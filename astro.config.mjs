@@ -20,6 +20,10 @@ export default defineConfig({
           href: 'https://github.com/yuancaoyaoHW',
         },
       ],
+      customCss: ['./src/styles/collapsible-sidebars.css'],
+      components: {
+        Head: './src/components/overrides/Head.astro',
+      },
       sidebar: [
         {
           label: '电子书',
