@@ -5,6 +5,7 @@ $SourceRoot = 'C:\Users\hw\Documents\modern-gpu-programming-for-mlsys'
 $ZhRoot = Join-Path $SourceRoot 'zh'
 $DocsRoot = Join-Path $Repo 'src\content\docs\books\modern-gpu-programming-for-mlsys'
 $AssetRoot = Join-Path $Repo 'public\books\modern-gpu-programming-for-mlsys'
+$BookBase = '/books/modern-gpu-programming-for-mlsys'
 
 New-Item -ItemType Directory -Force -Path $DocsRoot | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $AssetRoot 'img') | Out-Null
@@ -31,21 +32,64 @@ $Pages = @(
   @{ Src = 'appendix\debugging_warp_specialized.md'; Out = 'debugging-warp-specialized.md'; Order = 170 }
 )
 
+$RefMap = @{
+  'chap_background' = @{ Title = 'GPU execution model'; Slug = 'gpu-execution-model' }
+  'chap_performance' = @{ Title = 'performance'; Slug = 'performance' }
+  'chap_data_layout' = @{ Title = 'data layout'; Slug = 'data-layout' }
+  'chap_layout_generations' = @{ Title = 'layout generations'; Slug = 'layout-generations' }
+  'chap_tma' = @{ Title = 'TMA'; Slug = 'tma' }
+  'chap_tensor_cores' = @{ Title = 'Tensor Core'; Slug = 'tensor-cores' }
+  'chap_tmem' = @{ Title = 'TMEM'; Slug = 'tmem' }
+  'chap_async_barriers' = @{ Title = 'mbarrier'; Slug = 'async-barriers' }
+  'chap_clc' = @{ Title = 'cluster launch control'; Slug = 'cluster-launch-control' }
+  'chap_intro_tirx' = @{ Title = 'TIRx intro'; Slug = 'tirx-intro' }
+  'chap_tirx_layout_api' = @{ Title = 'TIRx layout API'; Slug = 'tirx-layout-api' }
+  'chap_gemm_basics' = @{ Title = 'GEMM basics'; Slug = 'gemm-basics' }
+  'chap_gemm_async' = @{ Title = 'GEMM async'; Slug = 'gemm-async' }
+  'chap_gemm_advanced' = @{ Title = 'advanced GEMM'; Slug = 'gemm-advanced' }
+  'chap_flash_attention' = @{ Title = 'Flash Attention 4'; Slug = 'flash-attention' }
+  'chap_arch' = @{ Title = 'compiler internals'; Slug = 'appendix' }
+  'chap_language_reference' = @{ Title = 'TIRx language reference'; Slug = 'appendix' }
+  'chap_tirx_primer' = @{ Title = 'TIRx intro'; Slug = 'tirx-intro' }
+  'chap_warp_spec_debug' = @{ Title = 'debugging warp specialization'; Slug = 'debugging-warp-specialized' }
+  'chap_cta_cluster' = @{ Title = 'CTA cluster'; Slug = 'gemm-advanced' }
+  'chap_multi_consumer' = @{ Title = 'multi-consumer GEMM'; Slug = 'gemm-advanced' }
+  'chap_warp_specialization' = @{ Title = 'warp specialization'; Slug = 'gemm-advanced' }
+}
+
 function Convert-BookMarkdown {
   param([string]$Text)
 
   $Text = $Text -replace '(?m)^\([^\r\n]+\)=\r?\n', ''
   $Text = $Text -replace '(?s)```\{toctree\}.*?```', ''
-  $Text = $Text -replace '(?m)^:::\{admonition\} ([^\r\n]+)\r?\n', "> **`$1**`n"
-  $Text = $Text -replace '(?m)^::::\{admonition\} ([^\r\n]+)\r?\n', "> **`$1**`n"
+  $Text = [regex]::Replace($Text, '(?ms)^```\{raw\} html\s*\r?\n(.*?)^```\s*$', '$1')
+  $Text = $Text -replace '(?m)^#\s+.+\r?\n', ''
+  $Text = $Text -replace '(?m)^:::\{admonition\} ([^\r\n]+)\r?\n', (':::note[$1]' + "`n")
+  $Text = $Text -replace '(?m)^::::\{admonition\} ([^\r\n]+)\r?\n', (':::note[$1]' + "`n")
   $Text = $Text -replace '(?m)^:class: [^\r\n]+\r?\n', ''
-  $Text = $Text -replace '(?m)^:::\s*$', ''
-  $Text = $Text -replace '(?m)^::::\s*$', ''
-  $Text = $Text -replace '(?m)^```\{raw\} html\s*$', ''
-  $Text = $Text -replace '(?m)^```\s*$', ''
-  $Text = $Text -replace '\.\./img/', '/books/modern-gpu-programming-for-mlsys/img/'
-  $Text = $Text -replace '\.\./demo/', '/books/modern-gpu-programming-for-mlsys/demo/'
-  $Text = $Text -replace '\.\./_static/tirx-layout-demo/', '/books/modern-gpu-programming-for-mlsys/_static/tirx-layout-demo/'
+  $Text = $Text -replace '(?m)^::::\s*$', ':::'
+  $Text = $Text -replace '\.\./img/', "$BookBase/img/"
+  $Text = $Text -replace '\.\./demo/', "$BookBase/demo/"
+  $Text = $Text -replace '\.\./_static/tirx-layout-demo/', "$BookBase/_static/tirx-layout-demo/"
+
+  $Text = [regex]::Replace($Text, '\{ref\}`([^`<]+?)\s*<([^>]+)>`', {
+    param($Match)
+    $Caption = $Match.Groups[1].Value.Trim()
+    $Label = $Match.Groups[2].Value.Trim()
+    if ($RefMap.ContainsKey($Label)) {
+      $Slug = $RefMap[$Label].Slug
+      return '[' + $Caption + '](' + $BookBase + '/' + $Slug + '/)'
+    }
+    return $Caption
+  })
+
+  foreach ($Label in $RefMap.Keys) {
+    $Title = $RefMap[$Label].Title
+    $Slug = $RefMap[$Label].Slug
+    $Pattern = [regex]::Escape('{ref}`' + $Label + '`')
+    $Replacement = '[' + $Title + '](' + $BookBase + '/' + $Slug + '/)'
+    $Text = [regex]::Replace($Text, $Pattern, $Replacement)
+  }
 
   return $Text.Trim() + "`n"
 }

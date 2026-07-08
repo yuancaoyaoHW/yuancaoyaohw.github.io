@@ -4,23 +4,21 @@ sidebar:
   order: 60
 ---
 
-# Tensor Core：`tcgen05`
-
-> **概述**
+:::note[概述]
 
 - `tcgen05` 是 Blackwell 的 Tensor Core 指令族。其 MMA 指令以协作方式执行分块矩阵乘加工作，并由一个被选中的线程提交该指令。
 - 累加器位于 TMEM 而非寄存器中。收尾阶段（epilogue）随后通过 `tcgen05.ld` 将其取回寄存器。
 - `cta_group::1` 和 `cta_group::2` 控制是一个 CTA 还是两个 CTA 协作参与 MMA。该选择也改变了 M 维度映射到 TMEM 的方式。
 - 块缩放 MMA 模式，如 `mxfp8` 和 `nvfp4`，增加了缩放因子操作数。数据操作数驻留在 SMEM 中，而缩放因子通过 TMEM 暂存。
+:::
 
-稠密线性代数是现代 GPU 花费大部分有用工作的地方。普通的 CUDA 核矩阵乘法无法接近芯片标称的峰值（{ref}`chap_background`）。快速的 GEMM（通用矩阵乘法）和注意力核函数（kernel）通过以正确的分块形状、布局和同步喂给 Tensor Core 来达到该峰值。
+稠密线性代数是现代 GPU 花费大部分有用工作的地方。普通的 CUDA 核矩阵乘法无法接近芯片标称的峰值（[GPU execution model](/books/modern-gpu-programming-for-mlsys/gpu-execution-model/)）。快速的 GEMM（通用矩阵乘法）和注意力核函数（kernel）通过以正确的分块形状、布局和同步喂给 Tensor Core 来达到该峰值。
 
 基本操作自 Volta 以来在精神上并未改变。Tensor Core 消费矩阵分块，将其相乘并累加结果。各代之间变化的是操作如何发出、操作数如何布局以及累加器驻留在何处。
 
-Blackwell 对最后一项做出了重大改变。`tcgen05` 的累加器不再作为长期存活的寄存器片段保存。它被写入张量内存（Tensor Memory，简称 TMEM，{ref}`chap_tmem`）。这一改变影响了整个核函数。MMA 写入 TMEM。完成被异步追踪。收尾阶段随后将累加器从 TMEM 加载出来，并将其转换回它所需的寄存器片段以进行转换和存储。
+Blackwell 对最后一项做出了重大改变。`tcgen05` 的累加器不再作为长期存活的寄存器片段保存。它被写入张量内存（Tensor Memory，简称 TMEM，[TMEM](/books/modern-gpu-programming-for-mlsys/tmem/)）。这一改变影响了整个核函数。MMA 写入 TMEM。完成被异步追踪。收尾阶段随后将累加器从 TMEM 加载出来，并将其转换回它所需的寄存器片段以进行转换和存储。
 
-本章聚焦于计算指令本身。TMA（张量内存加速器，{ref}`chap_tma`）负责将操作数搬入 SMEM。TMEM 负责持有累加器和一些缩放因子操作数。`tcgen05.mma` 是位于这两次内存移动之间的 Tensor Core 操作。
-
+本章聚焦于计算指令本身。TMA（张量内存加速器，[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）负责将操作数搬入 SMEM。TMEM 负责持有累加器和一些缩放因子操作数。`tcgen05.mma` 是位于这两次内存移动之间的 Tensor Core 操作。
 
 <div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/tcgen05_intro.html" title="tcgen05 and Tensor Memory" loading="lazy"
@@ -37,9 +35,9 @@ Blackwell 对最后一项做出了重大改变。`tcgen05` 的累加器不再作
 
 第一个问题是谁在协作。普通模式使用一个 CTA，写作 `cta_group::1`。更大的模式使用集群中的两个 CTA，写作 `cta_group::2`。在两种情况下，该指令都表示对一个分块的一次 Tensor Core 操作，而非一个线程的标量操作。
 
-第二个问题是操作数和结果位于何处。数据操作数通常驻留在 SMEM 中。某些变体也可以从 TMEM 读取 A 操作数。累加器写入 TMEM。操作数布局必须与 Tensor Core 所期望的匹配，包括数据操作数所使用的交换共享内存布局（{ref}`chap_data_layout`）。
+第二个问题是操作数和结果位于何处。数据操作数通常驻留在 SMEM 中。某些变体也可以从 TMEM 读取 A 操作数。累加器写入 TMEM。操作数布局必须与 Tensor Core 所期望的匹配，包括数据操作数所使用的交换共享内存布局（[data layout](/books/modern-gpu-programming-for-mlsys/data-layout/)）。
 
-第三个问题是如何观测完成。`tcgen05.mma` 是异步的。发出 MMA 并不意味着乘加已经完成。该指令在操作被提交后返回，而 Tensor Core 继续运行。核函数使用提交组和 `mbarrier` 来获知结果何时就绪（{ref}`chap_async_barriers`）。
+第三个问题是如何观测完成。`tcgen05.mma` 是异步的。发出 MMA 并不意味着乘加已经完成。该指令在操作被提交后返回，而 Tensor Core 继续运行。核函数使用提交组和 `mbarrier` 来获知结果何时就绪（[mbarrier](/books/modern-gpu-programming-for-mlsys/async-barriers/)）。
 
 正是这种异步行为使重叠成为可能。一个快速的核函数不会发出 MMA 后立即停滞直到它完成。它可以发出 MMA，开始准备后续分块，并仅在真正需要结果时才等待。代价是每次交接都必须是显式的。如果收尾阶段在 MMA 完成屏障触发之前读取 TMEM，它就读取得太早了。
 
@@ -49,7 +47,7 @@ Blackwell 对最后一项做出了重大改变。`tcgen05` 的累加器不再作
 
 Blackwell 打破了这一联系。`tcgen05.mma` 将其累加器写入 TMEM，这是一个作用域为 CTA 的 Blackwell 内存空间。累加器可以在计算阶段一直留在 TMEM 中，收尾阶段随后使用 `tcgen05.ld` 将其加载回寄存器。
 
-这改变了核函数的形态。寄存器片段在边界处仍然重要。收尾阶段仍然需要寄存器以便转换、应用逐元素工作并存储结果。但长期存活的累加器状态不再是一个寄存器分配问题，而是一个 TMEM 分配和布局问题（{ref}`chap_tmem`）。
+这改变了核函数的形态。寄存器片段在边界处仍然重要。收尾阶段仍然需要寄存器以便转换、应用逐元素工作并存储结果。但长期存活的累加器状态不再是一个寄存器分配问题，而是一个 TMEM 分配和布局问题（[TMEM](/books/modern-gpu-programming-for-mlsys/tmem/)）。
 
 这就是为什么 `tcgen05` 和 TMEM 必须被放在一起理解。MMA 指令决定计算什么分块。TMEM 决定累加器落在何处。收尾阶段必须使用匹配的加载路径，以它期望的寄存器布局恢复累加器。
 
@@ -95,7 +93,7 @@ N 维度仍然映射到 TMEM 列。不寻常的部分仅仅是 M 行在 Lane 上
 
 每个 CTA 还提供与其 M 行对应的 A 部分。B 根据模式要求对两个 CTA 均可用。偶数 CTA 负责为该对发出 MMA 并提交完成屏障。
 
-这是 {ref}`chap_gemm_advanced` 中双 CTA 集群 GEMM 所使用的模式。
+这是 [advanced GEMM](/books/modern-gpu-programming-for-mlsys/gemm-advanced/) 中双 CTA 集群 GEMM 所使用的模式。
 
 ![cta_group::2, M=256: M split contiguously across two CTAs, 128 rows per CTA](/books/modern-gpu-programming-for-mlsys/img/mma_cg2_m256.svg)
 
@@ -136,6 +134,7 @@ N 维度仍然映射到 TMEM 列。不寻常的部分仅仅是 M 行在 Lane 上
 ```text
 SFA(M, SFK)
 SFB(N, SFK)
+```
 
 其中 `SFK = K / B`，`B` 是沿 K 的块大小。
 
@@ -145,6 +144,7 @@ SFB(N, SFK)
 
 ```text
 acc += (Aq * scale_a) * (Bq * scale_b)
+```
 
 其中 `Aq` 和 `Bq` 是量化的低精度值，缩放在累加前恢复它们的近似量级。
 
@@ -161,8 +161,9 @@ acc += (Aq * scale_a) * (Bq * scale_b)
 ```text
 A, B:     global memory to SMEM, then MMA reads SMEM
 SFA, SFB: global memory to SMEM, then tcgen05.cp copies SMEM to TMEM, then MMA reads TMEM
+```
 
-缩放因子的 TMEM 布局很紧凑。一个 128 行的缩放向量可以装入 32 个 Lane 行，使用基于 `r % 32` 的通道位置和沿列的 `r / 32` 的映射。随后数据可以广播到读取完整 128 Lane 空间的四个线程束（{ref}`chap_layout_generations`）。
+缩放因子的 TMEM 布局很紧凑。一个 128 行的缩放向量可以装入 32 个 Lane 行，使用基于 `r % 32` 的通道位置和沿列的 `r / 32` 的映射。随后数据可以广播到读取完整 128 Lane 空间的四个线程束（[layout generations](/books/modern-gpu-programming-for-mlsys/layout-generations/)）。
 
 这是一个很好的例子，说明为什么 TMEM 布局必须显式。累加器布局和缩放因子布局都在 TMEM 中，但它们不是同一种布局。累加器使用 MMA 输出映射。缩放因子使用块缩放 MMA 所期望的紧凑布局。
 

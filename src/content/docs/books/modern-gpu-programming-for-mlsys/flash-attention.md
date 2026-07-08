@@ -4,12 +4,11 @@ sidebar:
   order: 150
 ---
 
-# Flash Attention 4
-
-> **概述**
+:::note[概述]
 
 - 注意力运行两个 MMA，中间夹着 softmax，因此它不能像 GEMM 那样简单地重复一个 MMA。
 - 该核函数（kernel）组合了第一部分的硬件原语（TMA、`tcgen05`、TMEM、屏障）和第三部分的 GEMM 技术，加上线程束（warp）角色、在线 softmax 重缩放、因果掩码和 GQA。
+:::
 
 注意力是决定一个 transformer 能否运行的核函数，也是我们到目前为止构建的一切终于要协同工作的地方。我们为 GEMM 组装的每一块在这里都延续：TMA 分块搬运、`tcgen05` MMA、TMEM、warpgroup 寄存器分块和显式屏障。
 
@@ -47,6 +46,7 @@ P = exp((S - m_new) / sqrt(d))
 row_sum = row_sum * scale + rowsum(P)
 O = O * scale + P @ V_block
 row_max = m_new
+```
 
 这里单个 `scale` 因子一物两用：它同时重缩放运行分母和运行输出，使较早和较晚块的贡献最终在同一尺度下度量。
 
@@ -73,6 +73,7 @@ Q, K, V in GMEM
   -> P in TMEM              通过 softmax 分子: TMEM -> RF -> TMEM
   -> O in TMEM              通过值 MMA: P V
   -> O in GMEM              通过归一化、SMEM 暂存和 TMA 存储
+```
 
 与 GEMM 的差异归结为一行。GEMM 是一条 MMA 链的重复；FA4 有两个 MMA 阶段，中间夹着 softmax。后续几乎所有内容都是这一个额外阶段的结果。
 
@@ -117,6 +118,7 @@ Q, K, V in GMEM
 ```python
 wg_id = T.warpgroup_id([4])
 warp_id = T.warp_id_in_wg([4])
+```
 
 读核函数时，先找角色分支。它告诉你哪个组拥有嵌在其中的每个分块原语。
 
@@ -153,6 +155,7 @@ warp_id = T.warp_id_in_wg([4])
 Q, K -> 得分 MMA -> S
 S    -> softmax   -> P
 P, V -> 值 MMA -> O
+```
 
 把它想象成一排三个生产者。第一个 MMA 产生注意力得分 `S`，softmax 将 `S` 转为分子 `P`，第二个 MMA 消费 `P` 来更新输出累加器 `O`。除以 `row_sum` 的归一化推迟到尾声，在每个 K/V 分块都发言过之后。
 
@@ -178,6 +181,7 @@ Tx.warp.gemm_async(
 )
 if T.ptx.elect_sync():
     s_ready.arrive(q_stage)
+```
 
 我们可以问 GEMM 章节对每个分块操作问过的同样四个问题：谁运行它、分块在哪里、如何派发、如何交接：
 
@@ -206,6 +210,7 @@ Tx.copy_async(
     s_chunk[:, chunk_start : chunk_end],
     S_region[wg_id, chunk_start : chunk_end],
 )
+```
 
 这是一次 warpgroup 作用域下的 TMEM 到寄存器分块读取。现在得分在寄存器中，softmax warpgroup 依次做三件事：
 
@@ -220,6 +225,7 @@ Tx.copy_async(
     P_region[wg_id, p_start : p_end],
     p_chunk[:, p_start : p_end],
 )
+```
 
 为什么要在寄存器中算完 `P` 后又写回 TMEM？因为值 MMA 需要 `P` 作为*分块操作数*，而 MMA 不能把分散的逐线程标量寄存器当作矩阵读取。此核函数中 MMA 可读的 `P` 形式是 `P_region`，即 fp16 TMEM 别名 `tmem_as_f16` 上的视图。所以写回不是多余的搬动；它是把 `P` 放进下一个 MMA 实际能消费的唯一形状。
 
@@ -232,7 +238,6 @@ $$O = O + P_{\text{block}}V_{\text{block}}$$
 当此 MMA 运行时，`O` 已被放入当前 K/V 块的正确状态——第一个块初始化、后续块重缩放——因此 MMA 只需累加。与 GEMM 的区别在于操作数在哪里：A 操作数是 TMEM 中的 `P`，B 操作数是 SMEM 中的 `V`，累加器 `O` 也在 TMEM：
 
 ```python
-# 第一个子 MMA: 列 0:K_SPLIT（P 的前 96 列 / V 的行）。
 Tx.warp.gemm_async(
     O_region[i_q],
     P_region[i_q, 0:K_SPLIT],
@@ -242,8 +247,7 @@ Tx.warp.gemm_async(
     dispatch="tcgen05",
     cta_group=CTA_GROUP,
 )
-# 第二个子 MMA（同形式，accum=True，由 p_ready_2 门控）覆盖
-# 剩余列 K_SPLIT:BLK_N。
+```
 
 > **分块原语读出：值 MMA**
 > - 作用域：WG3 warp 0。
@@ -294,6 +298,7 @@ tmem = tmem_pool.alloc((128, N_COLS_TMEM), "float32")
 tmem_pool.move_base_to(0)
 tmem_as_f16 = tmem_pool.alloc((128, N_COLS_TMEM * 2), "float16")
 tmem_pool.commit()
+```
 
 因为 fp16 元素只有一半宽，fp16 视图在同样字节上暴露两倍的可索引列，那正是 `P` 所处的空间——fp32 布局没有余地的空间。有了两个视图，核函数用 `T.TMEMStages` 将 `S`、`P` 和 `O` 槽切为分阶段区域，使计算代码按流水线阶段而非原始列索引：
 
@@ -301,6 +306,7 @@ tmem_pool.commit()
 S_region = T.TMEMStages(tmem,        col_start=0,                       width=MMA_N, stages=SMEM_PIPE_DEPTH_Q, stride=MMA_N)
 O_region = T.TMEMStages(tmem,        col_start=MMA_N * SMEM_PIPE_DEPTH_Q, width=MMA_N, stages=SMEM_PIPE_DEPTH_Q, stride=MMA_N)
 P_region = T.TMEMStages(tmem_as_f16, col_start=MMA_N,                   width=BLK_N, stages=SMEM_PIPE_DEPTH_Q, stride=MMA_N * 2)
+```
 
 `P_region` 步幅中的 `* 2` 是别名可见地泄漏到代码中的唯一位置。`S_region` 和 `O_region` 以 fp32 `tmem` 列度量，而 `P_region` 以 fp16 `tmem_as_f16` 列度量，后者只有一半宽，因此阶段间移动需要加倍的步幅才能落在同样的物理字节上。不过一旦区域定义好，计算代码保持干净：它写 `S_region[q_stage]`、读 `S_region[wg_id, ...]`、写 `P_region[wg_id, ...]`、累加到 `O_region[i_q]`，从不触碰原始列索引。
 
@@ -421,6 +427,7 @@ value P1*V[n-1]
 score Q1*K[n-2]
 value P0*V[n-2]
 ...
+```
 
 这种交错是得分、softmax、校正和值行在图中全部重叠而非整齐依次运行的原因。
 
@@ -443,6 +450,7 @@ Tx.copy_async(o_row, O_region[i_q, d_start : d_start + RESCALE_TILE])
 Tx.mul(o_row, o_row, acc_scale)
 Tx.copy_async(O_region[i_q, d_start : d_start + RESCALE_TILE], o_row)
 T.ptx.tcgen05.wait.st()
+```
 
 值得强调的是这是对整个 `O` 累加器的一次完整 TMEM → 寄存器 → TMEM 分块操作，而非一点标量簿记，它带有与每个其他阶段相同的读出卡：
 
@@ -489,12 +497,14 @@ $$\mathrm{LSE}_i = \log(\mathrm{row\_sum}_i) + \mathrm{row\_max}_i / \sqrt{d}$$
 ```python
 GQA_RATIO = num_qo_heads // num_kv_heads
 SEQ_Q_PER_TILE = BLK_M // GQA_RATIO
+```
 
 技巧是重新解释 128 行 Q 分块。对于 `GQA_RATIO=4`，它们不再代表 128 个序列位置；它们代表 32 个序列位置乘以 4 个查询头，打包在一起使所有四个头骑同一个 K/V 分块。行解码为：
 
 ```text
 seq_pos = row // GQA_RATIO
 q_head  = row % GQA_RATIO
+```
 
 Q 加载用三维视图表达这种打包。源是自然的 `Q[batch, seq, qo_head, dim]` 布局，目标是得分 MMA 稍后作为扁平 `128 x HEAD_DIM` 操作数读取的同一个 SMEM 分块。视图调和两者，且不需要任何拷贝：
 
@@ -508,6 +518,7 @@ Tx.copy_async(
       :],
     **tma_copy_q,
 )
+```
 
 K 和 V 从不在内存中展开，这正是 GQA 的全部意义：`kv_head_idx` 的单个 K/V 分块被打包进 Q 行的所有 `GQA_RATIO` 个查询头复用。输出侧与输入对称，尾声后用匹配的三维视图将打包行存回 `O[batch, seq, qo_head, dim]`。
 
@@ -529,6 +540,7 @@ while scheduler.valid():
     kv_head_idx = scheduler.head_idx
     # 处理一个 Q 块及其 K/V 块范围
     scheduler.next_tile()
+```
 
 唯一的行为差异在于 `next_tile()` 做什么：非因果模式下它将 CTA 推进到另一个任务，因果模式下它在当前任务后结束循环。无论哪种这都是纯粹的调度决策：它选择 CTA 拥有*哪个*注意力分块，从不论该分块如何计算。循环内部运行相同的局部原语：TMA 加载、得分 MMA、softmax、值 MMA、校正、TMA 存储。
 
@@ -557,11 +569,11 @@ with target:
 ex.mod(Q, K, V, O, prof)   # ex.mod 直接接受 torch 张量，与其他章节一样
 torch.cuda.synchronize()
 
-# torch 参考；enable_gqa 让 32 个查询头共享 8 个 KV 头
 qt, kt, vt = (x.transpose(1, 2).float() for x in (Q, K, V))
 ref = F.scaled_dot_product_attention(qt, kt, vt, enable_gqa=True).transpose(1, 2).half()
 torch.testing.assert_close(O, ref, rtol=1e-2, atol=1e-2)
 print(f"FA4: B={B} S={S} Hq={Hq} Hkv={Hkv} D={D}, non-causal -> PASS")
+```
 
 **预期输出**：`... -> PASS`。核函数以 fp32 累积在线 softmax，但仍有几种不同的近似将其结果与高精度参考分开。有输入和操作数的 fp16 存储与舍入；基于 `exp2` 的 softmax 重构（每个指数的 `scale_log2 = log2(e)/√d` 再表述）；在线 softmax 的重排序和逐行重缩放，它以运行尺度而非一次性地对块求和；最后是写回时 `O` 的 fp16 转换。此处选择的 `rtol`/`atol`（源核函数自身测试用的同样容差）的大小足以将所有这些一起覆盖对 torch 参考，而非仅 fp16 舍入。因此如果你在此看到真正的失败而非边缘险过，把它读作指向 softmax 路径的路标：一个被丢弃的 `s_ready` / `p_o_rescale` / `p_ready_2` 等待，或一个重缩放步骤未能应用的 `row_max` / `row_sum` 更新。这些正是本章把屏障花在上面的交接。
 

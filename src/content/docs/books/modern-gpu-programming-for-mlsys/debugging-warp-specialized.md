@@ -4,9 +4,7 @@ sidebar:
   order: 170
 ---
 
-# 调试线程束特化核函数
-
-{ref}`chap_gemm_advanced` 中的 GEMM 第 7-9 步重叠了 TMA 加载、`tcgen05` MMA 和 TMEM/SMEM 写回。同样的调试方法适用于 Flash Attention 的交接：识别角色，识别每个角色拥有的存储，然后对照该模型验证生成的 CUDA。
+[advanced GEMM](/books/modern-gpu-programming-for-mlsys/gemm-advanced/) 中的 GEMM 第 7-9 步重叠了 TMA 加载、`tcgen05` MMA 和 TMEM/SMEM 写回。同样的调试方法适用于 Flash Attention 的交接：识别角色，识别每个角色拥有的存储，然后对照该模型验证生成的 CUDA。
 
 不要一开始就重写核函数（kernel）。首先确保运行是有效的，然后检视生成的 CUDA。在排除了环境和编译期问题后，这些核函数的运行时失败通常归结为一个损坏的交接：未初始化的屏障（barrier）、错误的到达计数、藏在角色守卫内的集体操作、过期的屏障相位，或者存储在生产者使其写入可见之前就被复用。
 
@@ -17,6 +15,7 @@ sidebar:
 ```bash
 python -c "import tvm, tvm.tirx; print(tvm.__file__, tvm.__version__)"
 python -c "import torch; print(torch.cuda.get_device_name(), torch.cuda.get_device_capability())"
+```
 
 这些核函数面向 Blackwell（`sm_100a`）。如果 Python 导入了过期的 TVM 检出版，或 GPU 不是 Blackwell 级别，请在修改核函数之前先解决。然后运行核函数的最小正确性检查（如 `run_correctness()`），再看性能。
 
@@ -58,7 +57,7 @@ python -c "import torch; print(torch.cuda.get_device_name(), torch.cuda.get_devi
 
 | 症状 | 可能区域 | 首先检查 |
 |---|---|---|
-| 未知的 TIRx API 或属性错误 | 安装的 wheel 与教程代码不匹配 | 打印 `tvm.__file__` 和 `tvm.__version__`；将 API 名与 {ref}`chap_language_reference` 对比。 |
+| 未知的 TIRx API 或属性错误 | 安装的 wheel 与教程代码不匹配 | 打印 `tvm.__file__` 和 `tvm.__version__`；将 API 名与 [TIRx language reference](/books/modern-gpu-programming-for-mlsys/appendix/) 对比。 |
 | 不支持的 `dispatch=` | 所选目标或原语不支持该路径 | 检查 `dispatch` 参数和目标能力；本教程中的 `tcgen05` 路径需要 Blackwell。 |
 | 缓冲区作用域不匹配 | 缓冲区通过错误的硬件路径使用 | 检查工作表的存储行：TMEM 必须通过 `tcgen05` 访问，TMA 操作数必须使用兼容的 GMEM/SMEM 布局。 |
 | 编译成功但生成的 CUDA 缺少预期路径 | 派发未按你预期的方式降低 | 在修改算法之前先检视生成的 CUDA 中的 `tcgen05` 和 `cp.async.bulk.tensor`。 |
@@ -74,6 +73,7 @@ cuda_source = ex.mod.imports[0].inspect_source("cuda")
 Path("artifacts").mkdir(exist_ok=True)
 Path("artifacts/my_kernel.cu").write_text(cuda_source, encoding="utf-8")
 print(cuda_source)
+```
 
 生成的代码将 TIRx 构造映射到 CUDA，如下所示：
 
@@ -123,6 +123,7 @@ if (wg_id == 0)                                { /* WB   */ while(valid){ ... ne
 // (5) 清理：发射 warp，无 lane 守卫
 cta_sync();
 if (warp_id == 0) { tcgen05_relinquish_alloc_permit(); tcgen05_dealloc(..., 512); }
+```
 
 在修改算法之前检查这些：
 

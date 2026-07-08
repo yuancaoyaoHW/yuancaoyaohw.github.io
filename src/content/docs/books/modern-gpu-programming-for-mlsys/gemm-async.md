@@ -4,13 +4,12 @@ sidebar:
   order: 130
 ---
 
-# 用 TMA 为 GEMM 建立流水线
-
-> **概述**
+:::note[概述]
 
 - 基础 GEMM 在轮流执行上浪费时间（拷贝一个分块、计算、拷贝下一个），而这两件事本可以同时进行。
 - 第 4 步切换到 TMA 异步加载，第 5 步对 SMEM 双缓冲并预取（PIPE_DEPTH=2）；完整的加载/计算重叠随第 7 步的线程束特化到来，第 6 步通过分块调度器使核函数成为持久化核函数。
 - 目标是在 Tensor Core 啃当前分块的同时加载下一个分块。
+:::
 
 Tensor Core 是芯片上最昂贵的单元，而上一章那个正确的分块 GEMM 让它在大部分时钟周期里闲置。核函数轮流工作：线程把一个分块拷入共享内存，Tensor Core 啃完它，线程拷入下一个分块，Tensor Core 干等。每个阶段都因前一个阶段而停顿，尽管加载下一个分块和在当前分块上计算使用的是完全独立的硬件，本可以同时运行。弥合这一差距并不需要新的数据通路；分块、布局和数学都已经正确。需要改变的是工作*何时*发生以及*由谁*调度。本章让分块数据通路保持原样，直接攻击这种闲置。
 
@@ -18,7 +17,7 @@ Tensor Core 是芯片上最昂贵的单元，而上一章那个正确的分块 G
 
 ## 第 4 步：TMA 异步加载
 
-我们的第一个动作是把拷贝本身移出关键路径。想想 CTA 在第 1-3 步里在做什么：它的每个线程计算地址并发出加载指令，除了把分块搬进 SMEM 之外没有别的目的。这是花在管道上而非数学上的指令带宽（bandwidth）。第 4 步用 TMA 替换同步的 `Tx.copy`，在 TMA 中单个线程发出一条命令，TMA 引擎自行完成整块分块的搬运。从这里起，示例在完整的 M=N=K=4096 规模下运行，而非第 1-3 步的小规模，它们的端到端耗时出现在 {ref}`chap_gemm_advanced` 末尾的*端到端结果*表中。
+我们的第一个动作是把拷贝本身移出关键路径。想想 CTA 在第 1-3 步里在做什么：它的每个线程计算地址并发出加载指令，除了把分块搬进 SMEM 之外没有别的目的。这是花在管道上而非数学上的指令带宽（bandwidth）。第 4 步用 TMA 替换同步的 `Tx.copy`，在 TMA 中单个线程发出一条命令，TMA 引擎自行完成整块分块的搬运。从这里起，示例在完整的 M=N=K=4096 规模下运行，而非第 1-3 步的小规模，它们的端到端耗时出现在 [advanced GEMM](/books/modern-gpu-programming-for-mlsys/gemm-advanced/) 末尾的*端到端结果*表中。
 
 > **本步骤所改变的内容：调度**
 > - 作用域：不变，单个线程束组。
@@ -34,6 +33,7 @@ Tensor Core 是芯片上最昂贵的单元，而上一章那个正确的分块 G
 Tx.cta.copy(Asmem[:, :], A[m_st:m_st+BLK_M, i*BLK_K:(i+1)*BLK_K])   # all 128 threads
 Tx.cta.copy(Bsmem[:, :], B[n_st:n_st+BLK_N, i*BLK_K:(i+1)*BLK_K])
 T.cuda.cta_sync()
+```
 
 **之后（第 4 步）**：一个线程发出 TMA 加载，mbarrier 跟踪硬件搬运何时完成：
 ```python
@@ -43,6 +43,7 @@ if tid == 0:  # exactly one thread starts TMA
     Tx.copy_async(Bsmem, B[...], dispatch="tma")
     T.ptx.mbarrier.arrive.expect_tx(tma_bar, byte_count)  # bytes expected from TMA
 T.ptx.mbarrier.try_wait(tma_bar, phase)                  # wait before MMA reads SMEM
+```
 
 注意加载以 `tid == 0` 为门控，而非 `elect_sync()`，而这一区别比看起来更重要。`elect.sync` 是*每个线程束*选出一个活跃通道（lane），而一个线程束组有四个线程束，所以 `elect_sync()` 实际上会让四个线程进入加载协议。问题在于该协议要向 mbarrier 宣告预期的字节数，而它必须恰好宣告一次；四次宣告会破坏计数，等待也永远无法正确释放。按线程束组范围 id 精确选出一个线程才是干净的避免方式。
 
@@ -83,6 +84,7 @@ from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
 from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
+```
 
 它包裹在 `hgemm_v4(M, N, K)` 中，这是我们贯穿始终遵循的模式：包裹器把依赖形状的常量和布局放在使用它们的核函数旁边。
 
@@ -225,6 +227,7 @@ def hgemm_v4(M, N, K):
             T.ptx.tcgen05.dealloc(tmem_addr[0], n_cols=512, cta_group=1)
 
     return kernel
+```
 
 ### 核函数中的 TMA 配置
 
@@ -274,6 +277,7 @@ def hgemm_v4(M, N, K):
 ```python
 for s in range(min(PIPE_DEPTH, K_TILES)):
     tma_load(s, s * BLK_K)
+```
 
 **2. 主循环**：对每个 K 分块，我们等待它的阶段就绪、在其上运行 MMA，然后立即把那个已空闲的阶段重新投入使用，发出领先 `PIPE_DEPTH` 个分块的加载：
 ```python
@@ -283,11 +287,13 @@ mma(stage, accum)
 wait(mma_bar[0], phase_mma)
 phase_mma ^= 1
 tma_load(stage, next_k * BLK_K)
+```
 
 **3. 相位管理**：这是让人栽跟头的部分，但规则比初看简单。每个屏障的相位翻转规则直接来自该屏障有多少个槽位，这就是两个屏障按不同节奏翻转的原因。MMA 累加器位于一个 TMEM 槽中，所以 `mma_bar` 是单一屏障（`mma_bar.ptr_to([0])`），每次迭代都回到它，而每次迭代都回到的屏障必须每次迭代翻转相位。TMA 屏障讲的是另一个故事：它们组成一个 `PIPE_DEPTH` 元素数组，每阶段一个屏障，而任一给定阶段的屏障只在环上走完一圈才回来一次。所以 `phase_tma` 只在阶段索引回到 0 时翻转：
 ```python
 if stage == PIPE_DEPTH - 1:
     phase_tma ^= 1
+```
 
 **与你的 agent 一起尝试**：给定 `PIPE_DEPTH=2` 和 `K_TILES=5`，让它追踪主循环。对每个 `k`，列出 `stage`、传给等待的 `phase_tma` 和 `phase_mma` 值，以及是否发出了新的预取。`phase_tma` 恰好在何处翻转，为什么最后两次迭代没有预取？
 
@@ -302,6 +308,7 @@ from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
 from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
+```
 
 它包裹在 `hgemm_v5(M, N, K)` 中。`PIPE_DEPTH=2` 常量设定流水线阶段数（这里是两个，恰好就是双缓冲）：
 
@@ -451,6 +458,7 @@ def hgemm_v5(M, N, K):
             T.ptx.tcgen05.dealloc(tmem_addr[0], n_cols=512, cta_group=1)
 
     return kernel
+```
 
 ## 第 6 步：持久化核函数 + 分块调度器
 
@@ -486,6 +494,7 @@ tile_scheduler = ClusterPersistentScheduler2D(
     num_clusters=SM_COUNT
 )
 tile_scheduler.init(bx)
+```
 
 在分块上循环带来一个容易忽略的正确性后果。每个分块运行自己全新的 K 循环，这意味着它的屏障相位必须从已知状态开始。在第 5 步中，一个 CTA 恰好处理一个分块，所以一次性初始化 `phase_tma` 和 `phase_mma` 完全没问题。在第 6 步中，这些初始化必须移到 `while tile_scheduler.valid()` 循环*内部*，使每个分块以匹配自身 TMA 和 MMA 工作的相位状态开始，而非继承前一个分块恰好留下的状态：
 
@@ -494,6 +503,7 @@ while tile_scheduler.valid():
     phase_tma: T.int32 = 0
     phase_mma: T.int32 = 0
     ...
+```
 
 ### 完整核函数
 
@@ -507,6 +517,7 @@ from tvm.script.tirx import tile as Tx
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
 from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
 from tvm.tirx.lang.tile_scheduler import ClusterPersistentScheduler2D
+```
 
 网格维度现在简单的是 `SM_COUNT` 而非 `(M//BLK_M, N//BLK_N)`，由 `ClusterPersistentScheduler2D` 接管把分块交给每个 CTA 的工作：
 
@@ -663,6 +674,7 @@ def hgemm_v6(M, N, K):
             T.ptx.tcgen05.dealloc(tmem_addr[0], n_cols=512, cta_group=1)
 
     return kernel
+```
 
 ## 练习
 

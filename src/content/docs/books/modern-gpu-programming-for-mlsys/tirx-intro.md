@@ -4,22 +4,23 @@ sidebar:
   order: 100
 ---
 
-# TIRx 简介
-
-> **概览**
+:::note[概览]
 
 - TIRx 是一个用于在 IR 层级编写 GPU 核函数（kernel）的 Python DSL（领域特定语言）：你直接命名硬件，但通过结构化的 IR 来实现。
 - 每个分块（tiling）操作都由三个设计要素控制：*作用域*（scope，哪些线程）、*布局*（layout，数据存放在何处）和*调度*（dispatch，走哪条硬件路径）。
 - 一个可运行的单 MMA GEMM（通用矩阵乘法）展示了这三者；本书的其余部分就是这三个设计要素在更大规模上的应用。
+:::
 
-> **运行示例**
+:::note[运行示例]
 
 这些示例需要一块 Blackwell GPU（`sm_100a`，例如 B200）。TIRx 编译器以 Apache TVM wheel 包中的 `tvm.tirx` 模块形式发布；请与 CUDA 版本的 PyTorch 一起安装：
 
 ```bash
 pip install apache-tvm
+```
 
 用 `python -c "import tvm, tvm.tirx; print(tvm.__version__)"` 确认可以导入。同一套环境可以运行本书中每一个可运行的示例。
+:::
 
 第一部分讲解了硬件是什么。要让它进行计算，我们需要一种编程方法。
 
@@ -27,11 +28,11 @@ pip install apache-tvm
 
 TIRx（Tensor IR neXt）是一个 Python DSL，它将这三个决策提升到明处：**作用域**（scope，哪些线程执行操作）、**布局**（layout，操作数分块存放在哪里）和**调度**（dispatch，哪条硬件路径执行它）。它仍然直接命名硬件概念，包括线程、共享内存（shared memory）和张量内存、屏障（barrier）以及 `tcgen05` MMA。区别在于，这些选择现在变成了编译器可以降低（lowering）、检查和调度（schedule）的结构化 IR。
 
-与其抽象地介绍这些概念，不如我们从一个完整的核函数入手：一个最小的单 MMA GEMM。我们先让它跑起来，然后再逐行回读，看看作用域、布局和调度各自如何塑造它，以及核函数是如何被编译的。核函数所依赖的张量布局模型在 {ref}`chap_tirx_layout_api` 中单独展开，完整的语言特性集在 {ref}`chap_language_reference` 中介绍；这里我们只聚焦于这一个核函数和三个设计要素。
+与其抽象地介绍这些概念，不如我们从一个完整的核函数入手：一个最小的单 MMA GEMM。我们先让它跑起来，然后再逐行回读，看看作用域、布局和调度各自如何塑造它，以及核函数是如何被编译的。核函数所依赖的张量布局模型在 [TIRx layout API](/books/modern-gpu-programming-for-mlsys/tirx-layout-api/) 中单独展开，完整的语言特性集在 [TIRx language reference](/books/modern-gpu-programming-for-mlsys/appendix/) 中介绍；这里我们只聚焦于这一个核函数和三个设计要素。
 
 ## 第一个核函数：单 MMA GEMM
 
-我们承诺的核函数是一个最小化的 GEMM，精简到仍能驱动一个 Tensor Core 的最小版本。它计算 `D = A B^T` 的单个 128 x 128 输出分块，K = 64。整个计算从头到尾用一个 `Tx.gemm_async` 分块操作表达。（这一个分块操作并不映射到单条硬件指令：因为硬件 MMA 的 K 原子（K-atom）为 16，K=64 的分块会降低为一小段沿 K 步进的 `tcgen05.mma` 指令序列。DSL 的意义恰恰在于我们写的是分块，而不是序列。）围绕这个操作，核函数做一些常规杂务：它分配共享内存（SMEM）和张量内存（TMEM），将 A 和 B 从全局内存拷贝到共享内存，向 TMEM 累加器发出分块 MMA，通过寄存器（register）把累加器读回，并存储结果。虽然很小，这个核函数是我们在 {ref}`chap_gemm_basics` 中攀登的 GEMM 阶梯的第 1 步，在那里它将以完整的走查回归。
+我们承诺的核函数是一个最小化的 GEMM，精简到仍能驱动一个 Tensor Core 的最小版本。它计算 `D = A B^T` 的单个 128 x 128 输出分块，K = 64。整个计算从头到尾用一个 `Tx.gemm_async` 分块操作表达。（这一个分块操作并不映射到单条硬件指令：因为硬件 MMA 的 K 原子（K-atom）为 16，K=64 的分块会降低为一小段沿 K 步进的 `tcgen05.mma` 指令序列。DSL 的意义恰恰在于我们写的是分块，而不是序列。）围绕这个操作，核函数做一些常规杂务：它分配共享内存（SMEM）和张量内存（TMEM），将 A 和 B 从全局内存拷贝到共享内存，向 TMEM 累加器发出分块 MMA，通过寄存器（register）把累加器读回，并存储结果。虽然很小，这个核函数是我们在 [GEMM basics](/books/modern-gpu-programming-for-mlsys/gemm-basics/) 中攀登的 GEMM 阶梯的第 1 步，在那里它将以完整的走查回归。
 
 每个 TIRx 核函数都从同样的少数几个导入开始，所以值得一开始就看一次：
 
@@ -42,6 +43,7 @@ from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
 from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
+```
 
 我们把核函数包在一个小构建器 `hgemm_v1(M, N, K)` 里，它接受问题形状并返回一个 `PrimFunc`。对于我们所选的形状 `M=N=128, K=64`，启动恰好包含一个输出分块，这正是让这第一个版本简单到可以一口气读完的原因：
 
@@ -140,6 +142,7 @@ def hgemm_v1(M, N, K):
             T.ptx.tcgen05.dealloc(tmem_addr[0], n_cols=512, cta_group=1)
 
     return kernel
+```
 
 在阅读核函数之前，我们先确保它能正常工作。我们编译它并对照 torch 参考实现检查输出。我们不必显式指定架构：架构（如 `sm_100a`）会从设备自动检测，所以目标 `"cuda"` 就够了，而 `tir_pipeline="tirx"` 正是选择 TIRx 降低流水线（pipeline）的开关。编译完成后，`ex.mod(...)` 直接接受 torch 张量，中间无需任何手动转换。
 
@@ -160,7 +163,6 @@ A_tensor = torch.randn(M, K, dtype=torch.float16, device=device)
 B_tensor = torch.randn(N, K, dtype=torch.float16, device=device)
 D_tensor = torch.zeros(M, N, dtype=torch.float16, device=device)
 
-# ex.mod(...) takes torch tensors directly, the same call form used in every chapter.
 ex.mod(A_tensor, B_tensor, D_tensor)
 
 D_ref = (A_tensor.float() @ B_tensor.float().T).half()
@@ -168,11 +170,11 @@ max_err = float((D_tensor - D_ref).abs().max())
 print(f"Max error vs torch reference: {max_err:.6f}")
 torch.testing.assert_close(D_tensor, D_ref, rtol=2e-2, atol=1e-2)
 print("PASS")
+```
 
 ## 作用域、布局、调度
 
 现在核函数可以运行了，我们可以回读它，问一问它的每一行究竟决定了什么。这样看，整个核函数就是沿着三个设计要素的一组选择。其中的每个操作都回答同样的三个问题——*谁*运行它、它的数据*在何处*、它*如何*执行——而这三个答案正是作用域、布局和调度。本节余下部分逐一讨论这些设计要素；下方的交互式演示让你看到每个设计要素控制的是哪些行。
-
 
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/tirx_dispatch.html" title="TIRx: scope, layout, dispatch" loading="lazy"
         style="width:100%; min-width:960px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;
@@ -195,6 +197,7 @@ print("PASS")
 ```python
 target = tvm.target.Target("cuda")
 ex = tvm.compile(tvm.IRModule({"main": kernel}), target=target, tir_pipeline="tirx")
+```
 
 至少大致了解 `tir_pipeline="tirx"` 启动了什么是有价值的。流水线的核心 pass `LowerTIRx` 会针对每个分块原语的作用域/布局/调度契约进行解析：我们刚才讨论的三个设计要素正是在这里被实际兑现为指令的。此后，通常的 host/设备分割和一个 finalize 步骤生成可启动的模块。如果你愿意，也可以在 `with target:` 块内编译，这让核函数可以拾取周围的目标上下文。
 
@@ -204,16 +207,16 @@ ex = tvm.compile(tvm.IRModule({"main": kernel}), target=target, tir_pipeline="ti
 kernel.show()                          # pretty-print the TIRx (TVMScript)
 print(kernel.script())                 # ... the same, as a string
 
-# the generated CUDA C source, from the compiled Executable:
 print(ex.mod.imports[0].inspect_source())
+```
 
-这只是一个概述。关于完整的降低故事——涵盖所有 pass、分块原语调度如何解析、host/设备分割如何完成——请见 {ref}`chap_arch`。
+这只是一个概述。关于完整的降低故事——涵盖所有 pass、分块原语调度如何解析、host/设备分割如何完成——请见 [compiler internals](/books/modern-gpu-programming-for-mlsys/appendix/)。
 
 ## 接下来去哪里
 
 一个核函数已足以认识作用域、布局和调度，并看到它们被编译和运行。三个设计要素中的每一个，以及这个核函数本身，都通向一个将其进一步展开的章节：
 
-- {ref}`chap_tirx_layout_api`：张量布局模型（`TileLayout`、命名轴、swizzle），上面的操作数和累加器放置就是由它构建的。如果三个设计要素中布局让你觉得最神秘，从这里开始。
-- {ref}`chap_language_reference`：完整的语言特性集，涵盖解析器工具、数据类型、缓冲区和内存、控制流和线程同步，适合当你想要完整词汇表而非导览时。
-- {ref}`chap_gemm_basics`：这个核函数作为 GEMM 优化路径的第 1 步，通过 K 循环（loop）累加、空间分块、TMA 和线程束特化（warp specialization）逐步构建。如果你想看到同样的三个设计要素如何扩展到一个真实核函数，这是自然的下一站。
+- [TIRx layout API](/books/modern-gpu-programming-for-mlsys/tirx-layout-api/)：张量布局模型（`TileLayout`、命名轴、swizzle），上面的操作数和累加器放置就是由它构建的。如果三个设计要素中布局让你觉得最神秘，从这里开始。
+- [TIRx language reference](/books/modern-gpu-programming-for-mlsys/appendix/)：完整的语言特性集，涵盖解析器工具、数据类型、缓冲区和内存、控制流和线程同步，适合当你想要完整词汇表而非导览时。
+- [GEMM basics](/books/modern-gpu-programming-for-mlsys/gemm-basics/)：这个核函数作为 GEMM 优化路径的第 1 步，通过 K 循环（loop）累加、空间分块、TMA 和线程束特化（warp specialization）逐步构建。如果你想看到同样的三个设计要素如何扩展到一个真实核函数，这是自然的下一站。
 

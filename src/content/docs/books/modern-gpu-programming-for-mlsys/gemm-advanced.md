@@ -4,19 +4,18 @@ sidebar:
   order: 140
 ---
 
-# 用线程束特化和集群扩展 GEMM
-
-> **概述**
+:::note[概述]
 
 - 流水线化的 GEMM 仍然由一个线程束组顺序执行加载、MMA 和写回，本章移除这个瓶颈。
 - 第 7 步将线程束特化为不同角色，第 8 步加入 2-CTA 集群，第 9 步加入多个消费者。
 - 每一步移除一个串行瓶颈，最终接近 SOTA（state-of-the-art）吞吐量。
+:::
 
-上一章（{ref}`chap_gemm_async`）的流水线化 GEMM 很快，但它仍要求一个线程束组包揽一切：发出加载、运行 MMA、再写回结果。即便有了软件流水线，这一队线程仍然成为三个引擎交汇的地方。
+上一章（[GEMM async](/books/modern-gpu-programming-for-mlsys/gemm-async/)）的流水线化 GEMM 很快，但它仍要求一个线程束组包揽一切：发出加载、运行 MMA、再写回结果。即便有了软件流水线，这一队线程仍然成为三个引擎交汇的地方。
 
 症状显而易见。Tensor Core 运行时 TMA 单元安静下来，结果排空到内存时 Tensor Core 安静下来，每个引擎都通过同一组线程等待另一个。越过这一点的方法是停止让一队人马包揽一切。
 
-我们在三个不断拓宽合作的步骤中推进这个想法。第 7 步（{ref}`chap_warp_specialization`）将线程束特化为生产者、消费者和写回角色。第 8 步（{ref}`chap_cta_cluster`）把两个 CTA 连成一个集群，跨它们的共享内存共享操作数。第 9 步（{ref}`chap_multi_consumer`）加入第二个 MMA 消费者，使一块暂存的分块喂给两倍的数学运算。
+我们在三个不断拓宽合作的步骤中推进这个想法。第 7 步（[warp specialization](/books/modern-gpu-programming-for-mlsys/gemm-advanced/)）将线程束特化为生产者、消费者和写回角色。第 8 步（[CTA cluster](/books/modern-gpu-programming-for-mlsys/gemm-advanced/)）把两个 CTA 连成一个集群，跨它们的共享内存共享操作数。第 9 步（[multi-consumer GEMM](/books/modern-gpu-programming-for-mlsys/gemm-advanced/)）加入第二个 MMA 消费者，使一块暂存的分块喂给两倍的数学运算。
 
 把这三步看作同一模式在不同尺度上的应用会有帮助。第 7 步把完整流水线保留在一个 CTA 内：TMA 和 MMA 共享一个线程束组，而写回在另一个中运行。第 8 步跨 CTA 拓宽合作，产生一个跨越两个 CTA 的 256×256 分块。第 9 步进一步推高计算密度：集群输出增长到 512×256，每个暂存的 B 分块被两个消费者复用，我们到达本教程中最密集的变体。
 
@@ -88,9 +87,8 @@ sidebar:
 
 ```python
 tma_ps = PipelineState(PIPE_DEPTH, phase=1)   # Producer starts ready (phase=1)
-# tma_ps.stage = current stage index
-# tma_ps.phase = current phase (0 or 1)
 tma_ps.advance()                          # Advance to next stage
+```
 
 初始 `phase` 决定一个角色的第一次 `wait` 是让它运行还是让它阻塞，而在流水线两端正确答案恰好相反，这正是让人栽跟头的部分：
 - `phase=1`（生产者）-> 第一次 `wait(phase=1)` 看到屏障仍在相位 0，因为 0 != 1 它**立即通过**。这正是我们想要的，因为缓冲区开始时为空，生产者应当能自由地立即开始填充它们。
@@ -285,8 +283,9 @@ def hgemm_v7(M, N, K):
             T.ptx.tcgen05.dealloc(tmem_addr[0], n_cols=512, cta_group=1)
 
     return kernel
+```
 
-要运行这些核函数中的任何一个，复用我们在第 1 步（{ref}`chap_gemm_basics`）展示过一次的编译/运行/检查脚手架：把 `hgemm_v1` 换成 `hgemm_v7`、`hgemm_v8` 或 `hgemm_v9`，并选择一个问题规模如 `M=N=K=4096`。记住集群化步骤需要 `M` 和 `N` 是其集群分块（第 8 步 `256×256`，第 9 步 `512×256`）的倍数，所以一个微小的 `128×128` 规模根本产生不了分块。每个全新的 Python 会话只编译一个步骤，切换步骤前重启内核，因为核函数复用内部名称而编译器持有每会话状态。每步的耗时收集在下文的*端到端结果*中。
+要运行这些核函数中的任何一个，复用我们在第 1 步（[GEMM basics](/books/modern-gpu-programming-for-mlsys/gemm-basics/)）展示过一次的编译/运行/检查脚手架：把 `hgemm_v1` 换成 `hgemm_v7`、`hgemm_v8` 或 `hgemm_v9`，并选择一个问题规模如 `M=N=K=4096`。记住集群化步骤需要 `M` 和 `N` 是其集群分块（第 8 步 `256×256`，第 9 步 `512×256`）的倍数，所以一个微小的 `128×128` 规模根本产生不了分块。每个全新的 Python 会话只编译一个步骤，切换步骤前重启内核，因为核函数复用内部名称而编译器持有每会话状态。每步的耗时收集在下文的*端到端结果*中。
 
 ### 收尾（写回）细节
 
@@ -311,9 +310,9 @@ def hgemm_v7(M, N, K):
 
 ### 当第 7 步出问题时
 
-第 7 步是第一个 TMA 加载、`tcgen05` MMA 和写回同时处于在途状态的 GEMM 核函数。同样的失败模式在第 8 步和第 9 步中重现：屏障计数不匹配、角色守卫放错位置、缺少屏障（fence），或暂存缓冲区在 TMA 存储排空之前被复用。这些情况的调试清单收集在 {ref}`chap_warp_spec_debug` 中。
+第 7 步是第一个 TMA 加载、`tcgen05` MMA 和写回同时处于在途状态的 GEMM 核函数。同样的失败模式在第 8 步和第 9 步中重现：屏障计数不匹配、角色守卫放错位置、缺少屏障（fence），或暂存缓冲区在 TMA 存储排空之前被复用。这些情况的调试清单收集在 [debugging warp specialization](/books/modern-gpu-programming-for-mlsys/debugging-warp-specialized/) 中。
 
-**流水线深度调优。** 第 7 步核函数在 `PIPE_DEPTH=2` 下运行，即最小值。把它推到 4 或 6 让 TMA 生产者能更远地跑在 MMA 消费者之前，隐藏更多内存延迟，但代价是消耗更多 SMEM，而 SMEM 是有限的。B200 每个 SM 提供 228 KB（见 {ref}`chap_background` 的*需要记住的数字*）。在 `BLK_M=BLK_N=128, BLK_K=64, fp16` 下，每个流水线阶段为 A 和 B 合计花费 `(128*64 + 128*64) * 2 = 32 KB`，`Dsmem` 写回暂存缓冲区再加 32 KB。这让 `PIPE_DEPTH=4` 大约 160 KB、`PIPE_DEPTH=6` 大约 224 KB，直逼预算。要想比这更深，就得重新思考写回暂存策略。
+**流水线深度调优。** 第 7 步核函数在 `PIPE_DEPTH=2` 下运行，即最小值。把它推到 4 或 6 让 TMA 生产者能更远地跑在 MMA 消费者之前，隐藏更多内存延迟，但代价是消耗更多 SMEM，而 SMEM 是有限的。B200 每个 SM 提供 228 KB（见 [GPU execution model](/books/modern-gpu-programming-for-mlsys/gpu-execution-model/) 的*需要记住的数字*）。在 `BLK_M=BLK_N=128, BLK_K=64, fp16` 下，每个流水线阶段为 A 和 B 合计花费 `(128*64 + 128*64) * 2 = 32 KB`，`Dsmem` 写回暂存缓冲区再加 32 KB。这让 `PIPE_DEPTH=4` 大约 160 KB、`PIPE_DEPTH=6` 大约 224 KB，直逼预算。要想比这更深，就得重新思考写回暂存策略。
 
 ---
 
@@ -344,7 +343,6 @@ def hgemm_v7(M, N, K):
 
 整个优化建立在一项硬件能力之上：当 `cta_group=2` 时，MMA 被允许读取由*两个* CTA 暂存的操作数分块，而不仅是它所在的那个。每个 CTA 加载一片 128 行的存储 B，转置后它成为 128 个逻辑输出列，而协作 MMA 把两片缝合回一个操作数。下图追踪两个 CTA 的 A 和 B 切片如何组合成单个 256×256 集群分块：
 
-
 <div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/cta_cluster.html" title="A 2-CTA cluster: cooperative MMA via cross-CTA SMEM read" loading="lazy"
         style="width:100%; min-width:720px; height:580px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
@@ -368,6 +366,7 @@ def hgemm_v7(M, N, K):
 ```python
 m_st = (m_idx * CTA_GROUP + cbx) * BLK_M
 n_st = (n_idx * CTA_GROUP + cbx) * BLK_N
+```
 
 两个 CTA 在*同一个* 256×256 集群分块上工作，而单一坐标 `cbx`（CTA 在集群内的位置，0 或 1）正是挑出本 CTA 沿两条轴贡献的那个。`m_st` 选定本 CTA 拥有的输出行带，`n_st` 选定它喂给协作 MMA 的存储 B 切片，写回随后发出 256 列输出范围的两个 128 列半段。还要注意 `num_m_tiles = M // 256` 和 `num_n_tiles = N // 256` 计的是集群分块，而非单个 CTA 分块。
 
@@ -378,29 +377,24 @@ n_st = (n_idx * CTA_GROUP + cbx) * BLK_N
 相对第 7 步的 diff 有六处编辑，每一处编码我们刚描述的集群契约的一条：
 
 ```python
-# 1. Cluster launch
 cbx, cby = T.cta_id_in_cluster([CTA_GROUP, 1])   # cbx = CTA index within cluster (0 or 1)
 
-# 2. Cooperative MMA (was cta_group=1)
 Tx.gemm_async(..., cta_group=2)
 
-# 3. Cross-CTA shared memory access
 B_remote = T.ptx.map_shared_rank(Bsmem, cta_id=1)
 
-# 4. Cross-CTA barrier
 tma2mma_cta0 = T.decl_buffer(
     [CTA_GROUP], "uint64",
     data=T.ptx.map_shared_rank(tma2mma.ptr_to([0]), 0),
     scope="shared"
 )
 
-# 5. mma2tma / mma2ld arrives go from cta_mask=0 (single CTA, Step 7)
-#    to cta_mask=3 (signal both CTAs in the cluster)
 mma2tma.arrive(mma_ps.stage, cta_group=CTA_GROUP, cta_mask=3)
 mma2ld.arrive(0, cta_group=CTA_GROUP, cta_mask=3)
 
-# 6. Cluster sync replaces cta_sync at the end
 T.cuda.cluster_sync()
+```
+
 
 ### 集群作用域的变化
 
@@ -588,6 +582,7 @@ def hgemm_v8(M, N, K):
             T.ptx.tcgen05.dealloc(tmem_addr[0], n_cols=512, cta_group=CTA_GROUP)
 
     return kernel
+```
 
 **2 个 CTA 带来的变化。**
 
@@ -851,6 +846,7 @@ def hgemm_v9(M, N, K):
             T.ptx.tcgen05.dealloc(tmem_addr[0], n_cols=512, cta_group=CTA_GROUP)
 
     return kernel
+```
 
 **实现说明。**
 
@@ -873,7 +869,7 @@ def hgemm_v9(M, N, K):
 | 9 | 多消费者 | 0.094 ms | ~744× |
 | --- | cuBLAS（参考） | 0.094 ms | ~744× |
 
-这张表里的每个时间，包括 70 ms 的第 1 步基线，都是在同一个 M=N=K=4096 规模下测量的，这正是让加速链端到端可比的原因。有必要精确说明那个 70 ms 到底是什么，因为它容易被误读。它*不是* {ref}`chap_gemm_basics` 中那个单分块第 1 步核函数在 4096³ 下运行的结果；那个核函数只计算一个 128×128 分块，只在很小规模下运行。这 70 ms 是一个朴素的全规模基线，采用同样的顺序单分块方法并把它放大到完整的 4096³ 问题。第 1-3 步在 {ref}`chap_gemm_basics` 中以小规模（128×128 和 256³）引入以让最初的讲解简单；这里的第 1 步和第 3 步行是它们的全规模基准对应物。其余的破折号（第 2、5、6 步）标记的是为结构展示但未单独计时的步骤。
+这张表里的每个时间，包括 70 ms 的第 1 步基线，都是在同一个 M=N=K=4096 规模下测量的，这正是让加速链端到端可比的原因。有必要精确说明那个 70 ms 到底是什么，因为它容易被误读。它*不是* [GEMM basics](/books/modern-gpu-programming-for-mlsys/gemm-basics/) 中那个单分块第 1 步核函数在 4096³ 下运行的结果；那个核函数只计算一个 128×128 分块，只在很小规模下运行。这 70 ms 是一个朴素的全规模基线，采用同样的顺序单分块方法并把它放大到完整的 4096³ 问题。第 1-3 步在 [GEMM basics](/books/modern-gpu-programming-for-mlsys/gemm-basics/) 中以小规模（128×128 和 256³）引入以让最初的讲解简单；这里的第 1 步和第 3 步行是它们的全规模基准对应物。其余的破折号（第 2、5、6 步）标记的是为结构展示但未单独计时的步骤。
 
 把这些数字读作一次 B200 在受控条件下的参考运行，而非排行榜条目。嵌入每步的 `{.python .input}` 基准单元是烟雾基准：它们适合发现趋势，不适合声称峰值性能。
 
