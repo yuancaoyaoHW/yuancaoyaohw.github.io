@@ -1,0 +1,1938 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="面向机器学习系统的现代 GPU 编程（中文翻译）">
+      
+      
+      
+      
+        <link rel="prev" href="../chapter_performance/">
+      
+      
+        <link rel="next" href="../chapter_layout_generations/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>数据布局及其记法 - Modern GPU Programming For MLSys（中文翻译）</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto+Sans+SC:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Noto Sans SC";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#_1" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href=".." title="Modern GPU Programming For MLSys（中文翻译）" class="md-header__button md-logo" aria-label="Modern GPU Programming For MLSys（中文翻译）" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Modern GPU Programming For MLSys（中文翻译）
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              数据布局及其记法
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://mlc.ai/modern-gpu-programming-for-mlsys/" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Mlc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="标签" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  首页
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../chapter_background/" class="md-tabs__link">
+          
+  
+  
+  第一部分 — 理解 GPU
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../chapter_intro_tirx/" class="md-tabs__link">
+          
+  
+  
+  第二部分 — TIRx 概览
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../chapter_gemm_basics/" class="md-tabs__link">
+          
+  
+  
+  第三部分 — GEMM：从分块到 SOTA
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../chapter_flash_attention/" class="md-tabs__link">
+          
+  
+  
+  第四部分 — Flash Attention 4
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../appendix/" class="md-tabs__link">
+          
+  
+  
+  参考
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Modern GPU Programming For MLSys（中文翻译）" class="md-nav__button md-logo" aria-label="Modern GPU Programming For MLSys（中文翻译）" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Modern GPU Programming For MLSys（中文翻译）
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://mlc.ai/modern-gpu-programming-for-mlsys/" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Mlc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    第一部分 — 理解 GPU
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    第一部分 — 理解 GPU
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_background/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU 执行模型
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    什么让核函数变快
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据布局及其记法
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据布局及其记法
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        形状-步长模型
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tile 布局
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        命名轴
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        分布式布局
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="分布式布局">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tmem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        核函数内复制模式：TMEM 中的缩放因子
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swizzle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swizzle 布局
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_layout_generations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    跨 GPU 代的 Tensor Core 操作数布局
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_tma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    异步数据移动：TMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_tensor_cores/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tensor Core：tcgen05
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_tmem/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    特殊内存：TMEM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_async_barriers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    异步协调：mbarriers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_clc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    高级：集群启动控制
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    第二部分 — TIRx 概览
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    第二部分 — TIRx 概览
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_intro_tirx/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 简介
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_tirx_layout_api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 布局 API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    第三部分 — GEMM：从分块到 SOTA
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    第三部分 — GEMM：从分块到 SOTA
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_gemm_basics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    构建分块 GEMM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_gemm_async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    用 TMA 流水线化 GEMM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_gemm_advanced/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    用线程束特化和集群扩展 GEMM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    第四部分 — Flash Attention 4
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    第四部分 — Flash Attention 4
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chapter_flash_attention/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flash Attention 4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    参考
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    参考
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    参考首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix/debugging_warp_specialized/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    调试线程束特化核函数
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    编译器内部实现
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    编译器内部实现
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tirx_guide/arch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    编译器内部实现
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tirx_guide/arch/lowering_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 降低流水线
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_4" id="__nav_6_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 语言参考
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TIRx 语言参考
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tirx_guide/language_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 语言参考
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tirx_guide/language_reference/cuda/parser_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    解析器工具
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tirx_guide/language_reference/cuda/data_types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据类型与表达式
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tirx_guide/language_reference/cuda/buffers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    缓冲区与内存
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tirx_guide/language_reference/cuda/control_flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    控制流
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tirx_guide/language_reference/cuda/threads_sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CUDA C++/PTX 内建函数
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        形状-步长模型
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tile 布局
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        命名轴
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        分布式布局
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="分布式布局">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tmem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        核函数内复制模式：TMEM 中的缩放因子
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swizzle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swizzle 布局
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="_1">数据布局及其记法<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<div class="admonition note">
+<p class="admonition-title">概览</p>
+<ul>
+<li><em>数据布局</em>把张量的逻辑索引映射到物理位置，它决定合并访问、bank 冲突，以及某个引擎能否读取一个 tile。</li>
+<li>本书用一种记法书写布局：<code>S[(shape) : (strides)]</code>，带有命名轴（<code>@laneid</code>、<code>@TLane</code>、……）和一个用于广播或被复制数据的复制项 <code>R[...]</code>。</li>
+<li>swizzle 是对地址的一次 XOR 重映射，用于消除共享内存 bank 冲突。</li>
+</ul>
+</div>
+<p>同样的数字，以不同物理排列写入内存，在同一块 GPU 上可以相差一个数量级。</p>
+<p>原因是张量的逻辑索引并不说明它的字节实际落在何处。硬件对该放置极为敏感：它决定了 32 个通道的加载是合并成一次事务，还是散成 32 次；它们的地址是落入不同内存 bank，还是相撞并串行化；甚至决定了一个 tile 是否匹配 Tensor Core 能读取的字节排列。</p>
+<p>机器学习程序通常以逻辑形状描述张量。<strong>数据布局</strong>补上了缺失的物理部分：它说明具有逻辑索引 <code>(i, j, …)</code> 的元素住在哪里——是在内存、寄存器，还是某种其他硬件存储中。</p>
+<p>本章介绍现代 GPU 编程中出现的主要布局。为使讨论易于处理，我们发展出一套紧凑的<strong>记法</strong>，用以描述机器学习系统所遇到的各种情形下的布局。最后以<strong>交换（swizzle）</strong>收尾，这是让对一个 tile 的行向与列向访问同时高效的机制。</p>
+<h2 id="-">形状-步长模型<a class="headerlink" href="#-" title="Permanent link">&para;</a></h2>
+<p>在进入 GPU 专有布局之前，值得从最简单的布局讲起，因为本章其余一切都建立在它之上。其核心只有两样东西：一个<strong>形状</strong>和一组匹配的<strong>步长</strong>。我们把这对写作 <code>S[(shape) : (strides)]</code>，要找到某个逻辑索引的所在，就拿该索引与步长做点积。一个行主序的 4×4 矩阵看起来像这样：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>S[(4, 4) : (4, 1)]        addr(i, j) = i·4 + j·1
+</span></code></pre></div>
+<p>这无非是经典的形状/步长模型的紧凑写法（CuTe 记法的行主序简化），后续一切都由它构建而成。</p>
+<p>事实上，你几乎肯定已经用过这个模型。任何写过 PyTorch 或 NumPy 的人都用过，因为这些库里的张量<em>正是</em>一个形状加上对一个扁平存储缓冲区的步长：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">12</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">t</span><span class="o">.</span><span class="n">shape</span>        <span class="c1"># torch.Size([3, 4])</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">t</span><span class="o">.</span><span class="n">stride</span><span class="p">()</span>     <span class="c1"># (4, 1)        ← exactly S[(3, 4) : (4, 1)]</span>
+</span></code></pre></div>
+<p>一旦你以这种方式看待张量，就不难理解为什么那么多"重塑"操作根本不碰数据。它们只是改写步长、在同样的存储上返回一个<strong>视图</strong>，而最清晰的例子是转置，或 permute：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">tt</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>               <span class="c1"># or t.T</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">tt</span><span class="o">.</span><span class="n">shape</span>                           <span class="c1"># torch.Size([4, 3])</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">tt</span><span class="o">.</span><span class="n">stride</span><span class="p">()</span>                        <span class="c1"># (1, 4)        ← strides swapped, no data moved</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">tt</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">()</span> <span class="o">==</span> <span class="n">t</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">()</span>      <span class="c1"># True, same bytes</span>
+</span></code></pre></div>
+<p>这里 <code>t.permute(1, 0)</code> 就是 <code>S[(4, 3) : (1, 4)]</code>，落在<em>同一块</em>内存上：转置纯粹是步长的改变，一个字节都没动。<code>reshape</code> 或 <code>view</code> 在连续张量上的故事相同：在旧存储之上的新形状和新步长。（NumPy 的行为完全相同；唯一区别是它的 <code>.strides</code> 按字节而非按元素计数。）</p>
+<p>这正是布局在 GPU 上的工作方式，本章其余部分其实都是同一个想法的一系列变体：一个 tile 的映射（无论到内存，还是通过我们即将引入的命名轴到通道与寄存器）是对一个固定缓冲区的步长规则，所以重新安排一个 tile 通常是改变<em>布局</em>而非拷贝。不过我们应当谨慎对待这一推理的边界。零拷贝的故事对单一线性地址空间上的逻辑视图成立得很干净；在 GPU 上它只在新视图与现有字节排列和归属安排兼容时才适用。一旦你改变了哪个线程或寄存器拥有某个元素，或改变了 SMEM swizzle，你通常就需要真正的数据搬运：加载、存储、shuffle、<code>ldmatrix</code>、转置。</p>
+<h2 id="tile">Tile 布局<a class="headerlink" href="#tile" title="Permanent link">&para;</a></h2>
+<p>到目前为止我们描述的是整个张量的布局。然而 GPU 核函数很少一次处理整个矩阵；它们处理更小的 tile，这些 tile 由硬件的不同部分加载、变换并计算。好消息是分块并不要求任何新东西。它仍然只是一个布局，只不过现在多了几个维度。把一个 8×8 矩阵切成 2×4 的 tile，就得到一个 4 维布局，坐标为 <code>(tile_row, row_in_tile, tile_col, col_in_tile)</code>，步长选择使每个 tile 保持连续：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>S[(4, 2, 2, 4) : (16, 4, 8, 1)]
+</span></code></pre></div>
+<p>一个逻辑 <code>(i, j)</code> 先变成 <code>(i//2, i%2, j//4, j%4)</code>，再穿过步长。值得注意的是，这套记法根本不需要任何特殊的"tile"概念就能表达分块：它与之前的形状-步长模型完全相同，只是把索引拆成了外层与内层坐标。</p>
+<p>下方的交互式可视化展示了一个逻辑矩阵索引如何被分解为 tile 坐标，再映射到物理地址。</p>
+<iframe src="../../demo/tiled_layout.html" title="Tile layout: interactive address computation" loading="lazy"
+        style="width:100%; height:640px; border:1px solid #d0d0d0; border-radius:6px; max-width:100%;"></iframe>
+<p><em>交互式：点击一个单元格查看其分块索引与地址。</em></p>
+<h2 id="_2">命名轴<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<p>到目前为止 <code>S[...]</code> 中的每个步长都命名了一个到线性内存的偏移，我们把地址当作那里的一个位置。然而在 GPU 上，数据可以住在不止一个地方：除内存外，一个 tile 可以分布在 warp 通道、线程寄存器，或 TMEM 通道与列上。为统一描述所有这些，我们用<strong>命名轴</strong>扩展记法。想法是让每个步长系数带一个轴标签，说明它在哪个空间中移动：<code>@m</code> 表示普通内存，<code>@laneid</code> 表示 warp 通道，<code>@reg</code> 表示寄存器，<code>@warpid</code> 表示 warp，<code>@TLane</code> / <code>@TCol</code> 表示 TMEM 坐标。有了这些标签，单一布局就不仅能描述数据在内存中的位置，还能描述它如何在操作它的硬件资源上分布。</p>
+<p>一旦内存标签显式化，内存中一个行主序的 8×16 tile 就只是</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>S[(8, 16) : (16@m, 1@m)]
+</span></code></pre></div>
+<p>当布局描述的是<em>分布在线程间</em>而非排布在内存中的数据时，标签才真正显出价值。取 <code>S[(8, 4, 2) : (4@laneid, 1@laneid, 1@reg)]</code>：它不指向线性内存，而是把行和列映射到 lane ID 和每通道寄存器。这里 <code>laneid</code> 指 warp 内的 warp 通道索引，即 <code>thread_index % warp_size</code>。这正是你将在 <a href="../chapter_layout_generations/">chap_layout_generations</a> 中遇到的 Tensor Core 寄存器片段。</p>
+<p>下方的交互式可视化展示了布局如何把张量元素分布到 warp 通道与每通道寄存器，而非放置在线性内存中。</p>
+<iframe src="../../demo/thread_register.html" title="Thread + register layout via named axes" loading="lazy"
+        style="width:100%; height:640px; border:1px solid #d0d0d0; border-radius:6px; max-width:100%;"></iframe>
+<p><em>交互式：一个基于 <code>@laneid</code> 与 <code>@reg</code> 的布局；点击一个单元格查看哪个通道/寄存器持有它。</em></p>
+<h2 id="_3">分布式布局<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
+<p>命名轴之所以如此有用，是因为它们让我们能统一描述系统多个层级上的放置，包括<em>跨整个设备</em>的放置。我们刚把它们用于单个 GPU 内部的通道与寄存器，但同一想法也向外延伸：<code>@gpuid_x</code>、<code>@gpuid_y</code> 这样的轴可以说数据住在 GPU 网格中的何处，有了它们，记法就能刻画分布式训练与推理中出现的分片模式。轴尚不能刻画的一件事是<em>复制</em>——被拷贝到不止一处数据——所以我们加入记法 <code>R[n : stride]</code>，其中 <code>R</code> 标记被复制的维度。例如 <code>R[2 : 1@gpuid_x]</code> 描述沿 <code>@gpuid_x</code> 轴的复制。把两者结合，单一表达式既能把一个张量在 2×2 GPU 网格上分片，又能沿一条轴复制它：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>S[(2, 4, 8) : (1@gpuid_y, 8@m, 1@m)] + R[2 : 1@gpuid_x]
+</span></code></pre></div>
+<p>下方演示在一个小 GPU 网格上展示了这种分片与复制合二为一的模式。点击任意单元格查看哪个设备持有它，并观察 <code>@gpuid_x</code> 复制如何把一份相同的副本放到配对设备上；按钮在全分片、分片+副本、分片+偏移这几种布局间切换。</p>
+<iframe src="../../demo/tile_distributed.html" title="Distributed layout across a GPU mesh" loading="lazy"
+        style="width:100%; height:640px; border:1px solid #d0d0d0; border-radius:6px; max-width:100%;"></iframe>
+<p><em>交互式：一个分布在 2×2 GPU 网格上的布局；点击一个单元格查看哪些设备持有它。</em></p>
+<h3 id="tmem">核函数内复制模式：TMEM 中的缩放因子<a class="headerlink" href="#tmem" title="Permanent link">&para;</a></h3>
+<p>我们刚才为 GPU 网格引入的复制维度 <code>R[...]</code> 不只关乎多个设备。同一构造恰好也能描述完全发生在单个核函数内部的事情：硬件<em>跨通道广播</em>的数据。Blackwell 的块缩放 MMA（<a href="../chapter_layout_generations/">chap_layout_generations</a>）就是一个好例子。其缩放因子住在 TMEM 中，那里一个 128 行的缩放向量只存在 <strong>32 个 TMEM 通道</strong>里——逻辑行 <code>r</code> 落到 TMEM 通道 <code>r % 32</code>，<code>r // 32</code> 沿列方向走。这 32 个被存储的 TMEM 通道随后<strong>沿 TMEM 的 <code>TLane</code> 轴被复制</strong>，从 32 扩展到 128 个 TMEM 通道，使读取 warpgroup 中四个 warp 各自都能在自己那 32 通道的 TMEM 窗口里找到一份副本。这是一个 <code>warpx4</code> 广播，我们用复制维度书写。读取本身由这些 warp 的线程执行：</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>S[(32, …) : (1@TLane, …)] + R[4 : 32@TLane]
+</span></code></pre></div>
+<p>这给出四个副本，步长为 32 个 TMEM 通道：TMEM 通道 <code>l</code>、<code>l+32</code>、<code>l+64</code>、<code>l+96</code> 都持有同一个缩放值。和之前一样，复制维度不携带新数据；它只是说"同一个值，坐在四个 TMEM 通道位置上"，正像刚才 <code>@gpuid_x</code> 把一行跨 GPU 网格广播一样。</p>
+<p>下方交互式演示把两步一起展示：压缩进 32 个 TMEM 通道，然后 <code>warpx4</code> 广播到 128 个读取通道。</p>
+<iframe src="../../demo/sf_tmem.html" title="Scale factors in TMEM: packing and warpx4 replication" loading="lazy"
+        style="width:100%; min-width:1040px; height:560px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+<p><em>交互式：点击一个缩放因子 <code>SFA[m, sf]</code>；它压缩进 TMEM 的通道 <code>m mod 32</code>、列 <code>(m // 32)·4 + sf</code>，然后沿 <code>TLane</code> 轴 <code>warpx4</code> 广播到四个通道副本（<code>l</code>、<code>l+32</code>、<code>l+64</code>、<code>l+96</code>），每个 warp 的 32 通道窗口各一份。</em></p>
+<p>每列内部的字节打包（<code>scale_vec</code> 的 1X/2X/4X 模式）以及 <code>cta_group::2</code> 切分在 <a href="../chapter_layout_generations/">chap_layout_generations</a> 中讲述。</p>
+<p>已了解 CuTe 的读者可以把本章的记法视为 CuTe 的行主序变体，扩展了显式的硬件命名轴和专门的复制结构。</p>
+<h2 id="swizzle">Swizzle 布局<a class="headerlink" href="#swizzle" title="Permanent link">&para;</a></h2>
+<p>本章最后一个布局的存在是为了解决一个特定的硬件问题。GPU 的共享内存被组织成内存 bank，当不同通道落在不同 bank 上时访问最快。当若干通道反而落到<em>同一</em> bank 内的不同地址时，硬件别无选择只能把它们串行化，我们就付出一次 <strong>bank 冲突</strong>的代价。</p>
+<p>在张量程序中这很难避免，因为内存并非以纯线性顺序访问。处理矩阵时，我们常常需要读同一 tile 的行切片和列切片，这就造成真正的张力：对行向访问高效的布局往往在列向访问时产生 bank 冲突，而有利于列的布局又伤害行。<strong>交换（swizzle）</strong>正是为打破这一张力而设计的技术。</p>
+<p>swizzle 背后的想法是置换地址映射，通常通过把列索引与行做 XOR，使行访问和列访问<em>都</em>最终散布到各 bank 上。它提供的无冲突保证是具体的：它对匹配的元素位宽、swizzle 模式和访问模式（某个引擎描述符所期望的那种）成立，而对任意的元素位宽或对齐并不成立。</p>
+<p>下方的第一个交互式演示使之具体化。点击一个列索引，观察每个元素落入哪个 bank：在左侧的朴素行主序 tile 中，一列把全部八个元素灌进同一个 bank，于是该读取串行成八个周期；在右侧的 XOR-swizzle 布局中，同一列散布到八个不同 bank，一个周期即可读取。</p>
+<iframe src="../../demo/swizzle_8x8.html" title="8x8 XOR swizzle" loading="lazy"
+        style="width:100%; height:640px; border:1px solid #d0d0d0; border-radius:6px; max-width:100%;"></iframe>
+<p><em>交互式：一个 8×8 tile，朴素行主序下按列发生 bank 冲突，经 XOR swizzle 后无冲突。</em></p>
+<p>这个小小的 8×8 例子抓住了核心想法，但真实 GPU 内存比这个玩具图景有更多 bank。要让 swizzle 在满规模下生效，我们不是把整个 tile 当作一个整体对象。相反，我们把内存切成小段，并在每一段内部施加 swizzle 模式。实践中最常见的是 <code>SWIZZLE_128B</code>，围绕 128 字节段组织，使同样的行/列重映射技巧自然地嵌入一个 32-bank 内存系统。</p>
+<p>下方交互式演示展示了这一个具体的硬件 swizzle <code>SWIZZLE_128B</code>，以便在我们跨格式推广之前就能看到逐段重复的模式。</p>
+<iframe src="../../demo/swizzle_128B.html" title="SWIZZLE_128B layout" loading="lazy"
+        style="width:100%; height:640px; border:1px solid #d0d0d0; border-radius:6px; max-width:100%;"></iframe>
+<p><em>交互式：128 字节段内的 <code>SWIZZLE_128B</code> 模式；逐步查看读取周期，可见 <code>physical_sector = logical_sector XOR row</code> 把每一列散布到不同 bank。</em></p>
+<p>同一想法可以推广到这个 128 字节情形之外。为简化可视化，从现在起我们用一个色块代表一个段，而非画出各个 bank。一般而言，硬件定义一个小的重复<strong>原子</strong>，置换就在其上施加，不同 swizzle 模式选择不同原子大小。<code>SWIZZLE_128B</code> 用 8 × 128 B 原子，<code>SWIZZLE_64B</code> 用 8 × 64 B 原子，<code>SWIZZLE_32B</code> 用 8 × 32 B 原子；整个 tile 再由当前所用原子平铺而成。</p>
+<p>最后的交互式演示让你在这些格式间切换（包括一个 16 B 交错模式）、选取一种数据类型，并悬停任意单元格以直接查看一个原子内部的元素排列——这正是推理某条加载/存储指令期望哪种 swizzle 时所需的细节层级。</p>
+<iframe src="../../demo/swizzle_atom_general.html" title="Swizzle atom layout per format (128B/64B/32B)" loading="lazy"
+        style="width:100%; height:640px; border:1px solid #d0d0d0; border-radius:6px; max-width:100%;"></iframe>
+<p><em>交互式：选取一个 swizzle 格式（与数据类型）查看其原子形状（8 × N B）；悬停一个单元格查看其元素如何被置换。</em></p>
+<p>该选哪种模式？经验法则是优先选 tile 能填满的<em>最大</em>原子。一个 N 字节原子要求 tile 的连续维度至少为 N 字节，且为其倍数，因此 <code>SWIZZLE_128B</code> 只在行长至少 128 字节（即 64 个 <code>float16</code> 元素）时适用。当条件满足时它是默认选择，因为其 8 × 128 B 原子覆盖一整条 128 字节 bank 线，从而一次把一列散布到全部 32 个 bank，在 fp16 下同时给 8 行 8 列无冲突访问。但当问题形状迫使连续维度变小时，tile 就填不满一个 128 B 原子，你便退到 <code>SWIZZLE_64B</code> 或 <code>SWIZZLE_32B</code>——行仍能覆盖的最大原子。</p>
+<p>你从不需要手算这些置换地址，值得精确说明的是 swizzle 与 <code>S[...]</code> 记法的关系：它<em>不</em>属于那张仿射映射。它是叠加在其上的一个独立、非仿射层。<code>S[...]</code> 布局把一个元素放在一个线性内存（<code>@m</code>）地址上，swizzle 随后置换该地址，在 TIRx 布局 API 中写作 <code>ComposeLayout(swizzle, tile)</code>（<a href="../chapter_tirx_layout_api/">chap_tirx_layout_api</a>）。你的工作只是在每条触及该 tile 的操作上选一个一致的模式，让复合布局完成其余工作。</p>
+<p>这个复合布局也正是硬件所填充的，swizzle 与分块就在此处合流。TMA 描述符是多维的，所以一个三维盒子就能同时描述 tile 的原子分块与每个原子内部的 swizzle；一次 TMA 加载就逐原子地铺设 tile，并在写共享内存时施加 swizzle（<a href="../chapter_tma/">chap_tma</a>），无需单独的 swizzle 步骤。每个引擎要求<em>哪种</em> swizzle 是世代特定的，那是下一章的主题。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="../javascripts/iframe-autoresize.js"></script>
+      
+    
+  </body>
+</html>

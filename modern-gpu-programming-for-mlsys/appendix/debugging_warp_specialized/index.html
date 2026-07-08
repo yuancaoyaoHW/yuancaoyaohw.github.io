@@ -1,0 +1,2351 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="面向机器学习系统的现代 GPU 编程（中文翻译）">
+      
+      
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../../tirx_guide/arch/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>调试线程束特化核函数 - Modern GPU Programming For MLSys（中文翻译）</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto+Sans+SC:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Noto Sans SC";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#_1" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../.." title="Modern GPU Programming For MLSys（中文翻译）" class="md-header__button md-logo" aria-label="Modern GPU Programming For MLSys（中文翻译）" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Modern GPU Programming For MLSys（中文翻译）
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              调试线程束特化核函数
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://mlc.ai/modern-gpu-programming-for-mlsys/" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Mlc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="标签" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  首页
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../chapter_background/" class="md-tabs__link">
+          
+  
+  
+  第一部分 — 理解 GPU
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../chapter_intro_tirx/" class="md-tabs__link">
+          
+  
+  
+  第二部分 — TIRx 概览
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../chapter_gemm_basics/" class="md-tabs__link">
+          
+  
+  
+  第三部分 — GEMM：从分块到 SOTA
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../chapter_flash_attention/" class="md-tabs__link">
+          
+  
+  
+  第四部分 — Flash Attention 4
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  参考
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Modern GPU Programming For MLSys（中文翻译）" class="md-nav__button md-logo" aria-label="Modern GPU Programming For MLSys（中文翻译）" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Modern GPU Programming For MLSys（中文翻译）
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://mlc.ai/modern-gpu-programming-for-mlsys/" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Mlc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    第一部分 — 理解 GPU
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    第一部分 — 理解 GPU
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_background/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU 执行模型
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    什么让核函数变快
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_data_layout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据布局及其记法
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_layout_generations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    跨 GPU 代的 Tensor Core 操作数布局
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_tma/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    异步数据移动：TMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_tensor_cores/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tensor Core：tcgen05
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_tmem/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    特殊内存：TMEM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_async_barriers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    异步协调：mbarriers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_clc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    高级：集群启动控制
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    第二部分 — TIRx 概览
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    第二部分 — TIRx 概览
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_intro_tirx/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 简介
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_tirx_layout_api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 布局 API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    第三部分 — GEMM：从分块到 SOTA
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    第三部分 — GEMM：从分块到 SOTA
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_gemm_basics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    构建分块 GEMM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_gemm_async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    用 TMA 流水线化 GEMM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_gemm_advanced/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    用线程束特化和集群扩展 GEMM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    第四部分 — Flash Attention 4
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    第四部分 — Flash Attention 4
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../chapter_flash_attention/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flash Attention 4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    参考
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    参考
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    参考首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    调试线程束特化核函数
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    调试线程束特化核函数
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        调试核函数之前
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        调试工作流
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        交接清单
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        如果编译失败
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        检视生成的代码
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        第 7 步参考骨架
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        症状映射表
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        何时重启 Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        死锁
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        崩溃与上下文中毒
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        错误结果
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        正确但慢
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#issue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        提交一个好的 Issue
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    编译器内部实现
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    编译器内部实现
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tirx_guide/arch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    编译器内部实现
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tirx_guide/arch/lowering_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 降低流水线
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_4" id="__nav_6_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 语言参考
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    TIRx 语言参考
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tirx_guide/language_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TIRx 语言参考
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tirx_guide/language_reference/cuda/parser_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    解析器工具
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tirx_guide/language_reference/cuda/data_types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据类型与表达式
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tirx_guide/language_reference/cuda/buffers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    缓冲区与内存
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tirx_guide/language_reference/cuda/control_flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    控制流
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tirx_guide/language_reference/cuda/threads_sync/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CUDA C++/PTX 内建函数
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        调试核函数之前
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        调试工作流
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        交接清单
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        如果编译失败
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        检视生成的代码
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        第 7 步参考骨架
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        症状映射表
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        何时重启 Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        死锁
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        崩溃与上下文中毒
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        错误结果
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        正确但慢
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#issue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        提交一个好的 Issue
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="_1">调试线程束特化核函数<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<p><a href="../../chapter_gemm_advanced/">chap_gemm_advanced</a> 中的 GEMM 第 7-9 步重叠了 TMA 加载、<code>tcgen05</code> MMA 和 TMEM/SMEM 写回。同样的调试方法适用于 Flash Attention 的交接：识别角色，识别每个角色拥有的存储，然后对照该模型验证生成的 CUDA。</p>
+<p>不要一开始就重写核函数（kernel）。首先确保运行是有效的，然后检视生成的 CUDA。在排除了环境和编译期问题后，这些核函数的运行时失败通常归结为一个损坏的交接：未初始化的屏障（barrier）、错误的到达计数、藏在角色守卫内的集体操作、过期的屏障相位，或者存储在生产者使其写入可见之前就被复用。</p>
+<h2 id="_2">调试核函数之前<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<p>先排除运行时上下文问题：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import tvm, tvm.tirx; print(tvm.__file__, tvm.__version__)&quot;</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import torch; print(torch.cuda.get_device_name(), torch.cuda.get_device_capability())&quot;</span>
+</span></code></pre></div>
+<p>这些核函数面向 Blackwell（<code>sm_100a</code>）。如果 Python 导入了过期的 TVM 检出版，或 GPU 不是 Blackwell 级别，请在修改核函数之前先解决。然后运行核函数的最小正确性检查（如 <code>run_correctness()</code>），再看性能。</p>
+<h2 id="_3">调试工作流<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
+<ol>
+<li>在仍然失败的最小形状上复现失败。如果失败是非法内存访问，下次运行前重启 Python。</li>
+<li>如果编译失败，在阅读运行时同步代码之前，先检查已安装的 API、目标、<code>dispatch=</code> 和缓冲区作用域。</li>
+<li>保存 <code>inspect_source("cuda")</code> 输出。在重新阅读 Python 之前，先在其中搜索角色守卫、<code>mbarrier_init</code>、<code>tcgen05</code>、<code>cp.async.bulk.tensor</code> 和 <code>cta_sync()</code>。</li>
+<li>为失败的核函数路径编写角色 / 存储 / 交接 / 生命周期表。</li>
+<li>对照该表检查生成的 CUDA：屏障初始化在角色分支之前，预期的 TMA 生产者，MMA 发射者，写回组，以及 warpgroup 专属分支内没有 CTA 级集体操作。</li>
+<li>将运行分类为死锁、崩溃、错误结果或正确但慢，然后使用下方匹配的章节。</li>
+<li>每次只改一个交接：init 计数、arrive/wait 相位、角色守卫、fence、TMA 存储排空、TMEM alloc/dealloc 或分块调度器推进。</li>
+<li>测量性能前先重新运行正确性检查。</li>
+</ol>
+<h2 id="_4">交接清单<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h2>
+<p>对于任何异步核函数，在修改代码之前先做一个小工作表：</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>写下什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>角色</td>
+<td>发射每个异步操作的确切线程、warp（线程束）、warpgroup 或 CTA。</td>
+</tr>
+<tr>
+<td>存储</td>
+<td>每一步每个分块的活动位置：GMEM、SMEM、TMEM 或寄存器。</td>
+</tr>
+<tr>
+<td>交接</td>
+<td>生产者、消费者、信号对象、到达计数、相位，以及使数据可见的 fence 或排空。</td>
+</tr>
+<tr>
+<td>生命周期</td>
+<td>每个存储槽可被复用、读回或释放的最早时刻。</td>
+</tr>
+</tbody>
+</table>
+<p>然后对照工作表验证生成的 CUDA：</p>
+<ul>
+<li>角色守卫与角色表匹配。</li>
+<li>屏障初始化出现在守卫角色分支之前。</li>
+<li>集体操作未被 lane、warp 或 warpgroup 守卫意外收窄。</li>
+<li>Arrive/wait 相位与交接表匹配。</li>
+<li>TMA 存储排空、TMEM dealloc 和 SMEM 复用仅发生在生命周期表允许之后。</li>
+</ul>
+<p>对 TMA-&gt;MMA-&gt;写回 GEMM 流水线和 Flash Attention 中 score/softmax/value/correction 交接使用同一张工作表。</p>
+<h2 id="_5">如果编译失败<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h2>
+<p>在调试运行时同步之前先修复编译期失败：</p>
+<table>
+<thead>
+<tr>
+<th>症状</th>
+<th>可能区域</th>
+<th>首先检查</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>未知的 TIRx API 或属性错误</td>
+<td>安装的 wheel 与教程代码不匹配</td>
+<td>打印 <code>tvm.__file__</code> 和 <code>tvm.__version__</code>；将 API 名与 <a href="../../tirx_guide/language_reference/">chap_language_reference</a> 对比。</td>
+</tr>
+<tr>
+<td>不支持的 <code>dispatch=</code></td>
+<td>所选目标或原语不支持该路径</td>
+<td>检查 <code>dispatch</code> 参数和目标能力；本教程中的 <code>tcgen05</code> 路径需要 Blackwell。</td>
+</tr>
+<tr>
+<td>缓冲区作用域不匹配</td>
+<td>缓冲区通过错误的硬件路径使用</td>
+<td>检查工作表的存储行：TMEM 必须通过 <code>tcgen05</code> 访问，TMA 操作数必须使用兼容的 GMEM/SMEM 布局。</td>
+</tr>
+<tr>
+<td>编译成功但生成的 CUDA 缺少预期路径</td>
+<td>派发未按你预期的方式降低</td>
+<td>在修改算法之前先检视生成的 CUDA 中的 <code>tcgen05</code> 和 <code>cp.async.bulk.tensor</code>。</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_6">检视生成的代码<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h2>
+<p>对于任何编译后的核函数，保存 CUDA 以便搜索和对比：</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">cuda_source</span> <span class="o">=</span> <span class="n">ex</span><span class="o">.</span><span class="n">mod</span><span class="o">.</span><span class="n">imports</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">inspect_source</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;artifacts&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;artifacts/my_kernel.cu&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">cuda_source</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">cuda_source</span><span class="p">)</span>
+</span></code></pre></div>
+<p>生成的代码将 TIRx 构造映射到 CUDA，如下所示：</p>
+<table>
+<thead>
+<tr>
+<th>TIRx</th>
+<th>生成的 CUDA</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>wg_id == 0</code></td>
+<td><code>(warp_id_in_cta &gt;&gt; 2) == 0</code></td>
+</tr>
+<tr>
+<td><code>wg_id == 1</code></td>
+<td><code>(warp_id_in_cta &gt;&gt; 2) == 1</code></td>
+</tr>
+<tr>
+<td><code>warp_id == 0</code></td>
+<td><code>(warp_id_in_cta &amp; 3) == 0</code></td>
+</tr>
+<tr>
+<td><code>warp_id == 3</code></td>
+<td><code>(warp_id_in_cta &amp; 3) == 3</code></td>
+</tr>
+<tr>
+<td><code>lane_id == 0</code></td>
+<td><code>(((int)threadIdx.x) % 32) == 0</code></td>
+</tr>
+<tr>
+<td><code>.init()</code> 内部守卫</td>
+<td><code>((int)threadIdx.x) &lt; 1</code>（仅 CTA 线程 0）</td>
+</tr>
+<tr>
+<td><code>elect_sync()</code></td>
+<td><code>tvm_builtin_elect_one_sync_op()</code></td>
+</tr>
+</tbody>
+</table>
+<p>在阅读完整核函数之前先搜索这些字符串：</p>
+<table>
+<thead>
+<tr>
+<th>生成的 CUDA</th>
+<th>检查</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>if (threadIdx.x &lt; 1)</code></td>
+<td>单 CTA 线程守卫，通常是屏障初始化</td>
+</tr>
+<tr>
+<td><code>mbarrier_init</code></td>
+<td>屏障初始化存在且出现在角色分支之前</td>
+</tr>
+<tr>
+<td><code>tcgen05</code></td>
+<td>Tensor Core 路径已生成</td>
+</tr>
+<tr>
+<td><code>cp.async.bulk.tensor</code></td>
+<td>拷贝降低为 TMA</td>
+</tr>
+<tr>
+<td><code>cta_sync();</code></td>
+<td>CTA 级屏障；它不能位于 <code>wg_id</code> 分支内</td>
+</tr>
+</tbody>
+</table>
+<h2 id="7">第 7 步参考骨架<a class="headerlink" href="#7" title="Permanent link">&para;</a></h2>
+<p>一个正确编译的第 7 步核函数具有如下顶层形状。下方的守卫以角色名书写以便阅读；在生成的 CUDA 中，搜索上表对应的表达式。</p>
+<div class="language-c highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">// (1) 屏障初始化：顶层，仅 CTA 线程 0</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="n">mbarrier_init</span><span class="p">(</span><span class="n">tma2mma</span><span class="p">[</span><span class="mf">0..1</span><span class="p">],</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="n">mbarrier_init</span><span class="p">(</span><span class="n">mma2tma</span><span class="p">[</span><span class="mf">0..1</span><span class="p">],</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="n">mbarrier_init</span><span class="p">(</span><span class="n">mma2ld</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="n">mbarrier_init</span><span class="p">(</span><span class="n">ld2mma</span><span class="p">,</span><span class="w"> </span><span class="mi">128</span><span class="p">);</span><span class="w">   </span><span class="c1">// 由 WG0 全部 128 个线程到达</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">}</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1">// (2) TMEM 分配：WG0 warp 0，发射 warp 的所有通道</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wg_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">warp_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">tcgen05_alloc</span><span class="p">(...,</span><span class="w"> </span><span class="mi">512</span><span class="p">);</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1">// (3) fence + cta_sync，然后相位初始化：生产者=1，消费者=0</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="c1">// (4) 线程束特化循环</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wg_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">warp_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">elect_sync</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* TMA  */</span><span class="w"> </span><span class="k">while</span><span class="p">(</span><span class="n">valid</span><span class="p">){</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="n">next_tile</span><span class="p">();</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wg_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">warp_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">elect_sync</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* MMA  */</span><span class="w"> </span><span class="k">while</span><span class="p">(</span><span class="n">valid</span><span class="p">){</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="n">next_tile</span><span class="p">();</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wg_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w">                                </span><span class="p">{</span><span class="w"> </span><span class="cm">/* WB   */</span><span class="w"> </span><span class="k">while</span><span class="p">(</span><span class="n">valid</span><span class="p">){</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="n">next_tile</span><span class="p">();</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1">// (5) 清理：发射 warp，无 lane 守卫</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="n">cta_sync</span><span class="p">();</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">warp_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">tcgen05_relinquish_alloc_permit</span><span class="p">();</span><span class="w"> </span><span class="n">tcgen05_dealloc</span><span class="p">(...,</span><span class="w"> </span><span class="mi">512</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>在修改算法之前检查这些：</p>
+<ul>
+<li>屏障初始化位于顶层，不在 <code>wg_id</code> 守卫内。</li>
+<li><code>tcgen05_alloc</code> 和 <code>tcgen05_dealloc</code> 有 warp 守卫但无 lane 守卫；发射 warp 的所有通道参与。</li>
+<li>TMA 和 MMA 循环都迭代 <code>K_TILES</code> 次。</li>
+<li>相位初始化为生产者=<code>1</code>，消费者=<code>0</code>。</li>
+</ul>
+<h2 id="_7">症状映射表<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h2>
+<p>从症状出发，但将其视为线索而非最终诊断：</p>
+<table>
+<thead>
+<tr>
+<th>线索</th>
+<th>可能区域</th>
+<th>首先检查</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>核函数挂起，然后运行时报告未定义的启动失败</td>
+<td>死锁</td>
+<td>屏障初始化位置、到达计数、<code>cta_sync()</code> 位置和 <code>next_tile()</code> 参与</td>
+</tr>
+<tr>
+<td>非法内存访问、XID，或后续不相关的 CUDA 调用也失败</td>
+<td>崩溃 / 中毒上下文</td>
+<td>重启 Python，然后检查指针范围、存储生命周期和集体操作参与</td>
+</tr>
+<tr>
+<td>128 行或分块大小的条带中出现错误行</td>
+<td>同步竞争或分块索引不匹配</td>
+<td>生产者/消费者相位、调度器推进以及哪个 warpgroup 拥有每个行条带</td>
+</tr>
+<tr>
+<td><code>NaN</code> 或明显无效的值</td>
+<td>描述符、操作数设置或未初始化累加</td>
+<td>SMEM/TMEM 描述符设置、交换/布局和累加器初始化</td>
+</tr>
+<tr>
+<td>有限但有规律的错误值</td>
+<td>过期或部分可见的数据</td>
+<td>缺失 fence、缺失 TMA 存储排空，或存储在生命周期表允许之前被复用</td>
+</tr>
+<tr>
+<td>输出正确但无预期加速</td>
+<td>派发或资源问题</td>
+<td>生成的 CUDA 路径、流水线深度、占用率和寄存器溢出</td>
+</tr>
+</tbody>
+</table>
+<h2 id="python">何时重启 Python<a class="headerlink" href="#python" title="Permanent link">&para;</a></h2>
+<p>CUDA 错误并不总是自行清理。在非法内存访问、XID 或"CUDA 上下文中毒"错误之后，后续不相关的调用（如 <code>torch.randn</code>）可能持续失败。在测试下一个修复之前重启 Python 进程，否则你可能调试的是上一次崩溃而非当前代码。</p>
+<h2 id="_8">死锁<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h2>
+<p>按顺序检查这些：</p>
+<ul>
+<li><strong>到达计数与 init 计数不匹配。</strong> 常见情况：<code>MBarrier.init(128)</code> 但 <code>arrive</code> 被 <code>if warp_id == 0: if lane_id == 0:</code> 守卫，因此只有 1 个线程到达，wait 永不返回。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>屏障</th>
+<th>init(count)</th>
+<th>谁到达</th>
+<th>到达数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TMABar</code> (tma-&gt;mma)</td>
+<td>1</td>
+<td>TMA 引擎经 <code>arrive(stage, bytes)</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>TCGen05Bar</code> (mma-&gt;tma, mma-&gt;ld)</td>
+<td>1</td>
+<td>MMA warp 经 <code>tcgen05.commit</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>MBarrier</code> (ld-&gt;mma)</td>
+<td>128</td>
+<td>WG0 全部线程经 <code>arrive</code></td>
+<td>128</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>
+<p><strong>屏障初始化嵌套在 <code>wg_id</code> 守卫内。</strong> <code>.init()</code> 降低为 <code>if threadIdx.x &lt; 1:</code>，即 CTA 线程 0。CTA 线程 0 属于 WG0，因此 <code>if wg_id == 1:</code> 阻止每个线程运行初始化。初始化必须在顶层；在 <code>inspect_source()</code> 中 <code>grep mbarrier_init</code> 验证。</p>
+</li>
+<li>
+<p><strong><code>cta_sync()</code> 位于 warpgroup 分支内。</strong> <code>cta_sync</code> 是 <code>__syncthreads()</code>，要求所有 CTA 线程。在 <code>if wg_id == 0:</code> 内，WG1 永远到不了。用 <code>T.cuda.warpgroup_sync(10)</code> 做单 warpgroup 屏障。</p>
+</li>
+<li>
+<p><strong><code>tile_scheduler.next_tile()</code> 被某些消费者 warpgroup 线程跳过。</strong> 调度器跟踪每线程状态；跳过它的线程可能永远循环。</p>
+</li>
+<li>
+<p><strong>TMA 和 MMA 对 K-tile 计数不一致。</strong> 如果 MMA 做 <code>K_TILES - 1</code> 而非 <code>K_TILES</code>，屏障相位漂移，第二个外层分块死锁。</p>
+</li>
+<li>
+<p><strong><code>PipelineState</code> 初始相位错误。</strong> 生产者从 <code>phase=1</code> 开始使首次 wait 通过；消费者从 <code>phase=0</code> 开始使首次 wait 阻塞。如果两者从相同相位开始，首次交接可能立即死锁。</p>
+</li>
+</ul>
+<h2 id="_9">崩溃与上下文中毒<a class="headerlink" href="#_9" title="Permanent link">&para;</a></h2>
+<p>常见原因：</p>
+<ul>
+<li><strong><code>pool.commit()</code> 之后 <code>pool.alloc</code>。</strong> 屏障包装器在内部调用 <code>alloc</code>。正确顺序：<code>tmem_addr -&gt; 屏障包装器 -&gt; move_base_to(1024) -&gt; Asmem / Bsmem / Dsmem -&gt; commit()</code>。</li>
+<li><strong><code>tcgen05.alloc</code> 或 <code>tcgen05.dealloc</code> 带 lane 守卫。</strong> 发射 warp 必须所有通道参与。<code>if lane_id == 0:</code> 只运行一个线程，这是未定义行为。</li>
+<li><strong><code>tcgen05.dealloc</code> 之前缺失 <code>cta_sync()</code>。</strong> TMEM 在写回仍在读取时被释放。</li>
+<li><strong>GMEM 或 SMEM 越界访问。</strong> 缩小到一个分块，检查调度器的 <code>m_idx</code> / <code>n_idx</code>，并检查当前形状是否为核函数分块或集群分块的倍数。</li>
+</ul>
+<h2 id="_10">错误结果<a class="headerlink" href="#_10" title="Permanent link">&para;</a></h2>
+<p>在猜测之前先按模式分类错误输出。整行条带通常指向生产者/消费者相位、分块索引或角色归属不匹配。<code>NaN</code> 输出通常指向描述符设置、操作数设置或未初始化累加。有限但有规律的错误值通常意味着消费者读到了旧分块、半写分块或存储尚未排空的数据。</p>
+<ul>
+<li><strong><code>tcgen05.commit</code> 在 <code>elect_sync</code> 之外。</strong> 全部 32 个线程创建提交组；31 个空组立即向 mbarrier 发信号。TMA 可能在 MMA 读取之前覆盖 SMEM。</li>
+<li><strong>TMA 存储之前缺失 <code>fence.proxy_async("shared::cta")</code>。</strong> TMA 引擎可能看不到线程的 SMEM 写入。</li>
+<li><strong>TMA 存储之后缺失 <code>cp_async.bulk.commit_group()</code> 加 <code>wait_group(0)</code>。</strong> 下一个分块可能在存储排空之前复用 Dsmem。</li>
+<li><strong>持久化核函数在小尺寸（如 1024x1024）时间歇性失败。</strong> 更大的尺寸可用更长的 K 循环掩盖竞争。重新检查分块间的相位重置和 TMA 存储的 commit/wait。</li>
+<li><strong><code>fence.after_thread_sync()</code> 通常不是解法。</strong> MMA 完成 mbarrier 已携带 release-acquire 语义。第 8、9 步在写回边上（<code>mma2ld.wait</code> 之后、首次 <code>tcgen05.ld</code> 之前）保守地添加了它；不要在 TMA 到 MMA 边上例行添加。</li>
+</ul>
+<h2 id="_11">正确但慢<a class="headerlink" href="#_11" title="Permanent link">&para;</a></h2>
+<p>如果输出正确但性能远低于预期，使用同样的检视循环：</p>
+<table>
+<thead>
+<tr>
+<th>线索</th>
+<th>可能区域</th>
+<th>首先检查</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>生成的 CUDA 没有 <code>cp.async.bulk.tensor</code></td>
+<td>拷贝未降低为 TMA</td>
+<td>检查 <code>dispatch="tma"</code>、目标能力和操作数布局</td>
+</tr>
+<tr>
+<td>生成的 CUDA 没有 <code>tcgen05</code> 路径</td>
+<td>MMA 未降低为 Blackwell Tensor Core 指令</td>
+<td>检查 <code>dispatch="tcgen05"</code>、目标能力和操作数布局</td>
+</tr>
+<tr>
+<td>TMA 和 MMA 不重叠</td>
+<td>流水线太浅或相位使生产者/消费者串行化</td>
+<td>检视生成的 CUDA 中 wait/arrive/advance 的顺序</td>
+</tr>
+<tr>
+<td>小形状正确性良好但大形状速度差</td>
+<td>寄存器溢出、占用率或暂存缓冲区压力</td>
+<td>检查编译器资源报告；减小分块大小、分块写回或降低流水线深度</td>
+</tr>
+</tbody>
+</table>
+<h2 id="issue">提交一个好的 Issue<a class="headerlink" href="#issue" title="Permanent link">&para;</a></h2>
+<p>如果失败通过了上述所有检查，在 <a href="https://github.com/apache/tvm/issues">Apache TVM GitHub 仓库</a> 提交 issue 之前先缩减它。包含：</p>
+<ul>
+<li><code>tvm.__file__</code> / <code>tvm.__version__</code> 输出和 GPU 能力；</li>
+<li>复现失败的最小形状；</li>
+<li>失败是编译期、死锁、崩溃、错误结果还是正确但慢；</li>
+<li>最小核函数或 notebook 单元及其正确性检查；</li>
+<li>保存的 <code>inspect_source("cuda")</code> 输出，或显示可疑守卫、屏障或派发路径的最小摘录。</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+        <script src="../../javascripts/iframe-autoresize.js"></script>
+      
+    
+  </body>
+</html>
