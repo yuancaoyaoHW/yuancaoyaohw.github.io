@@ -19,6 +19,10 @@ foreach ($File in Get-ChildItem -File -LiteralPath $DocsRoot -Filter '*.md') {
     $Failures.Add("$($File.Name): unresolved MyST admonition")
   }
 
+  if ($Text -match 'min-width:\s*\d+px') {
+    $Failures.Add("$($File.Name): fixed min-width can cause page overflow")
+  }
+
   $WithoutFrontmatter = $Text -replace '(?s)^---\s.*?---\s*', ''
   $FirstMeaningfulLine = ($WithoutFrontmatter -split "`r?`n" | Where-Object { $_.Trim() })[0]
   if ($FirstMeaningfulLine -match '^# ') {

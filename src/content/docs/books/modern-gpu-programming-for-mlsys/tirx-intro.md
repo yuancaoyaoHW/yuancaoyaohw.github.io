@@ -177,7 +177,7 @@ print("PASS")
 现在核函数可以运行了，我们可以回读它，问一问它的每一行究竟决定了什么。这样看，整个核函数就是沿着三个设计要素的一组选择。其中的每个操作都回答同样的三个问题——*谁*运行它、它的数据*在何处*、它*如何*执行——而这三个答案正是作用域、布局和调度。本节余下部分逐一讨论这些设计要素；下方的交互式演示让你看到每个设计要素控制的是哪些行。
 
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/tirx_dispatch.html" title="TIRx: scope, layout, dispatch" loading="lazy"
-        style="width:100%; min-width:960px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;
+        style="width:100%; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;
 "></iframe>
 
 *交互：点击 Scope / Layout / Dispatch，高亮显示每个设计要素所控制的核函数代码行。*

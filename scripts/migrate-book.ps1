@@ -68,6 +68,7 @@ function Convert-BookMarkdown {
   $Text = $Text -replace '(?m)^::::\{admonition\} ([^\r\n]+)\r?\n', (':::note[$1]' + "`n")
   $Text = $Text -replace '(?m)^:class: [^\r\n]+\r?\n', ''
   $Text = $Text -replace '(?m)^::::\s*$', ':::'
+  $Text = $Text -replace '\s*min-width:\s*\d+px;', ''
   $Text = $Text -replace '\.\./img/', "$BookBase/img/"
   $Text = $Text -replace '\.\./demo/', "$BookBase/demo/"
   $Text = $Text -replace '\.\./_static/tirx-layout-demo/', "$BookBase/_static/tirx-layout-demo/"

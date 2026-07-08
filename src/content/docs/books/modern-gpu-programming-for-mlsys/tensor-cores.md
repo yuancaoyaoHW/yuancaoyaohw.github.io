@@ -22,7 +22,7 @@ Blackwell 对最后一项做出了重大改变。`tcgen05` 的累加器不再作
 
 <div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/tcgen05_intro.html" title="tcgen05 and Tensor Memory" loading="lazy"
-        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:100%; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
 *交互演示：`tcgen05` 累加器行为。切换 A 或 B 的转置，选择输出宽度 `N`，并逐步执行 `K` 迭代以观察部分和在 TMEM 中累加。*

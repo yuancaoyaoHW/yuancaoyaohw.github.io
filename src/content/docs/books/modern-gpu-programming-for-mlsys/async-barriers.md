@@ -25,7 +25,7 @@ TMA（[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）和 Tensor Core（[T
 
 <div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/mbarrier_mechanism.html" title="mbarrier data structure and APIs" loading="lazy"
-        style="width:100%; min-width:1320px; height:620px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:100%; height:620px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
 *交互演示：`mbarrier` 状态视图，展示到达计数器、阶段位以及 `init`、`arrive` 和 `wait` 操作；点击某个字段以聚焦它。*
@@ -54,7 +54,7 @@ TMA（[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）和 Tensor Core（[T
 
 <div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/phase_tracking.html" title="mbarrier phase tracking" loading="lazy"
-        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:100%; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
 *交互演示：一个在若干流水线迭代中重用的屏障，展示阶段位在每轮完成后翻转。*
@@ -83,7 +83,7 @@ TMA（[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）和 Tensor Core（[T
 
 <div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/mbarrier_tma_timeline.html" title="mbarrier signalling TMA completion" loading="lazy"
-        style="width:100%; min-width:1320px; height:700px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:100%; height:700px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
 *交互演示：一次 TMA 加载通过 `mbarrier` 发出完成信号。MMA 路径在读取共享内存分块前等待屏障。Tensor Core 到收尾阶段的交接遵循相同形态，只是由 Tensor Core 提交路径而非 TMA 执行到达。*
