@@ -19,7 +19,7 @@ foreach ($File in Get-ChildItem -File -LiteralPath $DocsRoot -Filter '*.md') {
     $Failures.Add("$($File.Name): unresolved MyST admonition")
   }
 
-  if ($Text -match 'min-width:\s*\d+px') {
+  if ($Text -match '(^|[;"\s])min-width:\s*\d+px') {
     $Failures.Add("$($File.Name): fixed min-width can cause page overflow")
   }
 

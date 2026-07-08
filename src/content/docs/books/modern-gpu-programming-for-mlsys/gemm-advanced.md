@@ -344,8 +344,10 @@ def hgemm_v7(M, N, K):
 整个优化建立在一项硬件能力之上：当 `cta_group=2` 时，MMA 被允许读取由*两个* CTA 暂存的操作数分块，而不仅是它所在的那个。每个 CTA 加载一片 128 行的存储 B，转置后它成为 128 个逻辑输出列，而协作 MMA 把两片缝合回一个操作数。下图追踪两个 CTA 的 A 和 B 切片如何组合成单个 256×256 集群分块：
 
 <div style="overflow-x:auto;">
+<div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/cta_cluster.html" title="A 2-CTA cluster: cooperative MMA via cross-CTA SMEM read" loading="lazy"
-        style="width:100%; height:580px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:720px; max-width:none; height:580px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div>
 </div>
 
 *交互式：每个 CTA 拥有一片 A 行切片和一片存储 B 行切片，然后通过集群（DSMEM）读取另一个 CTA 的存储 B 切片。经过 `B.T` 后，两片存储 B 切片覆盖完整的输出列范围，因此这对 CTA 产生一个 256×256 输出分块。*

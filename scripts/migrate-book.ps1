@@ -68,7 +68,16 @@ function Convert-BookMarkdown {
   $Text = $Text -replace '(?m)^::::\{admonition\} ([^\r\n]+)\r?\n', (':::note[$1]' + "`n")
   $Text = $Text -replace '(?m)^:class: [^\r\n]+\r?\n', ''
   $Text = $Text -replace '(?m)^::::\s*$', ':::'
-  $Text = $Text -replace '\s*min-width:\s*\d+px;', ''
+  $Text = [regex]::Replace($Text, 'style="width:100%;\s*min-width:\s*(\d+px);\s*([^"]*)"', {
+    param($Match)
+    $Width = $Match.Groups[1].Value
+    $Rest = $Match.Groups[2].Value
+    return 'style="width:' + $Width + '; max-width:none; ' + $Rest + '"'
+  })
+  $Text = [regex]::Replace($Text, '(?s)(<iframe\b(?=.*?style="width:\d+px; max-width:none;).*?</iframe>)', {
+    param($Match)
+    return '<div style="overflow-x:auto;">' + "`n" + $Match.Groups[1].Value + "`n" + '</div>'
+  })
   $Text = $Text -replace '\.\./img/', "$BookBase/img/"
   $Text = $Text -replace '\.\./demo/', "$BookBase/demo/"
   $Text = $Text -replace '\.\./_static/tirx-layout-demo/', "$BookBase/_static/tirx-layout-demo/"
@@ -117,6 +126,11 @@ foreach ($Page in $Pages) {
 
 Get-ChildItem -LiteralPath (Join-Path $SourceRoot '_images') | Copy-Item -Destination (Join-Path $AssetRoot 'img') -Recurse -Force
 Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'demo') | Copy-Item -Destination (Join-Path $AssetRoot 'demo') -Recurse -Force
+
+# viz-base.js / viz-base.css sit at the docs_build/site root and are referenced by every
+# demo HTML via ../viz-base.{js,css}. Without them every iframe renders blank (404).
+Copy-Item -LiteralPath (Join-Path $SourceRoot 'docs_build\site\viz-base.js') -Destination (Join-Path $AssetRoot 'viz-base.js') -Force
+Copy-Item -LiteralPath (Join-Path $SourceRoot 'docs_build\site\viz-base.css') -Destination (Join-Path $AssetRoot 'viz-base.css') -Force
 
 $TirxDemoTarget = Join-Path $AssetRoot '_static\tirx-layout-demo'
 New-Item -ItemType Directory -Force -Path $TirxDemoTarget | Out-Null

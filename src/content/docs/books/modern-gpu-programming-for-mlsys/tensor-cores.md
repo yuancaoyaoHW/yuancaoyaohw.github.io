@@ -21,8 +21,10 @@ Blackwell 对最后一项做出了重大改变。`tcgen05` 的累加器不再作
 本章聚焦于计算指令本身。TMA（张量内存加速器，[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）负责将操作数搬入 SMEM。TMEM 负责持有累加器和一些缩放因子操作数。`tcgen05.mma` 是位于这两次内存移动之间的 Tensor Core 操作。
 
 <div style="overflow-x:auto;">
+<div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/tcgen05_intro.html" title="tcgen05 and Tensor Memory" loading="lazy"
-        style="width:100%; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div>
 </div>
 
 *交互演示：`tcgen05` 累加器行为。切换 A 或 B 的转置，选择输出宽度 `N`，并逐步执行 `K` 迭代以观察部分和在 TMEM 中累加。*

@@ -24,8 +24,10 @@ TMA（[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）和 Tensor Core（[T
 `mbarrier`，即内存屏障（memory barrier）的简称，是存储在共享内存中的硬件同步（synchronization）对象。概念上，它包含两块状态：一个到达计数器和一个阶段位。计数器告诉屏障当前轮次还缺少多少次到达。阶段位告诉核函数屏障当前处于哪一轮。
 
 <div style="overflow-x:auto;">
+<div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/mbarrier_mechanism.html" title="mbarrier data structure and APIs" loading="lazy"
-        style="width:100%; height:620px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:1320px; max-width:none; height:620px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div>
 </div>
 
 *交互演示：`mbarrier` 状态视图，展示到达计数器、阶段位以及 `init`、`arrive` 和 `wait` 操作；点击某个字段以聚焦它。*
@@ -53,8 +55,10 @@ TMA（[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）和 Tensor Core（[T
 阶段位正是使该重用安全的关键。
 
 <div style="overflow-x:auto;">
+<div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/phase_tracking.html" title="mbarrier phase tracking" loading="lazy"
-        style="width:100%; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div>
 </div>
 
 *交互演示：一个在若干流水线迭代中重用的屏障，展示阶段位在每轮完成后翻转。*
@@ -82,8 +86,10 @@ TMA（[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）和 Tensor Core（[T
 第三种情况是 MMA 为收尾阶段产生数据。`tcgen05` MMA 将其结果异步写入 TMEM。在 Tensor Core 完成相关工作之前，收尾阶段不能安全读取累加器。因此 MMA 提交路径到达一个完成屏障，收尾阶段在读取 TMEM 之前等待该屏障。
 
 <div style="overflow-x:auto;">
+<div style="overflow-x:auto;">
 <iframe src="/books/modern-gpu-programming-for-mlsys/demo/mbarrier_tma_timeline.html" title="mbarrier signalling TMA completion" loading="lazy"
-        style="width:100%; height:700px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:1320px; max-width:none; height:700px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div>
 </div>
 
 *交互演示：一次 TMA 加载通过 `mbarrier` 发出完成信号。MMA 路径在读取共享内存分块前等待屏障。Tensor Core 到收尾阶段的交接遵循相同形态，只是由 Tensor Core 提交路径而非 TMA 执行到达。*
