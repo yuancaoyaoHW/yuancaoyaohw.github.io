@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Latent MoE 技术报告整理</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  // 避免 $ 在页面加载前闪烁未渲染的 LaTeX
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise();
+  });
+</script>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$','$']], displayMath: [['$$','$$']] },
+    svg: { fontCache: 'global' },
+    options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+<style>
+  :root {
+    --nv-green: #76b900;
+    --nv-green-dark: #3f8500;
+    --nv-green-tint: #eef7e0;
+    --nv-black: #000000;
+    --nv-near-black: #1a1a1a;
+    --nv-white: #ffffff;
+    --nv-gray-100: #f5f5f5;
+    --nv-gray-200: #ebebeb;
+    --nv-gray-300: #a7a7a7;
+    --nv-gray-400: #898989;
+    --nv-gray-500: #757575;
+    --nv-border: #e0e0e0;
+    --nv-border-strong: #5e5e5e;
+    --nv-link-hover: #3860be;
+    --nv-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    --nv-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: var(--nv-white);
+    color: var(--nv-black);
+    line-height: 1.5;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Nav */
+  nav {
+    background: var(--nv-white);
+    border-bottom: 1px solid var(--nv-border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+  nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .nav-brand {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nv-black);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .nav-brand::before {
+    content: "";
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    background: var(--nv-green);
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  }
+  .nav-links {
+    display: flex;
+    gap: 28px;
+    list-style: none;
+  }
+  .nav-links a {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--nv-black);
+    text-decoration: none;
+    transition: color .15s;
+  }
+  .nav-links a:hover { color: var(--nv-green-dark); }
+  @media (max-width: 768px) {
+    .nav-links { display: none; }
+  }
+
+  /* Hero */
+  .hero {
+    background: var(--nv-white);
+    padding: 80px 0 56px;
+    border-bottom: 2px solid var(--nv-green);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 70% 30%, rgba(118, 185, 0, 0.06) 0%, transparent 55%);
+    pointer-events: none;
+  }
+  .hero .container { position: relative; }
+  .hero-eyebrow {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--nv-green-dark);
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 16px;
+    max-width: 900px;
+    color: var(--nv-black);
+  }
+  .hero h1 .accent {
+    color: var(--nv-green-dark);
+    border-bottom: 2px solid var(--nv-green);
+    padding-bottom: 2px;
+  }
+  .hero .subtitle {
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1.67;
+    color: var(--nv-gray-500);
+    max-width: 820px;
+    margin-bottom: 28px;
+  }
+  .hero-meta {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--nv-gray-400);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  .hero-meta span { color: var(--nv-green-dark); }
+
+  /* Section base */
+  section {
+    padding: 64px 0;
+  }
+  section.tint { background: var(--nv-gray-100); }
+  section.white { background: var(--nv-white); }
+  .section-label {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--nv-green-dark);
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 32px;
+    color: var(--nv-black);
+  }
+  h3 {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 12px;
+    color: var(--nv-black);
+  }
+  p {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.67;
+    margin-bottom: 12px;
+    color: #333333;
+  }
+  strong { font-weight: 700; color: var(--nv-black); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    background: var(--nv-green-tint);
+    color: var(--nv-green-dark);
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+
+  /* Concept block */
+  .concept {
+    border-left: 4px solid var(--nv-green);
+    padding: 24px 32px;
+    margin: 24px 0;
+    background: var(--nv-green-tint);
+    border-radius: 0 2px 2px 0;
+  }
+  .concept p { margin-bottom: 16px; }
+  .concept p:last-child { margin-bottom: 0; }
+  .highlight {
+    color: var(--nv-green-dark);
+    font-weight: 700;
+  }
+
+  /* Deep-read report (Paper Parse 双模报告) */
+  .deep-read {
+    margin: 40px 0 0;
+    border: 1px solid var(--nv-border);
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--nv-white);
+    box-shadow: var(--nv-shadow);
+  }
+  .deep-read-header {
+    background: var(--nv-green-dark);
+    color: var(--nv-white);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .deep-read-header::before {
+    content: "📖";
+    font-size: 18px;
+  }
+  .deep-read-body { padding: 28px 32px; }
+  .deep-read-body h3 {
+    font-size: 18px;
+    margin: 28px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--nv-border);
+    color: var(--nv-green-dark);
+  }
+  .deep-read-body h3:first-child { margin-top: 0; }
+  .deep-read-body h4 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 20px 0 8px;
+    color: var(--nv-black);
+  }
+  .deep-read-body p { font-size: 14.5px; line-height: 1.7; color: #333; margin-bottom: 10px; }
+  .deep-read-body strong { color: var(--nv-black); }
+  .deep-read-body code { font-size: 12.5px; }
+  .deep-read-body ul, .deep-read-body ol { margin: 8px 0 12px 22px; }
+  .deep-read-body li { font-size: 14.5px; line-height: 1.7; color: #333; margin: 6px 0; }
+  .deep-read-body .formula {
+    background: #1a1a1a;
+    color: #76b900;
+    padding: 16px 20px;
+    border-radius: 2px;
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: auto;
+    margin: 16px 0;
+    white-space: pre;
+  }
+  .deep-read-body .formula .comment { color: #898989; }
+  .deep-read-body .ablock {
+    border-left: 3px solid var(--nv-green);
+    background: var(--nv-green-tint);
+    padding: 14px 18px;
+    margin: 16px 0;
+    border-radius: 0 2px 2px 0;
+    font-size: 14.5px;
+  }
+  .deep-read-body .ablock .alabel {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--nv-green-dark);
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .deep-read-body .principle {
+    display: inline-block;
+    background: var(--nv-green);
+    color: var(--nv-black);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 2px;
+    margin-right: 6px;
+  }
+  .deep-read-body .metric-up { color: var(--nv-green-dark); font-weight: 700; }
+  .deep-read-body .metric-flat { color: var(--nv-gray-500); font-weight: 700; }
+  .deep-read-part-divider {
+    border: none;
+    border-top: 1px dashed var(--nv-border);
+    margin: 32px 0;
+  }
+  .deep-read-body .part-label {
+    display: inline-block;
+    background: var(--nv-green-tint);
+    color: var(--nv-green-dark);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 2px;
+    border: 1px solid rgba(118,185,0,0.4);
+    margin-bottom: 16px;
+  }
+  .deep-read-body .one-liner {
+    background: var(--nv-green-tint);
+    border: 1px solid rgba(118,185,0,0.3);
+    border-left: 4px solid var(--nv-green);
+    padding: 16px 20px;
+    border-radius: 0 2px 2px 0;
+    margin: 16px 0;
+  }
+  .deep-read-body .one-liner .label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--nv-green-dark);
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .deep-read-body .one-liner p { margin: 0; font-size: 14.5px; }
+
+  /* Zhihu community discussion */
+  .zhihu-section { }
+  .zhihu-quote {
+    background: var(--nv-white);
+    border: 1px solid var(--nv-border);
+    border-left: 3px solid #0084ff;
+    padding: 18px 22px;
+    margin: 14px 0;
+    border-radius: 0 2px 2px 0;
+    box-shadow: var(--nv-shadow);
+    transition: border-color .15s;
+  }
+  .zhihu-quote:hover { border-left-color: var(--nv-green); }
+  .zhihu-quote-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .zhihu-quote-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--nv-black);
+    line-height: 1.4;
+    flex: 1 1 100%;
+  }
+  .zhihu-quote-title a {
+    color: #0084ff;
+    text-decoration: none;
+  }
+  .zhihu-quote-title a:hover { color: var(--nv-green-dark); }
+  .zhihu-quote-meta {
+    font-size: 12px;
+    color: var(--nv-gray-500);
+    font-family: ui-monospace, monospace;
+  }
+  .zhihu-quote-meta .author { color: #0084ff; font-weight: 600; }
+  .zhihu-quote-meta .votes { color: var(--nv-green-dark); font-weight: 700; }
+  .zhihu-quote-body {
+    font-size: 14px;
+    line-height: 1.7;
+    color: #333;
+    margin: 8px 0 0;
+    padding-left: 0;
+  }
+  .zhihu-quote-body p { margin: 6px 0; font-size: 14px; }
+  .zhihu-quote-body strong { color: var(--nv-black); }
+  .zhihu-insight {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: var(--nv-green-tint);
+    border-radius: 2px;
+    font-size: 13px;
+    color: var(--nv-green-dark);
+    font-weight: 600;
+  }
+  .zhihu-insight::before { content: "💡 论文未提及的补充："; }
+
+  /* Paper card */
+  .paper {
+    background: var(--nv-white);
+    border: 1px solid var(--nv-border);
+    border-radius: 2px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    box-shadow: var(--nv-shadow);
+    transition: box-shadow .15s, border-color .15s;
+  }
+  .paper:hover {
+    border-color: var(--nv-green);
+    box-shadow: var(--nv-shadow-hover);
+  }
+  .tint .paper {
+    background: var(--nv-white);
+  }
+  .paper-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 16px;
+    margin-bottom: 12px;
+  }
+  .paper-id {
+    display: inline-block;
+    background: var(--nv-green);
+    color: var(--nv-black);
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: background .15s;
+  }
+  .paper-id:hover { background: var(--nv-green-dark); color: var(--nv-white); }
+  .paper-date {
+    color: var(--nv-gray-400);
+    font-size: 13px;
+    font-family: ui-monospace, monospace;
+    font-weight: 600;
+  }
+  .paper-title {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--nv-black);
+    margin: 4px 0 8px;
+  }
+  .paper-authors {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--nv-gray-500);
+    margin-bottom: 14px;
+    font-style: italic;
+  }
+  .specs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .spec {
+    display: inline-block;
+    background: var(--nv-green-tint);
+    color: var(--nv-green-dark);
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 2px;
+    border: 1px solid rgba(118, 185, 0, 0.4);
+  }
+  .contributions { list-style: none; margin: 12px 0 0; }
+  .contributions li {
+    position: relative;
+    padding-left: 22px;
+    margin: 10px 0;
+    font-size: 15px;
+    line-height: 1.67;
+    color: #333333;
+  }
+  .contributions li::before {
+    content: "▸";
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: var(--nv-green);
+    font-weight: 700;
+  }
+  .contributions li strong { color: var(--nv-green-dark); }
+  .contributions ul {
+    list-style: disc;
+    margin: 8px 0 0 22px;
+    padding-left: 0;
+  }
+  .contributions ul li { padding-left: 0; }
+  .contributions ul li::before { content: none; }
+  .paper-note {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-left: 3px solid var(--nv-green);
+    background: var(--nv-green-tint);
+    font-size: 14px;
+    color: #333333;
+    line-height: 1.5;
+    border-radius: 0 2px 2px 0;
+  }
+  .paper-note strong { color: var(--nv-green-dark); }
+
+  /* Table */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--nv-border);
+    border-radius: 2px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--nv-white);
+    min-width: 700px;
+  }
+  th, td {
+    padding: 13px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--nv-border);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  th {
+    background: var(--nv-gray-100);
+    color: var(--nv-green-dark);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 12px;
+    border-bottom: 2px solid var(--nv-green);
+  }
+  td { color: #333333; }
+  tr:last-child td { border-bottom: none; }
+  td a {
+    color: var(--nv-green-dark);
+    text-decoration: none;
+    font-family: ui-monospace, monospace;
+    font-weight: 700;
+  }
+  td a:hover { color: var(--nv-link-hover); }
+  .check-yes { color: var(--nv-green-dark); font-weight: 700; }
+  .check-no { color: var(--nv-gray-400); font-weight: 700; }
+  .table-caption {
+    font-size: 13px;
+    color: var(--nv-gray-500);
+    margin-top: 10px;
+    font-weight: 400;
+  }
+
+  /* Warning */
+  .warn {
+    border: 1px solid #ef9100;
+    background: #fff8e1;
+    padding: 16px 20px;
+    border-radius: 2px;
+    margin: 24px 0;
+  }
+  .warn h4 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #b06800;
+    margin-bottom: 8px;
+  }
+  .warn p { color: #5d4500; margin: 0; }
+
+  /* Reading guide */
+  .guide {
+    background: var(--nv-white);
+    border: 1px solid var(--nv-border);
+    border-radius: 2px;
+    padding: 28px 32px;
+    margin: 24px 0;
+    box-shadow: var(--nv-shadow);
+  }
+  .guide-item {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--nv-border);
+    display: flex;
+    gap: 20px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .guide-item:last-child { border-bottom: none; }
+  .guide-goal {
+    font-weight: 700;
+    color: var(--nv-green-dark);
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 160px;
+  }
+  .guide-item .desc {
+    color: #333333;
+    font-size: 15px;
+    line-height: 1.67;
+    flex: 1;
+  }
+  .guide-item a {
+    font-family: ui-monospace, monospace;
+    color: var(--nv-green-dark);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .guide-item a:hover { color: var(--nv-link-hover); }
+
+  /* WHY block */
+  .why-block {
+    border: 1px solid var(--nv-green);
+    border-left: 4px solid var(--nv-green);
+    padding: 28px 32px;
+    margin: 44px 0 0;
+    border-radius: 2px;
+    background: var(--nv-green-tint);
+  }
+  .why-block .why-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--nv-green-dark);
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+  .why-block p { margin-bottom: 10px; color: #333333; }
+  .why-block p:last-child { margin-bottom: 0; }
+  .why-block .highlight { color: var(--nv-green-dark); }
+
+  /* Footer */
+  footer {
+    background: var(--nv-white);
+    border-top: 2px solid var(--nv-green);
+    padding: 32px 0;
+    text-align: center;
+  }
+  footer p {
+    font-size: 12px;
+    color: var(--nv-gray-500);
+    font-family: ui-monospace, monospace;
+    line-height: 1.5;
+  }
+  footer p .accent { color: var(--nv-green-dark); }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="container">
+    <div class="nav-brand">NVIDIA · LATENT MOE</div>
+    <ul class="nav-links">
+      <li><a href="#concept">概念</a></li>
+      <li><a href="#method">方法</a></li>
+      <li><a href="#deep-read">深读</a></li>
+      <li><a href="#zhihu">社区</a></li>
+      <li><a href="#nemotron">Nemotron 3</a></li>
+      <li><a href="#derivative">衍生</a></li>
+      <li><a href="#guide">阅读</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="container">
+    <div class="hero-eyebrow">技术报告整理 · TECHNICAL REPORTS</div>
+    <h1>Latent MoE：<span class="accent">把 MoE 的算力瓶颈变成可调旋钮</span></h1>
+    <p class="subtitle">
+      Latent Mixture-of-Experts 是 NVIDIA 在 2025–2026 年提出的新型 MoE 架构——
+      在路由前先将 token 压缩到低维 latent 子空间，再让专家在该子空间做 FFN，
+      从而在同等推理预算下挂载更多专家，把 accuracy per FLOP 推到帕累托前沿。
+    </p>
+    <div class="hero-meta">
+      整理日期 <span>2026-07-21</span> · 来源 <span>arXiv</span> · 核心论文 <span>7 篇</span>
+    </div>
+  </div>
+</header>
+
+<!-- 1. Concept -->
+<section id="concept" class="white">
+  <div class="container">
+    <div class="section-label">核心概念 · CONCEPT</div>
+    <h2>不是少算，是同等算力下挂更多专家</h2>
+    <div class="concept">
+      <p>传统稀疏 MoE 直接把<strong>全维 token embedding</strong> 路由给重量级 FFN 专家，每激活一个专家就要搬运/计算一次完整维度向量，因此<span class="highlight">激活专家数 k 一旦上去，推理算力和访存就线性爆炸</span>。</p>
+      <p>Latent MoE 的做法：在路由之前先把 token <strong>压缩到低维 latent 子空间</strong>，再让专家在这个低维空间里做 FFN。等价于把 MoE 的瓶颈从 <code>k × full-dim</code> 压到 <code>k × latent-dim</code>，于是<span class="highlight">在同等推理预算下可以挂更多专家</span>（NVIDIA 实测可到 ~4×），把 <strong>accuracy per FLOP</strong> 和 <strong>accuracy per parameter</strong> 同时推到帕累托前沿之上。</p>
+      <p>这是<strong>软硬协同</strong>的设计——latent 维度根据 GPU memory hierarchy 和 kernel 吞吐曲线来选，不是任意压缩。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2. Method -->
+<section id="method" class="tint">
+  <div class="container">
+    <div class="section-label">一 · 核心方法论文</div>
+    <h2>LatentMoE 原始论文</h2>
+
+    <article class="paper">
+      <div class="paper-header">
+        <a class="paper-id" href="https://arxiv.org/abs/2601.18089" target="_blank">arXiv:2601.18089</a>
+        <span class="paper-date">2026-01-26</span>
+      </div>
+      <div class="paper-title">LatentMoE: Toward Optimal Accuracy per FLOP and Parameter in Mixture of Experts</div>
+      <div class="paper-authors">Venmugil Elango, Nidhi Bhatia, Roger Waleffe, Rasoul Shafipour, Tomer Asida, Abhinav Khattar, Nave Assaf, Maximilian Golub, Joey Guman, Tiyasa Mitra, Ritchie Zhao, Ritika Borkar, Ran Zilberstein, Mostofa Patwary, Mohammad Shoeybi, Bita Rouhani · NVIDIA</div>
+      <ul class="contributions">
+        <li>从硬件-软件协同设计视角系统重审 MoE，定位<strong>离线高吞吐</strong> vs <strong>在线低延迟</strong>两大部署 regime 的瓶颈。</li>
+        <li>提出在路由前对 token 做<strong>低维 latent 压缩</strong>再喂给专家，使专家 FFN 在低维空间计算。</li>
+        <li>在 ≤95B 参数、&gt;1T token 训练规模上做 design-space exploration，经验+理论双证据显示 LatentMoE 在 accuracy/FLOP 和 accuracy/param 上稳定优于标准 MoE。</li>
+        <li>该架构被 Nemotron-3 Super/Ultra 旗舰模型采纳并扩展到更大规模。</li>
+      </ul>
+      <div class="paper-note">
+        <strong>原始论文，理解原理必读。</strong>后续所有 Nemotron 3 应用论文都引用此文。
+      </div>
+    </article>
+
+    <!-- Paper Parse 双模深读报告 -->
+    <div class="deep-read" id="deep-read">
+      <div class="deep-read-header">Paper Parse 双模深读报告 · arXiv:2601.18089</div>
+      <div class="deep-read-body">
+
+        <span class="part-label">Part A · 深度专业学术速读</span>
+
+        <h3>结构化摘要</h3>
+        <table>
+          <thead><tr><th style="width:120px">维度</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><strong>背景/目标</strong></td><td>MoE 已成 SOTA LLM 标配，但现有架构面向离线高吞吐优化，对在线低延迟的内存带宽和通信瓶颈缺乏考量。本文问：MoE 在 accuracy per FLOP 和 accuracy per parameter 上离最优有多远？</td></tr>
+            <tr><td><strong>方法</strong></td><td>硬件-软件协同设计，推导 5 条设计原则定位结构性低效，提出 LatentMoE：路由前将 token 从 $d$ 压到 $d_l$，用节省的开销同步增加 $N$ 和 $k$。≤95B 参数、>1T token 实验 + 万亿参数投影。</td></tr>
+            <tr><td><strong>结果</strong></td><td>$\lambda$-MoE$_{acc}$ 在 95B 上 MMLU Pro 29.26→34.91（<span class="metric-up">+5.65</span>），73B Hybrid 上 48.30→52.87（<span class="metric-up">+4.57</span>）。万亿投影：同等精度标准 MoE 需多 350B 参数且慢 1.24–3.46×。</td></tr>
+            <tr><td><strong>结论</strong></td><td>LatentMoE 把 $d$ 从算力/通信瓶颈变为可调旋钮，同时提升专家多样性，在 Pareto 前沿系统性超越标准 MoE。已被 Nemotron-3 Super/Ultra 采纳。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>1. 引言</h3>
+
+        <h4>1.1 研究背景与核心问题</h4>
+        <p>Transformer LLM 推理成本随规模增长成为部署瓶颈。MoE 通过条件计算在固定 FLOP 下扩展参数量，成为主流。但作者指出 MoE 设计空间缺乏系统理解——现有架构由高层稀疏论证驱动，<strong>主要面向离线吞吐场景优化</strong>，对在线低延迟部署的约束（延迟、内存带宽、通信）缺乏考量。</p>
+        <p>核心研究问题：<strong>MoE 在 accuracy per FLOP 和 accuracy per parameter 两个维度上，离最优有多远？能否同时改进？</strong></p>
+
+        <h4>1.2 文献综述与研究缺口</h4>
+        <p>三类相关工作：（1）标准 MoE（DeepSeek-v2, Qwen3）用全维 token 路由给重量级 FFN，$k$ 上去算力和访存线性爆炸；（2）MoE 压缩（量化、剪枝、MoLAE）是后处理，不触及架构；（3）残差路径改进（mHC）不改专家路径。</p>
+        <p>研究缺口：<strong>没有人从硬件-软件协同设计视角系统问"MoE 哪个维度该压、哪个该放大"</strong>。LatentMoE 填补的是"架构级精度-效率协同优化"空白。</p>
+
+        <h4>1.3 研究目标与核心假设</h4>
+        <p>目标：iso-FLOP 和 iso-parameter 下同时提升 accuracy per FLOP 和 accuracy per parameter。</p>
+        <ul>
+          <li><strong>H1</strong>：存在任务相关的 intrinsic feature rank $r_{eff}$，$d_l \geq r_{eff}$ 不损精度。</li>
+          <li><strong>H2</strong>：压缩 $d_l$ 节省的开销可同步放大 $N$ 和 $k$，不增推理成本下放大组合稀疏多样性，提升精度。</li>
+        </ul>
+
+        <h3>2. 研究设计与方法</h3>
+
+        <h4>2.1 研究范式</h4>
+        <p>构建式系统设计研究：roofline 分析 + 理论推导 → 5 条设计原则 → LatentMoE 架构 → 消融 + 规模实验 + 万亿投影三层证据。</p>
+
+        <h4>2.2 实验配置</h4>
+        <table>
+          <thead><tr><th>配置</th><th>$L$</th><th>$d$</th><th>$N$</th><th>$k$</th><th>shared</th><th>$d_{ff}$</th><th>总参</th><th>active</th></tr></thead>
+          <tbody>
+            <tr><td>16BT-2BA（消融）</td><td>27</td><td>2048</td><td>128</td><td>6</td><td>2</td><td>1408</td><td>16B</td><td>2B</td></tr>
+            <tr><td>95BT-8BA（规模）</td><td>32</td><td>4096</td><td>128</td><td>6</td><td>2</td><td>2688</td><td>95B</td><td>8B</td></tr>
+            <tr><td>Hybrid-73BT-8BA</td><td>52</td><td>4096</td><td>128</td><td>6</td><td>2</td><td>2688</td><td>73B</td><td>8B</td></tr>
+          </tbody>
+        </table>
+        <p>训练：序列 8192，batch 768（~6M tokens），warmup 8.4B tokens，总训练到 1T tokens。</p>
+
+        <h4>2.3 五条设计原则（论文核心推导链）</h4>
+        <div class="ablock">
+          <div class="alabel">Principle I · 内存带宽瓶颈</div>
+          低延迟场景 MoE 由权重加载的内存带宽主导。GB200 的 arithmetic intensity 阈值 = 1250 FLOPs/byte，而小 batch 下每专家 token 数 $\ll 1418$ → 专家计算落在 memory-bound 区。<strong>→ 最大化 accuracy per parameter 是关键</strong>
+        </div>
+        <div class="ablock">
+          <div class="alabel">Principle II · 通信瓶颈</div>
+          吞吐场景 all-to-all 通信是主要开销，正比于 $k \times d$。Qwen3-235B-A22B 上通信/计算比 ≈ 9。<strong>→ 需减小 $d$ 或 $k$</strong>
+        </div>
+        <div class="ablock">
+          <div class="alabel">Principle III · 质量底线</div>
+          有效非线性预算 $\propto k \times d_{ff}$（Barron 1993），减 $k$ 或 $d_{ff}$ 直接惩罚精度。<strong>→ $k$ 和 $d_{ff}$ 不能动</strong>
+        </div>
+        <div class="ablock">
+          <div class="alabel">Principle IV · 压缩下限</div>
+          存在任务相关 $r_{eff}$，$d < r_{eff}$ 会精度崩塌。<strong>→ $d_l$ 的下限是 $r_{eff}$</strong>
+        </div>
+        <div class="ablock">
+          <div class="alabel">Principle V · 组合稀疏放大</div>
+          同步放大 $N$ 和 $k$（$\times \lambda$）使专家组合多样性指数级增长 $\binom{\lambda N}{\lambda k}$。<strong>→ 提升质量</strong>
+        </div>
+        <p style="margin-top:16px"><strong>关键张力</strong>：P I/II 要压缩，P III 不让压 $k$ 或 $d_{ff}$——<strong>唯一可压的是 $d$（隐藏维度）</strong>。压 $d$ 降内存带宽和通信（P I/II 满足），同步放大 $N$ 和 $k$ 提质量（P V 满足），$d_{ff}$ 不变保质量（P III 满足），$d_l \geq r_{eff}$ 保下限（P IV 满足）。</p>
+
+        <h3>3. 结果与发现</h3>
+
+        <h4>3.1 LatentMoE 架构</h4>
+        <p>输入 token $x \in \mathbb{R}^d$ 经 $W_{down} \in \mathbb{R}^{d \times d_l}$ 压到 $\mathbb{R}^{d_l}$，专家在 latent 空间运算，$W_{up} \in \mathbb{R}^{d_l \times d}$ 升维回 $d$。两种配置：</p>
+        <ul>
+          <li><strong>$\lambda$-MoE$_{eff}$</strong>（iso-accuracy 效率版）：$N' = \lambda N$，$k$ 不变 → 通信和带宽减 $\lambda$ 倍，精度持平。</li>
+          <li><strong>$\lambda$-MoE$_{acc}$</strong>（iso-cost 精度版，<strong>推荐</strong>）：$N' = \lambda N$，$k' = \lambda k$ → 通信和带宽不变，精度提升。</li>
+        </ul>
+
+        <h4>3.2 消融实验（16BT-2BA）</h4>
+        <ul>
+          <li><strong>压缩比</strong>（Figure 3）：$\lambda \leq 4$ 无损，$\lambda=8$ 开始降。<strong>选 $\lambda=4$</strong>。</li>
+          <li><strong>专家数缩放</strong>（Figure 4）：压 $d_l$ 不放大 $N$ → 显著降精度；压 $d_l$ 同时 $N' = \lambda N$ → 精度恢复。<strong>验证 H2，且免超参重调</strong>。</li>
+          <li><strong>两变体对比</strong>（Figure 5）：$\lambda$-MoE$_{eff}$ 持平 baseline，$\lambda$-MoE$_{acc}$ 显著优于 baseline。</li>
+        </ul>
+
+        <h4>3.3 规模实验（Table 3/4）</h4>
+        <p><strong>95B Transformer（300B token horizon）：</strong></p>
+        <table>
+          <thead><tr><th>模型</th><th>Active</th><th>Total</th><th>MMLU Pro</th><th>MMLU</th><th>Code</th><th>Math</th><th>Commonsense</th></tr></thead>
+          <tbody>
+            <tr><td>Baseline</td><td>8.47B</td><td>94.4B</td><td>29.26</td><td>58.95</td><td>40.33</td><td>64.39</td><td>74.32</td></tr>
+            <tr><td><strong>$\lambda$-MoE$_{acc}$</strong></td><td>8.44B</td><td>94.8B</td><td class="metric-up">34.91</td><td class="metric-up">62.23</td><td>41.50</td><td class="metric-up">64.88</td><td class="metric-up">75.18</td></tr>
+            <tr><td>$\lambda$-MoE$_{eff}$</td><td>5.62B</td><td>94.8B</td><td>34.75</td><td>61.06</td><td>40.68</td><td>63.61</td><td>73.72</td></tr>
+          </tbody>
+        </table>
+        <p><strong>73B Hybrid Mamba-Attention（1T token horizon）：</strong></p>
+        <table>
+          <thead><tr><th>模型</th><th>Active</th><th>Total</th><th>MMLU Pro</th><th>MMLU</th><th>Code</th><th>Math</th><th>Commonsense</th></tr></thead>
+          <tbody>
+            <tr><td>Baseline</td><td>8.09B</td><td>72.6B</td><td>48.30</td><td>70.10</td><td>51.95</td><td>78.32</td><td>81.73</td></tr>
+            <tr><td><strong>$\lambda$-MoE$_{acc}$</strong></td><td>8.02B</td><td>72.8B</td><td class="metric-up">52.87</td><td class="metric-up">72.11</td><td class="metric-up">55.14</td><td class="metric-up">80.19</td><td class="metric-up">82.10</td></tr>
+            <tr><td>$\lambda$-MoE$_{eff}$</td><td>5.91B</td><td>72.8B</td><td>51.29</td><td>71.34</td><td>53.13</td><td>77.01</td><td>80.78</td></tr>
+          </tbody>
+        </table>
+
+        <h4>3.4 推理性能（Table 5）</h4>
+        <p>Hybrid-73BT 用 vLLM FP8 实测，$\lambda$-MoE$_{acc}$ 相对标准 MoE：<strong>高并发吞吐仅降 0–6%</strong>。优化方向：routed/shared 专家分 CUDA stream + 小矩阵 GEMM kernel。</p>
+
+        <h4>3.5 万亿参数投影（Figure 7）</h4>
+        <p>以 Kimi-K2-1T 构造 LatentMoE 变体，用 EPM 框架（反推 Qwen-3-Dense scaling law）得 $EPM \approx 1.35\times$，即 LatentMoE 1T 等效标准 MoE 1.35T。物理 iso-accuracy 基线 Kimi-K2-1.35T（61→80 层）：<strong>慢 1.24–3.46×</strong>。native Kimi-K2-1T 与 LatentMoE 版差距 ≤9%——投影开销小。</p>
+
+        <h3>4. 讨论</h3>
+
+        <h4>4.1 深度解读</h4>
+        <p>LatentMoE 的核心洞察：<strong>MoE 瓶颈不在 FLOP 总量，而在内存带宽和 all-to-all 通信——两者都正比于 $d$</strong>。因此唯一该压的是 $d$，而 $k$ 和 $d_{ff}$ 是质量底线不能动。压缩 $d$ 释放的带宽/通信预算，回投到放大 $N$ 和 $k$，指数级扩展专家组合多样性，提升精度。</p>
+
+        <h4>4.2 理论贡献</h4>
+        <ul>
+          <li><strong>MoE roofline 分析框架</strong>：首次给出 arithmetic intensity 阈值（1250 FLOPs/byte on GB200），量化证明在线低延迟 MoE 是 memory-bound。</li>
+          <li><strong>5 条设计原则</strong>：把 MoE 设计空间形式化为约束优化——$d$ 是唯一可压维度，$r_{eff}$ 是下限，$N/k$ 同步放大可指数扩展组合多样性。</li>
+          <li><strong>EPM 框架</strong>：用 dense scaling law 反推 MoE 等效参数量，使 LatentMoE 精度提升可换算为标准 MoE 需多少额外参数。</li>
+        </ul>
+
+        <h4>4.3 实践启示</h4>
+        <ul>
+          <li><strong>架构师</strong>：LatentMoE 是 drop-in 升级，只需加 $W_{down}/W_{up}$，超参不需重调。</li>
+          <li><strong>推理工程师</strong>：小 GEMM 可能导致 SM-bound，用分 CUDA stream + 小矩阵 kernel 优化。</li>
+          <li><strong>万亿服务</strong>：iso-accuracy 下快 1.24–3.46×，对长时程 agentic 任务尤其关键。</li>
+        </ul>
+
+        <h4>4.4 局限性</h4>
+        <ul>
+          <li>未公开训练数据来源，复现困难。</li>
+          <li>Figure 7 是 proprietary simulator 投影，非真实万亿参数实测。</li>
+          <li>EPM 框架假设 dense 和 MoE 共用同一 scaling law，未严格验证。</li>
+        </ul>
+
+        <h3>5. 核心参考文献</h3>
+        <ol>
+          <li><strong>Barron (1993)</strong> — Principle III 的理论基础（有效非线性预算 $\propto k \times d_{ff}$）。</li>
+          <li><strong>DeepSeek-AI et al. (2024)</strong> — 16BT-2BA 消融的基线架构来源。arXiv:2405.04434</li>
+          <li><strong>Liu et al. (2025) MoLAE</strong> — 最接近的并行工作，后训练低秩近似 vs LatentMoE 架构级耦合。arXiv:2503.23100</li>
+          <li><strong>NVIDIA et al. (2025)</strong> — LatentMoE 在 Nemotron-3 Super/Ultra 旗舰模型的落地。arXiv:2512.20856</li>
+          <li><strong>Frantar et al. (2025)</strong> — EPM 框架的理论依据。arXiv:2502.16440</li>
+        </ol>
+
+        <hr class="deep-read-part-divider">
+
+        <span class="part-label">Part B · 核心逻辑链与根本价值提炼</span>
+
+        <h3>核心四要素</h3>
+        <table>
+          <thead><tr><th style="width:100px">要素</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><strong>根本问题</strong></td><td>MoE 的推理瓶颈不是 FLOP 总量，而是<strong>内存带宽（权重加载）和 all-to-all 通信</strong>——两者都正比于隐藏维度 $d$。但现有 MoE 把 $d$ 当固定量，导致 $k$ 一上去带宽/通信就线性爆炸，accuracy per FLOP 和 accuracy per parameter 被锁死在次优设计点。</td></tr>
+            <tr><td><strong>切入视角</strong></td><td>作者的关键洞察：<strong>$d$ 不是神圣不可侵犯的</strong>。路由后的专家不需要在原 $d$ 维空间运算——token 可先投影到低维 latent 空间再喂专家，而 expert-external 的 routing 和 shared expert 仍在原维度。$d$ 从不可见约束变成<strong>直接控制通信/带宽/专家参数的可调旋钮</strong>。</td></tr>
+            <tr><td><strong>关键方法</strong></td><td>下投影 $W_{down}: \mathbb{R}^d \to \mathbb{R}^{d_l}$ 把 token 压 $\lambda = d/d_l$ 倍，专家在 $d_l$ 空间运算，上投影 $W_{up}$ 升维回 $d$。节省的带宽/通信预算同步用于把 $N$ 和 $k$ 放大 $\lambda$ 倍——组合稀疏多样性指数级增长，精度提升，推理成本持平。$\lambda=4$ 是实验选定的甜点。</td></tr>
+            <tr><td><strong>核心发现</strong></td><td>95B Transformer $\lambda$-MoE$_{acc}$ 的 MMLU Pro 29.26→34.91（<span class="metric-up">+5.65</span>），73B Hybrid 48.30→52.87（<span class="metric-up">+4.57</span>），iso-FLOP iso-parameter。万亿投影：同等精度标准 MoE 要多 350B 参数且慢 1.24–3.46×。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>方法公式化</h3>
+<div class="formula">LatentMoE (λ-MoE_acc) = (W_up ∘ Expert_λN,λk ∘ W_down)(x) + Shared(x)
+
+<span class="comment">其中：
+  W_down: R^d → R^(d/λ)        # 压维，降带宽+通信 λ 倍
+  Expert_λN,λk: R^(d/λ) → R^(d/λ)  # 专家数 λN，top-k λk，组合多样性指数↑
+  W_up: R^(d/λ) → R^d           # 升维回原空间
+
+精度提升 ≈ exp(λ) 的组合稀疏多样性增益
+推理成本 = 原成本（带宽+通信持平，GEMM 变小但可能 SM-bound）</span>
+</div>
+
+        <h3>最终双重总结</h3>
+        <div class="one-liner">
+          <span class="label">一句话总结 · 核心价值</span>
+          <p>LatentMoE 通过将 MoE 的隐藏维度 $d$ 从不可调约束变成可调旋钮——先投影到低维 latent 空间降低通信和带宽开销，再用节省的预算同步放大专家数和 top-k 以指数级扩展组合稀疏多样性——在 iso-FLOP 和 iso-parameter 下系统性提升精度，已被 NVIDIA Nemotron-3 Super/Ultra 旗舰模型采纳。</p>
+        </div>
+        <div class="one-liner">
+          <span class="label">一句话总结 · 大白话版</span>
+          <p>以前每个专家要读完整厚度的"书"才能回答，现在先让秘书把书压缩成摘要再给专家读——这样同样的工时能请得起 4 倍多的专家，每个专家虽然读的是摘要但人数多到组合出的观点更全面，最终答案反而更准，工资还不涨。</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2.5 Zhihu Community -->
+<section id="zhihu" class="tint">
+  <div class="container">
+    <div class="section-label">补充 · 中文社区讨论（知乎）</div>
+    <h2>论文之外的实践视角与官方比喻</h2>
+    <p style="color:var(--nv-gray-500);font-size:14px;margin-bottom:24px">
+      以下整理自知乎搜索 "Latent MoE" 的 10 条结果，按信息互补性精选 6 条。蓝色边框为知乎原文链接，绿色 insight 块标注论文未提及的补充信息。
+    </p>
+
+    <div class="zhihu-quote">
+      <div class="zhihu-quote-header">
+        <div class="zhihu-quote-title"><a href="https://zhuanlan.zhihu.com/p/2015369979776758983" target="_blank">老黄杀入 OpenClaw 战场！最强开源「龙虾」模型直逼 Opus 4.6</a></div>
+        <span class="zhihu-quote-meta"><span class="author">@新智元</span> · <span class="votes">34赞</span> · 2评论</span>
+      </div>
+      <div class="zhihu-quote-body">
+        <p>英伟达对 Nemotron 3 Super 底层架构进行了重构。88 层网络采用周期性交替排列，Mamba-2 层负责高效的序列建模，少量 Transformer 注意力层作为「全局锚点」穿插其中。与上一代相比，吞吐量提升高达 5 倍，准确率提升高达 2 倍。</p>
+        <p><strong>LatentMoE：懂硬件的专家设计，榨干每一字节的准确率。</strong>先把 Token 从隐藏维度 d 投射到更小的潜在维度 ℓ，路由和专家计算都在这个小得多的维度里进行。省下来的资源用来把专家总数和每次激活的专家数放大同样的倍数——<strong>等于「白嫖」了一波准确率，推理成本几乎没变</strong>。</p>
+      </div>
+      <div class="zhihu-insight">英伟达官方博客的说法更直观：「花 1 个专家的计算成本，激活 4 个专家」。这个 4× 比例是论文里 $\lambda=4$ 选择的通俗化表述。</div>
+    </div>
+
+    <div class="zhihu-quote">
+      <div class="zhihu-quote-header">
+        <div class="zhihu-quote-title"><a href="https://zhuanlan.zhihu.com/p/1987921218368710412" target="_blank">英伟达成美国大模型开源标杆：Nemotron 3 连训练配方都公开</a></div>
+        <span class="zhihu-quote-meta"><span class="author">@量子位</span> · <span class="votes">23赞</span></span>
+      </div>
+      <div class="zhihu-quote-body">
+        <p>LatentMoE 的做法是：先把 token 从原始隐藏维度 d 投影到一个更小的潜在维度 ℓ（通常是 d 的四分之一），在这个低维空间里完成专家路由和计算，最后再投影回原始维度。每个专家的权重加载量和通信量都降低了 d/ℓ 倍。</p>
+        <p><strong>标准 MoE 用 128 个专家、激活 6 个；LatentMoE 用 512 个专家、激活 22 个。</strong>两者的总参数量和激活参数量几乎相同（都是 8B 激活、73B 总参），但 LatentMoE 在所有下游任务上都取得了更好的成绩——MMLU-Pro 从 48.30 提升到 52.87，代码任务从 51.95 提升到 55.14，数学任务从 78.32 提升到 80.19。</p>
+        <p>路由门控网络、共享专家计算以及非专家层仍然保留在原始维度，因为这些部分对瓶颈的贡献很小。</p>
+      </div>
+      <div class="zhihu-insight">论文只给了 $\lambda=4$ 的压缩比，知乎这篇给出了具体的专家配置变化：128→512 专家，6→22 激活——$\lambda$ 放大的不是 $N$ 和 $k$ 的任意值，而是按 4× 同步放大。这是 $\lambda$-MoE$_{acc}$ 配置的真实落地参数。</div>
+    </div>
+
+    <div class="zhihu-quote">
+      <div class="zhihu-quote-header">
+        <div class="zhihu-quote-title"><a href="https://www.zhihu.com/question/2015436864903930494/answer/2015555191911493850" target="_blank">如何评价英伟达最新发布的开源 Agent 推理模型 Nemotron 3 Super？</a></div>
+        <span class="zhihu-quote-meta"><span class="author">@deephub</span> · <span class="votes">26赞</span> · 9评论</span>
+      </div>
+      <div class="zhihu-quote-body">
+        <p>在传统的 MoE 架构中，当一个词（Token）进入网络时，它处于一种"全维度"状态（比如携带了 4096 甚至 8192 维的庞大特征数据）。路由器会把这个庞大的 Token 完整地塞给选中的几个专家网络进行处理。</p>
+        <p><strong>Latent MoE 在见专家之前，先把它"压缩"一下。</strong>Token 在进入路由分发之前，首先经过一个投影层，被压缩到一个低秩的"潜在空间"（Latent Space）中。此时，Token 的体积被大幅缩小，只保留了最核心的特征。路由将这个压缩后的轻量级 Token 分发给专家网络，专家们在这个极小的维度空间内完成复杂的特征提取和逻辑计算。</p>
+      </div>
+    </div>
+
+    <div class="zhihu-quote">
+      <div class="zhihu-quote-header">
+        <div class="zhihu-quote-title"><a href="https://zhuanlan.zhihu.com/p/1989811311719236137" target="_blank">彻底开放 Nemotron 3，英伟达恨不得手把手带你训练大模型</a></div>
+        <span class="zhihu-quote-meta"><span class="author">@奉孝翼德</span> · <span class="votes">1赞</span></span>
+      </div>
+      <div class="zhihu-quote-body">
+        <p>对于 Super 和 Ultra 版本，英伟达还将额外采用一个叫 Latent MoE 的架构。<strong>英伟达企业生成式 AI 软件副总裁 Kari Briski 用一个形象的比喻介绍了 Latent MoE 架构的基本原理：</strong></p>
+        <p>传统的 MoE 像是一群厨师各在各的厨房忙活，而 Latent MoE 让所有厨师<strong>共享一个具备基础能力的中央大厨房（公共核心），同时保留各自的小香料架（私有专家参数）</strong>。这种设计可以极大地提高显存使用效率，让大模型的部署门槛显著降低。</p>
+      </div>
+      <div class="zhihu-insight">这是英伟达官方高管给的比喻——"中央大厨房 + 小香料架"对应论文中的 shared expert（原维度）+ routed experts（latent 空间）。比论文的数学表述更易传播。</div>
+    </div>
+
+    <div class="zhihu-quote">
+      <div class="zhihu-quote-header">
+        <div class="zhihu-quote-title"><a href="https://zhuanlan.zhihu.com/p/2028979938464658811" target="_blank">英伟达的旗舰大模型，吞吐量暴打 Qwen3.5 七倍，技术细节披露！</a></div>
+        <span class="zhihu-quote-meta"><span class="author">@Ai学习的老章</span> · <span class="votes">10赞</span> · 1评论</span>
+      </div>
+      <div class="zhihu-quote-body">
+        <p>我觉得这篇论文最有意思的创新是 LatentMoE。传统 MoE 的问题在哪？大家都 MoE 靠"只激活部分专家"来省计算量。<strong>但英伟达指出一个被忽视的问题：现有 MoE 设计几乎只优化了每 FLOP 的精度，忽略了每参数的精度。</strong></p>
+        <p>在实际部署中，你的成本不只是算力，还有：内存带宽（每个专家权重矩阵是 d×m，读取成本和隐藏维度 d 成正比）；通信开销（分布式推理时 all-to-all 路由的流量和 d×K 成正比）。所以英伟达的思路是：把隐藏维度 d 压下来。</p>
+        <p>LatentMoE 的做法：1. 降维；2. 在低维空间做路由和专家计算；3. 扩展专家数量；4. 升维。<strong>这个 trade-off 非常精妙——维度降了，但专家数增了，总计算量基本不变，精度却更好。</strong></p>
+      </div>
+    </div>
+
+    <div class="zhihu-quote">
+      <div class="zhihu-quote-header">
+        <div class="zhihu-quote-title"><a href="https://zhuanlan.zhihu.com/p/2015861785727607985" target="_blank">英伟达发力了，新模型在 OpenClaw 成功率排行榜杀进前五，目前免费用</a></div>
+        <span class="zhihu-quote-meta"><span class="author">@Ai学习的老章</span> · <span class="votes">13赞</span> · 1评论</span>
+      </div>
+      <div class="zhihu-quote-body">
+        <p>PinchBench 测的是模型驱动 AI Coding Agent 执行真实编码任务的能力。Nemotron 3 Super 120B A12B 的成绩：<strong>Basic/Calendar/Coding/File Ops 都是 100%，Data Analysis 98%，Research 90%，但 Creativity 只有 18%，Memory 甚至只有 0%。</strong></p>
+        <p>这模型的强项非常像一个"干活型" Agent 大脑：写脚本、改文件、跑流程、处理任务，确实强；但你要它靠长期上下文记忆、或者靠创意型表达去吃分，它就没那么惊艳。更像一个靠谱的工程经理加执行助手，不太像一个文艺青年。</p>
+        <p>硬参数：总参数 120B / 激活 12B / 架构 LatentMoE（Mamba-2 + MoE + Attention 混合）/ 上下文 1M / 最低 GPU 1×B200-80GB / 量化 NVFP4（训练即量化，不是后量化）。</p>
+      </div>
+      <div class="zhihu-insight">PinchBench 的 Memory 0% 和 Creativity 18% 是论文完全没有的实战画像——LatentMoE + Mamba 混合架构在"执行型任务"上极强，但在"长期记忆"和"创意表达"上反而是弱项。这补充了论文只报 MMLU/Math 等学术 benchmark 的盲区。</div>
+    </div>
+
+  </div>
+</section>
+<section id="nemotron" class="white">
+  <div class="container">
+    <div class="section-label">二 · NEMOTRON 3 应用论文（按规模递增）</div>
+    <h2>从 30B 到 550B 的落地路径</h2>
+
+    <article class="paper">
+      <div class="paper-header">
+        <a class="paper-id" href="https://arxiv.org/abs/2512.20856" target="_blank">arXiv:2512.20856</a>
+        <span class="paper-date">2025-12-24</span>
+      </div>
+      <div class="paper-title">NVIDIA Nemotron 3: Efficient and Open Intelligence</div>
+      <div class="paper-authors">NVIDIA 团队（数百人）</div>
+      <ul class="contributions">
+        <li>Nemotron 3 家族（Nano/Super/Ultra）总览 white paper。</li>
+        <li>三者统一架构：<strong>MoE + Hybrid Mamba-Transformer</strong>，上下文最长 1M token。</li>
+        <li><strong>Super 和 Ultra 才用 LatentMoE + NVFP4 预训练 + MTP 推测解码</strong>；Nano 不用 LatentMoE。</li>
+        <li>全部走 multi-environment RL 后训练，支持 reasoning budget 控制。</li>
+        <li>权重、训练软件、recipe、可重分发数据全部开源。</li>
+      </ul>
+      <div class="paper-note"><strong>家族总览</strong>，看 LatentMoE 在产品线中的定位先读这篇。</div>
+    </article>
+
+    <article class="paper">
+      <div class="paper-header">
+        <a class="paper-id" href="https://arxiv.org/abs/2512.20848" target="_blank">arXiv:2512.20848</a>
+        <span class="paper-date">2025-12-23</span>
+      </div>
+      <div class="paper-title">Nemotron 3 Nano: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Model for Agentic Reasoning</div>
+      <div class="paper-authors">NVIDIA 团队</div>
+      <div class="specs">
+        <span class="spec">30B / 3B active</span>
+        <span class="spec">25T tokens</span>
+        <span class="spec">不含 LatentMoE</span>
+      </div>
+      <ul class="contributions">
+        <li>25T token 预训练（相对 Nemotron 2 新增 3T+ unique token），SFT + 大规模 RL。</li>
+        <li><strong>不用 LatentMoE</strong>（是家族中最小、最早发布的）。</li>
+        <li>在同等规模模型中精度领先，推理成本极低。</li>
+      </ul>
+      <div class="paper-note"><strong>作为对照</strong>——Nano 是 LatentMoE 引入前的 baseline 架构，便于理解 LatentMoE 带来的差异。</div>
+    </article>
+
+    <article class="paper">
+      <div class="paper-header">
+        <a class="paper-id" href="https://arxiv.org/abs/2604.12374" target="_blank">arXiv:2604.12374</a>
+        <span class="paper-date">2026-04-14</span>
+      </div>
+      <div class="paper-title">Nemotron 3 Super: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Model for Agentic Reasoning</div>
+      <div class="paper-authors">NVIDIA 团队</div>
+      <div class="specs">
+        <span class="spec">120B / 12B active</span>
+        <span class="spec">25T tokens</span>
+        <span class="spec">首个 LatentMoE</span>
+        <span class="spec">首个 NVFP4</span>
+        <span class="spec">首个 MTP</span>
+      </div>
+      <ul class="contributions">
+        <li><strong>Nemotron 3 家族中第一个用 LatentMoE 的模型</strong>。</li>
+        <li>也是家族中第一个用 NVFP4 预训练 + MTP 层（原生推测解码）的。</li>
+        <li>25T token 预训练 → SFT + RL → 1M 上下文。</li>
+        <li>推理吞吐：相对 GPT-OSS-120B 提速 2.2×，相对 Qwen3.5-122B 提速 7.5×（同精度）。</li>
+        <li>base/post-trained/quantized checkpoint 全部开源在 HuggingFace。</li>
+      </ul>
+      <div class="paper-note"><strong>LatentMoE 落地的首个实证</strong>，最能反映该架构对精度/吞吐的实际影响。</div>
+    </article>
+
+    <article class="paper">
+      <div class="paper-header">
+        <a class="paper-id" href="https://arxiv.org/abs/2606.15007" target="_blank">arXiv:2606.15007</a>
+        <span class="paper-date">2026-06-12</span>
+      </div>
+      <div class="paper-title">Nemotron 3 Ultra: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Model for Agentic Reasoning</div>
+      <div class="paper-authors">NVIDIA 团队</div>
+      <div class="specs">
+        <span class="spec">550B / 55B active</span>
+        <span class="spec">20T tokens</span>
+        <span class="spec">1M 上下文</span>
+        <span class="spec">LatentMoE + MTP + NVFP4 + RLVR + MOPD</span>
+      </div>
+      <ul class="contributions">
+        <li>当前 Nemotron 系列能力最强的模型。</li>
+        <li>关键技术全栈：<strong>LatentMoE + MTP + NVFP4 预训练 + multi-env RLVR + MOPD（多教师 on-policy 蒸馏）+ reasoning budget control</strong>。</li>
+        <li>20T token 预训练，扩展到 1M 上下文，SFT + RL + MOPD 后训练。</li>
+        <li>推理吞吐比同精度 SOTA 公开 LLM 高约 6×；1M 上下文 + 高吞吐使其专为长时程自主 agentic 任务设计。</li>
+        <li>base/post-trained/quantized checkpoint + 训练数据 + recipe 全开源。</li>
+      </ul>
+      <div class="paper-note"><strong>LatentMoE 在 550B 规模、20T token horizon 上的最大规模验证。</strong></div>
+    </article>
+  </div>
+</section>
+
+<!-- Spec Table -->
+<section id="compare" class="tint">
+  <div class="container">
+    <div class="section-label">规格对比 · SPEC COMPARISON</div>
+    <h2>Nemotron 3 家族规格对比</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>模型</th>
+            <th>arXiv</th>
+            <th>参数 (Total / Active)</th>
+            <th>预训练 Tokens</th>
+            <th>LatentMoE</th>
+            <th>NVFP4</th>
+            <th>MTP</th>
+            <th>上下文</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Nano</strong></td>
+            <td><a href="https://arxiv.org/abs/2512.20848" target="_blank">2512.20848</a></td>
+            <td>30B / 3B</td>
+            <td>25T</td>
+            <td class="check-no">—</td>
+            <td class="check-no">—</td>
+            <td class="check-no">—</td>
+            <td>1M</td>
+          </tr>
+          <tr>
+            <td><strong>Super</strong></td>
+            <td><a href="https://arxiv.org/abs/2604.12374" target="_blank">2604.12374</a></td>
+            <td>120B / 12B</td>
+            <td>25T</td>
+            <td class="check-yes">✓ 首个</td>
+            <td class="check-yes">✓ 首个</td>
+            <td class="check-yes">✓ 首个</td>
+            <td>1M</td>
+          </tr>
+          <tr>
+            <td><strong>Ultra</strong></td>
+            <td><a href="https://arxiv.org/abs/2606.15007" target="_blank">2606.15007</a></td>
+            <td>550B / 55B</td>
+            <td>20T</td>
+            <td class="check-yes">✓</td>
+            <td class="check-yes">✓</td>
+            <td class="check-yes">✓</td>
+            <td>1M</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="table-caption">三者均为 <strong>Hybrid Mamba-Transformer + MoE</strong> 架构，后训练均含 SFT + RL + reasoning budget control。Super/Ultra 额外含 <strong>MOPD（多教师 on-policy 蒸馏）</strong>。</p>
+  </div>
+</section>
+
+<!-- 4. Derivative -->
+<section id="derivative" class="white">
+  <div class="container">
+    <div class="section-label">三 · 衍生与压缩工作</div>
+    <h2>分布式通信优化 + 部署压缩</h2>
+
+    <article class="paper">
+      <div class="paper-header">
+        <a class="paper-id" href="https://arxiv.org/abs/2602.04870" target="_blank">arXiv:2602.04870</a>
+        <span class="paper-date">2026-02-04</span>
+      </div>
+      <div class="paper-title">Multi-Head LatentMoE and Head Parallel: Communication-Efficient and Deterministic MoE Parallelism</div>
+      <div class="paper-authors">Chenwei Cui, Rockwell Jackson, Benjamin Joseph Herrera, Ana María Tárano, Hannah Kerner · Arizona State Univ + NASA</div>
+      <ul class="contributions">
+        <li>解决 Expert Parallel (EP) 的三大老问题：通信量随激活专家数 k 线性增长、负载不均衡、data-dependent 通信需要元数据交换。</li>
+        <li>提出 <strong>Multi-Head LatentMoE + Head Parallel (HP)</strong>：
+          <ul>
+            <li>通信量 <code>O(1)</code>（不随 k 增长）</li>
+            <li>完全均衡的流量分布</li>
+            <li>确定性通信</li>
+            <li>与 EP 兼容</li>
+          </ul>
+        </li>
+        <li>配套 IO-aware routing + expert computation。</li>
+        <li>相同精度下训练速度 1.61×；加倍粒度后仍 1.11× 更快。</li>
+      </ul>
+      <div class="paper-note"><strong>不是 NVIDIA 官方</strong>，是把 LatentMoE 思路扩展到分布式训练通信优化的第三方工作。读这篇能理解 LatentMoE 在大规模并行下为何通信更友好——latent 子空间本身就是低维的，天然降低 all-to-all 通信量。</div>
+    </article>
+
+    <article class="paper">
+      <div class="paper-header">
+        <a class="paper-id" href="https://arxiv.org/abs/2607.04371" target="_blank">arXiv:2607.04371</a>
+        <span class="paper-date">2026-07-05 (v2)</span>
+      </div>
+      <div class="paper-title">Nemotron-Labs-3-Puzzle-75B-A9B: Compressing Hybrid MoE LLMs</div>
+      <div class="paper-authors">Akhiad Bercovich 等 · NVIDIA（数十人）</div>
+      <div class="specs">
+        <span class="spec">75B / 9B active</span>
+        <span class="spec">从 Super 压缩</span>
+        <span class="spec">交互式部署</span>
+      </div>
+      <ul class="contributions">
+        <li>Nemotron-3-Super 的压缩变体，面向交互式部署（高 user throughput）。</li>
+        <li>单节点 8×B200 上，交互式 serving workload 吞吐约 2×（相对原 Super）。</li>
+        <li>在 server throughput 高约束下最大化设计的压缩实例。</li>
+      </ul>
+      <div class="paper-note"><strong>LatentMoE 架构下的压缩/部署变体</strong>，看 LatentMoE 对压缩友好度的实际数据。</div>
+    </article>
+  </div>
+</section>
+
+<!-- 5. Excluded -->
+<section id="exclude" class="tint">
+  <div class="container">
+    <div class="section-label">四 · 相关但非 LATENT MOE</div>
+    <h2>避免混淆的常见论文</h2>
+    <div class="warn">
+      <h4>⚠ 常见混淆点</h4>
+      <p>以下论文与 Latent MoE 名字相近或同属 NVIDIA 系列，但<strong>架构不含 LatentMoE</strong>，整理时请勿混入。</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>论文</th>
+            <th>arXiv</th>
+            <th>关系说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Nemotron-Labs-Diffusion</td>
+            <td><a href="https://arxiv.org/abs/2607.05722" target="_blank">2607.05722</a></td>
+            <td>同 NVIDIA 团队，但是 AR + diffusion 三模态 LM，<strong>不用 LatentMoE</strong></td>
+          </tr>
+          <tr>
+            <td>Nemotron 3 Nano Omni</td>
+            <td><a href="https://arxiv.org/abs/2604.24954" target="_blank">2604.24954</a></td>
+            <td>多模态版本，基于 Nano，<strong>不含 LatentMoE</strong></td>
+          </tr>
+          <tr>
+            <td>Qwen3 Technical Report</td>
+            <td>—</td>
+            <td>用的是 sliding-window shared attention + 普通 MoE，<strong>架构不同</strong>。Ultra 论文只是引用它做对比</td>
+          </tr>
+          <tr>
+            <td>AirMoE</td>
+            <td><a href="https://arxiv.org/abs/2607.16562" target="_blank">2607.16562</a></td>
+            <td>无线云-边协作 MoE，名字相近但<strong>完全是另一回事</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Reading Guide -->
+<section id="guide" class="white">
+  <div class="container">
+    <div class="section-label">阅读建议 · READING GUIDE</div>
+    <h2>按目标选择阅读顺序</h2>
+    <div class="guide">
+      <div class="guide-item">
+        <span class="guide-goal">想懂原理</span>
+        <span class="desc">先读 <a href="https://arxiv.org/pdf/2601.18089" target="_blank">2601.18089</a>（LatentMoE 原论文，含 design space exploration 和理论分析），再读 <a href="https://arxiv.org/pdf/2604.12374" target="_blank">2604.12374</a>（Super，第一个落地实证）。</span>
+      </div>
+      <div class="guide-item">
+        <span class="guide-goal">想看大规模效果</span>
+        <span class="desc"><a href="https://arxiv.org/pdf/2606.15007" target="_blank">2606.15007</a>（Ultra，550B-A55B，6× 吞吐）。</span>
+      </div>
+      <div class="guide-item">
+        <span class="guide-goal">想做分布式训练</span>
+        <span class="desc"><a href="https://arxiv.org/pdf/2602.04870" target="_blank">2602.04870</a>（Multi-Head LatentMoE + Head Parallel，O(1) 通信）。</span>
+      </div>
+      <div class="guide-item">
+        <span class="guide-goal">想做部署/压缩</span>
+        <span class="desc"><a href="https://arxiv.org/pdf/2607.04371" target="_blank">2607.04371</a>（Puzzle-75B-A9B）。</span>
+      </div>
+      <div class="guide-item">
+        <span class="guide-goal">想看家族定位</span>
+        <span class="desc"><a href="https://arxiv.org/pdf/2512.20856" target="_blank">2512.20856</a>（家族 white paper）。</span>
+      </div>
+    </div>
+
+    <div class="why-block">
+      <div class="why-label">核心要回答的 WHY</div>
+      <p>Latent MoE 不是为了少算，而是为了<span class="highlight">在同等算力下能挂更多专家</span>——把 MoE 的 "k 个 full-dim FFN" 改成 "k 个 latent-dim FFN"，让 k 这个维度从算力瓶颈变成可调旋钮，于是单位 FLOP 的精度被推上去。</p>
+      <p>所有 NVIDIA 后续工作（NVFP4、MTP、Hybrid Mamba）都是围绕这个 latent 空间做的协同优化。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p>整理自 <span class="accent">arXiv</span> 公开论文 · 共 7 篇核心文献 · <span class="accent">2026-07-21</span></p>
+  </div>
+</footer>
+
+</body>
+</html>
