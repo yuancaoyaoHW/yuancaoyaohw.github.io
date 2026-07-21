@@ -4,12 +4,19 @@ const books = [
     title: 'Modern GPU Programming For MLSys',
     href: '/books/modern-gpu-programming-for-mlsys/',
     description: '面向机器学习系统的现代 GPU 编程中文翻译，包含章节正文、交互式示例和参考资料。',
+    tag: 'GPU · MLSys',
   },
   {
     title: 'Convex Optimization',
     href: 'https://yuancaoyaohw.github.io/Convex-Optimization/',
     description: 'Boyd & Vandenberghe《Convex Optimization》中英对照翻译，含全书章节、原书插图与可拖动双栏布局。',
+    tag: 'Math · Optimization',
   },
+];
+
+const links = [
+  { label: '博客', href: '/blog/' },
+  { label: 'GitHub', href: 'https://github.com/yuancaoyaoHW' },
 ];
 ---
 
@@ -20,157 +27,407 @@ const books = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>yuancaoyaohw</title>
     <meta name="description" content="yuancaoyaohw 的电子书与博客入口" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
-        color-scheme: light dark;
-        --bg: #f7f8fb;
-        --text: #172033;
-        --muted: #5c667a;
-        --panel: #ffffff;
-        --border: #d8dee9;
-        --accent: #2457d6;
+        --black: #080D10;
+        --bg-1: #0B1117;
+        --bg-2: #0E141C;
+        --panel: #131A24;
+        --panel-hover: #18212E;
+        --white: #FFFFFF;
+        --orange: #FF7A00;
+        --orange-soft: rgba(255, 122, 0, 0.12);
+        --text: #E7ECF3;
+        --text-muted: #7C8699;
+        --border: #1E2733;
+        --border-hover: #2A3744;
+        --radius: 10px;
+        --font-display: "Bricolage Grotesque", Arial, sans-serif;
+        --font-body: "Inter", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
       }
 
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #111827;
-          --text: #eef2ff;
-          --muted: #a8b3cf;
-          --panel: #182235;
-          --border: #2c3954;
-          --accent: #8fb3ff;
-        }
-      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
 
-      * {
-        box-sizing: border-box;
-      }
+      html { scroll-behavior: smooth; }
 
       body {
-        margin: 0;
-        min-height: 100vh;
-        background: var(--bg);
+        background: var(--black);
         color: var(--text);
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: var(--font-body);
+        font-size: 16px;
         line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
       }
 
-      main {
-        width: min(1080px, calc(100% - 32px));
-        margin: 0 auto;
-        padding: 56px 0;
+      a { color: inherit; text-decoration: none; }
+
+      /* —— 全局环境光背景 —— */
+      .bg-glow {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(50% 40% at 85% 5%, rgba(255, 122, 0, 0.12) 0%, transparent 60%),
+          radial-gradient(35% 25% at 20% 35%, rgba(255, 122, 0, 0.07) 0%, transparent 60%);
       }
 
-      h1 {
-        margin: 0 0 16px;
-        font-size: clamp(34px, 5vw, 60px);
-        line-height: 1.08;
+      .bg-grid {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+        background-size: 56px 56px;
+        mask-image: radial-gradient(ellipse 90% 70% at 50% 20%, black 20%, transparent 75%);
+        -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 20%, black 20%, transparent 75%);
       }
 
-      h2 {
-        margin: 0 0 18px;
-        font-size: 24px;
-      }
-
-      p {
-        margin: 0;
-      }
-
-      .intro {
-        max-width: 760px;
-        color: var(--muted);
-        font-size: 18px;
-      }
-
-      .section {
-        margin-top: 48px;
-      }
-
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 18px;
-      }
-
-      .card {
+      /* —— Nav —— */
+      .nav {
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        z-index: 100;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        background: rgba(8, 13, 16, 0.72);
+        border-bottom: 1px solid var(--border);
+        color: var(--white);
+        padding: 16px 32px;
         display: flex;
-        min-height: 190px;
-        flex-direction: column;
+        align-items: center;
         justify-content: space-between;
-        padding: 22px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
+        font-family: var(--font-display);
+      }
+
+      .nav .brand {
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: var(--white);
+      }
+
+      .nav .nav-links {
+        display: flex;
+        gap: 28px;
+        align-items: center;
+      }
+
+      .nav .nav-links a {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--text-muted);
+        transition: color 0.2s;
+      }
+
+      .nav .nav-links a:hover { color: var(--white); }
+
+      .nav .cta {
+        border: 1px solid var(--border-hover);
+        color: var(--white);
+        padding: 8px 20px;
+        border-radius: var(--radius);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        background: transparent;
+      }
+
+      .nav .cta:hover { border-color: var(--orange); color: var(--orange); }
+
+      /* —— 主内容容器 —— */
+      .page {
+        position: relative;
+        z-index: 1;
+      }
+
+      /* —— Hero —— */
+      .hero {
+        padding: 180px 32px 100px;
+        position: relative;
+      }
+
+      .hero-inner {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+
+      .hero .eyebrow {
+        display: inline-block;
+        font-family: var(--font-display);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--orange);
+        margin-bottom: 28px;
+      }
+
+      .hero h1 {
+        font-family: var(--font-display);
+        font-size: clamp(40px, 7.5vw, 84px);
+        font-weight: 500;
+        line-height: 1.0;
+        letter-spacing: -0.035em;
+        margin-bottom: 32px;
+        color: var(--white);
+      }
+
+      .hero h1 .accent { color: var(--orange); }
+
+      .hero .lede {
+        max-width: 560px;
+        font-size: 18px;
+        line-height: 1.65;
+        color: var(--text-muted);
+      }
+
+      /* —— Section 通用 —— */
+      .section {
+        padding: 72px 32px;
+      }
+
+      .section-inner {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+
+      .section-label {
+        font-family: var(--font-display);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--text-muted);
+        margin-bottom: 36px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .section-label::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      /* —— Book cards —— */
+      .book-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 20px;
+      }
+
+      .book-card {
         background: var(--panel);
-        text-decoration: none;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        min-height: 260px;
+        transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+        position: relative;
+        overflow: hidden;
       }
 
-      .card strong {
-        color: var(--text);
-        font-size: 22px;
-        line-height: 1.25;
+      .book-card::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, var(--orange), transparent);
+        opacity: 0;
+        transition: opacity 0.25s ease;
       }
 
-      .card-text {
-        display: block;
+      .book-card:hover {
+        transform: translateY(-3px);
+        border-color: var(--border-hover);
+        background: var(--panel-hover);
       }
 
-      .card .description {
-        display: block;
+      .book-card:hover::before { opacity: 1; }
+
+      .book-card .tag {
+        align-self: flex-start;
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--orange);
+        background: var(--orange-soft);
+        padding: 5px 12px;
+        border-radius: 999px;
+        margin-bottom: 20px;
+      }
+
+      .book-card strong {
+        font-family: var(--font-display);
+        font-size: 23px;
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: -0.015em;
+        color: var(--white);
+      }
+
+      .book-card .description {
         margin-top: 12px;
-        color: var(--muted);
+        color: var(--text-muted);
+        font-size: 15px;
+        line-height: 1.55;
+        flex: 1;
       }
 
-      .card em {
-        margin-top: 22px;
-        color: var(--accent);
-        font-style: normal;
-        font-weight: 700;
+      .book-card .go {
+        margin-top: 24px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-display);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--white);
       }
 
-      .links {
+      .book-card .go svg {
+        width: 16px; height: 16px;
+        transition: transform 0.25s ease;
+      }
+
+      .book-card:hover .go svg { transform: translateX(4px); }
+      .book-card:hover .go { color: var(--orange); }
+
+      /* —— More（链接区）—— */
+      .link-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 16px;
-        margin-top: 24px;
+        gap: 12px;
       }
 
-      .links a {
-        color: var(--accent);
-        font-weight: 700;
-        text-decoration: none;
+      .link-row a {
+        display: inline-flex;
+        align-items: center;
+        padding: 12px 24px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        font-family: var(--font-display);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--text);
+        background: var(--panel);
+        transition: border-color 0.2s, background 0.2s, color 0.2s;
+      }
+
+      .link-row a:hover {
+        border-color: var(--orange);
+        background: var(--orange-soft);
+        color: var(--orange);
+      }
+
+      /* —— Footer —— */
+      footer {
+        padding: 40px 32px;
+        text-align: center;
+        font-size: 13px;
+        font-family: var(--font-display);
+        color: var(--text-muted);
+        border-top: 1px solid var(--border);
+      }
+
+      footer a { color: var(--white); }
+      footer a:hover { color: var(--orange); }
+
+      /* —— 响应式 —— */
+      @media (max-width: 640px) {
+        .nav { padding: 14px 20px; }
+        .nav .nav-links { gap: 16px; }
+        .nav .nav-links a:not(.cta) { display: none; }
+        .hero { padding: 130px 20px 72px; }
+        .section { padding: 56px 20px; }
+        .book-card { padding: 24px; min-height: auto; }
       }
     </style>
   </head>
   <body>
-    <main>
-      <h1>yuancaoyaohw</h1>
-      <p class="intro">这里整理电子书、课程翻译和技术笔记。内容以可长期维护的文档站形式发布。</p>
+    <!-- 背景层 -->
+    <div class="bg-grid"></div>
+    <div class="bg-glow"></div>
 
-      <section class="section" aria-labelledby="books-title">
-        <h2 id="books-title">电子书</h2>
-        <div class="grid">
-          {
-            books.map((book) => (
-              <a class="card" href={book.href}>
-                <span class="card-text">
+    <div class="page">
+      <!-- Nav -->
+      <nav class="nav">
+        <a href="/" class="brand">yuancaoyaohw</a>
+        <div class="nav-links">
+          <a href="#books">电子书</a>
+          <a href="#more">更多</a>
+          <a href="https://github.com/yuancaoyaoHW" class="cta">GitHub</a>
+        </div>
+      </nav>
+
+      <!-- Hero -->
+      <section class="hero">
+        <div class="hero-inner">
+          <span class="eyebrow">Books · Translations · Notes</span>
+          <h1>电子书、翻译<br />与<span class="accent">技术笔记</span></h1>
+          <p class="lede">这里整理我在阅读和实践中积累的资料，以可长期维护的文档站形式发布。希望对你也有帮助。</p>
+        </div>
+      </section>
+
+      <!-- Books -->
+      <section class="section" id="books">
+        <div class="section-inner">
+          <p class="section-label">电子书</p>
+          <div class="book-grid">
+            {
+              books.map((book) => (
+                <a class="book-card" href={book.href}>
+                  <span class="tag">{book.tag}</span>
                   <strong>{book.title}</strong>
                   <span class="description">{book.description}</span>
-                </span>
-                <em>打开</em>
-              </a>
-            ))
-          }
+                  <span class="go">
+                    打开
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                  </span>
+                </a>
+              ))
+            }
+          </div>
         </div>
       </section>
 
-      <section class="section" aria-labelledby="more-title">
-        <h2 id="more-title">更多</h2>
-        <p class="intro">博客区会用于放置较短的技术文章、读书笔记和项目记录。</p>
-        <div class="links">
-          <a href="/blog/">博客</a>
-          <a href="https://github.com/yuancaoyaoHW">GitHub</a>
+      <!-- More -->
+      <section class="section" id="more">
+        <div class="section-inner">
+          <p class="section-label">更多</p>
+          <div class="link-row">
+            {links.map((l) => <a href={l.href}>{l.label}</a>)}
+          </div>
         </div>
       </section>
-    </main>
+
+      <!-- Footer -->
+      <footer>
+        <p>© {new Date().getFullYear()} yuancaoyaohw · 由 Astro 与 Starlight 驱动 · <a href="https://github.com/yuancaoyaoHW">GitHub</a></p>
+      </footer>
+    </div>
   </body>
 </html>
