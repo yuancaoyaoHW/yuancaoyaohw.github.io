@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Megakernel 与 Rubin:软件抽象与硬件底座</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<title>Megakernel 与 Rubin：软件抽象与硬件底座</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise();
@@ -20,206 +22,356 @@
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
 <style>
   :root {
-    --nv-green: #76b900;
-    --nv-green-dark: #3f8500;
-    --nv-green-tint: #eef7e0;
-    --nv-black: #000000;
-    --nv-near-black: #1a1a1a;
-    --nv-white: #ffffff;
-    --nv-gray-100: #f5f5f5;
-    --nv-gray-200: #ebebeb;
-    --nv-gray-300: #a7a7a7;
-    --nv-gray-400: #898989;
-    --nv-gray-500: #757575;
-    --nv-border: #e0e0e0;
-    --nv-border-strong: #5e5e5e;
-    --nv-link-hover: #3860be;
-    --nv-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-    --nv-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.15);
-    --sw-blue: #0084ff;
-    --sw-blue-tint: #e8f2ff;
-    --warn-amber: #ef9100;
-    --warn-bg: #fff8e1;
-    --warn-text: #b06800;
+    --black: #080D10;
+    --bg-1: #0B1117;
+    --bg-2: #0E141C;
+    --panel: #131A24;
+    --panel-hover: #18212E;
+    --white: #FFFFFF;
+    --orange: #FF7A00;
+    --orange-soft: rgba(255, 122, 0, 0.12);
+    --orange-glow: rgba(255, 122, 0, 0.06);
+    --text: #E7ECF3;
+    --text-muted: #7C8699;
+    --text-dim: #5A6577;
+    --border: #1E2733;
+    --border-hover: #2A3744;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --font-display: "Bricolage Grotesque", Arial, sans-serif;
+    --font-body: "Inter", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --sw-blue: #4A9EFF;
+    --sw-blue-soft: rgba(74, 158, 255, 0.12);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body {
-    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
-    background: var(--nv-white);
-    color: var(--nv-black);
-    line-height: 1.5;
+    background: var(--black);
+    color: var(--text);
+    font-family: var(--font-body);
     font-size: 16px;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
-  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+  a { color: inherit; text-decoration: none; }
 
-  /* Nav */
-  nav {
-    background: var(--nv-white);
-    border-bottom: 1px solid var(--nv-border);
-    position: sticky; top: 0; z-index: 100;
-    backdrop-filter: blur(8px);
+  /* —— 环境光背景 —— */
+  .bg-glow {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(50% 40% at 85% 5%, rgba(255, 122, 0, 0.10) 0%, transparent 60%),
+      radial-gradient(35% 25% at 20% 35%, rgba(255, 122, 0, 0.05) 0%, transparent 60%);
   }
-  nav .container { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; padding-bottom: 14px; }
-  .nav-brand { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--nv-black); display: flex; align-items: center; gap: 10px; }
-  .nav-brand::before { content: ""; display: inline-block; width: 22px; height: 22px; background: var(--nv-green); clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
-  .nav-links { display: flex; gap: 28px; list-style: none; }
-  .nav-links a { font-size: 14px; font-weight: 700; text-transform: uppercase; color: var(--nv-black); text-decoration: none; transition: color .15s; }
-  .nav-links a:hover { color: var(--nv-green-dark); }
-  @media (max-width: 768px) { .nav-links { display: none; } }
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 20%, black 20%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 20%, black 20%, transparent 75%);
+  }
 
-  /* Hero */
-  .hero { background: var(--nv-white); padding: 80px 0 56px; border-bottom: 2px solid var(--nv-green); position: relative; overflow: hidden; }
-  .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 30%, rgba(118, 185, 0, 0.06) 0%, transparent 55%); pointer-events: none; }
-  .hero .container { position: relative; }
-  .hero-eyebrow { font-size: 14px; font-weight: 700; text-transform: uppercase; color: var(--nv-green-dark); letter-spacing: 1px; margin-bottom: 16px; }
-  .hero h1 { font-size: 36px; font-weight: 700; line-height: 1.25; margin-bottom: 16px; max-width: 900px; color: var(--nv-black); }
-  .hero h1 .accent { color: var(--nv-green-dark); border-bottom: 2px solid var(--nv-green); padding-bottom: 2px; }
-  .hero .subtitle { font-size: 18px; font-weight: 400; line-height: 1.67; color: var(--nv-gray-500); max-width: 820px; margin-bottom: 28px; }
-  .hero-meta { font-size: 14px; font-weight: 600; color: var(--nv-gray-400); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-  .hero-meta span { color: var(--nv-green-dark); }
+  /* —— Nav —— */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    background: rgba(8, 13, 16, 0.72);
+    border-bottom: 1px solid var(--border);
+    color: var(--white);
+    padding: 16px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--font-display);
+  }
+  .nav .brand {
+    font-size: 17px; font-weight: 600; letter-spacing: -0.02em; color: var(--white);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .nav .brand::before {
+    content: ""; display: inline-block; width: 22px; height: 22px;
+    background: var(--orange);
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  }
+  .nav .nav-links { display: flex; gap: 28px; align-items: center; }
+  .nav .nav-links a {
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.12em; color: var(--text-muted); transition: color 0.2s;
+  }
+  .nav .nav-links a:hover { color: var(--white); }
+  @media (max-width: 768px) { .nav .nav-links { display: none; } }
 
-  /* Section base */
-  section { padding: 64px 0; }
-  section.tint { background: var(--nv-gray-100); }
-  section.white { background: var(--nv-white); }
-  .section-label { font-size: 14px; font-weight: 700; text-transform: uppercase; color: var(--nv-green-dark); letter-spacing: 1px; margin-bottom: 12px; }
-  h2 { font-size: 24px; font-weight: 700; line-height: 1.25; margin-bottom: 32px; color: var(--nv-black); }
-  h3 { font-size: 20px; font-weight: 700; line-height: 1.25; margin-bottom: 12px; color: var(--nv-black); }
-  p { font-size: 16px; font-weight: 400; line-height: 1.67; margin-bottom: 12px; color: #333333; }
-  strong { font-weight: 700; color: var(--nv-black); }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; background: var(--nv-green-tint); color: var(--nv-green-dark); padding: 2px 6px; border-radius: 2px; }
+  .page { position: relative; z-index: 1; }
 
-  /* Concept block */
-  .concept { border-left: 4px solid var(--nv-green); padding: 24px 32px; margin: 24px 0; background: var(--nv-green-tint); border-radius: 0 2px 2px 0; }
-  .concept p { margin-bottom: 16px; }
+  /* —— Hero —— */
+  .hero {
+    padding: 160px 32px 80px;
+    position: relative;
+  }
+  .hero-inner { max-width: 1000px; margin: 0 auto; }
+  .hero .eyebrow {
+    display: inline-block; font-family: var(--font-display);
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.14em; color: var(--orange); margin-bottom: 28px;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(32px, 5.5vw, 52px); font-weight: 500;
+    line-height: 1.12; letter-spacing: -0.03em; margin-bottom: 28px; color: var(--white);
+  }
+  .hero h1 .accent { color: var(--orange); }
+  .hero .lede {
+    max-width: 680px; font-size: 17px; line-height: 1.65; color: var(--text-muted);
+  }
+  .hero .meta {
+    margin-top: 32px; font-size: 13px; font-weight: 600; color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+  .hero .meta span { color: var(--orange); }
+
+  /* —— Section 通用 —— */
+  .section { padding: 72px 32px; }
+  .section-inner { max-width: 1000px; margin: 0 auto; }
+  .section-label {
+    font-family: var(--font-display); font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--text-muted); margin-bottom: 36px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .section-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+  h2 {
+    font-family: var(--font-display); font-size: 28px; font-weight: 600;
+    line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 28px; color: var(--white);
+  }
+  h3 {
+    font-family: var(--font-display); font-size: 20px; font-weight: 600;
+    line-height: 1.3; margin-bottom: 14px; margin-top: 32px; color: var(--white);
+  }
+  p { font-size: 15.5px; font-weight: 400; line-height: 1.7; margin-bottom: 14px; color: var(--text); }
+  strong { font-weight: 600; color: var(--white); }
+  code {
+    font-family: var(--font-mono); font-size: 13px;
+    background: var(--orange-soft); color: var(--orange);
+    padding: 2px 7px; border-radius: 4px;
+  }
+  ul, ol { margin: 8px 0 16px 24px; }
+  li { font-size: 15.5px; line-height: 1.7; color: var(--text); margin: 6px 0; }
+  li::marker { color: var(--orange); }
+
+  /* —— Concept block —— */
+  .concept {
+    border-left: 3px solid var(--orange);
+    padding: 24px 28px; margin: 24px 0;
+    background: var(--panel); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
   .concept p:last-child { margin-bottom: 0; }
-  .highlight { color: var(--nv-green-dark); font-weight: 700; }
+  .highlight { color: var(--orange); font-weight: 600; }
 
-  /* Mnemonic */
-  .mnemonic { background: #1a1a1a; color: #76b900; padding: 18px 24px; border-radius: 2px; font-family: ui-monospace, monospace; font-size: 14px; line-height: 1.8; margin: 20px 0; white-space: pre-wrap; }
+  /* —— Mnemonic (dark code block) —— */
+  .mnemonic {
+    background: var(--bg-2); color: var(--orange);
+    border: 1px solid var(--border);
+    padding: 20px 24px; border-radius: var(--radius-sm);
+    font-family: var(--font-mono); font-size: 13.5px; line-height: 1.8;
+    margin: 24px 0; white-space: pre-wrap;
+  }
 
-  /* Comparison table */
-  .table-wrap { overflow-x: auto; margin: 24px 0; border: 1px solid var(--nv-border); border-radius: 2px; }
-  table { width: 100%; border-collapse: collapse; background: var(--nv-white); min-width: 600px; }
-  th, td { padding: 13px 16px; text-align: left; border-bottom: 1px solid var(--nv-border); font-size: 14px; line-height: 1.4; }
-  th { background: var(--nv-gray-100); color: var(--nv-green-dark); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; font-size: 12px; border-bottom: 2px solid var(--nv-green); }
-  td { color: #333333; }
+  /* —— Table —— */
+  .table-wrap { overflow-x: auto; margin: 24px 0; }
+  table {
+    width: 100%; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    overflow: hidden; min-width: 560px;
+  }
+  th, td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.5; }
+  th {
+    background: var(--bg-2); color: var(--orange); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.06em; font-size: 12px;
+    font-family: var(--font-display);
+  }
+  td { color: var(--text); }
   tr:last-child td { border-bottom: none; }
+  td a { color: var(--orange); font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
+  td a:hover { color: var(--white); }
+  td:first-child { font-weight: 600; color: var(--orange); }
 
-  /* Two-column compare card */
-  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 32px 0; }
-  @media (max-width: 768px) { .compare-grid { grid-template-columns: 1fr; } }
-  .compare-card { border: 1px solid var(--nv-border); border-radius: 2px; padding: 28px; background: var(--nv-white); box-shadow: var(--nv-shadow); }
-  .compare-card.sw { border-top: 4px solid var(--nv-green); }
-  .compare-card.hw { border-top: 4px solid var(--sw-blue); }
-  .compare-card h3 { font-size: 18px; margin-bottom: 8px; }
-  .compare-card .tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 2px; margin-bottom: 16px; }
-  .compare-card.sw .tag { background: var(--nv-green-tint); color: var(--nv-green-dark); }
-  .compare-card.hw .tag { background: var(--sw-blue-tint); color: var(--sw-blue); }
-  .compare-card ul { list-style: none; margin: 12px 0 0; padding: 0; }
-  .compare-card li { position: relative; padding-left: 20px; margin: 8px 0; font-size: 14px; line-height: 1.6; color: #333; }
-  .compare-card.sw li::before { content: "▸"; position: absolute; left: 0; color: var(--nv-green); font-weight: 700; }
-  .compare-card.hw li::before { content: "▸"; position: absolute; left: 0; color: var(--sw-blue); font-weight: 700; }
-
-  /* Deep-read report */
-  .deep-read { margin: 40px 0 0; border: 1px solid var(--nv-border); border-radius: 2px; overflow: hidden; background: var(--nv-white); box-shadow: var(--nv-shadow); }
-  .deep-read-header { background: var(--nv-green-dark); color: var(--nv-white); padding: 14px 24px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-  .deep-read-header::before { content: "📖"; font-size: 18px; }
-  .deep-read-body { padding: 28px 32px; }
-  .deep-read-body h3 { font-size: 18px; margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--nv-border); color: var(--nv-green-dark); }
-  .deep-read-body h3:first-child { margin-top: 0; }
-  .deep-read-body h4 { font-size: 15px; font-weight: 700; margin: 20px 0 8px; color: var(--nv-black); }
-  .deep-read-body p { font-size: 14.5px; line-height: 1.7; color: #333; margin-bottom: 10px; }
-  .deep-read-body strong { color: var(--nv-black); }
-  .deep-read-body code { font-size: 12.5px; }
-  .deep-read-body ul, .deep-read-body ol { margin: 8px 0 12px 22px; }
-  .deep-read-body li { font-size: 14.5px; line-height: 1.7; color: #333; margin: 6px 0; }
-  .deep-read-body .formula { background: #1a1a1a; color: #76b900; padding: 16px 20px; border-radius: 2px; font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.6; overflow-x: auto; margin: 16px 0; white-space: pre; }
-  .deep-read-body .formula .comment { color: #898989; }
-  .deep-read-body .ablock { border-left: 3px solid var(--nv-green); background: var(--nv-green-tint); padding: 14px 18px; margin: 16px 0; border-radius: 0 2px 2px 0; font-size: 14.5px; }
-  .deep-read-body .ablock .alabel { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--nv-green-dark); letter-spacing: 0.5px; margin-bottom: 4px; }
-  .deep-read-body .one-liner { background: var(--nv-green-tint); border: 1px solid rgba(118,185,0,0.3); border-left: 4px solid var(--nv-green); padding: 16px 20px; border-radius: 0 2px 2px 0; margin: 16px 0; }
-  .deep-read-body .one-liner .label { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--nv-green-dark); letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
-  .deep-read-body .one-liner p { margin: 0; font-size: 14.5px; }
-  .deep-read-part-divider { border: none; border-top: 1px dashed var(--nv-border); margin: 32px 0; }
-  .deep-read-body .part-label { display: inline-block; background: var(--nv-green-tint); color: var(--nv-green-dark); font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 2px; border: 1px solid rgba(118,185,0,0.4); margin-bottom: 16px; }
-
-  /* Structured abstract table */
-  .deep-read-body .table-wrap { margin: 16px 0 20px; }
-  .deep-read-body .table-wrap table { min-width: 500px; }
-  .deep-read-body .table-wrap td:first-child { font-weight: 700; color: var(--nv-green-dark); white-space: nowrap; width: 120px; }
-
-  /* Paper card */
-  .paper { background: var(--nv-white); border: 1px solid var(--nv-border); border-radius: 2px; padding: 28px 32px; margin-bottom: 20px; box-shadow: var(--nv-shadow); transition: box-shadow .15s, border-color .15s; }
-  .paper:hover { border-color: var(--nv-green); box-shadow: var(--nv-shadow-hover); }
+  /* —— Paper card —— */
+  .paper {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 32px; margin-bottom: 20px;
+    position: relative; overflow: hidden;
+    transition: border-color 0.25s, background 0.25s;
+  }
+  .paper::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--orange), transparent);
+    opacity: 1;
+  }
+  .paper:hover { border-color: var(--border-hover); background: var(--panel-hover); }
   .paper-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-bottom: 12px; }
-  .paper-id { display: inline-block; background: var(--nv-green); color: var(--nv-black); font-family: ui-monospace, monospace; font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 2px; text-decoration: none; transition: background .15s; }
-  .paper-id:hover { background: var(--nv-green-dark); color: var(--nv-white); }
-  .paper-date { color: var(--nv-gray-400); font-size: 13px; font-family: ui-monospace, monospace; font-weight: 600; }
-  .paper-title { font-size: 20px; font-weight: 700; line-height: 1.25; color: var(--nv-black); margin: 4px 0 8px; }
-  .paper-authors { font-size: 14px; font-weight: 400; color: var(--nv-gray-500); margin-bottom: 14px; font-style: italic; }
+  .paper-id {
+    display: inline-block; background: var(--orange); color: var(--black);
+    font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+    padding: 4px 12px; border-radius: 4px; transition: background 0.2s;
+  }
+  .paper-id:hover { background: var(--white); }
+  .paper-date { color: var(--text-dim); font-size: 13px; font-family: var(--font-mono); font-weight: 600; }
+  .paper-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; line-height: 1.3; color: var(--white); margin: 6px 0 10px; }
+  .paper-authors { font-size: 14px; font-weight: 400; color: var(--text-muted); margin-bottom: 16px; }
   .specs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-  .spec { display: inline-block; background: var(--nv-green-tint); color: var(--nv-green-dark); font-family: ui-monospace, monospace; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 2px; border: 1px solid rgba(118, 185, 0, 0.4); }
+  .spec {
+    display: inline-block; background: var(--orange-soft); color: var(--orange);
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(255,122,0,0.2);
+  }
 
-  /* Zhihu community */
-  .zhihu-quote { background: var(--nv-white); border: 1px solid var(--nv-border); border-left: 3px solid var(--sw-blue); padding: 18px 22px; margin: 14px 0; border-radius: 0 2px 2px 0; box-shadow: var(--nv-shadow); transition: border-color .15s; }
-  .zhihu-quote:hover { border-left-color: var(--nv-green); }
-  .zhihu-quote-title { font-size: 15px; font-weight: 700; color: var(--nv-black); line-height: 1.4; margin-bottom: 4px; }
-  .zhihu-quote-title a { color: var(--sw-blue); text-decoration: none; }
-  .zhihu-quote-title a:hover { color: var(--nv-green-dark); }
-  .zhihu-quote-meta { font-size: 12px; color: var(--nv-gray-500); font-family: ui-monospace, monospace; margin-bottom: 6px; }
+  /* —— Deep-read report —— */
+  .deep-read {
+    margin: 40px 0 0; border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; background: var(--panel);
+  }
+  .deep-read-header {
+    background: linear-gradient(90deg, var(--bg-2), var(--panel));
+    color: var(--white); border-bottom: 1px solid var(--border);
+    padding: 16px 28px; display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-display); font-size: 14px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+  }
+  .deep-read-header::before { content: "📖"; font-size: 18px; }
+  .deep-read-body { padding: 32px; }
+  .deep-read-body h3 {
+    font-size: 18px; margin: 32px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); color: var(--orange);
+  }
+  .deep-read-body h3:first-child { margin-top: 0; }
+  .deep-read-body h4 { font-size: 15px; font-weight: 600; margin: 22px 0 10px; color: var(--white); }
+  .deep-read-body p { font-size: 14.5px; line-height: 1.75; color: var(--text); margin-bottom: 12px; }
+  .deep-read-body strong { color: var(--white); }
+  .deep-read-body code { font-size: 12.5px; }
+  .deep-read-body ul, .deep-read-body ol { margin: 8px 0 14px 24px; }
+  .deep-read-body li { font-size: 14.5px; line-height: 1.75; color: var(--text); margin: 6px 0; }
+  .deep-read-body .formula {
+    background: var(--bg-2); color: var(--orange);
+    border: 1px solid var(--border);
+    padding: 18px 22px; border-radius: var(--radius-sm);
+    font-family: var(--font-mono); font-size: 13px; line-height: 1.7;
+    overflow-x: auto; margin: 18px 0; white-space: pre;
+  }
+  .deep-read-body .formula .comment { color: var(--text-dim); }
+  .deep-read-body .ablock {
+    border-left: 3px solid var(--orange);
+    background: var(--orange-soft); padding: 16px 20px; margin: 16px 0;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 14.5px;
+  }
+  .deep-read-body .ablock .alabel {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    color: var(--orange); letter-spacing: 0.06em; margin-bottom: 6px;
+    font-family: var(--font-display);
+  }
+  .deep-read-body .one-liner {
+    background: var(--orange-soft); border: 1px solid rgba(255,122,0,0.25);
+    border-left: 4px solid var(--orange); padding: 18px 22px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin: 18px 0;
+  }
+  .deep-read-body .one-liner .label {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    color: var(--orange); letter-spacing: 0.06em; display: block; margin-bottom: 8px;
+    font-family: var(--font-display);
+  }
+  .deep-read-body .one-liner p { margin: 0; font-size: 14.5px; }
+  .deep-read-part-divider { border: none; border-top: 1px dashed var(--border); margin: 32px 0; }
+  .deep-read-body .part-label {
+    display: inline-block; background: var(--orange-soft); color: var(--orange);
+    font-family: var(--font-display); font-size: 13px; font-weight: 600;
+    padding: 5px 14px; border-radius: 999px; border: 1px solid rgba(255,122,0,0.25);
+    margin-bottom: 18px;
+  }
+  .deep-read-body .table-wrap { margin: 16px 0 20px; }
+  .deep-read-body .table-wrap td:first-child {
+    font-weight: 600; color: var(--orange); white-space: nowrap; width: 110px;
+  }
+
+  /* —— Zhihu quotes —— */
+  .zhihu-quote {
+    background: var(--panel); border: 1px solid var(--border);
+    border-left: 3px solid var(--sw-blue); padding: 18px 22px; margin: 14px 0;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .zhihu-quote:hover { border-left-color: var(--orange); background: var(--panel-hover); }
+  .zhihu-quote-title { font-size: 15px; font-weight: 600; color: var(--white); line-height: 1.4; margin-bottom: 6px; }
+  .zhihu-quote-title a { color: var(--sw-blue); }
+  .zhihu-quote-title a:hover { color: var(--orange); }
+  .zhihu-quote-meta { font-size: 12px; color: var(--text-dim); font-family: var(--font-mono); margin-bottom: 4px; }
   .zhihu-quote-meta .author { color: var(--sw-blue); font-weight: 600; }
-  .zhihu-quote-meta .votes { color: var(--nv-green-dark); font-weight: 700; }
+  .zhihu-quote-meta .votes { color: var(--orange); font-weight: 700; }
 
-  /* Complement block */
-  .complement { border: 1px solid var(--nv-green); border-left: 4px solid var(--nv-green); padding: 28px 32px; margin: 32px 0; border-radius: 2px; background: var(--nv-green-tint); }
-  .complement .label { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--nv-green-dark); letter-spacing: 1px; margin-bottom: 10px; }
+  /* —— Complement block —— */
+  .complement {
+    border: 1px solid var(--border); border-left: 4px solid var(--orange);
+    padding: 28px 32px; margin: 32px 0; border-radius: var(--radius-sm);
+    background: var(--panel);
+  }
+  .complement .label {
+    font-family: var(--font-display); font-size: 12px; font-weight: 600;
+    text-transform: uppercase; color: var(--orange); letter-spacing: 0.1em; margin-bottom: 12px;
+  }
+  .complement p { margin-bottom: 0; }
 
-  /* Footer */
-  footer { background: var(--nv-white); border-top: 2px solid var(--nv-green); padding: 32px 0; text-align: center; }
-  footer p { font-size: 12px; color: var(--nv-gray-500); font-family: ui-monospace, monospace; line-height: 1.5; }
-  footer p .accent { color: var(--nv-green-dark); }
+  /* —— Footer —— */
+  footer {
+    border-top: 1px solid var(--border); padding: 40px 32px; text-align: center;
+    position: relative; z-index: 1;
+  }
+  footer p { font-size: 12px; color: var(--text-dim); font-family: var(--font-mono); line-height: 1.6; }
+  footer p .accent { color: var(--orange); }
+  footer a { color: var(--orange); }
+  footer a:hover { color: var(--white); }
 </style>
 </head>
 <body>
 
+<!-- 环境光背景 -->
+<div class="bg-glow"></div>
+<div class="bg-grid"></div>
+
 <!-- Nav -->
-<nav>
-  <div class="container">
-    <div class="nav-brand">MEGAKERNEL · RUBIN</div>
-    <ul class="nav-links">
-      <li><a href="#layers">两个层级</a></li>
-      <li><a href="#megakernel">Megakernel</a></li>
-      <li><a href="#rubin">Rubin</a></li>
-      <li><a href="#complement">互补</a></li>
-      <li><a href="#deep-read">深读</a></li>
-      <li><a href="#zhihu">社区</a></li>
-    </ul>
+<nav class="nav">
+  <div class="brand">MEGAKERNEL · RUBIN</div>
+  <div class="nav-links">
+    <a href="#layers">两个层级</a>
+    <a href="#megakernel">Megakernel</a>
+    <a href="#rubin">Rubin</a>
+    <a href="#complement">互补</a>
+    <a href="#deep-read">深读</a>
+    <a href="#zhihu">社区</a>
   </div>
 </nav>
 
+<div class="page">
+
 <!-- Hero -->
 <header class="hero">
-  <div class="container">
-    <div class="hero-eyebrow">技术整理 · TECHNICAL SYNTHESIS</div>
+  <div class="hero-inner">
+    <div class="eyebrow">技术整理 · TECHNICAL SYNTHESIS</div>
     <h1>Megakernel 与 Rubin：<span class="accent">软件抽象与硬件底座</span></h1>
-    <p class="subtitle">
+    <p class="lede">
       Megakernel 是 GPU 编程模型——把成百上千个小 kernel 融合成一个 persistent kernel；
       Rubin 是 NVIDIA 下一代 GPU 架构——面向"推理工厂"的整机平台。
       两者不构成"区别"，而是软件与硬件两个层级的互补关系。本文整理两者的核心机制，
       并深读 megakernel 侧的权威原论文 Event Tensor（MLSys 2026）。
     </p>
-    <div class="hero-meta">
+    <div class="meta">
       整理日期 <span>2026-07-22</span> · 来源 <span>arXiv + 知乎</span> · 核心论文 <span>Event Tensor</span>
     </div>
   </div>
 </header>
 
 <!-- 1. 两个层级 -->
-<section id="layers" class="white">
-  <div class="container">
+<section id="layers" class="section">
+  <div class="section-inner">
     <div class="section-label">核心定性 · POSITIONING</div>
     <h2>不是"区别"，是两个层级</h2>
 
@@ -234,11 +386,11 @@
           <tr><th>维度</th><th>Megakernel</th><th>Rubin</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>本质</strong></td><td>软件 / 编译技术（GPU 编程模型）</td><td>硬件 / GPU 架构（NVIDIA 下一代芯片）</td></tr>
-          <tr><td><strong>回答的问题</strong></td><td>"kernel 怎么组织？"</td><td>"kernel 跑在什么上？"</td></tr>
-          <tr><td><strong>所属层级</strong></td><td>编译器 / 推理框架</td><td>芯片 / 整机平台</td></tr>
-          <tr><td><strong>发布主体</strong></td><td>学术界+开源社区（CMU、Stanford、TVM、Luce…）</td><td>NVIDIA（CES 2026 / GTC 2026）</td></tr>
-          <tr><td><strong>命名来源</strong></td><td>"mega"（把多 kernel 融成一个）</td><td>天文学家 Vera Rubin</td></tr>
+          <tr><td>本质</td><td>软件 / 编译技术（GPU 编程模型）</td><td>硬件 / GPU 架构（NVIDIA 下一代芯片）</td></tr>
+          <tr><td>回答的问题</td><td>"kernel 怎么组织？"</td><td>"kernel 跑在什么上？"</td></tr>
+          <tr><td>所属层级</td><td>编译器 / 推理框架</td><td>芯片 / 整机平台</td></tr>
+          <tr><td>发布主体</td><td>学术界+开源社区（CMU、Stanford、TVM、Luce…）</td><td>NVIDIA（CES 2026 / GTC 2026）</td></tr>
+          <tr><td>命名来源</td><td>"mega"（把多 kernel 融成一个）</td><td>天文学家 Vera Rubin</td></tr>
         </tbody>
       </table>
     </div>
@@ -246,8 +398,8 @@
 </section>
 
 <!-- 2. Megakernel 详解 -->
-<section id="megakernel" class="tint">
-  <div class="container">
+<section id="megakernel" class="section" style="background: var(--bg-1);">
+  <div class="section-inner">
     <div class="section-label">软件层 · MEGAKERNEL</div>
     <h2>把成百上千个小 kernel 融成一个</h2>
 
@@ -277,11 +429,11 @@
       <table>
         <thead><tr><th>项目</th><th>团队</th><th>特点</th></tr></thead>
         <tbody>
-          <tr><td><strong>Mirage Persistent Kernel (MPK)</strong></td><td>CMU 贾志豪团队</td><td>几十行 PyTorch 自动编译成 megakernel，三层 μGraph(kernel/block/thread)精确映射 GPU 层级</td></tr>
-          <tr><td><strong>Event Tensor</strong></td><td>CMU + NVIDIA + TVM</td><td>把"任务完成事件"做成 tensor，让编译器用 symbolic shape + runtime index 表达<strong>动态依赖</strong>，再 static/dynamic scheduling 生成 megakernel</td></tr>
-          <tr><td><strong>TVM tirx</strong></td><td>TVM 社区</td><td>基于 tirx IR 的 event-tensor megakernel 实现</td></tr>
-          <tr><td><strong>Luce</strong></td><td>Luce-Org</td><td>针对消费级硬件（RTX 3090）手工调优的 megakernel</td></tr>
-          <tr><td><strong>vLLM / TensorRT-LLM</strong></td><td>工业界</td><td>推理框架自身的 megakernel 化</td></tr>
+          <tr><td>Mirage Persistent Kernel (MPK)</td><td>CMU 贾志豪团队</td><td>几十行 PyTorch 自动编译成 megakernel，三层 μGraph(kernel/block/thread)精确映射 GPU 层级</td></tr>
+          <tr><td>Event Tensor</td><td>CMU + NVIDIA + TVM</td><td>把"任务完成事件"做成 tensor，让编译器用 symbolic shape + runtime index 表达<strong>动态依赖</strong>，再 static/dynamic scheduling 生成 megakernel</td></tr>
+          <tr><td>TVM tirx</td><td>TVM 社区</td><td>基于 tirx IR 的 event-tensor megakernel 实现</td></tr>
+          <tr><td>Luce</td><td>Luce-Org</td><td>针对消费级硬件（RTX 3090）手工调优的 megakernel</td></tr>
+          <tr><td>vLLM / TensorRT-LLM</td><td>工业界</td><td>推理框架自身的 megakernel 化</td></tr>
         </tbody>
       </table>
     </div>
@@ -292,8 +444,8 @@ megakernel 一锅炖，细粒度流水线</div>
 </section>
 
 <!-- 3. Rubin 详解 -->
-<section id="rubin" class="white">
-  <div class="container">
+<section id="rubin" class="section">
+  <div class="section-inner">
     <div class="section-label">硬件层 · RUBIN</div>
     <h2>面向"推理工厂"的下一代整机平台</h2>
 
@@ -323,11 +475,11 @@ megakernel 一锅炖，细粒度流水线</div>
       <table>
         <thead><tr><th>特性</th><th>说明</th></tr></thead>
         <tbody>
-          <tr><td><strong>第三代 Transformer Engine</strong></td><td>NVFP4 精度 + 硬件自适应压缩，动态分析各层计算特性</td></tr>
-          <tr><td><strong>增强 TMA</strong></td><td>布局相同、内存位置不同的 tensor <strong>复用一个描述符</strong>，指令里覆盖指针/步幅。对 MoE 尤其重要：软件不用为每个专家维护一套重复的搬运说明</td></tr>
-          <tr><td><strong>HBM</strong></td><td>288GB 容量、<strong>22TB/s 带宽</strong>（Blackwell Ultra 最高 8TB/s，近 3 倍），服务逐 token 生成而非单纯塞更大模型</td></tr>
-          <tr><td><strong>规模</strong></td><td>3360 亿晶体管、224 SM、896 Tensor Core</td></tr>
-          <tr><td><strong>网络</strong></td><td>Spectrum-X 协调拥塞控制 + 自适应路由 + 端到端遥测，高负载下保持可重复性能</td></tr>
+          <tr><td>第三代 Transformer Engine</td><td>NVFP4 精度 + 硬件自适应压缩，动态分析各层计算特性</td></tr>
+          <tr><td>增强 TMA</td><td>布局相同、内存位置不同的 tensor <strong>复用一个描述符</strong>，指令里覆盖指针/步幅。对 MoE 尤其重要：软件不用为每个专家维护一套重复的搬运说明</td></tr>
+          <tr><td>HBM</td><td>288GB 容量、<strong>22TB/s 带宽</strong>（Blackwell Ultra 最高 8TB/s，近 3 倍），服务逐 token 生成而非单纯塞更大模型</td></tr>
+          <tr><td>规模</td><td>3360 亿晶体管、224 SM、896 Tensor Core</td></tr>
+          <tr><td>网络</td><td>Spectrum-X 协调拥塞控制 + 自适应路由 + 端到端遥测，高负载下保持可重复性能</td></tr>
         </tbody>
       </table>
     </div>
@@ -338,8 +490,8 @@ megakernel 一锅炖，细粒度流水线</div>
 </section>
 
 <!-- 4. 互补关系 -->
-<section id="complement" class="tint">
-  <div class="container">
+<section id="complement" class="section" style="background: var(--bg-1);">
+  <div class="section-inner">
     <div class="section-label">两者关系 · COMPLEMENTARY</div>
     <h2>不是对立，是互补</h2>
 
@@ -368,8 +520,8 @@ megakernel 一锅炖，细粒度流水线</div>
 </section>
 
 <!-- 5. Paper Parse 双模深读 -->
-<section id="deep-read" class="white">
-  <div class="container">
+<section id="deep-read" class="section">
+  <div class="section-inner">
     <div class="section-label">论文深读 · PAPER PARSE</div>
     <h2>Event Tensor：megakernel 的权威原论文</h2>
 
@@ -387,7 +539,7 @@ megakernel 一锅炖，细粒度流水线</div>
         <span class="spec">AOT 编译</span>
         <span class="spec">Qwen3-30B-A3B</span>
       </div>
-      <p style="font-size:15px; color:#333;">这篇论文由 CMU Zhihao Jia 团队（Mirage Persistent Kernel 一作）与 NVIDIA/TVM 的 Tianqi Chen、Vinod Grover 联合发表，把此前只能手工编写、只支持单 batch dense 推理的 megakernel 技术，提升为支持动态形状与数据相关控制流的编译器抽象。</p>
+      <p style="font-size:15px; color: var(--text-muted);">这篇论文由 CMU Zhihao Jia 团队（Mirage Persistent Kernel 一作）与 NVIDIA/TVM 的 Tianqi Chen、Vinod Grover 联合发表，把此前只能手工编写、只支持单 batch dense 推理的 megakernel 技术，提升为支持动态形状与数据相关控制流的编译器抽象。</p>
     </article>
 
     <div class="deep-read">
@@ -481,7 +633,7 @@ megakernel 一锅炖，细粒度流水线</div>
         <p>把同步原语（semaphore）从运行时实现细节提升为编译器 IR 的一等张量对象。三重后果：(1) 复用编译器已有的符号形状与张量索引表达式基础设施；(2) static 与 dynamic 调度成为同一 IR 上的可互换变换；(3) 把"producer→event→consumer"任务图范式压缩成张量形式，用单个张量表示成千上万事件。</p>
 
         <h4>4.2 实践启示</h4>
-        <p>对推理引擎开发者：提供从"kernel-by-kernel + CUDA Graph"升级到"单一 persistent megakernel + AOT 编译"的路径，利好低 batch延迟敏感场景。对编译器社区：抽象 DSL-agnostic，可集成 Triton、CuteDSL。对硬件设计者：Event Tensor 的 MoE 数据相关触发机制（<code>topk</code>+<code>exp_indptr</code>）与 Rubin 增强 TMA 在目标上高度对齐。</p>
+        <p>对推理引擎开发者：提供从"kernel-by-kernel + CUDA Graph"升级到"单一 persistent megakernel + AOT 编译"的路径，利好低 batch 延迟敏感场景。对编译器社区：抽象 DSL-agnostic，可集成 Triton、CuteDSL。对硬件设计者：Event Tensor 的 MoE 数据相关触发机制（<code>topk</code>+<code>exp_indptr</code>）与 Rubin 增强 TMA 在目标上高度对齐。</p>
 
         <h4>4.3 局限性</h4>
         <ul>
@@ -511,10 +663,10 @@ megakernel 一锅炖，细粒度流水线</div>
           <table>
             <thead><tr><th>要素</th><th>内容</th></tr></thead>
             <tbody>
-              <tr><td><strong>根本问题</strong></td><td>megakernel 能消除 LLM 推理两大延迟主因，但真实负载的动态性（动态 batch shape + MoE data-dependent 路由）让"手写 megakernel"彻底失效：要么为每个 shape 重编译，要么手写运行时动态依赖（不可维护）。现有编译器对"如何在一个 kernel 内表达并调度动态细粒度依赖"<strong>没有抽象</strong>。</td></tr>
-              <tr><td><strong>切入视角</strong></td><td>别人看到的是"同步是运行时实现细节"，作者看到的是"同步事件本身就是一个张量"。megakernel 把算子拆成海量 tile 级任务后，同步事件天然形成多维结构——把它显式提升为编译器 IR 里的一等张量，就能复用编译器已有的符号形状与索引表达式基础设施。</td></tr>
-              <tr><td><strong>关键方法</strong></td><td>两层机制。其一，Event Tensor 抽象：事件=SM 级任务集完成，多维事件数组，<code>wait_count</code>+<code>notify/wait/trigger</code>；shape dynamism 用符号模板+运行时实例化，data-dependent 用 runtime index 表达式（<code>topk</code>+<code>exp_indptr</code>）。其二，ETC 编译器：static/dynamic 两套可互换调度变换，降级为 persistent megakernel；Event Tensor→integer tensor，<code>notify()=atomic decrement</code>。</td></tr>
-              <tr><td><strong>核心发现</strong></td><td>用"同算子码、仅把细粒度依赖换成全局屏障"的非融合 megakernel 做对照，证明加速<strong>纯粹来自 inter-kernel parallelism</strong>。B200 上：融合 GEMM+RS/AG 最高 1.40×；MoE 最高 1.23×；端到端 batch=1 时 1.48× 优于 vLLM；warmup 35s vs 123s/583s（3.5×）；数据相关→dynamic 更优、规则 dense→static 更优。</td></tr>
+              <tr><td>根本问题</td><td>megakernel 能消除 LLM 推理两大延迟主因，但真实负载的动态性（动态 batch shape + MoE data-dependent 路由）让"手写 megakernel"彻底失效：要么为每个 shape 重编译，要么手写运行时动态依赖（不可维护）。现有编译器对"如何在一个 kernel 内表达并调度动态细粒度依赖"<strong>没有抽象</strong>。</td></tr>
+              <tr><td>切入视角</td><td>别人看到的是"同步是运行时实现细节"，作者看到的是"同步事件本身就是一个张量"。megakernel 把算子拆成海量 tile 级任务后，同步事件天然形成多维结构——把它显式提升为编译器 IR 里的一等张量，就能复用编译器已有的符号形状与索引表达式基础设施。</td></tr>
+              <tr><td>关键方法</td><td>两层机制。其一，Event Tensor 抽象：事件=SM 级任务集完成，多维事件数组，<code>wait_count</code>+<code>notify/wait/trigger</code>；shape dynamism 用符号模板+运行时实例化，data-dependent 用 runtime index 表达式（<code>topk</code>+<code>exp_indptr</code>）。其二，ETC 编译器：static/dynamic 两套可互换调度变换，降级为 persistent megakernel；Event Tensor→integer tensor，<code>notify()=atomic decrement</code>。</td></tr>
+              <tr><td>核心发现</td><td>用"同算子码、仅把细粒度依赖换成全局屏障"的非融合 megakernel 做对照，证明加速<strong>纯粹来自 inter-kernel parallelism</strong>。B200 上：融合 GEMM+RS/AG 最高 1.40×；MoE 最高 1.23×；端到端 batch=1 时 1.48× 优于 vLLM；warmup 35s vs 123s/583s（3.5×）；数据相关→dynamic 更优、规则 dense→static 更优。</td></tr>
             </tbody>
           </table>
         </div>
@@ -544,11 +696,11 @@ AOT 编译 = Event Tensor 的 first-class shape dynamism → 运行时零 JIT、
 </section>
 
 <!-- 6. 知乎社区参考 -->
-<section id="zhihu" class="tint">
-  <div class="container">
+<section id="zhihu" class="section" style="background: var(--bg-1);">
+  <div class="section-inner">
     <div class="section-label">社区讨论 · ZHIHU</div>
     <h2>知乎社区参考资料（按赞数排序）</h2>
-    <p>搜索词：<code>megakernel 原理</code> / <code>megakernel CUDA 持久化 kernel</code> / <code>NVIDIA Rubin GPU 架构</code> / <code>megakernel Rubin 区别</code>，Zhihu OpenAPI <code>zhihu_search</code> 端点。</p>
+    <p style="color: var(--text-muted);">搜索词：<code>megakernel 原理</code> / <code>megakernel CUDA 持久化 kernel</code> / <code>NVIDIA Rubin GPU 架构</code> / <code>megakernel Rubin 区别</code>，Zhihu OpenAPI <code>zhihu_search</code> 端点。</p>
 
     <h3>Megakernel 侧</h3>
 
@@ -587,7 +739,7 @@ AOT 编译 = Event Tensor 的 first-class shape dynamism → 运行时零 JIT、
       <div class="zhihu-quote-meta"><span class="author">非实在玩网魔怔人</span> · <span class="votes">50 赞</span></div>
     </div>
 
-    <h3 style="margin-top:32px;">Rubin 侧</h3>
+    <h3 style="margin-top:36px;">Rubin 侧</h3>
 
     <div class="zhihu-quote">
       <div class="zhihu-quote-title"><a href="https://www.zhihu.com/question/657966011/answer/2016326073965651150" target="_blank">英伟达首次宣布下一代GPU架构Rubin,该款产品有何亮点?</a></div>
@@ -614,11 +766,10 @@ AOT 编译 = Event Tensor 的 first-class shape dynamism → 运行时零 JIT、
 
 <!-- Footer -->
 <footer>
-  <div class="container">
-    <p>论文 PDF：<a href="https://arxiv.org/pdf/2604.13327v2" style="color:var(--nv-green-dark);">arXiv:2604.13327v2</a> · 整理于 <span class="accent">2026-07-22</span> · <a href="/" style="color:var(--nv-green-dark);">返回首页</a></p>
-    <p style="margin-top:8px;">本文整合知乎检索 + Paper Parse 双模研读，Part A 追求专业完整，Part B 追求洞察凝练</p>
-  </div>
+  <p>论文 PDF：<a href="https://arxiv.org/pdf/2604.13327v2">arXiv:2604.13327v2</a> · 整理于 <span class="accent">2026-07-22</span> · <a href="/">返回首页</a></p>
+  <p style="margin-top:8px;">本文整合知乎检索 + Paper Parse 双模研读，Part A 追求专业完整，Part B 追求洞察凝练</p>
 </footer>
 
+</div>
 </body>
 </html>
