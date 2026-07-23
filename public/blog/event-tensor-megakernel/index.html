@@ -1,808 +1,847 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Megakernel × Rubin 技术全景</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,ital,wght@6..72,0,400;6..72,0,500;6..72,0,600;6..72,0,700;6..72,1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise();
-  });
-</script>
-<script>
-  window.MathJax = {
-    tex: { inlineMath: [['$','$']], displayMath: [['$$','$$']] },
-    svg: { fontCache: 'global' },
-    options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] }
-  };
-</script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
-<style>
-  :root {
-    --bg: #FAFAF7;
-    --bg-paper: #FFFFFF;
-    --bg-tint: #F3F1EC;
-    --bg-code: #F6F4EF;
-    --ink: #1A1A1A;
-    --ink-soft: #3D3D3D;
-    --ink-muted: #6B6B6B;
-    --ink-faint: #9A9A9A;
-    --indigo: #3B4BA2;
-    --indigo-dark: #2A3870;
-    --indigo-tint: #ECEEF8;
-    --indigo-border: rgba(59, 75, 162, 0.25);
-    --teal: #2D7D78;
-    --teal-tint: #E5F2F0;
-    --amber: #B06800;
-    --amber-tint: #FDF3E0;
-    --crimson: #A02828;
-    --crimson-tint: #FBE8E8;
-    --green: #178845;
-    --green-tint: #E5F5EC;
-    --border: #E0DED8;
-    --border-strong: #C4C1B8;
-    --radius: 8px;
-    --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
-    --font-sans: "Inter", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: var(--bg); color: var(--ink);
-    font-family: var(--font-sans); font-size: 16px; line-height: 1.65;
-    -webkit-font-smoothing: antialiased; overflow-x: hidden;
-  }
-  a { color: var(--indigo); text-decoration: none; }
-  a:hover { color: var(--indigo-dark); text-decoration: underline; }
-
-  nav {
-    position: sticky; top: 0; z-index: 100;
-    background: rgba(250,250,247,0.92); backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--border); padding: 14px 0;
-  }
-  .nav-inner { max-width: 820px; margin: 0 auto; padding: 0 32px; display: flex; align-items: center; justify-content: space-between; }
-  .nav-brand { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--ink); letter-spacing: 0.02em; display: flex; align-items: center; gap: 8px; }
-  .nav-brand::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--indigo); }
-  .nav-links { display: flex; gap: 20px; }
-  .nav-links a { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.06em; text-decoration: none; }
-  .nav-links a:hover { color: var(--indigo); text-decoration: none; }
-  @media (max-width: 760px) { .nav-links { display: none; } }
-
-  .paper-layout { max-width: 820px; margin: 0 auto; padding: 0 32px; }
-
-  .hero { padding: 64px 0 48px; border-bottom: 1px solid var(--border); }
-  .hero .eyebrow { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--indigo); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 24px; }
-  .hero h1 { font-family: var(--font-serif); font-size: clamp(28px,4.5vw,40px); font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: 24px; color: var(--ink); }
-  .hero h1 .accent { color: var(--indigo); font-style: italic; }
-  .hero .lede { font-family: var(--font-serif); font-size: 19px; line-height: 1.55; color: var(--ink-soft); margin-bottom: 28px; }
-  .hero .meta { font-family: var(--font-mono); font-size: 12px; color: var(--ink-faint); display: flex; gap: 20px; flex-wrap: wrap; }
-  .hero .meta span { color: var(--indigo); }
-  .hero-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-top: 28px; }
-  @media (max-width: 600px) { .hero-stats { grid-template-columns: 1fr 1fr; } }
-  .hero-stat { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-paper); }
-  .hero-stat strong { display: block; font-size: 1.3rem; font-family: var(--font-mono); color: var(--indigo); line-height: 1.25; }
-  .hero-stat span { font-size: 0.78rem; color: var(--ink-muted); }
-
-  section { padding: 52px 0; border-bottom: 1px solid var(--border); }
-  section:last-of-type { border-bottom: none; }
-  .section-label { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
-  h2 { font-family: var(--font-serif); font-size: 26px; font-weight: 600; line-height: 1.3; margin-bottom: 24px; color: var(--ink); }
-  h3 { font-family: var(--font-sans); font-size: 18px; font-weight: 600; line-height: 1.35; margin: 32px 0 12px; color: var(--ink); }
-  h4 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: var(--ink); }
-  p { font-size: 15.5px; line-height: 1.72; margin-bottom: 14px; color: var(--ink-soft); }
-  strong { font-weight: 600; color: var(--ink); }
-  code { font-family: var(--font-mono); font-size: 13px; background: var(--bg-code); color: var(--indigo-dark); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border); }
-  ul, ol { margin: 8px 0 16px 22px; }
-  li { font-size: 15.5px; line-height: 1.72; color: var(--ink-soft); margin: 5px 0; }
-
-  .concept { border-left: 3px solid var(--indigo); padding: 20px 24px; margin: 20px 0; background: var(--bg-paper); border-radius: 0 var(--radius) var(--radius) 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-  .concept p:last-child { margin-bottom: 0; }
-  .highlight { color: var(--indigo); font-weight: 600; }
-
-  .mnemonic { background: var(--bg-code); border: 1px solid var(--border); padding: 18px 22px; border-radius: var(--radius); font-family: var(--font-mono); font-size: 13.5px; line-height: 1.8; color: var(--ink); margin: 24px 0; white-space: pre-wrap; }
-  .mnemonic::before { content: "※ "; color: var(--indigo); }
-
-  .table-wrap { overflow-x: auto; margin: 24px 0; }
-  table { width: 100%; border-collapse: collapse; background: var(--bg-paper); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; min-width: 500px; }
-  th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.5; }
-  th { background: var(--bg-tint); color: var(--ink); font-weight: 600; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--border-strong); }
-  td { color: var(--ink-soft); }
-  tr:last-child td { border-bottom: none; }
-  td:first-child { font-weight: 600; color: var(--indigo); }
-
-  .callout { border: 1px solid var(--border-strong); border-left: 4px solid var(--indigo); border-radius: var(--radius); padding: 16px 20px; background: var(--indigo-tint); margin: 20px 0; font-size: 14.5px; }
-  .callout.warn { border-left-color: var(--amber); background: var(--amber-tint); }
-  .callout.danger { border-left-color: var(--crimson); background: var(--crimson-tint); }
-  .callout strong:first-child { display: inline-block; margin-bottom: 4px; }
-
-  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 12px; }
-  .badge { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; border-radius: 999px; padding: 3px 8px; font-size: 11px; font-weight: 600; font-family: var(--font-mono); border: 1px solid var(--border); }
-  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .badge.measured { color: var(--green); background: var(--green-tint); }
-  .badge.paper { color: var(--indigo); background: var(--indigo-tint); }
-  .badge.vendor { color: var(--amber); background: var(--amber-tint); }
-  .badge.inference { color: var(--teal); background: var(--teal-tint); }
-  .badge.caution { color: var(--crimson); background: var(--crimson-tint); }
-
-  .grid-2, .grid-3, .grid-4 { display: grid; gap: 16px; margin: 20px 0; }
-  .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
-  .grid-4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
-  @media (max-width: 600px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
-  .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-paper); padding: 18px; }
-  .card h4 { margin-top: 0; }
-  .card .big { font-size: 1.5rem; font-weight: 700; font-family: var(--font-mono); color: var(--indigo); line-height: 1.1; margin: 6px 0; }
-  .yes { color: var(--green); font-weight: 700; }
-  .mid { color: var(--amber); font-weight: 700; }
-  .no { color: var(--crimson); font-weight: 700; }
-
-  .paper-card { background: var(--bg-paper); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
-  .paper-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
-  .paper-id { display: inline-block; background: var(--indigo); color: white; font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 3px; }
-  .paper-id:hover { background: var(--indigo-dark); color: white; text-decoration: none; }
-  .paper-date { color: var(--ink-faint); font-size: 12px; font-family: var(--font-mono); }
-  .paper-title { font-family: var(--font-serif); font-size: 20px; font-weight: 600; line-height: 1.3; color: var(--ink); margin: 6px 0 10px; }
-  .paper-authors { font-size: 14px; color: var(--ink-muted); margin-bottom: 14px; font-style: italic; }
-  .specs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-  .spec { display: inline-block; background: var(--indigo-tint); color: var(--indigo); font-family: var(--font-mono); font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 3px; border: 1px solid var(--indigo-border); }
-
-  .deep-read { margin: 40px 0 0; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; background: var(--bg-paper); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-  .deep-read-header { background: var(--bg-tint); border-bottom: 1px solid var(--border); padding: 14px 24px; font-family: var(--font-mono); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-  .deep-read-header::before { content: "§ "; color: var(--indigo); font-weight: 700; }
-  .deep-read-body { padding: 32px; }
-  .deep-read-body h3 { font-family: var(--font-serif); font-size: 18px; margin: 32px 0 14px; padding-bottom: 6px; border-bottom: 1px solid var(--border); color: var(--indigo); }
-  .deep-read-body h3:first-child { margin-top: 0; }
-  .deep-read-body h4 { font-size: 15px; font-weight: 600; margin: 22px 0 10px; color: var(--ink); }
-  .deep-read-body p { font-size: 14.5px; line-height: 1.75; color: var(--ink-soft); margin-bottom: 12px; }
-  .deep-read-body strong { color: var(--ink); }
-  .deep-read-body code { font-size: 12.5px; }
-  .deep-read-body ul, .deep-read-body ol { margin: 8px 0 14px 22px; }
-  .deep-read-body li { font-size: 14.5px; line-height: 1.75; color: var(--ink-soft); margin: 5px 0; }
-  .deep-read-body .formula { background: var(--bg-code); border: 1px solid var(--border); padding: 18px 22px; border-radius: var(--radius); font-family: var(--font-mono); font-size: 13px; line-height: 1.7; overflow-x: auto; margin: 18px 0; white-space: pre; color: var(--ink); }
-  .deep-read-body .formula .comment { color: var(--ink-faint); }
-  .deep-read-body .ablock { border-left: 3px solid var(--indigo); background: var(--indigo-tint); padding: 16px 20px; margin: 16px 0; border-radius: 0 var(--radius) var(--radius) 0; font-size: 14.5px; }
-  .deep-read-body .ablock .alabel { font-family: var(--font-mono); font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--indigo); letter-spacing: 0.06em; margin-bottom: 6px; }
-  .deep-read-body .one-liner { background: var(--indigo-tint); border: 1px solid var(--indigo-border); border-left: 4px solid var(--indigo); padding: 18px 22px; border-radius: 0 var(--radius) var(--radius) 0; margin: 18px 0; }
-  .deep-read-body .one-liner .label { font-family: var(--font-mono); font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--indigo); letter-spacing: 0.06em; display: block; margin-bottom: 8px; }
-  .deep-read-body .one-liner p { margin: 0; font-size: 14.5px; }
-  .deep-read-part-divider { border: none; border-top: 1px dashed var(--border-strong); margin: 32px 0; }
-  .deep-read-body .part-label { display: inline-block; background: var(--bg-tint); color: var(--indigo); font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 3px; border: 1px solid var(--border-strong); margin-bottom: 18px; }
-  .deep-read-body .table-wrap td:first-child { font-weight: 600; color: var(--indigo); white-space: nowrap; width: 100px; }
-
-  .zhihu-quote { background: var(--bg-paper); border: 1px solid var(--border); border-left: 3px solid var(--teal); padding: 16px 20px; margin: 12px 0; border-radius: 0 var(--radius) var(--radius) 0; transition: border-left-color 0.2s, box-shadow 0.2s; }
-  .zhihu-quote:hover { border-left-color: var(--indigo); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-  .zhihu-quote-title { font-size: 14.5px; font-weight: 600; color: var(--ink); line-height: 1.4; margin-bottom: 4px; }
-  .zhihu-quote-title a { color: var(--teal); }
-  .zhihu-quote-title a:hover { color: var(--indigo); }
-  .zhihu-quote-meta { font-size: 12px; color: var(--ink-faint); font-family: var(--font-mono); margin-bottom: 2px; }
-  .zhihu-quote-meta .author { color: var(--teal); font-weight: 600; }
-  .zhihu-quote-meta .votes { color: var(--indigo); font-weight: 700; }
-
-  .source-list { counter-reset: src; list-style: none; padding: 0; }
-  .source-list li { counter-increment: src; position: relative; margin: 10px 0; padding: 13px 14px 13px 48px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--ink-soft); word-break: break-word; font-size: 14px; line-height: 1.6; }
-  .source-list li::before { content: counter(src); position: absolute; left: 13px; top: 13px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 5px; background: var(--indigo-tint); color: var(--indigo); font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
-  .source-list b { color: var(--ink); }
-  .source-list .src-meta { display: block; color: var(--ink-faint); font-size: 12px; margin-top: 4px; }
-
-  .formula-block { font-family: var(--font-mono); font-size: 14px; padding: 18px 22px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-code); color: var(--ink); overflow-x: auto; margin: 18px 0; white-space: pre; }
-  .formula-block .comment { color: var(--ink-faint); }
-
-  details { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-paper); margin: 10px 0; }
-  summary { cursor: pointer; padding: 13px 15px; color: var(--ink); font-weight: 600; font-size: 14.5px; }
-  details > div { padding: 0 15px 15px; color: var(--ink-soft); font-size: 14.5px; line-height: 1.7; }
-
-  footer { padding: 40px 0; text-align: center; border-top: 1px solid var(--border); }
-  footer p { font-size: 12px; color: var(--ink-faint); font-family: var(--font-mono); line-height: 1.6; }
-  footer p .accent { color: var(--indigo); }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,ital,wght@6..72,0,400;6..72,0,500;6..72,0,600;6..72,0,700;6..72,1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta name="description" content="Megakernel 与 NVIDIA Rubin：原理、性能、场景、证据边界与联合架构分析。资料截点 2026-07-23。" />
+  <title>Megakernel × Rubin 技术全景</title>
+  <style>
+    :root {
+      --bg: #FAFAF7;
+      --bg-elev: #FFFFFF;
+      --panel: rgba(255,255,255,.96);
+      --panel-2: rgba(248,246,241,.98);
+      --text: #1A1A1A;
+      --muted: #52606B;
+      --faint: #8A8A8A;
+      --line: rgba(39, 83, 111, .14);
+      --line-strong: rgba(39, 83, 111, .28);
+      --cyan: #3B4BA2;
+      --blue: #3B4BA2;
+      --violet: #5A4099;
+      --amber: #B06800;
+      --green: #178845;
+      --red: #A02828;
+      --shadow: 0 2px 8px rgba(38,78,99,.08);
+      --radius: 8px;
+      --radius-sm: 6px;
+      --max: 1500px;
+      --nav-w: 260px;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: "Newsreader", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    }
+    
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 86% -8%, rgba(59,75,162,.04), transparent 30%),
+        radial-gradient(circle at 18% 8%, rgba(59,75,162,.03), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.72;
+      letter-spacing: .01em;
+    }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    button, input, select { font: inherit; }
+    .skip { position: fixed; left: 12px; top: -80px; z-index: 9999; padding: 9px 12px; background: var(--bg-elev); color: var(--text); border: 1px solid var(--line); border-radius: 8px; }
+    .skip:focus { top: 12px; }
+    .topbar {
+      position: sticky; top: 0; z-index: 60;
+      height: 62px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 22px; backdrop-filter: blur(15px);
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 760; letter-spacing: .02em; }
+    .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: conic-gradient(from 210deg, var(--cyan), var(--blue), var(--violet), var(--cyan)); }
+    .top-actions { display: flex; gap: 8px; align-items: center; }
+    .icon-btn, .small-btn {
+      border: 1px solid var(--line-strong); color: var(--text); background: var(--panel);
+      border-radius: 10px; padding: 8px 11px; cursor: pointer;
+    }
+    .icon-btn:hover, .small-btn:hover { border-color: var(--cyan); }
+    .layout { max-width: var(--max); margin: 0 auto; display: grid; grid-template-columns: var(--nav-w) minmax(0,1fr); gap: 30px; padding: 28px 24px 80px; }
+    aside { position: relative; }
+    .side-nav {
+      position: sticky; top: 88px; max-height: calc(100vh - 110px); overflow: auto;
+      padding: 16px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .side-nav .eyebrow { margin: 2px 10px 10px; }
+    .side-nav a { display: block; color: var(--muted); padding: 7px 10px; margin: 2px 0; border-radius: 8px; font-size: .91rem; text-decoration: none; border-left: 2px solid transparent; }
+    .side-nav a:hover { color: var(--text); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+    .side-nav a.active { color: var(--text); background: color-mix(in srgb, var(--cyan) 12%, transparent); border-left-color: var(--cyan); }
+    .side-nav .sub { padding-left: 22px; font-size: .83rem; }
+    main { min-width: 0; }
+    .hero {
+      position: relative; overflow: hidden;
+      padding: 64px 54px 46px; min-height: 520px;
+      border: 1px solid var(--line); border-radius: 26px;
+      background:
+        linear-gradient(135deg, rgba(59,75,162,.04), transparent 34%),
+        linear-gradient(320deg, rgba(90,64,153,.04), transparent 40%),
+        var(--panel-2);
+      box-shadow: var(--shadow);
+    }
+    .hero::before, .hero::after { content: ""; position: absolute; border-radius: 50%; filter: blur(3px); opacity: .65; pointer-events: none; }
+    .hero::before { width: 360px; height: 360px; right: -130px; top: -150px; border: 1px solid var(--line); box-shadow: 0 0 0 36px rgba(59,75,162,.02), 0 0 0 78px rgba(59,75,162,.015); }
+    .hero::after { width: 260px; height: 260px; left: -150px; bottom: -170px; border: 1px solid var(--line); box-shadow: 0 0 0 42px rgba(90,64,153,.02); }
+    .hero h1 { max-width: 1000px; margin: 18px 0 18px; font-size: clamp(2.25rem, 5.2vw, 5.1rem); line-height: 1.02; letter-spacing: -.055em; }
+    .gradient-text { background: linear-gradient(90deg, var(--cyan), var(--blue) 52%, var(--violet)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero .lead { max-width: 950px; font-size: clamp(1.04rem, 1.8vw, 1.35rem); color: var(--muted); line-height: 1.7; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 9px 14px; margin-top: 28px; color: var(--muted); font-size: .92rem; }
+    .meta-pill { border: 1px solid var(--line); background: var(--panel-2); border-radius: 999px; padding: 6px 10px; }
+    .hero-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 36px; }
+    .hero-stat { padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--panel) 90%, transparent); }
+    .hero-stat strong { display: block; font-size: 1.32rem; line-height: 1.25; }
+    .hero-stat span { font-size: .82rem; color: var(--muted); }
+    section { scroll-margin-top: 78px; margin-top: 32px; }
+    .section-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); padding: 34px; }
+    .section-head { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 16px; align-items: start; margin-bottom: 24px; }
+    .section-no { width: 52px; height: 52px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 14px; color: var(--cyan); font-family: var(--mono); font-weight: 800; background: color-mix(in srgb, var(--cyan) 7%, transparent); }
+    h2 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.55rem); line-height: 1.2; letter-spacing: -.035em; }
+    h3 { margin: 28px 0 12px; font-size: 1.3rem; line-height: 1.35; }
+    h4 { margin: 18px 0 8px; font-size: 1.02rem; }
+    p { margin: 10px 0 15px; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .13em; font-size: .74rem; font-weight: 800; color: var(--cyan); }
+    .muted { color: var(--muted); }
+    .fine { color: var(--faint); font-size: .84rem; }
+    .mono { font-family: var(--mono); }
+    .grid-2, .grid-3, .grid-4 { display: grid; gap: 16px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+    .card { border: 1px solid var(--line); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--panel-2) 88%, transparent); padding: 18px; }
+    .card h3, .card h4 { margin-top: 0; }
+    .card .big { font-size: 1.65rem; font-weight: 800; line-height: 1.1; margin: 8px 0; }
+    .callout { border: 1px solid var(--line-strong); border-left: 4px solid var(--cyan); border-radius: 12px; padding: 16px 18px; background: color-mix(in srgb, var(--cyan) 5%, var(--panel-2)); margin: 18px 0; }
+    .callout.warn { border-left-color: var(--amber); background: color-mix(in srgb, var(--amber) 5%, var(--panel-2)); }
+    .callout.danger { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 5%, var(--panel-2)); }
+    .callout strong:first-child { display: inline-block; margin-bottom: 4px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0 12px; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border-radius: 999px; padding: 4px 9px; font-size: .76rem; line-height: 1.2; border: 1px solid var(--line); font-weight: 740; }
+    .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .badge.paper { color: var(--blue); background: color-mix(in srgb, var(--blue) 8%, transparent); }
+    .badge.measured { color: var(--green); background: color-mix(in srgb, var(--green) 8%, transparent); }
+    .badge.vendor { color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, transparent); }
+    .badge.inference { color: var(--violet); background: color-mix(in srgb, var(--violet) 8%, transparent); }
+    .badge.caution { color: var(--red); background: color-mix(in srgb, var(--red) 8%, transparent); }
+    .metric { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+    .metric-line { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; }
+    .metric-line span { color: var(--muted); font-size: .9rem; }
+    .metric-line strong { font-family: var(--mono); }
+    .bar { height: 10px; border-radius: 999px; background: color-mix(in srgb, var(--line) 80%, transparent); overflow: hidden; margin-top: 7px; }
+    .bar > i { display: block; height: 100%; width: var(--w); border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--blue)); }
+    .bar.amber > i { background: linear-gradient(90deg, var(--amber), var(--red)); }
+    .bar.violet > i { background: linear-gradient(90deg, var(--violet), var(--blue)); }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 13px; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; font-size: .9rem; }
+    th, td { padding: 12px 13px; vertical-align: top; border-bottom: 1px solid var(--line); text-align: left; }
+    th { position: sticky; top: 0; z-index: 1; color: var(--text); background: var(--bg-elev); font-size: .8rem; letter-spacing: .04em; }
+    td { color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+    td strong { color: var(--text); }
+    .yes { color: var(--green); font-weight: 750; }
+    .mid { color: var(--amber); font-weight: 750; }
+    .no { color: var(--red); font-weight: 750; }
+    .diagram { margin: 18px 0; border: 1px solid var(--line); border-radius: 15px; background: var(--panel-2); overflow: hidden; }
+    .diagram .caption { padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: .84rem; }
+    svg { display: block; width: 100%; height: auto; }
+    .svg-text { font-family: var(--sans); fill: var(--text); }
+    .svg-muted { font-family: var(--sans); fill: var(--muted); }
+    .svg-line { stroke: var(--line-strong); }
+    .formula { font-family: var(--mono); font-size: clamp(.82rem,1.4vw,1.02rem); padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2); color: var(--text); overflow-x: auto; }
+    
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+    .tab-btn { border: 1px solid var(--line-strong); color: var(--muted); background: transparent; border-radius: 999px; padding: 7px 12px; cursor: pointer; }
+    .tab-btn[aria-selected="true"] { color: var(--text); border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+    .tab-panel[hidden] { display: none; }
+    details { border: 1px solid var(--line); border-radius: 11px; background: color-mix(in srgb, var(--panel-2) 90%, transparent); margin: 10px 0; }
+    summary { cursor: pointer; padding: 13px 15px; color: var(--text); font-weight: 720; }
+    details > div { padding: 0 15px 15px; color: var(--muted); }
+    sup a { font-family: var(--mono); font-size: .72rem; padding: 0 2px; }
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: stretch; margin: 18px 0; }
+    .flow .step { position: relative; padding: 15px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); min-height: 106px; }
+    .flow .step:not(:last-child)::after { content: "→"; position: absolute; right: -16px; top: 38px; color: var(--cyan); z-index: 2; font-weight: 900; }
+    .step b { display: block; color: var(--text); margin-bottom: 5px; }
+    .step span { color: var(--muted); font-size: .84rem; }
+    .heatmap { display: grid; grid-template-columns: 175px repeat(4, minmax(105px,1fr)); gap: 5px; font-size: .78rem; }
+    .heatmap > div { padding: 9px; border-radius: 8px; border: 1px solid var(--line); min-height: 48px; }
+    .heatmap .head { background: var(--bg-elev); color: var(--text); font-weight: 740; display: grid; place-items: center; text-align: center; }
+    .heatmap .rowhead { background: var(--panel-2); color: var(--text); font-weight: 700; }
+    .heatmap .h { background: color-mix(in srgb, var(--green) 18%, var(--panel-2)); color: var(--text); }
+    .heatmap .m { background: color-mix(in srgb, var(--amber) 13%, var(--panel-2)); color: var(--text); }
+    .heatmap .l { background: color-mix(in srgb, var(--red) 10%, var(--panel-2)); color: var(--text); }
+    .estimator { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(260px,.95fr); gap: 18px; border: 1px solid var(--line); border-radius: 15px; padding: 18px; background: var(--panel-2); }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+    label { display: block; color: var(--muted); font-size: .82rem; }
+    input[type="number"], select, input[type="search"] { width: 100%; margin-top: 4px; padding: 9px 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--bg-elev); color: var(--text); }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .result { padding: 14px; border: 1px solid var(--line); border-radius: 11px; }
+    .result b { display: block; font-family: var(--mono); font-size: 1.35rem; color: var(--cyan); }
+    .result span { color: var(--muted); font-size: .78rem; }
+    .decision { border-left: 2px solid var(--line-strong); margin-left: 12px; padding-left: 20px; }
+    .decision .node { margin: 14px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel-2); }
+    .decision .answer { font-size: .83rem; color: var(--muted); }
+    .source-list { counter-reset: src; list-style: none; padding: 0; }
+    .source-list li { counter-increment: src; position: relative; margin: 10px 0; padding: 13px 14px 13px 48px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); word-break: break-word; }
+    .source-list li::before { content: counter(src); position: absolute; left: 13px; top: 13px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; background: color-mix(in srgb, var(--cyan) 12%, transparent); color: var(--cyan); font-family: var(--mono); font-size: .76rem; font-weight: 800; }
+    .source-list b { color: var(--text); }
+    .source-list .src-meta { display: block; color: var(--faint); font-size: .78rem; margin-top: 3px; }
+    .footer { margin: 30px 0 0; padding: 22px 8px; color: var(--faint); font-size: .82rem; text-align: center; }
+    .mobile-toc { display: none; }
+    .print-only { display: none; }
+    .kbd { font-family: var(--mono); font-size: .77rem; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; color: var(--muted); }
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; padding-top: 18px; }
+      aside { display: none; }
+      .mobile-toc { display: block; margin-bottom: 18px; }
+      .mobile-toc select { margin: 0; }
+      .hero-grid { grid-template-columns: repeat(2,1fr); }
+      .grid-4 { grid-template-columns: repeat(2,1fr); }
+    }
+    @media (max-width: 760px) {
+      .topbar { padding: 0 12px; }
+      .brand span:last-child { display: none; }
+      .layout { padding: 14px 10px 50px; }
+      .hero { padding: 38px 22px 30px; min-height: auto; border-radius: 19px; }
+      .section-card { padding: 22px 17px; }
+      .section-head { grid-template-columns: 42px 1fr; gap: 12px; }
+      .section-no { width: 42px; height: 42px; }
+      .grid-2, .grid-3, .grid-4, .estimator { grid-template-columns: 1fr; }
+      .hero-grid { grid-template-columns: 1fr 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow .step:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -17px; }
+      .heatmap { grid-template-columns: 125px repeat(4, 100px); overflow-x: auto; }
+      .form-grid { grid-template-columns: 1fr; }
+      .top-actions .label { display: none; }
+    }
+    @media print {
+      :root { --bg: white; --panel: white; --panel-2: white; --text: #111; --muted: #333; --faint: #555; --line: #cdd6dc; --line-strong: #aab7c1; --cyan: #2A3870; --blue: #3B4BA2; --violet: #5A4099; --amber: #B06800; --green: #178845; --red: #A02828; --shadow: none; }
+      body { background: white; font-size: 10pt; }
+      .topbar, aside, .mobile-toc, .no-print, .tabs { display: none !important; }
+      .print-only { display: block; }
+      .layout { display: block; max-width: none; padding: 0; }
+      .hero, .section-card { box-shadow: none; break-inside: avoid; }
+      section { break-before: auto; }
+      a { color: #111; text-decoration: none; }
+      .tab-panel[hidden] { display: block !important; }
+      details > div { display: block; }
+      details { break-inside: avoid; }
+      .diagram { break-inside: avoid; }
+    }
+  </style>
 </head>
 <body>
-
-<nav>
-  <div class="nav-inner">
-    <div class="nav-brand">megakernel × rubin</div>
-    <div class="nav-links">
-      <a href="#layers">层级</a>
-      <a href="#mk">Megakernel</a>
-      <a href="#mk-perf">性能</a>
-      <a href="#rubin">Rubin</a>
-      <a href="#rubin-perf">性能</a>
-      <a href="#joint">联合</a>
-      <a href="#deep-read">深读</a>
-      <a href="#sources">来源</a>
-    </div>
-  </div>
-</nav>
-
-<div class="paper-layout">
-<header class="hero">
-  <div class="eyebrow">技术全景 · Architecture · Performance · Workloads</div>
-  <h1>Megakernel × <span class="accent">NVIDIA Rubin</span> 技术全景</h1>
-  <p class="lede">
-    从"一个算子一个内核"转向"设备驻留的模型级运行时"，再到由 Vera CPU、Rubin GPU、NVLink 6 和 NVL72 组成的机架级 AI 平台：本报告解释二者的原理、公开性能证据、适用场景，以及它们在低延迟推理、MoE、长上下文和多 GPU 通信中的潜在协同。资料截点 2026-07-23。
-  </p>
-  <div class="meta">
-    <span>2026-07-23</span>
-    <span>arXiv + NVIDIA + 知乎</span>
-    <span>结论按证据强度分层</span>
-  </div>
-  <div class="hero-stats">
-    <div class="hero-stat"><strong>&lt; 1 ms</strong><span>H100 Llama-1B BF16 前向，研究原型</span></div>
-    <div class="hero-stat"><strong>22 TB/s</strong><span>Rubin GPU HBM4 峰值带宽，官方规格</span></div>
-    <div class="hero-stat"><strong>3.6 TB/s</strong><span>单 Rubin GPU NVLink 6 双向带宽</span></div>
-    <div class="hero-stat"><strong>无直接基准</strong><span>截至截点无公开 Megakernel-on-Rubin 实测</span></div>
+<a class="skip" href="#main">跳到正文</a>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Megakernel × Rubin</span><span class="fine">技术全景 / 2026</span></div>
+  <div class="top-actions">
+    <button class="icon-btn" id="themeBtn" type="button" title="切换主题"><span aria-hidden="true">◐</span> <span class="label">主题</span></button>
+    <button class="icon-btn" id="printBtn" type="button" title="打印或另存为 PDF"><span aria-hidden="true">⎙</span> <span class="label">打印</span></button>
   </div>
 </header>
-</div>
-
-<!-- 1. 核心定性 -->
-<section id="layers">
-  <div class="paper-layout">
-    <div class="section-label">核心定性 · Positioning</div>
-    <h2>不是"区别"，是两个层级</h2>
-    <div class="concept">
-      <p>Megakernel 回答的是 <strong>"kernel 怎么组织"</strong>——把多个算子融合进一个 persistent kernel，消除 launch overhead 和 kernel 边界同步。Rubin 回答的是 <strong>"kernel 跑在什么上"</strong>——下一代 GPU 芯片的物理规格与整机平台。一个是图灵机上的算法，一个是物理芯片。</p>
-      <p>真正有意义的问题是：它们各自解决什么瓶颈，以及 Rubin 的硬件特性如何为 megakernel 这种软件思路提供更好的底座。</p>
+<div class="layout">
+  <aside aria-label="目录">
+    <nav class="side-nav" id="sideNav">
+      <div class="eyebrow">目录</div>
+      <a href="#summary">执行摘要</a>
+      <a href="#scope">范围与证据</a>
+      <a href="#megakernel">Megakernel 原理</a>
+      <a class="sub" href="#mk-runtime">运行时结构</a>
+      <a class="sub" href="#mk-scheduling">调度与同步</a>
+      <a class="sub" href="#mk-compare">与融合/图执行对比</a>
+      <a href="#mk-performance">Megakernel 性能</a>
+      <a href="#rubin">Rubin 架构</a>
+      <a class="sub" href="#rubin-gpu">Rubin GPU</a>
+      <a class="sub" href="#rubin-rack">Vera Rubin NVL72</a>
+      <a class="sub" href="#rubin-variants">CPX / LPX</a>
+      <a href="#rubin-performance">Rubin 性能</a>
+      <a href="#joint">联合分析</a>
+      <a class="sub" href="#joint-model">瓶颈模型</a>
+      <a class="sub" href="#joint-matrix">协同矩阵</a>
+      <a href="#scenarios">应用场景</a>
+      <a href="#deployment">落地方法</a>
+      <a href="#risks">风险与边界</a>
+      <a href="#glossary">术语表</a>
+      <a href="#sources">来源</a>
+    </nav>
+  </aside>
+  <main id="main">
+    <div class="mobile-toc">
+      <label for="mobileToc" class="fine">快速跳转</label>
+      <select id="mobileToc">
+        <option value="#summary">执行摘要</option><option value="#scope">范围与证据</option><option value="#megakernel">Megakernel 原理</option><option value="#mk-performance">Megakernel 性能</option><option value="#rubin">Rubin 架构</option><option value="#rubin-performance">Rubin 性能</option><option value="#joint">联合分析</option><option value="#scenarios">应用场景</option><option value="#deployment">落地方法</option><option value="#risks">风险与边界</option><option value="#glossary">术语表</option><option value="#sources">来源</option>
+      </select>
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>维度</th><th>Megakernel</th><th>Rubin</th></tr></thead>
+
+    <article class="hero">
+      <div class="eyebrow">Architecture · Performance · Workloads</div>
+      <h1><span class="gradient-text">Megakernel</span> ×<br>NVIDIA Rubin 技术全景</h1>
+      <p class="lead">从“一个算子一个内核”转向“设备驻留的模型级运行时”，再到由 Vera CPU、Rubin GPU、NVLink 6 和 NVL72 组成的机架级 AI 平台：本报告解释二者的原理、公开性能证据、适用场景，以及它们在低延迟推理、MoE、长上下文和多 GPU 通信中的潜在协同。</p>
+      <div class="hero-meta">
+        <span class="meta-pill">资料截点：2026-07-23</span>
+        <span class="meta-pill">语言：简体中文</span>
+        <span class="meta-pill">单文件 HTML · 可打印</span>
+        <span class="meta-pill">结论按证据强度分层</span>
+      </div>
+      <div class="hero-grid">
+        <div class="hero-stat"><strong>&lt; 1 ms</strong><span>H100 上 Llama-1B BF16 前向，研究原型公开结果<sup><a href="#src-m1">[M1]</a></sup></span></div>
+        <div class="hero-stat"><strong>22 TB/s</strong><span>Rubin GPU HBM4 峰值带宽，官方规格<sup><a href="#src-r1">[R1]</a></sup></span></div>
+        <div class="hero-stat"><strong>3.6 TB/s</strong><span>单 Rubin GPU NVLink 6 双向带宽，官方规格<sup><a href="#src-r1">[R1]</a></sup></span></div>
+        <div class="hero-stat"><strong>无直接基准</strong><span>截至资料截点，未发现公开 Megakernel-on-Rubin 实测</span></div>
+      </div>
+    </article>
+
+    <section id="summary" class="section-card">
+      <div class="section-head"><div class="section-no">01</div><div><div class="eyebrow">Executive Summary</div><h2>执行摘要</h2><p class="muted">先给结论，再展开证据与工程细节。</p></div></div>
+      <div class="grid-2">
+        <div class="card"><div class="badges"><span class="badge paper">研究结论</span></div><h3>Megakernel 的本质</h3><p>它不是“更大的算子融合”那么简单，而是把大量模型任务放入一个长期驻留的 GPU 内核中，通过设备侧解释器、任务队列、显式事件/计数器与 warp 专职化来调度。目标是减少 CPU 发射空隙、跨内核全局屏障、尾波浪费与中间张量往返 HBM，并把计算、访存和通信细粒度重叠。</p></div>
+        <div class="card"><div class="badges"><span class="badge vendor">官方规格</span></div><h3>Rubin 的本质</h3><p>Rubin 不只是一颗 GPU，而是一套机架级系统：Rubin GPU 提供 288 GB HBM4、22 TB/s HBM 带宽和 3.6 TB/s NVLink 6；Vera CPU 提供大容量一致性内存；NVL72 把 72 颗 GPU 组织成约 260 TB/s 机架内互联域。<sup><a href="#src-r1">[R1]</a></sup><sup><a href="#src-r2">[R2]</a></sup><sup><a href="#src-r3">[R3]</a></sup></p></div>
+        <div class="card"><div class="badges"><span class="badge inference">架构推断</span></div><h3>二者为何可能相互放大</h3><p>Rubin 大幅压缩计算、HBM 与链路时间后，固定的发射、同步和调度气泡更容易成为总时延中的显著比例；Megakernel 正好针对这些“非算术成本”。同时，Rubin 的 TMA 内联描述符更新、设备发起 NVLink counted writes 与更细粒度的依赖触发机制，为动态 MoE 和跨 GPU 设备侧运行时提供更合适的硬件原语。<sup><a href="#src-r1">[R1]</a></sup></p></div>
+        <div class="card"><div class="badges"><span class="badge caution">证据边界</span></div><h3>不能直接声称多少倍</h3><p>公开 Megakernel 数据来自 A100、H100、H200、B200 或 L20；Rubin 数据主要是官方峰值、厂商模型与少量合作伙伴现场测量。二者尚无公开、可复现实验交集，因此本报告只给出机制级判断、性能下界和验证方案，不伪造联合加速倍数。</p></div>
+      </div>
+      <div class="callout warn"><strong>一句话判断：</strong> 对<strong>小批量、内存受限、算子碎片多、跨 GPU 通信可细粒度重叠</strong>的推理，Megakernel 与 Rubin 的组合最值得投入；对<strong>大批量、单个 GEMM 已长期占满张量核心</strong>的工作，收益更可能来自 Rubin 本身，Megakernel 应采用混合而不是“全包”策略。</div>
+    </section>
+
+    <section id="scope" class="section-card">
+      <div class="section-head"><div class="section-no">02</div><div><div class="eyebrow">Scope & Evidence</div><h2>范围、定义与证据分级</h2></div></div>
+      <h3>本报告中的“Megakernel”</h3>
+      <p>这里专指 GPU/大模型系统中的 <strong>模型级或大图级持久内核执行模式</strong>：每张 GPU 启动一个或少数长期驻留的内核，在内核内部完成任务解释、依赖管理、数据搬运、计算和通信。它与数据库、图形渲染或操作系统中偶尔出现的同名概念无关。</p>
+      <div class="grid-4">
+        <div class="card"><span class="badge measured">实测</span><p>论文、公开代码或合作伙伴在真实硬件上给出的测量。仍需核对模型、批量、精度、提示分布、服务框架与统计口径。</p></div>
+        <div class="card"><span class="badge paper">论文/原型</span><p>研究原型的算法与性能，通常可解释性强，但工程成熟度、可移植性和服务功能可能不及生产框架。</p></div>
+        <div class="card"><span class="badge vendor">厂商峰值/预测</span><p>芯片规格、峰值算力、路线图或厂商模型。用于理解上限与方向，不等于应用端持续性能。</p></div>
+        <div class="card"><span class="badge inference">架构推断</span><p>由公开机制推导的协同关系。必须通过 Rubin 实机、相同模型和相同服务约束验证。</p></div>
+      </div>
+      <div class="callout"><strong>对比规则：</strong> 本报告不会把“batch 1 延迟”“离线吞吐”“tokens/MW”“峰值 PFLOPS”画在同一条排名轴上。每个数字都保留其基准条件；跨论文数字只能说明趋势，不能当成统一排行榜。</div>
+    </section>
+
+    <section id="megakernel" class="section-card">
+      <div class="section-head"><div class="section-no">03</div><div><div class="eyebrow">Megakernel Principles</div><h2>Megakernel：从算子流水线到设备侧运行时</h2><p class="muted">把“执行模型”从 CPU 主导的内核序列，迁移成 GPU 内部的任务系统。</p></div></div>
+
+      <h3>3.1 为什么传统执行会出现“气泡”</h3>
+      <p>典型深度学习框架把归一化、矩阵乘、激活、注意力、KV 读写与集合通信分别映射为 CUDA 内核。内核边界提供了方便的全局同步语义，但也引入 CPU 发射延迟、队列空隙、每个算子的尾波、重复读取/写回 HBM，以及无法跨边界调度的空闲 SM。小批量自回归解码中，单个算子本来就很短，几微秒级间隙可累积成可见时延。Hazy Research 对 Llama-1B 的分析估算每层约 7 次发射、16 层、约 5 μs 间隙时，仅发射停顿就会形成约 560 μs 量级的成本。<sup><a href="#src-m1">[M1]</a></sup></p>
+      <div class="diagram" role="img" aria-label="传统多内核和 Megakernel 执行时间线对比">
+        <svg viewBox="0 0 1180 430" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="g1" x1="0" x2="1"><stop stop-color="#4ed6d0"/><stop offset="1" stop-color="#72a8ff"/></linearGradient><linearGradient id="g2" x1="0" x2="1"><stop stop-color="#a989ff"/><stop offset="1" stop-color="#72a8ff"/></linearGradient></defs>
+          <text x="34" y="42" class="svg-text" font-size="23" font-weight="700">传统：operator-per-kernel</text>
+          <text x="34" y="76" class="svg-muted" font-size="15">CPU 逐个发射 · 内核边界近似全局屏障 · 中间张量往返 HBM</text>
+          <line x1="150" y1="126" x2="1120" y2="126" stroke="var(--line)" stroke-width="2"/>
+          <text x="34" y="132" class="svg-muted" font-size="14">时间</text>
+          <g>
+            <rect x="170" y="101" width="105" height="50" rx="8" fill="#D5E0F0"/><text x="222" y="132" text-anchor="middle" class="svg-text" font-size="14">Norm</text>
+            <rect x="285" y="101" width="35" height="50" rx="6" fill="#7a4b00"/><text x="302" y="132" text-anchor="middle" fill="#fff" font-size="12">gap</text>
+            <rect x="330" y="101" width="180" height="50" rx="8" fill="#C5D0E8"/><text x="420" y="132" text-anchor="middle" class="svg-text" font-size="14">GEMM</text>
+            <rect x="520" y="101" width="35" height="50" rx="6" fill="#7a4b00"/><text x="537" y="132" text-anchor="middle" fill="#fff" font-size="12">gap</text>
+            <rect x="565" y="101" width="95" height="50" rx="8" fill="#D5C5E8"/><text x="612" y="132" text-anchor="middle" class="svg-text" font-size="14">Act</text>
+            <rect x="670" y="101" width="35" height="50" rx="6" fill="#7a4b00"/>
+            <rect x="715" y="101" width="160" height="50" rx="8" fill="#C5D0E8"/><text x="795" y="132" text-anchor="middle" class="svg-text" font-size="14">Attention</text>
+            <rect x="885" y="101" width="35" height="50" rx="6" fill="#7a4b00"/>
+            <rect x="930" y="101" width="135" height="50" rx="8" fill="#D5E0F0"/><text x="998" y="132" text-anchor="middle" class="svg-text" font-size="14">KV / Comm</text>
+          </g>
+          <g class="svg-muted" font-size="13"><text x="310" y="176">发射空隙</text><text x="530" y="176">全局同步</text><text x="736" y="176">尾波/空闲 SM</text><text x="944" y="176">HBM 往返</text></g>
+          <text x="34" y="235" class="svg-text" font-size="23" font-weight="700">Megakernel：persistent device runtime</text>
+          <text x="34" y="269" class="svg-muted" font-size="15">一次发射 · 任务/指令队列 · 显式依赖 · 软件流水 · 设备侧通信</text>
+          <line x1="150" y1="330" x2="1120" y2="330" stroke="var(--line)" stroke-width="2"/>
+          <text x="34" y="336" class="svg-muted" font-size="14">时间</text>
+          <rect x="170" y="292" width="895" height="76" rx="13" fill="url(#g1)" opacity=".80"/>
+          <text x="188" y="318" fill="var(--text)" font-size="14" font-weight="800">一次启动：Megakernel</text>
+          <g fill="var(--text)" font-size="13" font-weight="650">
+            <text x="226" y="349">Load</text><text x="340" y="349">GEMM tile</text><text x="480" y="349">Norm</text><text x="590" y="349">Attention tile</text><text x="752" y="349">Store</text><text x="850" y="349">NVLink</text><text x="960" y="349">next tile…</text>
+          </g>
+          <path d="M210 325 C310 278, 370 390, 470 326 S670 278, 770 326 S930 385, 1030 324" fill="none" stroke="#071018" stroke-width="3" opacity=".55"/>
+          <text x="170" y="402" class="svg-muted" font-size="14">任务可跨传统算子边界重叠；同步从“每内核全局屏障”变成更细粒度的事件与计数器。</text>
+        </svg>
+        <div class="caption">概念图：真实实现会按 tile、SM、warp 和通信阶段进一步拆分。</div>
+      </div>
+
+      <h3 id="mk-runtime">3.2 运行时结构：宿主编排 + 设备解释/调度</h3>
+      <div class="flow">
+        <div class="step"><b>① 图拆分</b><span>把模型算子切成 GEMM tile、归一化片段、attention block、load/store、collective 等任务。</span></div>
+        <div class="step"><b>② 编译/排程</b><span>主机端生成每 SM 指令序列或全局任务 DAG，决定分块、依赖和资源预算。</span></div>
+        <div class="step"><b>③ 一次发射</b><span>每 GPU 启动持久内核；网格长期驻留，循环读取任务。</span></div>
+        <div class="step"><b>④ 设备执行</b><span>解释器或去中心化调度器分配 warp；显式事件表示 producer/consumer 关系。</span></div>
+        <div class="step"><b>⑤ 细粒度重叠</b><span>让加载、张量核心计算、写回和 NVLink 通信跨操作并发。</span></div>
+      </div>
+      <p>Hazy 的低延迟实现采用主机预生成的 per-SM 指令序列与 GPU 解释器；高吞吐实现则进一步引入全局工作队列，并把 loader、consumer、storer、controller 线程组专职化。MPK 将类似思想封装为 <span class="mono">torch.compile(backend=MPK)</span> 的编译后端；Event Tensor/ETC 则用事件张量抽象描述动态依赖和数据相关形状。<sup><a href="#src-m1">[M1]</a></sup><sup><a href="#src-m2">[M2]</a></sup><sup><a href="#src-m3">[M3]</a></sup><sup><a href="#src-m4">[M4]</a></sup></p>
+
+      <div class="diagram" role="img" aria-label="Megakernel 内部结构">
+        <svg viewBox="0 0 1180 510" xmlns="http://www.w3.org/2000/svg">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4ed6d0"/></marker></defs>
+          <rect x="40" y="36" width="1100" height="440" rx="20" fill="none" stroke="var(--line)" stroke-width="2"/>
+          <text x="70" y="75" class="svg-text" font-size="21" font-weight="700">单 GPU 内：持久 Megakernel</text>
+          <rect x="70" y="104" width="210" height="118" rx="13" fill="#F0EEE8" stroke="#4ed6d0"/>
+          <text x="175" y="133" text-anchor="middle" class="svg-text" font-size="16" font-weight="700">任务来源</text>
+          <text x="90" y="162" class="svg-muted" font-size="14">静态：per-SM 指令流</text><text x="90" y="190" class="svg-muted" font-size="14">动态：global work queue</text>
+          <rect x="340" y="96" width="770" height="305" rx="16" fill="#FAFAF7" stroke="var(--line)"/>
+          <text x="370" y="128" class="svg-text" font-size="17" font-weight="700">SM / CTA 内的 warp 专职化</text>
+          <g>
+            <rect x="375" y="154" width="155" height="75" rx="11" fill="#D5E0F0"/><text x="452" y="184" text-anchor="middle" class="svg-text" font-size="15" font-weight="700">Loader</text><text x="452" y="207" text-anchor="middle" class="svg-muted" font-size="12">TMA / HBM → SMEM</text>
+            <rect x="550" y="154" width="175" height="75" rx="11" fill="#C5D0E8"/><text x="638" y="184" text-anchor="middle" class="svg-text" font-size="15" font-weight="700">Consumer</text><text x="638" y="207" text-anchor="middle" class="svg-muted" font-size="12">Tensor Core / ALU</text>
+            <rect x="745" y="154" width="155" height="75" rx="11" fill="#D5C5E8"/><text x="822" y="184" text-anchor="middle" class="svg-text" font-size="15" font-weight="700">Storer</text><text x="822" y="207" text-anchor="middle" class="svg-muted" font-size="12">SMEM → HBM / peer</text>
+            <rect x="920" y="154" width="155" height="75" rx="11" fill="#F0E0C0"/><text x="997" y="184" text-anchor="middle" class="svg-text" font-size="15" font-weight="700">Controller</text><text x="997" y="207" text-anchor="middle" class="svg-muted" font-size="12">事件 / 队列 / 依赖</text>
+          </g>
+          <g stroke="#4ed6d0" stroke-width="2" fill="none" marker-end="url(#arr)"><path d="M530 191 L546 191"/><path d="M725 191 L741 191"/><path d="M900 191 L916 191"/></g>
+          <rect x="375" y="265" width="322" height="100" rx="12" fill="#F3F1EC" stroke="rgba(78,214,208,.5)"/>
+          <text x="397" y="293" class="svg-text" font-size="15" font-weight="700">共享内存页池</text>
+          <text x="397" y="320" class="svg-muted" font-size="13">循环缓冲 / page allocation / double buffering</text>
+          <text x="397" y="345" class="svg-muted" font-size="13">跨“算子”保留中间 tile，避免 HBM 往返</text>
+          <rect x="718" y="265" width="357" height="100" rx="12" fill="#ECEEF8" stroke="rgba(169,137,255,.5)"/>
+          <text x="740" y="293" class="svg-text" font-size="15" font-weight="700">显式事件与计数器</text>
+          <text x="740" y="320" class="svg-muted" font-size="13">生产者发布 · 消费者等待 · chunk 级同步</text>
+          <text x="740" y="345" class="svg-muted" font-size="13">可扩展到设备侧 peer write / collective</text>
+          <path d="M280 162 C315 162 310 191 340 191" fill="none" stroke="#4ed6d0" stroke-width="2" marker-end="url(#arr)"/>
+          <rect x="70" y="286" width="210" height="95" rx="13" fill="#F0EEE8" stroke="#72a8ff"/>
+          <text x="175" y="315" text-anchor="middle" class="svg-text" font-size="15" font-weight="700">跨 GPU（每卡一内核）</text>
+          <text x="90" y="344" class="svg-muted" font-size="13">NVLink / NVSHMEM 风格</text><text x="90" y="367" class="svg-muted" font-size="13">设备发起 load/store/notify</text>
+          <path d="M280 334 C315 334 310 334 340 334" fill="none" stroke="#72a8ff" stroke-width="2" marker-end="url(#arr)"/>
+          <text x="70" y="445" class="svg-muted" font-size="13">关键：Megakernel 并不是跨多 GPU 的“一个 CUDA 内核”；通常是每 GPU 一个驻留内核，通过设备侧通信协同。</text>
+        </svg>
+        <div class="caption">典型逻辑结构。不同实现对静态/动态调度、内存分配和通信原语的选择不同。</div>
+      </div>
+
+      <h3 id="mk-scheduling">3.3 调度、同步与内存层次</h3>
+      <div class="grid-3">
+        <div class="card"><h4>静态 per-SM 指令流</h4><p>编译期把工作精确分配给每个 SM，运行时开销低、行为可预测，适合形状稳定和 batch 很小的模型。代价是对动态序列长度、MoE 路由和负载偏斜不够鲁棒。</p></div>
+        <div class="card"><h4>动态全局工作队列</h4><p>SM 完成一块任务后领取下一块，可缓解尾波与不均衡，适合大 batch、异构任务和 MoE；但原子队列、争用、优先级与公平性会成为新成本。</p></div>
+        <div class="card"><h4>混合层级调度</h4><p>外层按 phase/专家/请求动态分配，内层按 tile 静态流水。通常更接近生产需求：既保留热点路径效率，又处理动态形状和连续批处理。</p></div>
+        <div class="card"><h4>共享内存页化</h4><p>把有限 SMEM 切成可复用页，生产者和消费者通过页所有权/计数器传递中间结果。Hazy 低延迟原型曾将约 213 KB 资源组织为 13 个约 16 KiB 页面。<sup><a href="#src-m1">[M1]</a></sup></p></div>
+        <div class="card"><h4>事件/计数器依赖</h4><p>用细粒度发布与等待替代内核边界。正确性依赖内存顺序、栅栏范围、环形缓冲复用和异常路径；错误可能表现为罕见数据竞争或死锁。</p></div>
+        <div class="card"><h4>软件流水与跨操作重叠</h4><p>下一 tile 的载入可与当前 tile 的 Tensor Core 运算并行；通信 warp 可在未来计算推进时发送前一结果。高吞吐原型的消融显示，仅 pipelining 和 interleaving 就可贡献数个百分点。<sup><a href="#src-m2">[M2]</a></sup></p></div>
+      </div>
+
+      <h3 id="mk-compare">3.4 它与算子融合、CUDA Graph、Persistent Kernel 有何不同</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>技术</th><th>控制面</th><th>内核边界</th><th>主要收益</th><th>最适合</th><th>主要局限</th></tr></thead>
         <tbody>
-          <tr><td>本质</td><td>软件 / 编译技术（GPU 编程模型）</td><td>硬件 / GPU 架构（NVIDIA 下一代芯片）</td></tr>
-          <tr><td>回答的问题</td><td>"kernel 怎么组织？"</td><td>"kernel 跑在什么上？"</td></tr>
-          <tr><td>所属层级</td><td>编译器 / 推理框架</td><td>芯片 / 整机平台</td></tr>
-          <tr><td>发布主体</td><td>学术界+开源社区（CMU、Stanford、TVM、Luce…）</td><td>NVIDIA（CES 2026 / GTC 2026）</td></tr>
-          <tr><td>命名来源</td><td>"mega"（把多 kernel 融成一个）</td><td>天文学家 Vera Rubin</td></tr>
+          <tr><td><strong>算子融合</strong></td><td>编译器/模板</td><td>融合区之外仍存在</td><td>减少中间读写与发射</td><td>局部、规则的数据流</td><td>资源压力与组合爆炸；难跨大算子</td></tr>
+          <tr><td><strong>CUDA Graph</strong></td><td>CPU 录制/重放</td><td>仍是多个内核</td><td>显著降低 CPU 发射开销</td><td>形状稳定的重复图</td><td>内核间全局边界和 HBM 往返仍在；动态性受限</td></tr>
+          <tr><td><strong>Persistent Kernel</strong></td><td>设备循环</td><td>一个或少数内核</td><td>避免重复启动、复用状态</td><td>队列、扫描、通信、单类算子</td><td>不必然具备模型级任务语义</td></tr>
+          <tr><td><strong>Megakernel</strong></td><td>设备侧解释器/调度器</td><td>覆盖大图或整步执行</td><td>跨算子流水、细粒度依赖、设备通信</td><td>碎片化推理、动态任务图、TP/MoE</td><td>编译与验证复杂；资源、QoS、可移植性挑战</td></tr>
         </tbody>
-      </table>
-    </div>
-  </div>
-</section>
+      </table></div>
+      <div class="callout"><strong>工程上常是组合而非替代：</strong> Megakernel 内部仍会调用/内联高度优化的 GEMM/attention tile；外部可能继续使用 CUDA Graph 管理预处理、采样或无法纳入的库调用。最优系统通常是“设备侧大图 + 少量专用内核”的混合结构。</div>
+    </section>
 
-<!-- 2. Megakernel 原理 -->
-<section id="mk" style="background: var(--bg-tint);">
-  <div class="paper-layout">
-    <div class="section-label">软件层 · Megakernel 原理</div>
-    <h2>从算子流水线到设备侧运行时</h2>
+    <section id="mk-performance" class="section-card">
+      <div class="section-head"><div class="section-no">04</div><div><div class="eyebrow">Megakernel Performance</div><h2>公开性能证据：在哪些边界上已经有效</h2><p class="muted">以下数字来自不同硬件、模型和服务栈，不能直接相互排名。</p></div></div>
 
-    <h3>为什么传统执行会出现"气泡"</h3>
-    <p>典型深度学习框架把归一化、矩阵乘、激活、注意力、KV 读写与集合通信分别映射为 CUDA 内核。内核边界提供方便的全局同步语义，但也引入 CPU 发射延迟、队列空隙、每个算子的尾波、重复读取/写回 HBM，以及无法跨边界调度的空闲 SM。小批量自回归解码中，单个算子本来就很短，几微秒级间隙可累积成可见时延。Hazy Research 对 Llama-1B 的分析估算每层约 7 次发射、16 层、约 5 μs 间隙时，仅发射停顿就会形成约 560 μs 量级的成本。<sup><a href="#src-m1">[M1]</a></sup></p>
+      <div class="tabs" role="tablist" aria-label="Megakernel 性能证据">
+        <button class="tab-btn" role="tab" aria-selected="true" aria-controls="tab-latency" id="btn-latency">低延迟</button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-throughput" id="btn-throughput">高吞吐</button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-dynamic" id="btn-dynamic">动态/工业</button>
+      </div>
+      <div id="tab-latency" class="tab-panel" role="tabpanel" aria-labelledby="btn-latency">
+        <div class="grid-3">
+          <div class="card"><div class="badges"><span class="badge measured">公开实测</span><span class="badge paper">研究原型</span></div><h3>Hazy：Llama-1B / H100</h3><div class="big">&lt; 1 ms</div><p>作者称实现了首个 H100 上 16-bit、10 亿参数以上模型低于 1 ms 的前向；相对 vLLM 约 2.5×、相对 SGLang 超过 1.5×。<sup><a href="#src-m1">[M1]</a></sup></p><div class="metric"><div class="metric-line"><span>实现测得 HBM 带宽利用</span><strong>约 78%</strong></div><div class="bar"><i style="--w:78%"></i></div><div class="metric-line"><span>对比框架上限（该实验）</span><strong>≤ 50%</strong></div><div class="bar amber"><i style="--w:50%"></i></div></div></div>
+          <div class="card"><div class="badges"><span class="badge measured">公开实测</span><span class="badge paper">研究原型</span></div><h3>Hazy：Llama-1B / B200</h3><div class="big">&lt; 680 μs</div><p>相对 vLLM 超过 3.5×、相对 SGLang 超过 1.5×。作者给出的一个 B200 分解约为 600 μs 量级，包含激活、同步等残余成本。<sup><a href="#src-m1">[M1]</a></sup></p></div>
+          <div class="card"><div class="badges"><span class="badge measured">多硬件评估</span></div><h3>MPK 编译后端</h3><div class="big">1.0–1.7×</div><p>在 A100、H100、B200 上，对多种模型与推理设置，论文报告相对 SGLang/vLLM 的延迟改进区间；价值在于把手写原型推进为编译器后端。<sup><a href="#src-m3">[M3]</a></sup></p></div>
+        </div>
+      </div>
+      <div id="tab-throughput" class="tab-panel" role="tabpanel" aria-labelledby="btn-throughput" hidden>
+        <div class="grid-3">
+          <div class="card"><div class="badges"><span class="badge measured">端到端</span><span class="badge paper">研究原型</span></div><h3>TP Llama-70B</h3><div class="big">&gt; 22%</div><p>集成到 Tokasaurus 后，在 65,536 个 ShareGPT 提示的实验中，相对 SGLang 报告超过 22% 的端到端吞吐提升。重点不是单个融合算子，而是计算、内存与跨 GPU 通信的分层重叠。<sup><a href="#src-m2">[M2]</a></sup></p></div>
+          <div class="card"><h3>流水线消融</h3><div class="big">2.5–6.6%</div><p>高吞吐实现中，仅移除/加入不同流水机制即可产生数个百分点差异；这说明在大 batch 下，Megakernel 的价值更多来自调度与尾波改善，而不只是发射次数。<sup><a href="#src-m2">[M2]</a></sup></p></div>
+          <div class="card"><h3>通信交错消融</h3><div class="big">最高约 6.4%</div><p>在 batch 8192 的报告条件下，通信与未来计算的 interleaving 可继续贡献提升；但规模增大后 collective 仍可能成为主导瓶颈。<sup><a href="#src-m2">[M2]</a></sup></p></div>
+        </div>
+      </div>
+      <div id="tab-dynamic" class="tab-panel" role="tabpanel" aria-labelledby="btn-dynamic" hidden>
+        <div class="grid-3">
+          <div class="card"><div class="badges"><span class="badge measured">8×B200</span><span class="badge paper">MLSys 2026</span></div><h3>Event Tensor / ETC</h3><div class="big">最高 1.48×</div><p>Qwen3-30B-A3B、batch 1 时相对 vLLM 1.48×、相对 SGLang 1.20×；Qwen3-32B 单卡最高约 1.15×/1.09×。TP=4 时相对 vLLM 约 0.99–1.06×，且某些条件落后 SGLang，暴露 CPU 调度与系统集成的重要性。<sup><a href="#src-m4">[M4]</a></sup></p></div>
+          <div class="card"><div class="badges"><span class="badge measured">预热对比</span></div><h3>减少 CUDA Graph 捕获</h3><div class="big">35 s / 0 次捕获</div><p>同一论文的一组设置中，ETC 预热约 35 s 且无需 graph capture；SGLang 约 583 s/51 次捕获，vLLM 约 123 s/67 次捕获。ETC 仍有约 107 s 离线编译成本，二者不可混淆。<sup><a href="#src-m4">[M4]</a></sup></p></div>
+          <div class="card"><div class="badges"><span class="badge measured">工业场景</span><span class="badge paper">预印本</span></div><h3>Ada-MK / L20 广告模型</h3><div class="big">+23.6% / +50.2%</div><p>单 batch 吞吐相对 TensorRT-LLM 提升 23.6%、相对 vLLM 提升 50.2%；论文称商业在线广告工作负载的内核发射开销占 14.6%，并通过 DAG 搜索与资源设计将共享内存需求降低 50%。<sup><a href="#src-m5">[M5]</a></sup></p></div>
+        </div>
+      </div>
 
-    <h3>核心思路</h3>
-    <div class="concept">
-      <p>把整个 Transformer Layer 甚至整个前向融合进<strong>一个持续运行的 persistent kernel</strong>，在 GPU 内部用协作组网络（<code>grid.sync()</code> / cooperative groups）做<strong>细粒度流水线</strong>，数据尽量留在寄存器/shared memory，不到万不得已不落 HBM。</p>
-    </div>
-
-    <h3>运行时结构：宿主编排 + 设备解释/调度</h3>
-    <p>Megakernel 不是"更大的算子融合"那么简单，而是把大量模型任务放入一个长期驻留的 GPU 内核中，通过设备侧解释器、任务队列、显式事件/计数器与 warp 专职化来调度。五个阶段：</p>
-    <ol>
-      <li><strong>图拆分</strong>——把模型算子切成 GEMM tile、归一化片段、attention block、load/store、collective 等任务</li>
-      <li><strong>编译/排程</strong>——主机端生成每 SM 指令序列或全局任务 DAG，决定分块、依赖和资源预算</li>
-      <li><strong>一次发射</strong>——每 GPU 启动持久内核；网格长期驻留，循环读取任务</li>
-      <li><strong>设备执行</strong>——解释器或去中心化调度器分配 warp；显式事件表示 producer/consumer 关系</li>
-      <li><strong>细粒度重叠</strong>——让加载、张量核心计算、写回和 NVLink 通信跨操作并发</li>
-    </ol>
-    <p>Hazy 的低延迟实现采用主机预生成的 per-SM 指令序列与 GPU 解释器；高吞吐实现引入全局工作队列，把 loader、consumer、storer、controller 线程组专职化。MPK 将类似思想封装为 <code>torch.compile(backend=MPK)</code>；Event Tensor/ETC 则用事件张量抽象描述动态依赖。<sup><a href="#src-m1">[M1]</a></sup><sup><a href="#src-m2">[M2]</a></sup><sup><a href="#src-m3">[M3]</a></sup><sup><a href="#src-m4">[M4]</a></sup></p>
-
-    <h3>调度、同步与内存层次</h3>
-    <div class="grid-3">
-      <div class="card"><h4>静态 per-SM 指令流</h4><p>编译期精确分配，运行时开销低、行为可预测，适合形状稳定和 batch 很小的模型。对动态序列长度、MoE 路由不够鲁棒。</p></div>
-      <div class="card"><h4>动态全局工作队列</h4><p>SM 完成一块后领取下一块，缓解尾波与不均衡，适合大 batch、异构任务和 MoE；但原子队列争用成为新成本。</p></div>
-      <div class="card"><h4>混合层级调度</h4><p>外层按 phase/专家/请求动态分配，内层按 tile 静态流水。更接近生产需求。</p></div>
-      <div class="card"><h4>共享内存页化</h4><p>把有限 SMEM 切成可复用页。Hazy 低延迟原型曾将约 213 KB 资源组织为 13 个约 16 KiB 页面。<sup><a href="#src-m1">[M1]</a></sup></p></div>
-      <div class="card"><h4>事件/计数器依赖</h4><p>用细粒度发布与等待替代内核边界。正确性依赖内存顺序、栅栏范围、环形缓冲复用和异常路径。</p></div>
-      <div class="card"><h4>软件流水与跨操作重叠</h4><p>下一 tile 的载入可与当前 tile 的 Tensor Core 运算并行；高吞吐原型消融显示，仅 pipelining 和 interleaving 就可贡献数个百分点。<sup><a href="#src-m2">[M2]</a></sup></p></div>
-    </div>
-
-    <h3>代表实现</h3>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>项目</th><th>团队</th><th>特点</th></tr></thead>
+      <h3>4.1 统一证据表</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>工作</th><th>硬件/模型</th><th>目标指标</th><th>主要结果</th><th>基线</th><th>解读</th></tr></thead>
         <tbody>
-          <tr><td>Hazy Megakernel</td><td>Stanford Hazy Research</td><td>低延迟 Llama-1B + 高吞吐 TP-70B，warp specialization，全局工作队列</td></tr>
-          <tr><td>Mirage Persistent Kernel (MPK)</td><td>CMU 贾志豪团队</td><td>几十行 PyTorch 自动编译成 megakernel，三层 μGraph 精确映射 GPU 层级</td></tr>
-          <tr><td>Event Tensor / ETC</td><td>CMU + NVIDIA + TVM</td><td>事件张量抽象描述动态依赖和数据相关形状，static/dynamic scheduling</td></tr>
-          <tr><td>Ada-MK</td><td>工业预印本</td><td>面向商业在线广告模型，DAG 搜索+资源设计，SMEM 需求降低 50%</td></tr>
-          <tr><td>Luce / TVM tirx / vLLM</td><td>社区+工业界</td><td>消费级硬件调优 / tirx IR 实现 / 推理框架自身 megakernel 化</td></tr>
+          <tr><td><strong>Hazy 低延迟</strong><br><span class="fine">2025</span></td><td>H100/B200，Llama-1B，BF16，小 batch</td><td>单前向延迟、HBM 利用</td><td>H100 &lt;1 ms；B200 &lt;680 μs；H100 约 78% HBM 利用</td><td>vLLM、SGLang</td><td>最能证明“碎片化、小批量、内存受限”场景的价值</td></tr>
+          <tr><td><strong>Hazy 高吞吐</strong><br><span class="fine">2025</span></td><td>TP Llama-70B；65,536 ShareGPT prompts</td><td>端到端吞吐</td><td>&gt;22% 相对 SGLang</td><td>SGLang</td><td>价值转向异构工作重叠与全局队列</td></tr>
+          <tr><td><strong>MPK</strong><br><span class="fine">v2 2026</span></td><td>A100/H100/B200，多模型</td><td>延迟</td><td>1.0–1.7×</td><td>SGLang/vLLM</td><td>编译器化、跨 GPU 与 PyTorch 接入更接近通用方案</td></tr>
+          <tr><td><strong>Event Tensor / ETC</strong><br><span class="fine">MLSys 2026</span></td><td>8×B200；Qwen3 dense/MoE</td><td>延迟、预热、融合通信</td><td>batch1 最高 1.48× vLLM；TP=4 有胜有负</td><td>vLLM/SGLang、cuBLAS+NCCL</td><td>动态形状可做，但服务调度仍会决定端到端结果</td></tr>
+          <tr><td><strong>Ada-MK</strong><br><span class="fine">2026 预印本</span></td><td>L20，在线广告模型，batch1</td><td>吞吐</td><td>+23.6% vs TRT-LLM；+50.2% vs vLLM</td><td>TensorRT-LLM/vLLM</td><td>说明非聊天 LLM 的工业小 batch 图也能受益</td></tr>
+          <tr><td><strong>SiFAR 观察</strong><br><span class="fine">2026 预印本</span></td><td>H200，Llama-3.1-8B，TP1→TP8</td><td>TPOT、通信占比</td><td>2.73 ms→1.43 ms；all-reduce 约占 30%</td><td>Megakernel 基线内扩展</td><td>当发射/HBM 被优化后，通信成为下一主瓶颈</td></tr>
         </tbody>
-      </table>
-    </div>
+      </table></div>
 
-    <h3>与算子融合、CUDA Graph、Persistent Kernel 有何不同</h3>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>技术</th><th>控制面</th><th>内核边界</th><th>主要收益</th><th>主要局限</th></tr></thead>
+      <h3>4.2 什么时候会变快，什么时候不会</h3>
+      <div class="grid-2">
+        <div class="card"><h4 class="yes">高概率受益</h4><p>batch 1–小 batch；每 token 数十到上百个短内核；低 HBM 利用；大量 elementwise/norm/KV 搬运；SM 尾波明显；通信可分块并与后续计算重叠；请求形状足够稳定或编译器可表达动态性。</p></div>
+        <div class="card"><h4 class="no">收益有限或可能退化</h4><p>大 batch 下单个 GEMM 已长时间满载；库内核本身已达高效率；Megakernel 导致寄存器/SMEM 过量而降低 occupancy；动态队列争用；连续批处理/采样仍依赖 CPU；多租户要求抢占和隔离；collective 已不可隐藏。</p></div>
+      </div>
+      <details><summary>专家注：为什么“单个大内核”不等于“高性能”</summary><div>内核做得更大，会同时放大寄存器、共享内存、代码体积和指令缓存压力。若每 CTA 占用资源过多，驻留 CTA 数下降，反而失去延迟隐藏；若同步图设计不当，warp 会在事件上空转。Megakernel 的难点是资源预算与调度，而不是把函数机械地拼接到一起。</div></details>
+    </section>
+
+    <section id="rubin" class="section-card">
+      <div class="section-head"><div class="section-no">05</div><div><div class="eyebrow">NVIDIA Rubin Architecture</div><h2>Rubin：从双芯粒 GPU 到 NVL72 机架</h2><p class="muted">理解 Rubin 必须同时看 GPU、CPU、一致性互联、机架内 NVLink 与 scale-out 网络。</p></div></div>
+
+      <div class="diagram" role="img" aria-label="Vera Rubin 平台层级结构">
+        <svg viewBox="0 0 1180 520" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="rg" x1="0" x2="1"><stop stop-color="#4ed6d0"/><stop offset="1" stop-color="#72a8ff"/></linearGradient></defs>
+          <text x="42" y="48" class="svg-text" font-size="23" font-weight="700">Vera Rubin 的四层尺度</text>
+          <g>
+            <rect x="50" y="84" width="235" height="342" rx="18" fill="#ECEEF8" stroke="#4ed6d0"/>
+            <text x="168" y="121" text-anchor="middle" class="svg-text" font-size="18" font-weight="700">Rubin GPU</text>
+            <rect x="84" y="151" width="69" height="112" rx="10" fill="#C5D0E8"/><rect x="181" y="151" width="69" height="112" rx="10" fill="#C5D0E8"/>
+            <text x="118" y="209" text-anchor="middle" fill="#fff" font-size="13">Die 0</text><text x="215" y="209" text-anchor="middle" fill="#fff" font-size="13">Die 1</text>
+            <path d="M153 207 L181 207" stroke="#4ed6d0" stroke-width="8"/><text x="168" y="286" text-anchor="middle" class="svg-muted" font-size="12">NV-HBI</text>
+            <rect x="84" y="310" width="166" height="62" rx="10" fill="#D5E0F0"/><text x="167" y="336" text-anchor="middle" class="svg-text" font-size="13">288 GB HBM4</text><text x="167" y="357" text-anchor="middle" class="svg-muted" font-size="12">22 TB/s</text>
+            <text x="168" y="404" text-anchor="middle" class="svg-muted" font-size="12">224 SM · 896 Tensor Cores</text>
+          </g>
+          <g>
+            <rect x="315" y="84" width="235" height="342" rx="18" fill="#E5F2F0" stroke="#72a8ff"/>
+            <text x="433" y="121" text-anchor="middle" class="svg-text" font-size="18" font-weight="700">Vera Rubin Superchip</text>
+            <rect x="337" y="158" width="62" height="102" rx="12" fill="#F0E0C0"/><text x="368" y="199" text-anchor="middle" class="svg-text" font-size="13">Vera</text><text x="368" y="220" text-anchor="middle" class="svg-muted" font-size="11">88 cores</text>
+            <rect x="426" y="148" width="48" height="92" rx="10" fill="#C5D0E8"/><text x="450" y="188" text-anchor="middle" class="svg-text" font-size="12">Rubin</text><text x="450" y="209" text-anchor="middle" class="svg-muted" font-size="10">GPU 0</text>
+            <rect x="490" y="148" width="48" height="92" rx="10" fill="#C5D0E8"/><text x="514" y="188" text-anchor="middle" class="svg-text" font-size="12">Rubin</text><text x="514" y="209" text-anchor="middle" class="svg-muted" font-size="10">GPU 1</text>
+            <path d="M399 190 L426 190 M399 220 C438 265 472 265 490 220" fill="none" stroke="url(#rg)" stroke-width="7"/><text x="441" y="281" text-anchor="middle" class="svg-muted" font-size="12">NVLink-C2C · 1.8 TB/s / GPU</text>
+            <text x="433" y="326" text-anchor="middle" class="svg-text" font-size="13">1 Vera + 2 Rubin</text><text x="433" y="351" text-anchor="middle" class="svg-muted" font-size="12">CPU 大内存 + GPU HBM4</text><text x="433" y="373" text-anchor="middle" class="svg-muted" font-size="12">一致性地址空间与数据通路</text>
+          </g>
+          <g>
+            <rect x="580" y="84" width="250" height="342" rx="18" fill="#ECEEF8" stroke="#a989ff"/>
+            <text x="705" y="121" text-anchor="middle" class="svg-text" font-size="18" font-weight="700">Vera Rubin NVL72</text>
+            <g fill="#C5D0E8"><rect x="620" y="151" width="34" height="48" rx="5"/><rect x="665" y="151" width="34" height="48" rx="5"/><rect x="710" y="151" width="34" height="48" rx="5"/><rect x="755" y="151" width="34" height="48" rx="5"/><rect x="620" y="214" width="34" height="48" rx="5"/><rect x="665" y="214" width="34" height="48" rx="5"/><rect x="710" y="214" width="34" height="48" rx="5"/><rect x="755" y="214" width="34" height="48" rx="5"/></g>
+            <path d="M606 287 H804" stroke="#a989ff" stroke-width="8"/><text x="705" y="318" text-anchor="middle" class="svg-muted" font-size="12">NVLink 6 fabric</text>
+            <text x="705" y="354" text-anchor="middle" class="svg-text" font-size="14">72 GPU · 36 CPU</text><text x="705" y="379" text-anchor="middle" class="svg-muted" font-size="12">260 TB/s rack NVLink</text><text x="705" y="402" text-anchor="middle" class="svg-muted" font-size="12">20.7 TB HBM4</text>
+          </g>
+          <g>
+            <rect x="860" y="84" width="270" height="342" rx="18" fill="#D5E8E5" stroke="#7fe3a1"/>
+            <text x="995" y="121" text-anchor="middle" class="svg-text" font-size="18" font-weight="700">Vera Rubin POD</text>
+            <g fill="#D5E8E5"><rect x="900" y="151" width="76" height="58" rx="7"/><rect x="1011" y="151" width="76" height="58" rx="7"/><rect x="900" y="230" width="76" height="58" rx="7"/><rect x="1011" y="230" width="76" height="58" rx="7"/></g>
+            <g stroke="#7fe3a1" stroke-width="2"><path d="M976 180 L1011 180"/><path d="M976 259 L1011 259"/><path d="M938 209 L938 230"/><path d="M1049 209 L1049 230"/></g>
+            <text x="995" y="332" text-anchor="middle" class="svg-text" font-size="14">多机架 scale-out</text><text x="995" y="358" text-anchor="middle" class="svg-muted" font-size="12">Spectrum-X / ConnectX-9</text><text x="995" y="381" text-anchor="middle" class="svg-muted" font-size="12">BlueField-4 控制与基础设施</text>
+          </g>
+          <text x="50" y="478" class="svg-muted" font-size="13">尺度越大，瓶颈越从单芯片计算/HBM，迁移到设备侧调度、NVLink 集合通信、网络与全局服务编排。</text>
+        </svg>
+        <div class="caption">层级概念图；POD 的实际规模与配置按部署方案变化。NVL72 官方配置为 18 个计算托盘、9 个 NVLink 交换托盘。<sup><a href="#src-r4">[R4]</a></sup></div>
+      </div>
+
+      <h3 id="rubin-gpu">5.1 Rubin GPU：核心微架构与数据通路</h3>
+      <div class="grid-4">
+        <div class="card"><div class="big">336B</div><p>晶体管，双 reticle 级计算芯粒，通过 NV-HBI 连接。<sup><a href="#src-r1">[R1]</a></sup></p></div>
+        <div class="card"><div class="big">224 SM</div><p>配合 896 个 Tensor Cores，面向高密度张量与 Transformer 工作负载。<sup><a href="#src-r1">[R1]</a></sup></p></div>
+        <div class="card"><div class="big">288 GB</div><p>HBM4 容量；22 TB/s 峰值带宽，约为 Blackwell/Blackwell Ultra 的 2.8 倍量级。<sup><a href="#src-r1">[R1]</a></sup></p></div>
+        <div class="card"><div class="big">50 PFLOPS</div><p>单 GPU NVFP4 推理峰值（厂商公布口径）；不是任意模型的持续吞吐。<sup><a href="#src-r1">[R1]</a></sup></p></div>
+      </div>
+      <div class="grid-2">
+        <div class="card"><h4>第三代 Transformer Engine</h4><p>自动/自适应地在低精度路径中平衡格式、缩放与精度；Rubin 还增加激活稀疏、压缩与 softmax 指令吞吐改进。官方称相对 Blackwell，FP32 指数运算约 2×，BF16/FP16 指数运算约 4×。<sup><a href="#src-r1">[R1]</a></sup></p></div>
+        <div class="card"><h4>K 维吞吐与 MoE 数据搬运</h4><p>Rubin 每时钟 K 维处理能力相对 Blackwell 翻倍，减少大矩阵乘内部迭代；TMA 支持内联描述符更新，有利于专家路由后不规则、运行时决定的张量地址与形状。<sup><a href="#src-r1">[R1]</a></sup></p></div>
+        <div class="card"><h4>细粒度依赖触发</h4><p>硬件可在 tile 级触发依赖内核/工作，减少必须等待整个生产者内核完成的空档。这与 Megakernel 是互补关系：前者改善混合多内核路径，后者进一步把更多控制移入设备侧。<sup><a href="#src-r1">[R1]</a></sup></p></div>
+        <div class="card"><h4>设备发起 NVLink counted writes</h4><p>GPU 可发起带计数语义的远端写入，使接收端通过计数器判定数据到齐；这正适合分块 all-to-all、reduce-scatter 或专家交换中的 producer/consumer 同步。<sup><a href="#src-r1">[R1]</a></sup></p></div>
+      </div>
+
+      <h3 id="rubin-rack">5.2 Vera Rubin NVL72：把 72 GPU 变成一个 NVLink 域</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>层级</th><th>关键规格</th><th>对系统设计的含义</th><th>证据类型</th></tr></thead>
         <tbody>
-          <tr><td>算子融合</td><td>编译器/模板</td><td>融合区之外仍存在</td><td>减少中间读写与发射</td><td>资源压力与组合爆炸；难跨大算子</td></tr>
-          <tr><td>CUDA Graph</td><td>CPU 录制/重放</td><td>仍是多个内核</td><td>显著降低 CPU 发射开销</td><td>内核间全局边界和 HBM 往返仍在</td></tr>
-          <tr><td>Persistent Kernel</td><td>设备循环</td><td>一个或少数内核</td><td>避免重复启动、复用状态</td><td>不必然具备模型级任务语义</td></tr>
-          <tr><td>Megakernel</td><td>设备侧解释器/调度器</td><td>覆盖大图或整步执行</td><td>跨算子流水、细粒度依赖、设备通信</td><td>编译与验证复杂；资源、QoS、可移植性挑战</td></tr>
+          <tr><td><strong>Rubin GPU</strong></td><td>288 GB HBM4；22 TB/s；3.6 TB/s NVLink 6；1.8 TB/s NVLink-C2C；PCIe Gen6 x16 256 GB/s</td><td>单卡内存墙显著抬高；跨卡带宽与 CPU-GPU 一致性通路同步升级</td><td><span class="badge vendor">官方规格</span></td></tr>
+          <tr><td><strong>Vera CPU</strong></td><td>88 Olympus cores / 176 threads；1.5 TB LPDDR5X；1.2 TB/s；SCF 双向 3.4 TB/s</td><td>适合 KV/参数分层、数据处理、调度与 CPU 侧大内存工作集</td><td><span class="badge vendor">官方规格</span></td></tr>
+          <tr><td><strong>NVL72</strong></td><td>72 GPU + 36 CPU；20.7 TB HBM4；约 1,580 TB/s 总 HBM 带宽；260 TB/s 机架 NVLink；54 TB CPU 内存</td><td>可把大模型、MoE 专家和 KV 分布在统一高带宽域；collective 算法与拓扑映射成为一级设计变量</td><td><span class="badge vendor">初步规格</span></td></tr>
+          <tr><td><strong>Scale-out</strong></td><td>ConnectX-9、Spectrum-6/Spectrum-X、BlueField-4；NVL72 官方表列约 28.8 TB/s scale-out</td><td>多机架训练、推理副本、专家并行与数据通路需要网络/拥塞控制协同</td><td><span class="badge vendor">平台规格</span></td></tr>
         </tbody>
-      </table>
-    </div>
-    <div class="callout"><strong>工程上常是组合而非替代：</strong> Megakernel 内部仍会调用高度优化的 GEMM/attention tile；外部可能继续使用 CUDA Graph 管理预处理、采样。最优系统通常是"设备侧大图 + 少量专用内核"的混合结构。</div>
+      </table></div>
+      <p>平台芯片叙事也在演进：早期“六芯片”包括 Vera、Rubin、NVLink 6、ConnectX-9、BlueField-4 与 Spectrum-6；2026 年 3 月 NVIDIA 把 Groq 3 LPX 纳入低延迟推理路径后，以“七芯片平台”描述 Vera Rubin。<sup><a href="#src-r4">[R4]</a></sup><sup><a href="#src-r7">[R7]</a></sup></p>
 
-    <div class="mnemonic">微核病 → launch 税 + 边界同步 + HBM 往返
-megakernel 一锅炖，细粒度流水线</div>
-  </div>
-</section>
+      <h3 id="rubin-variants">5.3 变体与异构路径：Rubin、Rubin CPX、Groq 3 LPX</h3>
+      <div class="grid-3">
+        <div class="card"><h4>Rubin GPU：通用主引擎</h4><p>覆盖训练、prefill、decode、MoE、科学计算与通用 CUDA 生态。HBM4 容量/带宽与 NVLink 6 是主系统的共同底座。</p></div>
+        <div class="card"><h4>Rubin CPX：长上下文专用</h4><p>官方披露 30 PFLOPS NVFP4、128 GB GDDR7，并宣称相对 GB300 NVL72 的 attention 加速最高 3×。NVL144 CPX 组合 144 CPX GPU、144 Rubin GPU 和 36 Vera CPU，面向百万 token 上下文。<sup><a href="#src-r8">[R8]</a></sup></p></div>
+        <div class="card"><h4>Groq 3 LPX：低延迟顺序路径</h4><p>每机架 256 个 LPU、128 GB SRAM、约 40 PB/s SRAM 带宽与 640 TB/s scale-up，定位低延迟推理。官方异构路径让 LPX 处理 decode 中延迟敏感的 FFN/MoE 专家执行，Rubin GPU 继续负责 prefill 与 decode attention；NVIDIA 宣称组合方案吞吐每瓦最高 35×。这是厂商场景化主张。<sup><a href="#src-r7">[R7]</a></sup></p></div>
+      </div>
+      <div class="callout warn"><strong>不要把 CPX 与 LPX 混为一谈：</strong> CPX 更强调长上下文 attention/prefill 类计算；LPX 以片上 SRAM 和确定性数据流追求低延迟顺序推理。实际系统可能让 Rubin 承担通用和大规模并行部分，再把特定阶段卸载到专用加速器。</div>
+      <p class="fine">范围说明：本文聚焦 2026 年 Rubin / Vera Rubin NVL72。官方路线图中的 2027 Rubin Ultra NVL576 属于下一代扩展，不与本报告的当前规格和性能数字混用。<sup><a href="#src-r4">[R4]</a></sup></p>
+    </section>
 
-<!-- 3. Megakernel 性能 -->
-<section id="mk-perf">
-  <div class="paper-layout">
-    <div class="section-label">Megakernel 性能 · 公开证据</div>
-    <h2>在哪些边界上已经有效</h2>
-    <p style="color: var(--ink-muted);">以下数字来自不同硬件、模型和服务栈，不能直接相互排名。</p>
+    <section id="rubin-performance" class="section-card">
+      <div class="section-head"><div class="section-no">06</div><div><div class="eyebrow">Rubin Performance</div><h2>Rubin 性能：峰值、平台目标与现场测量分开看</h2></div></div>
 
-    <div class="grid-3">
-      <div class="card"><div class="badges"><span class="badge measured">公开实测</span><span class="badge paper">研究原型</span></div><h4>Hazy：Llama-1B / H100</h4><div class="big">&lt; 1 ms</div><p>首个 H100 上 16-bit、10 亿参数以上模型低于 1 ms 的前向；相对 vLLM 约 2.5×、相对 SGLang 超过 1.5×。HBM 带宽利用约 78%。<sup><a href="#src-m1">[M1]</a></sup></p></div>
-      <div class="card"><div class="badges"><span class="badge measured">公开实测</span></div><h4>Hazy：Llama-1B / B200</h4><div class="big">&lt; 680 μs</div><p>相对 vLLM 超过 3.5×、相对 SGLang 超过 1.5×。B200 分解约 600 μs 量级，含激活、同步等残余成本。<sup><a href="#src-m1">[M1]</a></sup></p></div>
-      <div class="card"><div class="badges"><span class="badge measured">多硬件</span></div><h4>MPK 编译后端</h4><div class="big">1.0–1.7×</div><p>A100/H100/B200 多模型，相对 SGLang/vLLM 的延迟改进区间；把手写原型推进为编译器后端。<sup><a href="#src-m3">[M3]</a></sup></p></div>
-      <div class="card"><div class="badges"><span class="badge measured">端到端</span></div><h4>Hazy：TP Llama-70B</h4><div class="big">&gt; 22%</div><p>集成到 Tokasaurus，65,536 个 ShareGPT 提示，相对 SGLang 报告超过 22% 端到端吞吐提升。<sup><a href="#src-m2">[M2]</a></sup></p></div>
-      <div class="card"><div class="badges"><span class="badge measured">8×B200</span><span class="badge paper">MLSys 2026</span></div><h4>Event Tensor / ETC</h4><div class="big">最高 1.48×</div><p>Qwen3-30B-A3B batch 1 时 1.48× vLLM、1.20× SGLang；TP=4 有胜有负，暴露 CPU 调度与系统集成的重要性。<sup><a href="#src-m4">[M4]</a></sup></p></div>
-      <div class="card"><div class="badges"><span class="badge measured">工业场景</span></div><h4>Ada-MK / L20 广告模型</h4><div class="big">+23.6% / +50.2%</div><p>单 batch 吞吐相对 TRT-LLM 提升 23.6%、相对 vLLM 提升 50.2%。广告工作负载内核发射开销占 14.6%。<sup><a href="#src-m5">[M5]</a></sup></p></div>
-    </div>
+      <div class="callout"><strong>截至资料截点的状态：</strong> NVIDIA 于 2026 年 5 月披露 Rubin 正爬坡进入全面量产；7 月公布 CoreWeave 与 Google Cloud 的运行中系统/现场数据。广泛可用性、软件栈成熟度和不同云厂商配置仍需逐项核实。<sup><a href="#src-r5">[R5]</a></sup><sup><a href="#src-r6">[R6]</a></sup></div>
 
-    <h3>统一证据表</h3>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>工作</th><th>硬件/模型</th><th>主要结果</th><th>基线</th><th>解读</th></tr></thead>
-        <tbody>
-          <tr><td><strong>Hazy 低延迟</strong></td><td>H100/B200, Llama-1B, BF16</td><td>H100 &lt;1ms; B200 &lt;680μs; HBM 约 78%</td><td>vLLM, SGLang</td><td>碎片化、小批量、内存受限场景</td></tr>
-          <tr><td><strong>Hazy 高吞吐</strong></td><td>TP Llama-70B, 65K prompts</td><td>&gt;22% 相对 SGLang</td><td>SGLang</td><td>异构工作重叠与全局队列</td></tr>
-          <tr><td><strong>MPK</strong></td><td>A100/H100/B200, 多模型</td><td>1.0–1.7×</td><td>SGLang/vLLM</td><td>编译器化、PyTorch 接入</td></tr>
-          <tr><td><strong>Event Tensor / ETC</strong></td><td>8×B200; Qwen3</td><td>batch1 1.48× vLLM; TP=4 有胜有负</td><td>vLLM/SGLang</td><td>动态形状可做，服务调度决定结果</td></tr>
-          <tr><td><strong>Ada-MK</strong></td><td>L20, 广告模型</td><td>+23.6% TRT-LLM; +50.2% vLLM</td><td>TRT-LLM/vLLM</td><td>非聊天 LLM 工业小 batch</td></tr>
-          <tr><td><strong>SiFAR</strong></td><td>H200, Llama-3.1-8B, TP1→8</td><td>2.73ms→1.43ms; all-reduce 约 30%</td><td>Megakernel 基线</td><td>发射/HBM 优化后通信成下一瓶颈<sup><a href="#src-m7">[M7]</a></sup></td></tr>
-        </tbody>
-      </table>
-    </div>
+      <h3>6.1 NVL72 官方峰值表</h3>
+      <div class="grid-4">
+        <div class="card"><span class="badge vendor">峰值</span><div class="big">3,600 PFLOPS</div><p>NVFP4 推理</p></div>
+        <div class="card"><span class="badge vendor">峰值</span><div class="big">2,520 PFLOPS</div><p>NVFP4 训练</p></div>
+        <div class="card"><span class="badge vendor">峰值</span><div class="big">1,260 PFLOPS</div><p>FP8 / FP6</p></div>
+        <div class="card"><span class="badge vendor">峰值</span><div class="big">288 PFLOPS</div><p>BF16 / FP16</p></div>
+      </div>
+      <p class="fine">以上为 NVIDIA NVL72 官方初步规格，需遵循原页面对稀疏性、精度和“up to”的定义；不能用 PFLOPS 直接推导某模型 tokens/s。<sup><a href="#src-r2">[R2]</a></sup></p>
 
-    <h3>什么时候会变快，什么时候不会</h3>
-    <div class="grid-2">
-      <div class="card"><h4 class="yes">高概率受益</h4><p>batch 1–小 batch；每 token 数十到上百个短内核；低 HBM 利用；大量 elementwise/norm/KV 搬运；SM 尾波明显；通信可分块并与后续计算重叠；请求形状足够稳定或编译器可表达动态性。</p></div>
-      <div class="card"><h4 class="no">收益有限或可能退化</h4><p>大 batch 下单个 GEMM 已长时间满载；库内核本身已达高效率；Megakernel 导致寄存器/SMEM 过量而降低 occupancy；动态队列争用；连续批处理/采样仍依赖 CPU；多租户要求抢占和隔离；collective 已不可隐藏。</p></div>
-    </div>
-    <details><summary>专家注：为什么"单个大内核"不等于"高性能"</summary><div>内核做得更大，会同时放大寄存器、共享内存、代码体积和指令缓存压力。若每 CTA 占用资源过多，驻留 CTA 数下降，反而失去延迟隐藏；若同步图设计不当，warp 会在事件上空转。Megakernel 的难点是资源预算与调度，而不是把函数机械地拼接到一起。</div></details>
-  </div>
-</section>
+      <h3>6.2 相对 Blackwell 的公开主张</h3>
+      <div class="grid-2">
+        <div class="card"><h4>硬件向量（较易解释）</h4>
+          <div class="metric"><div class="metric-line"><span>HBM 带宽 / GPU</span><strong>约 2.8×</strong></div><div class="bar"><i style="--w:56%"></i></div></div>
+          <div class="metric"><div class="metric-line"><span>NVLink 带宽 / GPU</span><strong>约 2×</strong></div><div class="bar"><i style="--w:40%"></i></div></div>
+          <div class="metric"><div class="metric-line"><span>K 维每时钟处理</span><strong>2×</strong></div><div class="bar"><i style="--w:40%"></i></div></div>
+          <p class="fine">这些是架构维度，不是端到端应用加速。<sup><a href="#src-r1">[R1]</a></sup></p>
+        </div>
+        <div class="card"><h4>工作负载级主张（强依赖条件）</h4>
+          <div class="metric"><div class="metric-line"><span>AI 推理性能</span><strong>最高约 5×</strong></div><div class="bar violet"><i style="--w:50%"></i></div></div>
+          <div class="metric"><div class="metric-line"><span>训练性能</span><strong>最高约 3.5×</strong></div><div class="bar violet"><i style="--w:35%"></i></div></div>
+          <div class="metric"><div class="metric-line"><span>tokens/MW（特定现场基准）</span><strong>约 10×</strong></div><div class="bar amber"><i style="--w:100%"></i></div></div>
+          <p class="fine">前两项为 NVIDIA 平台比较；最后一项为 2026-07 CoreWeave 现场 DeepSeek-R1 相对 Grace Blackwell NVL72 的 NVIDIA/合作伙伴公布测量。<sup><a href="#src-r5">[R5]</a></sup><sup><a href="#src-r6">[R6]</a></sup></p>
+        </div>
+      </div>
 
-<!-- 4. Rubin 架构 -->
-<section id="rubin" style="background: var(--bg-tint);">
-  <div class="paper-layout">
-    <div class="section-label">硬件层 · NVIDIA Rubin 架构</div>
-    <h2>从双芯粒 GPU 到 NVL72 机架</h2>
-    <p>理解 Rubin 必须同时看 GPU、CPU、一致性互联、机架内 NVLink 与 scale-out 网络。</p>
-
-    <h3>Rubin GPU：核心微架构与数据通路</h3>
-    <div class="grid-4">
-      <div class="card"><div class="big">336B</div><p>晶体管，双 reticle 级计算芯粒，通过 NV-HBI 连接。<sup><a href="#src-r1">[R1]</a></sup></p></div>
-      <div class="card"><div class="big">224 SM</div><p>896 个 Tensor Cores，面向高密度张量与 Transformer 工作负载。<sup><a href="#src-r1">[R1]</a></sup></p></div>
-      <div class="card"><div class="big">288 GB</div><p>HBM4 容量；22 TB/s 峰值带宽，约为 Blackwell 的 2.8×。<sup><a href="#src-r1">[R1]</a></sup></p></div>
-      <div class="card"><div class="big">50 PFLOPS</div><p>单 GPU NVFP4 推理峰值（厂商口径）；不是任意模型持续吞吐。<sup><a href="#src-r1">[R1]</a></sup></p></div>
-    </div>
-
-    <div class="grid-2">
-      <div class="card"><h4>第三代 Transformer Engine</h4><p>自动/自适应地在低精度路径中平衡格式、缩放与精度；增加激活稀疏、压缩与 softmax 指令吞吐。官方称相对 Blackwell，FP32 指数运算约 2×，BF16/FP16 指数运算约 4×。<sup><a href="#src-r1">[R1]</a></sup></p></div>
-      <div class="card"><h4>K 维吞吐与 MoE 数据搬运</h4><p>每时钟 K 维处理能力相对 Blackwell 翻倍，减少大矩阵乘内部迭代；TMA 支持内联描述符更新，有利于专家路由后不规则、运行时决定的张量地址与形状。<sup><a href="#src-r1">[R1]</a></sup></p></div>
-      <div class="card"><h4>细粒度依赖触发</h4><p>硬件可在 tile 级触发依赖内核/工作，减少必须等待整个生产者内核完成的空档。与 Megakernel 互补：前者改善混合多内核路径，后者进一步把更多控制移入设备侧。<sup><a href="#src-r1">[R1]</a></sup></p></div>
-      <div class="card"><h4>设备发起 NVLink counted writes</h4><p>GPU 可发起带计数语义的远端写入，接收端通过计数器判定数据到齐；适合分块 all-to-all、reduce-scatter 或专家交换中的 producer/consumer 同步。<sup><a href="#src-r1">[R1]</a></sup></p></div>
-    </div>
-
-    <h3>Vera Rubin NVL72：把 72 GPU 变成一个 NVLink 域</h3>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>层级</th><th>关键规格</th><th>对系统设计的含义</th><th>证据</th></tr></thead>
-        <tbody>
-          <tr><td>Rubin GPU</td><td>288 GB HBM4; 22 TB/s; 3.6 TB/s NVLink 6; 1.8 TB/s NVLink-C2C; PCIe Gen6</td><td>单卡内存墙显著抬高；跨卡带宽与 CPU-GPU 一致性通路同步升级</td><td><span class="badge vendor">官方</span></td></tr>
-          <tr><td>Vera CPU</td><td>88 Olympus cores / 176 threads; 1.5 TB LPDDR5X; 1.2 TB/s; SCF 双向 3.4 TB/s</td><td>适合 KV/参数分层、数据处理、调度与 CPU 侧大内存工作集</td><td><span class="badge vendor">官方</span></td></tr>
-          <tr><td>NVL72</td><td>72 GPU + 36 CPU; 20.7 TB HBM4; 约 1,580 TB/s 总 HBM; 260 TB/s 机架 NVLink; 54 TB CPU 内存</td><td>大模型、MoE 专家和 KV 分布在统一高带宽域；collective 算法与拓扑映射成为一级设计变量</td><td><span class="badge vendor">初步</span></td></tr>
-          <tr><td>Scale-out</td><td>ConnectX-9、Spectrum-6、BlueField-4; NVL72 约 28.8 TB/s scale-out</td><td>多机架训练、推理副本、专家并行与数据通路需要网络协同</td><td><span class="badge vendor">平台</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p>平台芯片叙事在演进：早期"六芯片"含 Vera、Rubin、NVLink 6、ConnectX-9、BlueField-4 与 Spectrum-6；2026 年 3 月 NVIDIA 把 Groq 3 LPX 纳入低延迟推理路径后，以"七芯片平台"描述 Vera Rubin。<sup><a href="#src-r4">[R4]</a></sup><sup><a href="#src-r7">[R7]</a></sup></p>
-
-    <h3>变体与异构路径：Rubin、CPX、Groq 3 LPX</h3>
-    <div class="grid-3">
-      <div class="card"><h4>Rubin GPU：通用主引擎</h4><p>覆盖训练、prefill、decode、MoE、科学计算与通用 CUDA 生态。HBM4 与 NVLink 6 是主系统共同底座。</p></div>
-      <div class="card"><h4>Rubin CPX：长上下文专用</h4><p>30 PFLOPS NVFP4、128 GB GDDR7，宣称相对 GB300 NVL72 attention 加速最高 3×。NVL144 CPX 组合 144 CPX + 144 Rubin + 36 Vera，面向百万 token 上下文。<sup><a href="#src-r8">[R8]</a></sup></p></div>
-      <div class="card"><h4>Groq 3 LPX：低延迟顺序路径</h4><p>每机架 256 LPU、128 GB SRAM、约 40 PB/s SRAM 带宽与 640 TB/s scale-up。LPX 处理 decode 中延迟敏感的 FFN/MoE 专家执行，Rubin 负责 prefill 与 decode attention；NVIDIA 宣称组合方案吞吐每瓦最高 35×。<sup><a href="#src-r7">[R7]</a></sup></p></div>
-    </div>
-    <div class="callout warn"><strong>不要把 CPX 与 LPX 混为一谈：</strong> CPX 强调长上下文 attention/prefill 类计算；LPX 以片上 SRAM 和确定性数据流追求低延迟顺序推理。</div>
-    <p style="color: var(--ink-faint); font-size: 0.84rem;">范围说明：本文聚焦 2026 年 Rubin / Vera Rubin NVL72。2027 Rubin Ultra NVL576 属于下一代扩展，不与本报告混用。<sup><a href="#src-r4">[R4]</a></sup></p>
-
-    <div class="mnemonic">Blackwell 卖铲子，Rubin 卖电站
-不堆算力堆 token 经济学</div>
-  </div>
-</section>
-
-<!-- 5. Rubin 性能 -->
-<section id="rubin-perf">
-  <div class="paper-layout">
-    <div class="section-label">Rubin 性能 · 峰值与现场</div>
-    <h2>峰值、平台目标与现场测量分开看</h2>
-    <div class="callout"><strong>截至资料截点的状态：</strong> NVIDIA 于 2026 年 5 月披露 Rubin 正爬坡进入全面量产；7 月公布 CoreWeave 与 Google Cloud 的运行中系统/现场数据。广泛可用性、软件栈成熟度仍需逐项核实。<sup><a href="#src-r5">[R5]</a></sup><sup><a href="#src-r6">[R6]</a></sup></div>
-
-    <h3>NVL72 官方峰值</h3>
-    <div class="grid-4">
-      <div class="card"><div class="badges"><span class="badge vendor">峰值</span></div><div class="big">3,600</div><p>PFLOPS NVFP4 推理</p></div>
-      <div class="card"><div class="badges"><span class="badge vendor">峰值</span></div><div class="big">2,520</div><p>PFLOPS NVFP4 训练</p></div>
-      <div class="card"><div class="badges"><span class="badge vendor">峰值</span></div><div class="big">1,260</div><p>PFLOPS FP8 / FP6</p></div>
-      <div class="card"><div class="badges"><span class="badge vendor">峰值</span></div><div class="big">288</div><p>PFLOPS BF16 / FP16</p></div>
-    </div>
-
-    <h3>相对 Blackwell 的公开主张</h3>
-    <div class="grid-2">
-      <div class="card"><h4>硬件向量</h4><p>HBM 带宽 / GPU 约 2.8×；NVLink 带宽 / GPU 约 2×；K 维每时钟处理 2×。<sup><a href="#src-r1">[R1]</a></sup></p></div>
-      <div class="card"><h4>工作负载级主张（强依赖条件）</h4><p>AI 推理性能最高约 5×；训练性能最高约 3.5×；tokens/MW（特定现场基准）约 10×。前两项为 NVIDIA 平台比较；最后一项为 2026-07 CoreWeave 现场 DeepSeek-R1 相对 Grace Blackwell NVL72 的 NVIDIA/合作伙伴公布测量。<sup><a href="#src-r5">[R5]</a></sup><sup><a href="#src-r6">[R6]</a></sup></p></div>
-    </div>
-
-    <div class="table-wrap">
-      <table>
+      <div class="table-wrap"><table>
         <thead><tr><th>指标</th><th>公开结果</th><th>比较对象/条件</th><th>证据性质</th><th>正确解读</th></tr></thead>
         <tbody>
-          <tr><td>HBM4 带宽</td><td>22 TB/s / GPU</td><td>相对 Blackwell 约 2.8×</td><td><span class="badge vendor">芯片规格</span></td><td>内存上限显著提高，但持续利用率取决于访问模式</td></tr>
-          <tr><td>NVLink 6</td><td>3.6 TB/s / GPU; 260 TB/s / NVL72</td><td>相对前代单 GPU 约 2×</td><td><span class="badge vendor">互联规格</span></td><td>支持更细粒度 TP/MoE，但 collective 延迟仍重要</td></tr>
-          <tr><td>成本/百万 token</td><td>官方宣称约为 GB200 NVL72 的 1/10</td><td>特定推理模型与系统假设</td><td><span class="badge vendor">厂商模型</span></td><td>需用本地模型、SLA、电价、折旧和利用率重算</td></tr>
-          <tr><td>DeepSeek-R1 tokens/MW</td><td>约 10×</td><td>CoreWeave live hardware, 相对 Grace Blackwell NVL72</td><td><span class="badge measured">合作伙伴</span></td><td>重要现场信号，但仍非独立第三方统一结论</td></tr>
-          <tr><td>10T MoE 训练</td><td>所需 GPU 数约为前代 1/4</td><td>特定训练配置</td><td><span class="badge vendor">平台主张</span></td><td>反映算力、内存与网络共同变化</td></tr>
+          <tr><td><strong>HBM4 带宽</strong></td><td>22 TB/s / GPU</td><td>相对 Blackwell/Blackwell Ultra 约 2.8×量级</td><td><span class="badge vendor">芯片规格</span></td><td>内存上限显著提高，但持续利用率取决于访问模式与并发</td></tr>
+          <tr><td><strong>NVLink 6</strong></td><td>3.6 TB/s / GPU；260 TB/s / NVL72</td><td>相对前代单 GPU 约 2×</td><td><span class="badge vendor">互联规格</span></td><td>支持更细粒度 TP/MoE，但集合通信延迟与算法仍重要</td></tr>
+          <tr><td><strong>成本/百万 token</strong></td><td>官方宣称约为 GB200 NVL72 的 1/10</td><td>特定推理模型与系统假设</td><td><span class="badge vendor">厂商模型</span></td><td>需要用本地模型、SLA、电价、折旧和利用率重算</td></tr>
+          <tr><td><strong>DeepSeek-R1 tokens/MW</strong></td><td>约 10×</td><td>CoreWeave live hardware，相对 Grace Blackwell NVL72</td><td><span class="badge measured">合作伙伴测量</span></td><td>是重要现场信号，但仍不是独立第三方、跨多模型的统一结论</td></tr>
+          <tr><td><strong>10T MoE 训练</strong></td><td>官方称所需 GPU 数约为前代方案 1/4</td><td>特定训练配置</td><td><span class="badge vendor">平台主张</span></td><td>反映算力、内存与网络共同变化；需核对训练 token、收敛和精度</td></tr>
         </tbody>
-      </table>
-    </div>
-    <div class="callout danger"><strong>性能口径红线：</strong> 峰值 NVFP4 PFLOPS ≠ BF16 训练性能；单 GPU 带宽 ≠ 72 GPU 有效 collective 带宽；tokens/MW ≠ 单请求延迟；"最高"结果不能外推到所有模型和 batch。</div>
-  </div>
-</section>
+      </table></div>
+      <div class="callout danger"><strong>性能口径红线：</strong> 峰值 NVFP4 PFLOPS ≠ BF16 训练性能；单 GPU 带宽 ≠ 72 GPU 有效 collective 带宽；tokens/MW ≠ 单请求延迟；“最高”结果不能外推到所有模型和 batch。</div>
+    </section>
 
-<!-- 6. 联合分析 -->
-<section id="joint" style="background: var(--bg-tint);">
-  <div class="paper-layout">
-    <div class="section-label">联合分析 · Megakernel × Rubin</div>
-    <h2>Rubin 提供资源，Megakernel 消除编排损耗</h2>
-    <div class="callout warn"><div class="badges"><span class="badge inference">架构推断</span><span class="badge caution">无公开联合实测</span></div><strong>证据边界：</strong> 截至 2026-07-23，未发现 Hazy Megakernel、MPK、Event Tensor 或 Ada-MK 在 Rubin GPU/NVL72 上的公开直接基准。下面的"高/中/低"是工程优先级判断，不是承诺的加速倍数。</div>
+    <section id="joint" class="section-card">
+      <div class="section-head"><div class="section-no">07</div><div><div class="eyebrow">Megakernel × Rubin</div><h2>联合分析：Rubin 提供资源，Megakernel 消除编排损耗</h2><p class="muted">以下为基于公开架构的推断，尚需 Rubin 实机验证。</p></div></div>
+      <div class="callout warn"><div class="badges"><span class="badge inference">架构推断</span><span class="badge caution">无公开联合实测</span></div><strong>证据边界：</strong> 截至 2026-07-23，未发现 Hazy Megakernel、MPK、Event Tensor 或 Ada-MK 在 Rubin GPU/NVL72 上的公开直接基准。下面的“高/中/低”是工程优先级判断，而不是承诺的加速倍数。</div>
 
-    <h3>一个更实用的时延模型</h3>
-    <div class="formula-block"><span class="comment"># 一步延迟分解</span>
-T_step ≈ max(T_compute, T_memory, T_comm) + T_residual_sync + T_launch + T_scheduler + T_tail</div>
-    <p>在可充分重叠的理想情况下，计算、访存和通信由三者最大值决定；真正拉开系统差距的往往是无法重叠的残差。Rubin 主要降低前三项的硬件下界，Megakernel 主要压缩后四项并提高三大资源的重叠程度。若 Rubin 让 <code>T_memory</code> 从毫秒降到百微秒附近，而 <code>T_launch + T_sync</code> 仍维持原尺度，后者占比会变大。</p>
+      <h3 id="joint-model">7.1 一个更实用的时延模型</h3>
+      <div class="formula">T_step ≈ max(T_compute, T_memory, T_comm) + T_residual_sync + T_launch + T_scheduler + T_tail</div>
+      <p>在可充分重叠的理想情况下，计算、访存和通信由三者最大值决定；真正拉开系统差距的往往是无法重叠的残差。Rubin 主要降低前三项的硬件下界，Megakernel 主要压缩后四项并提高三大资源的重叠程度。若 Rubin 让 <span class="mono">T_memory</span> 从毫秒降到百微秒附近，而 <span class="mono">T_launch + T_sync</span> 仍维持原尺度，后者占比会变大。</p>
 
-    <h3>Rubin 硬件原语 × Megakernel 需求</h3>
-    <div class="table-wrap">
-      <table>
+      <div class="estimator" aria-label="简化性能下界估算器">
+        <div>
+          <h4>交互式下界估算器</h4>
+          <p class="fine">只估算“顺序读取模型字节”的 HBM 时间与“多内核发射间隙”，不包含算力、KV、缓存命中、通信或服务调度；用于理解量级，不是性能预测。</p>
+          <div class="form-grid">
+            <label>每步读取数据（GB）<input id="bytesInput" type="number" min="0.01" step="0.01" value="2.48"></label>
+            <label>平台<select id="platformSelect"><option value="3.35">H100 SXM（3.35 TB/s）</option><option value="8">B200（示意 8 TB/s）</option><option value="22" selected>Rubin（22 TB/s）</option></select></label>
+            <label>有效带宽利用率（%）<input id="effInput" type="number" min="1" max="100" step="1" value="70"></label>
+            <label>传统内核数量<input id="kernelsInput" type="number" min="1" step="1" value="100"></label>
+            <label>平均发射/边界空隙（μs）<input id="gapInput" type="number" min="0" step="0.1" value="5"></label>
+            <label>Megakernel 残余边界（个）<input id="residualInput" type="number" min="1" step="1" value="1"></label>
+          </div>
+        </div>
+        <div>
+          <div class="result-grid">
+            <div class="result"><b id="memTime">—</b><span>HBM 顺序读取下界</span></div>
+            <div class="result"><b id="launchTime">—</b><span>传统发射/边界间隙</span></div>
+            <div class="result"><b id="residualTime">—</b><span>Megakernel 残余边界</span></div>
+            <div class="result"><b id="shareTime">—</b><span>传统间隙 /（HBM+间隙）</span></div>
+          </div>
+          <p class="fine" id="estimatorNote"></p>
+        </div>
+      </div>
+      <p class="fine">默认 2.48 GB 来自 Hazy Llama-1B 分析中的权重量级；H100 3.35 TB/s 与 Rubin 22 TB/s 分别来自相关公开资料。该计算只展示“硬件越快，固定软件开销越显眼”的机制。<sup><a href="#src-m1">[M1]</a></sup><sup><a href="#src-r1">[R1]</a></sup></p>
+
+      <h3 id="joint-matrix">7.2 Rubin 硬件原语 × Megakernel 需求</h3>
+      <div class="table-wrap"><table>
         <thead><tr><th>Rubin 能力</th><th>Megakernel 可如何利用</th><th>预期影响</th><th>主要验证点</th></tr></thead>
         <tbody>
-          <tr><td>22 TB/s HBM4</td><td>更快流式读取权重/KV；跨操作流水维持请求级并发</td><td><span class="yes">高</span>：小 batch decode</td><td>实际 HBM 利用、L2 命中、SMEM 页占用</td></tr>
-          <tr><td>224 SM / 896 TC</td><td>更细 tile 队列和动态领取，减少 wave quantization</td><td><span class="mid">中高</span></td><td>寄存器与 SMEM 是否限制 occupancy</td></tr>
-          <tr><td>TMA 内联描述符</td><td>运行时切换专家、序列分块和动态地址</td><td><span class="yes">高</span>：MoE/动态形状</td><td>描述符更新成本、路由偏斜、缓存局部性</td></tr>
-          <tr><td>NVLink 6 + counted writes</td><td>通信 warp 在设备侧发送 tile 并发布到达计数</td><td><span class="yes">高</span>：TP/MoE</td><td>内存一致性、远端写聚合、拥塞</td></tr>
-          <tr><td>tile 级依赖触发</td><td>保留少量多内核路径时减少边界等待</td><td><span class="mid">中</span></td><td>何处融合进 Megakernel，何处留独立库</td></tr>
-          <tr><td>Vera 1.5TB 大内存 + C2C</td><td>CPU/GPU 分层 KV、参数与请求状态</td><td><span class="mid">中</span></td><td>C2C 实际延迟、页面迁移、NUMA</td></tr>
-          <tr><td>NVL72 统一域</td><td>多个每-GPU Megakernel 编排成机架级任务图</td><td><span class="yes">高但困难</span></td><td>故障恢复、跨 72 GPU 公平性、通信尾延迟</td></tr>
+          <tr><td><strong>22 TB/s HBM4</strong></td><td>更快流式读取权重/KV；以跨操作流水维持请求级并发，避免 224 SM 因短任务碎片化而空闲</td><td><span class="yes">高</span>：小 batch decode</td><td>实际 HBM 利用、L2 命中、SMEM 页面占用、tensor core 与访存平衡</td></tr>
+          <tr><td><strong>224 SM / 896 Tensor Cores</strong></td><td>更细 tile 队列和动态领取，减少 wave quantization；为 loader/consumer/storer 分配更丰富的 warp 角色</td><td><span class="mid">中高</span></td><td>寄存器与 SMEM 是否限制 occupancy；调度器争用</td></tr>
+          <tr><td><strong>TMA 内联描述符更新</strong></td><td>运行时切换专家、序列分块和动态地址，不必由 CPU 重建大量拷贝描述</td><td><span class="yes">高</span>：MoE/动态形状</td><td>描述符更新成本、路由偏斜、数据布局与缓存局部性</td></tr>
+          <tr><td><strong>NVLink 6 + counted writes</strong></td><td>通信 warp 在设备侧发送 tile 并发布到达计数；接收端只等待需要的分片</td><td><span class="yes">高</span>：TP/MoE</td><td>内存一致性、远端写聚合、拥塞、collective 算法与拓扑映射</td></tr>
+          <tr><td><strong>tile 级依赖触发</strong></td><td>保留少量多内核路径时减少边界等待；与 Megakernel 形成混合图</td><td><span class="mid">中</span></td><td>何处该融合进 Megakernel，何处留给独立库内核</td></tr>
+          <tr><td><strong>Vera 1.5 TB 大内存 + C2C</strong></td><td>CPU/GPU 分层 KV、参数与请求状态；设备侧 runtime 可减少 CPU 控制往返</td><td><span class="mid">中</span></td><td>C2C 实际延迟、页面迁移、NUMA、KV 分层策略</td></tr>
+          <tr><td><strong>NVL72 统一域</strong></td><td>将多个每-GPU Megakernel 编排成机架级任务图，分块隐藏 all-reduce/all-to-all</td><td><span class="yes">高但困难</span></td><td>故障恢复、跨 72 GPU 公平性、服务批调度、通信尾延迟</td></tr>
         </tbody>
-      </table>
-    </div>
+      </table></div>
 
-    <h3>瓶颈迁移：优化不消灭成本，只把它推向下一层</h3>
-    <p>2026 年 SiFAR 预印本给出一个有用信号：在 H200 Megakernel Llama-3.1-8B 中，TP1 到 TP8 的 TPOT 从约 2.73 ms 降至 1.43 ms，但 all-reduce 已接近 30% 占比。它不是 Rubin 数据，却支持"发射与 HBM 被优化后，通信会变成下一主瓶颈"的迁移逻辑。<sup><a href="#src-m7">[M7]</a></sup></p>
+      <h3>7.3 瓶颈迁移：优化不会消灭成本，只会把它推向下一层</h3>
+      <div class="heatmap" aria-label="瓶颈迁移热力图">
+        <div class="head">阶段</div><div class="head">内核发射/同步</div><div class="head">HBM</div><div class="head">Tensor Core</div><div class="head">跨 GPU 通信</div>
+        <div class="rowhead">传统 H100 小 batch</div><div class="h">高：短内核与边界</div><div class="h">高：权重流</div><div class="l">低至中</div><div class="m">TP 时中</div>
+        <div class="rowhead">H100 Megakernel</div><div class="l">显著下降</div><div class="h">常成为主项</div><div class="m">利用提高</div><div class="m">规模化后上升</div>
+        <div class="rowhead">Rubin 传统多内核</div><div class="h">占比可能上升</div><div class="m">22 TB/s 降低</div><div class="m">峰值更高</div><div class="m">NVLink 6 降低</div>
+        <div class="rowhead">Rubin + Megakernel</div><div class="l">目标：低</div><div class="m">依工作集而定</div><div class="m">大 GEMM 仍主导</div><div class="h">大规模 TP/MoE 的下一瓶颈</div>
+      </div>
+      <p>2026 年 SiFAR 预印本给出一个有用信号：在 H200 Megakernel Llama-3.1-8B 中，TP1 到 TP8 的 TPOT 从约 2.73 ms 降至 1.43 ms，但 all-reduce 已接近 30% 占比。它不是 Rubin 数据，却支持“发射与 HBM 被优化后，通信会变成下一主瓶颈”的迁移逻辑。<sup><a href="#src-m7">[M7]</a></sup></p>
+    </section>
 
-    <div class="complement" style="border: 1px solid var(--border-strong); border-left: 4px solid var(--indigo); padding: 24px 28px; margin: 32px 0; border-radius: var(--radius); background: var(--bg-paper);">
-      <div style="font-family: var(--font-mono); font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--indigo); letter-spacing: 0.08em; margin-bottom: 10px;">一句话记忆</div>
-      <p style="margin-bottom: 0;">megakernel 是"把菜一次炒完不留隔夜"的烹饪法，Rubin 是"灶台火力更大、调料盒更智能"的厨房。软件思路再好，也得有硬件配合才能榨干性能。</p>
-    </div>
-  </div>
-</section>
-
-<!-- 7. 场景地图 -->
-<section id="scenarios">
-  <div class="paper-layout">
-    <div class="section-label">应用场景 · Workload Scenarios</div>
-    <h2>哪里优先，哪里谨慎</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>场景</th><th>典型瓶颈</th><th>MK 价值</th><th>Rubin</th><th>联合建议</th></tr></thead>
+    <section id="scenarios" class="section-card">
+      <div class="section-head"><div class="section-no">08</div><div><div class="eyebrow">Workload Scenarios</div><h2>场景地图：哪里优先，哪里谨慎</h2></div></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>场景</th><th>典型瓶颈</th><th>Megakernel 价值</th><th>Rubin 价值</th><th>联合建议</th></tr></thead>
         <tbody>
-          <tr><td>实时聊天/语音/代码补全<br><span style="font-size:0.8rem;color:var(--ink-faint)">batch 1–小batch</span></td><td>权重/KV访存、短内核、采样尾延迟</td><td><span class="yes">很高</span></td><td><span class="yes">很高</span></td><td>优先 persistent runtime；采样和连续批处理尽量设备化；用 p50/p99 TPOT 验证</td></tr>
-          <tr><td>高吞吐在线服务</td><td>大GEMM、请求调度、KV管理、尾波</td><td><span class="mid">中高</span></td><td><span class="yes">很高</span></td><td>全局工作队列/混合图；不牺牲前缀缓存、投机解码与抢占</td></tr>
-          <tr><td>MoE 推理</td><td>动态路由、负载偏斜、小GEMM、网络</td><td><span class="yes">很高</span></td><td><span class="yes">很高</span></td><td>动态描述符、设备侧 counted write 与分块 all-to-all；设计拥塞回退</td></tr>
-          <tr><td>长上下文 prefill</td><td>attention 计算、KV 写入、分块调度</td><td><span class="mid">中</span></td><td><span class="yes">很高</span></td><td>大 attention 留给专用内核；MK 负责周边流水；评估 CPX 路径</td></tr>
-          <tr><td>长上下文 decode</td><td>巨大 KV 读取、序列依赖</td><td><span class="yes">高</span></td><td><span class="yes">高</span></td><td>HBM4/LPX SRAM 各有适用域；按 KV 压缩和 SLA 决定路径</td></tr>
-          <tr><td>训练/RL/Agent rollout</td><td>大GEMM、collective、频繁阶段切换</td><td><span class="mid">中</span></td><td><span class="yes">很高</span></td><td>MK 更适合碎片化 rollout；主训练由优化的库/编译图主导</td></tr>
-          <tr><td>广告/推荐小图</td><td>大量小算子、embedding、低batch</td><td><span class="yes">很高</span></td><td><span class="mid">视成本</span></td><td>Ada-MK 已有 L20 证据；Rubin 可能过度配置</td></tr>
-          <tr><td>多租户云推理</td><td>隔离、抢占、公平性、尾延迟</td><td><span class="no">高风险</span></td><td><span class="yes">高</span></td><td>持久内核可能阻碍抢占与 QoS；先做时间片、配额、看门狗</td></tr>
+          <tr><td><strong>实时聊天 / 语音 / 代码补全</strong><br><span class="fine">batch 1–小 batch，严格 TPOT</span></td><td>权重/KV 访存、短内核、采样与调度尾延迟</td><td><span class="yes">很高</span></td><td><span class="yes">很高</span></td><td>优先模型级 persistent runtime；保持采样和连续批处理尽量设备化；用 p50/p99 TPOT 而非离线 tokens/s 验证</td></tr>
+          <tr><td><strong>高吞吐在线服务</strong><br><span class="fine">动态 continuous batching</span></td><td>大 GEMM、请求调度、KV 管理、尾波</td><td><span class="mid">中高</span></td><td><span class="yes">很高</span></td><td>采用全局工作队列/混合图；不要牺牲成熟框架的前缀缓存、投机解码与抢占能力</td></tr>
+          <tr><td><strong>MoE 推理</strong><br><span class="fine">专家并行 / all-to-all</span></td><td>动态路由、负载偏斜、小 GEMM、网络</td><td><span class="yes">很高</span></td><td><span class="yes">很高</span></td><td>利用动态描述符、设备侧 counted write 与分块 all-to-all；必须设计拥塞和热点专家回退机制</td></tr>
+          <tr><td><strong>长上下文 prefill</strong><br><span class="fine">100K–1M tokens</span></td><td>attention 计算、KV 写入、分块调度</td><td><span class="mid">中</span></td><td><span class="yes">很高</span></td><td>大 attention/GEMM 留给专用高效内核；Megakernel 负责周边流水与阶段重叠；评估 Rubin CPX 异构路径</td></tr>
+          <tr><td><strong>长上下文 decode</strong></td><td>巨大 KV 读取、序列依赖、单 token 延迟</td><td><span class="yes">高</span></td><td><span class="yes">高</span></td><td>HBM4/LPX SRAM 各有适用域；按模型尺寸、KV 压缩和 SLA 决定通用 GPU 与专用低延迟路径</td></tr>
+          <tr><td><strong>训练 / RL / Agent rollout</strong></td><td>大 GEMM、collective、数据管线、频繁阶段切换</td><td><span class="mid">中</span></td><td><span class="yes">很高</span></td><td>Megakernel 更适合碎片化 rollout、采样和小算子区；主训练仍由高度优化的库/编译图主导</td></tr>
+          <tr><td><strong>广告/推荐小图</strong></td><td>大量小算子、embedding、低 batch、严格 SLA</td><td><span class="yes">很高</span></td><td><span class="mid">视成本</span></td><td>Ada-MK 已给出 L20 工业证据；Rubin 可能过度配置，应以成本/请求和功耗为准</td></tr>
+          <tr><td><strong>科学计算 / HPC 大核</strong></td><td>长时计算、内存带宽或通信</td><td><span class="mid">低至中</span></td><td><span class="yes">高</span></td><td>若原本就是少数大核，Megakernel 收益小；可用于多阶段 stencil/任务图，但需专门设计</td></tr>
+          <tr><td><strong>多租户云推理</strong></td><td>隔离、抢占、公平性、碎片化、尾延迟</td><td><span class="no">高风险</span></td><td><span class="yes">高</span></td><td>持久内核可能阻碍抢占与 QoS；先做时间片、工作队列配额、看门狗和故障恢复，再谈峰值</td></tr>
         </tbody>
-      </table>
-    </div>
-    <div class="grid-3">
-      <div class="card"><h4>最佳切入点</h4><p>稳定模型、batch 1、单/少卡、已有 Nsight 证据显示大量 launch gap，且允许自定义 runtime。</p></div>
-      <div class="card"><h4>战略价值最高</h4><p>Rubin NVL72 上 MoE/TP 的机架级设备侧调度。潜在收益大，但通信算法、服务功能和容错复杂度也最高。</p></div>
-      <div class="card"><h4>最容易误判</h4><p>只看 microbenchmark 的快 kernel，却忽略 continuous batching、KV eviction、prefix cache、采样、网络与 p99；端到端可能没有提升。</p></div>
-    </div>
-  </div>
-</section>
-
-<!-- 8. 落地方法 -->
-<section id="deployment" style="background: var(--bg-tint);">
-  <div class="paper-layout">
-    <div class="section-label">落地方法 · Deployment Playbook</div>
-    <h2>从剖析到 Rubin 就绪</h2>
-    <h3>决策树</h3>
-    <ol>
-      <li><strong>Q1：GPU 时间线中，launch gap + 内核边界等待是否超过约 10–15%？</strong> 否 → 先优化算子、量化、KV 或并行策略；是 → Q2。</li>
-      <li><strong>Q2：模型形状是否稳定，且主要目标是 batch 1/低延迟？</strong> 是 → 静态 per-SM 指令流或手工 Megakernel 是最快验证路径；否 → Q3。</li>
-      <li><strong>Q3：动态性来自连续批处理、MoE 路由还是长上下文？</strong> 需要动态全局队列、事件张量/编译器表示与混合内核边界；优先评估 MPK/ETC 类思路。</li>
-      <li><strong>Q4：TP/MoE 中通信是否超过 20–30%？</strong> 是 → 把设备侧通信、分块 collective 与计算交错作为一级功能。Rubin 上应重点验证 counted writes 与 NVLink 6 拓扑。</li>
-      <li><strong>Q5：是否有多租户、抢占或快速模型切换要求？</strong> 是 → 采用可退出/可让步的 persistent loop、配额队列与混合执行。</li>
-    </ol>
-    <h3>五阶段实施</h3>
-    <ol>
-      <li><strong>基线</strong>——固定模型、精度、prompt 分布、batch 策略与 SLA；记录 p50/p95/p99</li>
-      <li><strong>剖析</strong>——Nsight Systems 看空隙和通信；Nsight Compute 看 HBM、occupancy、stall</li>
-      <li><strong>最小原型</strong>——先覆盖 norm/activation/KV 与短 GEMM 周边，不急于吞并所有大算子</li>
-      <li><strong>系统集成</strong>——接入 continuous batching、prefix cache、采样、容错和指标</li>
-      <li><strong>Rubin 迁移</strong>——重新调 tile、SMEM、warp 角色、TMA、NVLink；绝不沿用 H100 常数</li>
-    </ol>
-    <h3>必须同时观测的 KPI</h3>
-    <div class="grid-4">
-      <div class="card"><h4>服务体验</h4><p>TTFT、TPOT、p50/p95/p99、超时率、抢占恢复、抖动</p></div>
-      <div class="card"><h4>吞吐与利用</h4><p>tokens/s、请求/s、SM active、TC active、HBM BW、L2 hit</p></div>
-      <div class="card"><h4>调度/通信</h4><p>launch gap、event wait、queue contention、comm overlap、collective p99</p></div>
-      <div class="card"><h4>经济性</h4><p>tokens/MW、成本/百万 token、编译/预热时间、显存碎片、运维失败率</p></div>
-    </div>
-  </div>
-</section>
-
-<!-- 9. 风险与边界 -->
-<section id="risks">
-  <div class="paper-layout">
-    <div class="section-label">风险与边界 · Risks</div>
-    <h2>失败模式与研究空白</h2>
-    <div class="grid-3">
-      <div class="card"><h4>资源超配</h4><p>代码、寄存器或 SMEM 膨胀降低 occupancy；单个慢路径拖住整个驻留网格。需按 phase 预算资源并允许退回独立内核。</p></div>
-      <div class="card"><h4>同步正确性</h4><p>页复用、远端写、事件计数和内存栅栏组合易出现 ABA、越界复用、罕见竞态或死锁。需形式化不变量与压力测试。</p></div>
-      <div class="card"><h4>动态负载偏斜</h4><p>MoE 热点专家、可变序列和 speculative decode 接受率使静态 schedule 失衡；动态队列又可能争用。</p></div>
-      <div class="card"><h4>可移植性</h4><p>Hopper/Blackwell 的 tile、SMEM、TMA 与指令假设不能原封不动迁到 Rubin。编译器化减少手工成本，但后端仍需架构特化。</p></div>
-      <div class="card"><h4>调试与可观测性</h4><p>一个超大内核在传统 profiler 中像"黑盒"；需任务级时间戳、事件等待、队列深度、page ownership 和跨 GPU tracing。</p></div>
-      <div class="card"><h4>多租户与抢占</h4><p>长期驻留内核可能阻碍其他工作、模型热切换与故障恢复。生产系统必须提供 yield、配额、公平性和看门狗。</p></div>
-      <div class="card"><h4>软件栈耦合</h4><p>只替换 kernel 可能破坏 prefix cache、chunked prefill、LoRA、采样、结构化输出和容错语义；端到端集成成本常大于内核开发。</p></div>
-      <div class="card"><h4>低精度与精度验证</h4><p>NVFP4 峰值吸引力很强，但量化策略、缩放、异常值与模型质量必须独立验证。</p></div>
-      <div class="card"><h4>公开证据缺口</h4><p>缺少 Rubin 上可复现的 Megakernel、跨 72 GPU 长期稳定性、独立第三方成本/功耗、以及多租户 p99 数据。</p></div>
-    </div>
-    <div class="callout"><strong>最关键的下一步研究：</strong> 在 Rubin NVL72 上，用同一模型、同一服务调度器，比较 CUDA Graph、融合内核、编译式 Megakernel 与混合路径，并同时发布时间线、HBM 利用、collective 占比、p99、tokens/MW 和编译/预热成本。</div>
-  </div>
-</section>
-
-<!-- 10. Paper Parse 深读 -->
-<section id="deep-read" style="background: var(--bg-tint);">
-  <div class="paper-layout">
-    <div class="section-label">论文深读 · Paper Parse</div>
-    <h2>Event Tensor：megakernel 的权威原论文</h2>
-
-    <div class="paper-card">
-      <div class="paper-header">
-        <a class="paper-id" href="https://arxiv.org/abs/2604.13327" target="_blank">arXiv:2604.13327</a>
-        <span class="paper-date">2026-04-21 · MLSys 2026</span>
+      </table></div>
+      <div class="grid-3">
+        <div class="card"><h4>最佳切入点</h4><p>稳定模型、batch 1、单/少卡、已有 Nsight 证据显示大量 launch gap，且允许自定义 runtime。这里最容易先证明 TPOT 与 HBM 利用率改善。</p></div>
+        <div class="card"><h4>战略价值最高</h4><p>Rubin NVL72 上 MoE/TP 的机架级设备侧调度。潜在收益大，但通信算法、服务功能和容错复杂度也最高。</p></div>
+        <div class="card"><h4>最容易误判</h4><p>只看 microbenchmark 的快 kernel，却忽略 continuous batching、KV eviction、prefix cache、采样、网络、容器调度与 p99；端到端可能没有提升。</p></div>
       </div>
-      <div class="paper-title">Event Tensor: A Unified Abstraction for Compiling Dynamic Megakernel</div>
-      <div class="paper-authors">Hongyi Jin*, Bohan Hou*, Guanjie Wang*, Ruihang Lai* 等 — CMU / SJTU / NVIDIA / UCB / Princeton / Tsinghua / PKU</div>
-      <div class="specs">
-        <span class="spec">Apache TVM</span>
-        <span class="spec">B200 ×8</span>
-        <span class="spec">MoE</span>
-        <span class="spec">AOT 编译</span>
-        <span class="spec">Qwen3-30B-A3B</span>
+    </section>
+
+    <section id="deployment" class="section-card">
+      <div class="section-head"><div class="section-no">09</div><div><div class="eyebrow">Deployment Playbook</div><h2>落地方法：从剖析到 Rubin 就绪</h2></div></div>
+      <h3>9.1 决策树</h3>
+      <div class="decision">
+        <div class="node"><strong>Q1：GPU 时间线中，launch gap + 内核边界等待是否超过约 10–15%？</strong><div class="answer">否 → 先优化算子、量化、KV 或并行策略；是 → 进入 Q2。</div></div>
+        <div class="node"><strong>Q2：模型形状是否稳定，且主要目标是 batch 1/低延迟？</strong><div class="answer">是 → 静态 per-SM 指令流或手工 Megakernel 是最快验证路径；否 → 进入 Q3。</div></div>
+        <div class="node"><strong>Q3：动态性来自连续批处理、MoE 路由还是长上下文？</strong><div class="answer">需要动态全局队列、事件张量/编译器表示与混合内核边界；优先评估 MPK/ETC 类思路，而不是硬编码完整 schedule。</div></div>
+        <div class="node"><strong>Q4：TP/MoE 中通信是否超过 20–30%？</strong><div class="answer">是 → 把设备侧通信、分块 collective 与计算交错作为一级功能；仅减少发射不够。Rubin 上应重点验证 counted writes 与 NVLink 6 拓扑。</div></div>
+        <div class="node"><strong>Q5：是否有多租户、抢占或快速模型切换要求？</strong><div class="answer">是 → 采用可退出/可让步的 persistent loop、配额队列与混合执行；不要让一个 Megakernel 无界占住全部 SM。</div></div>
       </div>
-      <p style="font-size:15px; color: var(--ink-muted);">CMU Zhihao Jia 团队（Mirage Persistent Kernel 一作）与 NVIDIA/TVM 的 Tianqi Chen、Vinod Grover 联合发表，把此前只能手工编写、只支持单 batch dense 推理的 megakernel 技术，提升为支持动态形状与数据相关控制流的编译器抽象。</p>
-    </div>
 
-    <div class="deep-read">
-      <div class="deep-read-header">Paper Parse 双模研读报告</div>
-      <div class="deep-read-body">
-
-        <span class="part-label">Part A · 深度专业学术速读</span>
-
-        <h3>结构化摘要</h3>
-        <div class="table-wrap">
-          <table>
-            <tbody>
-              <tr><td>背景/目标</td><td>LLM 推理中 kernel launch overhead（每次 5–10 μs，最快 kernel 仅 2 μs）与 kernel 边界隐式同步已成主导瓶颈。megakernel 能消除这两类开销但现有框架不支持动态 batch 与 MoE 路由。</td></tr>
-              <tr><td>方法</td><td>提出 Event Tensor——把"SM 级任务集完成事件"组织成多维张量，作为编译器 IR 的一等对象。基于此构建 ETC 编译器，提供 static 与 dynamic 两套调度变换。</td></tr>
-              <tr><td>结果</td><td>8×B200：融合 GEMM+RS/AG 最高 1.40× 优于 cuBLAS+NCCL；MoE 层最高 1.23×；端到端 batch=1 时 1.48× 优于 vLLM；warmup 从 123s/583s 降至 35s（3.5×）。</td></tr>
-              <tr><td>结论</td><td>Event Tensor 首次让 megakernel 支持 shape dynamism 与 data-dependent dynamism，实现 AOT 编译、零运行时编译开销。抽象位于 compiler IR 层，不绑定 GPU 代际。</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <hr class="deep-read-part-divider" />
-
-        <h3>1. 引言</h3>
-        <h4>1.1 研究背景与核心问题</h4>
-        <p>GPU 算力持续增长，但传统调度模型里两类开销反而成主导：<strong>kernel launch overhead</strong>（每次 5–10 μs，最快 kernel 仅 2 μs）和 <strong>kernel 边界隐式同步</strong>。CUDA Graph 减少 launch 但保留 kernel 边界且依赖静态输入；近期 megakernel 工作只支持单 batch dense 推理。</p>
-        <h4>1.2 文献综述与研究缺口</h4>
-        <p>深度学习编译器做图级优化但 kernel-by-kernel 执行；最新 megakernel 工作只支持单 batch dense、单一调度策略；CuSync 做跨 stream 同步但停留在分离 kernel；Graphene 在单 kernel 内建模同步但非多算子融合。<strong>缺口：缺乏在编译器 IR 层统一表达细粒度跨算子、且同时处理 shape 与 data-dependent dynamism 的抽象。</strong></p>
-        <h4>1.3 核心命题</h4>
-        <div class="ablock">
-          <div class="alabel">隐含假设</div>
-          把同步事件提升为编译器 IR 中的一等张量（Event Tensor），借助现有编译器对符号形状与张量索引表达式的支持，就能用一个紧致抽象同时表达 SM 级细粒度依赖、动态形状依赖、数据相关依赖，并通过 static/dynamic 两套调度变换自动生成高性能 persistent megakernel。
-        </div>
-
-        <h3>2. 研究设计与方法</h3>
-        <h4>2.1 范式</h4><p>构建式系统研究——提出新抽象、实现编译器、在真实硬件上以强基线对比评估。</p>
-        <h4>2.2 数据来源</h4><p>8×NVIDIA B200（NVLink）、PyTorch 2.8.0、CUDA 13.0。基线含 cuBLAS+NCCL、TP-Async、Triton-Dist、cuBLASMp、Triton 3.4.0、FlashInfer、vLLM v0.11.0rc2、SGLang v0.5.3rc0。</p>
-        <h4>2.3 三大语言构造</h4>
-        <ul>
-          <li><strong>Device Function</strong>：任务网格，多维坐标参数化，每个 SM 跑一个 tile</li>
-          <li><strong>Event Tensor</strong>：多维事件数组，元素含 <code>wait_count</code>，支持 <code>notify()</code>/<code>wait()</code>/<code>trigger</code></li>
-          <li><strong>Graph Function</strong>：含 data tensors + Event Tensors 的计算图，标注输入/输出依赖与坐标映射</li>
-        </ul>
-        <h4>2.4 两类动态性</h4>
-        <p><strong>Shape Dynamism</strong>：符号维度模板，运行时实例化，免重编译。<strong>Data-Dependent Dynamism</strong>：通过 runtime index 表达式映射任务坐标→事件坐标。MoE 例子：<code>topk</code> + <code>exp_indptr</code>（CSR 风格前缀和）动态决定哪些 grouping tiles 通知哪些 expert events。</p>
-        <h4>2.5 两套调度变换</h4>
-        <p><strong>Static</strong>：宿主预算 per-SM 队列 → persistent main loop → counter-based semaphore + event-triggered wait。<strong>Dynamic</strong>：GPU 上 on-device scheduler 的 push-pop。Appendix E 的 early push 策略——producer 一 dispatch 就 push consumer，调度开销与 producer 执行重叠。</p>
-        <div class="ablock">
-          <div class="alabel">Lowering 到最小运行时</div>
-          Event Tensor → integer tensor，<code>notify()</code> = atomic decrement，<code>wait()</code> = spin-wait counter==0。运行时仅含 integer tensors + scheduler task queue。
-        </div>
-
-        <h3>3. 结果与发现</h3>
-        <h4>3.1 融合通信+计算</h4><p>GEMM+Reduce-Scatter（dynamic）与 All-Gather+GEMM（static）均最高 <strong>1.40× 优于 cuBLAS+NCCL</strong>。</p>
-        <h4>3.2 MoE 数据相关负载</h4><p>Qwen3-30B-A3B（128 experts top-8）单 B200 上，最高 <strong>1.23× 加速（1024 tokens）</strong>。</p>
-        <h4>3.3 端到端低 batch serving</h4><p>Qwen3-30B-A3B TP=1 batch=1 时 <strong>1.48× 优于 vLLM、1.20× 优于 SGLang</strong>。TP=4 场景与 vLLM 持平（0.99×–1.06×）、落后 SGLang——论文归因于工程因素而非抽象根本局限。</p>
-        <h4>3.4 AOT 编译消除 warmup</h4>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>方法</th><th>Warmup</th><th># JIT Capture</th></tr></thead>
-            <tbody>
-              <tr><td>SGLang (JIT)</td><td>583s</td><td>51</td></tr>
-              <tr><td>vLLM (JIT)</td><td>123s</td><td>67</td></tr>
-              <tr><td><strong>ETC (AOT)</strong></td><td><strong>35s</strong></td><td><strong>0</strong></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <h4>3.5 调度权衡</h4><p>MoE 上 dynamic 优于 static（1024 tokens：dynamic 1.08× vs unfused、static 1.04×）。规则 dense（TP=4）上 static 优于 dynamic（1.06×–1.09× vs unfused），dynamic 反而 0.82×–0.89×。<strong>数据相关→dynamic，规则 dense→static，两种都需支持。</strong></p>
-
-        <h3>4. 讨论</h3>
-        <h4>4.1 理论贡献</h4><p>把同步原语从运行时实现细节提升为编译器 IR 的一等张量对象。三重后果：(1) 复用编译器符号形状与索引表达式基础设施；(2) static 与 dynamic 调度成为同一 IR 上的可互换变换；(3) 把 producer→event→consumer 任务图压缩成张量形式。</p>
-        <h4>4.2 实践启示</h4><p>对推理引擎开发者：提供从"kernel-by-kernel + CUDA Graph"升级到"单一 persistent megakernel + AOT 编译"的路径。对编译器社区：抽象 DSL-agnostic。对硬件设计者：Event Tensor 的 MoE 数据相关触发机制与 Rubin 增强 TMA 在目标上高度对齐。</p>
-        <h4>4.3 局限性</h4>
-        <ul>
-          <li><strong>Dynamic scheduler 集中式队列</strong>：全局内存共享，规模大时可能 contention</li>
-          <li><strong>TP=4 场景不总最优</strong>：SGLang CPU 调度器更精调，compiler GEMM tiles 不如 cuBLAS</li>
-          <li><strong>手动标注负担</strong>：当前需用户用 TVM-based DSL 写 device function 并手动标注</li>
-          <li><strong>代际覆盖</strong>：仅 B200 一代验证</li>
-        </ul>
-
-        <h3>5. 核心参考文献</h3>
-        <ol>
-          <li>Spector et al. (2025). <em>Look ma, no bubbles!</em> Stanford. — megakernel 前作</li>
-          <li>Cheng et al. (2025). <em>Mirage Persistent Kernel</em>. arXiv:2512.22219. — CMU megakernel 前作</li>
-          <li>Gray (2019). <em>CUDA Graphs</em>. NVIDIA. — 工业标准</li>
-          <li>Kwon et al. (2023). <em>vLLM</em>. SOSP'23. — serving 基线</li>
-          <li>Jangda et al. (2024). <em>CuSync</em>. arXiv:2305.13450. — 细粒度同步</li>
-          <li>Hagedorn et al. (2023). <em>Graphene</em>. ASPLOS'23. — 概念相关</li>
-        </ol>
-
-        <hr class="deep-read-part-divider" />
-
-        <span class="part-label">Part B · 核心逻辑链与根本价值提炼</span>
-
-        <h3>核心四要素</h3>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>要素</th><th>内容</th></tr></thead>
-            <tbody>
-              <tr><td>根本问题</td><td>megakernel 能消除 LLM 推理两大延迟主因，但真实负载的动态性让"手写 megakernel"彻底失效。现有编译器对"如何在一个 kernel 内表达并调度动态细粒度依赖"<strong>没有抽象</strong>。</td></tr>
-              <tr><td>切入视角</td><td>别人看到的是"同步是运行时实现细节"，作者看到的是"同步事件本身就是一个张量"。megakernel 把算子拆成海量 tile 级任务后，同步事件天然形成多维结构。</td></tr>
-              <tr><td>关键方法</td><td>两层机制。Event Tensor 抽象：事件=SM 级任务集完成，多维事件数组，<code>wait_count</code>+<code>notify/wait/trigger</code>。ETC 编译器：static/dynamic 两套可互换调度变换，降级为 persistent megakernel。</td></tr>
-              <tr><td>核心发现</td><td>用"同算子码、仅把细粒度依赖换成全局屏障"的非融合 megakernel 做对照，证明加速<strong>纯粹来自 inter-kernel parallelism</strong>。B200 上：最高 1.40×；MoE 1.23×；端到端 1.48×；warmup 3.5×。</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <h3>方法公式化</h3>
-        <div class="formula"><span class="comment"># 动态 megakernel 的核心公式</span>
-动态 megakernel = (细粒度任务图 + Event Tensor) × (static | dynamic 调度变换)
-
-<span class="comment"># 其中:</span>
-Event Tensor = 符号形状模板 ⊕ runtime index 表达式(topk + exp_indptr)
-notify() = atomic decrement    wait() = spin-wait(counter==0)
-AOT 编译 = Event Tensor 的 first-class shape dynamism → 运行时零 JIT、零 graph recapture</div>
-
-        <div class="one-liner">
-          <span class="label">一句话总结（核心价值）</span>
-          <p>本文把 GPU SM 级同步事件提升为编译器 IR 中的一等张量，使 megakernel 首次能自动支持真实 LLM 的动态形状与 MoE 数据相关路由，在不重编译、不 recapture 的前提下生成单一 persistent kernel，相对 vLLM/SGLang 等工业级基线实现端到端 1.15–1.48× 加速与 3.5× warmup 缩减。</p>
-        </div>
-        <div class="one-liner">
-          <span class="label">一句话总结（大白话版）</span>
-          <p>以前让 GPU 跑完一步就停一次"开会"再跑下一步，太慢；把所有步骤塞进一个"大 kernel"能快，但只要 batch 一变或碰到 MoE 这种"边跑边才知道下一步找谁"的活儿，手写大 kernel 就抓瞎——这篇论文给编译器装了一个"把任务完成信号排成表格"的通用工具，让编译器自动把动态活儿也塞进一个大 kernel 里跑完。</p>
-        </div>
-
+      <h3>9.2 五阶段实施</h3>
+      <div class="flow">
+        <div class="step"><b>基线</b><span>固定模型、精度、prompt 分布、batch 策略与 SLA；记录 p50/p95/p99。</span></div>
+        <div class="step"><b>剖析</b><span>Nsight Systems 看空隙和通信；Nsight Compute 看 HBM、occupancy、stall。</span></div>
+        <div class="step"><b>最小原型</b><span>先覆盖 norm/activation/KV 与短 GEMM 周边，不急于吞并所有大算子。</span></div>
+        <div class="step"><b>系统集成</b><span>接入 continuous batching、prefix cache、采样、容错和指标。</span></div>
+        <div class="step"><b>Rubin 迁移</b><span>重新调 tile、SMEM、warp 角色、TMA、NVLink；绝不沿用 H100 常数。</span></div>
       </div>
-    </div>
-  </div>
-</section>
 
-<!-- 11. 术语表 -->
-<section id="glossary">
-  <div class="paper-layout">
-    <div class="section-label">术语表 · Glossary</div>
-    <h2>关键术语</h2>
-    <div class="grid-2">
-      <div class="card"><h4>CTA / Thread Block</h4><p>在一个 SM 上协同执行的一组线程；Megakernel 常让每个 CTA 长期循环领取任务。</p></div>
-      <div class="card"><h4>Warp Specialization</h4><p>让不同 warp 固定承担加载、计算、写回、通信或控制，以构造软件流水。</p></div>
-      <div class="card"><h4>TMA</h4><p>Tensor Memory Accelerator，用描述符驱动多维张量搬运；Rubin 的内联描述符更新更适合运行时动态布局。</p></div>
-      <div class="card"><h4>HBM4</h4><p>Rubin GPU 使用的高带宽显存；容量和带宽影响权重、KV 与中间激活的数据下界。</p></div>
-      <div class="card"><h4>NVLink-C2C</h4><p>Vera CPU 与 Rubin GPU 之间的高带宽一致性互联，官方规格 1.8 TB/s。</p></div>
-      <div class="card"><h4>Counted Write</h4><p>远端写入与到达计数结合；消费者可在计数满足后继续，适合设备侧细粒度 producer/consumer。</p></div>
-      <div class="card"><h4>TP / EP</h4><p>Tensor Parallel / Expert Parallel；前者切分张量计算，后者切分 MoE 专家，均依赖高效 collective。</p></div>
-      <div class="card"><h4>TTFT / TPOT</h4><p>首 token 时间 / 每输出 token 时间。长上下文关心 TTFT，实时交互关心 p99 TPOT。</p></div>
-      <div class="card"><h4>Wave Quantization</h4><p>任务数量不是并行资源整数倍时，最后一波只有部分 SM 工作，产生尾部浪费。</p></div>
-      <div class="card"><h4>Roofline</h4><p>用计算峰值与内存带宽共同约束性能的上界模型；Megakernel 还需额外考虑发射、同步、调度与通信残差。</p></div>
-    </div>
-  </div>
-</section>
+      <h3>9.3 必须同时观测的 KPI</h3>
+      <div class="grid-4">
+        <div class="card"><h4>服务体验</h4><p>TTFT、TPOT、p50/p95/p99、超时率、抢占恢复、抖动。</p></div>
+        <div class="card"><h4>吞吐与利用</h4><p>tokens/s、请求/s、SM active、Tensor Core active、achieved HBM BW、L2 hit。</p></div>
+        <div class="card"><h4>调度/通信</h4><p>launch gap、event wait、queue contention、tail wave、comm overlap、collective p99。</p></div>
+        <div class="card"><h4>经济性</h4><p>tokens/MW、成本/百万 token、编译/预热时间、显存碎片、运维失败率。</p></div>
+      </div>
 
-<!-- 12. 来源 -->
-<section id="sources" style="background: var(--bg-tint);">
-  <div class="paper-layout">
-    <div class="section-label">主要来源 · Sources</div>
-    <h2>来源与阅读路径</h2>
-    <p style="color: var(--ink-muted);">优先使用论文、官方架构文档与公开代码；访问截点 2026-07-23。</p>
+      <h3>9.4 建议的 A/B 设计</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>维度</th><th>A：成熟框架</th><th>B：Megakernel/混合图</th><th>控制变量</th></tr></thead>
+        <tbody>
+          <tr><td><strong>低延迟</strong></td><td>vLLM/SGLang + CUDA Graph</td><td>相同量化、相同 KV、相同采样</td><td>固定请求到达过程、prompt/output 长度、并发</td></tr>
+          <tr><td><strong>吞吐</strong></td><td>相同 scheduler 和 batch policy</td><td>替换模型执行器，不改变 admission</td><td>总 prompts、warmup、缓存状态、功耗上限</td></tr>
+          <tr><td><strong>TP/MoE</strong></td><td>NCCL 标准路径</td><td>设备侧分块通信/融合</td><td>相同拓扑、专家放置、路由分布与网络负载</td></tr>
+          <tr><td><strong>Rubin</strong></td><td>官方优化栈</td><td>Megakernel backend</td><td>相同软件版本、时钟/功耗、精度、稀疏性与容错</td></tr>
+        </tbody>
+      </table></div>
+    </section>
 
-    <h3>Megakernel / Persistent Runtime</h3>
-    <ol class="source-list">
-      <li id="src-m1"><b>[M1] Hazy Research — "No Bubbles: Fast Llama-1B Inference with a Megakernel"</b><span class="src-meta">2025-05-27 · 低延迟 Llama-1B、H100/B200、HBM 利用与实现细节</span><a href="https://hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles" target="_blank">打开原文</a></li>
-      <li id="src-m2"><b>[M2] Hazy Research — Tensor-parallel Llama-70B Megakernel / Tokasaurus</b><span class="src-meta">2025-09 · 高吞吐、warp specialization、全局工作队列、通信交错</span><a href="https://hazyresearch.stanford.edu/blog/2025-09-28-tp-llama-main" target="_blank">打开原文</a></li>
-      <li id="src-m3"><b>[M3] MPK: Mirage Persistent Kernel</b><span class="src-meta">arXiv:2512.22219 v2, 2026-06-10 · PyTorch 编译后端、A100/H100/B200、多 GPU</span><a href="https://arxiv.org/html/2512.22219v2" target="_blank">打开论文</a> · <a href="https://github.com/mirage-project/mirage" target="_blank">代码</a></li>
-      <li id="src-m4"><b>[M4] Event Tensor / ETC — Dynamic Megakernel Abstraction</b><span class="src-meta">MLSys 2026 / arXiv:2604.13327 · 动态形状、Qwen3、8×B200、预热与 TP 数据</span><a href="https://arxiv.org/html/2604.13327v1" target="_blank">打开论文</a></li>
-      <li id="src-m5"><b>[M5] Ada-MK: Adaptive Megakernel for Industrial Online Ads</b><span class="src-meta">arXiv:2605.11581, 2026 · L20、商业广告模型、DAG 搜索与吞吐数据</span><a href="https://arxiv.org/abs/2605.11581" target="_blank">打开论文</a></li>
-      <li id="src-m6"><b>[M6] HazyResearch/Megakernels</b><span class="src-meta">公开研究代码与示例</span><a href="https://github.com/HazyResearch/Megakernels" target="_blank">打开仓库</a></li>
-      <li id="src-m7"><b>[M7] SiFAR — Communication-aware optimization after Megakernel</b><span class="src-meta">arXiv:2607.08973, 2026-07 · H200、TPOT 与 all-reduce 占比</span><a href="https://arxiv.org/html/2607.08973v1" target="_blank">打开论文</a></li>
-    </ol>
+    <section id="risks" class="section-card">
+      <div class="section-head"><div class="section-no">10</div><div><div class="eyebrow">Risks & Boundaries</div><h2>风险、失败模式与研究空白</h2></div></div>
+      <div class="grid-3">
+        <div class="card"><h4>资源超配</h4><p>代码、寄存器或 SMEM 膨胀降低 occupancy；单个慢路径拖住整个驻留网格。需要按 phase 预算资源并允许退回独立内核。</p></div>
+        <div class="card"><h4>同步正确性</h4><p>页复用、远端写、事件计数和内存栅栏组合易出现 ABA、越界复用、罕见竞态或死锁。必须有形式化不变量与压力测试。</p></div>
+        <div class="card"><h4>动态负载偏斜</h4><p>MoE 热点专家、可变序列和 speculative decode 接受率会使静态 schedule 失衡；动态队列又可能争用。</p></div>
+        <div class="card"><h4>可移植性</h4><p>Hopper/Blackwell 的 tile、SMEM、TMA 与指令假设不能原封不动迁到 Rubin。编译器化能减少手工成本，但后端仍需架构特化。</p></div>
+        <div class="card"><h4>调试与可观测性</h4><p>一个超大内核在传统 profiler 中像“黑盒”；需要任务级时间戳、事件等待、队列深度、page ownership 和跨 GPU tracing。</p></div>
+        <div class="card"><h4>多租户与抢占</h4><p>长期驻留内核可能阻碍其他工作、模型热切换与故障恢复。生产系统必须提供 yield、配额、公平性和看门狗。</p></div>
+        <div class="card"><h4>软件栈耦合</h4><p>只替换 kernel 可能破坏 prefix cache、chunked prefill、LoRA、采样、结构化输出和容错语义；端到端集成成本常大于内核开发。</p></div>
+        <div class="card"><h4>低精度与精度验证</h4><p>Rubin NVFP4 峰值吸引力很强，但量化策略、缩放、异常值与模型质量必须独立验证；性能不能以质量退化换取。</p></div>
+        <div class="card"><h4>公开证据缺口</h4><p>缺少 Rubin 上可复现的 Megakernel、跨 72 GPU 的长期稳定性、独立第三方成本/功耗、以及多租户 p99 数据。</p></div>
+      </div>
+      <div class="callout"><strong>最关键的下一步研究：</strong> 在 Rubin NVL72 上，用同一模型、同一服务调度器，比较 CUDA Graph、融合内核、编译式 Megakernel 与混合路径，并同时发布时间线、HBM 利用、collective 占比、p99、tokens/MW 和编译/预热成本。</div>
+    </section>
 
-    <h3>NVIDIA Rubin / Vera Rubin Platform</h3>
-    <ol class="source-list">
-      <li id="src-r1"><b>[R1] NVIDIA Developer Blog — Inside NVIDIA Rubin GPU Architecture</b><span class="src-meta">2026-07-21 · 双芯粒、224 SM、896 TC、HBM4、NVLink 6、TMA、counted writes</span><a href="https://developer.nvidia.com/blog/inside-nvidia-rubin-gpu-architecture-powering-the-era-of-agentic-ai/" target="_blank">打开官方架构文</a></li>
-      <li id="src-r2"><b>[R2] NVIDIA — Vera Rubin NVL72</b><span class="src-meta">官方产品页 · 72 GPU/36 CPU、计算峰值、内存与机架互联规格</span><a href="https://www.nvidia.com/en-us/data-center/vera-rubin-nvl72/" target="_blank">打开官方规格</a></li>
-      <li id="src-r3"><b>[R3] NVIDIA — Vera CPU</b><span class="src-meta">88 Olympus cores、176 threads、1.5 TB LPDDR5X、C2C 与 SCF</span><a href="https://www.nvidia.com/en-us/data-center/vera-cpu/" target="_blank">打开官方规格</a></li>
-      <li id="src-r4"><b>[R4] NVIDIA Developer Blog — Vera Rubin POD: Seven Chips, Five Rack-Scale Systems</b><span class="src-meta">2026-03-16 · 平台层级、NVL72 托盘构成、NVLink 域与出货节奏</span><a href="https://developer.nvidia.com/blog/nvidia-vera-rubin-pod-seven-chips-five-rack-scale-systems-one-ai-supercomputer/" target="_blank">打开官方平台文</a></li>
-      <li id="src-r5"><b>[R5] NVIDIA Blog — Vera Rubin live hardware / CoreWeave & Google Cloud</b><span class="src-meta">2026-07-21 · DeepSeek-R1 tokens/MW 现场数据</span><a href="https://blogs.nvidia.com/blog/vera-rubin/" target="_blank">打开官方博客</a></li>
-      <li id="src-r6"><b>[R6] NVIDIA Newsroom — Vera Rubin ramping into full production</b><span class="src-meta">2026-05-31 · 生产状态与供应链信息</span><a href="https://nvidianews.nvidia.com/news/vera-rubin-full-production-agentic-ai-factory" target="_blank">打开新闻稿</a></li>
-      <li id="src-r7"><b>[R7] NVIDIA Developer Blog — Groq 3 LPX for Vera Rubin</b><span class="src-meta">2026-03-16 · 256 LPU、128 GB SRAM、40 PB/s、640 TB/s scale-up</span><a href="https://developer.nvidia.com/blog/inside-nvidia-groq-3-lpx-the-low-latency-inference-accelerator-for-the-nvidia-vera-rubin-platform/" target="_blank">打开官方架构文</a></li>
-      <li id="src-r8"><b>[R8] NVIDIA Developer Blog — Rubin CPX</b><span class="src-meta">2025-09 · 30 PFLOPS NVFP4、128 GB GDDR7、NVL144 CPX</span><a href="https://developer.nvidia.com/blog/nvidia-rubin-cpx-accelerates-inference-performance-and-efficiency-for-1m-token-context-workloads/" target="_blank">打开官方介绍</a></li>
-    </ol>
+    <section id="glossary" class="section-card">
+      <div class="section-head"><div class="section-no">11</div><div><div class="eyebrow">Glossary</div><h2>术语表</h2></div></div>
+      <div class="grid-2">
+        <div class="card"><h4>CTA / Thread Block</h4><p>在一个 SM 上协同执行的一组线程；Megakernel 常让每个 CTA 长期循环领取任务。</p></div>
+        <div class="card"><h4>Warp Specialization</h4><p>让不同 warp 固定承担加载、计算、写回、通信或控制，以构造软件流水。</p></div>
+        <div class="card"><h4>TMA</h4><p>Tensor Memory Accelerator，用描述符驱动多维张量搬运；Rubin 的内联描述符更新更适合运行时动态布局。</p></div>
+        <div class="card"><h4>HBM4</h4><p>Rubin GPU 使用的高带宽显存；容量和带宽影响权重、KV 与中间激活的数据下界。</p></div>
+        <div class="card"><h4>NVLink-C2C</h4><p>Vera CPU 与 Rubin GPU 之间的高带宽一致性互联，官方规格为 1.8 TB/s。</p></div>
+        <div class="card"><h4>Counted Write</h4><p>远端写入与到达计数结合；消费者可在计数满足后继续，适合设备侧细粒度 producer/consumer。</p></div>
+        <div class="card"><h4>TP / EP</h4><p>Tensor Parallel / Expert Parallel；前者切分张量计算，后者切分 MoE 专家，均依赖高效 collective。</p></div>
+        <div class="card"><h4>TTFT / TPOT</h4><p>首 token 时间 / 每输出 token 时间。长上下文通常关心 TTFT，实时交互尤其关心 p99 TPOT。</p></div>
+        <div class="card"><h4>Wave Quantization</h4><p>任务数量不是并行资源整数倍时，最后一波只有部分 SM 工作，产生尾部浪费。</p></div>
+        <div class="card"><h4>Roofline</h4><p>用计算峰值与内存带宽共同约束性能的上界模型；Megakernel 还需额外考虑发射、同步、调度与通信残差。</p></div>
+      </div>
+    </section>
 
-    <h3>知乎社区参考</h3>
-    <div class="zhihu-quote">
-      <div class="zhihu-quote-title"><a href="https://zhuanlan.zhihu.com/p/1943608134460506500" target="_blank">2025年"LLM==编译器":Megakernel(vLLM/TensorRT-LLM/TVM-Relax/IREE…)</a></div>
-      <div class="zhihu-quote-meta"><span class="author">留着零零</span> · <span class="votes">140 赞</span></div>
-    </div>
-    <div class="zhihu-quote">
-      <div class="zhihu-quote-title"><a href="https://zhuanlan.zhihu.com/p/1919741129894650183" target="_blank">舍弃CUDA编程!CMU等用几十行代码将LLM编译成巨型内核</a></div>
-      <div class="zhihu-quote-meta"><span class="author">机器之心</span> · <span class="votes">112 赞</span></div>
-    </div>
-    <div class="zhihu-quote">
-      <div class="zhihu-quote-title"><a href="https://zhuanlan.zhihu.com/p/2048433885520958386" target="_blank">megakernel技术（多机通信 fence 优化）</a></div>
-      <div class="zhihu-quote-meta"><span class="author">Arsmart</span> · <span class="votes">94 赞</span></div>
-    </div>
-    <div class="zhihu-quote">
-      <div class="zhihu-quote-title"><a href="https://zhuanlan.zhihu.com/p/1999182124780114674" target="_blank">Rubin GPGPU架构特性概览</a></div>
-      <div class="zhihu-quote-meta"><span class="author">sazc</span> · <span class="votes">68 赞</span></div>
-    </div>
+    <section id="sources" class="section-card">
+      <div class="section-head"><div class="section-no">12</div><div><div class="eyebrow">Sources</div><h2>主要来源与阅读路径</h2><p class="muted">优先使用论文、官方架构文档与公开代码；访问截点 2026-07-23。</p></div></div>
+      <h3>Megakernel / Persistent Runtime</h3>
+      <ol class="source-list">
+        <li id="src-m1"><b>[M1] Hazy Research — “No Bubbles: Fast Llama-1B Inference with a Megakernel”</b><span class="src-meta">2025-05-27 · 低延迟 Llama-1B、H100/B200、HBM 利用与实现细节</span><a href="https://hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles" target="_blank" rel="noreferrer">打开原文</a></li>
+        <li id="src-m2"><b>[M2] Hazy Research — Tensor-parallel Llama-70B Megakernel / Tokasaurus</b><span class="src-meta">2025-09 · 高吞吐、warp specialization、全局工作队列、通信交错</span><a href="https://hazyresearch.stanford.edu/blog/2025-09-28-tp-llama-main" target="_blank" rel="noreferrer">打开原文</a></li>
+        <li id="src-m3"><b>[M3] MPK: Mirage Persistent Kernel</b><span class="src-meta">arXiv:2512.22219 v2，2026-06-10 · PyTorch 编译后端、A100/H100/B200、多 GPU</span><a href="https://arxiv.org/html/2512.22219v2" target="_blank" rel="noreferrer">打开论文</a> · <a href="https://github.com/mirage-project/mirage" target="_blank" rel="noreferrer">代码仓库</a></li>
+        <li id="src-m4"><b>[M4] Event Tensor / ETC — Dynamic Megakernel Abstraction</b><span class="src-meta">MLSys 2026 / arXiv:2604.13327 · 动态形状、Qwen3、8×B200、预热与 TP 数据</span><a href="https://arxiv.org/html/2604.13327v1" target="_blank" rel="noreferrer">打开论文</a></li>
+        <li id="src-m5"><b>[M5] Ada-MK: Adaptive Megakernel for Industrial Online Ads</b><span class="src-meta">arXiv:2605.11581，2026 · L20、商业广告模型、DAG 搜索与吞吐数据</span><a href="https://arxiv.org/abs/2605.11581" target="_blank" rel="noreferrer">打开论文</a></li>
+        <li id="src-m6"><b>[M6] HazyResearch/Megakernels</b><span class="src-meta">公开研究代码与示例</span><a href="https://github.com/HazyResearch/Megakernels" target="_blank" rel="noreferrer">打开仓库</a></li>
+        <li id="src-m7"><b>[M7] SiFAR — Communication-aware optimization after Megakernel</b><span class="src-meta">arXiv:2607.08973，2026-07 · H200、TPOT 与 all-reduce 占比；较新预印本</span><a href="https://arxiv.org/html/2607.08973v1" target="_blank" rel="noreferrer">打开论文</a></li>
+      </ol>
+      <h3>NVIDIA Rubin / Vera Rubin Platform</h3>
+      <ol class="source-list">
+        <li id="src-r1"><b>[R1] NVIDIA Developer Blog — Inside NVIDIA Rubin GPU Architecture</b><span class="src-meta">2026-07-21 · 双芯粒、224 SM、896 Tensor Cores、HBM4、NVLink 6、TMA、counted writes</span><a href="https://developer.nvidia.com/blog/inside-nvidia-rubin-gpu-architecture-powering-the-era-of-agentic-ai/" target="_blank" rel="noreferrer">打开官方架构文</a></li>
+        <li id="src-r2"><b>[R2] NVIDIA — Vera Rubin NVL72</b><span class="src-meta">官方产品页 · 72 GPU/36 CPU、计算峰值、内存与机架互联规格；标注 preliminary/up to</span><a href="https://www.nvidia.com/en-us/data-center/vera-rubin-nvl72/" target="_blank" rel="noreferrer">打开官方规格</a></li>
+        <li id="src-r3"><b>[R3] NVIDIA — Vera CPU</b><span class="src-meta">88 Olympus cores、176 threads、1.5 TB LPDDR5X、C2C 与 SCF</span><a href="https://www.nvidia.com/en-us/data-center/vera-cpu/" target="_blank" rel="noreferrer">打开官方规格</a></li>
+        <li id="src-r4"><b>[R4] NVIDIA Developer Blog — Vera Rubin POD: Seven Chips, Five Rack-Scale Systems</b><span class="src-meta">2026-03-16 · 平台层级、NVL72 托盘构成、NVLink 域与出货节奏</span><a href="https://developer.nvidia.com/blog/nvidia-vera-rubin-pod-seven-chips-five-rack-scale-systems-one-ai-supercomputer/" target="_blank" rel="noreferrer">打开官方平台文</a></li>
+        <li id="src-r5"><b>[R5] NVIDIA Blog — Vera Rubin live hardware / CoreWeave & Google Cloud</b><span class="src-meta">2026-07-21 · DeepSeek-R1 tokens/MW 现场数据与合作伙伴系统状态</span><a href="https://blogs.nvidia.com/blog/vera-rubin/" target="_blank" rel="noreferrer">打开官方博客</a></li>
+        <li id="src-r6"><b>[R6] NVIDIA Newsroom — Vera Rubin ramping into full production</b><span class="src-meta">2026-05-31 · 生产状态、平台性能主张与供应链信息</span><a href="https://nvidianews.nvidia.com/news/vera-rubin-full-production-agentic-ai-factory" target="_blank" rel="noreferrer">打开新闻稿</a></li>
+        <li id="src-r7"><b>[R7] NVIDIA Developer Blog — Groq 3 LPX for Vera Rubin</b><span class="src-meta">2026-03-16 · 256 LPU、128 GB SRAM、40 PB/s、640 TB/s scale-up 与低延迟定位</span><a href="https://developer.nvidia.com/blog/inside-nvidia-groq-3-lpx-the-low-latency-inference-accelerator-for-the-nvidia-vera-rubin-platform/" target="_blank" rel="noreferrer">打开官方架构文</a></li>
+        <li id="src-r8"><b>[R8] NVIDIA Developer Blog — Rubin CPX</b><span class="src-meta">2025-09 · 30 PFLOPS NVFP4、128 GB GDDR7、NVL144 CPX 与百万 token 上下文</span><a href="https://developer.nvidia.com/blog/nvidia-rubin-cpx-accelerates-inference-performance-and-efficiency-for-1m-token-context-workloads/" target="_blank" rel="noreferrer">打开官方介绍</a></li>
+      </ol>
+      <h3>阅读注意</h3>
+      <p class="muted">NVIDIA 产品页中的部分 Rubin 数字明确标为初步值、估算或“最高”；研究论文也可能在后续版本修订。采购、容量规划或上线决策应以签约时的正式数据表、软件版本和本地复现实验为准。</p>
+    </section>
 
-    <p style="color: var(--ink-muted); font-size: 14px; margin-top: 24px;">NVIDIA 产品页中的部分 Rubin 数字明确标为初步值、估算或"最高"；研究论文也可能在后续版本修订。采购、容量规划或上线决策应以签约时的正式数据表、软件版本和本地复现实验为准。</p>
-  </div>
-</section>
+    <div class="footer">Megakernel × NVIDIA Rubin 技术全景 · 版本 1.0 · 资料截点 2026-07-23<br>本报告用于技术研究与架构评估，不构成采购承诺或厂商性能保证。</div>
+  </main>
+</div>
+<script>
+(() => {
+  const root = document.documentElement;
+  const themeBtn = document.getElementById('themeBtn');
+  const savedTheme = localStorage.getItem('mk-rubin-theme');
+  if (savedTheme) root.dataset.theme = savedTheme;
+  themeBtn.addEventListener('click', () => {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('mk-rubin-theme', root.dataset.theme);
+  });
+  document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('mobileToc').addEventListener('change', e => {
+    const target = document.querySelector(e.target.value);
+    if (target) target.scrollIntoView({behavior:'smooth'});
+  });
 
-<footer>
-  <div class="paper-layout">
-    <p>Megakernel × NVIDIA Rubin 技术全景 · 资料截点 <span class="accent">2026-07-23</span> · <a href="/">返回首页</a></p>
-    <p style="margin-top:8px;">本报告用于技术研究与架构评估，不构成采购承诺或厂商性能保证。</p>
-  </div>
-</footer>
+  const navLinks = [...document.querySelectorAll('#sideNav a')];
+  const sections = [...document.querySelectorAll('main section[id]')];
+  const observer = new IntersectionObserver(entries => {
+    const visible = entries.filter(x => x.isIntersecting).sort((a,b) => b.intersectionRatio-a.intersectionRatio)[0];
+    if (!visible) return;
+    navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + visible.target.id));
+  }, {rootMargin:'-16% 0px -68% 0px', threshold:[0,.1,.3]});
+  sections.forEach(s => observer.observe(s));
+
+  const tabButtons = [...document.querySelectorAll('.tab-btn')];
+  tabButtons.forEach(btn => btn.addEventListener('click', () => {
+    tabButtons.forEach(b => b.setAttribute('aria-selected', String(b === btn)));
+    document.querySelectorAll('.tab-panel').forEach(p => p.hidden = p.id !== btn.getAttribute('aria-controls'));
+  }));
+
+  const ids = ['bytesInput','platformSelect','effInput','kernelsInput','gapInput','residualInput'];
+  const els = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
+  const fmtUs = us => us >= 1000 ? (us/1000).toFixed(2) + ' ms' : us.toFixed(us < 100 ? 1 : 0) + ' μs';
+  function updateEstimator() {
+    const gb = Math.max(.001, Number(els.bytesInput.value) || 0);
+    const tbps = Math.max(.001, Number(els.platformSelect.value) || 0);
+    const eff = Math.min(1, Math.max(.01, (Number(els.effInput.value)||1)/100));
+    const kernels = Math.max(1, Number(els.kernelsInput.value)||1);
+    const gap = Math.max(0, Number(els.gapInput.value)||0);
+    const residual = Math.max(1, Number(els.residualInput.value)||1);
+    const memUs = gb / (tbps * eff) * 1000;
+    const launchUs = Math.max(0, kernels - 1) * gap;
+    const residualUs = Math.max(0, residual - 1) * gap;
+    const share = (memUs + launchUs) > 0 ? launchUs/(memUs+launchUs)*100 : 0;
+    document.getElementById('memTime').textContent = fmtUs(memUs);
+    document.getElementById('launchTime').textContent = fmtUs(launchUs);
+    document.getElementById('residualTime').textContent = fmtUs(residualUs);
+    document.getElementById('shareTime').textContent = share.toFixed(1) + '%';
+    document.getElementById('estimatorNote').textContent = `在这一极简模型中，有效带宽为 ${(tbps*eff).toFixed(2)} TB/s。真实时延至少还要加入计算、KV、通信、同步和框架调度。`;
+  }
+  ids.forEach(id => els[id].addEventListener('input', updateEstimator));
+  updateEstimator();
+})();
+</script>
 
 </body>
 </html>
