@@ -25,7 +25,7 @@ TMA（[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）和 Tensor Core（[T
 
 <div style="overflow-x:auto;">
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/mbarrier_mechanism.html" title="mbarrier data structure and APIs" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/mbarrier_mechanism.html?notitle" title="mbarrier data structure and APIs" loading="lazy"
         style="width:1320px; max-width:none; height:620px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 </div>
@@ -56,7 +56,7 @@ TMA（[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）和 Tensor Core（[T
 
 <div style="overflow-x:auto;">
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/phase_tracking.html" title="mbarrier phase tracking" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/phase_tracking.html?notitle" title="mbarrier phase tracking" loading="lazy"
         style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 </div>
@@ -87,7 +87,7 @@ TMA（[TMA](/books/modern-gpu-programming-for-mlsys/tma/)）和 Tensor Core（[T
 
 <div style="overflow-x:auto;">
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/mbarrier_tma_timeline.html" title="mbarrier signalling TMA completion" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/mbarrier_tma_timeline.html?notitle" title="mbarrier signalling TMA completion" loading="lazy"
         style="width:1320px; max-width:none; height:700px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 </div>

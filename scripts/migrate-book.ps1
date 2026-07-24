@@ -74,6 +74,10 @@ function Convert-BookMarkdown {
     $Rest = $Match.Groups[2].Value
     return 'style="width:' + $Width + '; max-width:none; ' + $Rest + '"'
   })
+  $Text = [regex]::Replace($Text, '(<iframe\b[^>]*\bsrc="[^"?]+\.html)(")', {
+    param($Match)
+    return $Match.Groups[1].Value + '?notitle' + $Match.Groups[2].Value
+  })
   $Text = [regex]::Replace($Text, '(?s)(<iframe\b(?=.*?style="width:\d+px; max-width:none;).*?</iframe>)', {
     param($Match)
     return '<div style="overflow-x:auto;">' + "`n" + $Match.Groups[1].Value + "`n" + '</div>'

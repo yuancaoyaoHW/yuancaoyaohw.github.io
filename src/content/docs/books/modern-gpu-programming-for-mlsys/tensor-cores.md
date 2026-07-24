@@ -22,7 +22,7 @@ Blackwell 对最后一项做出了重大改变。`tcgen05` 的累加器不再作
 
 <div style="overflow-x:auto;">
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/tcgen05_intro.html" title="tcgen05 and Tensor Memory" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/tcgen05_intro.html?notitle" title="tcgen05 and Tensor Memory" loading="lazy"
         style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 </div>

@@ -17,7 +17,7 @@ sidebar:
 
 <div style="overflow-x:auto;">
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/sm_architecture.html" title="Blackwell SM architecture" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/sm_architecture.html?notitle" title="Blackwell SM architecture" loading="lazy"
         style="width:1320px; max-width:none; height:680px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 </div>
@@ -29,7 +29,7 @@ sidebar:
 我们从执行工作的线程讲起。GPU 并不会把它成千上万的线程呈现为一个扁平的池子。相反，它把它们组织成一个嵌套层级，之所以如此是因为协作会在多个不同尺度上同时发生。每一级的存在都是为了在某一个尺度上让协作变得廉价。下图展示了 Blackwell 上的层级；你可以点击每一级来高亮它。
 
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/thread_hierarchy.html" title="Blackwell thread hierarchy" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/thread_hierarchy.html?notitle" title="Blackwell thread hierarchy" loading="lazy"
         style="width:900px; max-width:none; height:520px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
@@ -68,7 +68,7 @@ DSMEM 让一个 CTA 可以直接寻址并访问对端 CTA 的共享内存。一�
 
 <div style="overflow-x:auto;">
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/cta_cluster.html" title="A 2-CTA cluster sharing distributed shared memory" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/cta_cluster.html?notitle" title="A 2-CTA cluster sharing distributed shared memory" loading="lazy"
         style="width:720px; max-width:none; height:580px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 </div>
@@ -92,7 +92,7 @@ DSMEM 让一个 CTA 可以直接寻址并访问对端 CTA 的共享内存。一�
 
 <div style="overflow-x:auto;">
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/pipeline_arch.html" title="Blackwell GEMM data pipeline" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/pipeline_arch.html?notitle" title="Blackwell GEMM data pipeline" loading="lazy"
         style="width:1320px; max-width:none; height:680px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 </div>

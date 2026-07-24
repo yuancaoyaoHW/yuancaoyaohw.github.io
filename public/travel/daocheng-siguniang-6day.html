@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>稻四环线6天自驾路书 · 经典川西大环线（懒人舒适版）</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg: #0B1622;
+  --bg-card: #142536;
+  --bg-warm: #1a2f3f;
+  --accent: #D44521;
+  --accent-light: #E8632E;
+  --plateau-blue: #1B4B7A;
+  --snow-white: #E8EEF2;
+  --plateau-green: #4A7C59;
+  --gold: #C9A84C;
+  --text-primary: #E8EEF2;
+  --text-secondary: #8B9DAF;
+  --text-muted: #5a6c7e;
+  --shadow: 0 4px 20px rgba(0,0,0,0.3);
+  --radius: 14px;
+  --danger: #E53935;
+  --warning: #F9A825;
+  --success: #43A047;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+.container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+
+.hero {
+  position: relative;
+  min-height: 520px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0B1622 0%, #1B4B7A 40%, #0B1622 100%);
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url('https://commons.wikimedia.org/wiki/Special:FilePath/%E7%A8%BB%E5%9F%8E%E4%BA%9A%E4%B8%81%E7%89%9B%E5%A5%B6%E6%B5%B7.jpg?width=1600') center/cover no-repeat;
+  opacity: 0.15;
+}
+.hero-content { position: relative; z-index: 2; padding: 40px 20px; }
+.hero h1 { font-size: 2.6em; font-weight: 800; margin-bottom: 12px; letter-spacing: 2px; }
+.hero .subtitle { font-size: 1.15em; color: var(--text-secondary); margin-bottom: 30px; }
+.hero-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; }
+.hero-stat {
+  background: rgba(20,37,54,0.7);
+  border: 1px solid rgba(212,69,33,0.3);
+  border-radius: 12px;
+  padding: 12px 24px;
+  backdrop-filter: blur(8px);
+}
+.hero-stat .num { font-size: 1.8em; font-weight: 800; color: var(--accent-light); }
+.hero-stat .label { font-size: 0.85em; color: var(--text-secondary); }
+
+section { padding: 60px 0; }
+.section-title {
+  font-size: 1.8em;
+  font-weight: 700;
+  margin-bottom: 30px;
+  padding-left: 16px;
+  border-left: 4px solid var(--accent);
+}
+.section-title small { font-size: 0.5em; color: var(--text-secondary); font-weight: 400; margin-left: 8px; }
+
+.timeline-overview {
+  display: flex;
+  overflow-x: auto;
+  gap: 0;
+  padding: 30px 0;
+  position: relative;
+}
+.timeline-overview::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--plateau-blue), var(--gold), var(--accent-light), var(--plateau-green), #5B9BD5);
+  z-index: 0;
+}
+.timeline-day-card {
+  flex: 0 0 160px;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+  transition: transform 0.3s;
+}
+.timeline-day-card:hover { transform: translateY(-4px); }
+.timeline-dot {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  margin: 0 auto 8px;
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 0 2px currentColor;
+}
+.d1 .timeline-dot { color: var(--accent); background: var(--accent); }
+.d2 .timeline-dot { color: var(--plateau-blue); background: var(--plateau-blue); }
+.d3 .timeline-dot { color: var(--gold); background: var(--gold); }
+.d4 .timeline-dot { color: var(--accent-light); background: var(--accent-light); }
+.d5 .timeline-dot { color: var(--plateau-green); background: var(--plateau-green); }
+.d6 .timeline-dot { color: #5B9BD5; background: #5B9BD5; }
+.timeline-date { font-size: 0.8em; color: var(--text-muted); }
+.timeline-city { font-size: 0.9em; font-weight: 600; margin-top: 4px; }
+.timeline-km { font-size: 0.75em; color: var(--text-secondary); margin-top: 2px; }
+
+#map-container { height: 560px; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); border: 1px solid rgba(255,255,255,0.1); }
+
+.day-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.day-tab {
+  padding: 10px 20px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.95em;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: all 0.3s;
+}
+.day-tab:hover { border-color: var(--accent); color: var(--text-primary); }
+.day-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.risk-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 6px; }
+.risk-dot.red { background: var(--danger); }
+.risk-dot.yellow { background: var(--warning); }
+.risk-dot.green { background: var(--success); }
+
+.day-content { display: none; }
+.day-content.active { display: block; }
+.day-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.day-card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 28px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.day-badge { font-size: 2em; font-weight: 800; color: var(--accent); flex-shrink: 0; }
+.day-info h3 { font-size: 1.3em; font-weight: 700; }
+.day-info .meta { font-size: 0.85em; color: var(--text-secondary); margin-top: 4px; }
+.day-card-body { padding: 28px; }
+.day-card-body h4 { font-size: 1.05em; font-weight: 600; color: var(--accent-light); margin: 20px 0 10px; }
+.day-card-body h4:first-child { margin-top: 0; }
+.day-card-body p { margin-bottom: 12px; }
+.day-card-body ul { list-style: none; padding: 0; }
+.day-card-body li { padding: 4px 0; padding-left: 20px; position: relative; }
+.day-card-body li::before { content: '▸'; position: absolute; left: 0; color: var(--accent); }
+
+.day-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+.day-img { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); }
+.day-img-caption { font-size: 0.75em; color: var(--text-muted); text-align: center; margin-top: 4px; }
+
+.risk-box { border-radius: 10px; padding: 16px 20px; margin: 16px 0; font-size: 0.9em; }
+.risk-box.red { background: rgba(229,57,53,0.1); border-left: 4px solid var(--danger); }
+.risk-box.yellow { background: rgba(249,168,37,0.1); border-left: 4px solid var(--warning); }
+.risk-box.green { background: rgba(67,160,71,0.1); border-left: 4px solid var(--success); }
+.risk-box strong { display: block; margin-bottom: 4px; }
+
+.altitude-profile { display: flex; align-items: flex-end; gap: 4px; height: 80px; margin: 16px 0; padding: 12px; background: var(--bg-warm); border-radius: 8px; }
+.alt-bar { flex: 1; background: linear-gradient(180deg, var(--accent-light), var(--plateau-blue)); border-radius: 3px 3px 0 0; position: relative; min-height: 4px; }
+.alt-label { font-size: 0.6em; color: var(--text-secondary); text-align: center; position: absolute; bottom: -16px; left: 0; right: 0; white-space: nowrap; }
+
+.budget-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.budget-table th, .budget-table td { padding: 14px 20px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.budget-table th { background: var(--bg-warm); font-weight: 600; color: var(--text-secondary); font-size: 0.9em; }
+.budget-table td { font-size: 0.95em; }
+.budget-table .total-row { background: var(--bg-warm); font-weight: 700; }
+.budget-table .total-row td { color: var(--accent-light); font-size: 1.1em; }
+
+.food-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.food-card { background: var(--bg-card); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.06); transition: transform 0.3s; }
+.food-card:hover { transform: translateY(-3px); }
+.food-card h4 { color: var(--accent-light); font-size: 1.1em; margin-bottom: 8px; }
+.food-card .city-tag { display: inline-block; background: var(--plateau-blue); color: #fff; padding: 2px 10px; border-radius: 20px; font-size: 0.75em; margin-bottom: 8px; }
+.food-card ul { list-style: none; padding: 0; }
+.food-card li { padding: 3px 0; font-size: 0.9em; }
+
+.checklist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.checklist-card { background: var(--bg-card); border-radius: 12px; padding: 24px; border: 1px solid rgba(255,255,255,0.06); }
+.checklist-card h4 { color: var(--accent-light); margin-bottom: 12px; font-size: 1.05em; }
+.checklist-card ul { list-style: none; padding: 0; }
+.checklist-card li { padding: 6px 0; padding-left: 24px; position: relative; font-size: 0.9em; }
+.checklist-card li::before { content: '☐'; position: absolute; left: 0; color: var(--accent); font-size: 1.2em; }
+
+.risk-panel { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.risk-col { border-radius: 12px; overflow: hidden; }
+.risk-col-header { padding: 12px 20px; font-weight: 700; text-align: center; }
+.risk-col.red .risk-col-header { background: rgba(229,57,53,0.2); color: var(--danger); }
+.risk-col.yellow .risk-col-header { background: rgba(249,168,37,0.2); color: var(--warning); }
+.risk-col.green .risk-col-header { background: rgba(67,160,71,0.2); color: var(--success); }
+.risk-col-body { background: var(--bg-card); padding: 20px; }
+.risk-col-body ul { list-style: none; padding: 0; }
+.risk-col-body li { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.88em; }
+.risk-col-body li:last-child { border-bottom: none; }
+
+/* Gas station cards */
+.gas-stations { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 14px 0; }
+.gas-card { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 8px; font-size: 0.88em; }
+.gas-card.must-fill { background: rgba(229,57,53,0.12); border-left: 4px solid var(--danger); }
+.gas-card.suggest-fill { background: rgba(249,168,37,0.12); border-left: 4px solid var(--warning); }
+.gas-card .gas-label { font-weight: 700; flex-shrink: 0; min-width: 70px; }
+.gas-card.must-fill .gas-label { color: var(--danger); }
+.gas-card.suggest-fill .gas-label { color: var(--warning); }
+.gas-card .gas-name { color: var(--text-primary); }
+.gas-card .gas-hint { font-size: 0.85em; color: var(--text-muted); margin-left: auto; }
+
+/* Copyable route book */
+.route-book { background: var(--bg-warm); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 16px 20px; margin: 14px 0; }
+.route-book-title { font-size: 0.85em; font-weight: 600; color: var(--accent-light); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.route-book-list { font-family: "SF Mono", "Fira Code", "JetBrains Mono", "Cascadia Code", Consolas, monospace; font-size: 0.82em; line-height: 1.9; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; }
+.route-book-list .stop-num { color: var(--accent-light); font-weight: 700; }
+.copy-btn {
+  margin-top: 10px;
+  padding: 5px 14px;
+  font-size: 0.8em;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent-light);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.copy-btn:hover { background: var(--accent); color: #fff; }
+.copy-btn.copied { background: var(--success); border-color: var(--success); color: #fff; }
+
+/* Memo board */
+.memo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.memo-card { background: var(--bg-card); border-radius: 12px; padding: 20px 24px; border-left: 4px solid var(--accent); }
+.memo-card .memo-num { font-size: 1.4em; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+.memo-card .memo-text { font-size: 0.92em; color: var(--text-secondary); line-height: 1.6; }
+
+.leaflet-container { background: #1a2f3f !important; }
+.route-label, .city-label { background: transparent !important; border: none !important; }
+.leaflet-popup-content-wrapper { background: var(--bg-card) !important; color: var(--text-primary) !important; }
+.leaflet-popup-tip { background: var(--bg-card) !important; }
+
+@media (max-width: 768px) {
+  .hero h1 { font-size: 1.8em; }
+  .risk-panel { grid-template-columns: 1fr; }
+  .day-images { grid-template-columns: 1fr 1fr; }
+  .timeline-day-card { flex: 0 0 120px; }
+}
+
+/* === Light Theme (default) === */
+html[data-theme="light"] {
+  --bg: #F5F0E8;
+  --bg-card: #FFFFFF;
+  --bg-warm: #EDE8DF;
+  --accent: #C4421A;
+  --accent-light: #D44521;
+  --plateau-blue: #1B4B7A;
+  --snow-white: #2C3E50;
+  --plateau-green: #3D6B4E;
+  --gold: #B8941F;
+  --text-primary: #1A2A3A;
+  --text-secondary: #5A6A7A;
+  --text-muted: #8A9AAA;
+  --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  --danger: #D32F2F;
+  --warning: #F57C00;
+  --success: #388E3C;
+}
+html[data-theme="light"] .hero {
+  background: linear-gradient(135deg, #E8D5C0 0%, #B8956A 40%, #E8D5C0 100%);
+}
+html[data-theme="light"] .hero::before { opacity: 0.25; }
+html[data-theme="light"] .hero h1 { color: #1A2A3A; text-shadow: 0 1px 4px rgba(255,255,255,0.5); }
+html[data-theme="light"] .hero .subtitle { color: #4A3A2A; }
+html[data-theme="light"] .hero-stat { background: rgba(255,255,255,0.85); border-color: rgba(196,66,26,0.2); }
+html[data-theme="light"] .hero-stat .num { color: var(--accent); }
+html[data-theme="light"] .hero-stat .label { color: var(--text-secondary); }
+html[data-theme="light"] .leaflet-container { background: #E8E8E8 !important; }
+html[data-theme="light"] .leaflet-popup-content-wrapper { background: #FFFFFF !important; color: #1A2A3A !important; }
+html[data-theme="light"] .leaflet-popup-tip { background: #FFFFFF !important; }
+html[data-theme="light"] .day-card,
+html[data-theme="light"] .day-tab,
+html[data-theme="light"] .food-card,
+html[data-theme="light"] .checklist-card,
+html[data-theme="light"] .day-img,
+html[data-theme="light"] #map-container,
+html[data-theme="light"] .route-book,
+html[data-theme="light"] .memo-card { border-color: rgba(0,0,0,0.08) !important; }
+html[data-theme="light"] table th,
+html[data-theme="light"] table td,
+html[data-theme="light"] .risk-col-body li { border-bottom-color: rgba(0,0,0,0.08) !important; }
+
+/* Theme Toggle Button */
+.theme-toggle {
+  position: fixed;
+  top: 20px; right: 20px;
+  z-index: 10000;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow);
+  transition: transform 0.3s, background 0.3s;
+}
+.theme-toggle:hover { transform: scale(1.1); }
+.theme-toggle .icon-sun { display: none; }
+.theme-toggle .icon-moon { display: inline; }
+html[data-theme="dark"] .theme-toggle .icon-sun { display: inline; }
+html[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+html[data-theme="light"] .theme-toggle { border-color: rgba(0,0,0,0.1); }
+</style>
+<script>(function(){var t=localStorage.getItem("travel-theme")||"light";document.documentElement.dataset.theme=t;})();</script>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题"><span class="icon-sun">☀️</span><span class="icon-moon">🌙</span></button>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-content">
+    <h1>🏔️ 稻四环线 · 6天自驾路书</h1>
+    <p class="subtitle">成都 → 折多山格底拉姆 → 新都桥 → 理塘 → 稻城亚丁 → 塔公墨石公园 → 丹巴 → 四姑娘山 → 成都</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">6</div><div class="label">天</div></div>
+      <div class="hero-stat"><div class="num">~1300</div><div class="label">公里</div></div>
+      <div class="hero-stat"><div class="num">4718</div><div class="label">最高海拔(m)</div></div>
+      <div class="hero-stat"><div class="num">哈弗大狗</div><div class="label">铺装为主</div></div>
+      <div class="hero-stat"><div class="num">8.1</div><div class="label">周六出发</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TIMELINE OVERVIEW -->
+<section class="container">
+  <h2 class="section-title">行程总览 <small>8月1日(周六) — 8月6日(周四) · 6天闭环</small></h2>
+  <div class="timeline-overview">
+    <div class="timeline-day-card d1" onclick="switchDay(1)"><div class="timeline-dot"></div><div class="timeline-date">8.1 周六</div><div class="timeline-city">成都→新都桥</div><div class="timeline-km">~350km</div></div>
+    <div class="timeline-day-card d2" onclick="switchDay(2)"><div class="timeline-dot"></div><div class="timeline-date">8.2 周日</div><div class="timeline-city">→亚丁镇</div><div class="timeline-km">~420km</div></div>
+    <div class="timeline-day-card d3" onclick="switchDay(3)"><div class="timeline-dot"></div><div class="timeline-date">8.3 周一</div><div class="timeline-city">亚丁舒适线</div><div class="timeline-km">景区内</div></div>
+    <div class="timeline-day-card d4" onclick="switchDay(4)"><div class="timeline-dot"></div><div class="timeline-date">8.4 周二</div><div class="timeline-city">→新都桥</div><div class="timeline-km">~370km</div></div>
+    <div class="timeline-day-card d5" onclick="switchDay(5)"><div class="timeline-dot"></div><div class="timeline-date">8.5 周三</div><div class="timeline-city">→丹巴</div><div class="timeline-km">~180km</div></div>
+    <div class="timeline-day-card d6" onclick="switchDay(6)"><div class="timeline-dot"></div><div class="timeline-date">8.6 周四</div><div class="timeline-city">→成都</div><div class="timeline-km">~320km</div></div>
+  </div>
+</section>
+
+<!-- WEATHER FORECAST (DYNAMIC) -->
+<section class="container">
+  <h2 class="section-title">沿途天气预报 <small id="weather-subtitle">动态拉取中 · Open-Meteo</small></h2>
+  <div id="weather-loading" style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+    <div style="font-size: 2em; margin-bottom: 12px;">🌤️</div>
+    <p>正在从 Open-Meteo 拉取实时预报...</p>
+  </div>
+  <div id="weather-container"></div>
+  <p id="weather-footer" style="margin-top: 12px; color: var(--text-muted); font-size: 0.8em; display: none;">数据来源:Open-Meteo · 每次打开页面自动刷新最新预报。温度为气温,高海拔体感温度更低(海拔每升高1000m降温约6℃)。</p>
+</section>
+
+<script>
+// === Dynamic Weather Forecast ===
+(function() {
+  var CITIES = [
+    { name: "成都", lat: 30.5728, lon: 104.0668 },
+    { name: "康定", lat: 30.0486, lon: 101.9625 },
+    { name: "新都桥", lat: 30.0500, lon: 101.4833 },
+    { name: "雅江", lat: 29.9961, lon: 101.4800 },
+    { name: "理塘", lat: 30.0031, lon: 100.2700 },
+    { name: "亚丁镇", lat: 28.4400, lon: 100.3500 },
+    { name: "塔公", lat: 30.0556, lon: 101.7250 },
+    { name: "丹巴", lat: 30.8787, lon: 101.8900 },
+    { name: "四姑娘山", lat: 31.1500, lon: 102.9000 }
+  ];
+
+  var DATES = ["8.1\nD1", "8.2\nD2", "8.3\nD3", "8.4\nD4", "8.5\nD5", "8.6\nD6"];
+  var WEEKDAYS = ["周六", "周日", "周一", "周二", "周三", "周四"];
+
+  var WMO = {
+    0: ["晴", "☀️"], 1: ["大部晴", "🌤️"], 2: ["多云", "⛅"], 3: ["阴", "☁️"],
+    45: ["雾", "🌫️"], 48: ["雾凇", "🌫️"],
+    51: ["毛毛雨", "🌦️"], 53: ["小雨", "🌦️"], 55: ["中雨", "🌧️"],
+    56: ["冻雨", "🌧️"], 57: ["冻雨", "🌧️"],
+    61: ["小雨", "🌦️"], 63: ["中雨", "🌧️"], 65: ["大雨", "🌧️"],
+    66: ["冻雨", "🌧️"], 67: ["冻雨", "🌧️"],
+    71: ["小雪", "🌨️"], 73: ["中雪", "🌨️"], 75: ["大雪", "❄️"], 77: ["雪粒", "🌨️"],
+    80: ["阵雨", "🌦️"], 81: ["中阵雨", "🌧️"], 82: ["大阵雨", "🌧️"],
+    85: ["阵雪", "🌨️"], 86: ["阵雪", "❄️"],
+    95: ["雷暴", "⛈️"], 96: ["雷暴冰雹", "⛈️"], 99: ["雷暴冰雹", "⛈️"]
+  };
+
+  function precipColor(mm) {
+    if (mm === 0) return "var(--text-muted)";
+    if (mm < 2) return "#5B9BD5";
+    if (mm < 10) return "#4A7C9E";
+    if (mm < 25) return "#2E5A8C";
+    return "#1A3A5C";
+  }
+
+  function isStorm(code) { return code >= 95; }
+  function isRain(code) { return (code >= 51 && code <= 67) || (code >= 80 && code <= 82); }
+
+  function fetchWeather() {
+    var promises = CITIES.map(function(city) {
+      var url = "https://api.open-meteo.com/v1/forecast?"
+        + "latitude=" + city.lat + "&longitude=" + city.lon
+        + "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,wind_speed_10m_max"
+        + "&timezone=Asia/Shanghai"
+        + "&start_date=2026-08-01&end_date=2026-08-06";
+      return fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+        var d = data.daily || {};
+        var days = [];
+        for (var i = 0; i < 6; i++) {
+          var code = (d.weathercode || [])[i] || 0;
+          var wmo = WMO[code] || ["未知", "❓"];
+          days.push({
+            date: (d.time || [])[i],
+            tmax: (d.temperature_2m_max || [])[i],
+            tmin: (d.temperature_2m_min || [])[i],
+            precip: (d.precipitation_sum || [])[i] || 0,
+            code: code,
+            text: wmo[0],
+            emoji: wmo[1],
+            wind: (d.wind_speed_10m_max || [])[i] || 0
+          });
+        }
+        return { city: city.name, days: days };
+      });
+    });
+
+    Promise.all(promises).then(renderWeather).catch(function(err) {
+      document.getElementById("weather-loading").innerHTML =
+        '<div style="font-size:2em;margin-bottom:12px;">⚠️</div>' +
+        '<p>天气数据获取失败: ' + (err.message || err) + '</p>' +
+        '<p style="font-size:0.85em;color:var(--text-muted);margin-top:8px;">可能是网络问题或API限流,请稍后刷新重试。</p>';
+    });
+  }
+
+  function renderWeather(results) {
+    var loading = document.getElementById("weather-loading");
+    if (loading) loading.style.display = "none";
+    document.getElementById("weather-footer").style.display = "block";
+
+    var now = new Date();
+    var ts = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0")
+      + " " + String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
+    document.getElementById("weather-subtitle").textContent = "最后更新 " + ts + " · 每次打开自动刷新";
+
+    var html = '<div style="overflow-x: auto; border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid rgba(255,255,255,0.06);">';
+    html += '<table style="width: 100%; border-collapse: collapse; background: var(--bg-card); min-width: 700px;">';
+    html += '<thead><tr style="background: var(--bg-warm);">';
+    html += '<th style="padding: 12px 14px; text-align: left; font-size: 0.85em; color: var(--text-secondary); font-weight: 600; border-bottom: 2px solid rgba(255,255,255,0.08);">城市 / 日期</th>';
+    for (var i = 0; i < 6; i++) {
+      var parts = DATES[i].split("\n");
+      html += '<th style="padding: 10px 8px; text-align: center; font-size: 0.8em; color: var(--text-secondary); font-weight: 600; border-bottom: 2px solid rgba(255,255,255,0.08); white-space: pre-line;">' + parts[1] + '<br><span style="font-weight:400;">' + parts[0] + " " + WEEKDAYS[i] + '</span></th>';
+    }
+    html += '</tr></thead><tbody>';
+
+    results.forEach(function(r) {
+      html += '<tr><td style="padding: 12px 14px; font-size: 0.9em; font-weight: 600; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.04);">' + r.city + '</td>';
+      for (var i = 0; i < 6; i++) {
+        var d = r.days[i];
+        var pcolor = precipColor(d.precip);
+        var precipStr = d.precip > 0 ? '🌧 ' + (Math.round(d.precip * 10) / 10) + 'mm' : '—';
+        html += '<td style="padding: 10px 6px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.04);">';
+        html += '<div style="font-size: 1.8em; line-height: 1.2;">' + d.emoji + '</div>';
+        html += '<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">' + d.text + '</div>';
+        html += '<div style="font-size: 0.8em; margin-top: 4px;"><span style="color: var(--accent-light); font-weight: 600;">' + Math.round(d.tmax) + '°</span> / <span style="color: var(--text-muted);">' + Math.round(d.tmin) + '°</span></div>';
+        html += '<div style="font-size: 0.7em; color: ' + pcolor + '; margin-top: 2px;">' + precipStr + '</div>';
+        html += '</td>';
+      }
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+
+    var warnings = generateWarnings(results);
+    html += '<div style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">';
+    warnings.forEach(function(w) {
+      html += '<div class="risk-box ' + w.level + '" style="margin: 0;"><strong>' + w.title + '</strong>' + w.text + '</div>';
+    });
+    html += '</div>';
+
+    document.getElementById("weather-container").innerHTML = html;
+  }
+
+  function generateWarnings(results) {
+    var warnings = [];
+
+    var d1Cities = ["成都", "康定", "新都桥"];
+    var d1Storms = [];
+    d1Cities.forEach(function(name) {
+      var r = results.find(function(x) { return x.city === name; });
+      if (r && isStorm(r.days[0].code)) d1Storms.push(name);
+    });
+    if (d1Storms.length > 0) {
+      warnings.push({
+        level: "yellow",
+        title: "🟡 D1(8.1)出发日雷暴预警",
+        text: d1Storms.join("、") + " 预报雷暴(⛈️)。翻折多山可能遇雷雨,能见度骤降。<strong>建议午后2点前翻过折多山</strong>,避开午后雷雨高发期。"
+      });
+    }
+
+    // D3: 亚丁景区舒适线 — 雨天影响大幅降低(观光车+平缓栈道)
+    var yd = results.find(function(x) { return x.city === "亚丁镇"; });
+    if (yd) {
+      var d3 = yd.days[2];
+      if (isStorm(d3.code) || d3.precip > 10) {
+        warnings.push({
+          level: "yellow",
+          title: "🟡 D3(8.3)亚丁景区有雨",
+          text: "亚丁镇预报" + d3.text + "(" + d3.emoji + "),降水" + (Math.round(d3.precip*10)/10) + "mm。本路线走舒适线(洛绒牛场+珍珠海),观光车+平缓栈道,雨天影响较小。<strong>穿冲锋衣+防滑鞋即可</strong>。仅雷暴时短暂避雨。"
+        });
+      }
+    }
+
+    // D4: 返程翻山
+    var litang = results.find(function(x) { return x.city === "理塘"; });
+    if (litang) {
+      var d4 = litang.days[3];
+      if (isRain(d4.code) || d4.precip > 8) {
+        warnings.push({
+          level: "yellow",
+          title: "🟡 D4(8.4)返程翻山有雨",
+          text: "理塘预报" + d4.text + "(" + d4.emoji + ")。翻兔儿山(4696m)、海子山(4500m)遇雨路滑。<strong>减速慢行,保持车距</strong>。"
+        });
+      }
+    }
+
+    // Trend check D4-D6 vs D1-D3
+    var lateCities = ["塔公", "丹巴", "四姑娘山", "成都"];
+    var d1to3Total = 0, d4to6Total = 0;
+    var earlyCities = ["康定", "新都桥", "理塘", "亚丁镇"];
+    earlyCities.forEach(function(name) {
+      var r = results.find(function(x) { return x.city === name; });
+      if (r) { for (var i = 0; i < 3; i++) d1to3Total += r.days[i].precip; }
+    });
+    lateCities.forEach(function(name) {
+      var r = results.find(function(x) { return x.city === name; });
+      if (r) { for (var i = 3; i < 6; i++) d4to6Total += r.days[i].precip; }
+    });
+    if (d4to6Total < d1to3Total * 0.7) {
+      warnings.push({
+        level: "green",
+        title: "🟢 D4-D6 天气转好趋势",
+        text: "塔公→丹巴→四姑娘山→成都沿途降水较前三天减弱,D4-D6适合自驾+观光。"
+      });
+    } else {
+      warnings.push({
+        level: "yellow",
+        title: "🟡 全程雨季持续",
+        text: "D4-D6降水未明显减弱,全程注意雨季路况。折多山/兔儿山/海子山易起雾塌方,预留弹性时间。"
+      });
+    }
+
+    return warnings;
+  }
+
+  fetchWeather();
+})();
+</script>
+
+<!-- MAP -->
+<section class="container">
+  <h2 class="section-title">路线地图 <small>Leaflet + 高德地图</small></h2>
+  <div id="map-container"></div>
+</section>
+
+<!-- KEY MEMO BOARD -->
+<section class="container">
+  <h2 class="section-title">⚠️ 出行关键备忘 <small>务必保存</small></h2>
+  <div class="memo-grid">
+    <div class="memo-card">
+      <div class="memo-num">01</div>
+      <div class="memo-text"><strong>理塘中石油是整条线路最核心补给点</strong>,进出稻城前后务必补满油箱。稻城方向加油站稀少,缺油将导致被困高海拔。</div>
+    </div>
+    <div class="memo-card">
+      <div class="memo-num">02</div>
+      <div class="memo-text"><strong>高原前两晚抵达住宿后不要立刻洗澡</strong>,放缓行动速度。常备葡萄糖、布洛芬。高反头痛时服用布洛芬缓解,严重时立即下撤。</div>
+    </div>
+    <div class="memo-card">
+      <div class="memo-num">03</div>
+      <div class="memo-text"><strong>四姑娘山双桥沟:门票80元+观光车70元</strong>,全程坐车游览,体力消耗极低。老少皆宜,无需徒步爬山。提前在"四姑娘山"公众号购票。</div>
+    </div>
+    <div class="memo-card">
+      <div class="memo-num">04</div>
+      <div class="memo-text"><strong>山区弯道较多,雨雪天气减速慢行</strong>。禁止碾压沿线草原草场避免罚款。8月雨季折多山/兔儿山/海子山易起雾,能见度骤降,预留弹性时间。</div>
+    </div>
+    <div class="memo-card">
+      <div class="memo-num">05</div>
+      <div class="memo-text"><strong>该环线不走回头路</strong>,稻城+四姑娘山两大核心景点全部覆盖,行车节奏宽松不赶路。成都取车成都还,无异地还车费,比成都→昆明线省500-1500元。</div>
+    </div>
+  </div>
+</section>
+
+<!-- DAILY DETAIL TABS -->
+<section class="container">
+  <h2 class="section-title">每日详情 <small>含风险评估 + 高德一键复制路书</small></h2>
+  <div class="day-tabs" id="day-tabs">
+    <div class="day-tab active" onclick="switchDay(1)">D1 8.1 周六<span class="risk-dot yellow"></span></div>
+    <div class="day-tab" onclick="switchDay(2)">D2 8.2 周日<span class="risk-dot red"></span></div>
+    <div class="day-tab" onclick="switchDay(3)">D3 8.3 周一<span class="risk-dot yellow"></span></div>
+    <div class="day-tab" onclick="switchDay(4)">D4 8.4 周二<span class="risk-dot yellow"></span></div>
+    <div class="day-tab" onclick="switchDay(5)">D5 8.5 周三<span class="risk-dot green"></span></div>
+    <div class="day-tab" onclick="switchDay(6)">D6 8.6 周四<span class="risk-dot green"></span></div>
+  </div>
+
+  <!-- D1 -->
+  <div class="day-content active" id="day-1">
+    <div class="day-card">
+      <div class="day-card-header">
+        <div class="day-badge">D1</div>
+        <div class="day-info">
+          <h3>成都 → 雅安 → 康定 → 折多山 → 格底拉姆 → 新都桥</h3>
+          <div class="meta">8月1日(周六) · 8:00出发 · 约350km/6-7h · 住宿海拔3300m · 汉庭酒店(康定新都桥店)</div>
+        </div>
+      </div>
+      <div class="day-card-body">
+        <h4>📋 行程安排</h4>
+        <p>早8点从成都出发,经<strong>雅安</strong>(可在此吃午饭),上雅康高速直达康定。午后翻越<strong>折多山垭口(4298m)</strong>——川藏线第一座高山,垭口有白塔和经幡。翻山后前往网红打卡点<strong>格底拉姆</strong>(天空之城,海拔约4200m),正对贡嘎雪山+秋千/路牌/帐篷等打卡道具。傍晚抵达<strong>新都桥</strong>入住<strong>汉庭酒店(康定新都桥店)</strong>,适应海拔。</p>
+        <p><strong>格底拉姆</strong>是近年小红书爆款打卡地,需买门票(约30元),含天空之镜、旋转木马、路牌等道具,正对贡嘎雪山。建议下午3-4点到,光线最佳。</p>
+
+        <div class="day-images">
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Chengdu%20Sichuan%20China%20Du-Fu-Thatched-Cottage-Park-02.jpg?width=600" alt="成都" loading="lazy"><div class="day-img-caption">成都·出发</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/%E5%BA%B7%E5%AE%9A%E6%83%85%E6%AD%8C%20-%20The%20Love%20Song%20of%20Kangding%20-%202012.10%20-%20panoramio.jpg?width=600" alt="折多山" loading="lazy"><div class="day-img-caption">折多山垭口 4298m</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Kangding%2C%20Garze%2C%20Sichuan%2C%20China%20-%20panoramio%20-%20Weiguang%20Teng%20%286%29.jpg?width=600" alt="康定" loading="lazy"><div class="day-img-caption">康定·川藏门户</div></div>
+        </div>
+
+        <h4>⛽ 加油站标注</h4>
+        <div class="gas-stations">
+          <div class="gas-card suggest-fill">
+            <span class="gas-label">建议补油</span>
+            <span class="gas-name">中石油鸳鸯坝加油站</span>
+            <span class="gas-hint">95# · 康定方向途经</span>
+          </div>
+        </div>
+
+        <h4>🗺️ 高德一键复制路书</h4>
+        <div class="route-book">
+          <div class="route-book-title">📍 主线导航（复制下方文字粘进高德搜索框）</div>
+          <div class="route-book-list" id="route-d1-main"><span class="stop-num">起点：</span>成都市
+<span class="stop-num">终点：</span>汉庭酒店(康定新都桥店)</div>
+          <button class="copy-btn" onclick="copyRoute('route-d1-main')">📋 复制主线导航</button>
+        </div>
+        <div class="route-book">
+          <div class="route-book-title">📍 沿途停靠顺序</div>
+          <div class="route-book-list" id="route-d1-stops"><span class="stop-num">1.</span> 中石油鸳鸯坝加油站 <span style="color:var(--warning)">【建议补油】</span>
+<span class="stop-num">2.</span> 折多山观雪台
+<span class="stop-num">3.</span> 红海子湿地公园
+<span class="stop-num">4.</span> 格底拉姆·天空之城 <span style="color:var(--text-muted)">(日落机位)</span>
+<span class="stop-num">5.</span> 新都桥十里画廊观景台
+<span class="stop-num">入住：</span> 汉庭酒店(康定新都桥店)</div>
+          <button class="copy-btn" onclick="copyRoute('route-d1-stops')">📋 复制沿途停靠</button>
+        </div>
+
+        <h4>⚠️ 今日风险</h4>
+        <div class="risk-box yellow">
+          <strong>🟡 海拔适应期</strong>
+          成都500m → 新都桥3300m,一天爬升2800m。个别人可能有轻微头痛,多喝水、别剧烈运动。今晚<strong>不喝酒、不洗澡(或快速冲洗)</strong>,早睡。
+        </div>
+        <div class="risk-box yellow">
+          <strong>🟡 雨季路况</strong>
+          8月折多山易起雾,能见度骤降。出发前查"四川交通广播"或高德实时路况,如遇大雾慢行或等待放行。折多山垭口气温比山下低10-15℃,下车拍照务必穿外套。
+        </div>
+        <div class="risk-box green">
+          <strong>🟢 格底拉姆:日落机位</strong>
+          相比传统新都桥行程,新增格底拉姆打卡是亮点。需预留1-1.5h,门票含道具拍照。下午3-4点光线最佳,太晚去贡嘎会被云遮。
+        </div>
+
+        <h4>💡 贴士</h4>
+        <ul>
+          <li>雅康高速已全线贯通,隧道多,注意限速80-100km/h</li>
+          <li>雅安午饭推荐:雅鱼(青衣江特色鱼),雅鱼饭店(老字号)</li>
+          <li>折多山垭口有白塔和经幡,下车拍照注意穿外套(气温比山下低10-15℃)</li>
+          <li>格底拉姆门票约30元,含天空之镜/秋千/路牌道具,正对贡嘎</li>
+          <li>汉庭酒店(康定新都桥店)带免费停车场,提前预订(旺季约300-400元/晚)</li>
+          <li>晚餐吃牦牛肉汤锅,暖身暖胃</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- D2 -->
+  <div class="day-content" id="day-2">
+    <div class="day-card">
+      <div class="day-card-header">
+        <div class="day-badge">D2</div>
+        <div class="day-info">
+          <h3>新都桥 → 雅江 → 天路十八弯 → 理塘 → 亚丁镇（香格里拉镇）</h3>
+          <div class="meta">8月2日(周日) · 6:00出发 · 约420km/7.5h · 住宿海拔2900m · 华美达安可酒店(稻城亚丁店)</div>
+        </div>
+      </div>
+      <div class="day-card-body">
+        <h4>📋 行程安排</h4>
+        <p>早6:00从新都桥出发,全天赶路。经<strong>雅江(2650m)</strong>午饭,翻越<strong>剪子湾山(4659m)、卡子拉山(4718m)</strong>,在观景台看<strong>"天路十八弯"</strong>——S型盘山路层层叠叠,非常壮观。经"世界高城"<strong>理塘(4014m)</strong>不停留,午后到稻城,下午3点左右到<strong>亚丁镇(香格里拉镇)</strong>入住<strong>华美达安可酒店(稻城亚丁店)</strong>休整补给。</p>
+        <p><strong>核心理由:今天必须赶到亚丁镇,为D3景区游玩做准备。</strong>风景都在路上,别恋战。天路十八弯观景台必停,5分钟拍照。</p>
+
+        <div class="day-images">
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/%E9%9B%85%E6%B1%9F%E5%8E%BF%E5%9F%8E%20-%20Yajiang%20County%20Town%20-%202012.10%20-%20panoramio.jpg?width=600" alt="雅江" loading="lazy"><div class="day-img-caption">雅江县城</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Litang%2C%20China%20%285366659018%29.jpg?width=600" alt="理塘" loading="lazy"><div class="day-img-caption">理塘·世界高城 4014m</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Daocheng%20-%20panoramio.jpg?width=600" alt="稻城" loading="lazy"><div class="day-img-caption">稻城方向</div></div>
+        </div>
+
+        <h4>⛽ 加油站标注</h4>
+        <div class="gas-stations">
+          <div class="gas-card must-fill">
+            <span class="gas-label">必加满</span>
+            <span class="gas-name">中国石油理塘高城加油站</span>
+            <span class="gas-hint">95# · 整条线路最核心补给点</span>
+          </div>
+        </div>
+
+        <h4>🗺️ 高德一键复制路书</h4>
+        <div class="route-book">
+          <div class="route-book-title">📍 主线导航</div>
+          <div class="route-book-list" id="route-d2-main"><span class="stop-num">起点：</span>汉庭酒店(康定新都桥店)
+<span class="stop-num">终点：</span>华美达安可酒店(稻城亚丁店)</div>
+          <button class="copy-btn" onclick="copyRoute('route-d2-main')">📋 复制主线导航</button>
+        </div>
+        <div class="route-book">
+          <div class="route-book-title">📍 沿途停靠顺序</div>
+          <div class="route-book-list" id="route-d2-stops"><span class="stop-num">1.</span> 天路十八弯观景台
+<span class="stop-num">2.</span> 中国石油理塘高城加油站 <span style="color:var(--danger)">【必加满】</span>
+<span class="stop-num">3.</span> 理塘西城门、勒通古镇·千户藏寨
+<span class="stop-num">4.</span> 兔儿山观景台、海子山古冰体遗迹观景台
+<span class="stop-num">入住：</span> 华美达安可酒店(稻城亚丁店)</div>
+          <button class="copy-btn" onclick="copyRoute('route-d2-stops')">📋 复制沿途停靠</button>
+        </div>
+
+        <h4>⚠️ 今日风险</h4>
+        <div class="risk-box red">
+          <strong>🔴 全程最高海拔过境</strong>
+          卡子拉山4718m是全程最高点。虽有高反风险,但因不停留(翻越即走),实际风险可控。<strong>关键:不要在理塘(4014m)久留吃饭</strong>,理塘含氧量只有平原60%,停留超30分钟易头痛。建议在雅江(2650m)午饭。
+        </div>
+        <div class="risk-box red">
+          <strong>🔴 纯赶路疲劳</strong>
+          7.5h开车+2h停留=近10小时。务必轮流驾驶。若只有1人主驾,每2小时休息,带红牛/咖啡。
+        </div>
+        <div class="risk-box yellow">
+          <strong>🟡 雨季山路</strong>
+          剪子湾、卡子拉山8月易起雾塌方。预留2h弹性时间。如遇暴雨塌方,听从交警指挥绕行。
+        </div>
+
+        <h4>💡 贴士</h4>
+        <ul>
+          <li><strong>理塘高城加油站是整条线路最核心补给点</strong>,进出稻城前后务必补满油箱</li>
+          <li>理塘长青春科尔寺值得停车10分钟远观拍照(不停留吃饭)</li>
+          <li>天路十八弯观景台在剪子湾山垭口附近,5分钟拍照</li>
+          <li>华美达安可酒店(稻城亚丁店)带免费停车场,海拔2900m比景区内舒服</li>
+          <li>镇上超市补给:水、巧克力、氧气瓶(2-3瓶备用)</li>
+          <li>晚餐别吃太饱,高海拔消化慢</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- D3 -->
+  <div class="day-content" id="day-3">
+    <div class="day-card">
+      <div class="day-card-header">
+        <div class="day-badge">D3</div>
+        <div class="day-info">
+          <h3>稻城亚丁景区一日游 · 懒人舒适线</h3>
+          <div class="meta">8月3日(周一) · 全天 · 景区内 · 最高海拔4180m · 续住华美达安可酒店(稻城亚丁店)</div>
+        </div>
+      </div>
+      <div class="day-card-body">
+        <h4>📋 行程安排</h4>
+        <p>早起进山,走<strong>舒适平缓线路</strong>:景区大门→扎灌崩(观光车)→<strong>冲古草甸</strong>→(电瓶车)→<strong>洛绒牛场</strong>(4180m)→原路返回→<strong>珍珠海观景台</strong>(4080m)。</p>
+        <p><strong>本路线不走牛奶海/五色海长线徒步</strong>,全程观光车+电瓶车+平缓栈道,体力消耗极低,适合懒人舒适游。洛绒牛场看三神山+草甸,珍珠海看仙乃日神山倒影。</p>
+        <p>上午走洛绒牛场线,下午走珍珠海线,中午在冲古草甸休息区吃干粮。下午5点前出景区回酒店。</p>
+
+        <div class="day-images">
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/%E7%A8%BB%E5%9F%8E%E4%BA%9A%E4%B8%81%E7%89%9B%E5%A5%B6%E6%B5%B7.jpg?width=600" alt="亚丁" loading="lazy"><div class="day-img-caption">亚丁·三神山</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Daocheng%2C%20Garze%2C%20Sichuan%2C%20China%20-%20panoramio%20%283%29.jpg?width=600" alt="亚丁风光" loading="lazy"><div class="day-img-caption">亚丁·洛绒牛场方向</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Daocheng%20inn%20in%20the%20morning.jpg?width=600" alt="稻城晨光" loading="lazy"><div class="day-img-caption">稻城晨光</div></div>
+        </div>
+
+        <h4>🗺️ 高德一键复制路书</h4>
+        <div class="route-book">
+          <div class="route-book-title">📍 酒店出发导航</div>
+          <div class="route-book-list" id="route-d3-main"><span class="stop-num">起点：</span>华美达安可酒店(稻城亚丁店)
+<span class="stop-num">终点：</span>稻城亚丁景区游客中心</div>
+          <button class="copy-btn" onclick="copyRoute('route-d3-main')">📋 复制导航</button>
+        </div>
+        <div class="route-book">
+          <div class="route-book-title">📍 景区游玩点位（懒人舒适线）</div>
+          <div class="route-book-list" id="route-d3-stops"><span class="stop-num">1.</span> 冲古草甸 <span style="color:var(--text-muted)">(观光车到达)</span>
+<span class="stop-num">2.</span> 洛绒牛场 <span style="color:var(--text-muted)">(电瓶车,4180m)</span>
+<span class="stop-num">3.</span> 珍珠海观景台 <span style="color:var(--text-muted)">(平缓栈道,4080m)</span>
+<span class="stop-num">住宿不变：</span> 华美达安可酒店(稻城亚丁店)</div>
+          <button class="copy-btn" onclick="copyRoute('route-d3-stops')">📋 复制游玩点位</button>
+        </div>
+
+        <h4>⚠️ 今日风险</h4>
+        <div class="risk-box green">
+          <strong>🟢 舒适线设计正确</strong>
+          相比长线徒步(牛奶海4600m/五色海4700m),本路线走洛绒牛场+珍珠海,最高4180m,全程观光车+电瓶车+平缓栈道。<strong>体力消耗极低,高反风险大幅降低</strong>。老少皆宜,适合懒人舒适游。
+        </div>
+        <div class="risk-box yellow">
+          <strong>🟡 高海拔仍需注意</strong>
+          虽然走舒适线,4180m仍属高海拔。慢走慢拍,别剧烈运动。带氧气瓶备用,不舒服时吸几口缓解。防晒霜SPF50+,高海拔紫外线极强。
+        </div>
+        <div class="risk-box green">
+          <strong>🟢 雨天影响小</strong>
+          景区内以观光车+电瓶车代步,雨天仅需穿冲锋衣。珍珠海段有部分栈道,防滑鞋即可。不像长线徒步那样雨天=红警。
+        </div>
+
+        <h4>💡 贴士</h4>
+        <ul>
+          <li>门票146元+观光车120元,提前在"稻城亚丁"公众号预订</li>
+          <li>电瓶车(冲古寺↔洛绒牛场)往返80元,强烈建议坐,省时省力</li>
+          <li>穿防滑运动鞋即可(舒适线无需登山鞋)</li>
+          <li>带冲锋衣+抓绒,4180m风大体感冷(可能10℃以下)</li>
+          <li>防晒霜SPF50+,高海拔紫外线极强</li>
+          <li>午餐带干粮(能量棒、巧克力、面包),景区内无餐饮</li>
+          <li>氧气瓶2-3瓶,不舒服时吸几口缓解</li>
+          <li>今日<strong>续住同一家酒店</strong>,行李不用搬</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- D4 -->
+  <div class="day-content" id="day-4">
+    <div class="day-card">
+      <div class="day-card-header">
+        <div class="day-badge">D4</div>
+        <div class="day-info">
+          <h3>亚丁镇 → 兔儿山 → 海子山 → 理塘 → 新都桥</h3>
+          <div class="meta">8月4日(周二) · 7:00出发 · 约370km/6.5-7.5h · 住宿海拔3300m · 汉庭酒店(康定新都桥店)</div>
+        </div>
+      </div>
+      <div class="day-card-body">
+        <h4>📋 行程安排</h4>
+        <p>7:00从亚丁镇出发返程。先在稻城打卡<strong>稻城白塔(尊胜塔林)</strong>——稻城地标,白塔群在晨光中金光灿灿。翻越<strong>兔儿山(4696m)</strong>——山顶有两块巨石形似兔耳,路边观景台停车拍照。经<strong>海子山(4500m)</strong>——青藏高原最大的古冰体遗迹,遍地巨石+千百个冰蚀湖,荒凉壮观。在<strong>理塘</strong>补油(不停留太久),沿<strong>毛垭大草原</strong>自由停靠拍摄,傍晚回到<strong>新都桥</strong>入住<strong>汉庭酒店(康定新都桥店)</strong>。</p>
+        <p><strong>今天风景在路上:</strong>兔儿山+海子山是川藏线上最荒凉壮观的路段,天气好极出片。毛垭大草原沿途随意停靠。</p>
+
+        <div class="day-images">
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/%E5%85%94%E8%80%B3%E5%B1%B1%20-%20Rabbit%20Ears%20Mountain%20-%202012.10%20-%20panoramio.jpg?width=600" alt="兔儿山" loading="lazy"><div class="day-img-caption">兔儿山 4696m</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Batang%20Haizishan%202014.09.16%2017-17-04.jpg?width=600" alt="海子山" loading="lazy"><div class="day-img-caption">海子山·古冰体遗迹</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Litang-chode-gompa-c01-f.jpg?width=600" alt="理塘寺" loading="lazy"><div class="day-img-caption">理塘·长青春科尔寺</div></div>
+        </div>
+
+        <h4>⛽ 加油站标注</h4>
+        <div class="gas-stations">
+          <div class="gas-card suggest-fill">
+            <span class="gas-label">建议补油</span>
+            <span class="gas-name">中国石油理塘高城加油站</span>
+            <span class="gas-hint">95# · 返程翻山前补满</span>
+          </div>
+        </div>
+
+        <h4>🗺️ 高德一键复制路书</h4>
+        <div class="route-book">
+          <div class="route-book-title">📍 主线导航</div>
+          <div class="route-book-list" id="route-d4-main"><span class="stop-num">起点：</span>华美达安可酒店(稻城亚丁店)
+<span class="stop-num">终点：</span>汉庭酒店(康定新都桥店)</div>
+          <button class="copy-btn" onclick="copyRoute('route-d4-main')">📋 复制主线导航</button>
+        </div>
+        <div class="route-book">
+          <div class="route-book-title">📍 沿途停靠顺序</div>
+          <div class="route-book-list" id="route-d4-stops"><span class="stop-num">1.</span> 稻城白塔（尊胜塔林）
+<span class="stop-num">2.</span> 中国石油理塘高城加油站 <span style="color:var(--warning)">【建议补油】</span>
+<span class="stop-num">3.</span> 沿途毛垭大草原沿路自由停靠拍摄
+<span class="stop-num">入住：</span> 汉庭酒店(康定新都桥店)</div>
+          <button class="copy-btn" onclick="copyRoute('route-d4-stops')">📋 复制沿途停靠</button>
+        </div>
+
+        <h4>⚠️ 今日风险</h4>
+        <div class="risk-box yellow">
+          <strong>🟡 D3后疲劳</strong>
+          虽然D3走舒适线体力消耗不大,但7.5h赶路仍有疲劳叠加。可以晚1小时出发(8:00),但别太晚——卡子拉山下午易起雾。
+        </div>
+        <div class="risk-box yellow">
+          <strong>🟡 雨季高海拔路段</strong>
+          兔儿山(4696m)、海子山(4500m)、卡子拉山(4718m)——8月易起雾、突发阵雨。减速慢行,保持车距。海子山路段遍地巨石,雾天能见度极差。
+        </div>
+        <div class="risk-box green">
+          <strong>🟢 返程不走回头路</strong>
+          去程走新都桥→雅江→理塘→亚丁,返程原路回新都桥。虽然路一样,但方向相反、光线不同,海子山+兔儿山在上午到中午光线最好。安排合理。
+        </div>
+
+        <h4>💡 贴士</h4>
+        <ul>
+          <li>稻城白塔(尊胜塔林)免费,晨光中拍照极美,5分钟停车</li>
+          <li>兔儿山观景台在路边,免费,停车5分钟拍照</li>
+          <li>海子山观景台也在路边,天气好可看到遍地冰蚀湖</li>
+          <li>理塘午饭别超过30分钟——海拔4014m久留易头痛</li>
+          <li><strong>理塘高城加油站返程务必补满</strong>,翻山油耗大</li>
+          <li>毛垭大草原沿途随意停靠,免费,草原+雪山背景极出片</li>
+          <li>新都桥今晚住宿同一家酒店,行李不用搬</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- D5 -->
+  <div class="day-content" id="day-5">
+    <div class="day-card">
+      <div class="day-card-header">
+        <div class="day-badge">D5</div>
+        <div class="day-info">
+          <h3>新都桥 → 塔公/姑弄村 → 墨石公园 → 雅拉雪山 → 丹巴</h3>
+          <div class="meta">8月5日(周三) · 8:00出发 · 约180km/4h驾驶 · 住宿海拔1800m · 全季酒店(丹巴店)</div>
+        </div>
+      </div>
+      <div class="day-card-body">
+        <h4>📋 行程安排</h4>
+        <p>今天是风景最丰富的一天,但驾驶距离最短。早8:00从新都桥出发,走S215省道北上<strong>塔公</strong>。塔公草原+塔公寺(有"小大昭寺"之称)值得停1小时。继续北上<strong>姑弄村</strong>(小红书爆款的雪山溪谷拍照地,帐篷+溪流+雪山背景)。</p>
+        <p>中午到<strong>八美镇</strong>,午饭+游览<strong>墨石公园</strong>(中国唯一高原墨石地貌,黑色石林如异星表面,门票60元)。下午沿S303省道经<strong>雅拉雪山观景台</strong>(远观5884m雪山),傍晚抵达<strong>丹巴</strong>入住<strong>全季酒店(丹巴店)</strong>。</p>
+        <p><strong>丹巴海拔仅1800m</strong>——从高原下来身体会舒服很多!</p>
+
+        <div class="day-images">
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/%E5%A1%94%E5%85%AC%E8%8D%89%E5%8E%9F%20-%20panoramio.jpg?width=600" alt="塔公草原" loading="lazy"><div class="day-img-caption">塔公草原</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Yalamountain.jpg?width=600" alt="雅拉雪山" loading="lazy"><div class="day-img-caption">雅拉雪山 5884m</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/%E5%A1%94%E5%85%AC%E8%8D%89%E5%8E%9F%20-%20panoramio%20-%20%E5%A2%A8%E6%B1%A0%E5%B1%B1%E4%B8%8B%E7%9A%84%E5%B0%8F%E5%B1%8B.jpg?width=600" alt="塔公" loading="lazy"><div class="day-img-caption">塔公·墨池山下</div></div>
+        </div>
+
+        <h4>🗺️ 高德一键复制路书</h4>
+        <div class="route-book">
+          <div class="route-book-title">📍 主线导航</div>
+          <div class="route-book-list" id="route-d5-main"><span class="stop-num">起点：</span>汉庭酒店(康定新都桥店)
+<span class="stop-num">终点：</span>丹巴全季酒店</div>
+          <button class="copy-btn" onclick="copyRoute('route-d5-main')">📋 复制主线导航</button>
+        </div>
+        <div class="route-book">
+          <div class="route-book-title">📍 沿途停靠顺序</div>
+          <div class="route-book-list" id="route-d5-stops"><span class="stop-num">1.</span> 塔公草原观景台
+<span class="stop-num">2.</span> 姑弄村河谷观景点
+<span class="stop-num">3.</span> 墨石公园大门口观景区
+<span class="stop-num">4.</span> 雅拉雪山观景台
+<span class="stop-num">入住：</span> 全季酒店(丹巴店)</div>
+          <button class="copy-btn" onclick="copyRoute('route-d5-stops')">📋 复制沿途停靠</button>
+        </div>
+
+        <h4>⚠️ 今日风险</h4>
+        <div class="risk-box green">
+          <strong>🟢 轻松一天 — 风景精华+海拔下降</strong>
+          前三天后,今天只有4h驾驶+多个景点停留。海拔从3300m降到1800m,身体会舒服很多。节奏对!
+        </div>
+        <div class="risk-box yellow">
+          <strong>🟡 塔公到丹巴省道弯多</strong>
+          S215和S303是盘山省道,路窄弯多,8月雨季注意落石。特别是八美到丹巴段的<strong>疙瘩梁子</strong>(约3900m),雾天能见度差。
+        </div>
+        <div class="risk-box yellow">
+          <strong>🟡 姑弄村/墨石公园时间管理</strong>
+          姑弄村拍照容易超时(雪山溪谷太出片),墨石公园至少1.5h。建议<strong>每个点不超过1.5h</strong>。
+        </div>
+
+        <h4>💡 贴士</h4>
+        <ul>
+          <li>塔公寺门票20元,有"小大昭寺"之称,值得进</li>
+          <li>姑弄村免费,溪边停车即拍,雪山背景极出片</li>
+          <li>墨石公园门票60元+观光车20元,黑色石林如异星表面</li>
+          <li>八美镇午饭推荐:牦牛肉面/藏式快餐</li>
+          <li>雅拉雪山观景台在路边,免费,5分钟拍照</li>
+          <li>全季酒店(丹巴店)带免费停车场,海拔1800m身体舒适</li>
+          <li>丹巴海拔1800m,身体舒适,可以洗澡</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- D6 -->
+  <div class="day-content" id="day-6">
+    <div class="day-card">
+      <div class="day-card-header">
+        <div class="day-badge">D6</div>
+        <div class="day-info">
+          <h3>丹巴 → 四姑娘山（双桥沟） → 成都</h3>
+          <div class="meta">8月6日(周四) · 8:00出发 · 约320km/5.5h · 终点海拔500m · 6天闭环终点</div>
+        </div>
+      </div>
+      <div class="day-card-body">
+        <h4>📋 行程安排</h4>
+        <p>早8:00从丹巴出发,<strong>丹巴城区中石油加满油箱</strong>。沿小金河谷北上,经<strong>小金县</strong>到<strong>四姑娘山镇</strong>(约120km/2.5h)。游览<strong>四姑娘山·双桥沟</strong>——四姑娘山三条沟中风景最丰富、最轻松的一条(全程观光车+栈道,无需徒步爬山),门票80元+观光车70元。沟内看森林、草甸、海子、雪山,约3-4小时。</p>
+        <p>双桥沟打卡点位:<strong>人参果坪、撵鱼坝、四姑娜措、布达拉峰、红杉林</strong>(全程观光车代步,到站下车拍照)。</p>
+        <p>下午2点出沟,经<strong>雅安市区</strong>午餐休整,走都汶高速+成灌高速回<strong>成都</strong>,约6点抵达——6天环线闭环完成!</p>
+
+        <div class="day-images">
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/%E5%9B%9B%E5%A7%91%E5%A8%98%E5%B1%B1%E5%8F%8C%E6%A1%A5%E6%B2%9F.jpg?width=600" alt="双桥沟" loading="lazy"><div class="day-img-caption">四姑娘山·双桥沟</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Mount%20Siguniang%202.jpg?width=600" alt="四姑娘山" loading="lazy"><div class="day-img-caption">四姑娘山</div></div>
+          <div><img class="day-img" referrerPolicy="no-referrer" src="https://commons.wikimedia.org/wiki/Special:FilePath/Chengdu%20Sichuan%20China%20Du-Fu-Thatched-Cottage-Park-02.jpg?width=600" alt="成都" loading="lazy"><div class="day-img-caption">成都·闭环终点</div></div>
+        </div>
+
+        <h4>⛽ 加油站标注</h4>
+        <div class="gas-stations">
+          <div class="gas-card must-fill">
+            <span class="gas-label">出发加油</span>
+            <span class="gas-name">丹巴城区中石油</span>
+            <span class="gas-hint">95# · 加满油箱再出发</span>
+          </div>
+        </div>
+
+        <h4>🗺️ 高德一键复制路书</h4>
+        <div class="route-book">
+          <div class="route-book-title">📍 主线导航</div>
+          <div class="route-book-list" id="route-d6-main"><span class="stop-num">起点：</span>全季酒店(丹巴店)
+<span class="stop-num">终点：</span>成都市</div>
+          <button class="copy-btn" onclick="copyRoute('route-d6-main')">📋 复制主线导航</button>
+        </div>
+        <div class="route-book">
+          <div class="route-book-title">📍 沿途停靠顺序</div>
+          <div class="route-book-list" id="route-d6-stops"><span class="stop-num">1.</span> 四姑娘山双桥沟游客中心 <span style="color:var(--text-muted)">(景区导航)</span>
+  沟内打卡:人参果坪 → 撵鱼坝 → 四姑娜措 → 布达拉峰 → 红杉林 <span style="color:var(--text-muted)">(全程观光车代步)</span>
+<span class="stop-num">2.</span> 雅安市区 <span style="color:var(--text-muted)">(午餐休整)</span>
+<span class="stop-num">出发加油：</span> 丹巴城区中石油 <span style="color:var(--danger)">【加满油箱】</span></div>
+          <button class="copy-btn" onclick="copyRoute('route-d6-stops')">📋 复制沿途停靠</button>
+        </div>
+
+        <h4>⚠️ 今日风险</h4>
+        <div class="risk-box green">
+          <strong>🟢 双桥沟选择正确</strong>
+          四姑娘山三条沟:双桥沟(观光车+栈道,最轻松)、长坪沟(骑马+徒步,中等)、海子沟(纯徒步,最累)。D6要走车+回成都,<strong>选双桥沟是正确的</strong>,3-4h轻松逛完,门票80元+观光车70元。
+        </div>
+        <div class="risk-box green">
+          <strong>🟢 6天闭环 — 无异地还车费</strong>
+          稻四环线是环线,成都取车成都还,无异地还车费!比川滇线(成都取昆明还)省500-1500元。今天抵达成都即6天闭环终点。
+        </div>
+        <div class="risk-box yellow">
+          <strong>🟡 巴朗山隧道海拔</strong>
+          巴朗山隧道海拔约3800m,翻越时仍可能有轻微高反(虽然不停留)。隧道前后弯多,8月雨季注意。
+        </div>
+
+        <h4>💡 贴士</h4>
+        <ul>
+          <li>双桥沟门票80元+观光车70元,提前在"四姑娘山"公众号买</li>
+          <li>双桥沟全程观光车+木栈道,无需徒步,老少皆宜,体力消耗极低</li>
+          <li>沟内五色海、人参果坪、撵鱼坝是核心打卡点</li>
+          <li>巴朗山隧道前有观景台,天气好可看四姑娘山全景</li>
+          <li>雅安市区午餐休整,推荐雅鱼或哒哒面</li>
+          <li>都汶高速注意限速,隧道多</li>
+          <li>成都晚餐推荐:火锅(小龙坎/大龙燚)或串串香,犒劳自己</li>
+          <li>还车前检查:油箱加满、有无刮蹭、行车记录仪/ETC归还、拍车况照片</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BUDGET -->
+<section class="container">
+  <h2 class="section-title">预算估算 <small>3人/舒适档(2026年8月 · 6天闭环)</small></h2>
+  <table class="budget-table">
+    <thead>
+      <tr><th>项目</th><th>明细</th><th>金额(3人合计)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>🚗 租车</td><td>哈弗大狗 ¥350/天×6天 + 保险¥300</td><td>¥2,400</td></tr>
+      <tr><td>⛽ 油费</td><td>约1300km × 10L/100km × 7.8元/L(95#)</td><td>¥1,014</td></tr>
+      <tr><td>🛣️ 过路费</td><td>雅康高速+都汶高速+成灌高速</td><td>¥280</td></tr>
+      <tr><td>🏨 住宿</td><td>5晚(新都桥×2+亚丁镇×2+丹巴×1)连锁酒店平均380元</td><td>¥1,900</td></tr>
+      <tr><td>🎫 门票</td><td>格底拉姆30×3 + 亚丁266×3 + 墨石公园80×3 + 四姑娘山150×3 + 塔公寺20×3</td><td>¥1,638</td></tr>
+      <tr><td>🍜 餐饮</td><td>6天 × 3人 × 100元/天</td><td>¥1,800</td></tr>
+      <tr><td>🏔️ 电瓶车/观光车</td><td>亚丁电瓶车(80×3) + 双桥沟观光车(70×3) + 墨石公园(20×3)</td><td>¥510</td></tr>
+      <tr><td>💊 高反药/氧气</td><td>红景天+高原安+氧气瓶</td><td>¥250</td></tr>
+      <tr><td>🅿️ 停车/杂费</td><td>景区停车+洗车+杂项</td><td>¥350</td></tr>
+      <tr class="total-row"><td>合计</td><td>3人6天总费用(成都取还无异地费)</td><td>¥10,142</td></tr>
+      <tr class="total-row"><td>人均</td><td>÷3</td><td>¥3,381</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:12px; color:var(--text-secondary); font-size:0.85em;">* 舒适档估算,实际浮动±20%。稻四环线为环线,成都取还无异地还车费,比成都→昆明线省500-1500元。住宿统一选用汉庭/全季/华美达连锁酒店,带免费停车场。旺季酒店建议提前2周预订。</p>
+</section>
+
+<!-- FOOD -->
+<section class="container">
+  <h2 class="section-title">必吃清单 <small>沿途各城招牌美食</small></h2>
+  <div class="food-grid">
+    <div class="food-card">
+      <div class="city-tag">成都</div>
+      <h4>出发前补能</h4>
+      <ul><li>龙抄手 · 钟水饺</li><li>串串香(钢管厂五区)</li><li>甜水面(洞子口张老二)</li><li>兔头(廖记/双流老妈)</li></ul>
+    </div>
+    <div class="food-card">
+      <div class="city-tag">雅安</div>
+      <h4>川西门户</h4>
+      <ul><li>雅鱼(青衣江特色,雅鱼饭店)</li><li>雅笋(鲜笋炒肉)</li><li>哒哒面(雅安特色面)</li></ul>
+    </div>
+    <div class="food-card">
+      <div class="city-tag">康定/新都桥</div>
+      <h4>高原第一顿</h4>
+      <ul><li>牦牛肉汤锅(新都桥镇上多)</li><li>酥油茶+糌粑</li><li>青稞饼+酸奶</li></ul>
+    </div>
+    <div class="food-card">
+      <div class="city-tag">雅江/理塘</div>
+      <h4>世界高城味道</h4>
+      <ul><li>理塘牦牛肉面</li><li>松茸炖鸡(8月正季)</li><li>藏香猪</li><li>青稞酒</li></ul>
+    </div>
+    <div class="food-card">
+      <div class="city-tag">稻城/亚丁</div>
+      <h4>亚丁脚下</h4>
+      <ul><li>藏式火锅(亚丁镇餐厅)</li><li>风干牦牛肉</li><li>酥油茶(抗高反)</li><li>糌粑</li></ul>
+    </div>
+    <div class="food-card">
+      <div class="city-tag">塔公/八美</div>
+      <h4>草原藏味</h4>
+      <ul><li>塔公酸奶(手工牦牛酸奶)</li><li>八美牦牛肉面</li><li>酥油茶+糌粑</li></ul>
+    </div>
+    <div class="food-card">
+      <div class="city-tag">丹巴</div>
+      <h4>藏寨风味</h4>
+      <ul><li>藏式石锅鸡(甲居藏寨民宿)</li><li>丹巴酸菜面块</li><li>香猪腿(丹巴特色)</li><li>青稞酒</li></ul>
+    </div>
+    <div class="food-card">
+      <div class="city-tag">四姑娘山</div>
+      <h4>小镇山味</h4>
+      <ul><li>烤羊排(四姑娘山镇)</li><li>牦牛肉干</li><li>沙锅鱼(当地溪鱼)</li></ul>
+    </div>
+    <div class="food-card">
+      <div class="city-tag">成都(收官)</div>
+      <h4>收官大餐</h4>
+      <ul><li>火锅(小龙坎/大龙燚)</li><li>串串香(钢管厂五区)</li><li>兔头(廖记)</li><li>担担面(洞子口)</li></ul>
+    </div>
+  </div>
+</section>
+
+<!-- PRE-TRIP CHECKLIST -->
+<section class="container">
+  <h2 class="section-title">行前须知 <small>装备/药品/车辆/手续</small></h2>
+  <div class="checklist-grid">
+    <div class="checklist-card">
+      <h4>💊 高反与药品</h4>
+      <ul>
+        <li>红景天(出发前7-10天开始吃)</li>
+        <li>高原安/乙酰唑胺(应急,出现头痛吃)</li>
+        <li>布洛芬(缓解高反头痛)</li>
+        <li>葡萄糖(口服补充体力)</li>
+        <li>氧气瓶2-3罐(亚丁用)</li>
+        <li>感冒药+肠胃药(高原感冒很危险)</li>
+        <li>创可贴+肌肉喷雾</li>
+      </ul>
+    </div>
+    <div class="checklist-card">
+      <h4>🧥 雨季装备</h4>
+      <ul>
+        <li>冲锋衣+抓绒(4180m可能10℃以下)</li>
+        <li>速干裤+雨裤(8月随时下雨)</li>
+        <li>防滑运动鞋(舒适线无需登山鞋)</li>
+        <li>防晒霜SPF50+(高海拔紫外线强)</li>
+        <li>墨镜(雪地+强光)</li>
+        <li>速干毛巾+换洗衣物</li>
+      </ul>
+    </div>
+    <div class="checklist-card">
+      <h4>🚗 车辆与加油</h4>
+      <ul>
+        <li>哈弗大狗(铺装为主,无高强度越野)</li>
+        <li>检查备胎+千斤顶+三角牌</li>
+        <li>D2理塘高城加油站【必加满】</li>
+        <li>D4理塘高城加油站【建议补油】</li>
+        <li>D6丹巴城区中石油【加满】</li>
+        <li>车载充电器+手机支架</li>
+        <li>玻璃水+雨刮检查(雨季关键)</li>
+      </ul>
+    </div>
+    <div class="checklist-card">
+      <h4>📋 手续与预订</h4>
+      <ul>
+        <li>租车:成都取/成都还(环线无异地费)</li>
+        <li>酒店:5晚连锁(汉庭/全季/华美达),提前2周预订</li>
+        <li>亚丁门票:公众号"稻城亚丁"提前买</li>
+        <li>四姑娘山:公众号"四姑娘山"提前买</li>
+        <li>身份证+驾驶证(高原检查站多)</li>
+        <li>保险:自驾游意外险+高原险</li>
+      </ul>
+    </div>
+    <div class="checklist-card">
+      <h4>📱 实用App与信息</h4>
+      <ul>
+        <li>高德地图(离线下载川西区域)</li>
+        <li>"四川交通广播"查实时路况</li>
+        <li>"稻城亚丁"公众号(门票/天气)</li>
+        <li>"四姑娘山"公众号(门票/天气)</li>
+        <li>天气App:8月川西多雨,关注预报</li>
+        <li>大众点评(沿途餐厅选择)</li>
+      </ul>
+    </div>
+    <div class="checklist-card">
+      <h4>⚡ 加油站分布（核心补给点）</h4>
+      <ul>
+        <li>成都出发前加满 ✓</li>
+        <li>D1 中石油鸳鸯坝加油站【建议补油】</li>
+        <li>D2 中国石油理塘高城加油站【必加满】✓ 核心!</li>
+        <li>D4 中国石油理塘高城加油站【建议补油】✓ 核心!</li>
+        <li>D6 丹巴城区中石油【加满】✓</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ALTITUDE PROFILE -->
+<section class="container">
+  <h2 class="section-title">海拔变化 <small>D2最高4718m · D3舒适线仅4180m</small></h2>
+  <div class="altitude-profile">
+    <div class="alt-bar" style="height: 70%; background: linear-gradient(180deg, var(--accent-light), var(--accent));" title="D1翻越4298m"><div class="alt-label">D1 4298m</div></div>
+    <div class="alt-bar" style="height: 100%; background: linear-gradient(180deg, var(--accent-light), var(--danger));" title="D2翻越4718m"><div class="alt-label">D2 4718m</div></div>
+    <div class="alt-bar" style="height: 89%; background: linear-gradient(180deg, var(--gold), var(--gold));" title="D3景区4180m"><div class="alt-label">D3 4180m</div></div>
+    <div class="alt-bar" style="height: 99%; background: linear-gradient(180deg, var(--accent-light), var(--warning));" title="D4翻越4696m"><div class="alt-label">D4 4696m</div></div>
+    <div class="alt-bar" style="height: 72%; background: linear-gradient(180deg, var(--plateau-green), var(--plateau-green));" title="D5翻越3900m"><div class="alt-label">D5 3900m</div></div>
+    <div class="alt-bar" style="height: 60%; background: linear-gradient(180deg, #5B9BD5, var(--plateau-blue));" title="D6翻越3800m"><div class="alt-label">D6 3800m</div></div>
+  </div>
+  <p style="margin-top: 32px; color: var(--text-secondary); font-size: 0.85em;">D2翻越全程最高点卡子拉山4718m(过境不停留)。D3走舒适线最高仅4180m(洛绒牛场),相比长线徒步版4700m大幅降低高反风险。D4返程翻越兔儿山4696m+海子山4500m。D5起海拔下降,身体逐渐恢复。D1一天从500m拉到3300m需注意适应。高原前两晚抵达住宿后不要立刻洗澡。</p>
+</section>
+
+<!-- RISK PANEL -->
+<section class="container">
+  <h2 class="section-title">风险预警面板 <small>红/黄/绿三色评估</small></h2>
+  <div class="risk-panel">
+    <div class="risk-col red">
+      <div class="risk-col-header">🔴 高风险(必须重视)</div>
+      <div class="risk-col-body">
+        <ul>
+          <li><strong>D2全程最高海拔过境</strong>卡子拉山4718m,虽不停留但高反风险存在。不在理塘(4014m)久留,雅江(2650m)午饭。</li>
+          <li><strong>D2纯赶路</strong>420km/7.5h+不停留,务必轮流驾驶。1人主驾极危险。</li>
+          <li><strong>理塘核心补给点</strong>进出稻城前后必须补满油箱,稻城方向加油站稀少,缺油将被困高海拔。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="risk-col yellow">
+      <div class="risk-col-header">🟡 中风险(留预案)</div>
+      <div class="risk-col-body">
+        <ul>
+          <li><strong>8月雨季路况</strong>折多山/剪子湾/卡子拉山/兔儿山/海子山易起雾塌方。预留2-3h弹性。</li>
+          <li><strong>高反适应期</strong>D1一天从500m拉到3300m,前两晚不洗澡,常备葡萄糖+布洛芬。</li>
+          <li><strong>格底拉姆时间</strong>新增打卡点需1-1.5h,D1别太晚到。</li>
+          <li><strong>姑弄村/墨石公园超时</strong>拍照容易超时,每点限1.5h。</li>
+          <li><strong>D5省道弯多</strong>S215/S303盘山路窄,雨季注意落石。</li>
+          <li><strong>D3高海拔</strong>虽走舒适线,4180m仍需注意,慢走慢拍,带氧气瓶。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="risk-col green">
+      <div class="risk-col-header">🟢 设计合理处</div>
+      <div class="risk-col-body">
+        <ul>
+          <li><strong>6天闭环设计</strong>成都取还无异地费,省500-1500元!</li>
+          <li><strong>D3舒适线选择</strong>只走洛绒牛场+珍珠海,不徒步牛奶海,体力消耗极低,雨天影响小。</li>
+          <li><strong>D1住新都桥</strong>正确!海拔3300m适应,为D2翻山做准备。</li>
+          <li><strong>D5轻松一天</strong>驾驶短+海拔降,前三天后的正确调整。</li>
+          <li><strong>D6选双桥沟</strong>四姑娘山三条沟中最轻松,观光车+栈道,老少皆宜。</li>
+          <li><strong>总里程1300km/6天</strong>平均217km/天,行车节奏宽松不赶路。</li>
+          <li><strong>不走回头路</strong>稻城+四姑娘山两大核心景点全部覆盖。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<section class="container" style="padding: 40px 0 60px; text-align: center; border-top: 1px solid rgba(255,255,255,0.06);">
+  <p style="color: var(--text-muted); font-size: 0.85em;">
+    稻四环线6天自驾路书 · 2026年8月1日出发 · 哈弗大狗 · 汉庭/全季/华美达连锁酒店<br>
+    图片来源:Wikimedia Commons (CC BY-SA / CC BY / CC0) · 地图:Leaflet + 高德地图 · 天气:Open-Meteo<br>
+    路线评估基于8月雨季实际路况,仅供参考。出行前请核实实时路况与天气。
+  </p>
+</section>
+
+<script>
+// === Day Tab Switching ===
+function switchDay(n) {
+  document.querySelectorAll('.day-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.day-content').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.day-tab')[n-1].classList.add('active');
+  document.getElementById('day-' + n).classList.add('active');
+}
+
+// === Theme Toggle ===
+function toggleTheme(){var h=document.documentElement;var c=h.dataset.theme||"light";var n=c==="light"?"dark":"light";h.dataset.theme=n;localStorage.setItem("travel-theme",n);}
+
+// === Copy Route Book ===
+function copyRoute(id) {
+  var el = document.getElementById(id);
+  var text = el.innerText.replace(/[\u200b\u200c\u200d\ufeff]/g, '').trim();
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function() {
+      var btn = event.target;
+      var orig = btn.textContent;
+      btn.textContent = '✅ 已复制';
+      btn.classList.add('copied');
+      setTimeout(function() { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+    });
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); var btn = event.target; var orig = btn.textContent; btn.textContent = '✅ 已复制'; btn.classList.add('copied'); setTimeout(function() { btn.textContent = orig; btn.classList.remove('copied'); }, 2000); } catch(e) {}
+    document.body.removeChild(ta);
+  }
+}
+
+// === Leaflet Map ===
+const COORDS = {
+  '成都': [30.5728, 104.0668],
+  '雅安': [29.9805, 102.9600],
+  '康定': [30.0486, 101.9625],
+  '折多山': [30.0833, 101.6833],
+  '格底拉姆': [30.0700, 101.6500],
+  '新都桥': [30.0500, 101.4833],
+  '雅江': [29.9961, 101.4800],
+  '天路十八弯': [30.0200, 101.3000],
+  '理塘': [30.0031, 100.2700],
+  '亚丁镇': [28.4400, 100.3500],
+  '稻城白塔': [28.7950, 100.5963],
+  '兔儿山': [29.2000, 100.0000],
+  '海子山': [29.8000, 100.2000],
+  '塔公': [30.0556, 101.7250],
+  '姑弄村': [30.1200, 101.7500],
+  '墨石公园': [30.3500, 101.8500],
+  '雅拉雪山': [30.3000, 102.0000],
+  '丹巴': [30.8787, 101.8900],
+  '四姑娘山': [31.1500, 102.9000],
+};
+
+const ROUTE_SEGMENTS = [
+  // D1: 成都→雅安→康定→折多山→格底拉姆→新都桥
+  ['成都', '雅安', '#D44521'],
+  ['雅安', '康定', '#D44521'],
+  ['康定', '折多山', '#D44521'],
+  ['折多山', '格底拉姆', '#D44521'],
+  ['格底拉姆', '新都桥', '#D44521'],
+  // D2: 新都桥→雅江→天路十八弯→理塘→亚丁镇
+  ['新都桥', '雅江', '#1B4B7A'],
+  ['雅江', '天路十八弯', '#1B4B7A'],
+  ['天路十八弯', '理塘', '#1B4B7A'],
+  ['理塘', '亚丁镇', '#1B4B7A'],
+  // D4: 亚丁镇→稻城白塔→兔儿山→海子山→理塘→新都桥
+  ['亚丁镇', '稻城白塔', '#E8632E'],
+  ['稻城白塔', '兔儿山', '#E8632E'],
+  ['兔儿山', '海子山', '#E8632E'],
+  ['海子山', '理塘', '#E8632E'],
+  ['理塘', '新都桥', '#E8632E'],
+  // D5: 新都桥→塔公→姑弄村→墨石公园→雅拉雪山→丹巴
+  ['新都桥', '塔公', '#4A7C59'],
+  ['塔公', '姑弄村', '#4A7C59'],
+  ['姑弄村', '墨石公园', '#4A7C59'],
+  ['墨石公园', '雅拉雪山', '#4A7C59'],
+  ['雅拉雪山', '丹巴', '#4A7C59'],
+  // D6: 丹巴→四姑娘山→成都
+  ['丹巴', '四姑娘山', '#5B9BD5'],
+  ['四姑娘山', '成都', '#5B9BD5'],
+];
+
+const STOPS = [
+  { name: '成都', day: 'D1', desc: '出发/终点 · 海拔500m' },
+  { name: '雅安', day: 'D1', desc: '经停 · 海拔600m' },
+  { name: '康定', day: 'D1', desc: '经停 · 海拔2560m' },
+  { name: '折多山', day: 'D1', desc: '翻越 · 海拔4298m' },
+  { name: '格底拉姆', day: 'D1', desc: '打卡 · 海拔4200m' },
+  { name: '新都桥', day: 'D1', desc: '住宿D1/D4 · 海拔3300m · 汉庭酒店' },
+  { name: '雅江', day: 'D2', desc: '经停 · 海拔2650m' },
+  { name: '天路十八弯', day: 'D2', desc: '观景 · 海拔3900m' },
+  { name: '理塘', day: 'D2', desc: '经停 · 海拔4014m · 核心加油点' },
+  { name: '亚丁镇', day: 'D2', desc: '住宿D2/D3 · 海拔2900m · 华美达安可' },
+  { name: '稻城白塔', day: 'D4', desc: '打卡 · 海拔3750m' },
+  { name: '兔儿山', day: 'D4', desc: '观景 · 海拔4696m' },
+  { name: '海子山', day: 'D4', desc: '观景 · 海拔4500m' },
+  { name: '塔公', day: 'D5', desc: '经停 · 海拔3780m' },
+  { name: '姑弄村', day: 'D5', desc: '打卡 · 海拔3500m' },
+  { name: '墨石公园', day: 'D5', desc: '景区 · 海拔3500m' },
+  { name: '雅拉雪山', day: 'D5', desc: '观景 · 海拔5884m' },
+  { name: '丹巴', day: 'D5', desc: '住宿 · 海拔1800m · 全季酒店' },
+  { name: '四姑娘山', day: 'D6', desc: '景区 · 海拔3100m · 双桥沟' },
+];
+
+const map = L.map('map-container', {
+  scrollWheelZoom: false,
+  zoomControl: true,
+}).setView([30.5, 101.5], 7);
+
+L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+  subdomains: ['1', '2', '3', '4'],
+  attribution: '高德地图',
+  maxZoom: 18,
+}).addTo(map);
+
+// Draw route segments
+ROUTE_SEGMENTS.forEach(([from, to, color]) => {
+  const f = COORDS[from], t = COORDS[to];
+  L.polyline([f, t], { color: color, weight: 3, opacity: 0.7 }).addTo(map);
+});
+
+// Add stop markers
+STOPS.forEach(stop => {
+  const coord = COORDS[stop.name];
+  const colorMap = {
+    'D1': '#D44521', 'D2': '#1B4B7A', 'D3': '#C9A84C',
+    'D4': '#E8632E', 'D5': '#4A7C59', 'D6': '#5B9BD5',
+  };
+  const color = colorMap[stop.day] || '#D44521';
+  
+  L.marker(coord, {
+    icon: L.divIcon({
+      html: `<div style="text-align:center;">
+        <div style="width:14px;height:14px;background:${color};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);margin:0 auto;"></div>
+        <div style="font-size:11px;font-weight:700;color:${color};text-shadow:0 1px 3px rgba(255,255,255,0.9);white-space:nowrap;margin-top:2px;background:rgba(255,255,255,0.85);padding:1px 6px;border-radius:4px;">${stop.name}</div>
+      </div>`,
+      className: 'city-label',
+      iconSize: [60, 40],
+      iconAnchor: [30, 12],
+    })
+  }).addTo(map).bindPopup(`<strong>${stop.name}</strong><br>${stop.day} · ${stop.desc}`);
+});
+
+// Fit bounds to all markers
+const allCoords = Object.values(COORDS);
+const bounds = L.latLngBounds(allCoords);
+map.fitBounds(bounds, { padding: [40, 40] });
+</script>
+</body>
+</html>

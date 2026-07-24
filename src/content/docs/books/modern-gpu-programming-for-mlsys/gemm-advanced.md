@@ -345,7 +345,7 @@ def hgemm_v7(M, N, K):
 
 <div style="overflow-x:auto;">
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/cta_cluster.html" title="A 2-CTA cluster: cooperative MMA via cross-CTA SMEM read" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/cta_cluster.html?notitle" title="A 2-CTA cluster: cooperative MMA via cross-CTA SMEM read" loading="lazy"
         style="width:720px; max-width:none; height:580px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 </div>

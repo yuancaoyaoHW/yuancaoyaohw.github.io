@@ -64,7 +64,7 @@ S[(4, 2, 2, 4) : (16, 4, 8, 1)]
 下方的交互式可视化展示了一个逻辑矩阵索引如何被分解为 tile 坐标，再映射到物理地址。
 
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/tiled_layout.html" title="Tile layout: interactive address computation" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/tiled_layout.html?notitle" title="Tile layout: interactive address computation" loading="lazy"
         style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
@@ -85,7 +85,7 @@ S[(8, 16) : (16@m, 1@m)]
 下方的交互式可视化展示了布局如何把张量元素分布到 warp 通道与每通道寄存器，而非放置在线性内存中。
 
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/thread_register.html" title="Thread + register layout via named axes" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/thread_register.html?notitle" title="Thread + register layout via named axes" loading="lazy"
         style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
@@ -102,7 +102,7 @@ S[(2, 4, 8) : (1@gpuid_y, 8@m, 1@m)] + R[2 : 1@gpuid_x]
 下方演示在一个小 GPU 网格上展示了这种分片与复制合二为一的模式。点击任意单元格查看哪个设备持有它，并观察 `@gpuid_x` 复制如何把一份相同的副本放到配对设备上；按钮在全分片、分片+副本、分片+偏移这几种布局间切换。
 
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/tile_distributed.html" title="Distributed layout across a GPU mesh" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/tile_distributed.html?notitle" title="Distributed layout across a GPU mesh" loading="lazy"
         style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
@@ -121,7 +121,7 @@ S[(32, …) : (1@TLane, …)] + R[4 : 32@TLane]
 下方交互式演示把两步一起展示：压缩进 32 个 TMEM 通道，然后 `warpx4` 广播到 128 个读取通道。
 
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/sf_tmem.html" title="Scale factors in TMEM: packing and warpx4 replication" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/sf_tmem.html?notitle" title="Scale factors in TMEM: packing and warpx4 replication" loading="lazy"
         style="width:1040px; max-width:none; height:560px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
@@ -142,7 +142,7 @@ swizzle 背后的想法是置换地址映射，通常通过把列索引与行做
 下方的第一个交互式演示使之具体化。点击一个列索引，观察每个元素落入哪个 bank：在左侧的朴素行主序 tile 中，一列把全部八个元素灌进同一个 bank，于是该读取串行成八个周期；在右侧的 XOR-swizzle 布局中，同一列散布到八个不同 bank，一个周期即可读取。
 
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/swizzle_8x8.html" title="8x8 XOR swizzle" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/swizzle_8x8.html?notitle" title="8x8 XOR swizzle" loading="lazy"
         style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
@@ -153,7 +153,7 @@ swizzle 背后的想法是置换地址映射，通常通过把列索引与行做
 下方交互式演示展示了这一个具体的硬件 swizzle `SWIZZLE_128B`，以便在我们跨格式推广之前就能看到逐段重复的模式。
 
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/swizzle_128B.html" title="SWIZZLE_128B layout" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/swizzle_128B.html?notitle" title="SWIZZLE_128B layout" loading="lazy"
         style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
@@ -164,7 +164,7 @@ swizzle 背后的想法是置换地址映射，通常通过把列索引与行做
 最后的交互式演示让你在这些格式间切换（包括一个 16 B 交错模式）、选取一种数据类型，并悬停任意单元格以直接查看一个原子内部的元素排列——这正是推理某条加载/存储指令期望哪种 swizzle 时所需的细节层级。
 
 <div style="overflow-x:auto;">
-<iframe src="/books/modern-gpu-programming-for-mlsys/demo/swizzle_atom_general.html" title="Swizzle atom layout per format (128B/64B/32B)" loading="lazy"
+<iframe src="/books/modern-gpu-programming-for-mlsys/demo/swizzle_atom_general.html?notitle" title="Swizzle atom layout per format (128B/64B/32B)" loading="lazy"
         style="width:1320px; max-width:none; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 
