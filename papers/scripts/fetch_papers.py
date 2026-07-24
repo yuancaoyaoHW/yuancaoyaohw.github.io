@@ -33,7 +33,7 @@ def fetch_papers_for_channel(channel_name, config):
     papers = []
 
     for category in categories:
-        url = f'https://export.arxiv.org/api/query?search_query=cat:{category}&start=0&max_results=30&sortBy=submittedDate&sortOrder=descending'
+        url = f'https://export.arxiv.org/api/query?search_query=cat:{category}&start=0&max_results=50&sortBy=submittedDate&sortOrder=descending'
 
         try:
             result = subprocess.run(['curl', '-sL', url], capture_output=True, timeout=30)
