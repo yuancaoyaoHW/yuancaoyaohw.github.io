@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KV Cache Offload 领域有影响力论文调研</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600;6..72,700&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#fafaf7; --bg-card:#fff; --bg-soft:#f3f1ea;
+  --ink:#1a1a2e; --ink-soft:#4a4a6a; --muted:#8a8aa0;
+  --accent:#3B4BA2; --accent-soft:#e8eaf5; --accent-line:#c5cce8;
+  --border:#e4e1d6; --border-strong:#d0ccbe;
+  --gold:#B8860B; --green:#2d6a4f; --red:#9b2226;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.04);
+  --shadow-hover:0 4px 16px rgba(59,75,162,.12);
+  --serif:'Newsreader',Georgia,serif; --sans:'Inter',system-ui,sans-serif; --mono:'JetBrains Mono',monospace;
+}
+[data-theme="dark"]{
+  --bg:#16161f; --bg-card:#1e1e2a; --bg-soft:#252535;
+  --ink:#e8e8f0; --ink-soft:#b0b0c8; --muted:#7878a0;
+  --accent:#8b9df5; --accent-soft:#2a2d4a; --accent-line:#3a3d5a;
+  --border:#2e2e3e; --border-strong:#3a3a4e;
+  --gold:#d4a933; --green:#6cbf8e; --red:#e07070;
+  --shadow:0 1px 3px rgba(0,0,0,.3),0 4px 12px rgba(0,0,0,.2);
+  --shadow-hover:0 4px 16px rgba(139,157,245,.15);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--serif);background:var(--bg);color:var(--ink);line-height:1.7;font-size:17px;transition:background .3s,color .3s}
+.wrap{max-width:920px;margin:0 auto;padding:48px 32px 80px}
+
+/* header */
+header{border-bottom:2px solid var(--accent);padding-bottom:24px;margin-bottom:40px}
+.eyebrow{font-family:var(--sans);font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+h1{font-family:var(--serif);font-size:38px;font-weight:700;line-height:1.2;letter-spacing:-.01em;margin-bottom:12px}
+.meta{font-family:var(--sans);font-size:13px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap}
+.meta b{color:var(--ink-soft);font-weight:600}
+
+/* theme toggle */
+.theme-toggle{position:fixed;top:20px;right:20px;width:44px;height:44px;border-radius:50%;border:1px solid var(--border-strong);background:var(--bg-card);cursor:pointer;font-size:18px;z-index:100;box-shadow:var(--shadow);transition:all .2s;display:flex;align-items:center;justify-content:center}
+.theme-toggle:hover{box-shadow:var(--shadow-hover);transform:scale(1.05)}
+
+/* section */
+h2{font-family:var(--serif);font-size:26px;font-weight:700;margin:48px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:12px}
+h2 .num{font-family:var(--mono);font-size:14px;color:var(--accent);font-weight:600}
+h3{font-family:var(--sans);font-size:18px;font-weight:600;margin:32px 0 12px;color:var(--accent)}
+p{margin-bottom:14px}
+.lead{font-size:18px;color:var(--ink-soft);border-left:3px solid var(--accent);padding-left:18px;margin:20px 0 32px;font-style:italic}
+
+/* paper cards */
+.tier-label{font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin:28px 0 12px}
+.paper{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:12px;box-shadow:var(--shadow);transition:all .2s;border-left:3px solid transparent}
+.paper:hover{box-shadow:var(--shadow-hover);border-left-color:var(--accent);transform:translateX(2px)}
+.paper-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px}
+.paper-title{font-family:var(--sans);font-weight:600;font-size:16px;color:var(--ink);text-decoration:none;line-height:1.35}
+.paper-title:hover{color:var(--accent)}
+.paper-title .arxiv-tag{font-family:var(--mono);font-size:11px;background:var(--accent-soft);color:var(--accent);padding:1px 5px;border-radius:3px;margin-left:6px;font-weight:600;vertical-align:2px}
+.paper-badges{display:flex;flex-direction:column;gap:3px;align-items:flex-end;flex-shrink:0;font-family:var(--mono);font-size:11px}
+.cites{background:var(--accent);color:#fff;padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap}
+[data-theme="dark"] .cites{background:var(--accent);color:#1a1a2e}
+.year-venue{color:var(--muted);white-space:nowrap}
+.paper-body{font-size:15px;color:var(--ink-soft)}
+.paper-body .why{display:block;margin-top:6px;font-size:13px;color:var(--muted);font-family:var(--sans)}
+.paper-body .why::before{content:"必读 ▸ ";color:var(--accent);font-weight:600}
+
+/* table for main lines */
+table{width:100%;border-collapse:collapse;margin:16px 0;font-family:var(--sans);font-size:14px}
+th{text-align:left;padding:10px 12px;background:var(--bg-soft);color:var(--accent);font-weight:600;font-size:12px;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--accent-line)}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+td:first-child{font-weight:600}
+td a{color:var(--accent);text-decoration:none}
+td a:hover{text-decoration:underline}
+
+/* timeline */
+.timeline{position:relative;padding-left:28px;margin:24px 0}
+.timeline::before{content:'';position:absolute;left:8px;top:8px;bottom:8px;width:2px;background:var(--accent-line)}
+.tl-item{position:relative;margin-bottom:24px}
+.tl-item::before{content:'';position:absolute;left:-24px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);box-shadow:0 0 0 2px var(--accent-line)}
+.tl-year{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent)}
+.tl-title{font-family:var(--sans);font-weight:600;font-size:15px;margin:2px 0}
+.tl-desc{font-size:14px;color:var(--ink-soft)}
+.tl-branch{margin-left:20px;margin-top:8px;padding-left:16px;border-left:2px dashed var(--border-strong)}
+
+/* reading order */
+.read-order{background:linear-gradient(135deg,var(--accent-soft),var(--bg-soft));border:1px solid var(--accent-line);border-radius:12px;padding:24px 28px;margin:24px 0}
+.read-step{display:flex;gap:16px;margin-bottom:16px;align-items:flex-start}
+.read-step:last-child{margin-bottom:0}
+.read-num{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:14px}
+[data-theme="dark"] .read-num{color:#1a1a2e}
+.read-text{font-family:var(--sans);font-size:15px;color:var(--ink)}
+.read-text b{color:var(--accent)}
+
+/* callout */
+.callout{background:var(--bg-soft);border-radius:8px;padding:16px 20px;margin:16px 0;font-size:14px;font-family:var(--sans)}
+.callout.warn{border-left:3px solid var(--gold)}
+.callout b{color:var(--accent)}
+
+/* footer */
+footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);font-family:var(--sans);font-size:12px;color:var(--muted);text-align:center}
+
+@media(max-width:640px){
+  .wrap{padding:32px 18px 60px}
+  h1{font-size:28px}
+  .paper-head{flex-direction:column}
+  .paper-badges{flex-direction:row;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">领域文献调研 · Semantic Paper Radar</div>
+  <h1>KV Cache Offload<br>有影响力论文调研</h1>
+  <div class="meta">
+    <span>📅 <b>2026-07-25</b></span>
+    <span>📚 <b>OpenAlex 626 篇</b> + arXiv</span>
+    <span>🔬 按引用数排序</span>
+  </div>
+</header>
+
+<p class="lead">LLM 自回归解码时需为每个 token 保存 K/V 矩阵,显存占用随上下文长度线性增长。当 batch×seq_len 增大,显存装不下,必须把部分 KV cache <b>offload</b> 到更慢的介质(CPU 内存 / NVMe SSD),用时再换回 GPU。整个领域的技术路线围绕"何时换出、换到哪、怎么少换、换了怎么快速换回"展开。</p>
+
+<h2><span class="num">01</span> 必读文献（分层）</h2>
+
+<h3 class="tier-label">A · 经典奠基（2013–2023）</h3>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.1145/3600006.3613165">Efficient Memory Management for LLM Serving with PagedAttention <span class="arxiv-tag">vLLM</span></a>
+    <div class="paper-badges"><span class="cites">1189 cites</span><span class="year-venue">2023 · SOSP</span></div>
+  </div>
+  <div class="paper-body">把 OS 分页机制引入 KV cache 管理,碎片从 60%→&lt;4%,吞吐 2-4×。
+    <span class="why">KV cache 管理的奠基论文,定义了"显存碎片"问题与分页范式</span>
+  </div>
+</div>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.48550/arxiv.2303.06865">FlexGen: High-Throughput Generative Inference of LLMs with a Single GPU</a>
+    <div class="paper-badges"><span class="cites">47 cites</span><span class="year-venue">2023 · ICML</span></div>
+  </div>
+  <div class="paper-body">首次系统化 CPU offload:把权重+KV cache offload 到 CPU 内存/NVMe,单卡跑 175B。
+    <span class="why"><b>offload 路线的开山之作</b>,定义了 offload 的 trade-off 公式</span>
+  </div>
+</div>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.18653/v1/2024.acl-long.678">LLM in a flash: Efficient LLM Inference with Limited Memory</a>
+    <div class="paper-badges"><span class="cites">84 cites</span><span class="year-venue">2024 · ACL</span></div>
+  </div>
+  <div class="paper-body">苹果提出的 flash→DRAM 二级 offload,按需加载权重+KV 片段。
+    <span class="why">给出"受限内存下的二级存储 offload"范式</span>
+  </div>
+</div>
+
+<h3 class="tier-label">B · 方法跃迁（2024–2025）</h3>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.1145/3651890.3672274">CacheGen: KV Cache Compression and Streaming for Fast LLM Serving</a>
+    <div class="paper-badges"><span class="cites">78 cites</span><span class="year-venue">2024 · SIGCOMM</span></div>
+  </div>
+  <div class="paper-body">把 KV cache 当"数据流"压缩+流式传输,减少 offload 带宽。
+    <span class="why"><b>网络/存储视角的 KV offload</b>,突破纯显存视角</span>
+  </div>
+</div>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.1145/3694715.3695964">PowerInfer: Fast LLM Serving with a Consumer-grade GPU</a>
+    <div class="paper-badges"><span class="cites">97 cites</span><span class="year-venue">2024 · ASPLOS</span></div>
+  </div>
+  <div class="paper-body">异构 GPU-CPU 推理引擎,热 KV 留 GPU、冷 KV offload CPU。
+    <span class="why">消费级硬件 offload 的标杆实现</span>
+  </div>
+</div>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.1145/3669940.3707256">vAttention: Dynamic Memory Management for Serving LLMs without Paging</a>
+    <div class="paper-badges"><span class="cites">28 cites</span><span class="year-venue">2025 · ASPLOS</span></div>
+  </div>
+  <div class="paper-body">用虚拟内存(非分页)做 KV 管理,避免分页开销。
+    <span class="why"><b>挑战 PagedAttention 的范式</b>,提出"无分页"路线</span>
+  </div>
+</div>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.48550/arxiv.2407.00079">Mooncake: A KVCache-centric Disaggregated Architecture for LLM Serving</a>
+    <div class="paper-badges"><span class="cites">13 cites</span><span class="year-venue">2024 · arXiv</span></div>
+  </div>
+  <div class="paper-body">把 KV cache 当独立资源池化,分离 prefill/decode 集群。
+    <span class="why"><b>生产级 KV 中心架构</b>(月之暗面),真实部署视角</span>
+  </div>
+</div>
+
+<h3 class="tier-label">C · 最新前沿（2024–2026）</h3>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.18653/v1/2024.findings-acl.195">PyramidInfer: Pyramid KV Cache Compression for High-throughput LLM Inference</a>
+    <div class="paper-badges"><span class="cites">17 cites</span><span class="year-venue">2024 · ACL Findings</span></div>
+  </div>
+  <div class="paper-body">层级化 KV 压缩,减少 offload 量。<span class="why">压缩而非换页的替代路线</span></div>
+</div>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.1145/3688351.3689164">TwinPilots: A New Computing Paradigm for GPU-CPU Parallel LLM Inference</a>
+    <div class="paper-badges"><span class="cites">17 cites</span><span class="year-venue">2024</span></div>
+  </div>
+  <div class="paper-body">GPU-CPU 真并行(非 offload)。<span class="why">重新定义 offload 为协作</span></div>
+</div>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.48550/arxiv.2401.14351">ServerlessLLM: Low-Latency Serverless Inference for LLMs</a>
+    <div class="paper-badges"><span class="cites">7 cites</span><span class="year-venue">2024 · arXiv</span></div>
+  </div>
+  <div class="paper-body">serverless 场景下 KV cache 的快速加载。<span class="why">云原生 offload 视角</span></div>
+</div>
+
+<div class="paper">
+  <div class="paper-head">
+    <a class="paper-title" href="https://doi.org/10.48550/arxiv.2406.06282">PowerInfer-2: Fast LLM Inference on a Smartphone</a>
+    <div class="paper-badges"><span class="cites">5 cites</span><span class="year-venue">2024 · arXiv</span></div>
+  </div>
+  <div class="paper-body">手机端 offload 到统一内存。<span class="why">移动端 offload 范式</span></div>
+</div>
+
+<h2><span class="num">02</span> 学术脉络（3 条主线）</h2>
+
+<h3>主线 1 · 分页内存管理（PagedAttention 系）</h3>
+<div class="timeline">
+  <div class="tl-item">
+    <div class="tl-year">2023</div>
+    <div class="tl-title">PagedAttention / vLLM <span style="color:var(--muted);font-weight:400">· 1189 cites · SOSP</span></div>
+    <div class="tl-desc">把 OS 分页引入 KV cache 管理,碎片 60%→&lt;4%</div>
+    <div class="tl-branch">
+      <div class="tl-item">
+        <div class="tl-year">2025</div>
+        <div class="tl-title">vAttention <span style="color:var(--muted);font-weight:400">· 28 cites</span></div>
+        <div class="tl-desc">用虚拟内存(非分页)挑战 PagedAttention</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-year">2026</div>
+        <div class="tl-title">KVSwap</div>
+        <div class="tl-desc">disk-aware 换页,on-device 场景</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p style="font-size:14px;color:var(--ink-soft);font-family:var(--sans)"><b style="color:var(--accent)">核心问题:</b>KV cache 的虚拟内存怎么管。PagedAttention 用 OS 分页,vAttention 用虚拟内存直接映射,KVSwap 针对磁盘换页。</p>
+
+<h3>主线 2 · CPU/SSD Offload（FlexGen 系）</h3>
+<div class="timeline">
+  <div class="tl-item">
+    <div class="tl-year">2023</div>
+    <div class="tl-title">FlexGen <span style="color:var(--muted);font-weight:400">· 47 cites · ICML · offload 开山</span></div>
+    <div class="tl-desc">系统化 CPU/NVMe offload,给出 trade-off 公式</div>
+    <div class="tl-branch">
+      <div class="tl-item">
+        <div class="tl-year">2024</div>
+        <div class="tl-title">LLM-in-a-flash <span style="color:var(--muted);font-weight:400">· 84 cites · ACL</span></div>
+        <div class="tl-desc">二级存储 offload(苹果)</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-year">2024</div>
+        <div class="tl-title">PowerInfer <span style="color:var(--muted);font-weight:400">· 97 cites · ASPLOS</span></div>
+        <div class="tl-desc">消费级 GPU+CPU 异构</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-year">2024</div>
+        <div class="tl-title">PowerInfer-2 <span style="color:var(--muted);font-weight:400">· 5 cites</span></div>
+        <div class="tl-desc">手机端 offload 到统一内存</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p style="font-size:14px;color:var(--ink-soft);font-family:var(--sans)"><b style="color:var(--accent)">核心问题:</b>显存装不下时,KV cache offload 到哪里、怎么换回。FlexGen 给出 offload 公式,后续工作在延迟/带宽上优化。</p>
+
+<h3>主线 3 · 压缩与池化（非纯 offload）</h3>
+<div class="timeline">
+  <div class="tl-item">
+    <div class="tl-year">2024</div>
+    <div class="tl-title">CacheGen <span style="color:var(--muted);font-weight:400">· 78 cites · SIGCOMM</span></div>
+    <div class="tl-desc">KV 流式压缩,减少 offload 带宽</div>
+    <div class="tl-branch">
+      <div class="tl-item">
+        <div class="tl-year">2024</div>
+        <div class="tl-title">PyramidInfer <span style="color:var(--muted);font-weight:400">· 17 cites</span></div>
+        <div class="tl-desc">层级压缩</div>
+      </div>
+    </div>
+  </div>
+  <div class="tl-item">
+    <div class="tl-year">2024</div>
+    <div class="tl-title">Mooncake <span style="color:var(--muted);font-weight:400">· 13 cites · 月之暗面</span></div>
+    <div class="tl-desc">KV cache 池化为独立资源</div>
+  </div>
+</div>
+<p style="font-size:14px;color:var(--ink-soft);font-family:var(--sans)"><b style="color:var(--accent)">核心问题:</b>与其换页,不如先把 KV cache 压小,或把 KV cache 当独立池化资源。这两条线是"换页"的替代方案。</p>
+
+<h2><span class="num">03</span> 建议阅读顺序</h2>
+<div class="read-order">
+  <div class="read-step">
+    <div class="read-num">1</div>
+    <div class="read-text">先读 <b>PagedAttention / vLLM</b>(2023,SOSP) — 建立问题定义:显存碎片、分页范式</div>
+  </div>
+  <div class="read-step">
+    <div class="read-num">2</div>
+    <div class="read-text">再读 <b>FlexGen</b>(2023,ICML) — 建立 offload 范式:trade-off 公式、offload 层级</div>
+  </div>
+  <div class="read-step">
+    <div class="read-num">3</div>
+    <div class="read-text">然后读 <b>vAttention</b>(2025,ASPLOS) — 理解"无分页"对 PagedAttention 的挑战</div>
+  </div>
+</div>
+<p style="margin-top:20px;font-size:15px">读完这 3 篇,你就能理解所有后续工作的<b>"坐标系"</b>:它们都在 FlexGen 的 offload 公式里调参数,或挑战 PagedAttention 的分页假设。</p>
+
+<h2><span class="num">04</span> 检索方法学说明</h2>
+<div class="callout">
+  <p><b>arXiv API</b>:用作"最新前沿"召回(按相关性),但引用数不稳定</p>
+  <p style="margin-top:8px"><b>OpenAlex API</b>:用作"经典奠基"判据(按 <code style="background:var(--accent-soft);padding:1px 5px;border-radius:3px;font-size:12px">cited_by_count</code> 排序,626 篇池)</p>
+</div>
+<div class="callout warn">
+  <b>脚本局限:</b>OpenAlex 的 <code style="background:var(--accent-soft);padding:1px 5px;border-radius:3px;font-size:12px">search=</code> 是全文相关性+引用混合排序,会混入通用 LLM survey 噪音(如"A Survey of Large Language Models" 1420 cites 但与本主题非核心相关);已手动剔除这类噪音并补入脚本漏召回的关键论文(vAttention、Mooncake、CacheGen、PowerInfer)。引用数截至 2026-07-25,新论文引用数会持续增长。
+</div>
+
+<footer>
+  Semantic Paper Radar · arXiv + OpenAlex 聚合检索 · 2026-07-25<br>
+  生成工具:hermes-agent / skill: semantic-paper-radar
+</footer>
+
+</div>
+<script>
+function toggleTheme(){
+  const h=document.documentElement;
+  const cur=h.getAttribute('data-theme');
+  const next=cur==='light'?'dark':'light';
+  h.setAttribute('data-theme',next);
+  document.querySelector('.theme-toggle').textContent=next==='light'?'🌙':'☀️';
+  try{localStorage.setItem('kv-radar-theme',next)}catch(e){}
+}
+(function(){
+  try{const s=localStorage.getItem('kv-radar-theme');if(s){document.documentElement.setAttribute('data-theme',s);document.querySelector('.theme-toggle').textContent=s==='light'?'🌙':'☀️'}}catch(e){}
+})();
+</script>
+</body>
+</html>
