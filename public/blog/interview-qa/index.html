@@ -76,17 +76,17 @@
 
     /* content */
     .content { padding: 36px 44px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); }
-    h2 { scroll-margin-top: 120px; margin: 36px 0 14px; font-size: 1.7rem; line-height: 1.25; letter-spacing: -.02em; border-bottom: 2px solid color-mix(in srgb, var(--cyan) 22%, transparent); padding-bottom: 8px; color: var(--cyan); }
-    h3 { scroll-margin-top: 120px; margin: 28px 0 10px; font-size: 1.25rem; line-height: 1.35; color: var(--blue); }
-    h4 { scroll-margin-top: 120px; margin: 20px 0 8px; font-size: 1.02rem; color: var(--cyan); }
-    p { margin: 0 0 12px; }
-    ul, ol { margin: 0 0 14px; padding-left: 1.5em; }
-    li { margin: 4px 0; }
+    h2 { scroll-margin-top: 120px; margin: 44px 0 18px; font-size: 1.7rem; line-height: 1.25; letter-spacing: -.02em; border-bottom: 2px solid color-mix(in srgb, var(--cyan) 22%, transparent); padding-bottom: 10px; color: var(--cyan); }
+    h3 { scroll-margin-top: 120px; margin: 32px 0 12px; font-size: 1.25rem; line-height: 1.35; color: var(--blue); }
+    h4 { scroll-margin-top: 120px; margin: 24px 0 10px; font-size: 1.02rem; color: var(--cyan); }
+    p { margin: 0 0 16px; line-height: 1.8; }
+    ul, ol { margin: 0 0 18px; padding-left: 1.5em; }
+    li { margin: 6px 0; line-height: 1.7; }
     strong { font-weight: 600; color: var(--text); }
-    blockquote { margin: 14px 0; padding: 12px 18px; border-left: 3px solid var(--cyan); background: var(--panel-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; color: var(--muted); font-size: .92rem; }
-    blockquote p { margin: 0; }
-    blockquote strong { color: var(--text); }
-    hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+    blockquote { margin: 18px 0; padding: 14px 20px; border-left: 3px solid var(--cyan); background: var(--panel-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; color: var(--muted); font-size: .92rem; }
+    blockquote p { margin: 0 0 8px; }
+    blockquote p:last-child { margin: 0; }
+    hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
     code { font-family: var(--mono); font-size: .88em; background: color-mix(in srgb, var(--cyan) 6%, transparent); padding: 1px 5px; border-radius: 3px; }
     pre { margin: 14px 0; padding: 16px 20px; background: #1e1e2e; color: #cdd6f4; border-radius: var(--radius-sm); overflow-x: auto; font-size: .85rem; line-height: 1.55; }
     pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
@@ -299,10 +299,12 @@
 <p><strong>问题</strong>：在你做过的这些工作里，哪一段最能证明你是主力实现者，而不是只参与测试、调参或跟着改？</p>
 <p><strong>标准答案</strong>：</p>
 <p>选 EAGLE-3 在 vLLM-MindSpore / Ascend NPU 上的适配和优化。原因是这段经历跨了模型网络、runtime 链路、NPU 图执行、correctness 排障和性能验证。</p>
-<p>亲手做过的三个关键点：
-1. <strong>EAGLE-3 draft proposer / prepare_inputs 链路</strong>：把 target 输出 token、target hidden states、position_ids、attention metadata、slot_mapping 等组织成 draft model 能消费的输入。
-2. <strong>attention metadata 和 KV cache 地址适配</strong>：block_table 到 slot_mapping 的物理 slot 映射，以及多并发下 KV cache 不串请求。
-3. <strong>性能路径优化</strong>：prepare_inputs / rejection_sampler 中小算子融合、host-device 调度减少、draft lm_head 首次编图 warmup。</p>
+<p>亲手做过的三个关键点：</p>
+<ol>
+<li><strong>EAGLE-3 draft proposer / prepare_inputs 链路</strong>：把 target 输出 token、target hidden states、position_ids、attention metadata、slot_mapping 等组织成 draft model 能消费的输入。</li>
+<li><strong>attention metadata 和 KV cache 地址适配</strong>：block_table 到 slot_mapping 的物理 slot 映射，以及多并发下 KV cache 不串请求。</li>
+<li><strong>性能路径优化</strong>：prepare_inputs / rejection_sampler 中小算子融合、host-device 调度减少、draft lm_head 首次编图 warmup。</li>
+</ol>
 <p><strong>最难 bug</strong>：多并发下 batch0 正常、batch1 之后 draft 输出同错。难点在于单 batch 基本对齐，只有多请求、第二轮 draft forward 后才明显暴露，且 EAGLE-3 同时涉及 target/draft 双模型、speculative token 展开、KV cache 物理地址和 sampler 状态。排查方式：固定输入和 seed，对比单并发、双并发和 10 并发，逐层 dump input_ids、position_ids、block_table、slot_mapping、KV cache slice、hidden states 和 logits。最后发现 slot_mapping 未转成底层算子期望的 int32，导致物理 KV slot 读写错位。修复后多并发 logits / hidden states 对齐，acceptance rate 恢复。</p>
 <p><strong>PR / commit / benchmark 证据</strong>：EAGLE-3 proposer / Qwen2、Qwen2.5 接入代码；slot_mapping、attention metadata、prepare_inputs 相关修改；吞吐、TPOT、acceptance rate / accepted length、logits 对齐和多并发回归记录。</p>
 <p><strong>保守表达点</strong>：rejection sampling 数学口径、hidden states 具体取法、通用 proposer 接口抽象——这三块不确定的细节不讲死。</p>
@@ -320,12 +322,14 @@
 <p><strong>问题</strong>：你有没有和 reviewer、同事或上游社区产生过技术分歧？</p>
 <p><strong>标准答案</strong>：</p>
 <p>有一次更准确地说是 review 方案取舍，不是强冲突。EAGLE-3 接入时，reviewer 担心 proposer 改动会侵入 vLLM V1 speculative decoding 原有抽象——EAGLE-3 有 target hidden states / auxiliary hidden states、draft model runner 和特殊 input builder，如果直接把这些字段塞进通用链路，会让后续 suffix decoding 或 ngram proposer 也被迫理解 EAGLE-3 的细节。</p>
-<p>我最初方案偏直接打通链路，先保证 correctness 和性能能跑通。后面根据 review 意见，调整成边界更清楚的方式：
-- proposer 只负责 candidate tokens 和 proposer-specific state；
-- target verification 链路尽量复用；
-- sampler 统一负责 accept / reject / recover sample；
-- state manager 统一处理 request state、KV cache 和输出 commit。
-- EAGLE-3 特有的 hidden states 和 draft input 构造尽量收在 builder / adapter 内，不散落到 runner 各处。</p>
+<p>我最初方案偏直接打通链路，先保证 correctness 和性能能跑通。后面根据 review 意见，调整成边界更清楚的方式：</p>
+<ul>
+<li>proposer 只负责 candidate tokens 和 proposer-specific state；</li>
+<li>target verification 链路尽量复用；</li>
+<li>sampler 统一负责 accept / reject / recover sample；</li>
+<li>state manager 统一处理 request state、KV cache 和输出 commit。</li>
+<li>EAGLE-3 特有的 hidden states 和 draft input 构造尽量收在 builder / adapter 内，不散落到 runner 各处。</li>
+</ul>
 <p>为说服对方，补了几类证据：单并发 / 多并发 logits 对齐、acceptance rate / accepted length 回归、开启和关闭 speculative 的 E2E 行为对比、prepare_inputs / sampler 相关 benchmark。最终方案不是简单坚持原直接实现，而是在保持功能打通的同时降低主链路侵入性。</p>
 <hr>
 <h2 id="二eagle-3-数据流与算法原理">二、EAGLE-3 数据流与算法原理</h2>
@@ -347,23 +351,29 @@
 <p><strong>rejection sampler</strong>：按 target distribution 和 draft proposal distribution 逐 token 决定 accept / reject。最终只把 confirmed tokens commit 到 request state 和输出缓冲；更新 confirmed seq_len、positions、accepted length、finished / EOS / stop 状态。KV cache 也要按最终确认的逻辑状态处理，不能让未确认或逻辑不可达的 draft / rejected 状态污染后续可见路径。</p>
 </li>
 </ol>
-<p><strong>多并发下最容易错的两个对齐</strong>：
-1. request 到 batch / token-level flatten 的映射：input_ids、position_ids、hidden states gather、accepted mask、final token 回写。
-2. KV cache 物理地址映射：block_table、slot_mapping、seq_lens、physical block、block offset 和 KV cache slot。</p>
+<p><strong>多并发下最容易错的两个对齐</strong>：</p>
+<ol>
+<li>request 到 batch / token-level flatten 的映射：input_ids、position_ids、hidden states gather、accepted mask、final token 回写。</li>
+<li>KV cache 物理地址映射：block_table、slot_mapping、seq_lens、physical block、block offset 和 KV cache slot。</li>
+</ol>
 <hr>
 <h3 id="q22p0-4rejection-sampling-严格口径">Q2.2【P0-4】Rejection sampling 严格口径</h3>
 <p><strong>问题</strong>：为什么 speculative decoding 必须做 rejection sampling？拒绝后 token 怎么来？为什么分布仍和 target 一致？</p>
 <p><strong>标准答案</strong>：</p>
 <p><strong>核心原因</strong>不是"判断 draft 对不对"，而是<strong>最终输出分布必须和 target model 一致</strong>。draft model 只是 proposal distribution，不能直接替代 target distribution。rejection sampling 的作用是利用 draft 提速，同时用 target distribution 校正最终输出。</p>
 <p><strong>temperature = 0 时</strong>：deterministic / greedy 路径，比较 target 和 draft 在对应位置的贪心 token。一致就接受；一旦不一致，就停止继续接受后续 draft tokens，并使用 target 的贪心结果作为该位置最终 token。</p>
-<p><strong>temperature &gt; 0 时</strong>：draft 在某个 token x 上的 proposal 概率记为 q(x)，target 对同一 token 的概率记为 p(x)。
-- <strong>接受概率 = min(1, p(x) / q(x))</strong>。
-- 被接受，继续看下一个 speculative token；
-- 被拒绝，则在剩余质量分布上采样一个 token：对 <strong>max(0, p - q)</strong> 做归一化后 recover sample。
-- proposal 已覆盖的概率质量 + 拒绝后的剩余概率质量 = target distribution。</p>
-<p><strong>线上 acceptance rate 很高但输出和 baseline 对不齐时，优先怀疑 sampler 两个实现点</strong>：
-1. logits 到 probabilities 的处理顺序是否和 baseline 完全一致：temperature、top-k、top-p、mask、softmax、renorm、dtype 精度和每个 request 的 sampling params。
-2. accept/reject 和 recover sample 是否正确：p/q gather、max(0, p-q) 归一化、随机数消费顺序、per-request seed、accept mask 和 final token commit 顺序。</p>
+<p><strong>temperature &gt; 0 时</strong>：draft 在某个 token x 上的 proposal 概率记为 q(x)，target 对同一 token 的概率记为 p(x)。</p>
+<ul>
+<li><strong>接受概率 = min(1, p(x) / q(x))</strong>。</li>
+<li>被接受，继续看下一个 speculative token；</li>
+<li>被拒绝，则在剩余质量分布上采样一个 token：对 <strong>max(0, p - q)</strong> 做归一化后 recover sample。</li>
+<li>proposal 已覆盖的概率质量 + 拒绝后的剩余概率质量 = target distribution。</li>
+</ul>
+<p><strong>线上 acceptance rate 很高但输出和 baseline 对不齐时，优先怀疑 sampler 两个实现点</strong>：</p>
+<ol>
+<li>logits 到 probabilities 的处理顺序是否和 baseline 完全一致：temperature、top-k、top-p、mask、softmax、renorm、dtype 精度和每个 request 的 sampling params。</li>
+<li>accept/reject 和 recover sample 是否正确：p/q gather、max(0, p-q) 归一化、随机数消费顺序、per-request seed、accept mask 和 final token commit 顺序。</li>
+</ol>
 <p><strong>自检</strong>：必须说"分布一致性"，不只说"判断 draft 是否预测正确"；必须说 min(1, p/q) 和 max(0, p-q)；不要把 logits 说成 logics（应为 logits）。</p>
 <hr>
 <h3 id="q23严格第2题rejection-sampler-接受拒绝机制">Q2.3【严格第2题】Rejection sampler 接受/拒绝机制</h3>
@@ -377,18 +387,22 @@
 <li>若所有 draft tokens 都接受，某些实现还会额外从 target 的最后位置采样 bonus token。</li>
 </ul>
 <p><strong>为什么分布一致</strong>：这个过程通过接受 draft 分布中与 target 重叠的部分，并在拒绝时从 target 多出的 residual 部分采样，使边际分布等价于直接从 target model 采样。</p>
-<p><strong>公式记忆点</strong>：
-- 接受概率 = <code>min(1, p/q)</code>
-- recover distribution = <code>normalize(max(0, p - q))</code>
-- 随机数 u 服从 Uniform[0,1]，判断 <code>u &lt;= min(1, p/q)</code></p>
+<p><strong>公式记忆点</strong>：</p>
+<ul>
+<li>接受概率 = <code>min(1, p/q)</code></li>
+<li>recover distribution = <code>normalize(max(0, p - q))</code></li>
+<li>随机数 u 服从 Uniform[0,1]，判断 <code>u &lt;= min(1, p/q)</code></li>
+</ul>
 <hr>
 <h3 id="q24严格第14题rejection-sampler-具体数值例子">Q2.4【严格第14题】Rejection sampler 具体数值例子</h3>
-<p><strong>问题</strong>：draft token 是 A，q(A)=0.6，p(A)=0.3。
-1. random rejection sampling 下，这个 draft token 的接受概率是多少？
-2. 如果随机数 u=0.4，接受还是拒绝？如果 u=0.6 呢？
-3. 如果拒绝，recover distribution 应该基于什么分布构造？
-4. 如果某个 token B 满足 p(B)=0.4, q(B)=0.1，它在 recover distribution 里对应的未归一化概率是多少？
-5. 如果融合 kernel 把 p-q 写成了 q-p，acceptance rate 和输出质量大概率会出现什么现象？</p>
+<p><strong>问题</strong>：draft token 是 A，q(A)=0.6，p(A)=0.3。</p>
+<ol>
+<li>random rejection sampling 下，这个 draft token 的接受概率是多少？</li>
+<li>如果随机数 u=0.4，接受还是拒绝？如果 u=0.6 呢？</li>
+<li>如果拒绝，recover distribution 应该基于什么分布构造？</li>
+<li>如果某个 token B 满足 p(B)=0.4, q(B)=0.1，它在 recover distribution 里对应的未归一化概率是多少？</li>
+<li>如果融合 kernel 把 p-q 写成了 q-p，acceptance rate 和输出质量大概率会出现什么现象？</li>
+</ol>
 <p><strong>标准答案</strong>：</p>
 <ol>
 <li>接受概率 = min(1, p/q) = min(1, 0.3/0.6) = <strong>0.5</strong>。</li>
@@ -403,33 +417,41 @@
 <p><strong>问题</strong>：为什么 speculative decoding 能提升吞吐？什么时候收益差甚至负收益？</p>
 <p><strong>标准答案</strong>：</p>
 <p>普通 decode 每输出一个 token 通常需要一次 target decode step。speculative decoding 额外付出 draft generation、target verification、rejection sampler 和状态管理开销，但如果一轮平均能接受 A 个 token，就把一次 target verification 的成本摊到 A 个输出 token 上，减少 target decode step 次数和每 token target 成本。</p>
-<p><strong>收益成立四个条件</strong>：
-1. accepted length 足够高；
-2. draft model 足够便宜；
-3. target verification 能高效并行；
-4. prepare_inputs、sampler、KV cache commit 等 runtime 额外开销不能太大。</p>
-<p><strong>收益差的场景</strong>：
-- draft / target 分布不匹配
-- 高熵输出、temperature 较高
-- 短输出
-- num_spec_tokens 过大导致后段 token acceptance 降低
-- draft model 太大
-- verification 序列并行效率不好
-- batch 内请求长度差异大
-- NPU 上小算子 / host 调度开销抵消收益</p>
+<p><strong>收益成立四个条件</strong>：</p>
+<ol>
+<li>accepted length 足够高；</li>
+<li>draft model 足够便宜；</li>
+<li>target verification 能高效并行；</li>
+<li>prepare_inputs、sampler、KV cache commit 等 runtime 额外开销不能太大。</li>
+</ol>
+<p><strong>收益差的场景</strong>：</p>
+<ul>
+<li>draft / target 分布不匹配</li>
+<li>高熵输出、temperature 较高</li>
+<li>短输出</li>
+<li>num_spec_tokens 过大导致后段 token acceptance 降低</li>
+<li>draft model 太大</li>
+<li>verification 序列并行效率不好</li>
+<li>batch 内请求长度差异大</li>
+<li>NPU 上小算子 / host 调度开销抵消收益</li>
+</ul>
 <hr>
 <h3 id="q32p1-4adaptive-speculative--fallback">Q3.2【P1-4】Adaptive speculative / fallback</h3>
 <p><strong>问题</strong>：如果线上 acceptance rate 低，如何做动态策略？</p>
 <p><strong>标准答案</strong>：</p>
 <p><strong>动态策略一定不能在 draft generation 或 target verification 中间切换</strong>。必须等当前 decode step 完成，confirmed tokens、KV cache、request state、scheduler state 都 commit 后，再决定下一轮策略。</p>
-<p>用 rolling window 统计每个 request 或 batch 的 acceptance rate / accepted length。
-- 如果连续几轮低于阈值，可以先降低 num_spec_tokens；
-- 如果仍然低，再 fallback 到普通 decode。</p>
+<p>用 rolling window 统计每个 request 或 batch 的 acceptance rate / accepted length。</p>
+<ul>
+<li>如果连续几轮低于阈值，可以先降低 num_spec_tokens；</li>
+<li>如果仍然低，再 fallback 到普通 decode。</li>
+</ul>
 <p><strong>避免抖动</strong>：需要 hysteresis、cooldown 和最小生效周期，比如连续 N 轮低 acceptance 才降级，连续 M 轮恢复才重新开启。</p>
-<p><strong>fallback 保证 non-spec path 不受影响</strong>：
-- 默认 config 可关闭 speculative；
-- 异常、低收益或 sampler 校验失败时回退普通 decode；
-- 测试覆盖开启/关闭 speculative 的输出一致性、KV cache 状态隔离和性能不回退。</p>
+<p><strong>fallback 保证 non-spec path 不受影响</strong>：</p>
+<ul>
+<li>默认 config 可关闭 speculative；</li>
+<li>异常、低收益或 sampler 校验失败时回退普通 decode；</li>
+<li>测试覆盖开启/关闭 speculative 的输出一致性、KV cache 状态隔离和性能不回退。</li>
+</ul>
 <hr>
 <h3 id="q33简历第18题speculative-decoding-与-kv-select-的瓶颈对比">Q3.3【简历第18题】speculative decoding 与 KV-select 的瓶颈对比</h3>
 <p><strong>问题</strong>：speculative decoding 和 KV-select 分别适合优化什么瓶颈？如果两者叠加使用，可能有什么冲突或收益抵消？</p>
@@ -438,10 +460,12 @@
 <li><strong>speculative decoding</strong> 优化的是"步数 / 每轮推进 token 数"——减少 target decode step 数，适合 target 单步昂贵且 draft 接受率高的场景。</li>
 <li><strong>KV-select</strong> 优化的是"单步长上下文 attention 的 KV 读取和 QK/softmax 计算"——减少每步长上下文 attention 的 KV 读取，适合长上下文且 attention 访存瓶颈明显的场景。</li>
 </ul>
-<p><strong>叠加冲突</strong>：
-- KV-select 如果改变 target logits 分布，可能降低 draft-target 一致性，从而降低 acceptance rate。
-- 两者都可能引入额外 runtime glue logic、gather/scatter、小算子、shape 复杂度和图编译路径，叠加后可能互相抵消收益。
-- correctness 口径：如果 target verification 使用 KV-select 后已经不是原始完整 target model 分布，那么 speculative decoding 保证与原 target 采样分布一致的理论前提会被破坏，除非接受这个近似或重新定义 target 分布。</p>
+<p><strong>叠加冲突</strong>：</p>
+<ul>
+<li>KV-select 如果改变 target logits 分布，可能降低 draft-target 一致性，从而降低 acceptance rate。</li>
+<li>两者都可能引入额外 runtime glue logic、gather/scatter、小算子、shape 复杂度和图编译路径，叠加后可能互相抵消收益。</li>
+<li>correctness 口径：如果 target verification 使用 KV-select 后已经不是原始完整 target model 分布，那么 speculative decoding 保证与原 target 采样分布一致的理论前提会被破坏，除非接受这个近似或重新定义 target 分布。</li>
+</ul>
 <p><strong>验证方式</strong>：需要分别 benchmark baseline、spec only、KV-select only、spec + KV-select，并观察 TPOT、throughput、acceptance length、质量指标和 NPU utilization。</p>
 <hr>
 <h2 id="四多并发-correctness-排查">四、多并发 correctness 排查</h2>
@@ -449,38 +473,48 @@
 <p><strong>问题</strong>：单请求 EAGLE-3 输出和 baseline 对齐，但多并发输出开始漂，acceptance rate 异常波动。你怎么排查？</p>
 <p><strong>标准答案</strong>：</p>
 <p>先把问题做成 deterministic case：固定输入、固定 sampling params、固定 seed，先跑单请求 baseline，再跑双请求和 10 并发 mixed case。最好让不同 request 的 accepted length 不同，故意制造 request state 分叉。</p>
-<p><strong>第一轮 dump 覆盖输入组织、中间验证和输出提交三段</strong>（不要只看输入）：
-- input_ids、position_ids、seq_lens / q_seq_length / batch_valid_length
-- block_table、slot_mapping、attention_metadata
-- target hidden states / draft hidden states、target logits / draft logits
-- processed_probs、accept mask、recovered token、final sampled token
-- 每个 request 的输出状态</p>
-<p><strong>分叉判断（找第一次 divergence）</strong>：
-- input_ids / position_ids / slot_mapping 不一致 → 查 batch mapping、position 构造、block_table / slot_mapping
-- hidden states 不一致 → 查 attention metadata、KV cache、model forward
-- target logits 不一致 → 仍然查 logits 前
-- target logits 一致但 processed_probs 不一致 → 查 logits processing（temperature、top-k、top-p、mask、softmax、renorm、dtype、sampling params 是否串请求）
-- accept_mask 不一致 → 查 rejection sampler 的 p/q gather、随机数比较、accept 判定
-- accept_mask 一致但 final_tokens 不一致 → 查 recover sample、bonus token、token 拼接、request output commit</p>
+<p><strong>第一轮 dump 覆盖输入组织、中间验证和输出提交三段</strong>（不要只看输入）：</p>
+<ul>
+<li>input_ids、position_ids、seq_lens / q_seq_length / batch_valid_length</li>
+<li>block_table、slot_mapping、attention_metadata</li>
+<li>target hidden states / draft hidden states、target logits / draft logits</li>
+<li>processed_probs、accept mask、recovered token、final sampled token</li>
+<li>每个 request 的输出状态</li>
+</ul>
+<p><strong>分叉判断（找第一次 divergence）</strong>：</p>
+<ul>
+<li>input_ids / position_ids / slot_mapping 不一致 → 查 batch mapping、position 构造、block_table / slot_mapping</li>
+<li>hidden states 不一致 → 查 attention metadata、KV cache、model forward</li>
+<li>target logits 不一致 → 仍然查 logits 前</li>
+<li>target logits 一致但 processed_probs 不一致 → 查 logits processing（temperature、top-k、top-p、mask、softmax、renorm、dtype、sampling params 是否串请求）</li>
+<li>accept_mask 不一致 → 查 rejection sampler 的 p/q gather、随机数比较、accept 判定</li>
+<li>accept_mask 一致但 final_tokens 不一致 → 查 recover sample、bonus token、token 拼接、request output commit</li>
+</ul>
 <p>如果单并发正确、多并发错误，最优先怀疑：request -&gt; batch index 映射、block_table / slot_mapping 物理 KV 地址映射、accepted length 不同导致的 seq_len / position / KV cache 写回错位。</p>
-<p><strong>修复后补三类回归</strong>：
-1. 单请求下不同 accepted length 的 correctness 回归
-2. 多请求下每个 request accepted length 不同的交叉回归
-3. 部分请求 reject / EOS / stop 提前结束时，其余 request position / KV cache / output commit 不受污染的回归</p>
+<p><strong>修复后补三类回归</strong>：</p>
+<ol>
+<li>单请求下不同 accepted length 的 correctness 回归</li>
+<li>多请求下每个 request accepted length 不同的交叉回归</li>
+<li>部分请求 reject / EOS / stop 提前结束时，其余 request position / KV cache / output commit 不受污染的回归</li>
+</ol>
 <hr>
 <h3 id="q42p0-6slotmapping--blocktable--kv-cache-bug">Q4.2【P0-6】slot_mapping / block_table / KV cache bug</h3>
 <p><strong>问题</strong>：slot_mapping 未转 int32 为什么导致 10 并发下后 9 个 batch 同错？</p>
 <p><strong>标准答案</strong>：</p>
-<p><strong>slot_mapping 不是普通 position</strong>，它表示当前 token 在 paged KV cache 中的物理 slot。完整映射链：
-1. request 的 logical position 先通过 <code>position // block_size</code> 得到 logical block
-2. 再查 block_table 得到 physical block id
-3. 最后用 <code>physical_block_id * block_size + position % block_size</code> 得到物理 slot</p>
+<p><strong>slot_mapping 不是普通 position</strong>，它表示当前 token 在 paged KV cache 中的物理 slot。完整映射链：</p>
+<ol>
+<li>request 的 logical position 先通过 <code>position // block_size</code> 得到 logical block</li>
+<li>再查 block_table 得到 physical block id</li>
+<li>最后用 <code>physical_block_id * block_size + position % block_size</code> 得到物理 slot</li>
+</ol>
 <p><code>block_ids * block_size + clamped_positions % block_size</code> 本质是在把 physical block id 和 block 内 offset 展平成当前 token 的 KV cache slot index。</p>
 <p><strong>bug 关键</strong>不是"310 不支持 int32"，而是<strong>底层 NPU attention / KV cache 索引算子期望 slot_mapping 是 int32</strong>。如果上层保留为默认 int64 或不符合算子期望的 dtype，框架可能不直接报错，但算子侧索引解释或地址计算会异常，导致读写到错误物理 slot。</p>
-<p><strong>为什么单 batch 不明显、多 batch 第 2 次明显</strong>：
-- 单 batch 时第一个 request 往往映射到低位或起始 slot，即使索引路径有问题，也可能碰巧读写到正确区域。
-- 多 batch 时每个 request 的 physical block / slot 不同，错误 dtype 可能让 batch1+ 读到同一段错误地址或 zero KV，所以后 9 个 batch hidden states / logits 变得相似甚至同错。
-- 第二次 draft 推理更明显，是因为第一次 decode / cache update 后，KV cache 已经有多 request 写回状态，错误 slot_mapping 开始影响下一轮 attention 读写。</p>
+<p><strong>为什么单 batch 不明显、多 batch 第 2 次明显</strong>：</p>
+<ul>
+<li>单 batch 时第一个 request 往往映射到低位或起始 slot，即使索引路径有问题，也可能碰巧读写到正确区域。</li>
+<li>多 batch 时每个 request 的 physical block / slot 不同，错误 dtype 可能让 batch1+ 读到同一段错误地址或 zero KV，所以后 9 个 batch hidden states / logits 变得相似甚至同错。</li>
+<li>第二次 draft 推理更明显，是因为第一次 decode / cache update 后，KV cache 已经有多 request 写回状态，错误 slot_mapping 开始影响下一轮 attention 读写。</li>
+</ul>
 <p><strong>证明链路</strong>：dump block_table / physical_block_ids、positions、slot_mapping、KV cache 对应 slice、attention output / hidden states / logits。修复 <code>.to(torch.int32)</code> 后期待：不同 request 的 slot_mapping 映射到各自 physical slot，KV cache slice 不再互相覆盖，hidden/logits 不再同错，acceptance rate 恢复到接近单 batch 的合理范围。</p>
 <hr>
 <h3 id="q43p1-1pagedattention-基础追问">Q4.3【P1-1】PagedAttention 基础追问</h3>
@@ -490,9 +524,11 @@
 <li><strong>block_table</strong> 更偏 sequence / request 级，记录 logical block 到 physical block 的映射。因为 paged KV cache 里逻辑连续的 token 不一定存放在物理连续内存中，所以需要 block_table 找到每个 logical block 对应的 physical block。</li>
 <li><strong>slot_mapping</strong> 更偏 token 级，表示当前 token 对应的物理 KV slot，通常由 block_table 和 position 推导得到：<code>logical_block = position // block_size</code>，<code>physical_block = block_table[logical_block]</code>，<code>slot = physical_block * block_size + position % block_size</code>。</li>
 </ul>
-<p><strong>两种错位现象</strong>：
-- 如果 block_table 对但 slot_mapping 错：历史 block 映射可能没错，但当前 token 读写的具体物理 slot 错了。
-- 如果 slot_mapping 对但 block_table 错（不常见）：当前 token 写入位置看似正确，attention 读取历史 KV blocks 时却查错 physical block。</p>
+<p><strong>两种错位现象</strong>：</p>
+<ul>
+<li>如果 block_table 对但 slot_mapping 错：历史 block 映射可能没错，但当前 token 读写的具体物理 slot 错了。</li>
+<li>如果 slot_mapping 对但 block_table 错（不常见）：当前 token 写入位置看似正确，attention 读取历史 KV blocks 时却查错 physical block。</li>
+</ul>
 <p><strong>一句话区分</strong>：position 是 request 逻辑序列里的 token 位置，offset 是 position 在当前 block 内的相对位置，slot_mapping 是结合 physical block id 后得到的 KV cache 物理 slot 地址。</p>
 <hr>
 <h3 id="q44p1-2第一次-divergence-定位表">Q4.4【P1-2】第一次 divergence 定位表</h3>
@@ -538,14 +574,18 @@
 <h3 id="q45简历第11题speculative-verification-attention-mask-可见性">Q4.5【简历第11题】speculative verification attention mask 可见性</h3>
 <p><strong>问题</strong>：在 speculative verification 阶段，假设一个 batch 里有多个请求，每个请求都有多个 speculative tokens。attention mask / attention metadata 必须保证哪些 token 能看见哪些 token？</p>
 <p><strong>标准答案</strong>：</p>
-<p>在 verification 阶段，每个请求内部的多个 speculative tokens 需要构造局部 causal 关系：
-- 第 k 个 speculative token 可以 attend 到该请求的历史 KV 和本轮候选序列中第 1 到 k-1 个 speculative token；
-- <strong>不能</strong> attend 到第 k+1 之后的 future token；
-- <strong>不同请求之间必须完全隔离，不能互相 attend</strong>，即使它们在 batch flatten 后相邻排列。batch 只是为了并行计算，不代表序列之间可以互相可见。</p>
+<p>在 verification 阶段，每个请求内部的多个 speculative tokens 需要构造局部 causal 关系：</p>
+<ul>
+<li>第 k 个 speculative token 可以 attend 到该请求的历史 KV 和本轮候选序列中第 1 到 k-1 个 speculative token；</li>
+<li><strong>不能</strong> attend 到第 k+1 之后的 future token；</li>
+<li><strong>不同请求之间必须完全隔离，不能互相 attend</strong>，即使它们在 batch flatten 后相邻排列。batch 只是为了并行计算，不代表序列之间可以互相可见。</li>
+</ul>
 <p>attention metadata 必须同时描述：每条 sequence 的历史长度、query token 起始位置、block_table 和 causal mask 边界。</p>
-<p><strong>mask 错和 KV 地址映射错是两类问题</strong>：
-- mask 错：可见性边界错（看见 future token、看见跨请求 token、看不见应有历史 token）
-- slot_mapping / block_table 错：物理 KV 地址读写错位</p>
+<p><strong>mask 错和 KV 地址映射错是两类问题</strong>：</p>
+<ul>
+<li>mask 错：可见性边界错（看见 future token、看见跨请求 token、看不见应有历史 token）</li>
+<li>slot_mapping / block_table 错：物理 KV 地址读写错位</li>
+</ul>
 <p>两者都可能导致 logits 异常，但排查路径不同。</p>
 <hr>
 <h3 id="q46简历第24题rejected-token-的-kv-cache-处理">Q4.6【简历第24题】rejected token 的 KV cache 处理</h3>
@@ -564,11 +604,13 @@
 <p><strong>优化做法</strong>：把部分索引生成逻辑融合到 device / 图内路径。以 output_index 为例：原来可能对每个 request 根据 prefix offset 生成 arange，再 slice 写入输出 tensor；融合后 kernel 直接读取 sum_tokens / sum_query_lengths 等 prefix 信息，在 device 端生成每个 token 的 relative index 或 position index，减少 Python loop、多次 arange、slice 写回和小 kernel launch。</p>
 <p><strong>收益主要来自</strong>减少 kernel launch、host 调度、中间 tensor 写回和 host-device 同步，而不是减少大量数学计算。</p>
 <p><strong>风险不能说"没有"</strong>，更稳的说法是逻辑等价、风险可控，但要重点验证：动态 batch size、不同 query length、不同 speculative length、空请求 / finished 请求、temperature=0 和非 0 两条 sampler 路径，以及 shape 变化是否触发 fallback 或重新编译。</p>
-<p><strong>小例子</strong>：
-- query lengths = [2, 3, 1]
-- sum_query_lengths end offsets = [2, 5, 6]，如果需要 start offsets 则是 [0, 2, 5, 6]
-- relative output_index = [0, 1, 0, 1, 2, 0]
-- 如果 start positions = [10, 20, 30]，最终 position index = [10, 11, 20, 21, 22, 30]</p>
+<p><strong>小例子</strong>：</p>
+<ul>
+<li>query lengths = [2, 3, 1]</li>
+<li>sum_query_lengths end offsets = [2, 5, 6]，如果需要 start offsets 则是 [0, 2, 5, 6]</li>
+<li>relative output_index = [0, 1, 0, 1, 2, 0]</li>
+<li>如果 start positions = [10, 20, 30]，最终 position index = [10, 11, 20, 21, 22, 30]</li>
+</ul>
 <p>最容易 off-by-one 的地方是第 0 个 request 的 start=0、end-exclusive slice、以及最后一个 token 边界。</p>
 <hr>
 <h3 id="q52p0-8lmhead-首次编图-spike-与-warmup">Q5.2【P0-8】lm_head 首次编图 spike 与 warmup</h3>
@@ -591,9 +633,11 @@
 <h3 id="q54p1-6msprof-性能归因">Q5.4【P1-6】MSProf 性能归因</h3>
 <p><strong>问题</strong>：拿到 MSProf 火焰图后如何区分模型计算慢和 runtime 调度慢？</p>
 <p><strong>标准答案</strong>：</p>
-<p>同时看 host timeline 和 device timeline：
-- <strong>模型计算慢</strong>：device kernel 持续占用，matmul / attention kernel 本身耗时长。
-- <strong>runtime 调度慢</strong>：host 侧 enqueue / compile / sync / Python 调度时间长，device kernel 之间有空洞，小 kernel 很多但单个计算时间短，或者 H2D / D2H 拷贝和同步点频繁。</p>
+<p>同时看 host timeline 和 device timeline：</p>
+<ul>
+<li><strong>模型计算慢</strong>：device kernel 持续占用，matmul / attention kernel 本身耗时长。</li>
+<li><strong>runtime 调度慢</strong>：host 侧 enqueue / compile / sync / Python 调度时间长，device kernel 之间有空洞，小 kernel 很多但单个计算时间短，或者 H2D / D2H 拷贝和同步点频繁。</li>
+</ul>
 <p><strong>判断 300ms 是否是首次编译</strong>：看它是否只在第一次某个 shape / path 出现，同 shape 后续是否消失，timeline 中是否有 compile / build graph event。</p>
 <p><strong>判断 500us 小开销是否值得优化</strong>：不只看单次占比，还要看出现频率、是否每个 decode step 都重复、是否影响 P99、是否被 speculative decoding 放大，以及优化风险。</p>
 <p><strong>把火焰图结论变成优化计划时，要形成闭环</strong>：假设、单点改动、对照实验、观察指标、回滚条件。比如假设 draft lm_head 首次编译导致 spike，改动是 warmup draft lm_head，验证是固定输入和并发，对比 MSProf、TPOT、P99 和首轮 decode latency，确认节点消失且没有转移。</p>
@@ -626,21 +670,25 @@
 <p><strong>吞吐口径</strong>：输出 token throughput（总输出 token 数 / 端到端总耗时）。
 <strong>TPOT 口径</strong>：每输出 token 的平均 decode 耗时；需要明确是否包含 prefill、是否端到端、统计窗口是否是完整 benchmark 还是 decode-only。如果是 vLLM benchmark 工具输出，补充具体参数、并发度、prompt / output length、采样参数、warmup 是否剔除、是否固定 seed，以及 baseline 和 optimized 是否使用相同输入和环境。</p>
 <p><strong>spec=3 时</strong>：一次 target verification 理论上最多可以接受多个 draft token，并可能有 bonus / guaranteed token 口径差异，所以面试里不能简单说 acceptance length 一定是 1 到 3。实际 mean accepted length 达不到上限，是因为越往后的 draft token 分布偏差越大，acceptance rate 通常递减，同时 draft 生成、target verification、sampler 和 prepare_inputs 都有额外开销。</p>
-<p><strong>如果面试官质疑公平性，优先补充五类条件</strong>：
-1. 模型和权重版本一致
-2. 相同 prompts / output length / sampling params / seed
-3. 相同 batch size / 并发度 / max tokens / num_spec_tokens
-4. 相同硬件、驱动、MindSpore / vLLM 版本和 warmup 状态
-5. 同时报告 acceptance rate / accepted length、TTFT、TPOT、throughput、P95/P99、显存、logits 对齐和质量回归</p>
+<p><strong>如果面试官质疑公平性，优先补充五类条件</strong>：</p>
+<ol>
+<li>模型和权重版本一致</li>
+<li>相同 prompts / output length / sampling params / seed</li>
+<li>相同 batch size / 并发度 / max tokens / num_spec_tokens</li>
+<li>相同硬件、驱动、MindSpore / vLLM 版本和 warmup 状态</li>
+<li>同时报告 acceptance rate / accepted length、TTFT、TPOT、throughput、P95/P99、显存、logits 对齐和质量回归</li>
+</ol>
 <p><strong>MT-Bench 前 80 轮只适合作为早期 smoke test 和通用问答验证</strong>。上线前还要补：真实流量 replay、不同 context length / output length bucket、长上下文、代码生成、NL2SQL、needle retrieval、高并发混合负载，以及质量回归。</p>
 <hr>
 <h3 id="q62简历第7题acceptance-length--token-acceptance-rate-指标关系">Q6.2【简历第7题】acceptance length / token acceptance rate 指标关系</h3>
 <p><strong>问题</strong>：在 Ascend 910B 上 num_spec_tokens=2 时，mean acceptance length 达 1.63，token-1 / token-2 接受率分别为 70% / 47%。解释这三个指标之间的关系。</p>
 <p><strong>标准答案</strong>：</p>
 <p>先明确统计口径：如果 accepted length 包含 target 本身保证推进的 token，那么 num_spec_tokens=2 时范围是 1 到 3；mean=1.63 表示每轮平均推进约 1.63 个输出 token。token-1 70%、token-2 47% 表明第二个位置接受率明显下降，所以继续增大 spec token 可能边际收益下降。</p>
-<p>mean acceptance length 的取值范围取决于统计口径：
-- 如果只统计 draft tokens，范围是 0 到 num_spec_tokens；
-- 如果包含 target guaranteed token / bonus token，范围可能是 1 到 num_spec_tokens+1。</p>
+<p>mean acceptance length 的取值范围取决于统计口径：</p>
+<ul>
+<li>如果只统计 draft tokens，范围是 0 到 num_spec_tokens；</li>
+<li>如果包含 target guaranteed token / bonus token，范围可能是 1 到 num_spec_tokens+1。</li>
+</ul>
 <p>mean acceptance length=1.63 不能简单解释为"平均 60% 接收率"，应该解释为每轮平均推进约 1.63 个 token，相比无投机每轮 1 个 token 有潜在收益，但实际收益还要看 draft/verification/rejection/runtime 开销。</p>
 <hr>
 <h2 id="七系统设计">七、系统设计</h2>
@@ -662,10 +710,12 @@
 <p><strong>state manager</strong>：负责 request state、KV cache、accepted length、position、finished / EOS / stop、output commit 和 rollback / fallback。这个模块不能散落在 runner 各处。</p>
 </li>
 </ol>
-<p><strong>容易绑死 EAGLE-3 的字段</strong>：
-- hidden states 这种 EAGLE 特有输入
-- draft model runner / extra model handle
-- request state 里混入某个算法专属字段</p>
+<p><strong>容易绑死 EAGLE-3 的字段</strong>：</p>
+<ul>
+<li>hidden states 这种 EAGLE 特有输入</li>
+<li>draft model runner / extra model handle</li>
+<li>request state 里混入某个算法专属字段</li>
+</ul>
 <p>为了支持多 proposer，优先统一：target verification 链路 和 accept/reject + state commit 链路。</p>
 <p><strong>request 级状态</strong>：当前已确认序列长度、proposer 相关状态、已接受 token 数、finished / EOS / stop 状态、suffix cache 或 draft cache 等 request-local 状态。</p>
 <p><strong>batch 级状态</strong>：slot mapping、block table、batch 内 request index 映射、本轮 speculative length / accepted mask。</p>
@@ -684,39 +734,47 @@
 <p><strong>标准答案</strong>：</p>
 <p><strong>KV-Select 主要减少长上下文 decode 阶段 attention 对历史 KV 的计算和访存压力</strong>。收益不只是 attention score FLOPs 下降，更关键的是减少历史 KV cache 读取带来的带宽压力；显存占用和调度开销未必是主收益。</p>
 <p><strong>sign-bit / hamming-topk 的直觉</strong>：用便宜的二值近似相似度先做粗筛，避免对全部历史 KV 都计算完整 attention score 和全量排序。具体是通过当前 query 与历史 key 在随机超平面空间的哈希投影，比较 sign-bit 二值码的一致程度（通常用异或 / popcount 得到距离或相似度），再做 TopK。它适合长上下文、并发较高、KV 访存压力明显的场景。</p>
-<p><strong>质量验证不能只看吞吐，至少看三类</strong>：
-1. 长上下文检索类，如 Needle-in-a-Haystack
-2. 代码生成 / NL2SQL 这类高精度结构化任务
-3. 多轮对话或长文问答的一致性和事实保真</p>
+<p><strong>质量验证不能只看吞吐，至少看三类</strong>：</p>
+<ol>
+<li>长上下文检索类，如 Needle-in-a-Haystack</li>
+<li>代码生成 / NL2SQL 这类高精度结构化任务</li>
+<li>多轮对话或长文问答的一致性和事实保真</li>
+</ol>
 <p>还要扫 TopK、context length、batch size，并记录质量下降边界。</p>
-<p><strong>生产上最担心两个失败模式</strong>：
-1. 漏掉远距离关键 token 导致答案错误
-2. 局部相似性偏置导致忽略全局依赖</p>
+<p><strong>生产上最担心两个失败模式</strong>：</p>
+<ol>
+<li>漏掉远距离关键 token 导致答案错误</li>
+<li>局部相似性偏置导致忽略全局依赖</li>
+</ol>
 <p>代码生成、NL2SQL、法律/金融等高精度场景要谨慎启用。</p>
 <hr>
 <h3 id="q82p1-8suffix-decoding-项目">Q8.2【P1-8】Suffix Decoding 项目</h3>
 <p><strong>问题</strong>：Suffix Decoding 在 request 级需要维护什么状态？收益边界在哪里？</p>
 <p><strong>标准答案</strong>：</p>
 <p>Suffix decoding 更适合高重复输出或模式化输出场景。</p>
-<p><strong>request 级状态至少包括</strong>：
-- generated token history
-- match pointer
-- candidate suffix tokens
-- 当前匹配长度
-- 上轮是否命中
-- 用于回退的普通 decode 状态</p>
+<p><strong>request 级状态至少包括</strong>：</p>
+<ul>
+<li>generated token history</li>
+<li>match pointer</li>
+<li>candidate suffix tokens</li>
+<li>当前匹配长度</li>
+<li>上轮是否命中</li>
+<li>用于回退的普通 decode 状态</li>
+</ul>
 <p><strong>收益来自</strong>直接复用或预测重复 suffix，减少 target decode step。</p>
 <p><strong>边界</strong>：短输出、低重复、高熵生成、强采样或用户输入变化很大时，命中率低，额外匹配开销可能抵消收益。</p>
 <p><strong>和 EAGLE-3 一样</strong>，动态启停必须在 step 边界做，不能在候选生成和验证中间切换；fallback 后 request state、KV cache 和 output commit 必须保持一致。</p>
 <hr>
 <h2 id="九代码级追问slotmapping-公式推演">九、代码级追问：slot_mapping 公式推演</h2>
 <h3 id="q91pr第16题blocksize16-positions161718-blockids3">Q9.1【PR第16题】block_size=16, positions=[16,17,18], block_ids=3</h3>
-<p><strong>问题</strong>：
-1. 这三个 token 的 block 内 offset 分别是多少？
-2. 对应的 slot_mapping 分别是多少？
-3. 如果 position 是 [15,16]，它们分别落在哪个 block 内 offset？为什么这是边界高风险点？
-4. 如果 <code>clamped_positions % block_size</code> 写错成 <code>clamped_positions / block_size</code>，会出现什么错误？
-5. 如果 <code>block_ids</code> 对了但 <code>positions</code> off-by-one，slot_mapping 会怎么错？</p>
+<p><strong>问题</strong>：</p>
+<ol>
+<li>这三个 token 的 block 内 offset 分别是多少？</li>
+<li>对应的 slot_mapping 分别是多少？</li>
+<li>如果 position 是 [15,16]，它们分别落在哪个 block 内 offset？为什么这是边界高风险点？</li>
+<li>如果 <code>clamped_positions % block_size</code> 写错成 <code>clamped_positions / block_size</code>，会出现什么错误？</li>
+<li>如果 <code>block_ids</code> 对了但 <code>positions</code> off-by-one，slot_mapping 会怎么错？</li>
+</ol>
 <p><strong>标准答案</strong>：</p>
 <ol>
 <li><code>[16,17,18] % 16 = [0,1,2]</code>，block 内 offset 分别是 0、1、2。</li>
@@ -784,11 +842,15 @@ positions = [0, 17, 31, 32]
 <p><strong>标准答案</strong>：</p>
 <ol>
 <li>offset 是 <code>[0,1,15,0]</code>。</li>
-<li>最终 slot：
-   - <code>0*16+0=0</code>
-   - <code>1*16+1=17</code>
-   - <code>3*16+15=63</code>
-   - <code>8*16+0=128</code></li>
+<li>最终 slot：</li>
+</ol>
+<ul>
+<li><code>0*16+0=0</code></li>
+<li><code>1*16+1=17</code></li>
+<li><code>3*16+15=63</code></li>
+<li><code>8*16+0=128</code></li>
+</ul>
+<ol start="3">
 <li>position 17 是 block 边界之后的 token；position 32 也是新 block 的起点。更严谨地说，<code>17</code> 是越过 16 边界后的第二个位置，<code>32</code> 是另一个 block 边界起点。</li>
 <li>只 dump offset 会丢失 physical block 信息，无法判断最终读写的是哪个物理 KV cache slot。</li>
 <li>"position 是 request 逻辑序列里的 token 位置，offset 是 position 在当前 block 内的相对位置，slot_mapping 是结合 physical block id 后得到的 KV cache 物理 slot 地址。"</li>
@@ -796,12 +858,14 @@ positions = [0, 17, 31, 32]
 <hr>
 <h2 id="十代码级追问prepareinputs--rejectionsampler-融合">十、代码级追问：prepare_inputs / rejection_sampler 融合</h2>
 <h3 id="q101pr第4题prepareinputs-小例子现场推">Q10.1【PR第4题】prepare_inputs 小例子现场推</h3>
-<p><strong>问题</strong>：batch size=3，每个 request 本轮 query token 数分别是 [2, 3, 1]。
-1. sum_query_lengths 应该长什么样？
-2. 如果 output_index 表示每个 token 在对应 request 内的相对位置，它最终应该是什么？
-3. 如果还要叠加每个 request 的起始 position，比如起始 position 是 [10, 20, 30]，那最终 position index 应该是什么？
-4. 原来用 arange + slice 怎么生成这些值？融合 kernel 又是怎么避免这些小 op 的？
-5. 这个例子里最容易出现 off-by-one 的地方在哪里？</p>
+<p><strong>问题</strong>：batch size=3，每个 request 本轮 query token 数分别是 [2, 3, 1]。</p>
+<ol>
+<li>sum_query_lengths 应该长什么样？</li>
+<li>如果 output_index 表示每个 token 在对应 request 内的相对位置，它最终应该是什么？</li>
+<li>如果还要叠加每个 request 的起始 position，比如起始 position 是 [10, 20, 30]，那最终 position index 应该是什么？</li>
+<li>原来用 arange + slice 怎么生成这些值？融合 kernel 又是怎么避免这些小 op 的？</li>
+<li>这个例子里最容易出现 off-by-one 的地方在哪里？</li>
+</ol>
 <p><strong>标准答案</strong>：</p>
 <ol>
 <li><code>[2,5,6]</code>（cumulative end offsets）。如果实现需要 start offsets，通常会再补一个前导 0，得到 <code>[0,2,5,6]</code>。</li>
@@ -814,47 +878,59 @@ positions = [0, 17, 31, 32]
 <h3 id="q102pr第10题rejectionsampler-算子融合">Q10.2【PR第10题】rejection_sampler 算子融合</h3>
 <p><strong>问题</strong>：原始 rejection_sampler 里哪些步骤会产生很多小算子或 host/device 调度？</p>
 <p><strong>标准答案</strong>：</p>
-<p><strong>容易产生小算子的步骤</strong>（至少 4 个）：
-1. logits 处理和 softmax / probability 生成
-2. gather draft token 对应概率
-3. 比较 <code>p/q</code> 与随机数
-4. 生成 accept mask
-5. 找到第一次 rejected 位置
-6. 构造 recovered distribution
-7. sample recovered token
-8. 拼接/过滤最终 token</p>
-<p><strong>融合后输入输出 tensor</strong>：
-- 输入：target logits 或 target probs、draft probs、draft token ids、random uniforms、temperature/sampling params、num_spec_tokens、batch/request mask
-- 输出：accepted mask、recovered token ids、final sampled token ids、每个 request 的 accepted length</p>
+<p><strong>容易产生小算子的步骤</strong>（至少 4 个）：</p>
+<ol>
+<li>logits 处理和 softmax / probability 生成</li>
+<li>gather draft token 对应概率</li>
+<li>比较 <code>p/q</code> 与随机数</li>
+<li>生成 accept mask</li>
+<li>找到第一次 rejected 位置</li>
+<li>构造 recovered distribution</li>
+<li>sample recovered token</li>
+<li>拼接/过滤最终 token</li>
+</ol>
+<p><strong>融合后输入输出 tensor</strong>：</p>
+<ul>
+<li>输入：target logits 或 target probs、draft probs、draft token ids、random uniforms、temperature/sampling params、num_spec_tokens、batch/request mask</li>
+<li>输出：accepted mask、recovered token ids、final sampled token ids、每个 request 的 accepted length</li>
+</ul>
 <p><strong>temperature=0 和 temperature&gt;0 两条路径</strong>：可以分别走不同融合 kernel 或不同分支，关键是减少原来 Python / 多小算子的调度，不一定强行塞进一个超大 kernel。</p>
-<p><strong>correctness 验证分三类</strong>：
-1. greedy 路径：看 argmax/token 是否一致
-2. random 路径：固定随机数，比较 accept mask 和 final token
-3. recover sample 路径：构造必拒绝 case，比较 recovered distribution 和 recovered token</p>
-<p><strong>核心公式</strong>：
-- random accept 判断核心是 <code>u &lt;= min(1, p_target(draft_token) / p_draft(draft_token))</code>
-- recover sample 核心是从 <code>max(0, p_target - p_draft)</code> 归一化后的分布采样</p>
+<p><strong>correctness 验证分三类</strong>：</p>
+<ol>
+<li>greedy 路径：看 argmax/token 是否一致</li>
+<li>random 路径：固定随机数，比较 accept mask 和 final token</li>
+<li>recover sample 路径：构造必拒绝 case，比较 recovered distribution 和 recovered token</li>
+</ol>
+<p><strong>核心公式</strong>：</p>
+<ul>
+<li>random accept 判断核心是 <code>u &lt;= min(1, p_target(draft_token) / p_draft(draft_token))</code></li>
+<li>recover sample 核心是从 <code>max(0, p_target - p_draft)</code> 归一化后的分布采样</li>
+</ul>
 <p><strong>correctness 不只看最终 token</strong>，也要看 accept mask、accepted length、recover token 和 logits/probs 差异。</p>
 <hr>
 <h3 id="q103pr第12题sampler-输出-accepted-length-的作用">Q10.3【PR第12题】sampler 输出 accepted length 的作用</h3>
 <p><strong>问题</strong>：为什么 sampler 需要输出 accepted length / valid token 数，而不是只输出 final token ids？</p>
 <p><strong>标准答案</strong>：</p>
 <p><strong>accepted length / valid token 数用于告诉 runtime 每个 request 本轮推进了多少 token</strong>，从而更新 request output、seq len、position、KV cache slot、下一轮 input、scheduler 状态，而不只是"批量输出 tokens"。</p>
-<p><strong>例子</strong>：
-- 如果一个 request 的 3 个 draft token 中前 2 个接受，第 3 个拒绝并 recover 了 1 个 token，那么本轮有效输出 token 数是 <strong>3 个</strong>（2 个 accepted draft token + 1 个 recovered token）。
-- 如果 3 个 draft token 全部接受，并且实现里支持 bonus token，那么本轮最多可能输出 <strong>4 个</strong> token。</p>
+<p><strong>例子</strong>：</p>
+<ul>
+<li>如果一个 request 的 3 个 draft token 中前 2 个接受，第 3 个拒绝并 recover 了 1 个 token，那么本轮有效输出 token 数是 <strong>3 个</strong>（2 个 accepted draft token + 1 个 recovered token）。</li>
+<li>如果 3 个 draft token 全部接受，并且实现里支持 bonus token，那么本轮最多可能输出 <strong>4 个</strong> token。</li>
+</ul>
 <p><strong>valid token 数影响的字段</strong>（至少 4 个）：output_token_ids、seq_lens、position_ids、slot_mapping/block_table，以及 request output buffer / finished state。</p>
 <p><strong>完整影响链路</strong>：<code>output_token_ids -&gt; seq_lens -&gt; position_ids -&gt; slot_mapping/KV cache -&gt; next input_ids -&gt; scheduler bookkeeping</code>。</p>
 <p><strong>如果 valid token 数算错但 final token ids 看起来对</strong>：会导致下一轮 position、seq length、KV cache 地址、draft input 对不齐，可能表现为重复 token、跳 token、读错 KV cache、acceptance rate 异常或 logits 漂移。</p>
 <hr>
 <h2 id="十一代码级追问off-by-one-与状态推进">十一、代码级追问：off-by-one 与状态推进</h2>
 <h3 id="q111pr第14题validtokennum132-的状态更新">Q11.1【PR第14题】valid_token_num=[1,3,2] 的状态更新</h3>
-<p><strong>问题</strong>：3 个 request 上一轮开始前的 seq_lens 分别是 [100, 200, 300]，sampler 本轮 valid token 数是 [1, 3, 2]。
-1. 本轮 commit 之后新的 seq_lens 应该是多少？
-2. 下一轮普通 decode 的 position_ids 应该是多少？
-3. 如果 request1 的 3 个有效 token 是 [a, b, c]，下一轮普通 decode 的 input_id 应该是哪个？
-4. 如果下一轮还要做 speculative verification，target verification 输入和普通 decode 输入有什么不同？
-5. 这个例子里 slot_mapping 应该按哪些 position 去算？</p>
+<p><strong>问题</strong>：3 个 request 上一轮开始前的 seq_lens 分别是 [100, 200, 300]，sampler 本轮 valid token 数是 [1, 3, 2]。</p>
+<ol>
+<li>本轮 commit 之后新的 seq_lens 应该是多少？</li>
+<li>下一轮普通 decode 的 position_ids 应该是多少？</li>
+<li>如果 request1 的 3 个有效 token 是 [a, b, c]，下一轮普通 decode 的 input_id 应该是哪个？</li>
+<li>如果下一轮还要做 speculative verification，target verification 输入和普通 decode 输入有什么不同？</li>
+<li>这个例子里 slot_mapping 应该按哪些 position 去算？</li>
+</ol>
 <p><strong>标准答案</strong>：</p>
 <ol>
 <li>commit 后新的 seq_lens 是 <code>[100,200,300] + [1,3,2] = [101,203,302]</code>。</li>
@@ -866,12 +942,14 @@ positions = [0, 17, 31, 32]
 <p><strong>牢牢记住</strong>：<code>seq_len</code> 个 token，对应最后 position 是 <code>seq_len-1</code>，下一个 position 是 <code>seq_len</code>。<code>seq_len+1</code> 是跳过当前应该写入的位置；<code>seq_len-1</code> 是覆盖最后一个旧位置。</p>
 <hr>
 <h3 id="q112pr第15题off-by-one-单测设计">Q11.2【PR第15题】off-by-one 单测设计</h3>
-<p><strong>问题</strong>：某个 request 目前已经确认了 5 个 token，它们的 position 是 [0,1,2,3,4]。
-1. 下一次普通 decode 要生成的新 token 的 position_id 应该是多少？
-2. 如果 speculative verification 要验证 3 个 draft tokens，它们的 position_ids 应该是多少？
-3. 如果代码错误地从 seq_len + 1 开始，会漏掉哪个 position？最终会导致什么现象？
-4. 如果代码错误地从 seq_len - 1 开始，会重复哪个 position？KV cache 会有什么风险？
-5. 你会用什么单测专门防这种 off-by-one？</p>
+<p><strong>问题</strong>：某个 request 目前已经确认了 5 个 token，它们的 position 是 [0,1,2,3,4]。</p>
+<ol>
+<li>下一次普通 decode 要生成的新 token 的 position_id 应该是多少？</li>
+<li>如果 speculative verification 要验证 3 个 draft tokens，它们的 position_ids 应该是多少？</li>
+<li>如果代码错误地从 seq_len + 1 开始，会漏掉哪个 position？最终会导致什么现象？</li>
+<li>如果代码错误地从 seq_len - 1 开始，会重复哪个 position？KV cache 会有什么风险？</li>
+<li>你会用什么单测专门防这种 off-by-one？</li>
+</ol>
 <p><strong>标准答案</strong>：</p>
 <ol>
 <li><strong>5</strong>。已有 positions <code>[0,1,2,3,4]</code>，已确认 token 数是 5，下一次普通 decode 新 token position 是 5。</li>
@@ -891,14 +969,18 @@ positions = [0, 17, 31, 32]
 <h4>FA-Q1 标准Self-Attention 的计算流程、时间和空间复杂度</h4>
 <p><strong>问题</strong>：标准 Self-Attention 的计算流程是什么？时间和空间复杂度分别是多少？</p>
 <p><strong>标准答案</strong>：</p>
-<p>计算流程：
-- Q = XW_Q, K = XW_K, V = XW_V（线性投影）
-- S = QK^T / √d_k（注意力分数矩阵 N×N）
-- P = softmax(S)（注意力权重矩阵 N×N）
-- O = PV（输出矩阵 N×d）</p>
-<p>复杂度：
-- 时间复杂度：<strong>O(N²d)</strong>，其中 N 为序列长度，d 为头维度
-- 空间复杂度：<strong>O(N²)</strong>，需要存储中间矩阵 S 和 P（均为 N×N）</p>
+<p>计算流程：</p>
+<ul>
+<li>Q = XW_Q, K = XW_K, V = XW_V（线性投影）</li>
+<li>S = QK^T / √d_k（注意力分数矩阵 N×N）</li>
+<li>P = softmax(S)（注意力权重矩阵 N×N）</li>
+<li>O = PV（输出矩阵 N×d）</li>
+</ul>
+<p>复杂度：</p>
+<ul>
+<li>时间复杂度：<strong>O(N²d)</strong>，其中 N 为序列长度，d 为头维度</li>
+<li>空间复杂度：<strong>O(N²)</strong>，需要存储中间矩阵 S 和 P（均为 N×N）</li>
+</ul>
 <p><strong>瓶颈</strong>：当 N 很大时（如长文本），N×N 的中间矩阵会消耗大量 HBM（GPU 显存），成为 memory-bound 操作。</p>
 <hr>
 <h4>FA-Q2 IO 感知算法与 GPU 存储层次</h4>
@@ -956,13 +1038,17 @@ positions = [0, 17, 31, 32]
 <p><strong>问题</strong>：Flash Attention 如何在分块（Tiling）的情况下正确计算 Softmax？</p>
 <p><strong>标准答案</strong>：</p>
 <p>这是 Flash Attention 最精巧的部分——<strong>Online Softmax</strong>。</p>
-<p>标准 softmax 需要遍历所有元素两次：
-1. 第一遍：求 max（数值稳定性）
-2. 第二遍：求 ∑exp(x − max)</p>
+<p>标准 softmax 需要遍历所有元素两次：</p>
+<ol>
+<li>第一遍：求 max（数值稳定性）</li>
+<li>第二遍：求 ∑exp(x − max)</li>
+</ol>
 <p>这在分块计算时不可行，因为处理第 i 个 block 时还不知道全局 max。</p>
-<p><strong>Online Softmax 的解决方案</strong>（基于 Milakov &amp; Gimelshein, 2018）：维护两个 running statistics：
-- m_i：当前已处理 block 的最大值
-- l_i：当前已处理 block 的指数和</p>
+<p><strong>Online Softmax 的解决方案</strong>（基于 Milakov &amp; Gimelshein, 2018）：维护两个 running statistics：</p>
+<ul>
+<li>m_i：当前已处理 block 的最大值</li>
+<li>l_i：当前已处理 block 的指数和</li>
+</ul>
 <p>每处理一个新的 block j：</p>
 <pre><code>m_new = max(m_old, max(S_ij))
 P_ij = exp(S_ij − m_new)
@@ -1027,11 +1113,13 @@ O = diag(1/l) @ O
 </tr>
 </tbody>
 </table>
-<p><strong>推导</strong>（设 block 大小 B_r = B_c = B）：
-- 外层循环 N/B 次，内层循环 N/B 次
-- 每次内循环：加载 Q_i (Bd) + K_j (Bd) + V_j (Bd)，写回 O_i (Bd)
-- 总 IO ≈ (N/B)² × Bd = N²d/B
-- 取 B = M/d（使 block 能放入 SRAM），得 IO = O(N²d²/M)</p>
+<p><strong>推导</strong>（设 block 大小 B_r = B_c = B）：</p>
+<ul>
+<li>外层循环 N/B 次，内层循环 N/B 次</li>
+<li>每次内循环：加载 Q_i (Bd) + K_j (Bd) + V_j (Bd)，写回 O_i (Bd)</li>
+<li>总 IO ≈ (N/B)² × Bd = N²d/B</li>
+<li>取 B = M/d（使 block 能放入 SRAM），得 IO = O(N²d²/M)</li>
+</ul>
 <p><strong>关键结论</strong>：IO 关于 N 是次二次的（d²/M 通常远小于 1）。对于 A100（M ≈ 100 KB 可用 SRAM，d = 64–128），Flash Attention 显著减少 HBM 访问。</p>
 <hr>
 <h3 id="反向传播与重计算">反向传播与重计算</h3>
@@ -1043,11 +1131,13 @@ O = diag(1/l) @ O
 <pre><code class="language-python"># 前向: 只存储最终的 O, l, m（均为 O(N) 大小，不存 P 的 O(N²)）
 # 反向: 利用 Q, K, V 重新计算 S 和 P（同样使用 tiling 策略）
 </code></pre>
-<p><strong>为什么可行</strong>：
-- S = QK^T / √d 可以直接从 Q, K 重算
-- P = softmax(S) 可以从 S 重算
-- 额外计算量约等于一次前向传播
-- 但节省的 HBM 读写量远大于重算代价</p>
+<p><strong>为什么可行</strong>：</p>
+<ul>
+<li>S = QK^T / √d 可以直接从 Q, K 重算</li>
+<li>P = softmax(S) 可以从 S 重算</li>
+<li>额外计算量约等于一次前向传播</li>
+<li>但节省的 HBM 读写量远大于重算代价</li>
+</ul>
 <p><strong>实际效果</strong>：在 A100 上，重算的 FLOPs 增加约 2×，但由于减少了 HBM 访问，整体 wall-clock 时间反而更快（memory-bound → compute-bound）。</p>
 <hr>
 <h3 id="flash-attention-2">Flash Attention 2</h3>
@@ -1102,20 +1192,24 @@ for i in Q_blocks:
         accumulate O_i
     # 只在最后 rescale 一次
 </code></pre>
-<p><strong>好处</strong>：
-1. 减少 rescaling 次数（从 N/B 次降到 1 次）
-2. 更好的数据局部性（一个 Q block 持续留在寄存器中）</p>
+<p><strong>好处</strong>：</p>
+<ol>
+<li>减少 rescaling 次数（从 N/B 次降到 1 次）</li>
+<li>更好的数据局部性（一个 Q block 持续留在寄存器中）</li>
+</ol>
 <hr>
 <h4>FA-Q9 Flash Attention 2 如何优化 warp 利用率</h4>
 <p><strong>问题</strong>：Flash Attention 2 是如何优化 warp 利用率的？</p>
 <p><strong>标准答案</strong>：</p>
 <p>GPU 中一个 Thread Block 由多个 warp（32 线程为一组）组成。</p>
 <p><strong>FA1 的问题</strong>：所有 warp 协作计算同一个 Q_i K_j^T，warp 之间需要同步和 shared memory 通信。</p>
-<p><strong>FA2 的优化</strong>：
-- 将 Q_i 的行切分给不同 warp
-- 每个 warp 独立负责 Q_i 的一部分行与完整的 K_j 做 matmul
-- warp 之间无需同步（因为各自算各自行的 attention）
-- 减少了 shared memory 的读写（数据更多留在寄存器中）</p>
+<p><strong>FA2 的优化</strong>：</p>
+<ul>
+<li>将 Q_i 的行切分给不同 warp</li>
+<li>每个 warp 独立负责 Q_i 的一部分行与完整的 K_j 做 matmul</li>
+<li>warp 之间无需同步（因为各自算各自行的 attention）</li>
+<li>减少了 shared memory 的读写（数据更多留在寄存器中）</li>
+</ul>
 <pre><code>Warp 0: Q_i[0:4]   @ K_j^T -&gt; O_i[0:4]     # 各自独立
 Warp 1: Q_i[4:8]   @ K_j^T -&gt; O_i[4:8]
 Warp 2: Q_i[8:12]  @ K_j^T -&gt; O_i[8:12]
@@ -1150,16 +1244,20 @@ Threads: 对 block t-1 做 softmax/rescale      # 同步
 <h4>FA-Q11 Flash Attention 的适用场景</h4>
 <p><strong>问题</strong>：Flash Attention 对哪些场景最有效？哪些场景不适用？</p>
 <p><strong>标准答案</strong>：</p>
-<p><strong>最有效的场景</strong>：
-- 长序列（N 大），如 Longformer、长文档处理
-- 大 batch size + 大模型 → 显存成为瓶颈时
-- 训练阶段（需要存储激活值做反向传播）
-- 需要精确 attention（非近似）的场景</p>
-<p><strong>不太适用 / 需要注意的场景</strong>：
-- 非常短的序列：overhead 可能大于收益
-- 需要稀疏 attention pattern：FA 默认是 dense 的（但有变体支持 masking）
-- 非标准 attention：如 linear attention、performer 等已有 O(N) 复杂度的变体
-- 推理阶段（decode）：每次只生成一个 token，此时用 PagedAttention（vLLM）更合适</p>
+<p><strong>最有效的场景</strong>：</p>
+<ul>
+<li>长序列（N 大），如 Longformer、长文档处理</li>
+<li>大 batch size + 大模型 → 显存成为瓶颈时</li>
+<li>训练阶段（需要存储激活值做反向传播）</li>
+<li>需要精确 attention（非近似）的场景</li>
+</ul>
+<p><strong>不太适用 / 需要注意的场景</strong>：</p>
+<ul>
+<li>非常短的序列：overhead 可能大于收益</li>
+<li>需要稀疏 attention pattern：FA 默认是 dense 的（但有变体支持 masking）</li>
+<li>非标准 attention：如 linear attention、performer 等已有 O(N) 复杂度的变体</li>
+<li>推理阶段（decode）：每次只生成一个 token，此时用 PagedAttention（vLLM）更合适</li>
+</ul>
 <hr>
 <h4>FA-Q12 Flash Attention 与 xFormers、PagedAttention 的关系</h4>
 <p><strong>问题</strong>：Flash Attention 与 xFormers、PagedAttention 的关系和区别？</p>
@@ -1206,10 +1304,12 @@ Threads: 对 block t-1 做 softmax/rescale      # 同步
 </tr>
 </tbody>
 </table>
-<p><strong>关键区别</strong>：
-- Flash Attention 优化的是单次 attention 计算的 IO
-- PagedAttention 优化的是多次 decode step 之间 KV cache 的显存管理（解决碎片和浪费问题）
-- 两者可以互补：预填充用 Flash Attention，decode 用 PagedAttention</p>
+<p><strong>关键区别</strong>：</p>
+<ul>
+<li>Flash Attention 优化的是单次 attention 计算的 IO</li>
+<li>PagedAttention 优化的是多次 decode step 之间 KV cache 的显存管理（解决碎片和浪费问题）</li>
+<li>两者可以互补：预填充用 Flash Attention，decode 用 PagedAttention</li>
+</ul>
 <hr>
 <h4>FA-Q13 Causal Mask 的处理</h4>
 <p><strong>问题</strong>：Flash Attention 如何支持 Causal Mask（因果遮罩）？</p>
@@ -1226,9 +1326,11 @@ Threads: 对 block t-1 做 softmax/rescale      # 同步
         # else: 完全在过去 → 无需 mask
         # 正常执行 online softmax + accumulate
 </code></pre>
-<p><strong>优化点</strong>：
-- 完全被 mask 的 block 直接跳过（节省约 50% 计算量）
-- 部分 mask 的 block 只在边界处应用 mask</p>
+<p><strong>优化点</strong>：</p>
+<ul>
+<li>完全被 mask 的 block 直接跳过（节省约 50% 计算量）</li>
+<li>部分 mask 的 block 只在边界处应用 mask</li>
+</ul>
 <hr>
 <h3 id="深层理解与延伸问题">深层理解与延伸问题</h3>
 <h4>FA-Q14 为什么 Flash Attention 是精确的而非近似的</h4>
@@ -1250,14 +1352,18 @@ Threads: 对 block t-1 做 softmax/rescale      # 同步
 <pre><code>B_r · d + B_c · d + B_r · B_c + B_r · d ≤ M   (SRAM 大小)
 </code></pre>
 <p>其中各项分别对应 Q_i、K_j、S_ij、O_i 的存储需求。</p>
-<p><strong>选择策略</strong>：
-- SRAM 容量上限：block 越大，SRAM 中能放下的数据有限
-- 越大越好（减少 IO 次数）：block 大 → 循环次数少 → HBM 访问少
-- 但不能太大（SRAM 放不下）：溢出到 HBM 反而更慢
-- 考虑硬件对齐：block 大小需要对齐 Tensor Core tile size（如 16×16 的 MMA tile）</p>
-<p><strong>典型值（A100, d = 128）</strong>：
-- Flash Attention 1: B_r = 128, B_c = 128
-- Flash Attention 2: B_r = 128, B_c = 256（利用更大的 SRAM）</p>
+<p><strong>选择策略</strong>：</p>
+<ul>
+<li>SRAM 容量上限：block 越大，SRAM 中能放下的数据有限</li>
+<li>越大越好（减少 IO 次数）：block 大 → 循环次数少 → HBM 访问少</li>
+<li>但不能太大（SRAM 放不下）：溢出到 HBM 反而更慢</li>
+<li>考虑硬件对齐：block 大小需要对齐 Tensor Core tile size（如 16×16 的 MMA tile）</li>
+</ul>
+<p><strong>典型值（A100, d = 128）</strong>：</p>
+<ul>
+<li>Flash Attention 1: B_r = 128, B_c = 128</li>
+<li>Flash Attention 2: B_r = 128, B_c = 256（利用更大的 SRAM）</li>
+</ul>
 <hr>
 <h4>FA-Q16 从 memory-bound 到 compute-bound</h4>
 <p><strong>问题</strong>：如何理解 Flash Attention 将 attention 从 memory-bound 转变为 compute-bound？</p>
@@ -1309,22 +1415,28 @@ AI         = 4M / d  →  与 N 无关! →  compute-bound
 </tr>
 </tbody>
 </table>
-<p><strong>GQA/MQA 与 Flash Attention 的结合</strong>：
-- K/V 的 HBM 访问量减少 G 倍（GQA）或 H 倍（MQA）
-- 进一步降低了 IO，提升了整体性能
-- 现代大模型（如 Llama 3、Mistral）普遍采用 GQA + Flash Attention</p>
+<p><strong>GQA/MQA 与 Flash Attention 的结合</strong>：</p>
+<ul>
+<li>K/V 的 HBM 访问量减少 G 倍（GQA）或 H 倍（MQA）</li>
+<li>进一步降低了 IO，提升了整体性能</li>
+<li>现代大模型（如 Llama 3、Mistral）普遍采用 GQA + Flash Attention</li>
+</ul>
 <hr>
 <h4>FA-Q18 FlashDecoding / Flash-Decoding++</h4>
 <p><strong>问题</strong>：FlashDecoding / Flash-Decoding++ 解决什么问题？</p>
 <p><strong>标准答案</strong>：</p>
 <p><strong>问题场景</strong>：在推理的 decode 阶段，Q 只有一行（当前生成的 token），但 KV cache 可能很长。</p>
-<p><strong>Flash Attention 在 decode 阶段的问题</strong>：
-- Q 只有 1 行，无法在序列维度做 tiling
-- 如果 batch × heads 数量小，GPU 利用率低</p>
-<p><strong>FlashDecoding 的解决方案</strong>：
-- 在 KV cache 的序列维度上做并行
-- 每个 thread block 处理 KV cache 的一段
-- 最后做 reduce 合并各段的结果</p>
+<p><strong>Flash Attention 在 decode 阶段的问题</strong>：</p>
+<ul>
+<li>Q 只有 1 行，无法在序列维度做 tiling</li>
+<li>如果 batch × heads 数量小，GPU 利用率低</li>
+</ul>
+<p><strong>FlashDecoding 的解决方案</strong>：</p>
+<ul>
+<li>在 KV cache 的序列维度上做并行</li>
+<li>每个 thread block 处理 KV cache 的一段</li>
+<li>最后做 reduce 合并各段的结果</li>
+</ul>
 <pre><code>KV Cache: [k1, k2, k3, ..., k_N]
    |
    v
@@ -1334,10 +1446,12 @@ Block P: ...        → partial_O_P
    |
    +--- reduce ---+  → final_O
 </code></pre>
-<p><strong>Flash-Decoding++ 进一步优化</strong>：
-- 对 softmax 的 rescaling 做了更细粒度的优化
-- 统一了 prefill 和 decode 的实现
-- 在长 context 推理场景下性能提升显著</p>
+<p><strong>Flash-Decoding++ 进一步优化</strong>：</p>
+<ul>
+<li>对 softmax 的 rescaling 做了更细粒度的优化</li>
+<li>统一了 prefill 和 decode 的实现</li>
+<li>在长 context 推理场景下性能提升显著</li>
+</ul>
 <hr>
 <h3 id="高频追问-amp-开放题">高频追问 &amp; 开放题</h3>
 <h4>FA-Q19 Flash Attention 使用的 CUDA 编程技巧</h4>
@@ -1388,18 +1502,22 @@ SRAM 大小 M, Tensor Core tile size, 带宽, 算力
 <h4>FA-Q21 Flash Attention 的局限性与未来改进方向</h4>
 <p><strong>问题</strong>：Flash Attention 的局限性有哪些？未来可能的改进方向？</p>
 <p><strong>标准答案</strong>：</p>
-<p><strong>局限性</strong>：
-1. 仅优化 dense attention：对 sparse attention pattern（如 sliding window、strided）支持有限
-2. head dimension 限制：通常要求 d ≤ 256（受 SRAM 限制），d 太大时 block 放不下
-3. 固定 block size：不同序列长度和 head dim 的最优 block size 不同
-4. 反向传播 2× 计算：recomputation 增加了训练时的 FLOPs
-5. 硬件依赖：深度绑定 NVIDIA GPU 架构，其他硬件需重新实现</p>
-<p><strong>改进方向</strong>：
-1. Flash Attention 3（已发布）：利用 H100 的 WGMmma + TMA 实现更深流水线
-2. 支持 sparse patterns：如 FlexAttention（PyTorch）支持任意 score_mod
-3. 与 approximate attention 结合：如 Flash Linear Attention
-4. 跨硬件统一框架：如 Triton 编写可移植的 Flash Attention
-5. 更激进的算子融合：将 LayerNorm、RoPE 等融合进 attention kernel</p>
+<p><strong>局限性</strong>：</p>
+<ol>
+<li>仅优化 dense attention：对 sparse attention pattern（如 sliding window、strided）支持有限</li>
+<li>head dimension 限制：通常要求 d ≤ 256（受 SRAM 限制），d 太大时 block 放不下</li>
+<li>固定 block size：不同序列长度和 head dim 的最优 block size 不同</li>
+<li>反向传播 2× 计算：recomputation 增加了训练时的 FLOPs</li>
+<li>硬件依赖：深度绑定 NVIDIA GPU 架构，其他硬件需重新实现</li>
+</ol>
+<p><strong>改进方向</strong>：</p>
+<ol>
+<li>Flash Attention 3（已发布）：利用 H100 的 WGMmma + TMA 实现更深流水线</li>
+<li>支持 sparse patterns：如 FlexAttention（PyTorch）支持任意 score_mod</li>
+<li>与 approximate attention 结合：如 Flash Linear Attention</li>
+<li>跨硬件统一框架：如 Triton 编写可移植的 Flash Attention</li>
+<li>更激进的算子融合：将 LayerNorm、RoPE 等融合进 attention kernel</li>
+</ol>
 <hr>
 <h3 id="flash-attention-快速自测清单">Flash Attention 快速自测清单</h3>
 <p>以下 10 个核心知识点，检验你是否能在 30 秒内清晰作答：</p>
@@ -1475,37 +1593,47 @@ SRAM 大小 M, Tensor Core tile size, 带宽, 算力
 <p><strong>问题</strong>：DFlash 的核心思想是什么？它解决了 EAGLE-3 的什么瓶颈？</p>
 <p><strong>标准答案</strong>：</p>
 <p>DFlash = <strong>块扩散（block diffusion）并行起草 + KV 注入（KV injection）</strong>。</p>
-<p><strong>它解决的 EAGLE-3 瓶颈</strong>：
-- EAGLE-3 的 draft model 仍是自回归的——逐 token 生成，draft 延迟随候选长度线性增长。
-- 高并发下（batch size &gt; 8）EAGLE-3 性能急剧下滑：投机推理的额外验证开销与显存占用让系统从计算受限转为访存受限，吞吐甚至会低于不用投机解码的原生推理。</p>
-<p><strong>DFlash 的两板斧</strong>：
-1. <strong>块扩散并行起草</strong>：一个极小的非自回归 draft 模型一次前向并行吐出一整块草稿 token（默认 block_size=16，LLaMA 3.1 为 10），消除自回归等待。
-2. <strong>KV 注入</strong>：把 target 模型多层 hidden states 投影后直接写进 draft 的 KV cache 每一层，让深草稿模型也能获得一致且强烈的 target 信息条件约束，消除信号衰减。</p>
+<p><strong>它解决的 EAGLE-3 瓶颈</strong>：</p>
+<ul>
+<li>EAGLE-3 的 draft model 仍是自回归的——逐 token 生成，draft 延迟随候选长度线性增长。</li>
+<li>高并发下（batch size &gt; 8）EAGLE-3 性能急剧下滑：投机推理的额外验证开销与显存占用让系统从计算受限转为访存受限，吞吐甚至会低于不用投机解码的原生推理。</li>
+</ul>
+<p><strong>DFlash 的两板斧</strong>：</p>
+<ol>
+<li><strong>块扩散并行起草</strong>：一个极小的非自回归 draft 模型一次前向并行吐出一整块草稿 token（默认 block_size=16，LLaMA 3.1 为 10），消除自回归等待。</li>
+<li><strong>KV 注入</strong>：把 target 模型多层 hidden states 投影后直接写进 draft 的 KV cache 每一层，让深草稿模型也能获得一致且强烈的 target 信息条件约束，消除信号衰减。</li>
+</ol>
 <p><strong>关键数据</strong>（Qwen3-8B）：DFlash 实现 6× 无损加速，是 EAGLE-3 的 2.4 倍；代码生成场景平均单轮确认 6-7 个 token，远超 EAGLE-3 的 2-3 个。</p>
 <hr>
 <h3 id="df-q2-dflash-的-block-diffusion-训练策略">DF-Q2 DFlash 的 Block Diffusion 训练策略</h3>
 <p><strong>问题</strong>：DFlash 的块扩散训练是怎么做的？随机锚点是什么？</p>
 <p><strong>标准答案</strong>：</p>
 <p><strong>块大小</strong>：默认 16（LLaMA 3.1 为 10）。</p>
-<p><strong>训练时的随机锚点策略</strong>：
-- 随机选择 2 个位置作为"锚点"——这两个位置不被遮罩，保持可见。
-- 其余 14 个位置全部遮罩。
-- 草稿模型基于锚点 token 和目标模型注入的特征，并行预测所有遮罩位置。
-- 这种随机锚点策略迫使模型学会从任意已知 token 出发推理整块内容，泛化能力更强。</p>
-<p><strong>block size 的训推泛化</strong>（论文 Table 8）：
-- 大 BS 训练能泛化到小 BS 推理（OK）
-- 小 BS 训练不能泛化到大 BS 推理（不行）
-- 论文把"自适应 block size 调度"留作 future work。</p>
+<p><strong>训练时的随机锚点策略</strong>：</p>
+<ul>
+<li>随机选择 2 个位置作为"锚点"——这两个位置不被遮罩，保持可见。</li>
+<li>其余 14 个位置全部遮罩。</li>
+<li>草稿模型基于锚点 token 和目标模型注入的特征，并行预测所有遮罩位置。</li>
+<li>这种随机锚点策略迫使模型学会从任意已知 token 出发推理整块内容，泛化能力更强。</li>
+</ul>
+<p><strong>block size 的训推泛化</strong>（论文 Table 8）：</p>
+<ul>
+<li>大 BS 训练能泛化到小 BS 推理（OK）</li>
+<li>小 BS 训练不能泛化到大 BS 推理（不行）</li>
+<li>论文把"自适应 block size 调度"留作 future work。</li>
+</ul>
 <hr>
 <h3 id="df-q3-kv-injection-与输入端拼接的区别">DF-Q3 KV Injection 与输入端拼接的区别</h3>
 <p><strong>问题</strong>：DFlash 的 KV Injection 和 EAGLE-3 的输入端拼接特征有什么本质区别？为什么更优？</p>
 <p><strong>标准答案</strong>：</p>
 <p><strong>EAGLE-3（输入端注入）</strong>：把 target hidden state 拼接到 draft model 输入 embedding 上，只在第一层注入。深层 draft 网络的信号衰减严重——越往后越弱。</p>
 <p><strong>DFlash（KV Injection）</strong>：把融合后的 target 特征直接注入到 draft 模型<strong>每一层</strong>的 Key 和 Value 投影中，并缓存在 KV Cache 里。这样深层 draft 网络也能获得一致且强烈的 target 信息条件约束。</p>
-<p><strong>消融实验</strong>（论文 Table 9）：
-- KV 注入在 AR 和 diffusion drafting 上都更优
-- 纯 5 层 block diffusion 草稿（不用 target feature）只有 2-3× 加速（Table 10）
-- <strong>结论</strong>：DFlash 的加速不是 diffusion 本身带来的，而是"diffusion 并行 + target conditioning"的组合。</p>
+<p><strong>消融实验</strong>（论文 Table 9）：</p>
+<ul>
+<li>KV 注入在 AR 和 diffusion drafting 上都更优</li>
+<li>纯 5 层 block diffusion 草稿（不用 target feature）只有 2-3× 加速（Table 10）</li>
+<li><strong>结论</strong>：DFlash 的加速不是 diffusion 本身带来的，而是"diffusion 并行 + target conditioning"的组合。</li>
+</ul>
 <hr>
 <h3 id="df-q4-dflash-的-non-causal-attention">DF-Q4 DFlash 的 Non-Causal Attention</h3>
 <p><strong>问题</strong>：DFlash 为什么用 non-causal attention？和 EAGLE-3 的 causal attention 有什么区别？</p>
@@ -1566,10 +1694,12 @@ SRAM 大小 M, Tensor Core tile size, 带宽, 算力
 <p><strong>标准答案</strong>：</p>
 <p><strong>EAGLE-3</strong>：prefill（draft step 0）和 decode（step 1+）形状不同，需要两套 graph。</p>
 <p><strong>DFlash</strong>：一个 graph manager 每步 query 数恒为 <code>1 + N</code>（固定：1 个 anchor + N 个 mask 位置），只需一套 FULL graph。</p>
-<p><strong>好处</strong>：
-- 减少图编译开销（只编译一次）
-- 简化 graph manager 逻辑
-- 固定 shape 避免动态 shape 触发的重新编图</p>
+<p><strong>好处</strong>：</p>
+<ul>
+<li>减少图编译开销（只编译一次）</li>
+<li>简化 graph manager 逻辑</li>
+<li>固定 shape 避免动态 shape 触发的重新编图</li>
+</ul>
 <p><strong>mask token id</strong>：来自 <code>dflash_config.mask_token_id</code>，在 <code>parallel_drafting_token_id</code> 字段中指定。</p>
 <hr>
 <h3 id="df-q6-dflash-草稿模型的层数与轻量化">DF-Q6 DFlash 草稿模型的层数与轻量化</h3>
@@ -1577,9 +1707,11 @@ SRAM 大小 M, Tensor Core tile size, 带宽, 算力
 <p><strong>标准答案</strong>：</p>
 <p><strong>DFlash 草稿模型 5-8 层 Transformer</strong>（vLLM 实现中为 5 层），参数规模严格控制。</p>
 <p><strong>对比 EAGLE-3</strong>：EAGLE-3 只有 1 层。</p>
-<p><strong>为什么 DFlash 可以用更多层</strong>：
-- DFlash 是并行的，延迟与层数线性但与块长解耦——5 层出 16 个 token 的延迟 &lt; EAGLE-3 单层出 4 个 token 的延迟（EAGLE-3 要循环 4 次）。
-- KV Injection 让深层不衰减，所以深一点反而效果好。</p>
+<p><strong>为什么 DFlash 可以用更多层</strong>：</p>
+<ul>
+<li>DFlash 是并行的，延迟与层数线性但与块长解耦——5 层出 16 个 token 的延迟 &lt; EAGLE-3 单层出 4 个 token 的延迟（EAGLE-3 要循环 4 次）。</li>
+<li>KV Injection 让深层不衰减，所以深一点反而效果好。</li>
+</ul>
 <p><strong>消融</strong>（论文 Table 6）：8 层 τ（接受率）最高但延迟增加，<strong>5 层综合 speedup 最优</strong>（质量 vs 开销平衡）。</p>
 <p><strong>对比早期 diffusion drafter</strong>：DiffuSpec 曾用 7B 参数的庞大草稿模型——内存占用巨大，推理延迟甚至超过目标模型本身，完全不具备部署价值。DFlash 用实践证明：<strong>轻量 + 强引导远胜重量 + 弱引导</strong>。Qwen3.5-35B-A3B 仅增加约 42MB 额外参数。</p>
 <hr>
@@ -1587,28 +1719,36 @@ SRAM 大小 M, Tensor Core tile size, 带宽, 算力
 <p><strong>问题</strong>：DFlash 和 SGLang Spec V2 是什么关系？Spec V2 相比 V1 改进了什么？</p>
 <p><strong>标准答案</strong>：</p>
 <p><strong>DFlash 是算法，Spec V2 是调度引擎</strong>——两者正交。</p>
-<p><strong>Spec V2 的核心</strong>：overlap scheduler（重叠调度器）
-- 把 host（CPU）端的清理与 KV 预分配，藏到 GPU 前向计算的背后
-- 靠 FutureMap、异步拷贝、双 CUDA stream 消除 host-device 同步点
-- 不改模型不改算法，获得 33%+ 吞吐提升</p>
+<p><strong>Spec V2 的核心</strong>：overlap scheduler（重叠调度器）</p>
+<ul>
+<li>把 host（CPU）端的清理与 KV 预分配，藏到 GPU 前向计算的背后</li>
+<li>靠 FutureMap、异步拷贝、双 CUDA stream 消除 host-device 同步点</li>
+<li>不改模型不改算法，获得 33%+ 吞吐提升</li>
+</ul>
 <p><strong>Spec V1 的问题</strong>：host-device 同步是推理性能的隐藏杀手——CPU 端清理/分配和 GPU 计算串行执行。</p>
-<p><strong>工程经验</strong>：
-1. <strong>重叠即性能</strong>：Host-device 同步是隐藏杀手
-2. <strong>即时物化 &gt; 缓存</strong>：KV 投影产物不存储——即时完成即丢弃，零额外显存 + Radix Cache 前缀天然共享
-3. <strong>Triton Kernel 是必选项</strong>：层批量化 + Norm+RoPE 融合在单 kernel 内完成
-4. <strong>块大小是核心调参项</strong>：block_size 4/8/16 需根据 workload benchmark 确定</p>
+<p><strong>工程经验</strong>：</p>
+<ol>
+<li><strong>重叠即性能</strong>：Host-device 同步是隐藏杀手</li>
+<li><strong>即时物化 &gt; 缓存</strong>：KV 投影产物不存储——即时完成即丢弃，零额外显存 + Radix Cache 前缀天然共享</li>
+<li><strong>Triton Kernel 是必选项</strong>：层批量化 + Norm+RoPE 融合在单 kernel 内完成</li>
+<li><strong>块大小是核心调参项</strong>：block_size 4/8/16 需根据 workload benchmark 确定</li>
+</ol>
 <hr>
 <h3 id="df-q8-dflash-的局限与边界">DF-Q8 DFlash 的局限与边界</h3>
 <p><strong>问题</strong>：DFlash 有哪些局限？</p>
 <p><strong>标准答案</strong>：</p>
-<p><strong>算法局限</strong>：
-1. <strong>长块后段接受率衰减</strong>：虽然并行出 16 个 token，但越往后位置预测偏差越大——DSpark 正是为此而生。
-2. <strong>bidirectional attention 计算量大</strong>：比 EAGLE-3 的 masked attention 开销大。
-3. <strong>每次重新计算</strong>：DFlash 输入 5 token，过一次 5 layer draft model——每一层都要重新计算全部 token；EAGLE-3 单 token 计算后可复用 hidden state 生成 KV cache，每层只算一个 token。
-4. <strong>实际部署中不一定胜过 EAGLE-3</strong>：vLLM 实测中，设置 DFlash 和 EAGLE-3 一次性生成 5 token、接受率拉平后，DFlash 性能不如 EAGLE-3（因为 DFlash 每层计算量大）。</p>
-<p><strong>工程局限（SGLang 实现）</strong>：
-- 吞吐和延迟受 block_size、accept rate、headroom、page size、draft window size 影响
-- 显存压力随 block_size 增大</p>
+<p><strong>算法局限</strong>：</p>
+<ol>
+<li><strong>长块后段接受率衰减</strong>：虽然并行出 16 个 token，但越往后位置预测偏差越大——DSpark 正是为此而生。</li>
+<li><strong>bidirectional attention 计算量大</strong>：比 EAGLE-3 的 masked attention 开销大。</li>
+<li><strong>每次重新计算</strong>：DFlash 输入 5 token，过一次 5 layer draft model——每一层都要重新计算全部 token；EAGLE-3 单 token 计算后可复用 hidden state 生成 KV cache，每层只算一个 token。</li>
+<li><strong>实际部署中不一定胜过 EAGLE-3</strong>：vLLM 实测中，设置 DFlash 和 EAGLE-3 一次性生成 5 token、接受率拉平后，DFlash 性能不如 EAGLE-3（因为 DFlash 每层计算量大）。</li>
+</ol>
+<p><strong>工程局限（SGLang 实现）</strong>：</p>
+<ul>
+<li>吞吐和延迟受 block_size、accept rate、headroom、page size、draft window size 影响</li>
+<li>显存压力随 block_size 增大</li>
+</ul>
 <p><strong>高并发场景</strong>：DFlash 比 EAGLE-3 好，但不是没有衰减——仍有 draft 额外显存占用问题。</p>
 <hr>
 <h2 id="十四dspark-原理与工程实现知乎检索">十四、DSpark 原理与工程实现（知乎检索）</h2>
@@ -1653,14 +1793,18 @@ SRAM 大小 M, Tensor Core tile size, 带宽, 算力
 </tr>
 </tbody>
 </table>
-<p><strong>DSpark 的洞察</strong>：
-- 并行块受 latency 约束、能堆深网络，在<strong>首 token</strong>上获得 0.10~0.19 的容量优势。
-- 这一首位容量优势足以弥补后续位置的衰减——整块平均接受长度被前几个位置主导。
-- <strong>仅需 2 层 DSpark 即可超越 5 层纯并行 DFlash</strong>，证明注入极少量局部自回归远比无脑堆叠网络深度更具性价比。</p>
-<p><strong>实测数据</strong>（V4-Flash）：
-- 单用户生成速度提升 60%-85%
-- 高并发场景下有效吞吐量翻 4 倍
-- 输出无损（与原生串行 100% 一致）</p>
+<p><strong>DSpark 的洞察</strong>：</p>
+<ul>
+<li>并行块受 latency 约束、能堆深网络，在<strong>首 token</strong>上获得 0.10~0.19 的容量优势。</li>
+<li>这一首位容量优势足以弥补后续位置的衰减——整块平均接受长度被前几个位置主导。</li>
+<li><strong>仅需 2 层 DSpark 即可超越 5 层纯并行 DFlash</strong>，证明注入极少量局部自回归远比无脑堆叠网络深度更具性价比。</li>
+</ul>
+<p><strong>实测数据</strong>（V4-Flash）：</p>
+<ul>
+<li>单用户生成速度提升 60%-85%</li>
+<li>高并发场景下有效吞吐量翻 4 倍</li>
+<li>输出无损（与原生串行 100% 一致）</li>
+</ul>
 <hr>
 <h3 id="ds-q2-dspark-的架构组件">DS-Q2 DSpark 的架构组件</h3>
 <p><strong>问题</strong>：DSpark 的草稿模型有哪些组件？哪些冻结、哪些训练？</p>
@@ -1708,28 +1852,36 @@ SRAM 大小 M, Tensor Core tile size, 带宽, 算力
 </tr>
 </tbody>
 </table>
-<p><strong>两个"冻结"的设计意图</strong>：
-1. <strong>共用语义空间</strong>：draft 和 target 共用同一套"token id ↔ 向量 ↔ logits"语义空间，draft 算出的隐状态过同一个 LM head，分布天然和 target 在同一坐标系里可比，验证时的接受率才有意义。
-2. <strong>省训练显存</strong>：LM head 是 [hidden × 词表] 的大矩阵（词表几万），冻结它省下大量训练显存和算力。</p>
+<p><strong>两个"冻结"的设计意图</strong>：</p>
+<ol>
+<li><strong>共用语义空间</strong>：draft 和 target 共用同一套"token id ↔ 向量 ↔ logits"语义空间，draft 算出的隐状态过同一个 LM head，分布天然和 target 在同一坐标系里可比，验证时的接受率才有意义。</li>
+<li><strong>省训练显存</strong>：LM head 是 [hidden × 词表] 的大矩阵（词表几万），冻结它省下大量训练显存和算力。</li>
+</ol>
 <p><strong>真正要学的只有中间三块</strong>——骨干、序列头、置信度头。</p>
 <hr>
 <h3 id="ds-q3-半自回归生成semi-autoregressive-generation">DS-Q3 半自回归生成（Semi-Autoregressive Generation）</h3>
 <p><strong>问题</strong>：DSpark 的"半自回归"具体怎么实现？Markov Head 是什么？</p>
 <p><strong>标准答案</strong>：</p>
 <p><strong>流程（Step 0 + Step 1）</strong>：</p>
-<p><strong>Step 0：DFlash-style 并行生成</strong>
-- 通过一次 forward 快速得到多个 draft position 的 base logits。
-- 以生成 "How can I do it" 为例，当前前缀是 "How can"。Target LM 先正常 forward 并采样出 anchor token "I"。
-- DSpark 从 Target LM 多层 hidden states 中抽取并融合上下文特征 G_ctx = [g_how, g_can, g_I]。
-- 构造并行 draft block，预测 "do", "it" 等。</p>
-<p><strong>Step 1：Markov Head 串行修正</strong>
-- 把 Step 0 采样的 token 逐个输入 Markov Head，输出下一个 token 纠正后的概率变化。
-- 选择下一个 token 时，根据 MTP 的原始概率 + Markov Head 的纠正概率一起决定。
-- 纠正阶段是串行的，这就赋予了 MTP 一定的准确性。</p>
-<p><strong>Markov Head 是什么</strong>：
-- 一个小的感知机模块，计算非常快，耗时可以忽略不计。
-- 训练目标：让 Head 的输出每一个词的概率都和大的模型的输出尽量完全相同。
-- 实际上因为模块很小，输出概率不可能完全相同，只能接近，但做矫正也够了，能大幅度降低 MTP 导致的幻觉问题。</p>
+<p><strong>Step 0：DFlash-style 并行生成</strong></p>
+<ul>
+<li>通过一次 forward 快速得到多个 draft position 的 base logits。</li>
+<li>以生成 "How can I do it" 为例，当前前缀是 "How can"。Target LM 先正常 forward 并采样出 anchor token "I"。</li>
+<li>DSpark 从 Target LM 多层 hidden states 中抽取并融合上下文特征 G_ctx = [g_how, g_can, g_I]。</li>
+<li>构造并行 draft block，预测 "do", "it" 等。</li>
+</ul>
+<p><strong>Step 1：Markov Head 串行修正</strong></p>
+<ul>
+<li>把 Step 0 采样的 token 逐个输入 Markov Head，输出下一个 token 纠正后的概率变化。</li>
+<li>选择下一个 token 时，根据 MTP 的原始概率 + Markov Head 的纠正概率一起决定。</li>
+<li>纠正阶段是串行的，这就赋予了 MTP 一定的准确性。</li>
+</ul>
+<p><strong>Markov Head 是什么</strong>：</p>
+<ul>
+<li>一个小的感知机模块，计算非常快，耗时可以忽略不计。</li>
+<li>训练目标：让 Head 的输出每一个词的概率都和大的模型的输出尽量完全相同。</li>
+<li>实际上因为模块很小，输出概率不可能完全相同，只能接近，但做矫正也够了，能大幅度降低 MTP 导致的幻觉问题。</li>
+</ul>
 <p><strong>不用 RNN</strong>：DSpark 不用 RNN，而是用 Markov Head——把块内联合显式拆成条件乘积，注入极少量局部自回归。</p>
 <p><strong>输出 10 个 token 的句子只需前向传播 2-4 次</strong>，保留了 MTP 的速度。</p>
 <hr>
@@ -1741,32 +1893,42 @@ SRAM 大小 M, Tensor Core tile size, 带宽, 算力
 <pre><code>c_k = σ(w^⊤ [h_k; W_1[x_{k-1}]])
 c_k* = 1 - ½·‖p_k^d - p_k^t‖_1   (监督信号：draft 分布与 target 分布的总变差距离对应的解析接受率)
 </code></pre>
-<p><strong>关键细节——要的是"绝对刻度"而不只是"排序"</strong>：
-- 很多阈值法只需要置信分能把 token 质量排对序就行。
-- 但 DSpark 的调度器要拿这些分数连乘算期望接受长度，必须是<strong>校准过的真概率</strong>。
-- 神经网络的置信普遍过度自信，所以作者加了一个后处理 <strong>STS（Sequential Temperature Scaling）</strong>。</p>
-<p><strong>STS（顺序温度缩放）</strong>：
-- 在验证集上从左到右、对累计连乘概率逐位做 1D 温度搜索
-- 最小化 ECE（Expected Calibration Error）
-- 温度缩放保序，不破坏已学到的排序
-- 把平均校准误差从 3%~8% 压到约 1%
-- <strong>在线运行</strong>：系统边跑边调，根据当前工作负载的实际接受率动态修正阈值。代码任务跑多了，它就学会对代码草稿更宽容；聊天任务来了，自动收紧阈值。</p>
+<p><strong>关键细节——要的是"绝对刻度"而不只是"排序"</strong>：</p>
+<ul>
+<li>很多阈值法只需要置信分能把 token 质量排对序就行。</li>
+<li>但 DSpark 的调度器要拿这些分数连乘算期望接受长度，必须是<strong>校准过的真概率</strong>。</li>
+<li>神经网络的置信普遍过度自信，所以作者加了一个后处理 <strong>STS（Sequential Temperature Scaling）</strong>。</li>
+</ul>
+<p><strong>STS（顺序温度缩放）</strong>：</p>
+<ul>
+<li>在验证集上从左到右、对累计连乘概率逐位做 1D 温度搜索</li>
+<li>最小化 ECE（Expected Calibration Error）</li>
+<li>温度缩放保序，不破坏已学到的排序</li>
+<li>把平均校准误差从 3%~8% 压到约 1%</li>
+<li><strong>在线运行</strong>：系统边跑边调，根据当前工作负载的实际接受率动态修正阈值。代码任务跑多了，它就学会对代码草稿更宽容；聊天任务来了，自动收紧阈值。</li>
+</ul>
 <hr>
 <h3 id="ds-q5-硬件感知前缀调度器hardware-aware-prefix-scheduler">DS-Q5 硬件感知前缀调度器（Hardware-Aware Prefix Scheduler）</h3>
 <p><strong>问题</strong>：DSpark 的硬件感知调度器怎么工作？贪心早停为什么保证无损？</p>
 <p><strong>标准答案</strong>：</p>
-<p><strong>模型</strong>：
-- 设一个 batch 有 R 条活跃请求。
-- 因为投机解码只接受连续前缀，位置 j 能存活的概率是置信分的累乘：<code>a_{r,j} = ∏_{i≤j} c_{r,i}</code>。
-- 引入一条引擎吞吐曲线 <code>SPS(B)</code>（batch 为 B 时每秒能跑多少步，引擎启动时离线 profiling 一次、存成代价表、O(1) 查表）。
-- 调度器要最大化的是<strong>系统级期望吞吐</strong>。</p>
-<p><strong>贪心调度算法</strong>：
-1. 把所有候选 token 按存活概率从高到低排。
-2. 逐个尝试加入，每加一个算一下吞吐涨没涨。
-3. <strong>涨了就留，不涨就停</strong>。</p>
-<p><strong>为什么"不涨就停"而不是继续试别的——这是无损性保证</strong>：
-- 推测解码要求"接受决策不能依赖未来 token"，否则会破坏精确的分布恢复（论文附录有数学反例证明）。
-- 早停机制确保了录取决策只依赖已经处理的前缀，维持了无损性。</p>
+<p><strong>模型</strong>：</p>
+<ul>
+<li>设一个 batch 有 R 条活跃请求。</li>
+<li>因为投机解码只接受连续前缀，位置 j 能存活的概率是置信分的累乘：<code>a_{r,j} = ∏_{i≤j} c_{r,i}</code>。</li>
+<li>引入一条引擎吞吐曲线 <code>SPS(B)</code>（batch 为 B 时每秒能跑多少步，引擎启动时离线 profiling 一次、存成代价表、O(1) 查表）。</li>
+<li>调度器要最大化的是<strong>系统级期望吞吐</strong>。</li>
+</ul>
+<p><strong>贪心调度算法</strong>：</p>
+<ol>
+<li>把所有候选 token 按存活概率从高到低排。</li>
+<li>逐个尝试加入，每加一个算一下吞吐涨没涨。</li>
+<li><strong>涨了就留，不涨就停</strong>。</li>
+</ol>
+<p><strong>为什么"不涨就停"而不是继续试别的——这是无损性保证</strong>：</p>
+<ul>
+<li>推测解码要求"接受决策不能依赖未来 token"，否则会破坏精确的分布恢复（论文附录有数学反例证明）。</li>
+<li>早停机制确保了录取决策只依赖已经处理的前缀，维持了无损性。</li>
+</ul>
 <p><strong>负载自适应场景</strong>：</p>
 <table>
 <thead>
@@ -1813,12 +1975,14 @@ c_k* = 1 - ½·‖p_k^d - p_k^t‖_1   (监督信号：draft 分布与 target �
 <p><strong>置信度调度只决定"验多长"，不改 accept/reject 判定</strong>：调度器选的是"送多少 token 去验证"，但每个 token 的 accept/reject 仍由标准 rejection sampling 决定（接受概率 min(1, p/q)，拒绝从 max(0, p-q) recover sample）。</p>
 </li>
 <li>
-<p><strong>贪心早停的无损性</strong>：
-- 调度器"不涨就停"——但停掉的是后续 token 的验证，不是改变已验证 token 的接受判定。
-- 推测解码要求"接受决策不能依赖未来 token"。早停确保录取决策只依赖已经处理的前缀。
-- 论文附录有数学反例证明：如果继续尝试别的（非早停），会破坏精确的分布恢复。</p>
+<p><strong>贪心早停的无损性</strong>：</p>
 </li>
 </ol>
+<ul>
+<li>调度器"不涨就停"——但停掉的是后续 token 的验证，不是改变已验证 token 的接受判定。</li>
+<li>推测解码要求"接受决策不能依赖未来 token"。早停确保录取决策只依赖已经处理的前缀。</li>
+<li>论文附录有数学反例证明：如果继续尝试别的（非早停），会破坏精确的分布恢复。</li>
+</ul>
 <p><strong>实测</strong>：输出与原生串行生成 100% 一致。</p>
 <hr>
 <h3 id="ds-q7-dspark-与-dflash-的架构对比">DS-Q7 DSpark 与 DFlash 的架构对比</h3>
@@ -1865,12 +2029,16 @@ c_k* = 1 - ½·‖p_k^d - p_k^t‖_1   (监督信号：draft 分布与 target �
 </tr>
 </tbody>
 </table>
-<p><strong>DSpark 的两个新增</strong>：
-1. <strong>半自回归生成</strong>：并行骨干 + 序列头，以 +0.4%~1.3% 的延迟开销换取 +16%~30% 的接受长度提升。
-2. <strong>置信度调度验证</strong>：Confidence Head + Hardware-Aware Prefix Scheduler，把 target 的验证预算只花在期望回报为正的 token 上。</p>
-<p><strong>代码结构</strong>：
-- 起草模型在 <code>deepspec/modeling/dspark/</code>（骨干 + 序列头 + 置信度头）
-- 推理时的起草和裁剪逻辑在 <code>deepspec/eval/dspark/draft_ops.py</code></p>
+<p><strong>DSpark 的两个新增</strong>：</p>
+<ol>
+<li><strong>半自回归生成</strong>：并行骨干 + 序列头，以 +0.4%~1.3% 的延迟开销换取 +16%~30% 的接受长度提升。</li>
+<li><strong>置信度调度验证</strong>：Confidence Head + Hardware-Aware Prefix Scheduler，把 target 的验证预算只花在期望回报为正的 token 上。</li>
+</ol>
+<p><strong>代码结构</strong>：</p>
+<ul>
+<li>起草模型在 <code>deepspec/modeling/dspark/</code>（骨干 + 序列头 + 置信度头）</li>
+<li>推理时的起草和裁剪逻辑在 <code>deepspec/eval/dspark/draft_ops.py</code></li>
+</ul>
 <hr>
 <h3 id="ds-q8-dspark-的训练流程">DS-Q8 DSpark 的训练流程</h3>
 <p><strong>问题</strong>：DSpark 的训练数据流是什么样的？</p>
@@ -1891,10 +2059,12 @@ c_k* = 1 - ½·‖p_k^d - p_k^t‖_1   (监督信号：draft 分布与 target �
 │       └── dspark/
 │           └── draft_ops.py  # 推理时的起草和裁剪逻辑
 </code></pre>
-<p><strong>训练要点</strong>：
-- Embedding 和 LM head 从 target 拷贝，<code>requires_grad_(False)</code> 冻结（modeling.py:271-288）。
-- 真正训练的只有骨干、序列头、置信度头三块。
-- 训练要 8 卡 + 38TB 数据（知乎提到）。</p>
+<p><strong>训练要点</strong>：</p>
+<ul>
+<li>Embedding 和 LM head 从 target 拷贝，<code>requires_grad_(False)</code> 冻结（modeling.py:271-288）。</li>
+<li>真正训练的只有骨干、序列头、置信度头三块。</li>
+<li>训练要 8 卡 + 38TB 数据（知乎提到）。</li>
+</ul>
 <hr>
 <h2 id="十五dflash--dspark--eagle-3-选型与对比">十五、DFlash / DSpark / EAGLE-3 选型与对比</h2>
 <h3 id="sel-q1-三种方案的本质区别">Sel-Q1 三种方案的本质区别</h3>
@@ -2016,10 +2186,12 @@ c_k* = 1 - ½·‖p_k^d - p_k^t‖_1   (监督信号：draft 分布与 target �
 <p><strong>问题</strong>：DSpark 相对 EAGLE-3 的离线优势是多少？为什么？</p>
 <p><strong>标准答案</strong>：</p>
 <p><strong>离线加速</strong>：DSpark 相对 EAGLE-3 <strong>+27%~31%</strong>。</p>
-<p><strong>根本原因</strong>（不是单纯堆更多 draft 层）：
-- DSpark 在 acceptance 曲线上同时取了 DFlash 和 Eagle3 两者之长——首位置用并行深网络拿容量优势，后段用序列头注入依赖救回衰减。
-- EAGLE-3 受 latency 约束只能用浅网络（1 层），而后段衰减虽然平缓，但起点低。
-- DSpark 用并行骨干突破首位置容量上限，用 Markov Head 补回后段依赖——两头都占。</p>
+<p><strong>根本原因</strong>（不是单纯堆更多 draft 层）：</p>
+<ul>
+<li>DSpark 在 acceptance 曲线上同时取了 DFlash 和 Eagle3 两者之长——首位置用并行深网络拿容量优势，后段用序列头注入依赖救回衰减。</li>
+<li>EAGLE-3 受 latency 约束只能用浅网络（1 层），而后段衰减虽然平缓，但起点低。</li>
+<li>DSpark 用并行骨干突破首位置容量上限，用 Markov Head 补回后段依赖——两头都占。</li>
+</ul>
 <hr>
 <h3 id="sel-q5-mtp-与-speculative-decoding-的关系">Sel-Q5 MTP 与 speculative decoding 的关系</h3>
 <p><strong>问题</strong>：MTP（Multi-Token Prediction）和 speculative decoding 是什么关系？</p>
@@ -2029,34 +2201,40 @@ c_k* = 1 - ½·‖p_k^d - p_k^t‖_1   (监督信号：draft 分布与 target �
 <li><strong>MTP 首先是一种训练目标</strong>。标准 next-token prediction 在位置 t 只预测 x_{t+1}；MTP 在位置 t 同时预测 x_{t+1}, x_{t+2}, ..., x_{t+k}。</li>
 <li><strong>speculative decoding 是推理协议</strong>——用小模型先猜、大模型一次性验证。</li>
 </ul>
-<p><strong>关键区分</strong>：
-- MTP 可以不做 speculative decoding——额外模块可以直接丢弃。
-- speculative decoding 可以不用 MTP——候选也能来自独立小模型、EAGLE 或并行 drafter。
-- <strong>MTP 模块只有接入 Draft、Verify、Accept 流程后，才成为推测解码的一部分</strong>。</p>
+<p><strong>关键区分</strong>：</p>
+<ul>
+<li>MTP 可以不做 speculative decoding——额外模块可以直接丢弃。</li>
+<li>speculative decoding 可以不用 MTP——候选也能来自独立小模型、EAGLE 或并行 drafter。</li>
+<li><strong>MTP 模块只有接入 Draft、Verify、Accept 流程后，才成为推测解码的一部分</strong>。</li>
+</ul>
 <p><strong>MTP head 能输出多个 logits，不代表这些 token 可以直接提交</strong>。尤其在采样场景中，额外 head 的输出分布和 target 的真实分布可能不一致，仍需 rejection sampling 校正。</p>
 <hr>
 <h2 id="十六术语纠错速记p2">十六、术语纠错速记（P2）</h2>
-<p><strong>必须说</strong>：
-- EAGLE-3 speculative decoding
-- vLLM-MindSpore / vLLM-Ascend
-- Ascend NPU / Atlas 3000 / 310P3 / 910B
-- MSProf timeline / flame graph
-- draft model / target model
-- num_spec_tokens
-- acceptance rate / accepted length
-- position_ids / slot_mapping / block_table / attention_metadata / KV cache
-- target verification / rejection sampler / recover sample
-- DFlash / block diffusion / KV injection / non-causal attention
-- DSpark / semi-autoregressive / Markov Head / confidence head / STS / hardware-aware prefix scheduler
-- DeepSpec / DeepSeek-V4-Pro-DSpark</p>
-<p><strong>不要说</strong>（均为口误 / 错误拼写，括号内为正确写法）：
-- Ego3 / EGO3（应为 EAGLE-3）
-- VM-Minus / Manusword / ManSport（应为 vLLM-MindSpore）
-- MS Proof（应为 MSProf）
-- 超网模型 / 长网模型（应为 draft model）
-- NLP tokens / Namspace tokens（应为 num_spec_tokens）
-- logics（应为 logits）
-- dflash（小写）/ dspark（小写）—— 首字母大写</p>
+<p><strong>必须说</strong>：</p>
+<ul>
+<li>EAGLE-3 speculative decoding</li>
+<li>vLLM-MindSpore / vLLM-Ascend</li>
+<li>Ascend NPU / Atlas 3000 / 310P3 / 910B</li>
+<li>MSProf timeline / flame graph</li>
+<li>draft model / target model</li>
+<li>num_spec_tokens</li>
+<li>acceptance rate / accepted length</li>
+<li>position_ids / slot_mapping / block_table / attention_metadata / KV cache</li>
+<li>target verification / rejection sampler / recover sample</li>
+<li>DFlash / block diffusion / KV injection / non-causal attention</li>
+<li>DSpark / semi-autoregressive / Markov Head / confidence head / STS / hardware-aware prefix scheduler</li>
+<li>DeepSpec / DeepSeek-V4-Pro-DSpark</li>
+</ul>
+<p><strong>不要说</strong>（均为口误 / 错误拼写，括号内为正确写法）：</p>
+<ul>
+<li>Ego3 / EGO3（应为 EAGLE-3）</li>
+<li>VM-Minus / Manusword / ManSport（应为 vLLM-MindSpore）</li>
+<li>MS Proof（应为 MSProf）</li>
+<li>超网模型 / 长网模型（应为 draft model）</li>
+<li>NLP tokens / Namspace tokens（应为 num_spec_tokens）</li>
+<li>logics（应为 logits）</li>
+<li>dflash（小写）/ dspark（小写）—— 首字母大写</li>
+</ul>
 <hr>
 <h2 id="十七最后一周复习顺序">十七、最后一周复习顺序</h2>
 <table>
