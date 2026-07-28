@@ -11,7 +11,7 @@ import subprocess
 import re
 import argparse
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "channels.json"
@@ -23,17 +23,34 @@ def load_config():
 
 
 def fetch_papers_for_channel(channel_name, config):
-    """Fetch latest papers for a specific channel."""
+    """Fetch latest papers for a specific channel.
+
+    日期过滤:arXiv API 的 submittedDate 范围查询不稳定(返回 500),
+    改成客户端按 <published> 字段过滤:只保留今天 + 昨天的论文。
+    这样既保证窗口稳定(拿到所有近 2 天论文),又保证不遗漏。
+    """
     channel = config["channels"][channel_name]
     categories = channel["categories"]
     keywords = [kw.lower() for kw in channel["keywords"]]
     min_score = config.get("min_score", 3)
     limit = config.get("per_channel_limit", 5)
 
+    # 客户端日期过滤:只保留今天 + 昨天发布的论文(覆盖 arXiv 索引延迟)
+    today = datetime.utcnow().date()
+    yesterday = today - timedelta(days=1)
+    valid_dates = {today.isoformat(), yesterday.isoformat()}
+
     papers = []
 
     for category in categories:
-        url = f'https://export.arxiv.org/api/query?search_query=cat:{category}&start=0&max_results=50&sortBy=submittedDate&sortOrder=descending'
+        # max_results 提升到 200(原 50 在大类如 cs.AI 不够);
+        # 不在 URL 里做日期过滤(arXiv API 的 submittedDate 范围查询返回 500),
+        # 改成拉取后按 published 字段客户端过滤
+        url = (
+            f'https://export.arxiv.org/api/query?'
+            f'search_query=cat:{category}'
+            f'&start=0&max_results=200&sortBy=submittedDate&sortOrder=descending'
+        )
 
         try:
             result = subprocess.run(['curl', '-sL', url], capture_output=True, timeout=30)
@@ -60,8 +77,21 @@ def fetch_papers_for_channel(channel_name, config):
             published = re.search(r'<published>(\d{4}-\d{2}-\d{2})</published>', entry)
             published = published.group(1) if published else datetime.now().strftime('%Y-%m-%d')
 
+            # 客户端日期过滤:只保留今天 + 昨天发布的论文
+            if published not in valid_dates:
+                continue
+
             text = (title + ' ' + summary).lower()
-            score = sum(1 for kw in keywords if kw in text)
+            # 词界正则:防止子串误命中(如 cot 命中 cottage, search 命中 research)
+            score = 0
+            for kw in keywords:
+                # 单字符关键词用 in,多词短语用 in,单词用词界
+                if ' ' in kw or len(kw) <= 2:
+                    if kw in text:
+                        score += 1
+                else:
+                    if re.search(r'\b' + re.escape(kw) + r'\b', text):
+                        score += 1
 
             if score >= min_score:
                 papers.append({
