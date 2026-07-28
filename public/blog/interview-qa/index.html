@@ -293,7 +293,7 @@
 <p>我过去一年最核心的项目是 EAGLE-3 speculative decoding 在 vLLM-MindSpore 和 vLLM-Ascend 上的落地。我负责过 draft proposer 输入构造、target hidden states / auxiliary hidden states 传递、target verification、rejection sampler、attention metadata、slot_mapping / block_table 和 KV cache 多并发回归等链路。</p>
 <p>这个项目里有两类比较能体现能力的工作。第一类是 correctness 排障：10 并发下 draft model 第二次推理 batch1 之后输出同错，通过 dump block_table、position_ids、slot_mapping、KV cache slice、hidden states 和 logits，定位到 slot_mapping 没按底层 attention / KV 索引算子期望转成 int32，导致物理 KV slot 读写错位。第二类是性能优化：用 MSProf 定位 decode step 中 host 调度、小算子 launch 和首次编图 spike，把 prepare_inputs 里的 prefix / arange / slice / output_index 等索引逻辑迁到 device / 图内路径，并覆盖 draft lm_head warmup。</p>
 <p>结果上，vLLM-Ascend PR #1032 合入了 EAGLE-3 proposer；在 Atlas 3000/310P3 上，Qwen2.5-7B + Eagle3-Qwen2.5-7B、spec=3 的实验中，输出吞吐从 9.22 tok/s 提升到 14.30 tok/s，TPOT 从 108.18 ms 降到 65.76 ms。我的优势是能把 speculative decoding 算法、vLLM runtime 状态和 NPU 执行性能放在一起看问题。</p>
-<p><strong>自检</strong>：不说 Ego3 / MS Proof / VM-Minus；先主线项目→真实 bug→性能优化→指标；不平均讲 Suffix / KV-Select。</p>
+<p><strong>自检</strong>：不说 Ego3（应为 EAGLE-3）/ MS Proof（应为 MSProf）/ VM-Minus（应为 vLLM-MindSpore）；先主线项目→真实 bug→性能优化→指标；不平均讲 Suffix / KV-Select。</p>
 <hr>
 <h3 id="q12p0-2如何证明自己是主力实现者">Q1.2【P0-2】如何证明自己是主力实现者</h3>
 <p><strong>问题</strong>：在你做过的这些工作里，哪一段最能证明你是主力实现者，而不是只参与测试、调参或跟着改？</p>
@@ -364,7 +364,7 @@
 <p><strong>线上 acceptance rate 很高但输出和 baseline 对不齐时，优先怀疑 sampler 两个实现点</strong>：
 1. logits 到 probabilities 的处理顺序是否和 baseline 完全一致：temperature、top-k、top-p、mask、softmax、renorm、dtype 精度和每个 request 的 sampling params。
 2. accept/reject 和 recover sample 是否正确：p/q gather、max(0, p-q) 归一化、随机数消费顺序、per-request seed、accept mask 和 final token commit 顺序。</p>
-<p><strong>自检</strong>：必须说"分布一致性"，不只说"判断 draft 是否预测正确"；必须说 min(1, p/q) 和 max(0, p-q)；不要把 logits 说成 logics。</p>
+<p><strong>自检</strong>：必须说"分布一致性"，不只说"判断 draft 是否预测正确"；必须说 min(1, p/q) 和 max(0, p-q)；不要把 logits 说成 logics（应为 logits）。</p>
 <hr>
 <h3 id="q23严格第2题rejection-sampler-接受拒绝机制">Q2.3【严格第2题】Rejection sampler 接受/拒绝机制</h3>
 <p><strong>问题</strong>：speculative decoding 里的 rejection sampling 具体怎么决定一个 draft token 是接受还是拒绝？要求解释 target probability / draft probability、接受概率、拒绝后的处理、重新采样分布，以及为什么能保证最终采样分布与直接 target model 采样一致。</p>
@@ -2049,13 +2049,13 @@ c_k* = 1 - ½·‖p_k^d - p_k^t‖_1   (监督信号：draft 分布与 target �
 - DFlash / block diffusion / KV injection / non-causal attention
 - DSpark / semi-autoregressive / Markov Head / confidence head / STS / hardware-aware prefix scheduler
 - DeepSpec / DeepSeek-V4-Pro-DSpark</p>
-<p><strong>不要说</strong>：
-- Ego3 / EGO3
-- VM-Minus / Manusword / ManSport
-- MS Proof
-- 超网模型 / 长网模型
-- NLP tokens / Namspace tokens
-- logics
+<p><strong>不要说</strong>（均为口误 / 错误拼写，括号内为正确写法）：
+- Ego3 / EGO3（应为 EAGLE-3）
+- VM-Minus / Manusword / ManSport（应为 vLLM-MindSpore）
+- MS Proof（应为 MSProf）
+- 超网模型 / 长网模型（应为 draft model）
+- NLP tokens / Namspace tokens（应为 num_spec_tokens）
+- logics（应为 logits）
 - dflash（小写）/ dspark（小写）—— 首字母大写</p>
 <hr>
 <h2 id="十七最后一周复习顺序">十七、最后一周复习顺序</h2>
