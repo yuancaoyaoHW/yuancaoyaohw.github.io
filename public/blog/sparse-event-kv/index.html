@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,ital,wght@6..72,0,400;6..72,0,500;6..72,0,600;6..72,0,700;6..72,1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta name="description" content="论文 2607.23693 深度解读：Sparse Event-KV 的内存契约——当 source 被丢弃后，下游 event 的 KV 行如何独立承载其状态（semantic materialization）。含动画可视化。" />
+  <title>全局计算，局部物化 · Sparse Event-KV 内存契约</title>
+  <style>
+    :root {
+      --bg: #FAFAF7;
+      --bg-elev: #FFFFFF;
+      --panel: rgba(255,255,255,.96);
+      --panel-2: rgba(248,246,241,.98);
+      --text: #1A1A1A;
+      --muted: #52606B;
+      --faint: #8A8A8A;
+      --line: rgba(39, 83, 111, .14);
+      --line-strong: rgba(39, 83, 111, .28);
+      --cyan: #3B4BA2;
+      --blue: #3B4BA2;
+      --violet: #5A4099;
+      --amber: #B06800;
+      --green: #178845;
+      --red: #A02828;
+      --shadow: 0 2px 8px rgba(38,78,99,.08);
+      --radius: 8px;
+      --radius-sm: 6px;
+      --max: 1500px;
+      --nav-w: 260px;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: "Newsreader", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    }
+    [data-theme="dark"] {
+      --bg: #0E0F13;
+      --bg-elev: #161821;
+      --panel: rgba(22,24,33,.96);
+      --panel-2: rgba(28,30,40,.98);
+      --text: #E8E8E8;
+      --muted: #9AA3B0;
+      --faint: #6A6F7A;
+      --line: rgba(255,255,255,.10);
+      --line-strong: rgba(255,255,255,.22);
+      --shadow: 0 2px 8px rgba(0,0,0,.4);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 86% -8%, rgba(59,75,162,.04), transparent 30%),
+        radial-gradient(circle at 18% 8%, rgba(59,75,162,.03), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.72;
+      letter-spacing: .01em;
+      transition: background .3s, color .3s;
+    }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { font-family: var(--mono); font-size: .92em; background: color-mix(in srgb, var(--cyan) 7%, transparent); padding: 1px 5px; border-radius: 4px; }
+    .skip { position: fixed; left: 12px; top: -80px; z-index: 9999; padding: 9px 12px; background: var(--bg-elev); color: var(--text); border: 1px solid var(--line); border-radius: 8px; }
+    .skip:focus { top: 12px; }
+
+    /* ── topbar ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 60;
+      height: 62px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 22px; backdrop-filter: blur(15px);
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 760; letter-spacing: .02em; }
+    .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: conic-gradient(from 210deg, var(--cyan), var(--blue), var(--violet), var(--cyan)); }
+    .top-actions { display: flex; gap: 8px; align-items: center; }
+    .icon-btn, .small-btn {
+      border: 1px solid var(--line-strong); color: var(--text); background: var(--panel);
+      border-radius: 10px; padding: 8px 11px; cursor: pointer; font-size: .9rem;
+    }
+    .icon-btn:hover, .small-btn:hover { border-color: var(--cyan); }
+
+    .layout { max-width: var(--max); margin: 0 auto; display: grid; grid-template-columns: var(--nav-w) minmax(0,1fr); gap: 30px; padding: 28px 24px 80px; }
+    aside { position: relative; }
+    .side-nav {
+      position: sticky; top: 88px; max-height: calc(100vh - 110px); overflow: auto;
+      padding: 16px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .side-nav .eyebrow { margin: 2px 10px 10px; }
+    .side-nav a { display: block; color: var(--muted); padding: 7px 10px; margin: 2px 0; border-radius: 8px; font-size: .91rem; text-decoration: none; border-left: 2px solid transparent; transition: all .15s; }
+    .side-nav a:hover { color: var(--text); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+    .side-nav a.active { color: var(--text); background: color-mix(in srgb, var(--cyan) 12%, transparent); border-left-color: var(--cyan); }
+    .side-nav .sub { padding-left: 22px; font-size: .83rem; }
+
+    /* ── mobile TOC ── */
+    .mobile-toc { display: none; margin: 0 0 18px; }
+    .mobile-toc select { width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel); color: var(--text); font-size: .95rem; }
+
+    /* ── article body ── */
+    main { min-width: 0; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; color: var(--muted); font-weight: 600; }
+    .fine { color: var(--muted); font-size: .86rem; font-weight: 400; }
+    .muted { color: var(--muted); }
+
+    .hero { padding: 56px 0 40px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+    .hero h1 { font-size: clamp(2.1rem, 4vw, 3.1rem); line-height: 1.12; margin: 12px 0 18px; letter-spacing: -.015em; font-weight: 700; }
+    .gradient-text { background: linear-gradient(120deg, var(--cyan), var(--violet)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero .lead { font-size: 1.18rem; color: var(--muted); max-width: 760px; margin: 0 0 24px; line-height: 1.6; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
+    .meta-pill { font-size: .8rem; padding: 5px 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+    .hero-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 14px; }
+    .hero-stat { padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+    .hero-stat strong { display: block; font-size: 1.7rem; font-family: var(--mono); color: var(--cyan); margin-bottom: 4px; }
+    .hero-stat span { font-size: .84rem; color: var(--muted); }
+
+    section.section-card { padding: 0 0 44px; margin-bottom: 8px; }
+    .section-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 24px; }
+    .section-no { flex: 0 0 auto; font-family: var(--mono); font-size: 1.3rem; font-weight: 600; color: var(--cyan); min-width: 38px; }
+    .section-head h2 { font-size: 1.65rem; margin: 4px 0 6px; font-weight: 700; line-height: 1.25; }
+    .section-head .muted { font-size: .92rem; }
+
+    h3 { font-size: 1.18rem; margin: 28px 0 10px; font-weight: 600; }
+    h4 { font-size: 1.02rem; margin: 20px 0 8px; font-weight: 600; color: var(--violet); }
+    p { margin: 0 0 14px; }
+    .section-card p { font-size: 1.02rem; }
+
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap: 16px; margin: 18px 0; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 14px; margin: 18px 0; }
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 14px; margin: 18px 0; }
+
+    .card { padding: 20px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+    .card h3 { margin-top: 0; }
+    .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    .badge { font-size: .72rem; padding: 3px 9px; border-radius: 999px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+    .badge.paper { background: color-mix(in srgb, var(--cyan) 14%, transparent); color: var(--cyan); }
+    .badge.vendor { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+    .badge.inference { background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--violet); }
+    .badge.caution { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+    .badge.metric { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+
+    .callout { padding: 18px 22px; background: color-mix(in srgb, var(--cyan) 6%, var(--panel)); border-left: 4px solid var(--cyan); border-radius: 8px; margin: 20px 0; }
+    .callout.warn { border-left-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--panel)); }
+    .callout.danger { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 7%, var(--panel)); }
+    .callout strong { color: var(--text); }
+
+    /* ── data table ── */
+    .data-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: .92rem; background: var(--panel); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+    .data-table caption { padding: 12px 14px; text-align: left; font-size: .9rem; color: var(--muted); background: var(--panel-2); border-bottom: 1px solid var(--line); }
+    .data-table th, .data-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); }
+    .data-table th { background: var(--panel-2); font-weight: 600; font-size: .86rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table td.num { font-family: var(--mono); color: var(--cyan); }
+    .data-table .hi { color: var(--green); font-weight: 600; }
+    .data-table .lo { color: var(--red); }
+
+    /* ── diagram container ── */
+    .diagram {
+      margin: 28px 0; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+      overflow-x: auto;
+    }
+    .diagram-cap { margin-top: 12px; font-size: .86rem; color: var(--muted); text-align: center; }
+    svg { display: block; width: 100%; height: auto; max-width: 900px; margin: 0 auto; }
+    .svg-text { font-family: var(--sans); fill: var(--text); }
+    .svg-muted { font-family: var(--sans); fill: var(--muted); }
+    .svg-mono { font-family: var(--mono); }
+    .svg-line { stroke: var(--line-strong); }
+    [data-theme="dark"] .svg-text { fill: var(--text); }
+    [data-theme="dark"] .svg-muted { fill: var(--muted); }
+
+    /* ── animation toggle ── */
+    .anim-controls { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .anim-btn { padding: 7px 14px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); border-radius: 8px; cursor: pointer; font-size: .88rem; font-family: var(--mono); }
+    .anim-btn:hover, .anim-btn.active { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); color: var(--cyan); }
+
+    /* ── SVG animation classes ── */
+    .anim-fade { opacity: 0; transition: opacity .8s ease; }
+    .anim-fade.in { opacity: 1; }
+    .anim-pulse { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:.4; } }
+    .anim-draw { stroke-dasharray: 400; stroke-dashoffset: 400; transition: stroke-dashoffset 1.2s ease; }
+    .anim-draw.in { stroke-dashoffset: 0; }
+
+    /* ── source/donor flowing token ── */
+    .flow-token { transition: transform 1.5s cubic-bezier(.4,0,.2,1), opacity .8s ease; }
+    .flow-token.dropped { opacity: 0; }
+
+    /* ── KV row highlight ── */
+    .kv-row-cell { transition: fill .6s ease, stroke .6s ease; }
+    .kv-row-cell.materialized { fill: color-mix(in srgb, var(--cyan) 22%, var(--bg-elev)); stroke: var(--cyan); }
+    .kv-row-cell.normal { fill: var(--bg-elev); stroke: var(--line); }
+
+    /* ── glossary ── */
+    .glossary dt { font-weight: 600; color: var(--violet); font-family: var(--mono); font-size: .92rem; margin-top: 12px; }
+    .glossary dd { margin: 2px 0 12px 0; color: var(--muted); font-size: .92rem; }
+
+    /* ── bilingual toggle ── */
+    .lang-toggle { display: flex; gap: 6px; }
+    .lang-btn { padding: 5px 11px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 6px; cursor: pointer; font-size: .82rem; font-family: var(--mono); }
+    .lang-btn.active { background: var(--cyan); color: white; border-color: var(--cyan); }
+    body.mode-cn .en-only { display: none; }
+    body.mode-en .cn-only { display: none; }
+
+    /* ── sources ── */
+    .src-list { font-size: .88rem; }
+    .src-list li { margin-bottom: 6px; }
+    .src-list code { font-size: .85em; }
+
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; padding-top: 18px; }
+      aside { display: none; }
+      .mobile-toc { display: block; }
+    }
+    @media (max-width: 640px) {
+      .hero { padding: 32px 0 24px; }
+      .hero h1 { font-size: 1.8rem; }
+      .section-card p { font-size: .96rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .anim-pulse { animation: none; }
+      .flow-token { transition: none; }
+    }
+  </style>
+</head>
+<body>
+<style data-sn-nav>
+.sn-nav{position:fixed;top:0;left:0;right:0;z-index:9990;display:flex;align-items:center;justify-content:space-between;padding:14px 28px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.78);border-bottom:1px solid rgba(0,0,0,.08);font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;transition:background .3s,border-color .3s}
+.sn-brand{font-weight:700;font-size:17px;color:#1a1a2e;text-decoration:none;display:flex;align-items:center;gap:2px}
+.sn-brand .sn-dot{color:#FF7A00}
+.sn-links{display:flex;align-items:center;gap:22px}
+.sn-links a{color:#1a1a2e;text-decoration:none;font-size:14px;font-weight:500;opacity:.82;transition:opacity .2s}
+.sn-links a:hover,.sn-links a.is-active{opacity:1;color:#3B4BA2}
+.sn-toggle{background:none;border:none;cursor:pointer;color:#1a1a2e;display:flex;align-items:center;padding:4px;border-radius:6px}
+.sn-toggle:hover{background:rgba(0,0,0,.06)}
+.sn-sun,.sn-moon{width:17px;height:17px;display:none}
+[data-theme="dark"] .sn-nav{background:rgba(8,13,16,.72);border-bottom-color:rgba(255,255,255,.08)}
+[data-theme="dark"] .sn-brand,[data-theme="dark"] .sn-links a,[data-theme="dark"] .sn-toggle{color:#E8E8E8}
+[data-theme="dark"] .sn-toggle:hover{background:rgba(255,255,255,.08)}
+[data-theme="light"] .sn-nav .sn-sun,[data-theme="dark"] .sn-nav .sn-moon{display:block}
+@media(max-width:640px){.sn-nav{padding:12px 18px}.sn-links{gap:14px}.sn-links a:not(.sn-brand){display:none}.sn-brand{font-size:15px}}
+</style>
+<nav class="sn-nav"><a href="/" class="sn-brand">yuancaoyaohw<span class="sn-dot">.</span></a><div class="sn-links"><a href="/">首页</a><a href="/papers/">每日论文</a><a href="/#posts" class="is-active">博客</a><a href="/#interview">面经</a><a href="/#travel">旅游攻略</a><button class="sn-toggle" onclick="snToggleTheme()" aria-label="切换主题" title="切换深/浅色主题"><svg class="sn-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><svg class="sn-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button></div></nav>
+<script data-sn-pad>(function(){function p(){var n=document.querySelector('.sn-nav');if(!n)return;document.body.style.paddingTop=n.getBoundingClientRect().height+'px';}if(document.readyState!=='loading'){p();}else{document.addEventListener('DOMContentLoaded',p);}window.addEventListener('resize',p);})();</script>
+<script data-sn-theme>function snToggleTheme(){var d=document.documentElement;var c=d.getAttribute('data-theme');var n=c==='dark'?'light':'dark';d.setAttribute('data-theme',n);try{localStorage.setItem('sn-theme',n);}catch(e){}}(function(){try{var s=localStorage.getItem('sn-theme');var t=s||'light';if(!document.documentElement.getAttribute('data-theme'))document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+
+<a class="skip" href="#main">跳到正文</a>
+<div class="topbar" style="margin-top:0;">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Memory Contract</span><span class="fine">/ 论文 2607.23693</span></div>
+  <div class="top-actions">
+    <div class="lang-toggle">
+      <button class="lang-btn active" data-lang="both" type="button">中英</button>
+      <button class="lang-btn" data-lang="cn" type="button">中</button>
+      <button class="lang-btn" data-lang="en" type="button">EN</button>
+    </div>
+    <button class="icon-btn" id="themeBtn" type="button" title="切换主题"><span aria-hidden="true">◐</span> <span class="fine">主题</span></button>
+    <button class="icon-btn" id="printBtn" type="button" title="打印或另存为 PDF"><span aria-hidden="true">⎙</span> <span class="fine">打印</span></button>
+  </div>
+</div>
+
+<div class="layout">
+  <aside aria-label="目录">
+    <nav class="side-nav" id="sideNav">
+      <div class="eyebrow">目录</div>
+      <a href="#summary">执行摘要</a>
+      <a href="#contract">服务契约</a>
+      <a href="#discovery">发现：行能回答</a>
+      <a class="sub" href="#discovery-anim">动画：物化机制</a>
+      <a href="#trigger">触发：哪些 event 物化</a>
+      <a href="#landing">着陆：根承载，引用边路由</a>
+      <a href="#access">访问：二值恢复，大负载衰减</a>
+      <a href="#programming">编程这个原语</a>
+      <a href="#implications">推论与边界</a>
+      <a href="#related">相关工作</a>
+      <a href="#limitations">局限与范围</a>
+      <a href="#glossary">术语表</a>
+      <a href="#sources">来源</a>
+    </nav>
+  </aside>
+  <main id="main">
+    <div class="mobile-toc">
+      <label for="mobileToc" class="fine">快速跳转</label>
+      <select id="mobileToc">
+        <option value="#summary">执行摘要</option>
+        <option value="#contract">服务契约</option>
+        <option value="#discovery">发现：行能回答</option>
+        <option value="#trigger">触发：哪些 event 物化</option>
+        <option value="#landing">着陆</option>
+        <option value="#access">访问</option>
+        <option value="#programming">编程原语</option>
+        <option value="#implications">推论与边界</option>
+        <option value="#related">相关工作</option>
+        <option value="#limitations">局限与范围</option>
+        <option value="#glossary">术语表</option>
+        <option value="#sources">来源</option>
+      </select>
+    </div>
+
+    <article class="hero">
+      <div class="eyebrow">arXiv 2607.23693 · LLM Serving · KV Cache · 2026-07-26</div>
+      <h1>全局计算，<span class="gradient-text">局部物化</span><br>Sparse Event-KV 的内存契约</h1>
+      <p class="lead">当长程 agent 把 KV cache 当作记忆复用，serving 系统只保留一部分行、丢弃其余——这隐含一个从未被直接验证的前提：被保留的 event 的 KV 行，在产生它的 source 已被丢弃后，是否还能独立承载那个 source 的状态？这篇论文直接测试它，并给出一个可编程的"语义物化"原语。</p>
+      <div class="hero-meta">
+        <span class="meta-pill">作者：Zefeng Cai, Zerui Cai</span>
+        <span class="meta-pill">独立研究者</span>
+        <span class="meta-pill">Qwen3-8B · Gemma-4 · Ministral-3</span>
+        <span class="meta-pill">含动画可视化</span>
+      </div>
+      <div class="hero-grid">
+        <div class="hero-stat"><strong>99:0</strong><span>Qwen3-8B 上 donor-sensitive 项的 follow:anti 比，source 被丢弃后答案仍跟随隐藏 donor（p=3.2×10⁻³⁰）</span></div>
+        <div class="hero-stat"><strong>6% → 51%</strong><span>刻意构造的 answer-free carrier 把 donor 对齐恢复率从 6% 提升到 51%，且从不点名答案</span></div>
+        <div class="hero-stat"><strong>9.7%</strong><span>verbatim 字面载荷几乎不转移；只有紧凑的二值状态能稳定存活</span></div>
+        <div class="hero-stat"><strong>.934</strong><span>二值状态原生恢复率（95% CI [.896, .968]），远高于随机</span></div>
+      </div>
+    </article>
+
+    <section id="summary" class="section-card">
+      <div class="section-head"><div class="section-no">01</div><div><div class="eyebrow">Executive Summary</div><h2>执行摘要：一个被默认的前提被直接验证</h2><p class="muted">先给结论，再展开机制、契约与证据。</p></div></div>
+
+      <div class="grid-2">
+        <div class="card"><div class="badges"><span class="badge paper">核心发现</span></div><h3>被丢弃的 source 仍通过下游行回答</h3><p>agent 历史 <code>𝒯 = (e₁,…,eₙ)</code> 中，某个 source event 设定了一个状态（如"寄存器 S 在线"），一个下游 event 只是说"M mirrors S"。当 serving <strong>丢弃 source</strong>、只保留下游行时，问 M 的状态——答案仍然 99:0 跟随被隐藏的 donor，即使 <strong>没有任何被服务的 span 点名"online"</strong>。论文称之为 <strong>semantic materialization</strong>（语义物化）：下游 event 的 contextualized KV 行是"一个可独立服务的、对已消失输入的计算视图"。</p></div>
+        <div class="card"><div class="badges"><span class="badge inference">可编程</span></div><h3>不只是被动观察——可以主动写入</h3><p>论文不仅发现这个现象，还把它做成一个原语。一个刻意措辞、<strong>不含答案</strong>的 carrier event（如"MM mirrors SS"），放在 source 之后，能把 donor 对齐恢复率从 6% 提升到 51%。而被动地从长程对话里收割自然提及，则检测不到任何收益。这意味着"记忆写入"是一个需要校准的、依赖措辞而非语义的写时操作。</p></div>
+        <div class="card"><div class="badges"><span class="badge caution">边界</span></div><h3>能携带什么：紧凑状态存活，大负载衰减</h3><p>物化是<strong>有界且具体的</strong>。二值状态（online/offline）原生恢复到 .934；四向、八向负载向随机衰减；精确数字载荷几乎无法原生恢复；verbatim 字面措辞只在 9.7% 的配对中转移——和随机不可区分。所以这不是"任意信息都能塞进 KV 行"的万能通道，而是一条<strong>窄但因果可信</strong>的信道。</p></div>
+        <div class="card"><div class="badges"><span class="badge vendor">对 eviction 的推论</span></div><h3>消融无精度损失 ≠ source 不必要</h3><p>对任何做 eviction 的人，最直接的推论是：你丢掉一个 source event、观察到精度没掉，<strong>这不能证明 source 不必要</strong>——它可能已经把状态物化进了你保留下来的某一行里。经典"丢掉看精度"的消融在 sparse-KV serving 下系统性高估了可丢弃性。</p></div>
+      </div>
+
+      <div class="callout warn"><strong>一句话判断：</strong> 在 sparse event-KV serving 下，<strong>"选行"不等于"只选它的可见 token 内容"</strong>——contextualized 事件行可以携带被丢弃 source 的计算结果。论文把这套行为提炼成 <em>trigger / landing / access</em> 三段契约，让"写什么、落在哪、丢弃后存留什么"成为可工程化的接口。</div>
+    </section>
+
+    <section id="contract" class="section-card">
+      <div class="section-head"><div class="section-no">02</div><div><div class="eyebrow">The Serving Contract</div><h2>服务契约：为什么这个问题不平凡</h2><p class="muted">三条规则让"丢掉 source 还能答"成为一个有意义而非显然的实验。</p></div></div>
+
+      <p>论文把实验置入一个 <strong>serving contract</strong>：源事件被排除在服务集 <code>Σ</code> 之外；donor 对比只在"两个 donor 输出不同"的项上进行；readout 的放置是协议选择而非自然给定。三条核心谓词贯穿全文：</p>
+
+      <div class="grid-3">
+        <div class="card"><span class="badge paper">谓词 1</span><h3>Materializes（物化）</h3><p>一个被服务的 span <code>e</code> 对 readout <code>q</code> 物化了值 <code>v</code>，当它的 contextualized 行 <code>KV(e)</code> 相对于<strong>孤立重编码相同文本</strong>，诱导出 donor 对齐行为——即答案跟随被丢弃的 donor 而非它的反面。</p></div>
+        <div class="card"><span class="badge paper">谓词 2</span><h3>Trigger / Carrier（触发/载体）</h3><p>trigger 是让一个 event 做这件事的<strong>写时构造</strong>。carrier 是这样的一个 event——它的 KV 持有上游派生的状态，而文本里<strong>不点名</strong>该状态。"MM mirrors SS" 是一个典型 carrier：它读 SS 但不说 SS 是 online 还是 offline。</p></div>
+        <div class="card"><span class="badge paper">谓词 3</span><h3>Conditional Landing（条件着陆）</h3><p>一个 span 是 conditional landing，当它在 <strong>span 级消融</strong>下仍物化 <code>v</code>——即把它与固定的 donor 无关脚手架（decoy + 无关 register）一起服务时，它单独承载 donor 信号。</p></div>
+      </div>
+
+      <div class="callout"><strong>关键设计：</strong> query 的放置是协议选择，不是自然给定。retained 行<strong>始终保留原始位置 id</strong>；只有 query 放在哪是可调的。合成 arm 把 query 放在 carrier 之后的槽位——这与"把 query 放在 source 之前"不等价，后者会破坏因果方向。</p></div>
+    </section>
+
+    <section id="discovery" class="section-card">
+      <div class="section-head"><div class="section-no">03</div><div><div class="eyebrow">Discovery</div><h2>发现：一个被服务的行，能从被丢弃的 source 回答</h2><p class="muted">论文的核心实验与 99:0 分裂。</p></div></div>
+
+      <p>具体场景（见下方动画）：一个 event 写"寄存器 S online"，一个后来的 event 只说"M mirrors S"。我们<strong>丢弃第一个</strong>、服务第二个，然后问 M——没有任何被服务的 span 说"online"。在 Qwen3-8B 上，分裂是 <strong>99:0</strong>（<code>p = 3.2×10⁻³⁰</code>）：99 个 donor-sensitive 项跟随我们丢弃的 source，0 个跟随反面。</p>
+
+      <div id="discovery-anim">
+        <div class="anim-controls">
+          <button class="anim-btn active" data-step="0" type="button">① 全局 prefill</button>
+          <button class="anim-btn" data-step="1" type="button">② 丢弃 source</button>
+          <button class="anim-btn" data-step="2" type="button">③ 只服务 carrier</button>
+          <button class="anim-btn" data-step="3" type="button">④ 问 M → 仍跟随 donor</button>
+          <button class="anim-btn" data-step="-1" type="button">↻ 重置</button>
+        </div>
+        <div class="diagram" role="img" aria-label="语义物化机制动画">
+          <svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+            <!-- timeline -->
+            <line x1="60" y1="80" x2="840" y2="80" class="svg-line" stroke-width="1.5"/>
+            <text x="60" y="60" class="svg-muted" font-size="13">时间 →</text>
+
+            <!-- Step labels (top) -->
+            <text x="120" y="40" class="svg-text" font-size="14" font-weight="700" id="lbl-source">① source event</text>
+            <text x="380" y="40" class="svg-text" font-size="14" font-weight="700" id="lbl-carrier">② carrier event</text>
+            <text x="640" y="40" class="svg-muted" font-size="14" font-weight="700" id="lbl-query">③ query</text>
+
+            <!-- Source event block -->
+            <g id="src-block">
+              <rect x="80" y="100" width="180" height="80" rx="10" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="1.5" class="kv-row-cell normal"/>
+              <text x="170" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">source e_s</text>
+              <text x="170" y="148" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"register S is ONLINE"</text>
+              <text x="170" y="166" text-anchor="middle" class="svg-muted" font-size="10">sets state</text>
+            </g>
+
+            <!-- Carrier event block -->
+            <g id="carrier-block">
+              <rect x="340" y="100" width="200" height="80" rx="10" fill="#FAFAF7" stroke="var(--line)" stroke-width="1.5" class="kv-row-cell normal" id="carrier-cell"/>
+              <text x="440" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">carrier e_c</text>
+              <text x="440" y="148" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"M mirrors S"</text>
+              <text x="440" y="166" text-anchor="middle" class="svg-muted" font-size="10">names no value</text>
+            </g>
+
+            <!-- Query block -->
+            <g id="query-block">
+              <rect x="600" y="100" width="200" height="80" rx="10" fill="#F5E8D5" stroke="#B06800" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <text x="700" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">query q</text>
+              <text x="700" y="148" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"is M online?"</text>
+              <text x="700" y="166" text-anchor="middle" class="svg-muted" font-size="10">readout</text>
+            </g>
+
+            <!-- Attention arrow source→carrier (during prefill) -->
+            <path id="attn-arrow" d="M 260 140 Q 300 110 340 140" fill="none" stroke="#3B4BA2" stroke-width="2" marker-end="url(#arrowhead)" class="anim-draw"/>
+            <text x="300" y="100" class="svg-muted" font-size="11" id="attn-label">attention</text>
+
+            <!-- "state carried" label on carrier -->
+            <text x="440" y="210" text-anchor="middle" class="svg-text" font-size="12" font-weight="600" id="carry-label" style="opacity:0">S 的状态物化进 KV(e_c)</text>
+
+            <!-- Drop indicator -->
+            <g id="drop-x" style="opacity:0">
+              <line x1="80" y1="90" x2="260" y2="190" stroke="#A02828" stroke-width="3" stroke-linecap="round"/>
+              <line x1="260" y1="90" x2="80" y2="190" stroke="#A02828" stroke-width="3" stroke-linecap="round"/>
+              <text x="170" y="220" text-anchor="middle" class="svg-text" font-size="13" font-weight="700" fill="#A02828">DROPPED</text>
+            </g>
+
+            <!-- Served-set box -->
+            <rect x="320" y="250" width="500" height="120" rx="10" fill="none" stroke="#178845" stroke-width="1.5" stroke-dasharray="5 4" id="served-box" style="opacity:0"/>
+            <text x="570" y="245" text-anchor="middle" class="svg-muted" font-size="12" id="served-label" style="opacity:0">served set Σ = { carrier, decoy, query }</text>
+
+            <!-- Answer reveal -->
+            <text x="700" y="300" text-anchor="middle" class="svg-text" font-size="20" font-weight="700" fill="#178845" id="answer-text" style="opacity:0">answer = ONLINE ✓</text>
+            <text x="700" y="330" text-anchor="middle" class="svg-muted" font-size="12" id="answer-sub" style="opacity:0">follows the dropped donor, not its opposite</text>
+
+            <defs>
+              <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="#3B4BA2"/>
+              </marker>
+            </defs>
+          </svg>
+        </div>
+        <p class="diagram-cap">图：语义物化的四步实验。① 全局 prefill 时 carrier 注意到 source，其 KV 行被"写入"source 的状态。② 丢弃 source 行。③ 只服务 carrier + decoy + query。④ 答案仍跟随被丢弃的 donor。</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card"><h3>比例只数 donor-sensitive 项</h3><p>99:0 不是整体恢复率。它<strong>只数两个 donor 输出不同的配对</strong>（donor-blind const 对被排除），所以报告的是<strong>方向</strong>而非恢复率。一个 256 配对复制给出了同样的分裂，排除了小样本偶然。</p></div>
+        <div class="card"><h3>跨服务设置、模型、readout 都成立</h3><p>无论 carrier 独自服务、还是与提及共服务、还是不同 readout 形式——donor-following 都成立。语义极性存活；verbatim 措辞很大程度上不存活。一个<strong>显式更新</strong>（后来 event 重置值）会覆盖被物化的状态——说明这条信道有"最后写入者"语义。</p></div>
+      </div>
+
+      <table class="data-table">
+        <caption>表 1：donor-sensitive 答案压倒性跟随隐藏 donor（follow : anti 计数，仅 scorable donor-dependent 对，source 被丢弃）</caption>
+        <thead><tr><th>模型</th><th>服务设置</th><th>follow</th><th>anti</th><th>方向</th></tr></thead>
+        <tbody>
+          <tr><td>Qwen3-8B</td><td>carrier alone</td><td class="num hi">99</td><td class="num lo">0</td><td>跟随 donor</td></tr>
+          <tr><td>Qwen3-8B</td><td>mention co-served</td><td class="num hi">97</td><td class="num lo">2</td><td>跟随 donor</td></tr>
+          <tr><td>Gemma-4</td><td>menu readout</td><td class="num hi">192</td><td class="num lo">0</td><td>跟随 donor</td></tr>
+          <tr><td>Ministral-3</td><td>carrier alone</td><td class="num hi">189</td><td class="num lo">3</td><td>跟随 donor</td></tr>
+        </tbody>
+      </table>
+      <p class="diagram-cap">精确双侧 sign test；Gemma-4 在 menu 协议下读出。donor-blind const 对被排除（两 donor 输出相同）。</p>
+    </section>
+
+    <section id="trigger" class="section-card">
+      <div class="section-head"><div class="section-no">04</div><div><div class="eyebrow">Trigger</div><h2>触发：哪些 event 会物化状态</h2><p class="muted">不是每个读上游状态的 event 都会写入它——写入取决于措辞，不取决于语义。</p></div></div>
+
+      <p>论文扫了 <strong>16 个 carrier 构造</strong>，分两族：8 个 mirror 构造（"register M ⟨relation⟩ register S"）和 8 个 flag 构造（"alert flag for sensor r ⟨relation⟩ check result"）——都<strong>不点名值</strong>。三个发现：</p>
+
+      <div class="grid-3">
+        <div class="card"><span class="badge paper">发现 1</span><h3>同语义，不同命运</h3><p>语义等价、模型同等理解的构造，write-through 率可差<strong>数十分</strong>。Qwen3 上 consist 写在 .94，而一个语义等价的变体写得更弱。这说明<strong>语义理解 ≠ 写入能力</strong>。</p></div>
+        <div class="card"><span class="badge paper">发现 2</span><h3>没有通用构造</h3><p>write aperture（在某模型上能写入的构造集合）<strong>随模型剧烈摆动</strong>：类总计 5/4/3 等。需要<strong>每模型校准</strong>，没有一个跨所有模型都能写的构造。</p></div>
+        <div class="card"><span class="badge paper">发现 3</span><h3>logit 层面分裂</h3><p>"理解但不原生生成"的类，在 forced-choice output-logit probe 下分裂为：有的构造 logits 里有信号但 top-1 不出，有的连 logits 都没有。校准而非通用——<strong>显式文本记录是唯一在所有模型上都恢复的 arm</strong>。</p></div>
+      </div>
+
+      <table class="data-table">
+        <caption>表 2：16 构造 write bank（两族；write-through 率与类，per 模型，serve carrier alone）</caption>
+        <thead><tr><th>族</th><th>构造示例</th><th>Qwen3 write-through</th><th>Gemma-4 write-through</th><th>类</th></tr></thead>
+        <tbody>
+          <tr><td>mirror</td><td>"M mirrors S"</td><td class="num hi">.94</td><td class="num hi">.91</td><td>consist</td></tr>
+          <tr><td>mirror</td><td>"M copies S"</td><td class="num">.51</td><td class="num hi">.88</td><td>comprehended-weak</td></tr>
+          <tr><td>mirror</td><td>"M tracks S"</td><td class="num lo">.12</td><td class="num">.47</td><td>comprehended-weak</td></tr>
+          <tr><td>flag</td><td>"flag for S = check"</td><td class="num">.43</td><td class="num hi">.85</td><td>comprehended-weak</td></tr>
+          <tr><td>flag</td><td>"alert on S"</td><td class="num lo">.08</td><td class="num lo">.15</td><td>non-write</td></tr>
+        </tbody>
+      </table>
+      <p class="diagram-cap">完整 16 构造见论文 Table 2；这里节选代表性项。"类"指 forced-choice logit probe 下的分类。</p>
+    </section>
+
+    <section id="landing" class="section-card">
+      <div class="section-head"><div class="section-no">05</div><div><div class="eyebrow">Landing</div><h2>着陆：根承载，引用边路由</h2><p class="muted">物化的值住在哪个 event 的行里？</p></div></div>
+
+      <p>当多个下游 event 都注意到 source 时，物化的值<strong>住在 root event 的行里</strong>；引用边（reference edge）大多只是<strong>路由</strong>到根。最锋利的情形是链式再延伸一跳：root "M mirrors S" 之后再来 "T mirrors M"——答案仍跟随 root donor。</p>
+
+      <div class="diagram" role="img" aria-label="root 承载 vs 引用边路由">
+        <svg viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg">
+          <text x="450" y="30" text-anchor="middle" class="svg-text" font-size="15" font-weight="700">roots carry, reference edges route</text>
+
+          <!-- source (dropped) -->
+          <rect x="40" y="120" width="140" height="60" rx="8" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5"/>
+          <text x="110" y="145" text-anchor="middle" class="svg-muted" font-size="12">source S</text>
+          <text x="110" y="163" text-anchor="middle" class="svg-muted" font-size="10">DROPPED</text>
+
+          <!-- root carrier -->
+          <rect x="280" y="100" width="160" height="80" rx="10" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="2" class="kv-row-cell materialized"/>
+          <text x="360" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="700">root C₁</text>
+          <text x="360" y="148" text-anchor="middle" class="svg-mono" font-size="11">"M mirrors S"</text>
+          <text x="360" y="166" text-anchor="middle" class="svg-text" font-size="11" font-weight="600" fill="#3B4BA2">★ carries state</text>
+
+          <!-- reference edge 1 -->
+          <rect x="540" y="100" width="160" height="80" rx="10" fill="#FAFAF7" stroke="var(--line-strong)" stroke-width="1.5" class="kv-row-cell normal"/>
+          <text x="620" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">ref C₂</text>
+          <text x="620" y="148" text-anchor="middle" class="svg-mono" font-size="11">"T mirrors M"</text>
+          <text x="620" y="166" text-anchor="middle" class="svg-muted" font-size="10">routes, doesn't carry</text>
+
+          <!-- query -->
+          <rect x="760" y="100" width="120" height="80" rx="10" fill="#F5E8D5" stroke="#B06800" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="820" y="145" text-anchor="middle" class="svg-text" font-size="13">query</text>
+          <text x="820" y="163" text-anchor="middle" class="svg-muted" font-size="10">"is T online?"</text>
+
+          <!-- arrows -->
+          <line x1="180" y1="140" x2="280" y2="140" stroke="#3B4BA2" stroke-width="1.5" marker-end="url(#arrowhead2)"/>
+          <line x1="440" y1="140" x2="540" y2="140" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 2" marker-end="url(#arrowhead2)"/>
+          <line x1="700" y1="140" x2="760" y2="140" stroke="#B06800" stroke-width="1.5" marker-end="url(#arrowhead2)"/>
+
+          <text x="360" y="220" text-anchor="middle" class="svg-muted" font-size="11">answer follows root donor</text>
+          <text x="620" y="220" text-anchor="middle" class="svg-muted" font-size="11">(serving C₂ alone still routes to root's state)</text>
+
+          <defs><marker id="arrowhead2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3B4BA2"/></marker></defs>
+        </svg>
+      </div>
+      <p class="diagram-cap">图 2：root event 的行承载主导 donor 信号；引用边大多把它路由出去。稀疏服务（source 丢弃）下，服务 C₂ 单独仍能把读出路由到 root 已物化的状态。</p>
+
+      <div class="callout"><strong>服务集与措辞都在读时移动读出。</strong> 加一个 value-free 的 target 提及，会把 root 的 donor-sensitivity 率从 41% 降到 22%——这个下降追踪的是"被服务 span 调制另一个 span 的读出"，论文在 §7 单独报告。</div>
+    </section>
+
+    <section id="access" class="section-card">
+      <div class="section-head"><div class="section-no">06</div><div><div class="eyebrow">Access</div><h2>访问：二值状态恢复，大负载衰减</h2><p class="muted">原生恢复能读到多少被携带的状态？</p></div></div>
+
+      <p>在单一 menu-form readout + 独立 decoy 下，<strong>二值状态恢复远高于随机</strong>（.934，95% CI [.896, .968]）。但负载类型很关键：</p>
+
+      <table class="data-table">
+        <caption>表：按负载类型的原生恢复率（Qwen3-8B，menu-form readout + 独立 decoy）</caption>
+        <thead><tr><th>负载类型</th><th>恢复率</th><th>相对随机</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>二值 (online/offline)</td><td class="num hi">.934</td><td>远高于 .5</td><td>recall 驱动，非 decoy-exclusion</td></tr>
+          <tr><td>四向</td><td class="num">.34</td><td>接近 .25</td><td>向随机衰减</td></tr>
+          <tr><td>八向</td><td class="num lo">.19</td><td>接近 .125</td><td>大负载几乎不恢复</td></tr>
+          <tr><td>精确数字</td><td class="num lo">≈.05</td><td>几乎失败</td><td>数字载荷不原生恢复</td></tr>
+          <tr><td>派生结论（无提示）</td><td class="num">.542</td><td>—</td><td>写时加 compute 指令可升至 .703</td></tr>
+          <tr><td>首位数字探针</td><td class="num">.20</td><td>高于 .1</td><td>query 形式影响巨大</td></tr>
+          <tr><td>分位查询</td><td class="num">.62</td><td>—</td><td>比精确数字恢复好得多</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn"><strong>query 形式与 store 同等重要。</strong> 一个首位数字探针 (.20) 或分位查询 (.62) 的读出远高于精确数字召回——<strong>两个紧凑 binding 可以并行携带</strong>。这意味着"KV 行里有什么"部分取决于你怎么问。</div>
+    </section>
+
+    <section id="programming" class="section-card">
+      <div class="section-head"><div class="section-no">07</div><div><div class="eyebrow">Programming the Primitive</div><h2>编程这个原语：刻意写入 vs 自然收割</h2><p class="muted">这是从"观察"到"工程接口"的关键一步。</p></div></div>
+
+      <p>论文不仅观察物化，还<strong>主动构造</strong>它。在 donor-paired 合成轨迹里，作者自己发射 carrier——source 之后一个 answer-free event，五个 arm 从"被动提及"到"显式 compute 指令"。</p>
+
+      <div class="grid-2">
+        <div class="card"><div class="badges"><span class="badge paper">主动 arm</span></div><h3>刻意 carrier 显著提升</h3><p>一个刻意措辞、不含答案的 carrier 把 donor 对齐恢复率从 <strong>6% 提升到 51%</strong>——<strong>从不点名值</strong>。一个写时的 compute 指令（"在写入时计算判定"）把派生恢复从 .542 提到 .703。</p></div>
+        <div class="card"><div class="badges"><span class="badge caution">被动 arm</span></div><h3>自然对话收割无收益</h3><p>在 REALTALK 和 LoCoMo 长程对话上，从全历史 cache 里收割 answer-free 晚期提及，相对孤立重编码相同文本，<strong>端到端检测不到任何收益</strong>。Gemma-4 原生服务时甚至更差。被动收割不是可靠的写入接口。</p></div>
+      </div>
+
+      <div class="diagram" role="img" aria-label="主动 vs 被动写入对比">
+        <svg viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+          <text x="450" y="30" text-anchor="middle" class="svg-text" font-size="15" font-weight="700">deliberate carrier vs passive harvest</text>
+
+          <!-- passive -->
+          <rect x="60" y="70" width="340" height="140" rx="10" fill="#FAFAF7" stroke="var(--line-strong)" stroke-width="1.5"/>
+          <text x="230" y="95" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">passive harvest (natural dialog)</text>
+          <text x="230" y="120" text-anchor="middle" class="svg-muted" font-size="11">harvest answer-free late mentions</text>
+          <text x="230" y="145" text-anchor="middle" class="svg-muted" font-size="11">from full-history cache</text>
+          <text x="230" y="180" text-anchor="middle" class="svg-text" font-size="14" font-weight="700" fill="#A02828">no detected advantage</text>
+          <text x="230" y="200" text-anchor="middle" class="svg-muted" font-size="10">vs isolated re-encoding</text>
+
+          <!-- deliberate -->
+          <rect x="500" y="70" width="340" height="140" rx="10" fill="#E8F0E8" stroke="#178845" stroke-width="2"/>
+          <text x="670" y="95" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">deliberate carrier (synthetic)</text>
+          <text x="670" y="120" text-anchor="middle" class="svg-muted" font-size="11">emit answer-free event after source</text>
+          <text x="670" y="145" text-anchor="middle" class="svg-muted" font-size="11">calibrated phrasing per model</text>
+          <text x="670" y="180" text-anchor="middle" class="svg-text" font-size="14" font-weight="700" fill="#178845">6% → 51% recovery</text>
+          <text x="670" y="200" text-anchor="middle" class="svg-muted" font-size="10">never names the value</text>
+        </svg>
+      </div>
+
+      <div class="callout"><strong>更新状态成本是一个 patch，不是重算。</strong> 修正很便宜——作为新 event 追加服务，而非 cache 编辑：对 full-attention 层，追加一个 <code>p</code>-token patch 就能在不重算整段 prefill 的情况下修复状态。这把"记忆更新"从"重算整段"降为"追加一小段"。</div>
+    </section>
+
+    <section id="implications" class="section-card">
+      <div class="section-head"><div class="section-no">08</div><div><div class="eyebrow">Implications & Boundaries</div><h2>推论与边界：对 eviction 的警告</h2><p class="muted">这条信道窄但因果可信；消融无损失 ≠ 可丢弃。</p></div></div>
+
+      <div class="callout danger"><strong>对任何做 eviction 的人的直接推论：</strong> 一个消融——丢掉 source event、观察到精度没掉——<strong>没有证明 source 不必要</strong>。它可能已经把状态物化进你保留下来的某一行里。经典"丢掉看精度"的消融在 sparse-KV serving 下系统性高估了可丢弃性。</p></div>
+
+      <div class="grid-2">
+        <div class="card"><h3>donor swap 只认证紧凑状态信道</h3><p>donor swap 认证的<strong>只是紧凑状态</strong>：verbatim 载荷很少转移（9.7%），精确数字不原生恢复，派生结论需要写时 compute 指令。这不是"任意信息都能塞进 KV 行"的万能通道。</p></div>
+        <div class="card"><h3>trigger 是表层形式属性，不是语义</h3><p>trigger 是<strong>表层形式</strong>的属性，不是语义。两个模型同等理解的措辞可以剧烈分化。物化与读出必须<strong>per-model 校准</strong>——没有通用构造。</p></div>
+      </div>
+    </section>
+
+    <section id="related" class="section-card">
+      <div class="section-head"><div class="section-no">09</div><div><div class="eyebrow">Related Work</div><h2>相关工作：修理被保留的行 vs 审计被丢弃的 source</h2></div></div>
+      <div class="grid-2">
+        <div class="card"><h3>Models Take Notes (Li, 2026)</h3><p>最近的机制工作：prefill 写入 memoized 下游结论、字段级 note 编辑、append-only erratum、patch 更新。本文与此在"prefill 写入"上同向，但<strong>审计的是被丢弃 source 留下了什么</strong>，而非修理被保留的行。</p></div>
+        <div class="card"><h3>KV reuse & repair 线（CacheBlend 等）</h3><p>这一线<strong>修理它保留的行</strong>；本文审计<strong>被丢弃 source 留下什么</strong>。四条工作线管理/修理/组合复用 KV：cross-chunk recomputation、cacheblend、sparse attention reuse、composed KV repair。</p></div>
+        <div class="card"><h3>EpiCache (Kim et al., 2025)</h3><p>memory 系统建外壳；本文量基底。EpiCache 在相同 REALTALK/LoCoMo 分布下选择并压缩 episodic KV，但报告的是端到端精度，不直接测试"被丢弃 source 是否物化"。</p></div>
+      </div>
+    </section>
+
+    <section id="limitations" class="section-card">
+      <div class="section-head"><div class="section-no">10</div><div><div class="eyebrow">Limitations & Scope</div><h2>局限与范围</h2></div></div>
+      <p>所有实验在冻结开源模型上用 greedy decoding 跑；donor pair、leak assertion、echo control 在代码里强制。标题结论基于三个近期 checkpoint——Qwen3-8B、Gemma-4、Ministral-3——三个家族。Qwen3.6-27B 因基底原因超出范围（§9）。donor swap 认证的<strong>只是紧凑状态信道</strong>：verbatim 与精确数字载荷不原生恢复。</p>
+      <p>所有实验在 greedy decoding 下进行；sampling 下的行为是开放问题。长上下文力学（position-budgeted assembly、reorder）是工程现实，但论文不主张比特级可复现，只主张行为级兼容性。</p>
+    </section>
+
+    <section id="glossary" class="section-card">
+      <div class="section-head"><div class="section-no">11</div><div><div class="eyebrow">Glossary</div><h2>术语表</h2></div></div>
+      <dl class="glossary">
+        <dt>semantic materialization（语义物化）</dt><dd>写时把上游派生状态承诺进下游 event 表示，不要求 event token 重复该状态。下游 event 的 KV 行成为"对已消失输入的可独立服务计算视图"。</dd>
+        <dt>carrier（载体）</dt><dd>一个 event，其 KV 持有上游派生状态，而文本里不点名该状态。"M mirrors S" 是典型 carrier。</dd>
+        <dt>trigger（触发）</dt><dd>让一个 event 做物化的写时构造。是表层形式属性，非语义。</dd>
+        <dt>donor（供体）</dt><dd>被丢弃的 source event，它定义了被查询的状态。donor-sensitive 项 = 两个 donor 输出不同的配对。</dd>
+        <dt>conditional landing（条件着陆）</dt><dd>一个 span 在 span 级消融下仍物化 v——与固定 donor 无关脚手架共服务时单独承载 donor 信号。</dd>
+        <dt>write aperture（写入孔径）</dt><dd>在某模型上能物化状态的构造集合。随模型剧烈摆动，需 per-model 校准。</dd>
+        <dt>serving contract（服务契约）</dt><dd>三条规则：source 排除在服务集外；donor 对比只在 donor-sensitive 项上；query 放置是协议选择。</dd>
+      </dl>
+    </section>
+
+    <section id="sources" class="section-card">
+      <div class="section-head"><div class="section-no">12</div><div><div class="eyebrow">Sources</div><h2>来源</h2></div></div>
+      <ul class="src-list">
+        <li><strong>主源：</strong> Cai, Z. & Cai, Z. (2026). <em>Compute Globally, Materialize Locally: The Memory Contract of Sparse Event-KV.</em> arXiv:2607.23693. <a href="https://arxiv.org/abs/2607.23693">arxiv.org/abs/2607.23693</a></li>
+        <li><strong>代码：</strong> <a href="https://github.com/oklen/Compute-Globally-Materialize-Locally">github.com/oklen/Compute-Globally-Materialize-Locally</a></li>
+        <li><strong>模型：</strong> Qwen3-8B, Gemma-4, Ministral-3（冻结开源权重，greedy decoding）</li>
+        <li><strong>对话基准：</strong> REALTALK (Lee et al., 2025), LoCoMo (Maharana et al., 2024)</li>
+        <li><strong>相关工作：</strong> Models Take Notes (Li, 2026); EpiCache (Kim et al., 2025); CacheBlend 系列</li>
+      </ul>
+      <p class="diagram-cap">本页面为论文 2607.23693 的深度解读与可视化，非原文翻译。所有数据点来自原论文 Table 1–9 与 Figure 1–4。动画为机制示意，非论文原图。</p>
+    </section>
+
+    <footer style="border-top:1px solid var(--line); padding-top:20px; margin-top:20px; color:var(--muted); font-size:.88rem;">
+      <p>解读与可视化 · 基于 arXiv:2607.23693 · 2026-07-28 · <a href="https://yuancaoyaohw.github.io">yuancaoyaohw.github.io</a></p>
+    </footer>
+  </main>
+</div>
+
+<script>
+// ── theme toggle (topbar button) ──
+document.getElementById('themeBtn').addEventListener('click', function(){ snToggleTheme(); });
+
+// ── print ──
+document.getElementById('printBtn').addEventListener('click', function(){ window.print(); });
+
+// ── language toggle ──
+document.querySelectorAll('.lang-btn').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.lang-btn').forEach(function(x){ x.classList.remove('active'); });
+    b.classList.add('active');
+    var lang = b.dataset.lang;
+    document.body.classList.remove('mode-cn','mode-en');
+    if(lang==='cn') document.body.classList.add('mode-cn');
+    else if(lang==='en') document.body.classList.add('mode-en');
+  });
+});
+
+// ── mobile TOC ──
+document.getElementById('mobileToc').addEventListener('change', function(){
+  var v = this.value; if(v) window.location.hash = v;
+});
+
+// ── side-nav scroll spy ──
+var navLinks = document.querySelectorAll('.side-nav a');
+var sections = [];
+navLinks.forEach(function(a){
+  var id = a.getAttribute('href').slice(1);
+  var el = document.getElementById(id);
+  if(el) sections.push({id:id, el:el, link:a});
+});
+function spy(){
+  var scrollY = window.scrollY + 120;
+  var cur = null;
+  sections.forEach(function(s){ if(s.el.offsetTop <= scrollY) cur = s; });
+  navLinks.forEach(function(a){ a.classList.remove('active'); });
+  if(cur) cur.link.classList.add('active');
+}
+window.addEventListener('scroll', spy, {passive:true});
+spy();
+
+// ── discovery animation ──
+var animState = 0; // 0..3
+var animBtns = document.querySelectorAll('#discovery-anim .anim-btn');
+var srcBlock = document.getElementById('src-block');
+var carrierCell = document.getElementById('carrier-cell');
+var attnArrow = document.getElementById('attn-arrow');
+var attnLabel = document.getElementById('attn-label');
+var carryLabel = document.getElementById('carry-label');
+var dropX = document.getElementById('drop-x');
+var servedBox = document.getElementById('served-box');
+var servedLabel = document.getElementById('served-label');
+var answerText = document.getElementById('answer-text');
+var answerSub = document.getElementById('answer-sub');
+var lblSource = document.getElementById('lbl-source');
+var lblCarrier = document.getElementById('lbl-carrier');
+
+function setAnimStep(step){
+  // reset
+  srcBlock.style.opacity = '1';
+  carrierCell.classList.remove('materialized'); carrierCell.classList.add('normal');
+  attnArrow.classList.remove('in');
+  attnLabel.style.opacity = '0';
+  carryLabel.style.opacity = '0';
+  dropX.style.opacity = '0';
+  servedBox.style.opacity = '0';
+  servedLabel.style.opacity = '0';
+  answerText.style.opacity = '0';
+  answerSub.style.opacity = '0';
+  lblSource.style.fill = 'var(--text)';
+  lblCarrier.style.fill = 'var(--text)';
+
+  animBtns.forEach(function(b){ b.classList.remove('active'); });
+
+  if(step < 0){ animState = 0; setAnimStep(0); return; }
+
+  animBtns.forEach(function(b){ if(parseInt(b.dataset.step)===step) b.classList.add('active'); });
+  animState = step;
+
+  if(step >= 0){
+    // step 0: full prefill, source present, attention arrow draws
+    attnArrow.classList.add('in');
+    attnLabel.style.opacity = '1';
+  }
+  if(step >= 1){
+    // drop source
+    srcBlock.style.opacity = '0.25';
+    dropX.style.opacity = '1';
+    lblSource.style.fill = 'var(--red)';
+  }
+  if(step >= 2){
+    // carrier cell materializes, served set appears
+    carrierCell.classList.remove('normal');
+    carrierCell.classList.add('materialized');
+    carryLabel.style.opacity = '1';
+    servedBox.style.opacity = '1';
+    servedLabel.style.opacity = '1';
+    lblCarrier.style.fill = 'var(--cyan)';
+  }
+  if(step >= 3){
+    // answer reveals
+    answerText.style.opacity = '1';
+    answerSub.style.opacity = '1';
+  }
+}
+
+animBtns.forEach(function(b){
+  b.addEventListener('click', function(){
+    var s = parseInt(b.dataset.step);
+    if(s < 0){ setAnimStep(-1); }
+    else { setAnimStep(s); }
+  });
+});
+
+// auto-advance on first scroll into view
+var animObs = new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(e.isIntersecting && animState === 0){
+      // step through 0→1→2→3 with delays
+      setAnimStep(0);
+      setTimeout(function(){ setAnimStep(1); }, 1500);
+      setTimeout(function(){ setAnimStep(2); }, 3000);
+      setTimeout(function(){ setAnimStep(3); }, 4500);
+    }
+  });
+}, {threshold: 0.4});
+animObs.observe(document.getElementById('discovery-anim'));
+
+// initial state
+setAnimStep(0);
+</script>
+</body>
+</html>
