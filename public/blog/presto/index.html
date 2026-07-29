@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRESTO：扩散投机解码的前缀对齐树起草（修订版）</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+:root {
+  --bg: #fafafa; --fg: #1a1a2e; --fg-soft: #444; --fg-muted: #888;
+  --accent: #6c5ce7; --accent-soft: #a29bfe; --accent-bg: #eeeafe;
+  --green: #00b894; --green-soft: #55efc4; --green-bg: #e0f8f4;
+  --red: #e74c3c; --red-soft: #fab1a0; --red-bg: #fdf0ee;
+  --orange: #fdcb6e; --orange-bg: #fff8e7;
+  --blue: #0984e3; --blue-soft: #74b9ff; --blue-bg: #e8f4fd;
+  --border: #ddd; --card-bg: #fff; --code-bg: #f4f4f4;
+  --disabled: #c8c8c8; --focus: #6c5ce7;
+  --toc-w: 240px; --content-w: 860px;
+  --layer-ms: 300ms;
+}
+[data-theme="dark"] {
+  --bg: #1a1a2e; --fg: #e0e0e0; --fg-soft: #bbb; --fg-muted: #888;
+  --accent: #a29bfe; --accent-soft: #6c5ce7; --accent-bg: #2a2a4e;
+  --green: #55efc4; --green-soft: #00b894; --green-bg: #1a3a32;
+  --red: #fab1a0; --red-soft: #e74c3c; --red-bg: #3a1a1a;
+  --orange: #fdcb6e; --orange-bg: #2a2614;
+  --blue: #74b9ff; --blue-soft: #0984e3; --blue-bg: #1a2a3a;
+  --border: #333; --card-bg: #252535; --code-bg: #1e1e2e;
+  --disabled: #555; --focus: #a29bfe;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+
+.content { width: var(--content-w); flex-shrink: 0; }
+section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-orange { background: var(--orange-bg); border-color: var(--orange); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: center; }
+th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--blue-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 620px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: #fff; }
+.badge-green { background: var(--green); color: #fff; }
+.badge-blue { background: var(--blue); color: #fff; }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: #fff; }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.anim-err { fill: var(--red); font-size: 13px; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+.footer { text-align: center; padding: 30px; color: var(--fg-muted); font-size: 13px; border-top: 1px solid var(--border); }
+.footer a { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 720px) {
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc">
+  <h3>导航</h3>
+  <a href="#hook">核心思想</a>
+  <a href="#bg">背景：扩散起草</a>
+  <a href="#problem">问题：线性起草</a>
+  <a href="#mismatch">根本矛盾：前缀盲</a>
+  <a href="#observations">三个关键观察</a>
+  <a href="#scoring">PRESTO 打分</a>
+  <a href="#tree">优先级树构建</a>
+  <a href="#hybrid">扩展到混合 dLLM</a>
+  <a href="#results">实验结果</a>
+  <a href="#summary">总结与框架</a>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>PRESTO</h1>
+  <p class="tagline"><strong>Prefix-Aligned Tree Drafting for Diffusion Speculative Decoding</strong></p>
+  <p class="tagline">扩散语言模型天生适合做多路径候选起草器——但块内位置边际分布对"在树中选了哪条前缀"不敏感。PRESTO 通过<strong>在边际对数分数上叠加前缀校正项</strong> + <strong>优先级树搜索</strong>，缓解构树阶段的前缀盲性。</p>
+  <div class="badges">
+    <span class="badge badge-accent">1.5× 吞吐 (dFlash, 均值)</span>
+    <span class="badge badge-green">1.12× 吞吐 (Self-Spec, 均值)</span>
+    <span class="badge badge-blue">NVIDIA × UIUC × Georgia Tech</span>
+  </div>
+</section>
+
+<section id="bg">
+  <h2>背景：扩散模型作为投机解码起草器</h2>
+  <p>扩散语言模型（dLLM）能在一次前向传播中<strong>并行生成一整块 token</strong>，这使它天然适合作为投机解码（SD）的起草模型：起草阶段极高效，目标模型只需一次验证即可接收/拒绝整块候选。</p>
+  <h3>两类扩散起草框架</h3>
+  <table>
+    <tr><th>框架</th><th>起草器</th><th>目标模型</th><th>代表</th></tr>
+    <tr><td>专用扩散起草</td><td>轻量扩散模型</td><td>AR LLM</td><td>dFlash (Qwen3-DFlash)</td></tr>
+    <tr><td>自投机扩散</td><td>同一模型</td><td>同一模型</td><td>Nemotron-Labs-Diffusion, TiDAR</td></tr>
+  </table>
+  <div class="callout callout-blue">
+    <strong>关键优势：</strong> 扩散起草器一次前向就能产出一整块（如 16 个位置）的候选 token，形成丰富的组合空间——但现有方法只走了<strong>一条路</strong>。
+  </div>
+</section>
+
+<section id="problem">
+  <h2>问题：线性起草浪费了候选空间</h2>
+  <p>现有扩散起草方法采用<strong>线性（单路径）起草</strong>：每个位置取 top-1，串成一条序列交给目标模型验证。但扩散模型在每个位置同时产出多个候选，形成巨大的组合空间——线性起草只探索了其中极小一部分。</p>
+  <div class="callout callout-red">
+    <strong>实测证据（Qwen3-4B-DFlash，block size=16）：</strong> GSM8K 的接受长度从线性起草的约 <strong>6.5</strong> 到 top-10 oracle 上界的约 <strong>9.78</strong>；Math500 从约 7.9 到约 11.16。差距显著，说明候选空间远未被充分利用。<span class="note-inline">（具体数值依模型与实验设置而变，下同。）</span>
+  </div>
+  <div class="anim-frame" id="anim1">
+    <div class="anim-header">
+      <span class="anim-title">动画 1：线性起草 vs 树起草</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg1" viewBox="0 0 820 380" width="820" height="380" role="img" aria-label="线性起草与树起草对比动画"></svg>
+    </div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> 扩散候选</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 选中路径</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 被拒绝</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> 未探索</span>
+    </div>
+  </div>
+</section>
+
+<section id="mismatch">
+  <h2>根本矛盾：构树阶段的前缀盲性</h2>
+  <p>把树起草直接搬到扩散起草器上为什么不行？因为存在一个<strong>结构性矛盾</strong>：</p>
+  <ul>
+    <li><strong>AR 验证是前缀条件化的：</strong> 验证从左到右进行，第 $i$ 个 token 是否被接受取决于它前面的所有 token 是否都被接受。接受概率按链式法则分解。</li>
+    <li><strong>扩散块内边际不随树中前缀选择而变：</strong> 扩散起草器在固定提示、固定扩散状态下一次产出整块的<strong>位置级边际分布</strong> $q_i(x_i)$。对于同一个位置 $i$，无论树中该节点之前选择了哪条候选前缀，$q_i(x_i)$ 的取值不变。因此仅用边际分数扩展候选树时，不同前缀无法影响后续节点的排序——这就是构树阶段的"prefix blindness"。</li>
+  </ul>
+  <div class="callout callout-red">
+    <strong>注意：</strong> prefix blindness 并不是说扩散模型对整个历史上下文完全不敏感。模型当然条件化于提示和已生成上下文；它针对的是"在同一个扩散状态上，用独立位置边际分数扩展候选树"这一具体限制。矛盾的根源是结构性的，而非训练不足。
+  </div>
+  <div class="anim-frame" id="anim2">
+    <div class="anim-header">
+      <span class="anim-title">动画 2：前缀盲 vs 前缀条件化</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg2" viewBox="0 0 820 380" width="820" height="380" role="img" aria-label="前缀盲与前缀条件化对比动画"></svg>
+    </div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+  </div>
+</section>
+
+<section id="observations">
+  <h2>三个关键观察</h2>
+  <p>论文在 Qwen3-4B-DFlash（block size=16）上做了细致的经验分析，揭示三个关键事实：</p>
+
+  <h3>观察 1：线性起草有巨大提升空间</h3>
+  <p>对比线性起草与 oracle 上界（每个位置保留 top-10，做位置级 oracle 匹配），所有任务上都存在显著差距。GSM8K 从约 6.5 到约 9.78，Math500 从约 7.9 到约 11.16——线性起草远未充分利用候选空间。</p>
+
+  <h3>观察 2：边际置信度与全局接受率正相关</h3>
+  <p>扩散边际置信度 $c_i^{\text{diff}}$（幂次化的边际概率）与实际接受率呈单调正相关——高置信度 token 确实更可能被接受。但校准曲线始终低于理想 $y = x$ 线，说明边际置信度<strong>有信息但不完美</strong>。</p>
+
+  <h3>观察 3：边际信号不充分，前缀条件化可补充</h3>
+  <p>在相同 $c_i^{\text{diff}}$ 分箱内，按前缀兼容性 $c_i^{\text{prefix}}$ 分为低/中/高三组，接受率从低到高递增——说明<strong>前缀条件化提供了边际置信度之外的预测信号</strong>。校正项 $(c^{\text{prefix}} - c^{\text{diff}})$ 与真实残差正相关（但相关系数远低于 1），是<strong>有方向性但含噪的校正信号</strong>。</p>
+
+  <div class="callout callout-accent">
+    <strong>洞察：</strong> 有效打分应<strong>保留边际的全局信号</strong>，同时在边际对数分数上<strong>叠加可控的前缀校正项</strong>——而非用校正替换或与边际做凸插值。
+  </div>
+</section>
+
+<section id="scoring">
+  <h2>PRESTO：前缀对齐打分</h2>
+  <p>PRESTO 的核心是在扩散边际对数分数上<strong>叠加</strong>一个前缀条件化校正项，由 $\lambda$ 控制校正强度：</p>
+  <p style="text-align:center; font-size:16px;">$$s(y_i) = \log q_d(y_i) \;+\; \lambda\, \log \rho_d(y_i \mid y_{<i})$$</p>
+  <p>等价乘法形式：$q_d(y_i)\cdot \rho_d(y_i \mid y_{<i})^{\lambda}$。路径打分按深度可加分解：$S(\text{path}) = \sum_i s(y_i)$，支持增量式优先级展开。</p>
+  <ul>
+    <li><strong>$\lambda = 0$：</strong> 退化为只使用扩散边际分数 $\log q_d$——构树阶段前缀盲，路径排名不可靠。</li>
+    <li><strong>$\lambda \gt 0$：</strong> 在边际之上引入自回归前缀校正 $\lambda \log \rho_d$；边际项始终保留，不被消除。</li>
+    <li><strong>$\lambda$ 过大：</strong> 校正项可能压过扩散边际信号，导致树的多样性或覆盖率下降——但边际项不会归零。</li>
+  </ul>
+  <div class="callout callout-green">
+    <strong>为什么是叠加而非插值：</strong> 论文采用乘法形式 $q_d \cdot \rho_d^{\lambda}$，取对数后边际项系数恒为 1，$\lambda$ 只缩放校正项。这保证 $\lambda=0$ 时退化为纯边际（前缀盲），而 $\lambda \neq 0$ 时边际信号始终存在。可解释为 KL 正则化目标——在保持接近 $q_d$ 的同时向 $\rho_d$ 对齐。
+  </div>
+  <div class="callout callout-orange">
+    <strong>关于最佳 $\lambda$：</strong> 论文消融显示<strong>适度的前缀校正通常优于完全关闭或过强校正</strong>，但最佳值依模型与实验设置而变化。页面下方的动画为示意，不宣称某个具体 $\lambda$ 值在所有设置中普适最优。
+  </div>
+  <div class="anim-frame" id="anim3">
+    <div class="anim-header">
+      <span class="anim-title">动画 3：前缀对齐打分的 $\lambda$ 校正强度</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg3" viewBox="0 0 820 380" width="820" height="380" role="img" aria-label="lambda 校正强度动画"></svg>
+    </div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+  </div>
+</section>
+
+<section id="tree">
+  <h2>优先级树构建</h2>
+  <p>有了可加分解的路径打分 $S$，树构建自然归约为<strong>优先级展开</strong>：维护待展开节点的前沿，每次展开打分最高的节点。关键在于子节点累计分数从父节点<strong>增量继承</strong>：</p>
+  <p style="text-align:center; font-size:15px;">$$S(\text{child}) = S(\text{parent}) + \log q_d(\text{token}) + \lambda \log \rho_d(\text{token} \mid \text{prefix})$$</p>
+  <p>即：父节点累计路径分数 + 当前深度的局部增量 = 子节点累计分数。不要只用子节点当前 token 的局部分数重新排序而忽略父路径。</p>
+  <h3>两种展开策略</h3>
+  <table>
+    <tr><th>策略</th><th>前沿管理</th><th>特点</th></tr>
+    <tr><td>Best-First Search (BFS)</td><td>全局优先队列</td><td>灵活，大预算下略优</td></tr>
+    <tr><td>Beam Search + Global Retention</td><td>每层保留 top-B，跨层保留</td><td>宽度受限的 BFS 近似</td></tr>
+  </table>
+  <div class="callout callout-blue">
+    <strong>为什么默认用 Beam Search：</strong> 在小到中等预算下，BFS 与 Beam Search 接受长度接近；预算超过硬件阈值后验证从 memory-bound 转向 compute-bound，前向代价随预算线性增长。PRESTO 在 memory-bound 区间内运行，采用 Beam Search 为默认。
+  </div>
+  <div class="anim-frame" id="anim4">
+    <div class="anim-header">
+      <span class="anim-title">动画 4：Beam Search 树展开过程</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg4" viewBox="0 0 820 380" width="820" height="380" role="img" aria-label="Beam Search 树展开动画"></svg>
+    </div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#6c5ce7"></span> 高分节点</span>
+      <span><span class="dot" style="background:#a29bfe"></span> beam 内</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> beam 外（保留）</span>
+      <span><span class="dot" style="background:#b2bec3"></span> 未展开</span>
+    </div>
+  </div>
+</section>
+
+<section id="hybrid">
+  <h2>扩展到混合扩散 LLM（二次自投机）</h2>
+  <p>Nemotron-Labs-Diffusion 提出<strong>二次自投机</strong>：单次前向传播中同时进行 AR 验证（验证上一轮起草树）和扩散起草（在尾部 mask 位置生成下一轮候选）。</p>
+  <h3>线性自投机的结构性低效</h3>
+  <p>若把一次扩散调用产生的多个位置预测组织成<strong>单条线性草稿</strong>，一旦中间某个 token 被验证器拒绝，该路径后续位置已经计算出的预测就无法继续被这条路径使用。这不是说所有计算都严格丢失，而是<strong>拒绝后该路径后缀失效</strong>的覆盖率问题。</p>
+  <h3>PRESTO 的改进逻辑链</h3>
+  <ol>
+    <li>一次扩散调用产生多个位置的高概率候选。</li>
+    <li>PRESTO 把这些候选组织成<strong>树</strong>，而非单条线性草稿。</li>
+    <li>当主分支被验证器拒绝时，其他共享前缀或替代分支仍可被验证器继续检查。</li>
+    <li>因此树结构提高了同一次扩散结果的候选覆盖率和复用机会，缓解"拒绝后整段后缀失效"的问题。</li>
+  </ol>
+  <div class="anim-frame" id="anim5">
+    <div class="anim-header">
+      <span class="anim-title">动画 5：二次自投机并行验证-起草流水线</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg5" viewBox="0 0 820 380" width="820" height="380" role="img" aria-label="二次自投机流水线动画"></svg>
+    </div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#00b894"></span> AR 验证（接受）</span>
+      <span><span class="dot" style="background:#e74c3c"></span> AR 验证（拒绝）</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 扩散起草</span>
+      <span><span class="dot" style="background:#b2bec3"></span> 失效后缀</span>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <h2>实验结果</h2>
+  <h3>专用扩散起草（dFlash）</h3>
+  <table>
+    <tr><th>模型</th><th>方法</th><th>Math $\bar L$</th><th>Code $\bar L$</th><th>Chat $\bar L$</th><th>平均加速</th></tr>
+    <tr><td rowspan="2">Qwen3-4B</td><td>dFlash</td><td>7.0</td><td>6.9</td><td>5.9</td><td>—</td></tr>
+    <tr><td><strong>PRESTO</strong></td><td>9.8</td><td>9.3</td><td>8.4</td><td class="gain">1.55×</td></tr>
+    <tr><td rowspan="2">Qwen3-8B</td><td>dFlash</td><td>7.0</td><td>6.9</td><td>5.7</td><td>—</td></tr>
+    <tr><td><strong>PRESTO</strong></td><td>9.9</td><td>9.3</td><td>8.5</td><td class="gain">1.60×</td></tr>
+    <tr><td rowspan="2">Qwen3-30B</td><td>dFlash</td><td>5.0</td><td>5.0</td><td>6.2</td><td>—</td></tr>
+    <tr><td><strong>PRESTO</strong></td><td>7.5</td><td>7.5</td><td>7.5</td><td class="gain">1.32×</td></tr>
+  </table>
+  <p class="note-inline">上表为 T=0 下各任务类别平均接受长度 $\bar L$ 与端到端吞吐加速（均值）。具体数值依模型规模、温度与任务而变。</p>
+
+  <h3>自投机扩散（Nemotron-Labs-Diffusion-8B）</h3>
+  <table>
+    <tr><th>模式</th><th>温度</th><th>Vanilla 平均加速</th><th>PRESTO 平均加速</th><th>提升</th></tr>
+    <tr><td>线性自投机</td><td>T=0</td><td>4.6×</td><td>4.9×</td><td class="gain">1.06×</td></tr>
+    <tr><td>线性自投机</td><td>T=1</td><td>2.1×</td><td>2.5×</td><td class="gain">1.17×</td></tr>
+    <tr><td>二次自投机</td><td>T=0</td><td>2.6×</td><td>3.5×</td><td class="gain">1.35×</td></tr>
+    <tr><td>二次自投机</td><td>T=1</td><td>1.4×</td><td>3.0×</td><td class="gain">2.14×</td></tr>
+  </table>
+  <div class="callout callout-green">
+    <strong>关键发现：</strong> 在随机解码（T=1）下，PRESTO 在二次自投机模式获得<strong>最大增益</strong>——单路径起草在轨迹分歧时退化严重，而树结构保留了多条合理续路径。
+  </div>
+  <h3>消融：$\lambda$ 敏感性</h3>
+  <p>过小 $\lambda$ → 退化为纯边际打分（前缀校正不足）；过大 $\lambda$ → 校正项压过边际信号（多样性/覆盖率下降）。论文消融显示<strong>适度校正通常最优</strong>，最佳值依模型与实验设置而变化。熵自适应 $\lambda$ 仅带来边际改进，说明固定 $\lambda$ 在实践中已足够。</p>
+  <h3>开销分析</h3>
+  <p>目标模型验证占总延迟的 <strong>81%–97%</strong>，树构建操作（树构造、候选过滤、attention mask 准备）仅占 <strong>0.7%–4%</strong>——PRESTO 的系统开销可忽略。</p>
+</section>
+
+<section id="summary">
+  <h2>总结与核心框架</h2>
+  <div class="callout callout-accent">
+    <strong>一句话记忆：</strong> PRESTO = <strong>保留扩散边际的全局信号</strong>（$\log q_d$ 始终在）+ <strong>在边际之上叠加前缀校正</strong>（$\lambda \log \rho_d$）+ <strong>优先级树展开最大化接受长度</strong>
+  </div>
+  <table>
+    <tr><th>组件</th><th>解决的问题</th><th>机制</th></tr>
+    <tr><td>前缀对齐打分</td><td>构树阶段前缀盲</td><td>$\log q_d + \lambda \log \rho_d$，叠加而非插值</td></tr>
+    <tr><td>优先级树展开</td><td>线性起草只探索一条路径</td><td>Beam/BFS + 父子增量累计分数</td></tr>
+    <tr><td>二次自投机扩展</td><td>线性草稿拒绝后后缀失效</td><td>树组织候选，提高覆盖率与复用</td></tr>
+  </table>
+  <h3>局限与展望</h3>
+  <ul>
+    <li>n-gram 只捕获短程词法兼容性——更丰富的前缀信号（如学习型）是未来方向</li>
+    <li>主要在单请求解码设置下评估——扩展到 vLLM/SGLang 生产级服务是未来工作</li>
+    <li>熵自适应 $\lambda$ 仅边际改进——可能需要学习型或目标感知调度</li>
+  </ul>
+  <div class="footer">
+    <p>论文来源：<a href="https://arxiv.org/html/2607.22634v1">arXiv:2607.22634</a> · PRESTO · NVIDIA / UIUC / Georgia Tech · 2026</p>
+  </div>
+</section>
+
+</div>
+</div>
+
+<script>
+"use strict";
+var SVG_NS = "http://www.w3.org/2000/svg";
+
+// ============ AnimEngine (Variant A — robust, with smooth layer transitions) ============
+function AnimEngine(svgRoot, opts) {
+  this.root = svgRoot;
+  this.svgId = svgRoot.id;
+  this.steps = (opts && opts.steps) ? opts.steps : [];
+  this.idx = -1;
+  this.playing = false;
+  this.timer = null;
+  this.speed = 1;
+  this._renderToken = 0;     // race guard
+  this._typesetToken = 0;    // MathJax race guard
+  this._currentLayer = null; // layer the current step renders into
+  this._initDefs();
+  this._bindControls();
+}
+
+AnimEngine.prototype._uid = function (suffix) {
+  return this.svgId + "-" + suffix;
+};
+
+// Create <defs> ONCE; never cleared during redraw. Unique marker IDs per SVG.
+AnimEngine.prototype._initDefs = function () {
+  if (this.root.querySelector("defs")) return;
+  var self = this;
+  var defs = document.createElementNS(SVG_NS, "defs");
+  var mk = function (id, color) {
+    var m = document.createElementNS(SVG_NS, "marker");
+    m.setAttribute("id", id);
+    m.setAttribute("markerWidth", "10");
+    m.setAttribute("markerHeight", "10");
+    m.setAttribute("refX", "8");
+    m.setAttribute("refY", "4");
+    m.setAttribute("orient", "auto");
+    m.setAttribute("markerUnits", "strokeWidth");
+    var p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", "M0,0 L8,4 L0,8 Z");
+    p.setAttribute("fill", color);
+    m.appendChild(p);
+    defs.appendChild(m);
+  };
+  mk(this._uid("arr"), "#636e72");
+  mk(this._uid("arrG"), "#00b894");
+  mk(this._uid("arrR"), "#e74c3c");
+  mk(this._uid("arrA"), "#6c5ce7");
+  this.root.appendChild(defs);
+};
+
+// Robust draw: handles null attrs, skips null/undefined values, className, style obj.
+AnimEngine.prototype.draw = function (tag, attrs, parent) {
+  var target = parent || this._currentLayer || this.root;
+  var el = document.createElementNS(SVG_NS, tag);
+  if (attrs) {
+    for (var k in attrs) {
+      if (!Object.prototype.hasOwnProperty.call(attrs, k)) continue;
+      var v = attrs[k];
+      if (v === null || v === undefined) continue;
+      if (k === "className") { el.setAttribute("class", v); continue; }
+      if (k === "style" && typeof v === "object") {
+        for (var sk in v) { if (Object.prototype.hasOwnProperty.call(v, sk)) el.style[sk] = v[sk]; }
+        continue;
+      }
+      if (typeof v === "boolean") { if (v) el.setAttribute(k, k); continue; }
+      el.setAttribute(k, v);
+    }
+  }
+  target.appendChild(el);
+  return el;
+};
+
+// Text helper: text attributes only, safe textContent (no HTML concat)
+AnimEngine.prototype.text = function (x, y, content, attrs) {
+  var a = Object.assign({ x: x, y: y }, attrs || {});
+  return this.draw("text", a, null).appendChild(document.createTextNode(String(content == null ? "" : content))).parentNode;
+};
+
+AnimEngine.prototype.rect = function (x, y, w, h, fill, stroke, attrs) {
+  var a = Object.assign({ x: x, y: y, width: w, height: h, fill: (fill || "none"), stroke: (stroke || "#333"), "stroke-width": 1.5, rx: 4 }, attrs || {});
+  return this.draw("rect", a, null);
+};
+
+AnimEngine.prototype.circle = function (cx, cy, r, fill, stroke, attrs) {
+  var a = Object.assign({ cx: cx, cy: cy, r: r, fill: (fill || "none"), stroke: (stroke || "#333"), "stroke-width": 1.5 }, attrs || {});
+  return this.draw("circle", a, null);
+};
+
+AnimEngine.prototype.line = function (x1, y1, x2, y2, stroke, attrs) {
+  var a = Object.assign({ x1: x1, y1: y1, x2: x2, y2: y2, stroke: (stroke || "#333"), "stroke-width": 1.5 }, attrs || {});
+  return this.draw("line", a, null);
+};
+
+AnimEngine.prototype.path = function (d, stroke, attrs) {
+  var a = Object.assign({ d: d, fill: "none", stroke: (stroke || "#333"), "stroke-width": 1.5 }, attrs || {});
+  return this.draw("path", a, null);
+};
+
+AnimEngine.prototype._showError = function (msg) {
+  var layer = this._newLayer();
+  var t = document.createElementNS(SVG_NS, "text");
+  t.setAttribute("x", 410); t.setAttribute("y", 190); t.setAttribute("text-anchor", "middle");
+  t.setAttribute("class", "anim-err"); t.setAttribute("font-size", "13");
+  t.textContent = "渲染错误: " + msg;
+  layer.appendChild(t);
+};
+
+AnimEngine.prototype._showErrorInLayer = function (layer, err) {
+  var t = document.createElementNS(SVG_NS, "text");
+  t.setAttribute("x", 410); t.setAttribute("y", 190); t.setAttribute("text-anchor", "middle");
+  t.setAttribute("class", "anim-err"); t.setAttribute("font-size", "13");
+  t.textContent = "该步骤渲染出错: " + (err && err.message ? err.message : String(err));
+  layer.appendChild(t);
+};
+
+// Create a fresh layer for this step's render, fading out & removing old ones.
+AnimEngine.prototype._newLayer = function () {
+  var self = this;
+  // remove layers older than the immediately-previous one (rapid switching)
+  var olds = Array.prototype.slice.call(this.root.querySelectorAll("g.anim-layer"));
+  if (olds.length > 1) {
+    olds.slice(0, olds.length - 1).forEach(function (l) { if (l.parentNode) l.remove(); });
+    olds = Array.prototype.slice.call(this.root.querySelectorAll("g.anim-layer"));
+  }
+  var layer = document.createElementNS(SVG_NS, "g");
+  layer.setAttribute("class", "anim-layer");
+  layer.style.opacity = "0";
+  this.root.appendChild(layer);
+  // fade in next frame
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { layer.style.opacity = "1"; });
+  });
+  // fade out + remove old
+  olds.forEach(function (old) {
+    old.style.opacity = "0";
+    setTimeout(function () { if (old.parentNode) old.remove(); }, 340);
+  });
+  this._currentLayer = layer;
+  return layer;
+};
+
+AnimEngine.prototype.goTo = function (i) {
+  if (this.steps.length === 0) { this._showError("未定义任何步骤"); this._updateStatus(); return; }
+  var clamped = Math.max(0, Math.min(this.steps.length - 1, Math.floor(i)));
+  this._renderToken++;
+  var token = this._renderToken;
+  this.idx = clamped;
+  this._newLayer();
+  try {
+    var step = this.steps[clamped];
+    if (step && typeof step.render === "function") step.render(this);
+  } catch (err) {
+    console.error("[" + this.svgId + "] render error at step " + clamped + ":", err);
+    this._showErrorInLayer(this._currentLayer, err);
+  }
+  this._updateStatus();
+};
+
+AnimEngine.prototype.next = function () {
+  if (this.idx < this.steps.length - 1) this.goTo(this.idx + 1);
+  else this.pause();
+};
+AnimEngine.prototype.prev = function () { if (this.idx > 0) this.goTo(this.idx - 1); };
+AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+
+AnimEngine.prototype.play = function () {
+  if (this.playing) { this.pause(); return; }
+  // at last step: restart from 0
+  if (this.idx >= this.steps.length - 1) this.goTo(0);
+  this.playing = true;
+  this._setPlayBtn("⏸ 暂停");
+  var self = this;
+  var tick = function () {
+    if (!self.playing) return;
+    if (self.idx >= self.steps.length - 1) { self.pause(); self._setPlayBtn("▶ 播放"); return; }
+    self.next();
+    self.timer = setTimeout(tick, 1200 / self.speed);
+  };
+  tick();
+};
+
+AnimEngine.prototype.pause = function () {
+  this.playing = false;
+  if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  this._setPlayBtn("▶ 播放");
+};
+
+AnimEngine.prototype.setSpeed = function (s) { this.speed = s; };
+
+AnimEngine.prototype._setPlayBtn = function (label) {
+  var b = this.root.closest(".anim-frame").querySelector(".btn-play");
+  if (b) b.textContent = label;
+};
+
+AnimEngine.prototype._updateStatus = function () {
+  var frame = this.root.closest(".anim-frame");
+  if (!frame) return;
+  var info = frame.querySelector(".step-info");
+  var desc = frame.querySelector(".step-desc");
+  var prev = frame.querySelector(".btn-prev");
+  var next = frame.querySelector(".btn-next");
+  var n = this.steps.length;
+  if (info) info.textContent = (this.idx < 0 ? "—" : ("Step " + (this.idx + 1) + " / " + n));
+  if (desc) {
+    var html = (this.idx >= 0 && this.steps[this.idx] && this.steps[this.idx].desc) ? this.steps[this.idx].desc : "";
+    desc.innerHTML = html;
+    this._typesetDesc(desc);
+  }
+  if (prev) { var disP = this.idx <= 0; prev.disabled = disP; prev.setAttribute("aria-disabled", disP ? "true" : "false"); }
+  if (next) { var disN = this.idx >= n - 1; next.disabled = disN; next.setAttribute("aria-disabled", disN ? "true" : "false"); }
+};
+
+AnimEngine.prototype._typesetDesc = function (el) {
+  if (!el) return;
+  var self = this;
+  this._typesetToken++;
+  var token = this._typesetToken;
+  if (!window.MathJax || !MathJax.startup || !MathJax.startup.promise) {
+    setTimeout(function () { if (self._typesetToken === token) self._typesetDesc(el); }, 200);
+    return;
+  }
+  MathJax.startup.promise.then(function () {
+    if (self._typesetToken !== token) return; // stale
+    try {
+      if (MathJax.typesetClear) MathJax.typesetClear([el]);
+      MathJax.typesetPromise([el]).catch(function () {});
+    } catch (e) { /* swallow */ }
+  }).catch(function () {});
+};
+
+AnimEngine.prototype._bindControls = function () {
+  var self = this;
+  var frame = this.root.closest(".anim-frame");
+  if (!frame) return;
+  frame.addEventListener("click", function (ev) {
+    var t = ev.target;
+    if (t.classList.contains("btn-play")) self.play();
+    else if (t.classList.contains("btn-next")) { self.pause(); self.next(); }
+    else if (t.classList.contains("btn-prev")) { self.pause(); self.prev(); }
+    else if (t.classList.contains("btn-reset")) self.reset();
+  });
+  var slider = frame.querySelector(".speed-slider");
+  if (slider) {
+    slider.addEventListener("input", function () {
+      var v = parseFloat(slider.value);
+      self.setSpeed(v);
+      var lab = frame.querySelector(".speed-label");
+      if (lab) lab.textContent = v.toFixed(1) + "×";
+    });
+  }
+};
+
+// ============ COLOR PALETTE ============
+var C = {
+  accent: "#6c5ce7", accentSoft: "#a29bfe", accentBg: "#eeeafe",
+  green: "#00b894", greenSoft: "#55efc4", greenBg: "#e0f8f4",
+  red: "#e74c3c", redSoft: "#fab1a0", redBg: "#fdf0ee",
+  orange: "#fdcb6e", orangeBg: "#fff8e7",
+  blue: "#0984e3", blueSoft: "#74b9ff", blueBg: "#e8f4fd",
+  grey: "#b2bec3", greySoft: "#dfe6e9", greyBg: "#f5f6fa",
+  dark: "#2d3436", white: "#ffffff",
+  text: "#2d3436", textSoft: "#636e72"
+};
+
+// ============ SCENE 1: Linear vs Tree Drafting ============
+function scene1Build() {
+  var positions = 8;
+  var posW = 50, gap = 8, startX = 80, y = 95;
+  var candidates = [
+    ["the", "a", "one", "this", "that"],
+    ["cat", "dog", "bird", "fish", "fox"],
+    ["sat", "ran", "jump", "walk", "flew"],
+    ["on", "in", "by", "at", "to"],
+    ["the", "a", "one", "some", "each"],
+    ["mat", "bed", "rug", "floor", "chair"],
+    ["and", "but", "or", "so", "yet"],
+    ["smiled", "laughed", "cried", "slept", "ran"]
+  ];
+
+  function drawBase(e) {
+    e.text(W / 2, 24, "扩散起草器：8 个位置并行生成候选（论文 block=16）",
+      { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.accent });
+    for (var i = 0; i < positions; i++) {
+      var x = startX + i * (posW + gap);
+      e.text(x + posW / 2, 80, "pos " + (i + 1), { "text-anchor": "middle", "font-size": 10, fill: C.textSoft });
+      e.rect(x, y, posW, 200, C.blueBg, C.blueSoft, { "stroke-dasharray": "3,2" });
+    }
+    e.text(28, y + 100, "候选空间", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft, transform: "rotate(-90 28 " + (y + 100) + ")" });
+  }
+
+  function drawCands(e, topK, highlight) {
+    for (var i = 0; i < positions; i++) {
+      var x = startX + i * (posW + gap);
+      for (var j = 0; j < Math.min(topK, candidates[i].length); j++) {
+        var cy = y + 10 + j * 38;
+        var isHi = highlight && highlight[i] === j;
+        var fill = isHi ? C.greenBg : (j === 0 ? C.accentBg : C.white);
+        var stroke = isHi ? C.green : (j === 0 ? C.accent : C.grey);
+        var r = e.rect(x + 4, cy, posW - 8, 32, fill, stroke, { "stroke-width": isHi ? 2.5 : 1.2 });
+        e.text(x + posW / 2, cy + 21, candidates[i][j], { "text-anchor": "middle", "font-size": 11, "font-weight": isHi ? "bold" : "normal", fill: stroke });
+      }
+    }
+  }
+
+  function drawPath(e, path, color, markerId) {
+    for (var i = 0; i < path.length - 1; i++) {
+      var x1 = startX + i * (posW + gap) + posW / 2;
+      var y1 = y + 10 + path[i] * 38 + 16;
+      var x2 = startX + (i + 1) * (posW + gap) + posW / 2;
+      var y2 = y + 10 + path[i + 1] * 38 + 16;
+      e.path("M" + x1 + "," + y1 + " C" + (x1 + 20) + "," + (y1 + 20) + " " + (x2 - 20) + "," + (y2 - 20) + " " + x2 + "," + y2, color, { "stroke-width": 2, "marker-end": "url(#" + markerId + ")", opacity: 0.85 });
+    }
+  }
+
+  var W = 820;
+  return [
+    { title: "扩散起草器产出", desc: "扩散模型一次前向传播，同时产出 8 个位置（论文中为 16 个）的候选 token 分布。每个位置有多个候选，形成丰富的组合空间。",
+      render: function (e) { drawBase(e); drawCands(e, 3, null); } },
+    { title: "线性起草：只取 top-1", desc: "现有方法在每个位置只取 top-1 候选，串成一条序列。在 Qwen3-4B-DFlash 上，GSM8K 接受长度约 $6.5$。",
+      render: function (e) {
+        drawBase(e); drawCands(e, 3, [0, 0, 0, 0, 0, 0, 0, 0]);
+        drawPath(e, [0, 0, 0, 0, 0, 0, 0, 0], C.accent, e._uid("arrA"));
+        e.text(W / 2, 335, "线性起草：单路径，GSM8K L̄ ≈ 6.5", { "text-anchor": "middle", "font-size": 13, "font-weight": "bold", fill: C.red });
+      } },
+    { title: "Oracle 上界：top-10 匹配", desc: "若每位置保留 top-10 候选并做 oracle 匹配，GSM8K 接受长度可达约 $9.78$。差距巨大，候选空间远未被充分利用。",
+      render: function (e) {
+        drawBase(e); drawCands(e, 3, null);
+        for (var p = 0; p < 3; p++) {
+          drawPath(e, [p % 3, (p + 1) % 3, p % 3, (p + 2) % 3, p % 3, (p + 1) % 3, p % 3, p % 2], C.orange, e._uid("arr"));
+        }
+        e.text(W / 2, 335, "Oracle 上界：多路径，GSM8K L̄ ≈ 9.78", { "text-anchor": "middle", "font-size": 13, "font-weight": "bold", fill: C.orange });
+      } },
+    { title: "PRESTO 树起草：多路径探索", desc: "PRESTO 在每位置保留多个候选，用前缀对齐打分 + 优先级展开构建树，探索多条候选路径。在 GSM8K（Qwen3-4B, T=0）上接受长度约 $9.4$，逼近 oracle。具体数值依模型与设置而变。",
+      render: function (e) {
+        drawBase(e);
+        drawCands(e, 3, [0, 0, 1, 0, 0, 2, 0, 1]);
+        drawPath(e, [0, 0, 0, 0, 0, 0, 0, 0], C.green, e._uid("arrG"));
+        drawPath(e, [0, 0, 1, 0, 0, 2, 0, 1], C.accent, e._uid("arrA"));
+        e.text(W / 2, 335, "PRESTO 树起草：多路径，GSM8K L̄ ≈ 9.4（4B, T=0）", { "text-anchor": "middle", "font-size": 13, "font-weight": "bold", fill: C.green });
+      } },
+    { title: "总结对比", desc: "线性起草只探索候选空间的冰山一角。PRESTO 的树结构充分利用扩散模型产出的多候选特性，将接受长度从约 $6.5$ 提升逼近 oracle 上界 $9.78$。数值为 Qwen3-4B-DFlash 在 GSM8K 上的示意，依实验设置而变。",
+      render: function (e) {
+        e.text(W / 2, 28, "GSM8K 接受长度对比（Qwen3-4B, 示意）", { "text-anchor": "middle", "font-size": 15, "font-weight": "bold", fill: C.accent });
+        var bars = [
+          { label: "线性起草", val: 6.5, color: C.red, w: 65 },
+          { label: "PRESTO 树起草", val: 9.4, color: C.green, w: 94 },
+          { label: "Oracle 上界", val: 9.78, color: C.orange, w: 97.8 }
+        ];
+        bars.forEach(function (b, i) {
+          var by = 70 + i * 85;
+          e.text(200, by + 22, b.label, { "text-anchor": "end", "font-size": 13, fill: C.text });
+          e.rect(220, by, b.w * 4, 40, C.white, b.color, { "stroke-width": 2 });
+          e.rect(220, by, b.w * 4 * 0.95, 40, b.color, b.color, { opacity: 0.25 });
+          e.text(220 + b.w * 4 + 10, by + 25, String(b.val), { "font-size": 14, "font-weight": "bold", fill: b.color });
+        });
+      } }
+  ];
+}
+
+// ============ SCENE 2: Prefix-Blind vs Prefix-Conditional ============
+function scene2Build() {
+  var W = 820;
+  return [
+    { title: "AR 验证：前缀条件化", desc: "目标模型的验证从左到右进行：第 $i$ 个 token 是否被接受取决于前面所有 token 是否已被接受。$\\Pr(\\text{all accepted}) = \\prod_i \\Pr(y_i \\mid y_{<i})$",
+      render: function (e) {
+        e.text(W / 2, 24, "AR 验证：前缀条件化链式接受", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.accent });
+        var tokens = ["The", "cat", "sat", "on", "mat", "?"];
+        var x0 = 100, tw = 100, gap = 20;
+        for (var i = 0; i < tokens.length; i++) {
+          var x = x0 + i * (tw + gap);
+          var accepted = i < 4;
+          var color = accepted ? C.green : (i === 4 ? C.red : C.grey);
+          var bg = accepted ? C.greenBg : (i === 4 ? C.redBg : C.greyBg);
+          e.rect(x, 80, tw, 50, bg, color, { "stroke-width": 2 });
+          e.text(x + tw / 2, 110, tokens[i], { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: color });
+          if (i < tokens.length - 1) e.path("M" + (x + tw) + ",105 L" + (x + tw + gap) + ",105", C.grey, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+          if (i > 0) e.text(x + tw / 2, 70, "cond. on y<" + (i + 1), { "text-anchor": "middle", "font-size": 10, fill: C.textSoft });
+          e.text(x + tw / 2, 155, accepted ? "✓" : (i === 4 ? "✗" : "?"), { "text-anchor": "middle", "font-size": 18, fill: color });
+        }
+        e.text(W / 2, 200, "每个 token 的接受依赖已接受的前缀 → 打分应反映前缀条件化结构", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.rect(200, 230, 420, 80, C.accentBg, C.accent, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 260, "Acceptance Factorization", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(W / 2, 285, "Pr(accept all) = Πᵢ Pr(yᵢ accepted | y<i accepted)", { "text-anchor": "middle", "font-size": 13, fill: C.textSoft });
+      } },
+    { title: "扩散块内边际：不随树中前缀选择而变", desc: "扩散起草器在固定提示与扩散状态下一次产出整块的<strong>位置级边际</strong> $q_i(x_i)$。对于同一位置，无论树中之前选了哪条候选前缀，$q_i$ 取值不变——这就是构树阶段的 prefix blindness（非对全部历史不敏感）。",
+      render: function (e) {
+        e.text(W / 2, 24, "扩散块内边际：构树阶段前缀盲", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.red });
+        var scenarios = [
+          { prefix: ["The", "cat"], y: 110, label: "树中前缀 A: \"The cat\"", color: C.blue },
+          { prefix: ["A", "fish"], y: 230, label: "树中前缀 B: \"A fish\"", color: C.orange }
+        ];
+        scenarios.forEach(function (s) {
+          e.text(50, s.y - 5, s.label, { "font-size": 12, fill: s.color, "font-weight": "bold" });
+          s.prefix.forEach(function (t, i) { e.rect(50 + i * 70, s.y, 60, 36, C.greyBg, C.grey, { "font-size": 12 }); e.text(80 + i * 70, s.y + 23, t, { "text-anchor": "middle", "font-size": 12, fill: C.text }); });
+          e.text(220, s.y + 22, "→ q_i(x_i) =", { "font-size": 12, fill: C.textSoft });
+          var cands = ["sat", "ran", "jump", "walk"];
+          var probs = [0.45, 0.25, 0.18, 0.12];
+          for (var i = 0; i < cands.length; i++) {
+            var cx = 350 + i * 100;
+            e.rect(cx, s.y, 80, 36, C.blueBg, C.blue, {});
+            e.text(cx + 40, s.y + 23, cands[i], { "text-anchor": "middle", "font-size": 11, fill: C.blue });
+            e.rect(cx, s.y + 40, 80 * probs[i] * 1.5, 12, C.blueSoft, C.blue, {});
+            e.text(cx + 80 * probs[i] * 1.5 + 5, s.y + 50, probs[i].toFixed(2), { "font-size": 10, fill: C.blue });
+          }
+        });
+        e.rect(340, 165, 140, 40, "⚠ 同一位置 q_i 完全相同！", C.redBg, C.red, { "font-size": 13, "font-weight": "bold" });
+        e.text(410, 188, "同一位置 q_i 完全相同！", { "text-anchor": "middle", "font-size": 12, fill: C.red, "font-weight": "bold" });
+        e.text(W / 2, 340, "q_i(x_i) 不随树中前缀选择而变 → 仅用边际构树时前缀无法影响后续排序", { "text-anchor": "middle", "font-size": 12, fill: C.red, "font-weight": "bold" });
+      } },
+    { title: "矛盾：高边际 ≠ 高前缀兼容", desc: "一个在边际上高概率的 token，在特定前缀下可能不被目标模型接受。边际打分会把它排在树的高优先级位置，导致验证失败、树预算浪费。",
+      render: function (e) {
+        e.text(W / 2, 24, "矛盾：高边际 ≠ 高前缀兼容", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.red });
+        e.text(200, 60, "边际打分排名", { "text-anchor": "middle", "font-size": 13, "font-weight": "bold", fill: C.blue });
+        var cands = ["sat (0.45)", "ran (0.25)", "jump (0.18)", "walk (0.12)"];
+        for (var i = 0; i < cands.length; i++) {
+          var yy = 80 + i * 40;
+          var isTop = i === 0;
+          e.rect(100, yy, 200, 34, isTop ? C.accentBg : C.white, isTop ? C.accent : C.grey, { "stroke-width": isTop ? 2 : 1 });
+          e.text(200, yy + 22, cands[i], { "text-anchor": "middle", "font-size": 11, "font-weight": isTop ? "bold" : "normal", fill: isTop ? C.accent : C.text });
+          if (isTop) e.text(320, yy + 22, "← 树优先选这个", { "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        }
+        e.path("M340,160 L400,160", C.red, { "stroke-width": 3, "marker-end": "url(#" + e._uid("arrR") + ")" });
+        e.text(600, 60, "AR 验证结果", { "text-anchor": "middle", "font-size": 13, "font-weight": "bold", fill: C.red });
+        var results = [
+          { token: "sat", accept: false, reason: '前缀 "A fish" 下不接受' },
+          { token: "ran", accept: true, reason: '前缀 "A fish" 下接受' }
+        ];
+        for (var j = 0; j < results.length; j++) {
+          var ry = 80 + j * 60;
+          var r = results[j];
+          var col = r.accept ? C.green : C.red;
+          var bgg = r.accept ? C.greenBg : C.redBg;
+          e.rect(420, ry, 260, 50, bgg, col, { "stroke-width": 2 });
+          e.text(440, ry + 20, r.accept ? "✓" : "✗", { "font-size": 13, "font-weight": "bold", fill: col });
+          e.text(465, ry + 20, r.token, { "font-size": 12, fill: C.text });
+          e.text(465, ry + 38, r.reason, { "font-size": 10, fill: C.textSoft });
+        }
+        e.text(W / 2, 260, "边际 top-1 被拒绝 → 树高优先级路径验证失败 → 浪费树预算", { "text-anchor": "middle", "font-size": 13, "font-weight": "bold", fill: C.red });
+        e.rect(180, 285, 460, 60, C.redBg, C.red, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 310, "结构根源：q_i 是块内位置边际，不随树中前缀选择而变", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(W / 2, 332, "→ 仅用边际打分无法做前缀条件化的路径排名", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+      } },
+    { title: "校正方向：n-gram 前缀信号", desc: "n-gram 前缀兼容性 $\\rho_d$ 与边际的差 $(c^{\\text{prefix}} - c^{\\text{diff}})$ 与真实残差正相关——方向对，但有噪声。适度叠加可校正排名。",
+      render: function (e) {
+        e.text(W / 2, 24, "前缀校正信号：方向对，但含噪", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.green });
+        e.rect(100, 60, 560, 250, C.white, C.grey, { "stroke-width": 1 });
+        e.text(380, 55, "校正项 (c_prefix - c_diff) vs 真实残差", { "text-anchor": "middle", "font-size": 11, fill: C.textSoft });
+        e.line(100, 310, 660, 310, C.dark, { "stroke-width": 1 });
+        e.line(100, 60, 100, 310, C.dark, { "stroke-width": 1 });
+        e.text(380, 335, "校正项 (c_prefix - c_diff) →", { "text-anchor": "middle", "font-size": 10, fill: C.textSoft });
+        e.text(70, 185, "↑ 真实残差", { "text-anchor": "middle", "font-size": 10, fill: C.textSoft, transform: "rotate(-90 70 185)" });
+        e.line(120, 290, 640, 90, C.green, { "stroke-width": 2, "stroke-dasharray": "6,3" });
+        e.text(600, 85, "正相关 ρ ≈ 0.3", { "text-anchor": "middle", "font-size": 11, fill: C.green, "font-weight": "bold" });
+        var pts = [[150, 280], [200, 260], [250, 240], [180, 270], [300, 200], [350, 220], [400, 170], [450, 150], [500, 130], [550, 110], [320, 250], [420, 200], [380, 190], [480, 160], [280, 230], [520, 120]];
+        pts.forEach(function (p) { e.circle(p[0], p[1], 4, C.accentSoft, C.accent, { "stroke-width": 1 }); });
+        e.rect(150, 340, 520, 30, C.greenBg, C.green, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 360, "在边际对数分数上叠加适度校正 → 打分更对齐 AR 验证 → 树排名更准确", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+      } }
+  ];
+}
+
+// ============ SCENE 3: Prefix-Aligned Scoring λ ============
+function scene3Build() {
+  var W = 820;
+  return [
+    { title: "打分公式：叠加校正", desc: "前缀对齐打分：$s(y_i) = \\log q_d(y_i) + \\lambda\\, \\log \\rho_d(y_i \\mid y_{<i})$。等价乘法形式 $q_d \\cdot \\rho_d^{\\lambda}$。$\\lambda$ 只缩放校正项，边际项 $\\log q_d$ 始终保留。",
+      render: function (e) {
+        e.text(W / 2, 28, "PRESTO 前缀对齐打分（叠加而非插值）", { "text-anchor": "middle", "font-size": 15, "font-weight": "bold", fill: C.accent });
+        e.rect(100, 70, 300, 80, C.blueBg, C.blue, { "stroke-dasharray": "4,2" });
+        e.text(250, 100, "log q_d(y_i)", { "text-anchor": "middle", "font-size": 14, fill: C.blue, "font-weight": "bold" });
+        e.text(250, 125, "扩散边际（始终保留，系数 1）", { "text-anchor": "middle", "font-size": 11, fill: C.textSoft });
+        e.text(410, 115, "+", { "text-anchor": "middle", "font-size": 24, fill: C.accent, "font-weight": "bold" });
+        e.rect(420, 70, 300, 80, C.orangeBg, C.orange, { "stroke-dasharray": "4,2" });
+        e.text(570, 100, "λ · log ρ_d(y_i | y<i)", { "text-anchor": "middle", "font-size": 14, fill: C.orange, "font-weight": "bold" });
+        e.text(570, 125, "n-gram 前缀校正（λ 缩放）", { "text-anchor": "middle", "font-size": 11, fill: C.textSoft });
+        e.text(W / 2, 185, "↓ 按深度可加分解", { "text-anchor": "middle", "font-size": 14, fill: C.accent });
+        e.rect(250, 200, 320, 60, C.accentBg, C.accent, {});
+        e.text(W / 2, 225, "S(path) = Σᵢ s(yᵢ)", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(W / 2, 245, "路径打分支持增量式优先级展开", { "text-anchor": "middle", "font-size": 11, fill: C.textSoft });
+        e.rect(150, 290, 520, 70, C.greenBg, C.green, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 315, "KL 正则化解释：保持接近 q_d 的同时向 ρ_d 对齐", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(W / 2, 340, "λ 只缩放校正项——边际项不会被消除", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+      } },
+    { title: "λ = 0：纯边际（前缀盲）", desc: "$\\lambda=0$：校正项消失，$s = \\log q_d$。构树阶段前缀盲，路径排名不可靠，树预算可能浪费在低前缀兼容路径上。",
+      render: function (e) {
+        e.text(W / 2, 24, "λ = 0：纯边际打分（构树前缀盲）", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.red });
+        e.rect(150, 60, 250, 30, C.blue, C.blue, { opacity: 0.25 });
+        e.text(275, 80, "1 · log q_d = 100%", { "text-anchor": "middle", "font-size": 12, fill: C.blue, "font-weight": "bold" });
+        e.rect(420, 60, 5, 30, C.orange, C.orange, { opacity: 0.25 });
+        e.text(580, 80, "0 · log ρ_d = 0%", { "text-anchor": "middle", "font-size": 12, fill: C.grey });
+        e.rect(200, 120, 420, 50, C.redBg, C.red, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 150, "⚠ 路径排名不可靠 → 树预算浪费在低前缀兼容路径", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(100, 210, "接受长度: ", { "font-size": 12, fill: C.textSoft });
+        e.rect(200, 195, 200, 24, C.redBg, C.red, {});
+        e.rect(200, 195, 130, 24, C.red, C.red, { opacity: 0.4 });
+        e.text(415, 212, "≈ 6.5 (低)", { "font-size": 12, fill: C.red, "font-weight": "bold" });
+        e.rect(100, 270, 620, 40, C.greyBg, C.grey, {});
+        e.circle(110, 290, 12, C.red, C.dark, { "stroke-width": 2 });
+        e.text(110, 294, "0", { "text-anchor": "middle", "font-size": 10, fill: "#fff", "font-weight": "bold" });
+        e.text(410, 294, "λ（适度校正通常最优，值依设置而变）", { "text-anchor": "middle", "font-size": 10, fill: C.grey });
+      } },
+    { title: "λ 过大：校正压过边际", desc: "$\\lambda$ 过大：校正项 $\\lambda \\log \\rho_d$ 压过边际信号 $\\log q_d$，树的多样性或覆盖率下降——但边际项不会归零（与凸插值不同）。",
+      render: function (e) {
+        e.text(W / 2, 24, "λ 过大：校正压过边际信号（边际不归零）", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.red });
+        e.rect(150, 60, 250, 30, C.blue, C.blue, { opacity: 0.25 });
+        e.text(275, 80, "1 · log q_d（仍在，但被淹没）", { "text-anchor": "middle", "font-size": 11, fill: C.blue, "font-weight": "bold" });
+        e.rect(420, 60, 250, 30, C.orange, C.orange, { opacity: 0.45 });
+        e.text(545, 80, "大 λ · log ρ_d（主导）", { "text-anchor": "middle", "font-size": 11, fill: C.orange, "font-weight": "bold" });
+        e.rect(200, 120, 420, 50, C.redBg, C.red, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 150, "⚠ n-gram 噪声主导 → 多样性/覆盖率下降", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(100, 210, "接受长度: ", { "font-size": 12, fill: C.textSoft });
+        e.rect(200, 195, 200, 24, C.redBg, C.red, {});
+        e.rect(200, 195, 100, 24, C.red, C.red, { opacity: 0.4 });
+        e.text(415, 212, "下降", { "font-size": 12, fill: C.red, "font-weight": "bold" });
+        e.rect(100, 270, 620, 40, C.greyBg, C.grey, {});
+        e.circle(710, 290, 12, C.red, C.dark, { "stroke-width": 2 });
+        e.text(710, 294, "大", { "text-anchor": "middle", "font-size": 10, fill: "#fff", "font-weight": "bold" });
+        e.text(110, 332, "λ=0 (前缀盲)", { "text-anchor": "middle", "font-size": 10, fill: C.grey });
+        e.text(410, 332, "适度通常最优（值依设置而变）", { "text-anchor": "middle", "font-size": 10, fill: C.grey });
+      } },
+    { title: "适度 λ：平衡最稳", desc: "论文消融显示<strong>适度校正通常优于完全关闭或过强校正</strong>，最佳值依模型与实验设置而变化。熵自适应 $\\lambda$ 仅边际改进，固定 $\\lambda$ 实践中已足够。",
+      render: function (e) {
+        e.text(W / 2, 24, "适度 λ：平衡最稳（值依设置而变）", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.green });
+        e.rect(150, 60, 250, 30, C.blue, C.blue, { opacity: 0.25 });
+        e.text(275, 80, "1 · log q_d（保留）", { "text-anchor": "middle", "font-size": 12, fill: C.blue, "font-weight": "bold" });
+        e.rect(420, 60, 250, 30, C.orange, C.orange, { opacity: 0.3 });
+        e.text(545, 80, "适度 λ · log ρ_d", { "text-anchor": "middle", "font-size": 12, fill: C.orange, "font-weight": "bold" });
+        e.rect(200, 120, 420, 50, C.greenBg, C.green, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 150, "✓ 全局边际 + 适度前缀校正 → 排名最准确", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(100, 210, "接受长度: ", { "font-size": 12, fill: C.textSoft });
+        e.rect(200, 195, 200, 24, C.greenBg, C.green, {});
+        e.rect(200, 195, 188, 24, C.green, C.green, { opacity: 0.4 });
+        e.text(415, 212, "显著提升", { "font-size": 12, fill: C.green, "font-weight": "bold" });
+        e.rect(100, 270, 620, 40, C.greyBg, C.grey, {});
+        e.circle(410, 290, 14, C.green, C.dark, { "stroke-width": 3 });
+        e.text(410, 294, "适度", { "text-anchor": "middle", "font-size": 10, fill: "#fff", "font-weight": "bold" });
+        e.text(110, 332, "λ=0 (前缀盲)", { "text-anchor": "middle", "font-size": 10, fill: C.grey });
+        e.text(710, 332, "λ 过大 (噪声主导)", { "text-anchor": "middle", "font-size": 10, fill: C.grey });
+      } }
+  ];
+}
+
+// ============ SCENE 4: Beam Search Tree Expansion ============
+function scene4Build() {
+  var W = 820;
+  var levels = [
+    [{ id: "r", x: 410, y: 40, label: "root", score: 0 }],
+    [{ id: "a", x: 250, y: 110, label: "tok A", score: -1.2 }, { id: "b", x: 410, y: 110, label: "tok B", score: -1.0 }, { id: "c", x: 570, y: 110, label: "tok C", score: -1.5 }],
+    [{ id: "a1", x: 170, y: 200, label: "A₁", score: -2.1 }, { id: "a2", x: 250, y: 200, label: "A₂", score: -2.3 }, { id: "b1", x: 370, y: 200, label: "B₁", score: -1.8 }, { id: "b2", x: 450, y: 200, label: "B₂", score: -2.0 }, { id: "c1", x: 530, y: 200, label: "C₁", score: -2.6 }, { id: "c2", x: 610, y: 200, label: "C₂", score: -2.8 }],
+    [{ id: "b1a", x: 330, y: 290, label: "B₁ₐ", score: -2.9 }, { id: "b1b", x: 410, y: 290, label: "B₁ᵦ", score: -3.1 }, { id: "a1a", x: 170, y: 290, label: "A₁ₐ", score: -3.4 }, { id: "b2a", x: 490, y: 290, label: "B₂ₐ", score: -3.3 }]
+  ];
+  var edges = [["r", "a"], ["r", "b"], ["r", "c"], ["a", "a1"], ["a", "a2"], ["b", "b1"], ["b", "b2"], ["c", "c1"], ["c", "c2"], ["b1", "b1a"], ["b1", "b1b"], ["a1", "a1a"], ["b2", "b2a"]];
+  var nodeMap = {};
+  levels.forEach(function (l) { l.forEach(function (n) { nodeMap[n.id] = n; }); });
+
+  function drawTree(e, activeNodes, beamNodes, expandToDepth) {
+    e.text(W / 2, 20, "Beam Search 树展开（父子增量累计分数）", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.accent });
+    edges.forEach(function (ed) {
+      var f = nodeMap[ed[0]], t = nodeMap[ed[1]];
+      if (f.y >= (expandToDepth + 1) * 80 + 40 || t.y >= (expandToDepth + 1) * 80 + 40) return;
+      var inBeam = beamNodes.indexOf(t.id) >= 0;
+      e.line(f.x, f.y + 20, t.x, t.y - 18, inBeam ? C.accent : C.grey, { "stroke-width": inBeam ? 2 : 1, opacity: inBeam ? 1 : 0.4 });
+    });
+    Object.keys(nodeMap).forEach(function (k) {
+      var n = nodeMap[k];
+      if (n.y >= (expandToDepth + 1) * 80 + 60) return;
+      var isActive = activeNodes.indexOf(n.id) >= 0;
+      var inBeam = beamNodes.indexOf(n.id) >= 0;
+      var fill = isActive ? C.accentBg : (inBeam ? C.accentBg : C.white);
+      var stroke = isActive ? C.accent : (inBeam ? C.accentSoft : C.grey);
+      e.circle(n.x, n.y, 18, fill, stroke, { "stroke-width": isActive ? 3 : (inBeam ? 2 : 1) });
+      e.text(n.x, n.y + 4, n.label, { "text-anchor": "middle", "font-size": 10, "font-weight": (isActive || inBeam) ? "bold" : "normal", fill: stroke });
+      e.text(n.x, n.y + 32, n.score.toFixed(1), { "text-anchor": "middle", "font-size": 9, fill: C.textSoft });
+    });
+    e.text(W / 2, 355, "S(child) = S(parent) + log q_d(token) + λ log ρ_d(token | prefix)", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+  }
+
+  return [
+    { title: "初始：根节点", desc: "从根节点开始，前沿只含根节点。$S(\\text{root}) = 0$。",
+      render: function (e) { drawTree(e, ["r"], ["r"], 0); } },
+    { title: "展开根 → 第一层", desc: "展开根节点生成第一层。每个子节点 $S = S(\\text{parent}) + \\log q_d + \\lambda \\log \\rho_d$，从父节点增量计算。",
+      render: function (e) {
+        drawTree(e, [], ["a", "b", "c"], 1);
+        e.rect(100, 335, 240, 30, C.accentBg, C.accent, { rx: 4 });
+        e.text(220, 355, "前沿: A(-1.2), B(-1.0), C(-1.5)", { "text-anchor": "middle", "font-size": 11, fill: C.accent });
+      } },
+    { title: "Beam：每层保留 top-B", desc: "Beam Search 每层保留 top-$B$（这里 $B=2$）。B(-1.0) 和 A(-1.2) 进入 beam，C(-1.5) 被保留但不在 beam 内。",
+      render: function (e) {
+        drawTree(e, [], ["a", "b", "b1", "b2", "a1", "a2"], 2);
+        e.rect(80, 335, 300, 30, C.accentBg, C.accent, { rx: 4 });
+        e.text(230, 355, "Beam(top-2): A(-1.2), B(-1.0) → 展开", { "text-anchor": "middle", "font-size": 11, fill: C.accent });
+      } },
+    { title: "继续展开最高分节点", desc: "展开 beam 内节点。$S(B_1) = S(B) + \\log q_d + \\lambda \\log \\rho_d = -1.8$ 最高，展开其子节点。累计分数从父节点继承，非只用局部分数重排。",
+      render: function (e) {
+        drawTree(e, [], ["a", "b", "b1", "b2", "a1", "a2", "b1a", "b1b", "a1a", "b2a"], 3);
+        e.rect(100, 335, 300, 30, C.greenBg, C.green, { rx: 4 });
+        e.text(250, 355, "最高: B₁ₐ(-2.9) < B₁ᵦ(-3.1) < B₂ₐ(-3.3)", { "text-anchor": "middle", "font-size": 11, fill: C.green });
+      } },
+    { title: "终止：选 top-B 路径展平", desc: "达预算后终止。从所有节点选 top-$B$ 路径（beam 内 + 保留的），展平为 draft tokens 交给目标模型做 tree attention 验证。",
+      render: function (e) {
+        drawTree(e, ["b1a"], ["a", "b", "b1", "b2", "a1", "a2", "b1a", "b1b", "a1a", "b2a"], 3);
+        e.path("M410,58 L250,110 L370,200 L330,290", C.green, { "stroke-width": 3 });
+        e.rect(150, 335, 520, 40, C.greenBg, C.green, { rx: 4 });
+        e.text(W / 2, 358, "最优路径: root→B→B₁→B₁ₐ (S=-2.9) → 展平验证", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+      } }
+  ];
+}
+
+// ============ SCENE 5: Quadratic Self-Speculation Pipeline ============
+function scene5Build() {
+  var W = 820;
+  return [
+    { title: "线性草稿：拒绝后后缀失效", desc: "若把一次扩散调用产生的多位置预测组织成<strong>单条线性草稿</strong>，一旦中间 token 被验证器拒绝，该路径后续位置已计算出的预测无法继续被这条路径使用。并非所有计算都严格丢失，而是覆盖率问题。",
+      render: function (e) {
+        e.text(W / 2, 24, "线性草稿：拒绝后该路径后缀失效", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.red });
+        e.rect(100, 60, 620, 120, C.white, C.dark, { "stroke-dasharray": "5,3", rx: 8 });
+        e.text(W / 2, 55, "单次前向传播", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.rect(120, 75, 280, 90, C.greenBg, C.green, { rx: 6 });
+        e.text(260, 95, "AR 验证（KV cache 复用）", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        ["tok1 ✓", "tok2 ✓", "tok3 ✗"].forEach(function (t, i) {
+          var acc = t.indexOf("✗") < 0;
+          e.rect(140 + i * 80, 110, 70, 30, acc ? C.greenBg : C.redBg, acc ? C.green : C.red, {});
+          e.text(175 + i * 80, 130, t, { "text-anchor": "middle", "font-size": 10, fill: acc ? C.green : C.red });
+        });
+        e.rect(420, 75, 280, 90, C.accentBg, C.accent, { rx: 6 });
+        e.text(560, 95, "扩散起草（尾部 mask 位置）", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        ["m1", "m2", "m3", "m4", "m5", "m6"].forEach(function (t, i) {
+          var attached = i < 3;
+          e.rect(440 + i * 40, 110, 36, 30, attached ? C.greenBg : C.greyBg, attached ? C.greenSoft : C.grey, { opacity: attached ? 1 : 0.5 });
+          e.text(458 + i * 40, 130, t, { "text-anchor": "middle", "font-size": 9, fill: attached ? C.green : C.grey });
+        });
+        e.text(W / 2, 210, "↓ 验证后", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.rect(150, 230, 520, 80, C.redBg, C.red, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 255, "tok3 被拒 → 该路径 m4, m5, m6 后缀失效", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(W / 2, 280, "→ 一次扩散产出的多位置预测未被充分利用", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(560, 335, "♻", { "text-anchor": "middle", "font-size": 22, fill: C.red });
+      } },
+    { title: "PRESTO：树组织候选", desc: "PRESTO 把一次扩散调用产生的多位置高概率候选组织成<strong>树</strong>，而非单条线性草稿。同一前向传播产出的候选被更有效地利用。",
+      render: function (e) {
+        e.text(W / 2, 24, "PRESTO：树组织 mask 候选", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.green });
+        e.rect(100, 60, 620, 120, C.white, C.dark, { "stroke-dasharray": "5,3", rx: 8 });
+        e.text(W / 2, 55, "单次前向传播（并行验证+起草）", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.rect(120, 75, 280, 90, C.greenBg, C.green, { rx: 6 });
+        e.text(260, 95, "AR 验证", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        ["tok1 ✓", "tok2 ✓", "tok3 ✗"].forEach(function (t, i) {
+          var acc = t.indexOf("✗") < 0;
+          e.rect(140 + i * 80, 110, 70, 30, acc ? C.greenBg : C.redBg, acc ? C.green : C.red, {});
+          e.text(175 + i * 80, 130, t, { "text-anchor": "middle", "font-size": 10, fill: acc ? C.green : C.red });
+        });
+        e.rect(420, 75, 280, 90, C.accentBg, C.accent, { rx: 6 });
+        e.text(560, 95, "扩散起草 → top-k 候选", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        e.circle(560, 115, 8, C.accent, C.accent, {});
+        e.circle(530, 140, 6, C.accentSoft, C.accentSoft, {});
+        e.circle(560, 140, 6, C.accentSoft, C.accentSoft, {});
+        e.circle(590, 140, 6, C.accentSoft, C.accentSoft, {});
+        e.line(560, 123, 530, 134, C.accentSoft, { "stroke-width": 1 });
+        e.line(560, 123, 560, 134, C.accentSoft, { "stroke-width": 1 });
+        e.line(560, 123, 590, 134, C.accentSoft, { "stroke-width": 1 });
+        e.text(645, 120, "→ 树!", { "font-size": 11, fill: C.accent, "font-weight": "bold" });
+        e.text(W / 2, 210, "↓ 验证后 + 前缀对齐打分", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.rect(150, 230, 520, 80, C.greenBg, C.green, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 255, "有效 mask 位置提取 top-k → 前缀对齐打分 → 树展开", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(W / 2, 280, "→ 多条候选路径被利用，缓解后缀失效", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        e.text(560, 335, "🌳", { "text-anchor": "middle", "font-size": 22, fill: C.green });
+      } },
+    { title: "主分支被拒时其他分支仍可验证", desc: "验证后，主分支被拒时，其他共享前缀或替代分支仍可被验证器继续检查——树结构提高了同一次扩散结果的候选覆盖率和复用机会。",
+      render: function (e) {
+        e.text(W / 2, 24, "主分支被拒 → 其他分支仍可验证", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.accent });
+        e.rect(150, 60, 520, 200, C.white, C.dark, { rx: 8, "stroke-dasharray": "5,3" });
+        e.circle(410, 90, 16, C.greenBg, C.green, { "stroke-width": 3 });
+        e.text(410, 94, "root", { "text-anchor": "middle", "font-size": 10, fill: C.green, "font-weight": "bold" });
+        e.circle(350, 140, 14, C.greenBg, C.green, { "stroke-width": 3 });
+        e.text(350, 144, "B ✓", { "text-anchor": "middle", "font-size": 9, fill: C.green });
+        e.line(410, 106, 350, 126, C.green, { "stroke-width": 2 });
+        e.circle(300, 190, 12, C.greenBg, C.green, { "stroke-width": 3 });
+        e.text(300, 194, "B₁ ✓", { "text-anchor": "middle", "font-size": 8, fill: C.green });
+        e.line(350, 154, 300, 178, C.green, { "stroke-width": 2 });
+        e.circle(250, 230, 10, C.greenBg, C.green, { "stroke-width": 3 });
+        e.text(250, 234, "B₁ₐ", { "text-anchor": "middle", "font-size": 7, fill: C.green });
+        e.line(300, 202, 250, 220, C.green, { "stroke-width": 2 });
+        e.circle(470, 140, 14, C.redBg, C.red, { "stroke-width": 2, "stroke-dasharray": "3,2", opacity: 0.6 });
+        e.text(470, 144, "C ✗", { "text-anchor": "middle", "font-size": 9, fill: C.red });
+        e.line(410, 106, 470, 126, C.red, { "stroke-width": 1, "stroke-dasharray": "3,2", opacity: 0.6 });
+        e.circle(550, 190, 12, C.orangeBg, C.orange, { "stroke-width": 2, "stroke-dasharray": "3,2" });
+        e.text(550, 194, "C₁?", { "text-anchor": "middle", "font-size": 8, fill: C.orange });
+        e.line(470, 154, 550, 178, C.orange, { "stroke-width": 1, "stroke-dasharray": "3,2" });
+        e.text(200, 120, "✓ 接受路径", { "font-size": 11, fill: C.green, "font-weight": "bold" });
+        e.text(560, 120, "✗ 主分支被拒", { "font-size": 11, fill: C.red, "font-weight": "bold" });
+        e.text(600, 175, "替代分支仍可验证", { "font-size": 10, fill: C.orange, "font-weight": "bold" });
+        e.rect(100, 285, 620, 70, C.greenBg, C.green, { "stroke-dasharray": "4,2" });
+        e.text(W / 2, 310, "树结构 → 覆盖率与复用机会提升", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(W / 2, 335, "下一次前向：AR tree attention 验证新树", { "text-anchor": "middle", "font-size": 11, fill: C.textSoft });
+      } },
+    { title: "完整流水线", desc: "PRESTO 保留原始并行验证-起草流水线，不引入额外模型前向。每轮：验证旧树 → 有效 mask 做扩散 → top-k 组织新树 → 前缀对齐打分 → 优先级展开 → 展平 → 下一轮验证。",
+      render: function (e) {
+        e.text(W / 2, 24, "PRESTO 二次自投机完整流水线", { "text-anchor": "middle", "font-size": 14, "font-weight": "bold", fill: C.accent });
+        var stages = [
+          { x: 50, label: "AR 验证\n旧树", color: C.green, icon: "✓" },
+          { x: 200, label: "扩散起草\nmask 位置", color: C.accent, icon: "◈" },
+          { x: 350, label: "top-k\n候选提取", color: C.blue, icon: "↓" },
+          { x: 500, label: "前缀对齐\n打分", color: C.orange, icon: "Σ" },
+          { x: 650, label: "优先级\n树展开", color: C.accent, icon: "🌳" }
+        ];
+        stages.forEach(function (s, i) {
+          e.rect(s.x, 60, 120, 80, C.white, s.color, { rx: 8, "stroke-width": 2 });
+          e.text(s.x + 60, 82, s.icon, { "text-anchor": "middle", "font-size": 20, fill: s.color });
+          s.label.split("\n").forEach(function (line, j) {
+            e.text(s.x + 60, 110 + j * 16, line, { "text-anchor": "middle", "font-size": 11, fill: C.text });
+          });
+          if (i < stages.length - 1) {
+            e.path("M" + (s.x + 120) + ",100 L" + stages[i + 1].x + ",100", C.grey, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+          }
+        });
+        e.path("M710,140 Q710,210 410,210 Q110,210 110,140", C.accent, { "stroke-width": 2, "stroke-dasharray": "5,3", "marker-end": "url(#" + e._uid("arrA") + ")" });
+        e.text(410, 230, "← 下一轮（新树展平验证）←", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        e.rect(100, 260, 620, 100, C.greenBg, C.green, { rx: 8, "stroke-dasharray": "4,2" });
+        e.text(W / 2, 285, "PRESTO 的改进", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(W / 2, 308, "① 树组织 mask 候选 → 缓解拒绝后后缀失效", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.text(W / 2, 328, "② 前缀对齐打分 → 路径排名更准确 → 接受长度更高", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.text(W / 2, 348, "③ 不引入额外前向 → 开销仅 0.7%-4%", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+      } }
+  ];
+}
+
+// ============ INIT ============
+var engines = {};
+var sceneBuilders = {
+  svg1: scene1Build,
+  svg2: scene2Build,
+  svg3: scene3Build,
+  svg4: scene4Build,
+  svg5: scene5Build
+};
+
+function initScene(svgId) {
+  if (engines[svgId]) return engines[svgId];
+  var svg = document.getElementById(svgId);
+  if (!svg) return null;
+  var buildFn = sceneBuilders[svgId];
+  if (!buildFn) return null;
+  var steps = buildFn();
+  var eng = new AnimEngine(svg, { steps: steps });
+  engines[svgId] = eng;
+  eng.goTo(0);
+  return eng;
+}
+
+function toggleTheme() {
+  var cur = document.documentElement.getAttribute("data-theme");
+  if (cur === "dark") {
+    document.documentElement.removeAttribute("data-theme");
+    var tb = document.querySelector(".theme-toggle"); if (tb) tb.textContent = "🌙";
+    localStorage.setItem("theme", "light");
+  } else {
+    document.documentElement.setAttribute("data-theme", "dark");
+    var tb2 = document.querySelector(".theme-toggle"); if (tb2) tb2.textContent = "☀️";
+    localStorage.setItem("theme", "dark");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  if (localStorage.getItem("theme") === "dark") toggleTheme();
+  ["svg1", "svg2", "svg3", "svg4", "svg5"].forEach(function (id) { initScene(id); });
+
+  var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        var id = entry.target.id;
+        tocLinks.forEach(function (l) { l.classList.remove("active"); });
+        var link = document.querySelector('.toc a[href="#' + id + '"]');
+        if (link) { link.classList.add("active"); link.scrollIntoView({ block: "nearest" }); }
+      }
+    });
+  }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+  document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+  var backTop = document.getElementById("backTop");
+  window.addEventListener("scroll", function () {
+    if (window.scrollY > 600) backTop.classList.add("visible");
+    else backTop.classList.remove("visible");
+  });
+
+  tocLinks.forEach(function (a) {
+    a.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      var id = a.getAttribute("href").slice(1);
+      var target = document.getElementById(id);
+      if (target) target.scrollIntoView({ behavior: "smooth" });
+    });
+  });
+});
+</script>
+</body>
+</html>
