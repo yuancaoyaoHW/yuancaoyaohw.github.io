@@ -3,6 +3,13 @@
 // Add a new entry here ONCE — both pages update automatically.
 export const blogPosts = [
   {
+    title: 'PRESTO：扩散投机解码的前缀对齐树起草',
+    href: '/blog/presto/',
+    description: 'arXiv 2607.22634 深度解读：扩散语言模型天生适合做多路径候选起草器，但块内位置边际分布对树中前缀选择不敏感（构树阶段前缀盲）。PRESTO 在边际对数分数上叠加前缀校正项（log q_d + λ log ρ_d）+ 优先级树展开，dFlash 平均 1.5× 吞吐加速。含 5 段交互式 SVG 动画：线性 vs 树起草、前缀盲性、λ 校正、Beam Search 增量打分、二次自投机流水线。',
+    tag: 'PRESTO · Speculative Decoding',
+    date: '2026-07-29',
+  },
+  {
     title: 'PTStore：把 KV 缓存变成 CDN',
     href: '/blog/ptstore/',
     description: 'arXiv 2607.22648 深度解读：PTStore 借鉴 CDN 思维——增量存储让前缀像 trie 无冗余生长、扁平元数据免遍历查询、热度复制用冗余换 locality、GDSF 驱逐频率×大小、bulk RDMA 零拷贝拉散落张量。长文档 Q&A 比基线快 5–6×，含 7 段交互式 SVG 动画。',
