@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <meta name="description" content="2026-07-29 每日论文推荐 — AI Infra / Algorithms / Architecture 三频道" />
+  <title>每日论文 · 2026-07-29</title>
+  <script>
+      // 防止主题闪烁：在首次绘制前根据存储/系统偏好设置 data-theme
+      (function () {
+        var stored = localStorage.getItem('theme');
+        var theme = stored || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+  <style>
+    :root {
+      --font-display: "Bricolage Grotesque", Arial, sans-serif;
+      --font-body: "Inter", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      --radius: 10px;
+    }
+    [data-theme="dark"] {
+      --black: #080D10;
+      --bg-1: #0B1117;
+      --bg-2: #0E141C;
+      --panel: #131A24;
+      --panel-hover: #18212E;
+      --white: #FFFFFF;
+      --orange: #FF7A00;
+      --orange-soft: rgba(255, 122, 0, 0.12);
+      --text: #E7ECF3;
+      --text-muted: #7C8699;
+      --border: #1E2733;
+      --border-hover: #2A3744;
+      --nav-bg: rgba(8, 13, 16, 0.72);
+      --grid-line: rgba(255, 255, 255, 0.025);
+      --glow-1: rgba(255, 122, 0, 0.12);
+      --glow-2: rgba(255, 122, 0, 0.07);
+      --purple: #5A4099;
+      --purple-soft: rgba(90, 64, 153, 0.12);
+      --green: #178845;
+      --green-soft: rgba(23, 136, 69, 0.12);
+    }
+    [data-theme="light"] {
+      --black: #FAFAF7;
+      --bg-1: #F4F4EF;
+      --bg-2: #EFEEE9;
+      --panel: #FFFFFF;
+      --panel-hover: #F8F8F3;
+      --white: #1A1F26;
+      --orange: #E8620F;
+      --orange-soft: rgba(232, 98, 15, 0.10);
+      --text: #2C3338;
+      --text-muted: #6A737B;
+      --border: #E2E3DD;
+      --border-hover: #CFD0C8;
+      --nav-bg: rgba(250, 250, 247, 0.74);
+      --grid-line: rgba(0, 0, 0, 0.035);
+      --glow-1: rgba(232, 98, 15, 0.08);
+      --glow-2: rgba(232, 98, 15, 0.05);
+      --purple: #7B5CC9;
+      --purple-soft: rgba(123, 92, 201, 0.10);
+      --green: #1A9C52;
+      --green-soft: rgba(26, 156, 82, 0.10);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--black);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+    a { color: inherit; text-decoration: none; }
+    .bg-glow {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(50% 40% at 85% 5%, var(--glow-1) 0%, transparent 60%),
+        radial-gradient(35% 25% at 20% 35%, var(--glow-2) 0%, transparent 60%);
+    }
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(ellipse 90% 70% at 50% 20%, black 20%, transparent 75%);
+      -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 20%, black 20%, transparent 75%);
+    }
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      background: var(--nav-bg);
+      border-bottom: 1px solid var(--border);
+      color: var(--white);
+      padding: 16px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: var(--font-display);
+    }
+    .nav .brand { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; color: var(--white); }
+    .nav .nav-links { display: flex; gap: 28px; align-items: center; }
+    .nav .nav-links a { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); transition: color 0.2s; }
+    .nav .nav-links a:hover { color: var(--white); }
+    .nav .nav-links a.active { color: var(--orange); }
+    .page { position: relative; z-index: 1; }
+    .hero { padding: 140px 32px 60px; }
+    .hero-inner { max-width: 900px; margin: 0 auto; }
+    .hero .eyebrow {
+      display: inline-block; font-family: var(--font-display);
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--orange); margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 500; line-height: 1.15; letter-spacing: -0.03em;
+      margin-bottom: 24px; color: var(--white);
+    }
+    .hero h1 .accent { color: var(--orange); }
+    .hero .lede { max-width: 560px; font-size: 17px; line-height: 1.65; color: var(--text-muted); }
+    .hero .stats {
+      display: flex; gap: 32px; margin-top: 32px;
+      font-family: var(--font-display);
+    }
+    .hero .stat { text-align: center; }
+    .hero .stat .num { font-size: 28px; font-weight: 700; color: var(--orange); }
+    .hero .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+    .section { padding: 48px 32px; }
+    .section-inner { max-width: 900px; margin: 0 auto; }
+    .section-label {
+      font-family: var(--font-display); font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--text-muted); margin-bottom: 28px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .section-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+    .channel-group { margin-bottom: 56px; }
+    .channel-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 24px;
+    }
+    .channel-badge {
+      font-family: var(--font-display); font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      padding: 6px 14px; border-radius: 999px;
+    }
+    .paper-card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px 32px; margin-bottom: 16px;
+      transition: border-color 0.25s, background 0.25s, transform 0.25s;
+      position: relative; overflow: hidden;
+    }
+    .paper-card::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--orange), transparent);
+      opacity: 0; transition: opacity 0.25s;
+    }
+    .paper-card:hover { border-color: var(--border-hover); background: var(--panel-hover); transform: translateY(-2px); }
+    .paper-card:hover::before { opacity: 1; }
+    .paper-card .paper-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+    .paper-card h3 {
+      font-family: var(--font-display); font-size: 20px; font-weight: 600;
+      line-height: 1.3; letter-spacing: -0.01em; color: var(--white);
+    }
+    .paper-card .score-badge { flex-shrink: 0; font-family: var(--font-display); font-size: 14px; color: var(--orange); white-space: nowrap; }
+    .paper-card .meta { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.6; }
+    .paper-card .meta strong { color: var(--text); font-weight: 600; }
+    .paper-card .meta a { color: var(--orange); }
+    .paper-card .meta a:hover { text-decoration: underline; }
+    .paper-card .abstract {
+      font-size: 14px; color: var(--text-muted); line-height: 1.7;
+      padding: 16px 20px; background: rgba(255,255,255,0.02);
+      border-left: 3px solid var(--border); border-radius: 4px; margin-bottom: 20px;
+    }
+    [data-theme="light"] .paper-card .abstract { background: rgba(0,0,0,0.02); }
+    .paper-card h4 {
+      font-family: var(--font-display); font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.1em; color: var(--orange);
+      margin-bottom: 10px; margin-top: 20px;
+    }
+    .paper-card h4:first-of-type { margin-top: 0; }
+    .paper-card ul { list-style: none; padding: 0; margin: 0 0 16px; }
+    .paper-card ul li {
+      font-size: 14px; line-height: 1.7; color: var(--text-muted);
+      padding-left: 18px; position: relative; margin-bottom: 6px;
+    }
+    .paper-card ul li::before {
+      content: "▸"; position: absolute; left: 0; color: var(--orange);
+    }
+    .paper-card .significance {
+      padding: 14px 18px; background: var(--orange-soft);
+      border-radius: 6px; font-size: 14px; color: var(--text); line-height: 1.6;
+      margin-top: 16px;
+    }
+    .paper-card .significance strong { color: var(--orange); }
+    footer { padding: 40px 32px; text-align: center; font-size: 13px; font-family: var(--font-display); color: var(--text-muted); border-top: 1px solid var(--border); }
+    footer a { color: var(--orange); }
+    /* —— 主题切换按钮 —— */
+    .theme-toggle {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; padding: 0;
+      border: 1px solid var(--border-hover); border-radius: var(--radius);
+      background: transparent; color: var(--text-muted);
+      cursor: pointer; transition: color 0.2s, border-color 0.2s; flex-shrink: 0;
+    }
+    .theme-toggle:hover { color: var(--orange); border-color: var(--orange); }
+    .theme-toggle svg { width: 16px; height: 16px; }
+    [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+    [data-theme="light"] .theme-toggle .icon-sun { display: none; }
+
+    @media (max-width: 640px) {
+      .nav { padding: 14px 20px; }
+      .nav .nav-links { gap: 16px; }
+      .nav .nav-links a:not(.cta) { display: none; }
+      .hero { padding: 110px 20px 48px; }
+      .section { padding: 36px 20px; }
+      .paper-card { padding: 24px; }
+      .paper-card .paper-header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+  <div class="page">
+    <nav class="nav">
+      <a href="/" class="brand">yuancaoyaohw</a>
+      <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="/papers/" class="active">每日论文</a>
+        <a href="/#posts">博客</a>
+        <a href="/#travel">旅游攻略</a>
+        <button class="theme-toggle" aria-label="切换主题" title="切换深/浅色主题">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </nav>
+    <section class="hero">
+      <div class="hero-inner">
+        <span class="eyebrow">Daily Papers · 2026-07-29</span>
+        <h1>每日<span class="accent">论文</span>推荐</h1>
+        <p class="lede">AI Infra / Algorithms / Architecture 三频道自动抓取与评审,每日精选 score≥4 的论文。修复 arXiv RSS 数据源后,今日 13 篇推荐覆盖 KV cache 分布式存储、Apple Silicon 推理加速、机械可解释性服务化、扩散模型投机解码与块编辑、数学推理综述等方向。</p>
+        <div class="stats">
+          <div class="stat"><div class="num">13</div><div class="label">推荐论文</div></div>
+          <div class="stat"><div class="num">3</div><div class="label">频道</div></div>
+          <div class="stat"><div class="num">14</div><div class="label">候选池</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-inner">
+
+        <!-- AI Infra -->
+        <div class="channel-group">
+          <div class="channel-header">
+            <span class="channel-badge" style="background: rgba(255,122,0,0.12); color: #FF7A00;">AI Infra</span>
+            <span style="font-family: var(--font-display); font-size: 12px; color: var(--text-muted);">5 篇推荐</span>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>PTStore: Distributed Prefix Caching and Replication for High Throughput Inference Serving</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Meghana Maghyastha, Robert Underwood, Randal Burns, Bogdan Nicolae &nbsp;|&nbsp;
+              <strong>机构:</strong> Johns Hopkins University; Argonne National Laboratory &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.22648">arXiv</a> · <a href="https://arxiv.org/pdf/2607.22648.pdf">PDF</a>
+            </div>
+            <div class="abstract">受 CDN 客户端缓存设计启发,PTStore 将构成可复用 KV cache 前缀的热门张量进行分布式存储与复制。这降低了 KV cache 访问延迟并缓解了因热门张量集中在少数服务器上导致的负载不均衡。通过去中心化,PTStore 将 LLM 推理可用 KV cache 容量扩展数个数量级。在长文问答数据集上,PTStore 比不聚合跨节点/GPU 内存、需重新生成 KV cache 的基线高效 5-6 倍。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>提出 PTStore——分布式、可复制的细粒度前缀张量存储,受 CDN 客户端缓存启发,实现跨多节点/GPU 的 KV cache 前缀复用可扩展存储(增量存储消除冗余、扁平化合并元数据支持一次性 LCP 查询、热前缀本地复制)</li>
+              <li>给出一套设计原则:RDMA 感知的主存整合(零拷贝批量 RDMA、段缓存)、访问模式感知的 GDSF 淘汰策略(适配大小-频率权衡,区分 owned/replicated 缓存)、可配置多级缓存与驱逐策略</li>
+              <li>实现研究原型,基于 Mochi/Thallium 的 C++ 客户端 + nanobind Python 接口,无缝替换 vLLM 的前缀共享路径</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>通过分布式增量张量存储与本地复制,PTStore 能跨大量 GPU/节点高效复用 KV cache 前缀,将 LLM 推理可用 KV cache 容量扩展数个量级</li>
+              <li>在长文问答数据集上,PTStore 比不聚合跨节点/GPU 内存的基线高效 5-6 倍,TTFT 降低最多约一个量级</li>
+              <li>本地复制是关键:缺乏复制(如 EvoStore)的远程前缀复用因 RDMA I/O 开销过大而接近于忽略远程前缀</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>测试平台:ALCF Polaris(560 节点,每节点 4×A100、512GB DDR4、Slingshot 10、Lustre),Mistral-7B + vLLM v0.6,每 GPU worker 跑 1500 条抽取式问答查询,按 α=6 幂律采样模拟重尾前缀热度</li>
+              <li>弱可扩展(8-32 GPU,WikiQA ~8k tokens):PTStore 优于 vLLM-Vanilla、vLLM-Prefix 和 EvoStore;EvoStore 因无本地复制 RDMA 开销高、接近 vLLM-Prefix</li>
+              <li>序列长度可扩展(SQUAD,1k-8k tokens):短前缀(1k)vLLM 基线更优,2k 起 PTStore 反超,8k 时比 vLLM 前缀缓存快约 2 倍</li>
+              <li>PTStore 相对 EvoStore:1k 时快 2 倍以上,8k 时快 20%,复制显著降低 RDMA I/O 开销</li>
+              <li>局限:复制缓存比例固定 50% 未做敏感性扫描,与 LMCache/Mooncake 正面对比留待未来工作</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 将 CDN 客户端缓存范式引入 LLM KV cache 管理,实现跨节点分布式前缀存储与复制,使 KV cache 容量可扩展数个量级,是大规模 LLM 推理服务的关键基础设施创新</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>FusionML: Prefill, Not Decode — Mechanism and Boundaries of CPU+GPU Co-Execution on Unified-Memory Apple Silicon</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Om Mohite &nbsp;|&nbsp;
+              <strong>机构:</strong> Independent Researcher, Mumbai, India &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AR &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.22785">arXiv</a> · <a href="https://arxiv.org/pdf/2607.22785.pdf">PDF</a>
+            </div>
+            <div class="abstract">Apple Silicon SoC 在统一内存系统上共享 CPU、GPU 和 Neural Engine,引发了 Transformer 推理能否通过跨单元拆分单算子加速的问题。此前尝试(包括作者自己的)都失败了。本文找到原因:MLX 的惰性图调度器在 CPU 操作消费未具体化的 GPU 结果时序列化跨流工作。FusionML 实现逐层、竞争感知的 CPU+GPU 行拆分用于 Transformer prefill,在五款芯片、三代 Apple Silicon 上将 Llama 形状 decoder-block prefill 加速 1.15-1.38 倍,在 Qwen2.5-7B 上通过原生 MLX-LM 达到 1.18-1.25 倍更快 TTFT,token 输出完全相同且 decode 吞吐不变。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>机制发现:识别 MLX 惰性图调度器为跨流 CPU+GPU 工作的隐藏序列化器——行拆分 matmul 在具体化输入下快 1.38 倍,在惰性图内反而慢至 0.66 倍;eager 物化边界(mx.eval)恢复并发(1.34 倍)。解释了此前协同执行尝试失败的历史</li>
+              <li>FusionML 设计:逐层、竞争感知的 CPU+GPU 行拆分用于 Transformer prefill,基于 eager 边界,在实际并发竞争下校准比例(非单单元速率),配有无回归运行时门控(试运行+周期性重探测+迟滞)</li>
+              <li>跨五款芯片、三代 Apple Silicon 的公平社区复现评估,采用严格精度匹配、相邻测量协议</li>
+              <li>同等严谨的边界刻画:decode 结构性不获益(共享带宽受限)、精度匹配训练在所有芯片上均失败、ANE 分派开销在层粒度排除、探测调度器在内存压力下自我破坏</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>在统一内存 Apple Silicon 上,算子内 CPU+GPU 协同执行既非神话也非免费午餐:它是 prefill 范围内的机制,受 eager 边界调度要求约束(惰性图框架默认违反)</li>
+              <li>在其有效区间内,加速真实、可复现且免费(块级最高 1.38 倍,端到端 TTFT 1.25 倍,token 输出完全相同且 decode 中性)</li>
+              <li>受共享带宽(decode)、分派开销(ANE)和工作集共驻(探测调度器)三重边界约束</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>Llama-3-8B 几何 decoder-block prefill 在五款芯片(M1/M2/M3 Pro/M4/M4 Pro)上加速 1.15-1.38 倍,全 32 块深度无损</li>
+              <li>Qwen2.5-7B 通过原生 MLX-LM 端到端 TTFT 加速 1.18-1.25 倍,token 输出完全相同,decode 吞吐不变</li>
+              <li>精度匹配训练在所有五款芯片上失败(0.86-0.97 倍);ANE 分派开销在层粒度排除</li>
+              <li>无回归门控在内存压力下自我破坏:观察者效应约 1.4 倍偏差,约 1.7 倍重载成本</li>
+              <li>公平协议:精度匹配相邻基线、环境戳记原始结果、撤回先前关于训练速度提升的声明</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 揭示了 Apple Silicon 上 CPU+GPU 协同执行失败的根因(MLX 惰性图序列化),并给出了 prefill 范围内真实有效的解决方案,对 Apple Silicon 上的 LLM 推理优化有直接工程价值</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>xMIx: High-Performance Serving-Time Platform for Mechanistic Interpretability Apps</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Michael Blum, Mark Silberstein, Yaniv David &nbsp;|&nbsp;
+              <strong>机构:</strong> Technion (Israel Institute of Technology) &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.22595">arXiv</a> · <a href="https://arxiv.org/pdf/2607.22595.pdf">PDF</a>
+            </div>
+            <div class="abstract">机械可解释性(MI)已成为分析和干预推理计算的有力方法,但 MI 在生产级模型服务系统中部署目前不现实,因为现有 MI 框架引入了过高的运行时开销。根本问题是 MI 函数与服务模型不能干净组合:它们碎片化部署,常迫使排空请求并重建服务状态,并与连续批处理和 CUDA 图执行等关键性能优化冲突。本文提出 xMIx——一个服务原生框架,在 vLLM 中部署 MI 应用,实现 1.3% 平均 ITL 减速、1.2% P99 ITL、2.6% TTFT、1.6% TTT 减速,性能与原生 vLLM 执行相当。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>调研 14 个 MI 应用并归纳为三个原语(Read/Write/Conditional Write),提供统一抽象</li>
+              <li>构建服务原生框架(基于 vLLM),保持高吞吐低延迟推理,支持动态运行时启用/禁用("don't-use-don't-pay")</li>
+              <li>CUDA 图安全内核设计,图级切换支持连续批处理;多个 MI 应用可部署在单个模型实例中</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>xMIx 消除了将 MI 洞察带入生产级推理的障碍;MI 应用可坍缩为少量适合服务原生集成的原语</li>
+              <li>开销比现有 MI 框架低至少一个数量级</li>
+              <li>为 MI 从研究走向生产部署铺平道路</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>在 3 个模型(Llama-3.1-8B、Mixtral-8x7B、Qwen3-8B)× 7 个 MI 应用上评估</li>
+              <li>性能开销:1.3% 平均 ITL、1.2% P99 ITL、2.6% TTFT、1.6% TTT 减速 vs vLLM 基线</li>
+              <li>vs TransformerLens/NNsight:xMIx 保留约 99% 基线吞吐,而 TransformerLens 全层配置吞吐下降 99.7%(17.18 vs 7596 tok/s),NNsight 下降 54-55%</li>
+              <li>vs EasySteer:在 Mixtral 上 xMIx +0.7% ITL vs EasySteer +178% ITL</li>
+              <li>内存开销可忽略——框架状态几 KB,MI 应用总占用几 MB;输出正确性通过精确 token 比较验证</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 首次将机械可解释性(MI)应用以近乎零开销部署在生产级 vLLM 服务系统中,使越狱检测、真实性评估、幻觉检测等 MI 应用可用于生产推理,是 MI 从研究走向生产的关键一步</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>HyMCache: A KV Cache Framework for Multi-Turn LLM Serving with CXL-Hybrid Memory</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Hakbeom Jang, Inho Song, Sam H. Noh, Jongryool Kim &nbsp;|&nbsp;
+              <strong>机构:</strong> SK hynix America; Virginia Tech &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.DC &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.18141">arXiv</a> · <a href="https://arxiv.org/pdf/2607.18141.pdf">PDF</a>
+            </div>
+            <div class="abstract">长上下文、多轮和智能体 LLM 工作负载日益复用先前处理的上下文,使 KV cache 复用对减少冗余计算至关重要。然而,复用将瓶颈转移到存储和提供可复用 KV 状态的内存层。本文提出 HyMCache——一个集成 CXL 混合内存(CXL-HM)的 KV cache 框架。CXL-HM 将少量设备内 DRAM 与大容量 SSD 后端容量结合在 CXL 接口之后。通过利用多轮 KV cache 访问的读主导、可预测和仅追加特性,HyMCache 在设备 DRAM 中暂存延迟关键的读取,实现 DRAM 级 KV cache 效率与 SSD 级成本。在相同 DRAM 预算下,HyMCache 单节点服务比本地 LMCache 快 3.0 倍,PD 分离式服务快 1.45 倍。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>提出 HyMCache——首个将 CXL 混合内存(CXL-HM)作为远程 KV-cache 层集成到多轮 LLM 服务中的框架,暴露 SSD 支持的 TB 级容量作为 RDMA 可寻址的内存语义层</li>
+              <li>表征多轮/智能体 LLM 访问模式(读主导、可预测的跨轮前缀重用、仅追加),表明通用商用 CXL-HM LRU 管理不足以应对此类工作负载,设计了针对 LLM 的 CXL-HM</li>
+              <li>在 CXL-HM 内重新构思 DRAM 管理,通过请求级前缀预取和机会性写入缓冲两个机制,使延迟关键的读取保持在快速 DRAM 路径上</li>
+              <li>在 vLLM/Dynamo 中实现 HyMCache 连接器,具有统一多设备 NUMA 地址空间、对象粒度放置及异构 KV 块大小支持</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>通用 CXL-HM 资源管理(如商用 LRU)无法满足智能体 LLM 服务;针对多轮 KV 重用的可预测性进行定制,使 CXL-HM 成为高效的远程 KV 后端</li>
+              <li>CXL-HM 是远程 LLM 服务的实用中间方案:以 SSD 级成本提供 DRAM 级 KV cache 效率,比 DRAM-only 层扩展性更好</li>
+              <li>随着可复用 KV 足迹在轮次间增长,容量占据主导地位,HyMCache 与 DRAM-only 基线的性能差距随轮数增加而缩小</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>在相同 DRAM 预算下(64GB/worker,256GB 总量),HyMCache 单节点服务比本地 LMCache 快 3.0 倍,PD 分离式服务(4P-1D-1S 配置)快 1.45 倍</li>
+              <li>与 1TB 分布式 DRAM Mooncake 相比,HyMCache 性能低约 30%,但使用 DRAM 少 16 倍;差距在后续轮次中缩小(SSD 容量保留更多可复用前缀块,命中率高约 10%)</li>
+              <li>FPGA CXL-HM 原型成本约 1.05-1.1 万美元,比 1TB Mooncake DRAM 层便宜约 2.8-3.8 倍</li>
+              <li>在真实 CXL-HM 原型上评估,涵盖单聚合器和 PD 分离式服务配置</li>
+              <li>与 LMCache、Mooncake(DRAM 和 NVMe-oF 变体)及 Redis 支持 LMCache 公平对比,附清晰成本效益分析</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 首个将 CXL 混合内存用于多轮 LLM 服务的 KV cache 框架,以 SSD 级成本实现 DRAM 级 KV cache 效率,为 TB 级共享上下文容量提供了经济可行的远程 KV 层方案</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>Beyond Block Boundaries: Multi-Block Editing for Diffusion Large Language Models</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Xingyu Mou, Zijin Huang, Tianze Zhang, Yuxin Ma, Lanning Wei &nbsp;|&nbsp;
+              <strong>机构:</strong> Ant Group; Fudan University; Shanghai Innovation Institute &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.22663">arXiv</a> · <a href="https://arxiv.org/pdf/2607.22663.pdf">PDF</a>
+            </div>
+            <div class="abstract">块扩散已成为扩展离散扩散语言模型(dLLM)的主导范式,因为按固定大小块解码文本在保持每块内并行生成的同时控制了二次注意力成本。然而,这种效率带来了结构限制:块末尾的 token 生成时无法获取未来跨块上下文,一旦块确定,其不确定预测成为后续所有块的不可逆上下文。这造成块边界问题,不确定性沿块边界累积并向后传播。本文提出 Multi-Block Editing(MBE),通过基于跨块上下文编辑已解码 token 来缓解此问题。在 LLaDA2.1-Mini 的 13 个基准上,训练自由 MBE 超过所有现有解码基线,MBE SFT 再提升 2.7 分,AIME 2025 提升 13.3,ZebraLogic 提升 5.9。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>首次识别并定义块扩散语言模型(dLLM)中的"块边界问题"(block boundary problem):块末尾 token 生成时无法获取未来跨块上下文,不确定预测不可逆影响后续生成,导致错误沿块边界累积并向后传播</li>
+              <li>提出 Multi-Block Editing(MBE)训练自由解码算法:将块视为调度单元而非硬修订边界,通过重新打开已解码块的滑动窗口进行联合全注意力前向传播,基于熵的历史困惑水印自适应识别最不确定的块进行编辑修正</li>
+              <li>提出 Multi-Block Edit SFT 策略:使用双向注意力掩码和逐步扩展编辑跨度的课程学习,弥合块扩散训练与 MBE 推理之间的注意力机制差异,将编辑窗口从 K=2 扩展至 K=4</li>
+              <li>基础设施级优化:扩展 SGLang 的多形状 CUDA Graph 池和细粒度 KV cache 控制,使变长编辑过程在实践中高效执行</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>块扩散模型存在结构性的块边界问题,token 在块边界处缺乏未来跨块上下文,不确定预测不可逆地影响后续生成</li>
+              <li>MBE 通过跨块编辑有效缓解该问题:将块作为调度单元,以滑动窗口重做联合全注意力前向传播,使早期 token 能在新跨块上下文中被直接修正</li>
+              <li>基于熵的历史困惑水印可自适应定位最不确定块进行编辑;SFT 通过双向注意力掩码和课程学习进一步扩展有效编辑范围</li>
+              <li>实验验证训练自由 MBE 优于所有现有解码基线且保持可比吞吐,MBE SFT 进一步提升性能,长程一致性任务改善尤为显著</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>训练自由 MBE 在 LLaDA2.1-Mini 的 13 个基准上平均分 61.14,超过全部 5 个基线(标准解码 60.44、ReMDM 60.66、RDD 55.81、Saber 60.46、DCD 58.93)</li>
+              <li>MBE SFT 进一步将平均分提升至 63.10(+2.7 over Standard Decoding)</li>
+              <li>改善集中在需长程一致性的任务:AIME 2025 +13.3、ZebraLogic +5.9;知识密集型 GPQA 上略低于标准解码,说明事实性错误源于模型知识缺口</li>
+              <li>质量-吞吐权衡:MBE 方法处于帕累托最优区域,在 BFCL v3 和 Spider 上 TPF 甚至超过标准解码</li>
+              <li>跨规模泛化:在更大的 LLaDA2.1-Flash 上 5 类基准中 4 类提升(ZebraLogic +4.0、MBPP+ +2.38),证明跨块修正效益不随模型容量增大而消失</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 识别并解决了块扩散语言模型的结构性"块边界问题",MBE 框架(训练自由解码 + SFT + 工程优化)在 13 个基准上超过所有基线,且扩展了 SGLang CUDA Graph 和 KV cache 控制,对 dLLM 推理质量与效率均有直接贡献</div>
+          </div>
+
+        </div>
+
+        <!-- Algorithms -->
+        <div class="channel-group">
+          <div class="channel-header">
+            <span class="channel-badge" style="background: rgba(90,64,153,0.12); color: #5A4099;">Algorithms</span>
+            <span style="font-family: var(--font-display); font-size: 12px; color: var(--text-muted);">4 篇推荐</span>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>PRESTO: Prefix-Aligned Tree Drafting for Diffusion Speculative Decoding</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Zheng Wang, Zhifan Ye, Qi Cheng, Yonggan Fu, Ziyan Wang 等 11 人 &nbsp;|&nbsp;
+              <strong>机构:</strong> University of Illinois Urbana-Champaign; Georgia Institute of Technology; NVIDIA &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.22634">arXiv</a> · <a href="https://arxiv.org/pdf/2607.22634.pdf">PDF</a>
+            </div>
+            <div class="abstract">扩散大语言模型(dLLM)作为自回归 LLM 的替代方案,可并行生成 token,使其成为投机解码的有效草稿模型。然而现有基于扩散的草稿方法依赖线性草稿,未充分利用 dLLM 的多候选结构,限制了接受长度和解码效率。本文提出 PRESTO,将树形草稿扩展到扩散草稿器,通过前缀对齐评分和基于优先级的树搜索,解决扩散草稿置信度与前缀 AR 验证之间的根本不匹配。在 dFlash 上平均 1.5 倍端到端吞吐加速,在自推测扩散 LLM 上平均 1.12 倍。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>首次形式化揭示了扩散草稿评分与基于前缀的自回归验证之间的根本不匹配:扩散边缘分布是前缀盲的(prefix-blind),无法为树形草稿提供可靠的路径排序</li>
+              <li>提出 PRESTO 框架,通过最小化修正将前缀条件兼容性信号 ρ_d 融入扩散边缘 q_d,实现 prefix-aligned scoring,并以基于优先级的树搜索构建候选路径</li>
+              <li>首个同时适用于专用扩散草稿器(dFlash)和自推测扩散 LLM(Nemotron-Labs-Diffusion)的树形草稿框架,并给出基于 prefix-mass 分解与 KL 正则化的理论支撑</li>
+              <li>将树构建形式化为在统一路径分数下的优先级扩展,无需手工调参即可跨树预算/草稿器/目标模型泛化</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>扩散概率虽提供强全局合理性信号,但本质上前缀盲,不足以可靠排序树形草稿候选路径</li>
+              <li>引入前缀对齐评分+优先级树搜索可有效弥合该不匹配,显著提升接受长度与吞吐</li>
+              <li>树形草稿在确定性与随机性解码、线性与二次自推测模式下均稳定有效,框架对模型规模、解码机制与树预算具良好泛化性</li>
+              <li>树相关操作仅占每步延迟 0.7%-4%,开销可忽略且随模型增大比例下降,具良好可扩展性</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>在 dFlash(专用扩散草稿器)上平均 1.5× 端到端吞吐加速,接受长度 τ 提升 +2~3 token(Qwen3-4B T=0:MATH-500 7.9→10.9,AIME25 7.4→10.3,LCB 6.9→10.0,HumanEval 6.7→9.9)</li>
+              <li>在 Nemotron-Labs-Diffusion 线性自推测模式下,吞吐 4.6×→4.9×(T=0)/2.1×→2.5×(T=1),τ 8.8→9.9/4.2→5.1</li>
+              <li>在 NLD 二次自推测模式下,吞吐 2.6×→3.5×(T=0)/1.4×→3.0×(T=1),τ 4.7→5.6/2.4→4.7,GSM8K 最高 2.04×</li>
+              <li>消融证实前缀条件项 ρ_d 在所有任务与树预算下一致提升 τ,树操作仅占 0.7%-4% 延迟</li>
+              <li>线性草稿与 oracle 多路径上界存在显著差距(GSM8K 6.5→9.78),证明多路径探索潜力</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 揭示并解决了扩散草稿与前缀 AR 验证之间的"前缀盲"不匹配问题,PRESTO 是首个统一适用于专用扩散草稿器和自推测 dLLM 的树形草稿框架,对扩散 LLM 投机解码效率有直接推动</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>Artificial Intelligence for Mathematical Reasoning: An Integrated Survey of Language Models, Neuro-symbolic Systems, and Verified Discovery</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Syed Rifat Raiyan, Mohsinul Kabir, Hasan Mahmud, Md Kamrul Hasan, Sophia Ananiadou &nbsp;|&nbsp;
+              <strong>机构:</strong> Islamic University of Technology (Bangladesh); University of Manchester (UK) &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2606.08728">arXiv</a> · <a href="https://arxiv.org/pdf/2606.08728.pdf">PDF</a>
+            </div>
+            <div class="abstract">数学推理长期作为机器智能的严苛测试。本综述提供了该领域演进的统一叙述,从早期规则化数学应用题(MWP)求解器和模板驱动的几何系统,经神经网络表达式生成和 LLM 提示,到当代推理模型、多智能体系统、神经符号定理证明器和已验证发现工作流。按四轴组织:(i) 文本与图表的非正式推理;(ii) 证明助手中的形式推理;(iii) 数学发现;(iv) 连接生成与验证的推理和训练技术。目录涵盖主要基准,并批判性评估失败模式:扰动脆弱性、奖励作弊、多模态基础失败、形式化脆弱性及推理规模推理的能耗成本。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>时序追溯方法论栈:从 1980s 规则/统计 MWP → 2024-2026 推理与证明系统,提供完整的演进地图</li>
+              <li>提出"监督阶梯"(supervision-ladder)框架,整合 formal/informal/multimodal/multi-agent/discovery 的更新分类法</li>
+              <li>编篹经典+当代基准全面目录,记录从 2018 <70% MWP 到 2025 小学算术与奥赛几何饱和的转变</li>
+              <li>批判性评估失败模式:扰动脆弱性、奖励作弊、多模态基础失败、形式化脆弱性、推理规模推理的能耗成本</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>每次能力扩张都由相应监督扩张驱动(语法学家→方程模板→CoT→PRM→Lean 4 确定性评分器,后者更丰富)</li>
+              <li>未来监督者非单一模型而是流水线(LLM 提议/批评者过滤/自动形式化翻译/Lean 验证),数学家角色为指导而非被取代</li>
+              <li>AI 数学推理正在从非正式文本推理向形式化验证发现工作流转变,基础设施使 AI 辅助形式化广泛可用是关键</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>o1 AIME'24:74%(greedy)→83%(maj@64)→93%(best-of-1000);o3 AIME'24 91.6%/AIME'25 88.9%/FrontierMath ~25.2%</li>
+              <li>Gemini Deep Think IMO 2025 35/42 金牌;DeepSeek-ProverV2 MiniF2F 60%→88.9%(pass@8192)</li>
+              <li>PAL+Codex GSM8K 72.0% 超 PaLM-540B+CoT 15 个百分点</li>
+              <li>前沿模型表:o1 MATH-500 94.8%/GSM8K 97.1/AIME'24 83.0;DeepSeek-R1 671B MATH-500 97.3</li>
+              <li>GPT-5.5 High AIME 25/26 92.5%/92.9% 且 IMO-ProofBench 总体 80.7%</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 首个整合非正式推理、形式推理、数学发现和训练技术的 AI 数学推理全景综述,提出"监督阶梯"框架并批判性评估失败模式,是该领域研究者的必备参考文献</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>TRACE: Business Rule-Grounded Reasoning Curriculum for Knowledge-Preserving Parametric Tool Retrieval in Enterprise LLMs</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Sai Shruthi Sistla, Ashutosh Hathidara, Christopher Toukmaji, Mayank Shrivastava, Karthikeyan Asokkumar &nbsp;|&nbsp;
+              <strong>机构:</strong> SAP Labs &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.22639">arXiv</a> · <a href="https://arxiv.org/pdf/2607.22639.pdf">PDF</a>
+            </div>
+            <div class="abstract">参数化检索使 LLM 通过为每个 API 分配唯一虚拟 token 来隐式检索工具。ToolSense 发现该方案有两个关键缺陷:训练时破坏参数化工具知识,且束搜索解码对实时部署太慢。本文提出 TRACE——一种两阶段课程,通过推理增强检索解决此背离。Stage 1 复用 ToolSense 的多格式记忆 SFT 来播种工具知识;Stage 2 训练模型在生成工具 token 前先输出推理轨迹,使用业务规则增强数据。在 8300+ 工具的企业目录上,TRACE 在 Domain A 达约 86% 召回率、Domain B 约 60%,采用单束贪婪解码,可直接生产部署。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>提出 TRACE 两阶段课程:结合 Stage 1 的记忆 SFT 和 Stage 2 的推理增强检索 SFT,使参数化工具检索在保持工具知识的同时可在生产延迟下实现单束贪婪解码</li>
+              <li>业务规则接地:将 123 条企业业务规则注入推理轨迹的数据增强机制,使语义重叠工具上的检索提升高达 +23 个百分点</li>
+              <li>在两个业务领域共 8,283 个专有企业工具的目录上进行端到端验证,确立了推理检索为企业 AI 副驾驶提供知识安全的路径</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>TRACE 通过将工具知识与检索目标解耦(通过业务规则接地的推理轨迹)解决了 ToolSense 发现的"检索训练破坏参数化工具知识"问题</li>
+              <li>在 8,283 个企业工具上,TRACE 在 Domain A 达约 86% 召回率,Domain B 约 60%,采用单束贪婪解码,可直接生产部署</li>
+              <li>非推理检索目标对工具知识的破坏在很大程度上不可逆(n→r 课程仅能部分恢复),应避免使用</li>
+              <li>局限性:仅覆盖两个领域/单一模型规模、专有基准无法公开发布、Domain B 的规模差距仍需改进</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>知识保留:非推理检索训练将 MCQexpert 从 69.2% 跌至 33.7%(接近随机 29.3%),推理检索恢复至 61.5%,并在分布内探测中超过 Stage-1 上限(+3.2 pp MCQ,+9 pp QA)</li>
+              <li>检索性能:约束束解码下 TRACE 在 Domain A 达 R@10 86.3%、R@1 48.9%;单束贪婪解码下 Domain A R@gen 85.5%、Domain B 60.2%</li>
+              <li>嵌入基线对比:text-embedding-3-large R@10 仅 27.5%/52.7%,TRACE 大幅领先</li>
+              <li>业务规则效果:规则引用率从 0% 跃升至 71%,引用率 94.6% vs 未引用率 63.2%</li>
+              <li>生产部署:单束解码在单 H200 GPU 上提供约 200 倍吞吐量提升,可直接生产部署</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 解决了参数化工具检索的"知识破坏"问题,使企业级 LLM 可在 8300+ 工具目录上以生产延迟实现高效检索,是 LLM agent 企业落地的关键技术</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>Masked Distillation: Internalizing the Chain-of-Thought in Language Models</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Durgesh Kalwar, Vardhan Palod, Subbarao Kambhampati &nbsp;|&nbsp;
+              <strong>机构:</strong> SCAI, Arizona State University &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.22629">arXiv</a> · <a href="https://arxiv.org/pdf/2607.22629.pdf">PDF</a>
+            </div>
+            <div class="abstract">大型推理模型(LRM)在推理时先生成显式的长链中间步骤,再输出最终答案。这些中间 trace 主导了延迟、内存和服务成本,尽管最终答案正确性与 trace 正确性无因果关系且 trace 长度不是问题复杂度的可靠指标。本文提出掩码蒸馏——一种知识蒸馏框架,学生 LLM 仅在问题条件下预测解 token,而推理教师在以问题及其自身 CoT trace 为条件时提供反馈。在 GSM8K 自蒸馏中,完全掩码学生达 76.0%(基础 61.0%,教师 87.9%),同时 token 数减少 6.5 倍。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>提出掩码蒸馏框架:学生模型仅预测解 token(以问题为条件),推理教师在以问题及自身 CoT trace 为条件时提供反馈,将推理时中间计算内化到学生参数中</li>
+              <li>两种实例化:自蒸馏(同一模型思考模式作教师、非思考模式作学生)和双模型(更大推理教师监督更小非思考学生)</li>
+              <li>引入 α-suffix 支架法:内化教师中间 trace 的 (1-α) 前缀,推理时生成 α-分数后缀,将完全掩码(α=0)与非掩码(α=1)蒸馏之间的整个谱系参数化</li>
+              <li>系统消融实验比较 reverse-KL 蒸馏与教师 trace 的 SFT,并探讨不同支架形式</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>中间 token 完全内化的成功与否强烈依赖任务,且与学生模型在预训练期间对该任务的接触程度相关——GSM8K 上有效,Countdown 上失败</li>
+              <li>α-suffix 支架以较低推理成本代价弥补了任务依赖性差距,确立了支架化为可调的精度与成本轴</li>
+              <li>在分布外(OOD)设置中,经过支架训练的模型在目标范围偏移下可干净迁移,且在自蒸馏设置下泛化能力可优于非掩码变体</li>
+              <li>训练目标至关重要:reverse-KL 蒸馏能利用支架将 Countdown 准确率提高近一倍,而 SFT 则不能</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>GSM8K 自蒸馏:完全掩码(α=0)学生达 76.0%(基础 61.0%,教师 87.9%),token 数减少 6.5 倍(369.6 vs 2398.1)</li>
+              <li>Countdown 自蒸馏:完全掩码失败(41.7% vs 教师 87.3%,低于基础 56.2%),但 α=0.3 支架提升至 86.2%</li>
+              <li>Countdown 双模型:α=0.5 达 84.2% 帕累托最优,在准确率和成本上均超过非掩码变体(81.1%)</li>
+              <li>OOD:自蒸馏 Countdown 搜索深度偏移中,α=0.5 支架变体优于非掩码基线(32.8% vs 25.7%)</li>
+              <li>消融:Reverse-KL 蒸馏利用 teaching-token 支架(ID 从 34.08% 提升至 65-67%),SFT 不能(无论支架均 30-38%)</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 提出了一种将 CoT 推理内化到模型参数的系统框架,揭示了完全内化的任务依赖性和 α-suffix 支架作为可调精度-成本轴的价值,对推理模型降低服务成本有直接意义</div>
+          </div>
+
+        </div>
+
+        <!-- Architecture -->
+        <div class="channel-group">
+          <div class="channel-header">
+            <span class="channel-badge" style="background: rgba(23,136,69,0.12); color: #178845;">Architecture</span>
+            <span style="font-family: var(--font-display); font-size: 12px; color: var(--text-muted);">4 篇推荐</span>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>A Frozen 12B Beats Frontier Models on Verified Work: 100% Accuracy, 0 Tokens, Bit-Exact, Forever</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Sietse Schelpe &nbsp;|&nbsp;
+              <strong>机构:</strong> Corbenic AI &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.CL &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.23806">arXiv</a> · <a href="https://arxiv.org/pdf/2607.23806.pdf">PDF</a>
+            </div>
+            <div class="abstract">改进语言模型今天意味着重新训练:巨大算力、每个周期一个新不透明模型、非确定性输出。本文走相反路径:模型保持冻结,已验证解的持久记忆在其旁增长。一旦问题族被解决并通过不参考答案密钥的独立验证步骤,该族的每个新实例以零生成 token、位精确、确定性方式作答。在跨九个问题族、四种架构(密集与 MoE)的 180 个新实例上,每个模型均得分 180/180,零生成 token。验证复用成本在数十次查询内摊薄至零。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>提出并实现"冻结模型 + 持久化已验证记忆"范式(Galahad/Merlin):问题族一旦解决并通过不参考答案密钥的独立验证步骤,此后每个新实例以零生成 token、位精确、确定性方式作答</li>
+              <li>通过四家厂商四种不相关架构(密集与 MoE:Gemma-4-12B、Qwen3-14B、DeepSeek-Coder-V2-Lite、Phi-4)证明了能力与模型无关——能力存在于记忆层而非权重中</li>
+              <li>建立 verify-before-store 契约,验证闸门(机器检查形式证明、一致性检查、层叠候选测试)能拒绝微错候选、伪证明和自相矛盾推理</li>
+              <li>在单张 46 GB GPU 上实现 600 万 token 可移动工作窗口(vLLM 30,399 token 硬错误、SGLang ~32,000 后静默截断)</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>在已求解并验证的"执行边界、可验证"工作领域,冻结 12B 在成本、延迟、确定性、可验证性四维同时优于前沿 API 调用;冷启动推理明确声明出范围</li>
+              <li>能力完全归因于记忆而非权重:负对照清空记忆后系统无法解题;能力可在模型替换后存活、跨厂商保持一致</li>
+              <li>精确内容寻址是已验证知识存储的设计必需而非偏好——近似相似度检索在 4,500 项库上错误率达 94.3%,而精确寻址零碰撞</li>
+              <li>验证复用成本在数十次查询(N*=17-34)内摊薄至零,此后差距无界扩大</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>180 个新参数实例、九个问题族、四种模型架构,各模型均得分 180/180(100%),零生成 token,每答案约 36 mWh</li>
+              <li>开放式推理:88/88 一致性闸门验收(四模型)、机器检验形式证明首过通过、推理方法迁移 77/80</li>
+              <li>负对照:记忆清空→系统零解题;外部源解 30/30;复合问题(需三个独立存储项)5/5,移除必需项降至 0/5</li>
+              <li>选择延迟 1.4 µs(p95),完整复用 6-23 ms;600 万 token 窗口在 5 个探测项上 5/5 正确召回</li>
+              <li>一次性存证成本 16,579 token / 81.1 Wh;4,500 项上精确寻址零碰撞 vs 损失式相似匹配 94.3% 错误率</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 提出了一种范式转变——冻结模型 + 持久化已验证记忆,在已验证工作领域以零 token 成本实现 100% 准确率和位精确确定性,挑战了"改进模型必须重训练"的主流假设</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>X-Stage: An Overlooked Pipeline Stage for Communication-Computation Overlap in DiT Inference</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Jianwen Xian, Zhiyuan Xu, Yuchen Li, Ziliang Lai, Kang He &nbsp;|&nbsp;
+              <strong>机构:</strong> KlingAI Research; Tsinghua University; NVIDIA &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.DC &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.23264">arXiv</a> · <a href="https://arxiv.org/pdf/2607.23264.pdf">PDF</a>
+            </div>
+            <div class="abstract">细粒度、设备发起的通信使分布式扩散 Transformer(DiT)推理中的持久 GPU 内核可发出远程存储并将数据移动与 Tensor Core 计算重叠。现有系统调度通信发出和接收数据何时可消费,但遗漏了发出后远程可见完成前的进展,使发送方背压难以预测。本文识别 X-Stage——一个软件可见的发出后流水线阶段。在八 GPU 节点上的测量表明,短远程存储突发在发出者恢复工作时排空,而持续注入耗尽有限未完成容量并延迟后续发出。轻量 Burst-Gap 模型预测发出开销、突发间恢复和背压 onset。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>识别 X-Stage——一个软件可见的发出后流水线阶段(远程存储发出与远程可见完成之间的有限区间),解释了为何全阻塞和无界异步模型都无法捕捉发送方可见行为;现有融合系统遗漏了这一阶段</li>
+              <li>提出轻量 Burst-Gap 模型,三个可测量参数(无背压发出时间、有效排空率、有效未完成容量),一次微基准校准即可预测发送方可见发出开销、突发间恢复和背压 onset</li>
+              <li>两个模型引导的内核重设计:DeepGEMM MegaMoE 跨波 Linear-1/Linear-2 交错;附带 FlashAttention-A2A 流水线融合,输出 tile 拥有者发出远程存储并恢复计算</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>发出后进展是一个可测量的调度杠杆,可用于塑造突发、避免背压和隐藏发送方开销</li>
+              <li>Burst-Gap 模型无需应用特定重拟合即可预测发送方可见行为</li>
+              <li>跨波交错和 tile 级融合分别在不同通信模式下实现显著加速</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>DeepGEMM MegaMoE:跨波 Linear-1/Linear-2 交错在 84 个配置上几何平均 1.18×、最大 1.62× 内核加速</li>
+              <li>Ulysses 序列并行注意力:tile 级 FlashAttention-A2A 融合使 FlashAttention-3/4 分别达最大 1.43×/1.42× 发送方可见加速</li>
+              <li>长序列时 A2A 占串行时间比例下降,稳态时间接近 FlashAttention 单独执行</li>
+              <li>短远程存储突发在发出者恢复工作时排空,持续注入耗尽有限未完成容量并延迟后续发出</li>
+              <li>Burst-Gap 模型预测发出开销、突发间恢复和背压 onset,与实际测量吻合</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 识别了分布式 DiT 推理中被忽视的"X-Stage"流水线阶段,并提出可预测的 Burst-Gap 模型指导融合内核重设计,对扩散模型分布式推理的通信-计算重叠有直接工程价值</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>Beyond Storage: State as a Runtime Control Problem in Parallel and Distributed Systems</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Shuhao Zhang, Haoran Peng, Chun Ho Ma, Yancan Mao, Yufeng Du 等 9 人 &nbsp;|&nbsp;
+              <strong>机构:</strong> Huazhong University of Science and Technology &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.DC &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.16836">arXiv</a> · <a href="https://arxiv.org/pdf/2607.16836.pdf">PDF</a>
+            </div>
+            <div class="abstract">共享状态日益塑造流式、服务、检索和持续学习系统的性能与失败行为。现有研究常孤立访问控制、硬件感知执行、内存管理和长周期更新。本综述围绕三个耦合维度组织文献:状态访问与调度、状态感知执行、状态演进与复用。通过通用脚手架(状态对象、控制面、耦合路径、评估边界、未解决契约)综合文献,识别反复出现的反模式并提出面向契约的蓝图和干扰感知评估议程。证据将状态管理表征为运行时控制问题。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>引入可复用的五元比较词汇表(状态对象、控制面、耦合路径、评估边界、未解决契约),统一流式、近似执行、LLM 服务、检索和持续学习系统于一个分析框架</li>
+              <li>开发三轴分类法(状态访问与调度、状态感知执行、状态演进与复用),展示这些轴分析上独立但操作上耦合(失败跨轴传播)</li>
+              <li>识别反复出现的反模式(遥测-动作不匹配、策略无冲突语义层叠、一次性基准测试、忽略写放大、静态状态所有权)并提出五层面向契约的蓝图</li>
+              <li>提出干扰感知评估议程,四维证据阶梯(稳态效率、尾部行为、状态质量、操作可持续性)和五簇干扰导向评估矩阵</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>高效状态管理最好理解为一个耦合控制回路(跨访问、执行和演进),而非各阶段内的孤立优化</li>
+              <li>反复出现的瓶颈不是缺乏巧妙的本地机制,而是缺乏在状态跨时间、硬件和服务阶段共享后保持机制兼容的契约</li>
+              <li>有效系统命名状态对象、将本地操作绑定到可测量服务边界、并将延迟债务(驱逐、重建、恢复)计入接收即时收益的同一边界</li>
+              <li>进展取决于在干扰下保持状态身份、可观测性和策略优先级稳定的运行时</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>跨领域比较综合识别四个主导接缝:流式关注可见性/所有权、硬件感知执行关注移动/质量边界、LLM 服务关注短生命周期控制、检索/保留关注长周期维护债务</li>
+              <li>关键反复发现:局部加速在组合下消失——分配器效率可提升而恢复成本增长,prefill/decode 分离可提升 goodput而传输排序成下一瓶颈</li>
+              <li>五元组归一化揭示反复出现的反模式可追溯到缺失契约(隐藏无效动作、冲突目标、延迟债务)而非孤立 bug</li>
+              <li>面向契约的蓝图验证:使五层显式的系统使状态更可治理,而隐式系统将债务推入干扰处理、恢复或后续复用</li>
+              <li>干扰感知评估矩阵指定推荐干扰测试和常见盲点,论证基准应从一次性运行转向多阶段干扰 trace</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 首个跨领域(流式/LLM 服务/检索/持续学习)统一状态管理的综述,提出面向契约的蓝图和干扰感知评估议程,对分布式有状态系统设计有系统级指导价值</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>HeraSys: Collaborative Serving of Multiple LLM Workflows via Fine-Grained End-to-End Optimization</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Size Li, Zhiqing Tang, Hongrui Liang, Jianxiong Guo, Jiong Lou &nbsp;|&nbsp;
+              <strong>机构:</strong> Beijing Normal University (Zhuhai); Shanghai Jiao Tong University &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-28<br/>
+              <a href="https://arxiv.org/abs/2607.22578">arXiv</a> · <a href="https://arxiv.org/pdf/2607.22578.pdf">PDF</a>
+            </div>
+            <div class="abstract">LLM 的普及使服务系统从处理孤立请求转向编排高并发、多租户 agentic 工作流。现有方案优先工作流内优化,忽略了工作流间优化的巨大潜力。本文提出 HeraSys——一个设计用于优化并发工作流端到端性能的 LLM 服务系统。通过细粒度编排,HeraSys 通过结构化节点合并和复用消除跨工作流计算冗余。此外,HeraSys 引入负载感知联合调度策略,动态管理执行顺序。实验表明 HeraSys 在严格延迟保证下将 P99 延迟降低最高 2.17 倍,服务吞吐提升最高 1.85 倍。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>提出 HeraSys——针对多工作流 LLM 服务场景的细粒度端到端服务系统,通过双层优化(执行前图融合 + 运行时调度)打破请求级别隔离</li>
+              <li>执行前图融合器:在并发查询中识别冗余子图(嵌入/检索/工具/共享前缀),通过签名匹配结构性地合并到单个执行实例,结合异步缓存重用</li>
+              <li>负载感知联合调度器:基于 SRTF 的动态优先级,结合拓扑感知和抗饥饿提升、资源倾斜机制及自适应批处理/流水线分解</li>
+              <li>提供形式化问题建模(资源/决策变量、NP 难度证明、具竞争性和活性的在线求解器),在 Ray 和 vLLM 上实现原型</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>通过细粒度编排和跨工作流节点合并/复用消除跨工作流计算冗余,可显著提升端到端多租户 LLM 服务性能</li>
+              <li>双层设计是协同的:单靠调度不够——冗余移除至关重要,单靠 SRTF 损害尾部延迟,联合优化是必要的</li>
+              <li>负载感知调度加资源倾斜缓解异构工作流中的阻塞和饥饿,在保持低平均延迟的同时减少尾部延迟(P99)</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>测试平台:Ray 原型,4× RTX 4090,vLLM 后端,Llama-3-8B,bge-large-en-v1.5 + bge-reranker-large;对比 LangGraph、LlamaIndex 及 Ayo</li>
+              <li>延迟:平均延迟降低 35.2%(带重排 RAG)和 30.7%(不带重排 RAG),Web Search 工作流降低 41.8%</li>
+              <li>吞吐:可达 Ayo 的 1.50 倍,约为传统模块化框架的 2 倍;P99 延迟最高降低 2.17 倍,服务吞吐最高提升 1.85 倍</li>
+              <li>消融:禁用图融合将吞吐限制为完整版的 1/1.16;恢复 FCFS 使 P99 增加 12.5%;仅 SRTF 使 P50 降低约 13% 但 P99 增加 22.3%</li>
+              <li>去重验证:对重复查询(Zipfian 热点文档,注入 5-15% 重复)系统比基线更高效应对不断增加的负载</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 首个提出跨工作流优化(而非仅工作流内优化)的 LLM 服务系统,通过图融合消除冗余计算+负载感知联合调度,P99 降低 2.17 倍,对多租户 agentic 服务有直接工程价值</div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <footer>
+      <p>© 2026 yuancaoyaohw · 每日论文由 Hermes Agent + paper-recommendation 技能自动生成 · <a href="https://github.com/yuancaoyaoHW">GitHub</a></p>
+    </footer>
+  </div>
+    <script>
+      (function () {
+        var btn = document.querySelector('.theme-toggle');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var current = document.documentElement.getAttribute('data-theme');
+          var next = current === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          localStorage.setItem('theme', next);
+        });
+      })();
+    </script>
+</body>
+</html>

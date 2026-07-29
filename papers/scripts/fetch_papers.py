@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Fetch latest papers from arXiv by channel configuration.
+Uses RSS feeds (no rate limiting) as primary source, API as fallback.
 Usage:
   python fetch_papers.py --channel infra --json
   python fetch_papers.py --channel infra --download --json
@@ -11,10 +12,19 @@ import subprocess
 import re
 import argparse
 import sys
+import time
 from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "channels.json"
+
+# arXiv API rate limit: 1 request per 3 seconds (conservative)
+API_DELAY = 3.5
+# Per-request timeout (seconds)
+API_TIMEOUT = 60
+# Number of retry attempts on failure
+MAX_RETRIES = 3
 
 
 def load_config():
@@ -22,12 +32,117 @@ def load_config():
         return json.load(f)
 
 
-def fetch_papers_for_channel(channel_name, config):
-    """Fetch latest papers for a specific channel.
+def fetch_rss_category(category):
+    """Fetch papers from arXiv RSS feed for a single category.
+    RSS feeds have no rate limiting and return all papers from the latest update.
+    """
+    url = f'https://rss.arxiv.org/rss/{category}'
 
-    日期过滤:arXiv API 的 submittedDate 范围查询不稳定(返回 500),
-    改成客户端按 <published> 字段过滤:只保留今天 + 昨天的论文。
-    这样既保证窗口稳定(拿到所有近 2 天论文),又保证不遗漏。
+    for attempt in range(MAX_RETRIES):
+        try:
+            result = subprocess.run(
+                ['curl', '-sL', '--max-time', '30', url],
+                capture_output=True, timeout=40
+            )
+            data = result.stdout.decode('utf-8', errors='replace')
+
+            if not data or 'Rate exceeded' in data or len(data.strip()) < 50:
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(5)
+                continue
+
+            return data
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(5)
+            else:
+                print(f"  [warn] Error fetching RSS {category}: {e}", file=sys.stderr)
+
+    return ""
+
+
+def parse_rss_items(data, category):
+    """Parse RSS XML and extract paper items."""
+    papers = []
+
+    items = re.findall(r'<item>(.*?)</item>', data, re.DOTALL)
+
+    for item in items:
+        # Extract paper ID from link or guid
+        link_m = re.search(r'<link>(.*?)</link>', item)
+        if link_m:
+            url = link_m.group(1).strip()
+            paper_id = url.split('/abs/')[-1].split('v')[0] if '/abs/' in url else ""
+        else:
+            guid_m = re.search(r'<guid[^>]*>(.*?)</guid>', item)
+            if guid_m:
+                guid = guid_m.group(1).strip()
+                paper_id = guid.split('arXiv.org:')[-1].split('v')[0] if 'arXiv.org:' in guid else ""
+            else:
+                continue
+
+        if not paper_id:
+            continue
+
+        # Title
+        title_m = re.search(r'<title>(.*?)</title>', item, re.DOTALL)
+        title = title_m.group(1).replace('\n', ' ').strip() if title_m else "No title"
+
+        # Description (contains abstract)
+        desc_m = re.search(r'<description>(.*?)</description>', item, re.DOTALL)
+        desc = desc_m.group(1) if desc_m else ""
+        # RSS description contains "arXiv:IDv1 Announce Type: new \nAbstract: ..."
+        summary = ""
+        if 'Abstract:' in desc:
+            summary = desc.split('Abstract:')[-1].strip()
+        elif desc:
+            summary = desc.strip()
+
+        # Clean up HTML entities in description
+        summary = summary.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
+
+        # Authors
+        creator_m = re.search(r'<dc:creator>(.*?)</dc:creator>', item, re.DOTALL)
+        if creator_m:
+            authors_str = creator_m.group(1).strip()
+            authors = [a.strip() for a in authors_str.split(',')]
+        else:
+            authors = []
+
+        # Publication date
+        pub_m = re.search(r'<pubDate>(.*?)</pubDate>', item)
+        if pub_m:
+            try:
+                pub_date = parsedate_to_datetime(pub_m.group(1).strip())
+                published = pub_date.strftime('%Y-%m-%d')
+            except Exception:
+                published = datetime.now().strftime('%Y-%m-%d')
+        else:
+            published = datetime.now().strftime('%Y-%m-%d')
+
+        # Categories
+        categories = re.findall(r'<category>(.*?)</category>', item)
+        primary_category = categories[0] if categories else category
+
+        papers.append({
+            'id': paper_id,
+            'title': title,
+            'summary': summary,
+            'authors': authors[:5],
+            'published': published,
+            'url': f'https://arxiv.org/abs/{paper_id}',
+            'pdf_url': f'https://arxiv.org/pdf/{paper_id}.pdf',
+            'category': primary_category,
+        })
+
+    return papers
+
+
+def fetch_papers_for_channel(channel_name, config):
+    """Fetch latest papers for a specific channel using RSS feeds.
+
+    RSS feeds return all papers from the latest arXiv update (daily).
+    No rate limiting, no date filtering needed (RSS only has today's papers).
     """
     channel = config["channels"][channel_name]
     categories = channel["categories"]
@@ -35,57 +150,32 @@ def fetch_papers_for_channel(channel_name, config):
     min_score = config.get("min_score", 3)
     limit = config.get("per_channel_limit", 5)
 
-    # 客户端日期过滤:只保留今天 + 昨天发布的论文(覆盖 arXiv 索引延迟)
+    # Date filter: keep today + yesterday (covers timezone differences)
     today = datetime.utcnow().date()
     yesterday = today - timedelta(days=1)
     valid_dates = {today.isoformat(), yesterday.isoformat()}
 
     papers = []
 
-    for category in categories:
-        # max_results 提升到 200(原 50 在大类如 cs.AI 不够);
-        # 不在 URL 里做日期过滤(arXiv API 的 submittedDate 范围查询返回 500),
-        # 改成拉取后按 published 字段客户端过滤
-        url = (
-            f'https://export.arxiv.org/api/query?'
-            f'search_query=cat:{category}'
-            f'&start=0&max_results=200&sortBy=submittedDate&sortOrder=descending'
-        )
+    for i, category in enumerate(categories):
+        if i > 0:
+            time.sleep(1)  # Small delay between RSS requests
 
-        try:
-            result = subprocess.run(['curl', '-sL', url], capture_output=True, timeout=30)
-            data = result.stdout.decode('utf-8', errors='replace')
-        except Exception:
+        data = fetch_rss_category(category)
+        if not data:
             continue
 
-        entries = re.findall(r'<entry>(.*?)</entry>', data, re.DOTALL)
+        rss_papers = parse_rss_items(data, category)
 
-        for entry in entries:
-            id_match = re.search(r'<id>(.*?)</id>', entry)
-            if id_match:
-                paper_id = id_match.group(1).split('/abs/')[-1].split('v')[0]
-            else:
+        for p in rss_papers:
+            # Date filter
+            if p['published'] not in valid_dates:
                 continue
 
-            title = re.search(r'<title>(.*?)</title>', entry, re.DOTALL)
-            title = title.group(1).replace('\n', ' ').strip() if title else "No title"
-
-            summary = re.search(r'<summary>(.*?)</summary>', entry, re.DOTALL)
-            summary = summary.group(1).replace('\n', ' ').strip() if summary else ""
-
-            authors = re.findall(r'<name>(.*?)</name>', entry)[:3]
-            published = re.search(r'<published>(\d{4}-\d{2}-\d{2})</published>', entry)
-            published = published.group(1) if published else datetime.now().strftime('%Y-%m-%d')
-
-            # 客户端日期过滤:只保留今天 + 昨天发布的论文
-            if published not in valid_dates:
-                continue
-
-            text = (title + ' ' + summary).lower()
-            # 词界正则:防止子串误命中(如 cot 命中 cottage, search 命中 research)
+            # Keyword scoring
+            text = (p['title'] + ' ' + p['summary']).lower()
             score = 0
             for kw in keywords:
-                # 单字符关键词用 in,多词短语用 in,单词用词界
                 if ' ' in kw or len(kw) <= 2:
                     if kw in text:
                         score += 1
@@ -94,19 +184,10 @@ def fetch_papers_for_channel(channel_name, config):
                         score += 1
 
             if score >= min_score:
-                papers.append({
-                    'id': paper_id,
-                    'title': title,
-                    'summary': summary,
-                    'authors': authors,
-                    'published': published,
-                    'url': f'https://arxiv.org/abs/{paper_id}',
-                    'pdf_url': f'https://arxiv.org/pdf/{paper_id}.pdf',
-                    'category': category,
-                    'channel': channel_name,
-                    'channel_label': channel["label"],
-                    'relevance_score': score
-                })
+                p['channel'] = channel_name
+                p['channel_label'] = channel["label"]
+                p['relevance_score'] = score
+                papers.append(p)
 
     papers.sort(key=lambda x: (-x['relevance_score'], x['published']))
     seen = set()
@@ -146,7 +227,7 @@ def main():
                 pdfs_downloaded.append(str(pdf_path))
                 continue
             try:
-                subprocess.run(['curl', '-sL', p['pdf_url'], '-o', str(pdf_path)], timeout=60)
+                subprocess.run(['curl', '-sL', '--max-time', '60', p['pdf_url'], '-o', str(pdf_path)], timeout=70)
                 if pdf_path.exists() and pdf_path.stat().st_size > 1000:
                     pdfs_downloaded.append(str(pdf_path))
             except Exception:
