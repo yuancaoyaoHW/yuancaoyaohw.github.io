@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RTP-LLM 深度研读 — 论文 × 源码全对照</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg:#ffffff; --bg-soft:#f6f8fa; --bg-card:#ffffff;
+  --bg-dark:#0d1117; --bg-dark-soft:#161b22; --bg-dark-card:#1c2230;
+  --border:#d0d7de; --border-soft:#eaeef2; --border-dark:#30363d;
+  --text:#1f2328; --text-dim:#57606a; --text-mute:#818b98;
+  --text-dark:#e6edf3; --text-dark-dim:#8b949e; --text-dark-mute:#6e7681;
+  --accent:#76b900; --accent-2:#1a7f37; --accent-dark:#3fb950; --accent-light:#bff230;
+  --green:#1a7f37; --yellow:#9a6700; --orange:#bc4c00; --red:#cf222e;
+  --purple:#8250df; --blue:#0969da; --cyan:#0599bf;
+  --shadow:rgba(0,0,0,0.06); --shadow-lg:rgba(0,0,0,0.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text);background:var(--bg);line-height:1.65;font-size:15px}
+.mono{font-family:'JetBrains Mono',ui-monospace,Consolas,monospace}
+
+/* ===== HERO ===== */
+.hero{background:linear-gradient(135deg,#0d1117 0%,#161b22 40%,#1a2a0a 100%);color:var(--text-dark);padding:56px 24px 48px;text-align:center;position:relative;overflow:hidden;border-bottom:3px solid var(--accent)}
+.hero::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:radial-gradient(circle at 20% 50%,rgba(118,185,0,0.08) 0%,transparent 50%);pointer-events:none}
+.hero-inner{position:relative;z-index:1;max-width:900px;margin:0 auto}
+.hero .tag{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:12px;padding:4px 14px;border:1px solid var(--accent);border-radius:2px;background:rgba(118,185,0,0.08)}
+.hero h1{font-size:34px;font-weight:800;line-height:1.2;margin-bottom:10px}
+.hero .subtitle{font-size:17px;color:var(--text-dark-dim);font-weight:400;margin-bottom:20px}
+.hero .meta{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:2px;font-size:12px;font-weight:700}
+.badge-accent{background:rgba(118,185,0,0.15);color:var(--accent);border:1px solid rgba(118,185,0,0.4)}
+.badge-dark{background:rgba(139,148,158,0.15);color:var(--text-dark-dim);border:1px solid var(--border-dark)}
+.badge-green{background:rgba(63,185,80,0.15);color:var(--accent-dark);border:1px solid rgba(63,185,80,0.4)}
+.badge-blue{background:rgba(9,105,218,0.2);color:#79c0ff;border:1px solid rgba(9,105,218,0.4)}
+.hero .stats{display:flex;flex-wrap:wrap;gap:24px;justify-content:center;margin-top:24px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.1)}
+.hero .stat{text-align:center}
+.hero .stat-num{font-size:28px;font-weight:800;color:var(--accent);font-family:'JetBrains Mono',monospace}
+.hero .stat-label{font-size:11px;color:var(--text-dark-mute);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+
+/* ===== NAV ===== */
+nav.toc{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:8px 24px;box-shadow:0 1px 3px var(--shadow)}
+nav.toc ul{display:flex;flex-wrap:wrap;gap:2px;list-style:none;justify-content:center;max-width:1300px;margin:0 auto}
+nav.toc a{color:var(--text-dim);text-decoration:none;font-size:12px;font-weight:700;padding:5px 10px;border-radius:2px;transition:all 0.15s}
+nav.toc a:hover{color:var(--accent);background:var(--bg-soft)}
+
+/* ===== LAYOUT ===== */
+.container{max-width:1200px;margin:0 auto;padding:0 24px}
+section{padding:48px 0;border-bottom:1px solid var(--border-soft)}
+section:last-of-type{border-bottom:none}
+h2{font-size:26px;font-weight:800;color:var(--text);margin-bottom:20px;padding-bottom:8px;border-bottom:3px solid var(--accent);display:inline-block}
+h3{font-size:20px;font-weight:700;color:var(--text);margin:28px 0 14px}
+h4{font-size:14px;font-weight:700;color:var(--accent-2);margin:20px 0 10px;text-transform:uppercase;letter-spacing:0.8px}
+h5{font-size:14px;font-weight:700;color:var(--text-dim);margin:14px 0 8px}
+p{margin-bottom:12px}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+ul,ol{margin:8px 0 12px 20px}
+li{margin-bottom:4px}
+
+/* ===== TABLE ===== */
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;box-shadow:0 1px 2px var(--shadow)}
+th{background:var(--bg-dark);color:var(--text-dark);text-align:left;padding:10px 12px;font-weight:700;border:1px solid var(--border-dark);font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+td{padding:10px 12px;border:1px solid var(--border-soft);vertical-align:top}
+tr:nth-child(even){background:var(--bg-soft)}
+.mono-cell{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-2)}
+.status-ok{color:var(--green);font-weight:700}
+.status-warn{color:var(--orange);font-weight:700}
+.status-no{color:var(--red);font-weight:700}
+
+/* ===== CALLOUT ===== */
+.callout{border-left:4px solid;padding:14px 18px;margin:16px 0;border-radius:0 6px 6px 0;font-size:14px}
+.callout-tip{border-color:var(--blue);background:#ddf4ff}
+.callout-warn{border-color:var(--orange);background:#fff1e6}
+.callout-success{border-color:var(--green);background:#dafbe1}
+.callout-danger{border-color:var(--red);background:#ffebe9}
+.callout-purple{border-color:var(--purple);background:#fbefff}
+.callout-accent{border-color:var(--accent);background:rgba(118,185,0,0.06)}
+.callout strong{font-weight:700}
+.callout code{font-size:12px}
+
+/* ===== CODE ===== */
+pre{background:var(--bg-dark);color:var(--text-dark);padding:16px 20px;border-radius:6px;overflow-x:auto;font-size:12.5px;line-height:1.55;margin:14px 0;border:1px solid var(--border-dark);position:relative}
+pre code{font-family:'JetBrains Mono',monospace}
+code.inline{background:var(--bg-soft);color:var(--accent-2);padding:2px 6px;border-radius:3px;font-size:13px;border:1px solid var(--border-soft);font-family:'JetBrains Mono',monospace}
+pre code{background:none;color:inherit;padding:0;border:none}
+.code-lang{position:absolute;top:8px;right:12px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--accent);background:rgba(118,185,0,0.1);padding:2px 8px;border-radius:2px;border:1px solid rgba(118,185,0,0.3)}
+
+/* ===== PART DIVIDER ===== */
+.part-divider{background:linear-gradient(135deg,#0d1117 0%,#1a2a0a 100%);color:var(--text-dark);text-align:center;padding:40px 24px;border-top:3px solid var(--accent);border-bottom:1px solid var(--border-dark)}
+.part-divider .tag{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--accent);margin-bottom:8px}
+.part-divider h2{color:var(--text-dark);border-color:var(--accent);margin-bottom:8px}
+.part-divider p{color:var(--text-dark-dim);font-size:14px}
+
+/* ===== CARDS ===== */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:18px 0}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:18px;box-shadow:0 1px 3px var(--shadow);transition:box-shadow 0.2s}
+.card:hover{box-shadow:0 4px 12px var(--shadow-lg)}
+.card .icon{font-size:24px;margin-bottom:8px}
+.card h4{margin-top:0;color:var(--accent-2);font-size:14px}
+.card p{font-size:13px;color:var(--text-dim);margin-bottom:0}
+.card-accent{border-left:3px solid var(--accent)}
+.card-blue{border-left:3px solid var(--blue)}
+.card-purple{border-left:3px solid var(--purple)}
+.card-orange{border-left:3px solid var(--orange)}
+
+/* ===== MERMAID ===== */
+.mermaid-wrap{position:relative;margin:20px 0}
+.mermaid-wrap .mermaid-toolbar{position:absolute;top:8px;right:8px;z-index:10;display:flex;gap:4px;opacity:0;transition:opacity .2s}
+.mermaid-wrap:hover .mermaid-toolbar{opacity:1}
+.mermaid-toolbar button{width:28px;height:28px;border:1px solid var(--border);background:rgba(255,255,255,0.9);border-radius:3px;cursor:pointer;font-size:16px;font-weight:700;color:var(--text-dim);line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
+.mermaid-toolbar button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.mermaid-viewport{overflow:hidden;border:1px solid var(--border-soft);border-radius:6px;background:var(--bg-soft);position:relative;cursor:grab;max-height:620px;touch-action:none}
+.mermaid-viewport:active{cursor:grabbing}
+.mermaid-viewport .no-zoom-note{position:absolute;bottom:4px;left:8px;font-size:10px;color:var(--text-mute);pointer-events:none;opacity:.5}
+.mermaid-zoom-inner{transform-origin:0 0;display:inline-block;min-width:100%}
+/* keep old .mermaid class from adding extra bg/border now that wrapper handles it */
+.mermaid-wrap .mermaid{background:transparent;border:none;padding:0;margin:0}
+
+/* ===== FILE REF ===== */
+.file-ref{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--accent-2);background:var(--bg-soft);padding:2px 7px;border-radius:3px;border:1px solid var(--border-soft);white-space:nowrap}
+.section-label{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:6px}
+
+/* ===== COMPARE ===== */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:0;margin:16px 0;border:1px solid var(--border);border-radius:6px;overflow:hidden;box-shadow:0 1px 3px var(--shadow)}
+.compare > div{padding:16px}
+.compare .label{background:var(--bg-dark);color:var(--text-dark);font-weight:700;font-size:12px;text-align:center;text-transform:uppercase;letter-spacing:0.8px;padding:10px}
+.compare .paper{border-right:1px solid var(--border);border-top:3px solid var(--blue)}
+.compare .code{border-top:3px solid var(--accent)}
+.compare h5{font-size:13px;font-weight:700;margin-bottom:8px}
+.compare .paper h5{color:var(--blue)}
+.compare .code h5{color:var(--accent-2)}
+.compare .file-ref{display:inline-block;margin-bottom:6px}
+
+/* ===== ASCII ===== */
+.ascii-box{background:var(--bg-dark);color:var(--text-dark);padding:18px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;overflow-x:auto;border:1px solid var(--border-dark);margin:14px 0}
+.ascii-box .hl{color:var(--accent)}
+
+/* ===== STATS GRID ===== */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:18px 0}
+.stat-card{background:linear-gradient(135deg,var(--bg-soft) 0%,var(--bg-card) 100%);border:1px solid var(--border);border-radius:6px;padding:16px;text-align:center}
+.stat-card .num{font-size:32px;font-weight:800;color:var(--accent);font-family:'JetBrains Mono',monospace;line-height:1.1}
+.stat-card .num-blue{color:var(--blue)}
+.stat-card .num-purple{color:var(--purple)}
+.stat-card .label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;margin-top:4px}
+.stat-card .vs{font-size:11px;color:var(--text-mute);margin-top:6px}
+
+footer{background:var(--bg-dark);color:var(--text-dark-dim);padding:32px 24px;text-align:center;font-size:13px;border-top:3px solid var(--accent)}
+footer a{color:var(--accent)}
+footer p{margin-bottom:6px}
+
+@media(max-width:768px){
+  .compare{grid-template-columns:1fr}
+  .compare .paper{border-right:none;border-bottom:1px solid var(--border)}
+  nav.toc ul{flex-direction:column;align-items:center}
+  .hero h1{font-size:24px}
+}
+</style>
+</head>
+<body>
+<style data-sn-nav>
+.sn-nav{position:fixed;top:0;left:0;right:0;z-index:9990;display:flex;align-items:center;justify-content:space-between;padding:14px 28px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.78);border-bottom:1px solid rgba(0,0,0,.08);font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;transition:background .3s,border-color .3s}
+.sn-brand{font-weight:700;font-size:17px;color:#1a1a2e;text-decoration:none;display:flex;align-items:center;gap:2px}
+.sn-brand .sn-dot{color:#FF7A00}
+.sn-links{display:flex;align-items:center;gap:22px}
+.sn-links a{color:#1a1a2e;text-decoration:none;font-size:14px;font-weight:500;opacity:.82;transition:opacity .2s}
+.sn-links a:hover,.sn-links a.is-active{opacity:1;color:#3B4BA2}
+.sn-toggle{background:none;border:none;cursor:pointer;color:#1a1a2e;display:flex;align-items:center;padding:4px;border-radius:6px}
+.sn-toggle:hover{background:rgba(0,0,0,.06)}
+.sn-sun,.sn-moon{width:17px;height:17px;display:none}
+[data-theme="dark"] .sn-nav{background:rgba(8,13,16,.72);border-bottom-color:rgba(255,255,255,.08)}
+[data-theme="dark"] .sn-brand,[data-theme="dark"] .sn-links a,[data-theme="dark"] .sn-toggle{color:#E8E8E8}
+[data-theme="dark"] .sn-toggle:hover{background:rgba(255,255,255,.08)}
+[data-theme="light"] .sn-nav .sn-sun,[data-theme="dark"] .sn-nav .sn-moon{display:block}
+@media(max-width:640px){.sn-nav{padding:12px 18px}.sn-links{gap:14px}.sn-links a:not(.sn-brand){display:none}.sn-brand{font-size:15px}}
+</style>
+<nav class="sn-nav"><a href="/" class="sn-brand">yuancaoyaohw<span class="sn-dot">.</span></a><div class="sn-links"><a href="/">首页</a><a href="/papers/">每日论文</a><a href="/#posts" class="is-active">博客</a><a href="/#interview">面经</a><a href="/#travel">旅游攻略</a><button class="sn-toggle" onclick="snToggleTheme()" aria-label="切换主题" title="切换深/浅色主题"><svg class="sn-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><svg class="sn-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button></div></nav>
+<script data-sn-pad>(function(){function p(){var n=document.querySelector('.sn-nav');if(!n)return;document.body.style.paddingTop=n.getBoundingClientRect().height+'px';}if(document.readyState!=='loading'){p();}else{document.addEventListener('DOMContentLoaded',p);}window.addEventListener('resize',p);})();</script>
+<script data-sn-theme>function snToggleTheme(){var d=document.documentElement;var c=d.getAttribute('data-theme');var n=c==='dark'?'light':'dark';d.setAttribute('data-theme',n);try{localStorage.setItem('sn-theme',n);}catch(e){}}(function(){try{var s=localStorage.getItem('sn-theme');var t=s||'light';if(!document.documentElement.getAttribute('data-theme'))document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+
+<!-- ===== HERO ===== -->
+<header class="hero">
+  <div class="hero-inner">
+    <span class="tag">arXiv:2605.29639 · cs.OS · 2026-05-28</span>
+    <h1>RTP-LLM: High-Performance Alibaba LLM Inference Engine</h1>
+    <p class="subtitle">论文深度研读 × rtp-llm 源码全对照（6097 文件 / 3 并行子代理辅助）</p>
+    <div class="meta">
+      <span class="badge badge-accent">⚡ 阿里基础模型推理团队</span>
+      <span class="badge badge-dark">8B–235B 参数模型</span>
+      <span class="badge badge-green">✅ 生产级 · 1 亿+用户</span>
+      <span class="badge badge-blue">📦 开源 github.com/alibaba/rtp-llm</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="stat-num">6.3×</div><div class="stat-label">模型加载加速</div></div>
+      <div class="stat"><div class="stat-num">215%</div><div class="stat-label">缓存复用提升</div></div>
+      <div class="stat"><div class="stat-num">2.48×</div><div class="stat-label">推测解码吞吐</div></div>
+      <div class="stat"><div class="stat-num">2.52×</div><div class="stat-label">多模态吞吐</div></div>
+      <div class="stat"><div class="stat-num">37%</div><div class="stat-label">TTFT P95 降低</div></div>
+    </div>
+  </div>
+</header>
+
+<!-- ===== NAV ===== -->
+<nav class="toc">
+  <ul>
+    <li><a href="#abstract">摘要</a></li>
+    <li><a href="#intro">1·引言</a></li>
+    <li><a href="#arch">2·系统设计</a></li>
+    <li><a href="#loading">3·模型加载</a></li>
+    <li><a href="#sched">4·流量调度</a></li>
+    <li><a href="#kvcache">5·KV Cache</a></li>
+    <li><a href="#spec">6·推测解码</a></li>
+    <li><a href="#runtime">7·运行时</a></li>
+    <li><a href="#eval">8·实验</a></li>
+    <li><a href="#diff">9·差异</a></li>
+    <li><a href="#partb">Part B</a></li>
+  </ul>
+</nav>
+
+<div class="container">
+
+<!-- ==================== ABSTRACT ==================== -->
+<section id="abstract">
+  <h2>结构化摘要</h2>
+  <table>
+    <tr><th style="width:16%">维度</th><th>内容</th></tr>
+    <tr><td><strong>背景/目标</strong></td><td>LLM 自回归推理存在四重根本瓶颈：①动态负载下 GPU 利用率低；②KV Cache 无界增长耗尽显存；③异构模型架构（MoE 600B+、多模态）带来系统僵化；④企业级快速迭代需分钟级加载 600B+ 模型。现有开源框架（vLLM、SGLang）优化单组件而忽视系统级协同。RTP-LLM 旨在构建端到端集成的生产级推理引擎。</td></tr>
+    <tr><td><strong>方法</strong></td><td>六大技术柱：(1) file-order-driven 模型加载 + I/O-通信重叠；(2) Prefill-Decode 物理解耦 + 动态流量调度；(3) 四级层次化 KV Cache（GPU→本地 CPU→远程 CPU RDMA→分布式 3FS）；(4) 模块化推测解码（MTP/Eagle/Prompt Lookup）；(5) 自适应 KV Cache 量化（INT8/FP8）；(6) 解耦多模态处理（EPD）。多级并行 TP/PP/DP/EP，DeepEP 做 MoE All2All。</td></tr>
+    <tr><td><strong>结果</strong></td><td>对照 vLLM/SGLang：模型加载 4.7×–6.3×；TTFT P95 −37%，缓存复用 +215%；推测解码 1.12×–2.48×；多模态 1.86×–2.52×；量化 batch 延迟 −40%，TTFT 1.9×–3.0×。已在淘宝/天猫/菜鸟生产环境服务 1 亿+用户。</td></tr>
+    <tr><td><strong>结论</strong></td><td>端到端系统集成（而非单点优化）是工业级 LLM 部署的关键。开源提供可复现参考。未来计划探索 DSA（DeepSeek Sparse Attention）。</td></tr>
+  </table>
+</section>
+
+<!-- ==================== INTRO ==================== -->
+<section id="intro">
+  <h2>1. 引言 — 四重生产挑战</h2>
+  <p>LLM 自回归生成的固有顺序性制造了不可消除的串行瓶颈，直接限制 GPU 利用率。论文将生产部署的挑战归纳为四类，每类对应论文的一个技术章节：</p>
+  <div class="cards">
+    <div class="card card-orange">
+      <div class="icon">📊</div>
+      <h4>Challenge I · GPU 空闲</h4>
+      <p>输入/输出长度极端可变（短查询→128K+上下文），静态 batching 无法适应，memory-bound decode 让计算单元闲置。<strong>→ §5 流量调度 + §6 推测解码</strong></p>
+    </div>
+    <div class="card card-purple">
+      <div class="icon">💾</div>
+      <h4>Challenge II · 显存耗尽</h4>
+      <p>KV Cache 随 seq_len + batch 线性增长，128K+ 场景迅速吞噬显存，传统分配器面对碎片化和跨请求共享无力。<strong>→ §5.2 KV Cache 管理</strong></p>
+    </div>
+    <div class="card card-blue">
+      <div class="icon">🔀</div>
+      <h4>Challenge III · 架构僵化</h4>
+      <p>600B+ MoE 需高效 expert 路由；多模态融合视觉编码器与语言模型，计算特性迥异。<strong>→ §7 多级并行 + EPD</strong></p>
+    </div>
+    <div class="card card-accent">
+      <div class="icon">⚙️</div>
+      <h4>Challenge IV · 运维脆弱</h4>
+      <p>企业需分钟级加载 600B+ 模型支持业务持续更新，现有系统需数小时且缺乏容错与滚动更新。<strong>→ §4 高效模型加载</strong></p>
+    </div>
+  </div>
+  <div class="callout callout-tip">
+    <strong>文献缺口：</strong>vLLM (PagedAttention)、TensorRT-LLM (NVIDIA 内核)、FlashAttention 各自优化单点，但<strong>聚焦单节点、缺乏异构硬件支持、忽视从动态调度到快速迭代的全谱系挑战</strong>。RTP-LLM 的研究缺口不是发明新算法，而是将多技术集成为协同的生产系统。
+  </div>
+</section>
+
+<!-- ==================== ARCH ==================== -->
+<section id="arch">
+  <h2>2. 系统设计 — 组件拓扑</h2>
+  <p>论文 Figure 1 展示的组件拓扑，在源码中可清晰对应。下方的 Mermaid 架构图标注了论文术语与源码文件的双重映射：</p>
+
+  <div class="mermaid">
+flowchart LR
+    subgraph Client["用户"]
+        U["Request"]
+    end
+    subgraph FE["Frontend (Python)"]
+        FA["FrontendApp<br/>tokenize + block_hash"]
+    end
+    subgraph M["Master = FlexLB (Java/Spring Boot)"]
+        NS["NameService<br/>心跳发现"]
+        RT["DefaultRouter<br/>多阶段路由"]
+        LB["LoadBalancer<br/>RANDOM/SHORTEST_TTFT/WEIGHTED_CACHE"]
+        GCI["GlobalCacheIndex<br/>ConcurrentHashMap"]
+        QM["QueueManager<br/>+ RequestScheduler"]
+    end
+    subgraph Infer["Inference (C++)"]
+        DPC["DP-Controller<br/>FIFOScheduler"]
+        PN["Prefill Node<br/>RoleType::PREFILL"]
+        DN["Decode Node<br/>RoleType::DECODE"]
+        VN["ViT Node<br/>RoleType::VIT"]
+    end
+    subgraph Cache["Multi-Tiered Cache"]
+        T1["Tier1 GPU 显存<br/>BlockCache"]
+        T2["Tier2 本地CPU<br/>KVCacheMemoryConnector"]
+        T3["Tier3 远程RDMA<br/>P2PConnector"]
+        T4["Tier4 分布式3FS<br/>RemoteConnector"]
+    end
+    U --> FA
+    FA -->|"block_cache_keys"| LB
+    NS -.-> RT
+    RT --> LB
+    LB -->|"batch"| QM
+    QM --> DPC
+    DPC --> PN & DN & VN
+    GCI -.->|"prefix_match"| LB
+    PN -.->|"KV via P2P broadcast"| DN
+    T1 --> T2 --> T3 --> T4
+  </div>
+
+  <table>
+    <tr><th>论文术语</th><th>源码模块/文件</th><th>语言</th><th>对应关系</th></tr>
+    <tr><td>FrontendApp</td><td><span class="file-ref">rtp_llm/frontend/</span></td><td>Python</td><td>tokenize + block hash 生成</td></tr>
+    <tr><td>Master</td><td><span class="file-ref">rtp_llm/flexlb/</span></td><td>Java 21</td><td>FlexLB 模块 = 论文 Master（Router+LoadBalancer+QueueManager+GlobalCacheIndex）</td></tr>
+    <tr><td>DP-Controller</td><td><span class="file-ref">cpp/engine_base/schedulers/FIFOScheduler.cc</span></td><td>C++</td><td>引擎内调度器，管理本地 GPU 资源 + batch</td></tr>
+    <tr><td>Prefill/Decode Node</td><td><span class="file-ref">cpp/config/RoleTypes.h</span></td><td>C++</td><td><code>RoleType::{PREFILL=1, DECODE=2, PDFUSION=0, VIT=3}</code></td></tr>
+    <tr><td>Multi-Tiered Cache</td><td><span class="file-ref">cpp/cache/connector/</span></td><td>C++</td><td>三级 Connector 实现（memory/p2p/remote_connector）</td></tr>
+    <tr><td>Carbon 故障恢复</td><td><strong>未在开源代码中找到</strong></td><td>—</td><td><span class="status-warn">⚠️ 阿里内部运维服务，未开源</span></td></tr>
+  </table>
+</section>
+
+<!-- ==================== MODEL LOADING ==================== -->
+<section id="loading">
+  <h2>3. 高效模型加载 — File-Order-Driven I/O</h2>
+  <p>论文 §4 的核心洞察：阿里生产环境所有 checkpoint 存在 FUSE 云存储上，文件访问效率<strong>严重依赖 I/O 模式</strong>。传统按模型结构遍历加载 → 跨进程冗余读 + 非顺序访问 → FUSE 预取失效。</p>
+
+  <div class="mermaid">
+flowchart TD
+    subgraph Traditional["传统 model-structure-driven"]
+        T1["遍历 weight modules"] --> T2["每进程读所有文件<br/>提取自己的 tensor 份"]
+        T2 --> T3["冗余读 + 非顺序访问"]
+        T3 --> T4["FUSE 预取失效<br/>❌ 慢"]
+    end
+    subgraph RTP["RTP-LLM file-order-driven"]
+        R1["按文件顺序遍历"] --> R2["每文件单进程读取<br/>fastsafetensors ParallelLoader"]
+        R2 --> R3["PyTorch distributed<br/>broadcast 分享 tensor"]
+        R3 --> R4["共享内存复用<br/>use_shm=True"]
+        R4 --> R5["I/O 与 broadcast 重叠"]
+        R5 --> R6["✅ FUSE 预取有效<br/>TP=8 加载 235B 仅 33s"]
+    end
+  </div>
+
+  <h3>源码对照</h3>
+  <div class="compare">
+    <div class="label">论文声称</div>
+    <div class="label">源码实际</div>
+    <div class="paper">
+      <h5>"集成 IBM fastsafetensors 库"</h5>
+      <p>引用 Yoshimura et al. 2025 (arXiv:2505.23072)，称用 IBM fastsafetensors + PyTorch broadcast。</p>
+    </div>
+    <div class="code">
+      <h5>阿里 fork 版 fastsafetensors + 自研 fast_safetensors</h5>
+      <span class="file-ref">deps/requirements_lock_torch_gpu_cuda12_9.txt:763</span>
+      <p>实际安装 <code>fastsafetensors@...oss-cn-hangzhou.aliyuncs.com...fast_safetensors-0.7.3+torch2.1.2...whl</code>（阿里 OSS 源），版本带 <code>-ali</code> 后缀。是 IBM 库的阿里 fork。另有一个自研 <code>fast_safetensors</code> 包封装 Loader 接口，两者并存。</p>
+      <p style="font-size:12px;color:var(--text-mute)">子代理发现：仓库依赖<strong>两个独立库</strong>——<code>fast-safetensors</code>（阿里自研，模块名 <code>fast_safetensors</code>，提供 <code>LoadWithShm</code>/<code>load_safetensors_to_device</code>，用于单机/单文件加载）与 <code>fastsafetensors</code>（IBM <code>ParallelLoader</code>，<code>0.1.19rc5+ali</code>，用于分布式加载）。论文未区分。file-order 在两条路径各有实现：自研 <code>ckpt_file_info._safetensors_read_order</code>（按 <code>data_offsets[0]</code> 升序）+ IBM <code>ParallelLoader.iterate_weights()</code> 内部按文件偏移流式产出。</p>
+    </div>
+  </div>
+
+  <h5>真实代码：loader.py 调用 fastsafetensors 迭代器</h5>
+  <pre><code><span class="code-lang">Python</span># rtp_llm/model_loader/loader.py:385-395
+# fastsafetensors ParallelLoader 的 iterate_weights 按文件顺序产出 tensor
+all_tensors = self._load_config.database.fastsafetensors_weights_iterator(
+    device,
+    True,  # use_shm=True → 共享内存复用，消除 600ms/2GB 分配开销
+    stacked_key_config=stacked_key_config,
+)
+for key, loaded_tensor in all_tensors:  # 按文件顺序，非按模型结构
+    if key not in tensor_to_weight_map:
+        continue
+    weight_info = tensor_to_weight_map[key]
+    # ... PyTorch distributed broadcast 分享 tensor 到其他进程</code></pre>
+
+  <div class="callout callout-warn">
+    <strong>差异：</strong>论文称"IBM fastsafetensors"，源码用阿里 fork（<code>+ali</code> 后缀）+ 自研封装。论文未区分这两个包。I/O-通信重叠的深度优化可能在阿里 fork 内部，开源层可见度有限。
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card"><div class="num">33.0s</div><div class="label">RTP-LLM TP=8</div><div class="vs">SGLang 206.7s · vLLM 204.0s</div></div>
+    <div class="stat-card"><div class="num">6.27×</div><div class="label">vs SGLang</div><div class="vs">Qwen3-235B-A22B</div></div>
+    <div class="stat-card"><div class="num">6.18×</div><div class="label">vs vLLM</div><div class="vs">同上</div></div>
+    <div class="stat-card"><div class="num">+17%</div><div class="label">vLLM 负扩展性</div><div class="vs">TP4→8 反而变慢</div></div>
+  </div>
+</section>
+
+<!-- ==================== SCHEDULING ==================== -->
+<section id="sched">
+  <h2>4. 流量调度 — FlexLB (Java/Spring Boot)</h2>
+  <p>论文 §5.1 的 "Master" 在源码中是 <strong>FlexLB</strong>——一个 Java 21 + Spring Boot 2.7 + WebFlux 反应式负载均衡器。<span class="file-ref">flexlb/CLAUDE.md</span> 是一份与论文高度吻合的架构文档。</p>
+
+  <div class="mermaid">
+sequenceDiagram
+    participant U as 用户
+    participant FA as FrontendApp
+    participant Q as QueueManager
+    participant S as RequestScheduler
+    participant R as DefaultRouter
+    participant LB as LoadBalancer
+    participant GCI as GlobalCacheIndex
+    participant W as Worker(Prefill/Decode)
+    U->>FA: 请求
+    FA->>FA: tokenize + 生成 block_hash_ids(64 tokens/block)
+    FA->>Q: block_cache_keys + seq_len + chat_id
+    Q->>S: 异步入队
+    S->>R: routeRequest
+    R->>GCI: findMatchingEngines(block_cache_keys)
+    GCI-->>R: Map{engine → prefixMatchLength}
+    R->>LB: 选策略(SHORTEST_TTFT / WEIGHTED_CACHE)
+    LB->>W: 路由到最优 worker
+    alt Prefill
+        W-->>R: prefill 完成 + KV cache blocks
+        R->>R: rollBack 或 继续路由到 Decode
+    end
+  </div>
+
+  <h3>三种负载均衡策略</h3>
+  <table>
+    <tr><th>策略</th><th>论文对应</th><th>选择逻辑</th><th>源码文件</th></tr>
+    <tr><td><code>RANDOM</code></td><td>—</td><td>随机选 worker</td><td><span class="file-ref">flexlb-sync/.../strategy/RandomLoadBalancer.java</span></td></tr>
+    <tr><td><code>SHORTEST_TTFT</code></td><td>预测性调度（估计完成时间）</td><td>选最短 TTFT worker</td><td><span class="file-ref">flexlb-sync/.../strategy/ShortestTtftLoadBalancer.java</span></td></tr>
+    <tr><td><code>WEIGHTED_CACHE</code></td><td>Decode KV Cache 亲和性</td><td>cache-aware 加权随机，优先匹配 block</td><td><span class="file-ref">flexlb-sync/.../strategy/WeightedCacheLoadBalancer.java</span></td></tr>
+  </table>
+
+  <h5>真实代码：WeightedCacheLoadBalancer 的 prefix 匹配（对应论文 Algorithm 2）</h5>
+  <pre><code><span class="code-lang">Java</span>// flexlb-sync/.../strategy/WeightedCacheLoadBalancer.java:115-137
+private long calcPrefixMatchLength(CacheStatus cacheStatus, List<Long> promptCacheKeys) {
+    if (cacheStatus == null || promptCacheKeys == null) return 0;
+    long blockSize = cacheStatus.getBlockSize();
+    Set<Long> cachePrefixHash = cacheStatus.getCachedKeys();
+    if (cachePrefixHash == null) return 0;
+
+    // 逐 block 查询，首个 miss 即 break — O(N) 复杂度
+    for (int index = 0; index < promptCacheKeys.size(); index++) {
+        long hash = promptCacheKeys.get(index);
+        if (!cachePrefixHash.contains(hash)) {
+            return blockSize * index;  // 返回匹配长度
+        }
+    }
+    return blockSize * promptCacheKeys.size();  // 全匹配
+}</code></pre>
+
+  <div class="callout callout-danger">
+    <strong>差异 — "chat ID 缓存亲和"：</strong>论文称"若 chat ID 命中先前 worker 则直接路由"。源码搜索 <code>chat_id</code>、<code>chatId</code> 在 FlexLB 中<strong>零命中</strong>。代码实际用 <code>blockCacheKeys</code>（token 块级哈希）实现亲和——通过 <code>Request.blockCacheKeys</code> 字段（<span class="file-ref">flexlb-common/.../Request.java:16</span>）传入，<code>WeightedCacheLoadBalancer</code> 匹配后优先路由。论文的"chat ID"是面向读者的高层概念抽象。
+  </div>
+
+  <div class="callout callout-success">
+    <strong>子代理发现 — 预测性调度的真实公式：</strong>论文称"估计完成时间"但未给公式。源码 <code>TaskInfo.estimatePrefillTimeMs()</code>（<span class="file-ref">flexlb-common/.../master/TaskInfo.java:36-38</span>）：<code>(long)(tokens * 1.0 - hitCacheTokens * 0.7)</code>——命中缓存部分按 0.7 系数折减。<code>ShortestTTFTStrategy.scoreWorkers()</code>（<span class="file-ref">flexlb-sync/.../ShortestTTFTStrategy.java:187-206</span>）计算 <code>newTTFT = prefillTime + queueTime</code>，取前 50% 候选（<code>CANDIDATE_PERCENTAGE=0.5</code>），再用 <code>lastSelectedTime</code> CAS 保证并发请求分散到不同 worker。
+  </div>
+
+  <div class="callout callout-purple">
+    <strong>子代理发现 — 每 RoleType 默认策略映射：</strong>Prefill/PDFusion 默认 <code>SHORTEST_TTFT</code> + <code>WAIT_TIME</code> 指标；Decode 默认 <code>WEIGHTED_CACHE</code> + <code>REMAINING_KV_CACHE</code> 指标；VIT 默认 <code>RANDOM</code> + <code>WAIT_TIME</code>（<span class="file-ref">flexlb-sync/.../FlexlbConfig.java:138-183</span>）。<code>WEIGHTED_CACHE</code> 的加权公式：<code>weight = exp(-0.001 * (cacheUsed - avgCacheUsed))</code>——指数衰减，所有 worker 用量相同时退化为均匀随机。
+  </div>
+
+  <div class="callout callout-purple">
+    <strong>关键设计 — 每 RoleType 不同策略：</strong>Prefill 用 <code>WAIT_TIME</code> 指标（<code>PrefillResourceMeasure</code>），Decode 用 <code>REMAINING_KV_CACHE</code> 指标（<code>DecodeResourceMeasure</code>）。<code>DynamicWorkerManager</code> 基于 <code>ReducibleSemaphore</code> 动态调整容量，水位低则扩容、水位高则缩容。这精确对应论文"Prefill 按吞吐、Decode 按 KV 亲和"的差异化设计。
+  </div>
+</section>
+
+<!-- ==================== KV CACHE ==================== -->
+<section id="kvcache">
+  <h2>5. KV Cache 管理 — 四级层次 + 统一哈希</h2>
+
+  <h3>5.1 四级层次化架构（论文 Algorithm 1）</h3>
+  <div class="mermaid">
+flowchart TD
+    REQ["请求 req.kv_cache"] --> Q1{"Tier1: GPU 显存<br/>BlockCache 命中?"}
+    Q1 -->|"是"| U1["UpdateReferenceCount<br/>→ 直接推理"]
+    Q1 -->|"否"| Q2{"Tier2: 本地 CPU 内存?"}
+    Q2 -->|"是"| L2G["LoadToGPU<br/>KVCacheMemoryConnector"]
+    Q2 -->|"否"| Q3{"Tier3: 远程 CPU via RDMA?"}
+    Q3 -->|"是"| RDMA["RDMATransfer<br/>P2PConnector.broadcast"]
+    Q3 -->|"否"| Q4{"Tier4: 分布式 3FS?"}
+    Q4 -->|"是"| L3FS["LoadFrom3FS<br/>RemoteConnector + MetaClient"]
+    Q4 -->|"否"| MISS["Cache Miss<br/>→ 全量 prefill"]
+    U1 & L2G & RDMA & L3FS --> EXEC["ExecuteInference"]
+    EXEC --> CRU["CacheReturnAndUpdate<br/>LRU version++"]
+  </div>
+
+  <table>
+    <tr><th>层级</th><th>论文操作</th><th>源码类</th><th>文件:行</th><th>外部依赖</th></tr>
+    <tr><td>Tier1+2<br/>GPU/本地CPU</td><td>UpdateRefCount / LoadToGPU</td><td><code>KVCacheMemoryConnector</code></td><td><span class="file-ref">cache/connector/memory/KVCacheMemoryConnector.cc:107</span></td><td>—</td></tr>
+    <tr><td>Tier3<br/>远程 RDMA</td><td>RDMATransfer</td><td><code>P2PConnector</code> + <code>P2PConnectorSchedulerPrefill</code></td><td><span class="file-ref">cache/connector/p2p/P2PConnectorSchedulerPrefill.cc:48</span></td><td><code>3rdparty/ali-rdma-core</code></td></tr>
+    <tr><td>Tier4<br/>分布式 3FS</td><td>LoadFrom3FS</td><td><code>RemoteConnector</code> + <code>ClientFactory</code></td><td><span class="file-ref">cache/connector/remote_connector/ClientFactory.cc:7</span></td><td><code>3rdparty/3fs:hf3fs</code></td></tr>
+    <tr><td>RDMA MR 注册</td><td>—</td><td><code>MemoryUtil::regUserMr()</code></td><td><span class="file-ref">disaggregate/cache_store/MemoryUtil.h:13</span></td><td>—</td></tr>
+  </table>
+
+  <h5>真实代码：P2PConnector 从 Prefill 广播 KV 到 Decode 节点（Tier3 RDMA）</h5>
+  <pre><code><span class="code-lang">C++</span>// cache/connector/p2p/P2PConnectorSchedulerPrefill.cc:22-48
+// sendKVCache: Prefill 节点将 KV cache 广播到 Decode 节点
+auto layer_cache_buffers = LayerCacheBufferUtil::convert(*resource, 0);
+auto result = tp_broadcast_client_->broadcast(
+    request_id,
+    layer_cache_buffers,
+    decode_transfer_servers,   // Decode 节点地址列表
+    unique_key,
+    deadline_ms,
+    P2PConnectorBroadcastType::HANDLE_READ
+);
+// 失败/超时则 cancel + 报错
+if (!result) { /* broadcast failed */ }</code></pre>
+
+  <h3>5.2 统一哈希表（论文 §5.2.1 核心）</h3>
+  <div class="callout callout-success">
+    <strong>高度吻合：</strong>论文称"合并所有 worker 的 cache key 到单一 hash map，O(N) 复杂度（而非 O(N×M)）"。源码 <code>GlobalCacheIndex</code> 精确实现：
+  </div>
+  <pre><code><span class="code-lang">Java</span>// flexlb-cache/.../core/GlobalCacheIndex.java:17-33
+public class GlobalCacheIndex {
+    // 核心存储: block_hash_id → Set{engine_ip:port}
+    private final ConcurrentHashMap<Long, Set<String>> blockToEnginesMap = new ConcurrentHashMap<>();
+
+    public void addCacheBlock(Long blockCacheKey, String engineIpPort) {
+        Set<String> engines = blockToEnginesMap.computeIfAbsent(blockCacheKey, k -> {
+            totalBlocks.increment();
+            return Sets.newConcurrentHashSet();
+        });
+        engines.add(engineIpPort);
+    }
+    // findMatchingEngines: 一次遍历返回 Map{engine → prefixMatchLength}
+}</code></pre>
+
+  <h3>5.3 Rolling Hash + 版本号 Delta 同步</h3>
+  <pre><code><span class="code-lang">C++</span>// cache/KVCacheHashUtil.cc — initCacheKeys
+int64_t rolling_hash = 0;
+for (int index = 0; index < desired_blocks; ++index) {
+    const int pos = index * seq_size_per_block;
+    rolling_hash = rtp_llm::hashInt64Array(rolling_hash, token_ids + pos, ...);
+    batch_kv_cache_resource->pushBackCacheKey(i, rolling_hash);  // 每个 block 一个 hash
+}</code></pre>
+  <pre><code><span class="code-lang">C++</span>// utils/LRUCache.h:34,92,113 — 版本号 delta 同步
+struct CacheSnapshot { int64_t version; std::vector<ValueType> values; };
+int64_t version = -1;  // 每次插入新 key: version++
+CacheSnapshot cacheSnapshot(int64_t latest_version) const;  // 带 version 查询</code></pre>
+
+  <div class="callout callout-purple">
+    <strong>子代理深度发现 — 采样哈希的真实实现：</strong>论文 §5.2.3 称"block 超 208 tokens 则按 step=4 在 208,212,216... 采样"。C++ 侧的采样逻辑在 <code>CPSlotMapper::canonicalCacheKeys()</code>（<span class="file-ref">cache/CPSlotMapper.cc:108-118</span>）——从位置 <code>cp_size_-1</code> 起、步长 <code>cp_size_</code> 取 last-rank key：<code>for (int i = cp_size_-1; i &lt; full_keys.size(); i += cp_size_) local.push_back(full_keys[i]);</code>。步长 = <code>cp_size_</code>（典型为 TP 的 <code>tp_size</code>），208/216 是 token 空间表述（208 = 4×52，52 是典型 block_size）。子采样 key 用独立命名空间 <code>kGpuCpCanonicalNamespace=2</code> 写入，与普通逻辑 key 隔离。
+  </div>
+  <div class="callout callout-warn">
+    <strong>差异 — 20ms/50ms + 协调器循环：</strong>论文称"Master 查询 20ms、cache 同步 50ms"。C++ 侧 <code>KVCacheConnectorCoordinator::update_thread_</code> 以 <code>update_interval_ms_{1}</code>（<strong>1ms</strong>，远高于论文 20ms）循环处理 read/write 队列（<span class="file-ref">connector/KVCacheConnectorCoordinator.cc:100</span>）。Java 侧 <code>DefaultDynamicCacheIntervalService</code> 默认 50ms 且<strong>根据 cache diff 自适应调整</strong>。论文的固定数字是简化叙述，实际 C++ 协调器 1ms + Java 同步 50ms 是分层异步的。
+  </div>
+  <div class="callout callout-danger">
+    <strong>子代理发现 — L3 P2P RDMA 连接器当前被 <code>#if 0</code> 关闭：</strong>在 <span class="file-ref">connector/KVCacheConnectorCoordinator.cc:389-416</span>，P2PConnector 的初始化代码被 <code>#if 0</code> 包裹，注释"待后续 PR 启用"——说明 L3 tier（远程 RDMA）在此代码版本处于<strong>"代码就绪、默认未激活"</strong>状态。L2（本地内存）和 L4（3FS）是当前活跃的远程 tier。
+  </div>
+  <div class="callout callout-success">
+    <strong>子代理发现 — C++ 侧也有统一哈希表：</strong>不仅 Java 侧 <code>GlobalCacheIndex</code>，C++ 侧 <code>SharedBlockCache</code>（<span class="file-ref">cache/SharedBlockCache.h:18</span>）同样实现聚合——<code>UnifiedCacheItem.group_block_ids</code> 向量折叠所有 cache group 的 block id 到同一 key 项，<code>FullKVCacheGroup::matchPrefix()</code>（<span class="file-ref">FullKVCacheGroup.cc:76-95</span>）单遍遍历 + 首次未命中即 break → O(N)。容量上限 <code>kCacheMaxCapacity=10000000</code>（一千万项）。
+  </div>
+</section>
+
+<!-- ==================== SPECULATIVE ==================== -->
+<section id="spec">
+  <h2>6. 推测解码 — 模块化框架</h2>
+  <p>论文 §6.1.1 将推测采样分解为四模块：<strong>ProposeExecutor</strong>（提议）→ <strong>ScoreExecutor</strong>（评分）→ <strong>SpeculativeSampler</strong>（验证）→ <strong>SpeculativeUpdater</strong>（更新）。支持四种算法。</p>
+
+  <div class="callout callout-danger">
+    <strong>重要差异 — 论文四模块名 ≠ 代码类名：</strong>代码中<strong>没有</strong> <code>ProposeExecutor</code>、<code>ScoreExecutor</code>、<code>SpeculativeUpdater</code> 类。实际核心是 <code>MtpExecutor</code>（统一编排 target+draft forward），<code>SpeculativeSampler</code> 是唯一直接命名的类。论文四模块是<strong>逻辑职责描述</strong>，非代码字面映射。
+  </div>
+
+  <h3>实际执行流（MtpExecutor::process）</h3>
+  <div class="mermaid">
+sequenceDiagram
+    participant S as Stream
+    participant ME as MtpExecutor
+    participant DM as DraftModel
+    participant TM as TargetModel
+    participant SS as SpeculativeSampler
+    ME->>ME: prepareStreams<br/>(分 prefill_streams / decode_streams)
+    alt Prefill
+        ME->>TM: forwardModel(TARGET)
+        TM-->>ME: model_output
+        ME->>DM: forwardModel(DRAFT)
+        DM-->>ME: draft_output
+    else Decode
+        ME->>DM: draftModelDecode (if propose_step>1)
+        DM-->>ME: draft_probs + draft_token_ids
+        ME->>TM: forwardModel(is_target_verify=true)
+        TM-->>ME: target_probs + target_token_ids
+        ME->>SS: batchSample(draft, target)
+        SS->>SS: execChainSpeculativeSampling (CUDA kernel)
+        SS-->>ME: accepted_tokens + accept_len
+    end
+    ME->>S: dispatch output
+  </div>
+
+  <h5>真实代码：MtpExecutor::process 路由逻辑</h5>
+  <pre><code><span class="code-lang">C++</span>// normal_engine/speculative/MtpExecutor.cc:778-797
+absl::Status MtpExecutor::process(const std::list<GenerateStreamPtr>& streams) {
+    MtpMetricsCollector metrics_collector;
+    std::list<GenerateStreamPtr> prefill_streams, decode_streams;
+    prepareStreams(streams, prefill_streams, decode_streams);
+
+    if (role_type_ == RoleType::PREFILL || role_type_ == RoleType::PDFUSION) {
+        THROW_IF_STATUS_ERROR(prefillStep(prefill_streams, metrics_collector));
+    }
+    if (role_type_ == RoleType::DECODE || role_type_ == RoleType::PDFUSION) {
+        THROW_IF_STATUS_ERROR(decodeStep(decode_streams, metrics_collector));
+    }
+}</code></pre>
+
+  <h3>支持算法 — 论文 vs 源码枚举</h3>
+  <pre><code><span class="code-lang">C++</span>// config/ConfigModules.h:283-288
+enum SpeculativeType {
+    SP_TYPE_NONE          = 0,  // 未启用
+    SP_TYPE_VANILLA       = 1,  // Classic speculative = 论文 "Naive"
+    SP_TYPE_MTP           = 2,  // Multi-token prediction (DeepSeek-V3)
+    SP_TYPE_EAGLE3        = 3,  // EAGLE-3
+    SP_TYPE_EAGLE         = 4,  // EAGLE
+    SP_TYPE_DETERMINISTIC = 5   // Deterministic (Prompt-Lookup)  ← 论文 Prompt Lookup
+};</code></pre>
+  <table>
+    <tr><th>论文算法</th><th>源码枚举</th><th>状态</th><th>说明</th></tr>
+    <tr><td>Naive Speculative</td><td><code>SP_TYPE_VANILLA</code></td><td class="status-ok">✅ 对应</td><td>Classic speculative sampling</td></tr>
+    <tr><td>MTP</td><td><code>SP_TYPE_MTP</code></td><td class="status-ok">✅ 对应</td><td>DeepSeek-V3 多 token 预测</td></tr>
+    <tr><td>Eagle</td><td><code>SP_TYPE_EAGLE</code> + <code>EAGLE3</code></td><td class="status-ok">✅ 对应</td><td>含 EAGLE-3 变体</td></tr>
+    <tr><td>Prompt Lookup</td><td><code>SP_TYPE_DETERMINISTIC</code></td><td class="status-warn">⚠️ 隐含</td><td>注释标注 "Prompt-Lookup"，cursor 优化未开源</td></tr>
+  </table>
+
+  <h5>真实代码：SpeculativeSampler 调用 CUDA 验证内核</h5>
+  <pre><code><span class="code-lang">C++</span>// normal_engine/speculative/SpeculativeSampler.cc:33-87
+void SpeculativeSampler::batchSample(...) {
+    // 准备 draft/target probs + token_ids 到 GPU
+    auto draft_token_probs_d_t  = draft_token_probs;
+    auto target_token_probs_d_t = target_token_probs;
+    torch::Tensor uniform_samples_d = torch::rand({batch_size, propose_step_+1}, ...);
+
+    // 调用 CUDA kernel 做链式推测采样验证
+    execChainSpeculativeSampling({
+        draft_token_probs_d_t,
+        draft_token_ids_d_t,
+        uniform_samples_d,
+        target_token_probs_d_t,
+        output_token_ids_d,
+        output_accepted_token_num_d,   // 接受的 token 数
+        output_emitted_token_num_d
+    });
+    // 回传 host → dispatch accepted tokens
+}</code></pre>
+  <p style="font-size:13px;color:var(--text-dim)">CUDA kernel 位于 <span class="file-ref">models_py/bindings/cuda/kernels/speculative_sampling/sampling.cu</span>。论文 §8.3 报告 RTP-LLM 比 vLLM 快 1.12×、比 SGLang 快 2.48×，归因于"C++ 直接 operator launch 消除 Python→C++ 调用开销"——这里可见 <code>execChainSpeculativeSampling</code> 是直接 C++→CUDA 调用，无 Python 中间层。</p>
+</section>
+
+<!-- ==================== RUNTIME ==================== -->
+<section id="runtime">
+  <h2>7. 运行时扩展 — 并行 · 量化 · 多模态</h2>
+
+  <h3>7.1 多级并行（TP/PP/DP/EP + DeepEP）</h3>
+  <div class="callout callout-success">
+    <strong>DeepEP 确认：</strong>论文 §8.2 称"使用 DeepEP 做 MoE expert All2All"。源码 <code>3rdparty/accl_ep/deep_ep_api.h</code> + <code>3rdparty/deep_gemm/</code> 直接对应。<code>ExpertBalancer</code>（<span class="file-ref">cpp/models/eplb/ExpertBalancer.cc</span>）负责 expert 负载均衡。配置在 <code>MoeConfig</code>（<span class="file-ref">config/ConfigModules.h:262-269</span>）：<code>use_deepep_low_latency=true</code>（默认开），<code>use_deepep_internode/use_deepep_p2p_low_latency</code> 默认 false。Python 封装在 <code>DeepEPWrapper</code>（<span class="file-ref">models_py/distributed/deepep_wrapper.py</span>）。
+  </div>
+  <div class="callout callout-danger">
+    <strong>子代理发现 — PP 实际未支持：</strong>论文 §7.1 称"Pipeline Parallelism (PP) 分布连续层到 GPU 序列"。但源码 <span class="file-ref">config/ConfigModules.h:516</span> 注释明确：<code>in fact pipeline parallelism is not supported yet</code>。PP 是论文面向完整性的叙述，代码中未实现。
+  </div>
+  <div class="callout callout-purple">
+    <strong>子代理发现 — FFN Disaggregate（注意力与 FFN 分卡）：</strong>代码有论文未提及的 <code>FfnDisAggregateConfig</code>（<span class="file-ref">config/ConfigModules.h:43-54</span>）——将注意力层与 FFN 层部署到不同 GPU 组（<code>attention_tp_size</code> vs <code>ffn_tp_size</code>）。<code>NormalEngine.cc:60</code> 引用 <code>ffn_disaggregate_config</code>，是 EPD 之外另一种显存解耦机制。
+  </div>
+  <table>
+    <tr><th>维度</th><th>论文描述</th><th>源码位置</th><th>代码状态</th></tr>
+    <tr><td><strong>TP</strong></td><td>权重矩阵切分，NVLink 加速 all-gather/reduce-scatter</td><td><code>ParallelismConfig</code>（<span class="file-ref">ops/librtp_compute_ops</span>）<code>tp_size/tp_rank</code></td><td class="status-ok">✅ 支持</td></tr>
+    <tr><td><strong>PP</strong></td><td>连续层分布到 GPU 序列，micro-batching 缓解气泡</td><td><span class="file-ref">config/ConfigModules.h:60</span></td><td class="status-no">❌ 注释: not supported yet</td></tr>
+    <tr><td><strong>DP</strong></td><td>集群级复制权重，动态 batching + 负载均衡</td><td>FlexLB DP-Controller</td><td class="status-ok">✅ 支持</td></tr>
+    <tr><td><strong>EP</strong></td><td>MoE sparse expert 分布，DeepEP All2All</td><td><span class="file-ref">3rdparty/accl_ep/deep_ep_api.h</span> + <span class="file-ref">cpp/models/eplb/</span></td><td class="status-ok">✅ 支持</td></tr>
+    <tr><td><strong>CP</strong></td><td>Context Parallel（论文未详述）</td><td><span class="file-ref">config/ConfigModules.h:33</span> <code>prefill_cp_size</code></td><td class="status-ok">✅ ALL_GATHER/ALLTOALL</td></tr>
+  </table>
+
+  <h3>7.2 量化（Weight-Only + KV Cache）</h3>
+  <pre><code><span class="code-lang">C++</span>// cpp/model_utils/QuantInfo.cc:9-11
+static const std::unordered_set<int> kValidGroupSizes = {16, 32, 64, 128};
+void QuantAlgo::setQuantAlgo(const std::string& quant_method, int64_t bits, int64_t group_size);</code></pre>
+  <ul>
+    <li><strong>Weight-Only</strong>：GPTQ (INT4)、AWQ (INT4)、FP8 (<code>TYPE_FP8_E4M3</code>) — 权重低精度，激活高精度计算</li>
+    <li><strong>KV Cache 量化</strong>：INT8/FP8 — <span class="file-ref">cache/CacheConfig.h</span> 的 <code>kv_cache_quant</code> 字段</li>
+    <li>model_loader 下完整量化加载器：<code>compressed_w4a8_int4_*.py</code>、<code>per_group_fp4_*.py</code>、<code>per_block_fp8_*.py</code>、<code>online_modelopt_fp4_*.py</code> 等</li>
+  </ul>
+  <div class="callout callout-danger">
+    <strong>子代理发现 — KV Cache INT8 仅在 MHA 路径支持：</strong>论文 §7.2.2 称支持 INT8 和 FP8 KV Cache 量化。但 <code>KvCacheDataType</code> 枚举（<span class="file-ref">model_utils/AttentionConfig.h:8-11</span>）<strong>仅含 BASE 和 FP8</strong>，配置入口只暴露 FP8。<code>MHAKVCacheSpec.h:52</code> 检查 <code>TYPE_INT8 || TYPE_FP8_E4M3</code>——INT8 路径在 MHA 内存布局层存在，但用户配置层无法直接选择 INT8。论文的 INT8 KV cache 支持是底层能力，非开箱即用。
+  </div>
+  <div class="callout callout-purple">
+    <strong>子代理发现 — 完整量化方法枚举：</strong><code>QuantMethod</code>（<span class="file-ref">model_utils/QuantInfo.h:6-19</span>）支持 12 种：None/WeightOnlyPerCol/GptQ/Awq/SmoothQuant/OmniQuant/PerTensorQuant/FP8Quant/FP8PTPC/W4A8INT4PTPC/ModelOptFP4/QuarkMXFP4。校验：<code>weight_bits ∈ {4, 8}</code>，<code>group_size ∈ {16, 32, 64, 128}</code>（<span class="file-ref">QuantInfo.cc:60-65</span>）。
+  </div>
+
+  <h3>7.3 EPD 解耦多模态 — 论文 vs 源码</h3>
+  <div class="callout callout-danger">
+    <strong>差异 — "EPD" 在代码中零字面匹配：</strong>搜索 <code>EPD</code>、<code>epd_</code> 在源码中<strong>零命中</strong>。论文的 EPD (Encode-Prefill-Decode) 概念由<strong>三层抽象</strong>实现：
+  </div>
+  <table>
+    <tr><th>论文 EPD 概念</th><th>源码实现</th><th>文件:行</th></tr>
+    <tr><td>Encode (ViT) 独立角色</td><td><code>RoleType::VIT = 3</code></td><td><span class="file-ref">config/RoleTypes.h</span></td></tr>
+    <tr><td>ViT 与 LLM 分离部署</td><td><code>VitSeparation</code> 枚举: LOCAL/ROLE/REMOTE</td><td><span class="file-ref">config/RoleTypes.h</span></td></tr>
+    <tr><td>跨进程 ViT 处理</td><td><code>RemoteMultimodalProcessor</code></td><td><span class="file-ref">cpp/multimodal_processor/RemoteMultimodalProcessor.h</span></td></tr>
+    <tr><td>不对称 GPU 显存</td><td><code>AsymmetricTpUtil</code></td><td><span class="file-ref">cache/connector/p2p/AsymmetricTpUtil.cc</span></td></tr>
+  </table>
+
+  <h5>真实代码：AsymmetricTpUtil 处理 Prefill/Decode TP 不对称（不对称显存底层）</h5>
+  <pre><code><span class="code-lang">C++</span>// cache/connector/p2p/AsymmetricTpUtil.cc:11-38
+std::vector<AsymmetricTPContext>
+AsymmetricTpUtil::handleAsymmetricTP(const std::vector<std::pair<std::string, uint32_t>>& decode_transfer_servers) {
+    // prefill_tp_size 在 init 时已知，decode_tp_size 请求时才知
+    if (tp_size_ > static_cast<int64_t>(decode_transfer_servers.size())) {
+        return handleNP1D(decode_transfer_servers);  // N倍TP → 1倍DP
+    }
+    return handleND1P(decode_transfer_servers);  // N倍DP → 1倍TP
+}
+// handleNP1D: prefill_tp / decode_tp = remote_partition_count
+// → 论文 GPU0 9GB / GPU1 89GB 的不对称源于此</code></pre>
+
+  <p><code>VitSeparation::VIT_SEPARATION_ROLE</code>（=1）正是论文的 EPD 模式——ViT 作为独立角色运行在分离进程。<code>VIT_SEPARATION_REMOTE</code>（=2）允许跨机器 ViT。</p>
+
+  <h3>7.4 RoleType 枚举（全系统角色定义）</h3>
+  <pre><code><span class="code-lang">C++</span>// config/RoleTypes.h
+enum RoleType {
+    PDFUSION = 0,  // Prefill+Decode 共置（PD-Fusion）
+    PREFILL  = 1, // Prefill 独立节点
+    DECODE   = 2, // Decode 独立节点
+    VIT      = 3, // ViT 独立节点（EPD 的 E）
+    FRONTEND = 4
+};
+enum VitSeparation {
+    VIT_SEPARATION_LOCAL  = 0,  // 本地多模态处理
+    VIT_SEPARATION_ROLE   = 1,  // VIT 角色（分离进程）= 论文 EPD
+    VIT_SEPARATION_REMOTE = 2   // 远程多模态处理
+};</code></pre>
+</section>
+
+<!-- ==================== EVAL ==================== -->
+<section id="eval">
+  <h2>8. 实验结果 — 生产流量 + 受控基准</h2>
+  <p>论文 §8 优先使用<strong>真实业务流量</strong>评估流量调度、PD 解耦、推测解码；受控基准用于模型加载、量化、多模态。所有评估在 Linux 5.10 x86_64，64 核 CPU，600GB 内存，8 GPU。</p>
+
+  <h3>8.1 流量调度（生产）</h3>
+  <table>
+    <tr><th>工作负载</th><th>TS</th><th>TTFT P95 (ms)</th><th>Inference P95 (ms)</th><th>Cache Reuse (tokens)</th></tr>
+    <tr><td>内部机器人 Q&A (Qwen 7B)</td><td>Off</td><td>83.3</td><td>136</td><td>26.6</td></tr>
+    <tr><td></td><td><strong>On</strong></td><td><strong>52.3 (−37.2%)</strong></td><td>96.2</td><td><strong>83.8 (+215%)</strong></td></tr>
+    <tr><td>淘宝商家客服 (Qwen 4B)</td><td>Off</td><td>350</td><td>1760</td><td>833</td></tr>
+    <tr><td></td><td><strong>On</strong></td><td><strong>226 (−35.4%)</strong></td><td>1210 (−31.3%)</td><td>840</td></tr>
+  </table>
+  <div class="callout callout-accent"><strong>缓存复用 +215% 使 prefill 机器从 80 台降至 20 台（−75%）。</strong></div>
+
+  <h3>8.2 PD 解耦（Qwen3-Coder-480B-FP8 MoE）</h3>
+  <table>
+    <tr><th>指标</th><th>RTP-LLM</th><th>SGLang</th><th>vLLM</th></tr>
+    <tr><td>Cache Hit Rate (%)</td><td><strong>45.09</strong></td><td>28.70</td><td>19.10</td></tr>
+    <tr><td>TTFT (ms)</td><td><strong>1338</strong></td><td>6323</td><td>7135</td></tr>
+    <tr><td>Tokens/s</td><td>1082</td><td>1153</td><td>1085</td></tr>
+  </table>
+  <p style="font-size:13px;color:var(--text-dim)">RTP-LLM TTFT 比 SGLang 快 <strong>4.72×</strong>、比 vLLM 快 <strong>5.33×</strong>——主因是流量调度使 prefix cache 复用更有效。吞吐三者接近（MoE decode 本身 memory-bound）。</p>
+
+  <h3>8.3 推测解码（DeepSeek-V3-0324, TP=8）</h3>
+  <table>
+    <tr><th>框架</th><th>RTP-LLM</th><th>vLLM</th><th>SGLang</th></tr>
+    <tr><td>Tokens/s</td><td><strong>187.53</strong></td><td>167.95 (1.12×)</td><td>75.79 (2.48×)</td></tr>
+  </table>
+  <p style="font-size:13px;color:var(--text-dim)">比 vLLM 仅快 1.12×——论文归因：C++ 直接 operator launch 消除 Python→C++ 调用开销。比 SGLang 快 2.48× 因 SGLang 未优化此场景。</p>
+
+  <h3>8.4 生产部署指导 — 235B MoE + MTP（1000 真实查询）</h3>
+  <table>
+    <tr><th>配置</th><th>最佳场景</th><th>TPOT@64</th><th>TPOT@512</th><th>说明</th></tr>
+    <tr><td><strong>4TP×4</strong></td><td>低并发低延迟</td><td class="status-ok">15.83ms ✓</td><td>退化</td><td>高并发退化，专用低延迟通道</td></tr>
+    <tr><td><strong>1TP8DP</strong></td><td>在线延迟敏感</td><td>17.57</td><td class="status-ok">25.64ms ✓</td><td>高 DP 分散请求，<strong>生产首选</strong></td></tr>
+    <tr><td><strong>2TP4DP</strong></td><td>离线吞吐</td><td>—</td><td>—</td><td>decode TPS 峰值 601.98，吞吐最优</td></tr>
+    <tr><td><strong>2TP8DP</strong></td><td>混合统一集群</td><td>—</td><td class="status-no">46.3ms ✗</td><td>TP 通信成瓶颈，最差</td></tr>
+  </table>
+
+  <h3>8.5 模型加载 + 量化 + 多模态汇总</h3>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="num">6.3×</div><div class="label">加载加速</div><div class="vs">235B TP=8: 33s vs 204s</div></div>
+    <div class="stat-card"><div class="num num-blue">3.0×</div><div class="label">量化 TTFT</div><div class="vs">Qwen3-32B FP8 KV</div></div>
+    <div class="stat-card"><div class="num num-purple">2.52×</div><div class="label">多模态吞吐</div><div class="vs">Qwen2.5-VL-7B GQA</div></div>
+    <div class="stat-card"><div class="num">2.36×</div><div class="label">多模态 TTFT</div><div class="vs">1737ms vs 4103ms</div></div>
+    <div class="stat-card"><div class="num">9GB/89GB</div><div class="label">不对称显存</div><div class="vs">EPD: GPU0 vs GPU1</div></div>
+    <div class="stat-card"><div class="num num-blue">&lt;0.01</div><div class="label">PPL 精度损失</div><div class="vs">WikiText-2</div></div>
+  </div>
+</section>
+
+<!-- ==================== DIFF SUMMARY ==================== -->
+<section id="diff">
+  <h2>9. 论文 vs 源码差异总览</h2>
+  <table>
+    <tr><th>论文声称</th><th>源码实际</th><th>差异性质</th></tr>
+    <tr><td>"IBM fastsafetensors"</td><td>阿里 fork（<code>+ali</code> 后缀）+ 自研 <code>fast_safetensors</code></td><td class="status-warn">简化叙述</td></tr>
+    <tr><td>四模块（ProposeExecutor/ScoreExecutor/Updater）</td><td><code>MtpExecutor</code> 统一编排，仅 <code>SpeculativeSampler</code> 命名一致</td><td class="status-warn">逻辑职责 vs 类名</td></tr>
+    <tr><td>"Prompt Lookup" 算法 + cursor 优化</td><td><code>SP_TYPE_DETERMINISTIC</code>，cursor 细节未开源</td><td class="status-warn">隐含对应</td></tr>
+    <tr><td>"EPD Disaggregation"</td><td>无 EPD 字面符号；<code>RoleType::VIT</code> + <code>VitSeparation::ROLE</code> + <code>RemoteMultimodalProcessor</code></td><td class="status-warn">概念→代码间接映射</td></tr>
+    <tr><td>"chat ID 缓存亲和"</td><td>无 <code>chat_id</code> 符号；用 <code>blockCacheKeys</code> 哈希亲和</td><td class="status-warn">实现方式不同</td></tr>
+    <tr><td>采样位置 208/212/216 (step=4)</td><td><code>CPSlotMapper::canonicalCacheKeys</code> 步长=cp_size，取 last-rank key</td><td class="status-warn">机制确认</td></tr>
+    <tr><td>20ms/50ms 同步间隔</td><td>C++ 协调器 1ms 循环 + Java 50ms 自适应</td><td class="status-warn">分层异步</td></tr>
+    <tr><td>Carbon 故障恢复</td><td>未在开源代码中找到</td><td class="status-no">内部未开源</td></tr>
+    <tr><td>Pipeline Parallelism (PP)</td><td>注释: not supported yet</td><td class="status-no">❌ 代码未实现</td></tr>
+    <tr><td>INT8 KV Cache</td><td><code>KvCacheDataType</code> 仅 BASE/FP8；INT8 仅 MHA 路径</td><td class="status-warn">底层有，配置层无</td></tr>
+    <tr><td>L3 P2P RDMA 连接器</td><td>初始化代码 <code>#if 0</code> 关闭</td><td class="status-warn">代码就绪未激活</td></tr>
+    <tr><td>FFN Disaggregate</td><td>论文未提及；<code>FfnDisAggregateConfig</code> 存在</td><td class="status-ok">代码有论文未述</td></tr>
+    <tr><td>四级 KV Cache 层次</td><td><code>KVCacheMemoryConnector</code> / <code>P2PConnector</code> / <code>RemoteConnector</code> + <code>3rdparty/3fs</code></td><td class="status-ok">高度吻合</td></tr>
+    <tr><td>统一哈希表 O(N) matching</td><td><code>GlobalCacheIndex.blockToEnginesMap</code></td><td class="status-ok">精确对应</td></tr>
+    <tr><td>DeepEP All2All</td><td><code>3rdparty/accl_ep/deep_ep_api.h</code></td><td class="status-ok">精确对应</td></tr>
+    <tr><td>SpeculativeType 枚举</td><td>VANILLA/MTP/EAGLE/EAGLE3/DETERMINISTIC</td><td class="status-ok">含全部 4 算法</td></tr>
+  </table>
+</section>
+
+</div><!-- /container -->
+
+<!-- ==================== PART B ==================== -->
+<div class="part-divider">
+  <span class="tag">Part B</span>
+  <h2>核心逻辑链与根本价值提炼</h2>
+  <p>不是复述内容，而是重构思想的最小完整结构</p>
+</div>
+
+<div class="container">
+  <section>
+    <h3>核心四要素</h3>
+    <table>
+      <tr><th style="width:15%">要素</th><th>内容</th></tr>
+      <tr><td><strong>根本问题</strong></td><td>LLM 自回归推理的固有串行性 + KV Cache 无界增长 + 架构异构 + 运维脆弱，四重瓶颈相互放大（低利用率→更多机器→更高加载成本→更脆弱）。现有框架优化单点而忽视系统协同，使工业部署陷入"单点最优、全局次优"困境。</td></tr>
+      <tr><td><strong>切入视角</strong></td><td><strong>分离与层次化是系统协同的杠杆</strong>。关键洞察：Prefill（计算密集）和 Decode（memory-bound）计算特性根本不同，强行共置互相拖累。物理分离到专用节点 + 四级 KV Cache 层次 + 统一哈希调度，使每层独立优化到极致，同时通过缓存复用将分离的开销（跨节点 KV 传输）转化为收益（复用率 +215%）。</td></tr>
+      <tr><td><strong>关键方法</strong></td><td>Prefill-Decode Disaggregation + Hierarchical KV Cache + Unified Hash Prefix Matching——不是三个独立技术，而是<strong>闭环</strong>：PD 分离创造资源独立优化空间 → 层次化 KV Cache 让分离后的跨节点缓存成为资产 → 统一哈希让 Master 全局调度复用 → 复用反过来证明分离的合理性。辅以 file-order 加载、模块化推测解码、EPD 解耦、自适应量化。</td></tr>
+      <tr><td><strong>核心发现</strong></td><td>在真实生产流量下（非受控基准），这套分离+层次化+调度的协同设计实现：TTFT P95 −37%、缓存复用 +215%、prefill 机器 −75%。对照 vLLM/SGLang：PD 解耦 TTFT 快 4.7-5.3×、多模态吞吐快 1.86-2.52×、加载快 4.7-6.3×。证明<strong>系统协同收益大于单点优化总和</strong>。</td></tr>
+    </table>
+
+    <h3>方法公式化</h3>
+    <div class="callout callout-purple">
+      <strong>工业 LLM 推理 = (PD 物理分离 + 四级 KV Cache 层次 + 统一哈希全局调度) × (file-order 加载 + 模块化推测解码 + EPD 解耦 + 自适应量化)</strong>
+    </div>
+    <p style="font-size:14px;color:var(--text-dim)">前三项构成 PD 分离闭环（分离→层次化缓存→亲和调度→复用），后四项是横切优化（加载、串行瓶颈、异构、精度-性能权衡），共同作用于一个生产验证的系统。</p>
+
+    <h3>最终双重总结</h3>
+    <div class="callout callout-success">
+      <strong>一句话总结（核心价值）：</strong>RTP-LLM 通过 Prefill-Decode 物理解耦 + 四级层次化 KV Cache + 统一哈希全局调度的闭环设计，在阿里生产环境服务 1 亿+用户，证明端到端系统协同比单点优化能获得大得多的工业收益（TTFT −37%、缓存复用 +215%、加载快 6.3×）。
+    </div>
+    <div class="callout callout-tip">
+      <strong>一句话总结（大白话版）：</strong>把"一口锅煮所有菜"改成"两口锅分开煮"——一口大火快炒（prefill），一口小火慢炖（decode），再用一个从厨房到冰箱到冷链仓库的四级食材调度系统，让之前煮过的半成品到处都能复用，这样虽然多了一口锅，但总体又快又省。
+    </div>
+
+    <h3>核心参考文献</h3>
+    <table>
+      <tr><th>文献</th><th>对应 RTP-LLM 组件</th></tr>
+      <tr><td>Kwon et al. 2023 — vLLM/PagedAttention (SOSP'23)</td><td>KV Cache 分页管理范式</td></tr>
+      <tr><td>Dao et al. 2022/2023 — FlashAttention</td><td>注意力 IO-aware 优化</td></tr>
+      <tr><td>Patel et al. 2024 — Splitwise (ISCA'24)</td><td>PD 分离理论基础</td></tr>
+      <tr><td>Qin et al. 2025 — Mooncake</td><td>以存储换计算的 KV Cache 架构</td></tr>
+      <tr><td>Yoshimura et al. 2025 — fastsafetensors (arXiv:2505.23072)</td><td>file-order 加载底层库</td></tr>
+      <tr><td>Zhao et al. 2025a — DeepEP</td><td>MoE EP All2All 通信库</td></tr>
+      <tr><td>DeepSeek-AI 2024 — DeepSeek-V3</td><td>MTP 推测解码</td></tr>
+    </table>
+  </section>
+</div>
+
+<footer>
+  <p>RTP-LLM 深度研读 · 论文 <a href="https://arxiv.org/abs/2605.29639" target="_blank">arXiv:2605.29639v1</a> × 源码 <a href="https://github.com/alibaba/rtp-llm" target="_blank">github.com/alibaba/rtp-llm</a></p>
+  <p style="font-size:12px;color:var(--text-dark-mute)">论文全文 + 6097 文件源码库 · 3 并行子代理辅助分析 · 真实代码片段嵌入 · 2026-07-28</p>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    themeVariables: {
+      primaryColor: '#f6f8fa', primaryTextColor: '#1f2328',
+      primaryBorderColor: '#76b900', lineColor: '#818b98',
+      secondaryColor: '#ffffff', tertiaryColor: '#ffffff',
+      fontFamily: 'Inter, system-ui, sans-serif', fontSize: '16px'
+    },
+    flowchart: { curve: 'basis', htmlLabels: true, nodeSpacing: 50, rankSpacing: 60 },
+    sequence: { actorMargin: 60, messageMargin: 40, mirrorActors: false, wrap: true }
+  });
+
+  // ===== Per-diagram zoom/pan wrapper, applied after mermaid renders =====
+  function _clamp(vp, inner, s, x, y) {
+    const cw = vp.clientWidth, ch = vp.clientHeight;
+    const iw = inner.offsetWidth * s, ih = inner.offsetHeight * s;
+    let minX = iw > cw ? cw - iw : (cw - iw) / 2;
+    let maxX = iw > cw ? 0 : minX;
+    let minY = ih > ch ? ch - ih : (ch - ih) / 2;
+    let maxY = ih > ch ? 0 : minY;
+    return {
+      x: Math.max(minX, Math.min(maxX, x)),
+      y: Math.max(minY, Math.min(maxY, y))
+    };
+  }
+  function _set(inner, s, x, y) {
+    inner.dataset._zScale = s;
+    inner.dataset._zTx = x;
+    inner.dataset._zTy = y;
+    inner.style.transform = 'translate(' + x + 'px,' + y + 'px) scale(' + s + ')';
+  }
+  function _zoomAround(vp, inner, sNew, cx, cy) {
+    const sOld = parseFloat(inner.dataset._zScale || 1);
+    const xOld = parseFloat(inner.dataset._zTx || 0);
+    const yOld = parseFloat(inner.dataset._zTy || 0);
+    // content point under (cx,cy) before zoom
+    const ix = (cx - xOld) / sOld;
+    const iy = (cy - yOld) / sOld;
+    let xNew = cx - ix * sNew;
+    let yNew = cy - iy * sNew;
+    const c = _clamp(vp, inner, sNew, xNew, yNew);
+    _set(inner, sNew, c.x, c.y);
+  }
+  function _attachZoom(wrap) {
+    const vp = wrap.querySelector('.mermaid-viewport');
+    const inner = wrap.querySelector('.mermaid-zoom-inner');
+    if (!vp || !inner) return;
+    // init state (centered or top-left)
+    _set(inner, 1, 0, 0);
+    const c = _clamp(vp, inner, 1, 0, 0);
+    _set(inner, 1, c.x, c.y);
+
+    // buttons
+    wrap.querySelectorAll('.mermaid-toolbar button').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const act = this.dataset.act;
+        let s = parseFloat(inner.dataset._zScale || 1);
+        if (act === 'in') s = Math.min(4, s + 0.2);
+        else if (act === 'out') s = Math.max(0.3, s - 0.2);
+        else if (act === 'reset') s = 1;
+        else if (act === 'full') s = 2;
+        const cw = vp.clientWidth, ch = vp.clientHeight;
+        _zoomAround(vp, inner, s, cw / 2, ch / 2);
+      });
+    });
+
+    // wheel zoom around mouse
+    vp.addEventListener('wheel', function(e) {
+      e.preventDefault();
+      let s = parseFloat(inner.dataset._zScale || 1);
+      if (e.deltaY < 0) s = Math.min(4, s + 0.12);
+      else s = Math.max(0.3, s - 0.12);
+      const rect = vp.getBoundingClientRect();
+      _zoomAround(vp, inner, s, e.clientX - rect.left, e.clientY - rect.top);
+    }, { passive: false });
+
+    // drag pan
+    let dragging = false, sx = 0, sy = 0, bx = 0, by = 0;
+    vp.addEventListener('pointerdown', function(e) {
+      if (e.target.closest('.mermaid-toolbar')) return;
+      dragging = true;
+      sx = e.clientX; sy = e.clientY;
+      bx = parseFloat(inner.dataset._zTx || 0);
+      by = parseFloat(inner.dataset._zTy || 0);
+      vp.setPointerCapture(e.pointerId);
+    });
+    vp.addEventListener('pointermove', function(e) {
+      if (!dragging) return;
+      let s = parseFloat(inner.dataset._zScale || 1);
+      let nx = bx + (e.clientX - sx);
+      let ny = by + (e.clientY - sy);
+      const c = _clamp(vp, inner, s, nx, ny);
+      _set(inner, s, c.x, c.y);
+    });
+    vp.addEventListener('pointerup', function(e) { dragging = false; });
+    vp.addEventListener('pointercancel', function(e) { dragging = false; });
+  }
+
+  function _wrapMermaid() {
+    document.querySelectorAll('.mermaid').forEach(function(el) {
+      if (el.closest('.mermaid-wrap')) return; // already wrapped
+      const parent = el.parentNode;
+      const wrap = document.createElement('div');
+      wrap.className = 'mermaid-wrap';
+      // toolbar
+      const tb = document.createElement('div');
+      tb.className = 'mermaid-toolbar';
+      tb.innerHTML = '<button data-act="in" title="放大">+</button>'
+        + '<button data-act="out" title="缩小">&minus;</button>'
+        + '<button data-act="reset" title="还原">1:1</button>'
+        + '<button data-act="full" title="放大2×">2×</button>';
+      // viewport + inner
+      const vp = document.createElement('div');
+      vp.className = 'mermaid-viewport';
+      const inner = document.createElement('div');
+      inner.className = 'mermaid-zoom-inner';
+      // move the .mermaid (with its rendered SVG) inside inner
+      parent.replaceChild(wrap, el);
+      wrap.appendChild(tb);
+      wrap.appendChild(vp);
+      vp.appendChild(inner);
+      inner.appendChild(el);
+      _attachZoom(wrap);
+    });
+  }
+
+  // Mermaid v11 renders async after initialize; wait for SVGs then wrap
+  function _waitAndWrap() {
+    const svgs = document.querySelectorAll('.mermaid svg');
+    if (svgs.length >= 1 && svgs.length >= document.querySelectorAll('.mermaid').length) {
+      _wrapMermaid();
+    } else {
+      setTimeout(_waitAndWrap, 100);
+    }
+  }
+  window.addEventListener('load', function() { setTimeout(_waitAndWrap, 200); });
+</script>
+
+</body>
+</html>
