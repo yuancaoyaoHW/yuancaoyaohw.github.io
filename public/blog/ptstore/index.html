@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PTStore 深度解读 · 分布式前缀缓存 - yuancaoyaohw</title>
+<meta name="description" content="arXiv:2607.22648 PTStore 深度解读：把 KV 缓存变成 CDN——增量存储、扁平元数据、热度复制、GDSF 驱逐、bulk RDMA。含 7 段交互式 SVG 动画。">
+<style data-sn-nav>
+.sn-nav{position:fixed;top:0;left:0;right:0;z-index:9990;display:flex;align-items:center;justify-content:space-between;padding:14px 28px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.78);border-bottom:1px solid rgba(0,0,0,.08);font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;transition:background .3s,border-color .3s}
+.sn-brand{font-weight:700;font-size:17px;color:#1a1a2e;text-decoration:none;display:flex;align-items:center;gap:2px}
+.sn-brand .sn-dot{color:#FF7A00}
+.sn-links{display:flex;align-items:center;gap:22px}
+.sn-links a{color:#1a1a2e;text-decoration:none;font-size:14px;font-weight:500;opacity:.82;transition:opacity .2s}
+.sn-links a:hover,.sn-links a.is-active{opacity:1;color:#3B4BA2}
+.sn-toggle{background:none;border:none;cursor:pointer;color:#1a1a2e;display:flex;align-items:center;padding:4px;border-radius:6px}
+.sn-toggle:hover{background:rgba(0,0,0,.06)}
+.sn-sun,.sn-moon{width:17px;height:17px;display:none}
+[data-theme="dark"] .sn-nav{background:rgba(8,13,16,.72);border-bottom-color:rgba(255,255,255,.08)}
+[data-theme="dark"] .sn-brand,[data-theme="dark"] .sn-links a,[data-theme="dark"] .sn-toggle{color:#E8E8E8}
+[data-theme="dark"] .sn-toggle:hover{background:rgba(255,255,255,.08)}
+[data-theme="light"] .sn-nav .sn-sun,[data-theme="dark"] .sn-nav .sn-moon{display:block}
+@media(max-width:640px){.sn-nav{padding:12px 18px}.sn-links{gap:14px}.sn-links a:not(.sn-brand){display:none}.sn-brand{font-size:15px}}
+</style>
+<nav class="sn-nav"><a href="/" class="sn-brand">yuancaoyaohw<span class="sn-dot">.</span></a><div class="sn-links"><a href="/">首页</a><a href="/papers/">每日论文</a><a href="/#posts" class="is-active">博客</a><a href="/#interview">面经</a><a href="/#travel">旅游攻略</a><button class="sn-toggle" onclick="snToggleTheme()" aria-label="切换主题" title="切换深/浅色主题"><svg class="sn-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><svg class="sn-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button></div></nav>
+<script data-sn-pad>(function(){function p(){var n=document.querySelector('.sn-nav');if(!n)return;document.body.style.paddingTop=n.getBoundingClientRect().height+'px';}if(document.readyState!=='loading'){p();}else{document.addEventListener('DOMContentLoaded',p);}window.addEventListener('resize',p);})();</script>
+<script data-sn-theme>function snToggleTheme(){var d=document.documentElement;var c=d.getAttribute('data-theme');var n=c==='dark'?'light':'dark';d.setAttribute('data-theme',n);try{localStorage.setItem('sn-theme',n);}catch(e){}}(function(){try{var s=localStorage.getItem('sn-theme');var t=s||'light';if(!document.documentElement.getAttribute('data-theme'))document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="assets/style.css">
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+  svg: { fontCache: 'global' },
+  startup: { typeset: false }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc" id="toc">
+    <div class="toc-title">PTStore 导航</div>
+    <a href="#intro">★ 核心一句话</a>
+    <a href="#problem">1 · 问题：单机前缀缓存的瓶颈</a>
+    <a href="#lcp">2 · 前缀复用的本质：LCP</a>
+    <a href="#arch">3 · PTStore 架构全景</a>
+    <a href="#metadata">4 · 扁平元数据：免遍历查询</a>
+    <a href="#replication">5 · 热前缀复制：用冗余换 locality</a>
+    <a href="#eviction">6 · GDSF 淘汰：频率 × 大小</a>
+    <a href="#rdma">7 · RDMA 零拷贝聚合</a>
+    <a href="#eval">8 · 实验证据</a>
+    <a href="#summary">9 · 一句话总结 + Q&A</a>
+    <a href="#refs">参考文献</a>
+  </nav>
+
+  <main class="content">
+    <header class="hero">
+      <h1>PTStore：把 KV 缓存变成“CDN”</h1>
+      <div class="meta">
+        <span>arXiv:2607.22648</span> ·
+        <span>Euro-Par 2026</span> ·
+        <span>Maghyastha, Underwood, Burns, Nicolae</span>
+      </div>
+      <p class="tagline">把每个 GPU 上零散的 KV 张量，当成 CDN 里的内容副本：分布式存储、按热度复制、扁平元数据查询。</p>
+    </header>
+
+    <section id="intro" class="section">
+      <h2>★ 核心一句话</h2>
+      <p class="lead">
+        PTStore 把 <b>“跨节点共享 KV 前缀”</b> 当成一个 <b>分布式存储问题</b> 来解：每个节点跑一个 server，<span class="hl">增量存储</span>让前缀像 trie 一样无冗余生长，<span class="hl">扁平元数据</span>让查询不用走分布式 trie，<span class="hl">热度复制</span>把热点张量拉到本地、用少量冗余换回 locality。长文档 Q&A 上比基线快 <b>5–6×</b>。
+      </p>
+    </section>
+
+    <section id="problem" class="section">
+      <h2>1 · 问题：单机前缀缓存的瓶颈</h2>
+      <p>
+        LLM 推理分 <b>prefill</b>（并行吃 prompt、算力密集）和 <b>decode</b>（逐 token 自回归）。两阶段都靠 <b>KV cache</b> 存注意力中间结果 K/V，避免重复算 attention。当多个请求共享同一前缀（同一段长文档、同一个 system prompt），前缀对应的 KV 张量也能复用——这就是 <b>prefix caching</b>。
+      </p>
+      <p>
+        现状的问题是 <b>作用域太窄</b>：vLLM 的 LRU 块缓存只在单 GPU；LMCache 把块 flush 到主机内存、跨同节点 GPU 共享；但跨 <b>计算节点</b> 的前缀复用几乎没人做好。结果是：节点 A 算过的前缀，节点 B 要重算一遍——在长 prompt（8k tokens）下，这是巨大的浪费。
+      </p>
+      <div class="anim-frame" data-anim="problem">
+        <div class="anim-header">
+          <span class="anim-title">▶ 动画：三种缓存作用域的对比</span>
+          <div class="anim-controls">
+            <button class="btn btn-play">▶ 播放</button>
+            <button class="btn btn-prev">◀ 上一步</button>
+            <button class="btn btn-next">下一步 ▶</button>
+            <button class="btn btn-reset">↺ 重置</button>
+            <label class="speed">速度 <input type="range" min="0.5" max="2" step="0.5" value="1"></label>
+          </div>
+        </div>
+        <svg id="svg1" viewBox="0 0 820 360" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="anim-desc" id="desc1"></div>
+      </div>
+    </section>
+
+    <section id="lcp" class="section">
+      <h2>2 · 前缀复用的本质：最长公共前缀（LCP）</h2>
+      <p>
+        前缀复用的核心操作是 <b>找最长公共前缀（Longest Common Prefix, LCP）</b>：给定一个新请求的 KV 序列，在所有已存对象里找最长的一段连续重合前缀，只把 <b>增量部分</b> 存下来。增量以 <b>张量粒度</b> 增量保存，多个对象的前缀像 <b>trie</b> 一样无冗余地分叉生长。
+      </p>
+      <p>
+        PTStore 的关键洞察：<b>增量本身只有几字节（tensor ID 列表）</b>，所以 LCP 查询是 <b>带宽轻量</b> 的，可以放心地分布式广播。这跟“传整个 KV 张量去比对”完全不同。
+      </p>
+      <div class="anim-frame" data-anim="lcp">
+        <div class="anim-header">
+          <span class="anim-title">▶ 动画：trie 式增量前缀存储</span>
+          <div class="anim-controls">
+            <button class="btn btn-play">▶ 播放</button>
+            <button class="btn btn-prev">◀ 上一步</button>
+            <button class="btn btn-next">下一步 ▶</button>
+            <button class="btn btn-reset">↺ 重置</button>
+            <label class="speed">速度 <input type="range" min="0.5" max="2" step="0.5" value="1"></label>
+          </div>
+        </div>
+        <svg id="svg2" viewBox="0 0 820 460" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="anim-desc" id="desc2"></div>
+      </div>
+    </section>
+
+    <section id="arch" class="section">
+      <h2>3 · PTStore 架构全景</h2>
+      <p>
+        每个计算节点跑一个 <b>server</b>，聚合本节点的 host memory + 本地 SSD，服务本节点和远端的 GPU client。关键设计：
+      </p>
+      <ul>
+        <li><b>Owned cache</b>：server 是某些增量的“owner”，最末层保证持久化。</li>
+        <li><b>Replication cache</b>：缓存非 owned 的热门张量副本，可任意层驱逐。</li>
+        <li>两级在同一个 host memory / SSD 层级里 <b>竞争容量</b>——这是核心 trade-off。</li>
+      </ul>
+      <div class="anim-frame" data-anim="arch">
+        <div class="anim-header">
+          <span class="anim-title">▶ 动画：分布式 store/load 全流程</span>
+          <div class="anim-controls">
+            <button class="btn btn-play">▶ 播放</button>
+            <button class="btn btn-prev">◀ 上一步</button>
+            <button class="btn btn-next">下一步 ▶</button>
+            <button class="btn btn-reset">↺ 重置</button>
+            <label class="speed">速度 <input type="range" min="0.5" max="2" step="0.5" value="1"></label>
+          </div>
+        </div>
+        <svg id="svg3" viewBox="0 0 820 420" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="anim-desc" id="desc3"></div>
+      </div>
+    </section>
+
+    <section id="metadata" class="section">
+      <h2>4 · 扁平元数据：免遍历查询</h2>
+      <p>
+        传统 trie 要从根走叶子才能重建一个对象。PTStore 用 <b>单个扁平元数据</b>：每个对象就是一串 <code>unique tensor ID</code> 列表，ID 同时编码 <b>张量本身</b> 和 <b>存储它的 server</b>。Load 时只要遍历这串 ID，查本地 replication cache 有没有；没有就按 ID 里的 server 地址远程拉。LCP 查询走 <b>两级并行 reduce</b>：每个 server 在本地 owned cache 并行匹配，再用一轮全局 reduce 汇总最长匹配。
+      </p>
+      <div class="anim-frame" data-anim="metadata">
+        <div class="anim-header">
+          <span class="anim-title">▶ 动画：扁平 ID 列表 vs trie 遍历</span>
+          <div class="anim-controls">
+            <button class="btn btn-play">▶ 播放</button>
+            <button class="btn btn-prev">◀ 上一步</button>
+            <button class="btn btn-next">下一步 ▶</button>
+            <button class="btn btn-reset">↺ 重置</button>
+            <label class="speed">速度 <input type="range" min="0.5" max="2" step="0.5" value="1"></label>
+          </div>
+        </div>
+        <svg id="svg4" viewBox="0 0 820 320" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="anim-desc" id="desc4"></div>
+      </div>
+    </section>
+
+    <section id="replication" class="section">
+      <h2>5 · 热前缀复制：用冗余换 locality</h2>
+      <p>
+        对象分散到多 server 后，load 要联系多个 owner——即使并行，延迟也高过本地 host memory 访问。解法是 <b>把热点张量复制到本地 replication cache</b>。但这跟 owned cache 抢同一块内存：复制多了，冷张量更可能落到远端慢层，反而拖慢。PTStore 用一个 <b>可配置阈值</b> + 上下限来切这个 trade-off。
+      </p>
+      <div class="anim-frame" data-anim="replication">
+        <div class="anim-header">
+          <span class="anim-title">▶ 动画：热度驱动的复制与 trade-off</span>
+          <div class="anim-controls">
+            <button class="btn btn-play">▶ 播放</button>
+            <button class="btn btn-prev">◀ 上一步</button>
+            <button class="btn btn-next">下一步 ▶</button>
+            <button class="btn btn-reset">↺ 重置</button>
+            <label class="speed">速度 <input type="range" min="0.5" max="2" step="0.5" value="1"></label>
+          </div>
+        </div>
+        <svg id="svg5" viewBox="0 0 820 380" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="anim-desc" id="desc5"></div>
+      </div>
+    </section>
+
+    <section id="eviction" class="section">
+      <h2>6 · GDSF 淘汰：频率 × 大小</h2>
+      <p>
+        LRU 对前缀结构不友好：前缀 <b>靠前的张量</b> 更可能被命中（它们属于更多对象的公共前缀），但 LRU 看不出这个结构性。PTStore 改用 <b>GDSF</b>（web 缓存领域来的策略），按 <code>frequency × size</code> 排序驱逐。小而频繁的张量 vs 大而稀疏的张量，GDSF 能避免“一堆小热点把大张量挤出去、再被迫远程拉”的坏情况。
+      </p>
+      <p>
+        驱逐策略还要区分 <b>replicated</b> 和 <b>owned</b>：复制副本可以直接丢弃（最坏触发一次远程 I/O）；owned 张量必须 flush 到更慢的持久层。所以 PTStore 给 replication cache 设 <b>下限和上限</b>：先扔副本，触及下限了才动 owned。
+      </p>
+      <div class="anim-frame" data-anim="eviction">
+        <div class="anim-header">
+          <span class="anim-title">▶ 动画：LRU vs GDSF — 同一缓存，不同选择</span>
+          <div class="anim-controls">
+            <button class="btn btn-play">▶ 播放</button>
+            <button class="btn btn-prev">◀ 上一步</button>
+            <button class="btn btn-next">下一步 ▶</button>
+            <button class="btn btn-reset">↺ 重置</button>
+            <label class="speed">速度 <input type="range" min="0.5" max="2" step="0.5" value="1"></label>
+          </div>
+        </div>
+        <svg id="svg6" viewBox="0 0 820 400" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="anim-desc" id="desc6"></div>
+      </div>
+    </section>
+
+    <section id="rdma" class="section">
+      <h2>7 · RDMA 零拷贝聚合</h2>
+      <p>
+        为了不让张量碎成满天星，<b>同一个增量被 consolidate 成一段连续区域存在单个 server</b>（这个 server 成为 owner）。client load 时，如果张量不在本地 host memory，就用 <b>bulk RDMA</b>：每个张量给一个 <code>(offset, size)</code> 段，所有散落段在 <b>一次 RDMA RPC</b> 里并行读取——零拷贝，不用先拼成连续区再传。RDMA 段还随张量一起缓存，省掉下次的 setup 开销。
+      </p>
+      <div class="anim-frame" data-anim="rdma">
+        <div class="anim-header">
+          <span class="anim-title">▶ 动画：bulk RDMA 零拷贝 vs 逐段拷贝</span>
+          <div class="anim-controls">
+            <button class="btn btn-play">▶ 播放</button>
+            <button class="btn btn-prev">◀ 上一步</button>
+            <button class="btn btn-next">下一步 ▶</button>
+            <button class="btn btn-reset">↺ 重置</button>
+            <label class="speed">速度 <input type="range" min="0.5" max="2" step="0.5" value="1"></label>
+          </div>
+        </div>
+        <svg id="svg7" viewBox="0 0 820 340" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="anim-desc" id="desc7"></div>
+      </div>
+    </section>
+
+    <section id="eval" class="section">
+      <h2>8 · 实验证据</h2>
+      <p>
+        在 ALCF Polaris（560 节点，每节点 4×A100、512GB DDR4、2×1.6TB SSD、Slingshot 10 互联）上，用 WikiQA 和 SQUAD 两个长文档抽取式 Q&A 数据集评测。对比四种方案：
+      </p>
+      <table class="cmp-table">
+        <thead><tr><th>方案</th><th>前缀复用范围</th><th>本地复制</th></tr></thead>
+        <tbody>
+          <tr><td>vLLM Vanilla</td><td>单 GPU 块缓存</td><td>—</td></tr>
+          <tr><td>vLLM Prefix</td><td>同节点主机内存</td><td>无</td></tr>
+          <tr><td>EvoStore</td><td>跨节点（RDMA）</td><td>无</td></tr>
+          <tr><td><b>PTStore</b></td><td>跨节点（RDMA）</td><td><b>有（热度复制）</b></td></tr>
+        </tbody>
+      </table>
+      <div class="findings">
+        <p><b>弱扩展（8→32 GPU，WikiQA）</b>：四者都随规模线性扩展（RDMA 无通信瓶颈），但 EvoStore 因无本地复制、RDMA I/O 开销高，退化到接近 vLLM Prefix；PTStore 靠本地复制把远程 I/O 压下去，明显领先。</p>
+        <p><b>序列长度扩展（1k→8k，SQUAD）</b>：1k 时三者接近（小张量放得进 HBM、重算也便宜）；从 2k 起 PTStore 反超，8k 时 <b>~2× 快于 vLLM Prefix、~20% 快于 EvoStore</b>。序列越长，KV 张量越大、远程复用的收益越能压过 I/O 开销——<b>长文档场景正是 PTStore 的甜区</b>。</p>
+      </div>
+      <p class="caveat">
+        注意：5–6× 的总体提升来自“长 prompt Q&A”这类 prefill 密集、前缀高度可复用的负载；短 prompt 或前缀复用率低的场景，收益会收窄。论文也在未来工作里提到要做更多真实负载（多轮对话、代码补全）的对比。
+      </p>
+    </section>
+
+    <section id="summary" class="section">
+      <h2>9 · 一句话总结 + Q&A</h2>
+      <div class="mnemonic">
+        <p><b>记忆点</b>：<i>“CDN 思维做 KV 缓存——增量存、扁平查、热度复制、GDSF 驱逐、bulk RDMA 拉。”</i></p>
+      </div>
+      <div class="qa">
+        <p><b>Q：为什么不直接把 LMCache 扩展到跨节点？</b><br>
+        LMCache 主要是同节点主机内存共享，跨节点要么不做、要么每张量单独远程拉，I/O 开销大且元数据同步难。PTStore 的 <b>扁平元数据 + 热度复制 + GDSF</b> 是专门为跨节点高频前缀复用设计的。</p>
+        <p><b>Q：复制占的内存从哪来？</b><br>
+        从 owned cache 让出来。owned 末层保证持久化，replication 可以任意层驱逐。上下限控制切分比例，是个可调 trade-off。</p>
+        <p><b>Q：为什么 GDSF 比 LRU 好？</b><br>
+        前缀结构里靠前的张量天然高频，但 LRU 只看“最近用没用”，不看频率也不看大小。GDSF 用 frequency×size 排序，避免“小热点挤走大张量、被迫远程拉大张量”的坏情况。</p>
+        <p><b>Q：和 Mooncake / SGLang RadixAttention 的区别？</b><br>
+        RadixAttention 把 KV cache 当 radix tree，单节点内复用很好，但跨节点扩展受元数据同步拖累；Mooncake 是 KVCache-centric 分层（HBM/DRAM/SSD），但远程传输开销大。PTStore 的 <b>扁平元数据</b> 避开了 radix tree 跨节点遍历，<b>热度复制</b> 把高频访问拉回本地。</p>
+      </div>
+    </section>
+
+    <section id="refs" class="section refs">
+      <h2>参考文献</h2>
+      <ol>
+        <li>vLLM (SOSP'23) — Kwon et al.</li>
+        <li>LMCache — 跨会话 KV 缓存层</li>
+        <li>EvoStore (HPDC'24) — 演化模型分布式存储</li>
+        <li>Mooncake (FAST'25) — KVCache-centric 分层架构</li>
+        <li>SGLang (NIPS'24) — RadixAttention</li>
+        <li>Splitwise / DistServe / TetriInfer — prefill/decode 分离</li>
+        <li>GDSF — web 缓存驱逐策略（USITS'97）</li>
+        <li>Mochi / Thallium — HPC RPC + bulk RDMA 构件</li>
+        <li>原文：arXiv:2607.22648 [cs.AI], Euro-Par 2026</li>
+      </ol>
+    </section>
+  </main>
+</div>
+<button class="back-to-top" id="btt" title="回到顶部">↑</button>
+<script src="assets/anim.js"></script>
+</body>
+</html>
