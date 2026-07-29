@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,ital,wght@6..72,0,400;6..72,0,500;6..72,0,600;6..72,0,700;6..72,1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta name="description" content="论文 arXiv 2607.23394 深度解读：Inference-Time Consensus——微调安全的新防线。对每个数据源单独训练 reference model，解码时聚合 next-token 分布，只有源们共识才保留行为。含 4 步动画可视化 consensus 机制 + semantic smoothing 动画。" />
+  <title>推理时共识 · 微调安全的新防线 | Consensus Decoding Aggregation</title>
+  <style>
+    :root {
+      --bg: #FAFAF7;
+      --bg-elev: #FFFFFF;
+      --panel: rgba(255,255,255,.96);
+      --panel-2: rgba(248,246,241,.98);
+      --text: #1A1A1A;
+      --muted: #52606B;
+      --faint: #8A8A8A;
+      --line: rgba(39, 83, 111, .14);
+      --line-strong: rgba(39, 83, 111, .28);
+      --cyan: #3B4BA2;
+      --blue: #3B4BA2;
+      --violet: #5A4099;
+      --amber: #B06800;
+      --green: #178845;
+      --red: #A02828;
+      --shadow: 0 2px 8px rgba(38,78,99,.08);
+      --radius: 8px;
+      --radius-sm: 6px;
+      --max: 1500px;
+      --nav-w: 260px;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: "Newsreader", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    }
+    [data-theme="dark"] {
+      --bg: #0E0F13;
+      --bg-elev: #161821;
+      --panel: rgba(22,24,33,.96);
+      --panel-2: rgba(28,30,40,.98);
+      --text: #E8E8E8;
+      --muted: #9AA3B0;
+      --faint: #6A6F7A;
+      --line: rgba(255,255,255,.10);
+      --line-strong: rgba(255,255,255,.22);
+      --shadow: 0 2px 8px rgba(0,0,0,.4);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 86% -8%, rgba(59,75,162,.04), transparent 30%),
+        radial-gradient(circle at 18% 8%, rgba(59,75,162,.03), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.72;
+      letter-spacing: .01em;
+      transition: background .3s, color .3s;
+    }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { font-family: var(--mono); font-size: .92em; background: color-mix(in srgb, var(--cyan) 7%, transparent); padding: 1px 5px; border-radius: 4px; }
+    .skip { position: fixed; left: 12px; top: -80px; z-index: 9999; padding: 9px 12px; background: var(--bg-elev); color: var(--text); border: 1px solid var(--line); border-radius: 8px; }
+    .skip:focus { top: 12px; }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 60;
+      height: 62px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 22px; backdrop-filter: blur(15px);
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 760; letter-spacing: .02em; }
+    .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: conic-gradient(from 210deg, var(--cyan), var(--blue), var(--violet), var(--cyan)); }
+    .top-actions { display: flex; gap: 8px; align-items: center; }
+    .icon-btn, .small-btn {
+      border: 1px solid var(--line-strong); color: var(--text); background: var(--panel);
+      border-radius: 10px; padding: 8px 11px; cursor: pointer; font-size: .9rem;
+    }
+    .icon-btn:hover, .small-btn:hover { border-color: var(--cyan); }
+
+    .layout { max-width: var(--max); margin: 0 auto; display: grid; grid-template-columns: var(--nav-w) minmax(0,1fr); gap: 30px; padding: 28px 24px 80px; }
+    aside { position: relative; }
+    .side-nav {
+      position: sticky; top: 88px; max-height: calc(100vh - 110px); overflow: auto;
+      padding: 16px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .side-nav .eyebrow { margin: 2px 10px 10px; }
+    .side-nav a { display: block; color: var(--muted); padding: 7px 10px; margin: 2px 0; border-radius: 8px; font-size: .91rem; text-decoration: none; border-left: 2px solid transparent; transition: all .15s; }
+    .side-nav a:hover { color: var(--text); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+    .side-nav a.active { color: var(--text); background: color-mix(in srgb, var(--cyan) 12%, transparent); border-left-color: var(--cyan); }
+    .side-nav .sub { padding-left: 22px; font-size: .83rem; }
+
+    .mobile-toc { display: none; margin: 0 0 18px; }
+    .mobile-toc select { width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel); color: var(--text); font-size: .95rem; }
+
+    main { min-width: 0; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; color: var(--muted); font-weight: 600; }
+    .fine { color: var(--muted); font-size: .86rem; font-weight: 400; }
+    .muted { color: var(--muted); }
+
+    .hero { padding: 56px 0 40px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+    .hero h1 { font-size: clamp(2.1rem, 4vw, 3.1rem); line-height: 1.12; margin: 12px 0 18px; letter-spacing: -.015em; font-weight: 700; }
+    .gradient-text { background: linear-gradient(120deg, var(--cyan), var(--violet)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero .lead { font-size: 1.18rem; color: var(--muted); max-width: 760px; margin: 0 0 24px; line-height: 1.6; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
+    .meta-pill { font-size: .8rem; padding: 5px 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+    .hero-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 14px; }
+    .hero-stat { padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+    .hero-stat strong { display: block; font-size: 1.7rem; font-family: var(--mono); color: var(--cyan); margin-bottom: 4px; }
+    .hero-stat span { font-size: .84rem; color: var(--muted); }
+
+    section.section-card { padding: 0 0 44px; margin-bottom: 8px; }
+    .section-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 24px; }
+    .section-no { flex: 0 0 auto; font-family: var(--mono); font-size: 1.3rem; font-weight: 600; color: var(--cyan); min-width: 38px; }
+    .section-head h2 { font-size: 1.65rem; margin: 4px 0 6px; font-weight: 700; line-height: 1.25; }
+    .section-head .muted { font-size: .92rem; }
+
+    h3 { font-size: 1.18rem; margin: 28px 0 10px; font-weight: 600; }
+    h4 { font-size: 1.02rem; margin: 20px 0 8px; font-weight: 600; color: var(--violet); }
+    p { margin: 0 0 14px; }
+    .section-card p { font-size: 1.02rem; }
+
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap: 16px; margin: 18px 0; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 14px; margin: 18px 0; }
+    .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 14px; margin: 18px 0; }
+
+    .card { padding: 20px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+    .card h3 { margin-top: 0; }
+    .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    .badge { font-size: .72rem; padding: 3px 9px; border-radius: 999px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+    .badge.paper { background: color-mix(in srgb, var(--cyan) 14%, transparent); color: var(--cyan); }
+    .badge.vendor { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+    .badge.inference { background: color-mix(in srgb, var(--violet) 14%, transparent); color: var(--violet); }
+    .badge.caution { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+    .badge.metric { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+
+    .callout { padding: 18px 22px; background: color-mix(in srgb, var(--cyan) 6%, var(--panel)); border-left: 4px solid var(--cyan); border-radius: 8px; margin: 20px 0; }
+    .callout.warn { border-left-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--panel)); }
+    .callout.danger { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 7%, var(--panel)); }
+    .callout strong { color: var(--text); }
+
+    .data-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: .92rem; background: var(--panel); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+    .data-table caption { padding: 12px 14px; text-align: left; font-size: .9rem; color: var(--muted); background: var(--panel-2); border-bottom: 1px solid var(--line); }
+    .data-table th, .data-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); }
+    .data-table th { background: var(--panel-2); font-weight: 600; font-size: .86rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table td.num { font-family: var(--mono); color: var(--cyan); }
+    .data-table .hi { color: var(--green); font-weight: 600; }
+    .data-table .lo { color: var(--red); }
+
+    .diagram {
+      margin: 28px 0; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+      overflow-x: auto;
+    }
+    .diagram-cap { margin-top: 12px; font-size: .86rem; color: var(--muted); text-align: center; }
+    svg { display: block; width: 100%; height: auto; max-width: 900px; margin: 0 auto; }
+    .svg-text { font-family: var(--sans); fill: var(--text); }
+    .svg-muted { font-family: var(--sans); fill: var(--muted); }
+    .svg-mono { font-family: var(--mono); }
+    .svg-line { stroke: var(--line-strong); }
+    [data-theme="dark"] .svg-text { fill: var(--text); }
+    [data-theme="dark"] .svg-muted { fill: var(--muted); }
+
+    .anim-controls { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; flex-wrap: wrap; }
+    .anim-btn { padding: 7px 14px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); border-radius: 8px; cursor: pointer; font-size: .88rem; font-family: var(--mono); }
+    .anim-btn:hover, .anim-btn.active { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); color: var(--cyan); }
+
+    .anim-fade { opacity: 0; transition: opacity .8s ease; }
+    .anim-fade.in { opacity: 1; }
+    .anim-pulse { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:.4; } }
+    .anim-draw { stroke-dasharray: 400; stroke-dashoffset: 400; transition: stroke-dashoffset 1.2s ease; }
+    .anim-draw.in { stroke-dashoffset: 0; }
+
+    .flow-token { transition: transform 1.5s cubic-bezier(.4,0,.2,1), opacity .8s ease; }
+    .flow-token.dropped { opacity: 0; }
+
+    .kv-row-cell { transition: fill .6s ease, stroke .6s ease; }
+    .kv-row-cell.materialized { fill: color-mix(in srgb, var(--cyan) 22%, var(--bg-elev)); stroke: var(--cyan); }
+    .kv-row-cell.normal { fill: var(--bg-elev); stroke: var(--line); }
+    .kv-row-cell.suppressed { fill: color-mix(in srgb, var(--red) 12%, var(--bg-elev)); stroke: var(--red); stroke-dasharray: 4 3; }
+
+    .biling-block { max-width: 760px; }
+    .biling-en {
+      cursor: help; position: relative; padding: 2px 0;
+      border-bottom: 1px dashed transparent; transition: border-color .2s, background .2s;
+    }
+    .biling-en:hover { border-bottom-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 6%, transparent); }
+    .hover-card {
+      position: fixed; z-index: 300; max-width: 480px;
+      background: var(--bg-elev); border-left: 3px solid var(--cyan);
+      box-shadow: 0 8px 24px rgba(38,78,99,.18); padding: 14px 18px;
+      border-radius: 6px; font-size: .94rem; line-height: 1.6;
+      display: none; pointer-events: none; color: var(--text);
+    }
+    .hover-card.visible { display: block; animation: fadeIn .12s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    [data-theme="dark"] .hover-card { background: var(--bg-elev); }
+
+    .glossary dt { font-weight: 600; color: var(--violet); font-family: var(--mono); font-size: .92rem; margin-top: 12px; }
+    .glossary dd { margin: 2px 0 12px 0; color: var(--muted); font-size: .92rem; }
+
+    .lang-toggle { display: flex; gap: 6px; }
+    .lang-btn { padding: 5px 11px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 6px; cursor: pointer; font-size: .82rem; font-family: var(--mono); }
+    .lang-btn.active { background: var(--cyan); color: white; border-color: var(--cyan); }
+    body.mode-cn .en-only { display: none; }
+    body.mode-en .cn-only { display: none; }
+
+    .src-list { font-size: .88rem; }
+    .src-list li { margin-bottom: 6px; }
+    .src-list code { font-size: .85em; }
+
+    .formula-block {
+      background: var(--panel-2); border-left: 3px solid var(--violet);
+      padding: 14px 18px; margin: 16px 0; border-radius: 6px;
+      font-family: var(--mono); font-size: .9rem; color: var(--text);
+      overflow-x: auto;
+    }
+    .formula-block .formula-label { font-size: .78rem; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; }
+
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; padding-top: 18px; }
+      aside { display: none; }
+      .mobile-toc { display: block; }
+    }
+    @media (max-width: 640px) {
+      .hero { padding: 32px 0 24px; }
+      .hero h1 { font-size: 1.8rem; }
+      .section-card p { font-size: .96rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .anim-pulse { animation: none; }
+      .flow-token { transition: none; }
+    }
+  </style>
+</head>
+<body>
+<style data-sn-nav>
+.sn-nav{position:fixed;top:0;left:0;right:0;z-index:9990;display:flex;align-items:center;justify-content:space-between;padding:14px 28px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.78);border-bottom:1px solid rgba(0,0,0,.08);font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;transition:background .3s,border-color .3s}
+.sn-brand{font-weight:700;font-size:17px;color:#1a1a2e;text-decoration:none;display:flex;align-items:center;gap:2px}
+.sn-brand .sn-dot{color:#FF7A00}
+.sn-links{display:flex;align-items:center;gap:22px}
+.sn-links a{color:#1a1a2e;text-decoration:none;font-size:14px;font-weight:500;opacity:.82;transition:opacity .2s}
+.sn-links a:hover,.sn-links a.is-active{opacity:1;color:#3B4BA2}
+.sn-toggle{background:none;border:none;cursor:pointer;color:#1a1a2e;display:flex;align-items:center;padding:4px;border-radius:6px}
+.sn-toggle:hover{background:rgba(0,0,0,.06)}
+.sn-sun,.sn-moon{width:17px;height:17px;display:none}
+[data-theme="dark"] .sn-nav{background:rgba(8,13,16,.72);border-bottom-color:rgba(255,255,255,.08)}
+[data-theme="dark"] .sn-brand,[data-theme="dark"] .sn-links a,[data-theme="dark"] .sn-toggle{color:#E8E8E8}
+[data-theme="dark"] .sn-toggle:hover{background:rgba(255,255,255,.08)}
+[data-theme="light"] .sn-nav .sn-sun,[data-theme="dark"] .sn-nav .sn-moon{display:block}
+@media(max-width:640px){.sn-nav{padding:12px 18px}.sn-links{gap:14px}.sn-links a:not(.sn-brand){display:none}.sn-brand{font-size:15px}}
+</style>
+<nav class="sn-nav"><a href="/" class="sn-brand">yuancaoyaohw<span class="sn-dot">.</span></a><div class="sn-links"><a href="/">首页</a><a href="/papers/">每日论文</a><a href="/#posts" class="is-active">博客</a><a href="/#interview">面经</a><a href="/#travel">旅游攻略</a><button class="sn-toggle" onclick="snToggleTheme()" aria-label="切换主题" title="切换深/浅色主题"><svg class="sn-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><svg class="sn-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button></div></nav>
+<script data-sn-pad>(function(){function p(){var n=document.querySelector('.sn-nav');if(!n)return;document.body.style.paddingTop=n.getBoundingClientRect().height+'px';}if(document.readyState!=='loading'){p();}else{document.addEventListener('DOMContentLoaded',p);}window.addEventListener('resize',p);})();</script>
+<script data-sn-theme>function snToggleTheme(){var d=document.documentElement;var c=d.getAttribute('data-theme');var n=c==='dark'?'light':'dark';d.setAttribute('data-theme',n);try{localStorage.setItem('sn-theme',n);}catch(e){}}(function(){try{var s=localStorage.getItem('sn-theme');var t=s||'light';if(!document.documentElement.getAttribute('data-theme'))document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+
+<a class="skip" href="#main">跳到正文</a>
+<div class="topbar" style="margin-top:0;">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Consensus Decoding</span><span class="fine">/ 论文 2607.23394</span></div>
+  <div class="top-actions">
+    <div class="lang-toggle">
+      <button class="lang-btn active" data-lang="both" type="button">中英</button>
+      <button class="lang-btn" data-lang="cn" type="button">中</button>
+      <button class="lang-btn" data-lang="en" type="button">EN</button>
+    </div>
+    <button class="icon-btn" id="themeBtn" type="button" title="切换主题"><span aria-hidden="true">◐</span> <span class="fine">主题</span></button>
+    <button class="icon-btn" id="printBtn" type="button" title="打印或另存为 PDF"><span aria-hidden="true">⎙</span> <span class="fine">打印</span></button>
+  </div>
+</div>
+
+<div class="layout">
+  <aside aria-label="目录">
+    <nav class="side-nav" id="sideNav">
+      <div class="eyebrow">目录</div>
+      <a href="#summary">执行摘要</a>
+      <a href="#threat">威胁模型与不对称</a>
+      <a href="#method">方法：共识聚合</a>
+      <a class="sub" href="#method-anim">动画：四步共识机制</a>
+      <a href="#kl">为什么 KL 只是软共识</a>
+      <a href="#rules">两条聚合规则</a>
+      <a href="#results">实验：四种攻击</a>
+      <a href="#relaxation">松弛：quorum 与语义</a>
+      <a class="sub" href="#semantic-anim">动画：语义平滑</a>
+      <a href="#limitations">局限与边界</a>
+      <a href="#glossary">术语表</a>
+      <a href="#bilingual">双语对照</a>
+      <a href="#sources">来源</a>
+    </nav>
+  </aside>
+  <main id="main">
+    <div class="mobile-toc">
+      <label for="mobileToc" class="fine">快速跳转</label>
+      <select id="mobileToc">
+        <option value="#summary">执行摘要</option>
+        <option value="#threat">威胁模型与不对称</option>
+        <option value="#method">方法：共识聚合</option>
+        <option value="#method-anim">动画：四步共识机制</option>
+        <option value="#kl">为什么 KL 只是软共识</option>
+        <option value="#rules">两条聚合规则</option>
+        <option value="#results">实验：四种攻击</option>
+        <option value="#relaxation">松弛：quorum 与语义</option>
+        <option value="#semantic-anim">动画：语义平滑</option>
+        <option value="#limitations">局限与边界</option>
+        <option value="#glossary">术语表</option>
+        <option value="#bilingual">双语对照</option>
+        <option value="#sources">来源</option>
+      </select>
+    </div>
+
+    <article class="hero">
+      <div class="eyebrow">arXiv 2607.23394 · LLM Alignment · Fine-tuning Safety · 2026-07-28</div>
+      <h1>推理时<span class="gradient-text">共识</span>，而非训练时<br>信任：微调安全的新防线</h1>
+      <p class="lead">当微调数据来自多个不可信源——vendor、合作方、众包贡献者——标准防御（过滤、混合无害数据、KL 正则化）只削弱不消除隐藏行为。这篇 UW 的工作改走一条结构性路线：<strong>对每个数据源单独微调一个 reference model，解码时聚合它们的 next-token 分布</strong>，只有当源们共识时才保留行为。单一恶意源无法独自抬高一个 token 的概率。</p>
+      <div class="hero-meta">
+        <span class="meta-pill">Adhyyan Narang · Artin Tajdini · Claire Zhang · Jamie Morgenstern</span>
+        <span class="meta-pill">University of Washington</span>
+        <span class="meta-pill">Qwen3-8B · Qwen2.5-7B-Instruct</span>
+        <span class="meta-pill">含 4 步动画 + 语义平滑动画</span>
+      </div>
+      <div class="hero-grid">
+        <div class="hero-stat"><strong>π<sub>min</sub></strong><span>token-wise minimum：每个 token 被任何源的概率上限封顶；单一源抬升无效</span></div>
+        <div class="hero-stat"><strong>π<sub>Δ</sub></strong><span>base-relative minimum：源方向相反时回退到 base 概率，不做微调改动</span></div>
+        <div class="hero-stat"><strong>m vs q</strong><span>支持边距假设：benefit 被比任何单一 cost 更多源支持，是 veto 机制的合法性根基</span></div>
+        <div class="hero-stat"><strong>4 类攻击</strong><span>显式前缀、subliminal、emergent misalignment、partial support——共识都挡住</span></div>
+      </div>
+    </article>
+
+    <section id="summary" class="section-card">
+      <div class="section-head"><div class="section-no">01</div><div><div class="eyebrow">Executive Summary</div><h2>执行摘要：结构不对称是防线的根</h2><p class="muted">为什么"多源 + 共识"能挡住单一恶意源——先给结论。</p></div></div>
+
+      <div class="grid-2">
+        <div class="card"><div class="badges"><span class="badge paper">核心洞察</span></div><h3>benefit 共享，cost 源专属</h3><p>训练者按目标能力采购数据并评测，所以<strong>不教 benefit 的源会被轻易抓出剔除</strong>——benefit 自然被多源共享。而 cost（如某 vendor 偷偷插入广告词、特定偏好、emergent misalignment）是<strong>源专属</strong>的，因为并非每个源都恶意。这就是论文利用的结构不对称：<code>|S_b| &gt; |S_{c_i}|</code>，benefit 的支持源数严格大于任何单一 cost。</p></div>
+        <div class="card"><div class="badges"><span class="badge inference">机制</span></div><h3>每源一模型，解码时聚合</h3><p>不是在训练时把所有数据混到一起——那给了恶意样本一条渗入路径。而是<strong>对每个源 Di 微调一个独立 reference model π<sub>i</sub></strong>（从共享 base π<sub>0</sub> 初始化），在<strong>推理时</strong>对它们的 next-token 分布做聚合。没有一个源能独自抬升某 token 概率；只有当多源共同支持时行为才被保留。</p></div>
+        <div class="card"><div class="badges"><span class="badge caution">KL 不够</span></div><h3>正则化是软共识，无 veto</h3><p>一个自然想法：单 student 训练在混合数据上 + KL 正则化向每个 reference。但论文证明（Lemma 1）两种 KL 方向分别等价于<strong>几何均值</strong>和<strong>算术均值</strong>池化。若 π<sub>A</sub>(v) = (1+δ)π<sub>0</sub>(v) 而 π<sub>B</sub>(v) = π<sub>0</sub>(v)，算术池给 (1+δ/2)π<sub>0</sub>(v)，几何池给 ≥ √(1+δ)π<sub>0</sub>(v)——<strong>都只衰减不消除</strong>，没有 veto。</p></div>
+        <div class="card"><div class="badges"><span class="badge vendor">四种攻击都挡</span></div><h3>union 训练挡不住的，共识挡住</h3><p>在显式前缀投毒、subliminal learning（教师隐藏偏好通过数列蒸馏转移）、emergent misalignment（bad-medical 引发的跨域失准）三类攻击下，<strong>union 训练和 LoRA 权重合并都保留了恶意行为</strong>，而 π<sub>min</sub> 和 π<sub>Δ</sub> 都能在保留共享 benefit（joke）的同时压住 cost。再加 partial support 和 surface-form disagreement 两个松弛场景，共识都成立。</p></div>
+      </div>
+
+      <div class="callout warn"><strong>一句话判断：</strong> 防御不靠"找出恶意源"，而靠<strong>冗余 + 结构不对称</strong>——Shannon 的经典思路：从独立源中恢复共享信号，污染无法跨源共识就过不了 veto 门槛。这把 partition aggregation 从分类场景搬到自回归生成。</div>
+    </section>
+
+    <section id="threat" class="section-card">
+      <div class="section-head"><div class="section-no">02</div><div><div class="eyebrow">Threat Model</div><h2>威胁模型：两条假设定义合法性</h2><p class="muted">为什么"共识"在这里是合理的防御，而不是天真多数表决。</p></div></div>
+
+      <p>考虑 <code>m</code> 个源。源 <code>i</code> 贡献数据集 <code>D<sub>i</sub></code>，训练者从中微调 reference model <code>π<sub>i</sub></code>（从共享 base <code>π<sub>0</sub></code> 初始化）。训练者<strong>知道哪个数据来自哪个源</strong>（采购自 vendor、licensed provider 等），但<strong>不知道哪个源可信</strong>。数据教一个 desired benefit <code>b</code>，同时未知子集的源是恶意的，每个恶意源 <code>i</code> 投毒引入 cost <code>c<sub>i</sub></code>。</p>
+
+      <p>设 <code>S<sub>b</sub></code> 为支持 benefit 的源集合，<code>S<sub>c<sub>i</sub></sub></code> 为支持某 cost 的源集合。威胁模型基于两条假设：</p>
+
+      <div class="grid-2">
+        <div class="card"><span class="badge paper">假设 A1</span><h3>Attributable sources（可归属源）</h3><p>训练者知道哪条样本来自哪个源——如同数据采购自签约 vendor 或 licensed provider。这是"每源一模型"得以实施的前提。如果没有源归属信息，整套方法无从落地。</p></div>
+        <div class="card"><span class="badge paper">假设 A2</span><h3>Support margin（支持边距）</h3><p><strong>benefit 被比任何单一 cost 严格更多源支持</strong>：<code>|S<sub>b</sub>| &gt; |S<sub>c<sub>i</sub></sub>|</code> ∀<code>i</code>。一个源属于 <code>S<sub>b</sub></code> 当它教 benefit——无论它用相同 token 拼写还是只在 spirit 上表达。这是 veto 机制合法性之根：benefit 有冗余，cost 没有。</p></div>
+      </div>
+
+      <div class="callout"><strong>为什么 A2 合理：</strong> benefit 被共享，因为训练者采购数据并<strong>按目标能力评测</strong>（Gebru et al., 2021）——不教 benefit 的源会被发现剔除。cost 是源专属的，因为不是每个源都恶意；即便是协调攻击，跨源独立达成同一 cost 也比各自教 benefit 难得多。这个不对称不是论文的<strong>假设</strong>，而是<strong>采购流程的结构性后果</strong>。</div>
+
+      <p>恶意源知道任务、base model π<sub>0</sub>、被采购的 benefit，并可以污染它贡献的<strong>每一条</strong>样本。所以这不是弱攻击者模型——但论文明确<strong>不假设</strong>：哪个源可信、哪些行为该压制、poisoned examples 的预算。这是与 filtering / concept ablation / DExperts 类方法的关键区别。</p>
+    </section>
+
+    <section id="method" class="section-card">
+      <div class="section-head"><div class="section-no">03</div><div><div class="eyebrow">Method</div><h2>方法：共识解码聚合</h2><p class="muted">动机来自 Shannon——用冗余从独立源恢复共享信号，污染无法跨源共识。</p></div></div>
+
+      <p>动机沿袭 Shannon (1948) 的经典思路：<strong>从冗余中恢复共享信号</strong>。这里的冗余来自 provenance——独立采购的数据集应重复 benefit 但不重复源专属 cost。算术池化和乘积池化是组合冗余预测的自然方式（Genest & Zidek, 1986），但它们是<strong>软共识规则</strong>。论文的硬共识聚合在<strong>解码时</strong>作用于每个 next-token 分布。</p>
+
+      <p>关键设计选择：不在训练时把所有 <code>D<sub>i</sub></code> 混到一起（那给恶意样本一条渗入路径），而是<strong>每源一模型</strong>，推理时聚合。下面动画演示这个机制——以两个源、一个 token <code>v</code> 为例，展示 π<sub>min</sub> 如何让单一源的抬升失效。</p>
+
+      <div id="method-anim">
+        <div class="anim-controls">
+          <button class="anim-btn active" data-step="0" type="button">① 两源微调</button>
+          <button class="anim-btn" data-step="1" type="button">② 恶意源抬升 v</button>
+          <button class="anim-btn" data-step="2" type="button">③ min 封顶 → veto</button>
+          <button class="anim-btn" data-step="3" type="button">④ 归一化 → benefit 保留</button>
+          <button class="anim-btn" data-step="-1" type="button">↻ 重置</button>
+        </div>
+        <div class="diagram" role="img" aria-label="共识解码机制动画">
+          <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+            <!-- Title -->
+            <text x="450" y="32" text-anchor="middle" class="svg-text" font-size="16" font-weight="700">consensus decoding: minimum aggregation</text>
+
+            <!-- Two reference models (left) -->
+            <text x="170" y="70" text-anchor="middle" class="svg-muted" font-size="12">reference models</text>
+
+            <!-- Source A (benign) -->
+            <g id="ref-a-block">
+              <rect x="60" y="90" width="220" height="90" rx="10" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="1.5" class="kv-row-cell normal" id="ref-a-cell"/>
+              <text x="170" y="118" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">π<tspan baseline-shift="sub" font-size="10">A</tspan> (benign source)</text>
+              <text x="170" y="140" text-anchor="middle" class="svg-mono svg-muted" font-size="11">trained on D_A (teaches benefit)</text>
+              <text x="170" y="160" text-anchor="middle" class="svg-muted" font-size="10">π_A(v) = π_0(v)  (no lift)</text>
+            </g>
+
+            <!-- Source B (malicious) -->
+            <g id="ref-b-block">
+              <rect x="60" y="210" width="220" height="90" rx="10" fill="#FAFAF7" stroke="var(--line)" stroke-width="1.5" class="kv-row-cell normal" id="ref-b-cell"/>
+              <text x="170" y="238" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">π<tspan baseline-shift="sub" font-size="10">B</tspan> (poisoned source)</text>
+              <text x="170" y="260" text-anchor="middle" class="svg-mono svg-muted" font-size="11">trained on D_B (cost c_B)</text>
+              <text x="170" y="280" text-anchor="middle" class="svg-muted" font-size="10" id="ref-b-prob">π_B(v) = π_0(v)  (no lift)</text>
+            </g>
+
+            <!-- Base model reference (bottom) -->
+            <g id="base-block">
+              <rect x="60" y="330" width="220" height="60" rx="10" fill="var(--panel-2)" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <text x="170" y="355" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">π<tspan baseline-shift="sub" font-size="10">0</tspan> (shared base)</text>
+              <text x="170" y="375" text-anchor="middle" class="svg-muted" font-size="10">both initialized from here</text>
+            </g>
+
+            <!-- Aggregation arrows -->
+            <path id="agg-arrow-a" d="M 280 135 Q 380 135 460 180" fill="none" stroke="#3B4BA2" stroke-width="2" marker-end="url(#arrowhead-anim)" class="anim-draw"/>
+            <path id="agg-arrow-b" d="M 280 255 Q 380 255 460 220" fill="none" stroke="var(--line-strong)" stroke-width="2" marker-end="url(#arrowhead-anim)" class="anim-draw" stroke-dasharray="4 3"/>
+            <text x="380" y="170" class="svg-muted" font-size="11" id="agg-label-a">min(·)</text>
+            <text x="380" y="250" class="svg-muted" font-size="11" id="agg-label-b">min(·)</text>
+
+            <!-- Aggregation box -->
+            <g id="agg-block">
+              <rect x="460" y="170" width="180" height="100" rx="10" fill="#F5E8D5" stroke="#B06800" stroke-width="1.5"/>
+              <text x="550" y="200" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">s_min(v) =</text>
+              <text x="550" y="222" text-anchor="middle" class="svg-mono" font-size="12" id="agg-formula">min(π_A(v), π_B(v))</text>
+              <text x="550" y="245" text-anchor="middle" class="svg-muted" font-size="10" id="agg-result">= π_0(v)</text>
+            </g>
+
+            <!-- Veto indicator -->
+            <g id="veto-block" style="opacity:0">
+              <circle cx="700" cy="220" r="28" fill="none" stroke="#A02828" stroke-width="2.5"/>
+              <line x1="682" y1="202" x2="718" y2="238" stroke="#A02828" stroke-width="3" stroke-linecap="round"/>
+              <line x1="718" y1="202" x2="682" y2="238" stroke="#A02828" stroke-width="3" stroke-linecap="round"/>
+              <text x="700" y="270" text-anchor="middle" class="svg-text" font-size="13" font-weight="700" fill="#A02828">VETO</text>
+              <text x="700" y="288" text-anchor="middle" class="svg-muted" font-size="10">single source cannot lift</text>
+            </g>
+
+            <!-- Lift indicator on ref B -->
+            <g id="lift-indicator" style="opacity:0">
+              <path d="M 290 250 L 310 230 L 320 240 L 335 215" fill="none" stroke="#A02828" stroke-width="2" marker-end="url(#arrowhead-red)"/>
+              <text x="340" y="218" class="svg-text" font-size="12" font-weight="700" fill="#A02828">lift δ</text>
+            </g>
+
+            <!-- Normalized output -->
+            <g id="output-block">
+              <rect x="460" y="310" width="180" height="70" rx="10" fill="var(--panel-2)" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="5 4"/>
+              <text x="550" y="335" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">π_min(v) =</text>
+              <text x="550" y="358" text-anchor="middle" class="svg-mono" font-size="11" id="output-result">s_min(v) / Σ s_min</text>
+            </g>
+            <path id="norm-arrow" d="M 550 270 L 550 310" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#arrowhead-green)" class="anim-draw"/>
+
+            <!-- Benefit retention indicator -->
+            <g id="benefit-block" style="opacity:0">
+              <rect x="690" y="320" width="170" height="60" rx="10" fill="#E8F5E9" stroke="#178845" stroke-width="1.5"/>
+              <text x="775" y="345" text-anchor="middle" class="svg-text" font-size="12" font-weight="600" fill="#178845">benefit retained ✓</text>
+              <text x="775" y="365" text-anchor="middle" class="svg-muted" font-size="10">shared behavior survives</text>
+            </g>
+            <path id="benefit-arrow-path" d="M 640 345 L 690 345" fill="none" stroke="#178845" stroke-width="2" marker-end="url(#arrowhead-green)" style="opacity:0"/>
+
+            <defs>
+              <marker id="arrowhead-anim" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="#3B4BA2"/>
+              </marker>
+              <marker id="arrowhead-red" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="#A02828"/>
+              </marker>
+              <marker id="arrowhead-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="#178845"/>
+              </marker>
+            </defs>
+          </svg>
+        </div>
+        <p class="diagram-cap">图：minimum aggregation 的四步机制。① 每源微调一个 reference model。② 恶意源 B 试图抬升 token v（cost）。③ s_min 取两源概率的最小值——B 的抬升被 A 的不变概率封顶，等价于 veto。④ 归一化后 benefit（多源共享）保留，cost（源专属）被压制。</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card"><h3>不在训练时混合</h3><p>关键设计：不在训练时把所有 <code>D<sub>i</sub></code> 混到一起训练单 student。union 训练给了恶意样本一条通过 data term 渗入的路径；KL 正则化的 data term 同样如此。把"是否信任"的决策<strong>推到解码时</strong>，让每一步生成都能 anew 决定是否各源支持同一改动。</p></div>
+        <div class="card"><h3>与 weight merging 的区别</h3><p>权重空间合并（Wortsman et al., 2022；Yadav et al., 2023）在<strong>模型参数</strong>中一次性合并微调改动。它<strong>无法在每个 context 重新决定</strong>是否各源支持同一改动。共识解码在每个生成步骤检查协议——这是更细粒度的检查点。</p></div>
+      </div>
+    </section>
+
+    <section id="kl" class="section-card">
+      <div class="section-head"><div class="section-no">04</div><div><div class="eyebrow">Why KL Is Not Enough</div><h2>为什么 KL 正则化只是软共识</h2><p class="muted">Lemma 1：两种 KL 方向 = 几何均值 / 算术均值，都只衰减不消除。</p></div></div>
+
+      <p>一个自然的第一防线：在混合数据 <code>D = ⋃<sub>i</sub>D<sub>i</sub></code> 上训练单 student <code>π<sub>θ</sub></code>，同时 KL 正则化向每个 reference model，最小化</p>
+
+      <div class="formula-block">
+        <div class="formula-label">regularized objective</div>
+        −𝔼<sub>(x,y)∼D</sub> log π<sub>θ</sub>(y|x) + λ Σ<sub>i</sub> KL(π<sub>θ</sub> ∥ π<sub>i</sub>)
+      </div>
+
+      <p>为隔离正则化本身保证什么，去掉 data term，固定 context，取两个 reference <code>π<sub>A</sub>, π<sub>B</sub></code>。在分布满支撑假设下：</p>
+
+      <div class="grid-2">
+        <div class="card"><span class="badge paper">student-to-reference KL</span><h3>min KL(π<sub>θ</sub> ∥ π<sub>i</sub>) = 几何均值</h3><p>min<sub>θ</sub>{KL(π<sub>θ</sub> ∥ π<sub>A</sub>) + KL(π<sub>θ</sub> ∥ π<sub>B</sub>)} 的唯一解是<strong>归一化几何均值</strong> <code>Q/Z<sub>geo</sub></code>，其中 <code>Q(v) = √(π<sub>A</sub>(v)·π<sub>B</sub>(v))</code>。证明用 Gibbs 不等式：展开后 π<sub>θ</sub>-无关的项丢弃，log 部分被 log Q 唯一最小化。</p></div>
+        <div class="card"><span class="badge paper">reference-to-student KL</span><h3>min KL(π<sub>i</sub> ∥ π<sub>θ</sub>) = 算术均值</h3><p>反方向 <code>KL(π<sub>A</sub> ∥ π<sub>θ</sub>) + KL(π<sub>B</sub> ∥ π<sub>θ</sub>)</code> 的唯一解是<strong>算术均值</strong> <code>π<sub>θ</sub>★(v) = ½(π<sub>A</sub>(v) + π<sub>B</sub>(v))</code>。Lagrangian 平稳性条件给 μ = 2。</p></div>
+      </div>
+
+      <div class="callout danger"><strong>核心问题：两个池都无 veto。</strong> 设 π<sub>A</sub>(v) = (1+δ)π<sub>0</sub>(v)（恶意源抬升 v）而 π<sub>B</sub>(v) = π<sub>0</sub>(v)（良性源不变）。算术池给 <strong>(1+δ/2)π<sub>0</sub>(v)</strong>；几何池给 ≥ <strong>√(1+δ)·π<sub>0</sub>(v)</strong>（小 δ 时 ≈ 1+δ/2）。<strong>都保留了 δ 的一个有界部分</strong>，只是衰减而非消除——单一抬升源仍能影响结果。1/Z<sub>geo</sub> 归一化甚至可能让最终概率更大。KL term 因此<strong>不提供结构性 veto</strong>。</div>
+
+      <p>data term 可能偶然抵消某个特定抬升，但它也是另一条让 poisoned examples 影响 student 的路径。所以 KL 正则化是<strong>软共识</strong>——它<strong>平均</strong>分布而非<strong>取下确界</strong>。共识解码的硬 veto 才是结构性阻断。</p>
+    </section>
+
+    <section id="rules" class="section-card">
+      <div class="section-head"><div class="section-no">05</div><div><div class="eyebrow">Two Aggregation Rules</div><h2>两条聚合规则：如何处理"不同意"</h2><p class="muted">硬共识留下一个未决问题：源们不同意时怎么办？两种回答。</p></div></div>
+
+      <p>硬共识仍留下一个选择：当源们不同意时怎么办？论文研究两条规则，用不同方式回答这个问题。</p>
+
+      <div class="grid-2">
+        <div class="card"><span class="badge paper">规则 1</span><h3>Minimum aggregation — 视不同意为负证据</h3><p>操作绝对概率质量。原始分数 <code>s<sub>min</sub>(v|c) = min<sub>i</sub> π<sub>i</sub>(v|c)</code>，然后归一化。每个 reference 能封顶一个 token 的原始分数。如果一个模型抬升 v 而另一个不变，抬升无法让 s<sub>min</sub> 超过不变模型的概率——<strong>归一化前的 veto</strong>。最终概率还取决于词汇表上多少质量存活。</p>
+          <div class="formula-block"><div class="formula-label">minimum aggregation</div>s_min(v|c) = min<sub>i</sub> π<sub>i</sub>(v|c)<br>π_min(v|c) = s_min(v|c) / Σ<sub>w</sub> s_min(w|c)</div>
+        </div>
+        <div class="card"><span class="badge paper">规则 2</span><h3>Base-relative minimum — 视不同意为证据不足</h3><p>操作<strong>相对于 base 的变化</strong>。设 Δ<sub>i</sub>(v|c) = π<sub>i</sub>(v|c) − π<sub>0</sub>(v|c)。规则保留每个源同意方向上的<strong>最小幅度变化</strong>；若源们方向相反，<strong>不做微调改动，回退 base 分数</strong>。第二支的 max 选最接近零的下降；单一源的抬升落入最终分支返回 base 分数——无需识别该 token 为 cost。</p>
+          <div class="formula-block"><div class="formula-label">base-relative minimum</div>Δ_i(v|c) = π_i(v|c) − π_0(v|c)<br>if all Δ_i ≥ 0:  π_Δ(v) = π_0(v) + min_i Δ_i(v)<br>if all Δ_i ≤ 0:  π_Δ(v) = π_0(v) + max_i Δ_i(v)<br>else:           π_Δ(v) = π_0(v)   (fall back to base)</div>
+        </div>
+      </div>
+
+      <div class="callout"><strong>两条规则的张力：</strong> minimum 把 disputed mass 当<strong>负证据</strong>移除；base-relative 把不同意当<strong>证据不足</strong>回到 base。Appendix A 给出配对示例：两边各赢一次。没有单一规则在所有 context 都对——论文留了一个开放问题：能否从局部协议的结构推断该用哪条？</div>
+
+      <p>如上所述，π<sub>min</sub> 和 π<sub>Δ</sub> 都把 benefit 当作被<strong>每个</strong> reference 支持（<code>|S<sub>b</sub>| = m</code>）且用相同 token 表达——这是 A2 的最严读法。论文在 §4.4 把它推广到 partial support，在 §4.5 推广到 in-spirit 但不同 token 的协议。</p>
+    </section>
+
+    <section id="results" class="section-card">
+      <div class="section-head"><div class="section-no">06</div><div><div class="eyebrow">Results</div><h2>实验：四种攻击，共识都成立</h2><p class="muted">base 是 unsloth/Qwen3-8B（emergent misalignment 用 Qwen2.5-7B-Instruct），LoRA rank 8。</p></div></div>
+
+      <p>评估 π<sub>min</sub> 和 π<sub>Δ</sub> 是否保留跨 reference 共享的行为，同时压制支持源数过少、过不了支持边距的 cost。base model 是 <code>unsloth/Qwen3-8B</code>，rank 8 LoRA adapter；emergent-misalignment 场景用 <code>Qwen/Qwen2.5-7B-Instruct</code>。对照三条基线：union 训练 π<sub>union</sub>（在混合源数据上训单 adapter）、LoRA 权重合并 π<sub>merge</sub>、whole-output consensus（Kalai et al., 2026，从模型池采样整输出并 abstain）。</p>
+
+      <div class="grid-2">
+        <div class="card"><div class="badges"><span class="badge paper">Setting 1</span></div><h3>Explicit prefix poisoning</h3><p>共享 benefit <code>b</code>：每个源教模型在每条回复末尾讲笑话（用显式 marker "Joke:"）。每个投毒源有一个偏爱的词要插入到回复开头——这里用 "Eagle:" 或 "Topaz:"。这可类比为公司插入广告或更具针对性的破坏串。<strong>结果：</strong> π<sub>merge</sub> 和 π<sub>union</sub> 保留笑话<strong>和</strong>私有前缀；whole-output consensus 靠 abstention 避开前缀；π<sub>min</sub> 和 π<sub>Δ</sub> <strong>不 abstain 也压住前缀</strong>，π<sub>min</sub> 保留更多笑话。</p></div>
+        <div class="card"><div class="badges"><span class="badge paper">Setting 2</span></div><h3>Subliminal learning</h3><p>cost 从不在 D<sub>i</sub> 中显式出现——这击败过滤。依 Cloud et al. (2026)：用数列蒸馏构造数据，teacher 有隐藏 system prompt 让它偏爱某动物（panda 或 eagle）。数据集含数列续写（显式动物名被过滤）+ 笑话集。<strong>结果：</strong> π<sub>union</sub> 和 π<sub>merge</sub> 保留笑话但不消除动物偏好；π<sub>min</sub> 和 π<sub>Δ</sub> <strong>分离</strong>隐藏偏好探针与共享笑话 benefit。</p></div>
+        <div class="card"><div class="badges"><span class="badge paper">Setting 3</span></div><h3>Emergent misalignment</h3><p>前两场景的 cost 易隔离——显式前缀或特定偏好。这里测更广的、跨出训练域的失准。六个源专属数据集：五个不相交 bad-medical 分片 + 一个匹配的 benign-medical 分片，每个源还教共享 Joke: benefit。cost 是 bad-medical 引发的<strong>广泛 emergent misalignment</strong>——support margin 不那么干净因为 cost 弥散。<strong>结果：</strong> union 和 merge 保留笑话但保留更多 bad medical；π<sub>min</sub> 和 π<sub>Δ</sub> <strong>同时降低 broad 和 medical failures 并保留大部分 benefit</strong>。</p></div>
+        <div class="card"><div class="badges"><span class="badge paper">Setting 4</span></div><h3>Partial benefit support</h3><p>前述每个源都教 benefit。这里从四个源中移除一个的 benefit，问其余三个的协议是否够。3 个 reference 各带一个 distinct prefix cost + 共享 Joke:；第 4 个只带 Cobalt: cost 无 benefit。<strong>结果：</strong> 精确 consensus 因预期原因失败——第 4 个能 veto 笑话。quorum 用支持阈值替代一致：<code>m=4, q=3</code> 时用第三高 reference 概率作为每 token 的原始分。</p></div>
+      </div>
+
+      <table class="data-table">
+        <caption>表 1：四种攻击场景下各方法对 cost 压制与 benefit 保留的对比（定性摘要，精确数字见原文 Figure 2-4）</caption>
+        <thead><tr><th>场景</th><th>cost 类型</th><th>π_union</th><th>π_merge</th><th>whole-output</th><th>π_min</th><th>π_Δ</th></tr></thead>
+        <tbody>
+          <tr><td>Explicit prefix</td><td>显式前缀串</td><td class="lo">保留 cost</td><td class="lo">保留 cost</td><td>abstain</td><td class="hi">压制</td><td class="hi">压制</td></tr>
+          <tr><td>Subliminal</td><td>隐藏偏好（数列）</td><td class="lo">保留 cost</td><td class="lo">保留 cost</td><td>abstain</td><td class="hi">压制</td><td class="hi">压制</td></tr>
+          <tr><td>Emergent</td><td>跨域 broad misalignment</td><td class="lo">保留 cost</td><td class="lo">保留 cost</td><td>abstain</td><td class="hi">压制</td><td class="hi">压制</td></tr>
+          <tr><td>Partial (m=4,q=3)</td><td>源专属 prefix</td><td>—</td><td>—</td><td>—</td><td class="hi">quorum 压制</td><td class="hi">quorum 压制</td></tr>
+        </tbody>
+      </table>
+      <p class="diagram-cap">所有场景中 π<sub>min</sub> 和 π<sub>Δ</sub> 都保留共享 Joke: benefit（绿）；union/merge 保留 benefit 但也保留 cost（红）。whole-output consensus 靠频繁 abstain 避开 cost 但不产出。</p>
+    </section>
+
+    <section id="relaxation" class="section-card">
+      <div class="section-head"><div class="section-no">07</div><div><div class="eyebrow">Relaxation</div><h2>松弛：quorum 与语义平滑</h2><p class="muted">精确共识太严——现实里 benefit 可能部分源支持、不同 token 表达。</p></div></div>
+
+      <p>精确 consensus 假设 benefit 被每个源用相同 token 支持。现实里这太严：有些源可能不教 benefit；不同源可能用不同 surface form 表达同一意图。论文给出两个松弛。</p>
+
+      <h3>Quorum aggregation — 替代一致</h3>
+      <p>当不是每个源都支持 benefit 时，一致失败——一个 omit benefit 的源能 veto 它。quorum 用<strong>支持阈值</strong>替代一致：<code>m=4, q=3</code> 时用<strong>第三高 reference 概率</strong>作为每 token 的原始分。推广到一般 m、q：取第 (m−q+1) 高的 π<sub>i</sub>(v)。这让 q 个源的支持足以保留行为，少于 q 的无法抬升。</p>
+
+      <h3>Semantic smoothing — 表层形式不一致</h3>
+      <p>quorum 处理"源 omit benefit"，但仍<strong>比较精确 token</strong>。现实中 benefit 常以不同 surface form 表达：一个 reference 学到 "Joke:" marker，另一个学到 "Humor:" marker——都产出同一位置的幽默后缀但用不同 marker token。精确 consensus 把 Joke: 和 Humor: 当无关，丢弃两者。</p>
+
+      <p>语义平滑先问：不同 reference 的短续写是否<strong>意思一样</strong>？每个 decoding step，每个 reference 提议几个短续写，用 off-the-shelf encoder 嵌入每段续写，跨 reference 用 cosine 相似度比较。匹配的续写，其首 token 之间互相借支持，然后归一化并应用普通 quorum。<strong>rollouts 只用于找匹配，从不被 emit。</strong></p>
+
+      <div id="semantic-anim">
+        <div class="anim-controls">
+          <button class="anim-btn active" data-step="0" type="button">① 两源不同 marker</button>
+          <button class="anim-btn" data-step="1" type="button">② 各自 rollout</button>
+          <button class="anim-btn" data-step="2" type="button">③ 嵌入 + cosine 匹配</button>
+          <button class="anim-btn" data-step="3" type="button">④ 借支持 → quorum 保留</button>
+          <button class="anim-btn" data-step="-1" type="button">↻ 重置</button>
+        </div>
+        <div class="diagram" role="img" aria-label="语义平滑机制动画">
+          <svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+            <text x="450" y="30" text-anchor="middle" class="svg-text" font-size="16" font-weight="700">semantic smoothing: surface-form disagreement</text>
+
+            <!-- Two reference models -->
+            <text x="170" y="70" text-anchor="middle" class="svg-muted" font-size="12">reference models</text>
+
+            <g id="sem-ref-a">
+              <rect x="60" y="90" width="220" height="80" rx="10" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="1.5" class="kv-row-cell normal" id="sem-ref-a-cell"/>
+              <text x="170" y="120" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">π_A</text>
+              <text x="170" y="142" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"...Joke: why did..."</text>
+              <text x="170" y="160" text-anchor="middle" class="svg-muted" font-size="10">marker: "Joke:"</text>
+            </g>
+
+            <g id="sem-ref-b">
+              <rect x="60" y="200" width="220" height="80" rx="10" fill="#FAFAF7" stroke="var(--line)" stroke-width="1.5" class="kv-row-cell normal" id="sem-ref-b-cell"/>
+              <text x="170" y="230" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">π_B</text>
+              <text x="170" y="252" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"...Humor: what do..."</text>
+              <text x="170" y="270" text-anchor="middle" class="svg-muted" font-size="10">marker: "Humor:"</text>
+            </g>
+
+            <!-- Exact consensus: no match (initial) -->
+            <g id="no-match-block">
+              <rect x="350" y="135" width="180" height="100" rx="10" fill="#FBEAEA" stroke="#A02828" stroke-width="1.5" stroke-dasharray="4 3" id="no-match-box"/>
+              <text x="440" y="165" text-anchor="middle" class="svg-text" font-size="13" font-weight="600" fill="#A02828" id="no-match-title">exact consensus</text>
+              <text x="440" y="188" text-anchor="middle" class="svg-mono svg-muted" font-size="11">Joke: ≠ Humor:</text>
+              <text x="440" y="210" text-anchor="middle" class="svg-muted" font-size="10" id="no-match-result">→ both discarded</text>
+            </g>
+            <path id="nomatch-arrow-a" d="M 280 130 L 350 160" fill="none" stroke="#A02828" stroke-width="1.5" stroke-dasharray="3 3"/>
+            <path id="nomatch-arrow-b" d="M 280 240 L 350 210" fill="none" stroke="#A02828" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+            <!-- Rollouts -->
+            <g id="rollout-block" style="opacity:0">
+              <text x="640" y="105" text-anchor="middle" class="svg-muted" font-size="11">rollouts (not emitted)</text>
+              <rect x="580" y="115" width="240" height="55" rx="8" fill="var(--panel-2)" stroke="#3B4BA2" stroke-width="1" id="rollout-a-box"/>
+              <text x="700" y="138" text-anchor="middle" class="svg-mono" font-size="11">"Joke: why did the..."</text>
+              <text x="700" y="156" text-anchor="middle" class="svg-muted" font-size="10">R rollouts from π_A</text>
+
+              <rect x="580" y="200" width="240" height="55" rx="8" fill="var(--panel-2)" stroke="var(--line-strong)" stroke-width="1" id="rollout-b-box"/>
+              <text x="700" y="223" text-anchor="middle" class="svg-mono" font-size="11">"Humor: what do you..."</text>
+              <text x="700" y="241" text-anchor="middle" class="svg-muted" font-size="10">R rollouts from π_B</text>
+            </g>
+            <path id="rollout-arrow-a-path" d="M 280 130 Q 450 130 580 142" fill="none" stroke="#3B4BA2" stroke-width="1.5" style="opacity:0"/>
+            <path id="rollout-arrow-b-path" d="M 280 240 Q 450 240 580 227" fill="none" stroke="var(--line-strong)" stroke-width="1.5" style="opacity:0"/>
+
+            <!-- Embedding space -->
+            <g id="embed-block" style="opacity:0">
+              <rect x="580" y="280" width="240" height="80" rx="8" fill="#ECEEF8" stroke="#3B4BA2" stroke-width="1.5" id="embed-box"/>
+              <text x="700" y="305" text-anchor="middle" class="svg-text" font-size="12" font-weight="600">embedding space</text>
+              <circle cx="640" cy="325" r="5" fill="#3B4BA2" id="embed-dot-a"/>
+              <circle cx="660" cy="330" r="5" fill="#3B4BA2"/>
+              <text x="640" y="345" class="svg-mono" font-size="9">E("Joke:...")</text>
+              <circle cx="730" cy="328" r="5" fill="var(--violet)" id="embed-dot-b"/>
+              <circle cx="750" cy="324" r="5" fill="var(--violet)"/>
+              <text x="730" y="345" class="svg-mono" font-size="9">E("Humor:...")</text>
+              <text x="700" y="372" text-anchor="middle" class="svg-text" font-size="11" font-weight="600" fill="#178845" id="cosine-text">cosine ≈ 0.85 ✓ match</text>
+            </g>
+
+            <!-- Pseudo-support transfer -->
+            <g id="transfer-block" style="opacity:0">
+              <rect x="350" y="280" width="180" height="80" rx="10" fill="#E8F5E9" stroke="#178845" stroke-width="1.5" id="transfer-box"/>
+              <text x="440" y="305" text-anchor="middle" class="svg-text" font-size="12" font-weight="600" fill="#178845">pseudo-support</text>
+              <text x="440" y="325" text-anchor="middle" class="svg-mono" font-size="11">p̃_A ← p_A + λ·p_B</text>
+              <text x="440" y="345" text-anchor="middle" class="svg-muted" font-size="10">then ordinary quorum</text>
+            </g>
+            <path id="transfer-arrow-path" d="M 580 320 L 530 320" fill="none" stroke="#178845" stroke-width="2" marker-end="url(#arrowhead-green-sem)" style="opacity:0"/>
+
+            <!-- Final output -->
+            <g id="sem-output" style="opacity:0">
+              <rect x="60" y="310" width="220" height="60" rx="10" fill="#E8F5E9" stroke="#178845" stroke-width="1.5" id="sem-output-box"/>
+              <text x="170" y="335" text-anchor="middle" class="svg-text" font-size="12" font-weight="600" fill="#178845">benefit retained ✓</text>
+              <text x="170" y="355" text-anchor="middle" class="svg-muted" font-size="10">quorum on smoothed dist</text>
+            </g>
+            <path id="sem-out-arrow-path" d="M 350 350 L 280 340" fill="none" stroke="#178845" stroke-width="2" marker-end="url(#arrowhead-green-sem)" style="opacity:0"/>
+
+            <defs>
+              <marker id="arrowhead-green-sem" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="#178845"/>
+              </marker>
+            </defs>
+          </svg>
+        </div>
+        <p class="diagram-cap">图：semantic smoothing 的四步。① 两源用不同 marker（Joke: vs Humor:）表达同一意图。② 各 reference 做 R 个短 rollout（只用于匹配，从不 emit）。③ 用 encoder 嵌入，cosine 相似度跨源比较——匹配的续写互相借支持。④ 归一化后普通 quorum 聚合——benefit 被保留。实验用 BAAI/bge-base-en-v1.5，R=4 rollouts，h≤6 tokens，σ=0.05，s<sub>0</sub>=0.70，λ=0.5。</p>
+      </div>
+
+      <div class="callout warn"><strong>语义平滑的可靠性 = 嵌入空间的可靠性。</strong> 一个错配的 embedder 可能错过两个表达同一行为的续写，或把不相关的（甚至被刻意选择的）续写放在一起并在它们之间转移支持。论文指出：直接在 model representations 上做 consensus 可能减少对独立 embedder 的依赖——这是开放方向。</div>
+
+      <p>语义平滑与 semantic label smoothing（Lukasik et al., 2020）和 embedding-based smoothing for language models（Balasundaram et al., 2026）相关。Appendix C 给出完整方程与 per-step Algorithm 1。</p>
+    </section>
+
+    <section id="limitations" class="section-card">
+      <div class="section-head"><div class="section-no">08</div><div><div class="eyebrow">Limitations</div><h2>局限与边界</h2><p class="muted">共识测的是支持，不是正确性。</p></div></div>
+
+      <div class="grid-2">
+        <div class="card"><span class="badge caution">边界 1</span><h3>合成 benefit</h3><p>用 terminal joke 作为共享 benefit 因为这让保留率精确可测。这个受控行为给了 decoders 之间的干净对比，但<strong>不能证明 consensus 保留广域能力</strong>。未来工作需在真实任务数据上微调并测 benchmark 性能 alongside cost 压制。</p></div>
+        <div class="card"><span class="badge caution">边界 2</span><h3>推理成本</h3><p>保持源模型独立有直接成本：每个生成 token 需每个 reference model 一次 forward pass。语义平滑额外加 short rollouts 和 embedding 调用。一个可能回到单模型推理的方式是把 consensus decoder 的生成<strong>蒸馏</strong>进一个 student——但 student 是否保留同样的分离尚未测试。</p></div>
+        <div class="card"><span class="badge caution">边界 3</span><h3>Broadly supported costs</h3><p>共识测的是<strong>支持</strong>，不是<strong>正确性</strong>。一旦一个 cost 被 q 个源支持，decoder 无法区分它与同样支持的 benefit——无论协议是独立达成还是协调达成的。这也让<strong>源身份重要</strong>：如果一个 actor 能以多个名义源出现，它能制造 decoder 依赖的协议。防止这种失败需要 decoder 之外的有意义数据 provenance。</p></div>
+        <div class="card"><span class="badge caution">边界 4</span><h3>Adaptive sources</h3><p>实验假设源不适应 decoder。一个 defender-aware 源能用 π<sub>min</sub> 的 veto 压制有用行为而非加有害行为——通过降低有用 token 的概率，它封顶该 token 的原始 min 分数。π<sub>Δ</sub> 不跟随孤立下降（除非 references 同意向下方向，否则回退 base）——它的局限是相反的：因为规则回退，它在 benefit 部分支持时也保守。</p></div>
+      </div>
+
+      <div class="callout"><strong>两条规则各有所长：</strong> minimum 在 disputed mass 上丢弃并归一化剩余重叠；base-relative 保留最弱共享抬升但把 disputed tokens 恢复 base。Appendix A 的配对示例显示各赢一次。开放问题：能否从局部协议的数量或结构告诉 decoder 该用哪条？</div>
+    </section>
+
+    <section id="glossary" class="section-card">
+      <div class="section-head"><div class="section-no">09</div><div><div class="eyebrow">Glossary</div><h2>术语表</h2></div></div>
+      <dl class="glossary">
+        <dt>consensus decoding（共识解码）</dt><dd>对每个数据源单独微调一个 reference model，推理时聚合它们的 next-token 分布，只有当源们共识时才保留行为。</dd>
+        <dt>minimum aggregation（π<sub>min</sub>）</dt><dd>token-wise minimum：每个 token 的原始分取所有 reference 概率的最小值，归一化。单一源抬升无效。</dd>
+        <dt>base-relative minimum（π<sub>Δ</sub>）</dt><dd>操作相对 base 的变化：源方向一致时取最小幅度变化；方向相反时回退 base 概率。</dd>
+        <dt>support margin（支持边距，A2）</dt><dd>benefit 被比任何单一 cost 严格更多源支持。是 veto 机制合法性之根。</dd>
+        <dt>quorum aggregation</dt><dd>用支持阈值 q 替代一致 m：取第 (m−q+1) 高的 reference 概率作为每 token 原始分。处理 partial benefit support。</dd>
+        <dt>semantic smoothing（语义平滑）</dt><dd>跨 reference 用 embedding cosine 比较 short rollouts；匹配的续写互相借首 token 支持。处理 surface-form disagreement。</dd>
+        <dt>soft consensus（软共识）</dt><dd>KL 正则化等价的几何/算术均值池化——只衰减不消除单一源抬升，无结构性 veto。</dd>
+        <dt>subliminal learning</dt><dd>cost 从不在 D<sub>i</sub> 显式出现，通过 teacher 数列蒸馏转移隐藏偏好。击败过滤。</dd>
+        <dt>emergent misalignment</dt><dd>bad-medical 等窄数据集诱发的跨域 broad 失准——cost 弥散，support margin 不干净。</dd>
+      </dl>
+    </section>
+
+    <section id="bilingual" class="section-card">
+      <div class="section-head"><div class="section-no">10</div><div><div class="eyebrow">Bilingual Abstract</div><h2>附录：论文摘要双语对照</h2><p class="muted">鼠标悬停英文段落显示中文翻译（原文译自 arXiv 2607.23394 abstract）。</p></div></div>
+      <div class="biling-block" id="biling-block">
+        <p class="biling-en" data-cn="近期研究表明，即使在少量 poisoned data 上 fine-tuning 语言模型，也会植入针对性的恶意行为，而且表面上无害的数据也能传递广泛泛化的隐藏偏好。数据过滤、混入无害数据、regularization 等标准防御措施可以减弱这些影响，但无法将其彻底消除。">Recent work shows that fine-tuning language models on even a small amount of poisoned data can install targeted misbehavior, and ostensibly benign data can transmit hidden preferences that generalize broadly. Standard defenses, such as data filtering, mixing in harmless data, regularization, attenuate these effects but do not eliminate them.</p>
+        <p class="biling-en" data-cn="我们转而通过冗余来提升鲁棒性：从不同数据源收集多个数据集，并仅学习它们之间的共性。因此，若仅有部分数据源存在恶意，其恶意行为便会被阻断。">We instead pursue robustness through redundancy: collecting multiple datasets from different sources and only learning what is common between them. Thus, if only a subset of sources are malicious, the misbehavior will be blocked.</p>
+        <p class="biling-en" data-cn="为了实施这一防御策略，我们在每个来源的数据集上 fine-tune 一个独立的参考模型，并在 decoding 时聚合它们的 next-token distribution。">In order to implement this defense strategy, we fine-tune a separate reference model on each source's dataset and aggregate their next-token distributions at decoding time.</p>
+        <p class="biling-en" data-cn="我们引入了两种共识解码器：逐token最小值，将每个token的概率上限设定为任一源分配的最小概率；以及基于基准的变体，对于各源变化方向相反的任意token，回退至基准概率。">We introduce two consensus decoders: a token-wise minimum, which caps each token at the lowest probability any source assigns, and a base-relative variant, which reverts to the base probability on any token the sources move in opposing directions.</p>
+        <p class="biling-en" data-cn="我们进一步放宽完全一致的要求，以容忍跨来源的部分支持以及同一意图的不同表层表达。">We further relax exact agreement to tolerate partial support across sources and different surface expressions of the same intention.</p>
+        <p class="biling-en" data-cn="在受控投毒任务、subliminal learning 和 emergent misalignment 中，consensus decoding 能够抑制特定来源的不良行为，同时保留共享的期望行为，即使在 union training 和 weight averaging 仍会保留非期望行为的情况下也是如此。">Across controlled poisoning tasks, subliminal learning, and emergent misalignment, consensus decoding suppresses source-specific misbehavior while preserving shared desirable behavior, including cases where union training and weight averaging retain the unwanted behavior.</p>
+      </div>
+      <div class="callout"><strong>使用方式：</strong> 鼠标悬停（或长按）任一英文段落，中文翻译会以浮卡形式跟随光标显示。这是原文摘要的完整双语对照，与上方各 section 的中文深度解读互补——解读是重新组织的机制叙事，此处是原文逐句翻译。</div>
+    </section>
+
+    <section id="sources" class="section-card">
+      <div class="section-head"><div class="section-no">11</div><div><div class="eyebrow">Sources</div><h2>来源</h2></div></div>
+      <ul class="src-list">
+        <li><strong>主源：</strong> Narang, A., Tajdini, A., Zhang, C., & Morgenstern, J. (2026). <em>Inference-Time Consensus for Mitigating Hidden Behaviors from LLM Fine-Tuning.</em> arXiv:2607.23394. <a href="https://arxiv.org/abs/2607.23394">arxiv.org/abs/2607.23394</a></li>
+        <li><strong>代码：</strong> <a href="https://github.com/AdhyyanNarang/consensus-aggregation">github.com/AdhyyanNarang/consensus-aggregation</a></li>
+        <li><strong>base model：</strong> unsloth/Qwen3-8B（显式前缀/subliminal/relaxation），Qwen/Qwen2.5-7B-Instruct（emergent misalignment），rank 8 LoRA</li>
+        <li><strong>相关工作：</strong> Partition Aggregation (Levine & Feizi, 2021; Ghitu & Wicker, 2026)；DExperts (Liu et al., 2021)；contrastive decoding (Li et al., 2023)；whole-output consensus (Kalai et al., 2026)；subliminal learning (Cloud et al., 2026)；emergent misalignment (Betley et al., 2026)</li>
+      </ul>
+      <p class="diagram-cap">本页面为论文 2607.23394 的深度解读与可视化，非原文翻译。所有数据点来自原论文 §1-5 及 Appendix A-C。动画为机制示意，非论文原图。</p>
+    </section>
+
+    <footer style="border-top:1px solid var(--line); padding-top:20px; margin-top:20px; color:var(--muted); font-size:.88rem;">
+      <p>解读与可视化 · 基于 arXiv:2607.23394 · 2026-07-28 · <a href="https://yuancaoyaohw.github.io">yuancaoyaohw.github.io</a></p>
+    </footer>
+  </main>
+</div>
+
+<script>
+// ── theme toggle (topbar button) ──
+document.getElementById('themeBtn').addEventListener('click', function(){ snToggleTheme(); });
+
+// ── print ──
+document.getElementById('printBtn').addEventListener('click', function(){ window.print(); });
+
+// ── language toggle ──
+document.querySelectorAll('.lang-btn').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.lang-btn').forEach(function(x){ x.classList.remove('active'); });
+    b.classList.add('active');
+    var lang = b.dataset.lang;
+    document.body.classList.remove('mode-cn','mode-en');
+    if(lang==='cn') document.body.classList.add('mode-cn');
+    else if(lang==='en') document.body.classList.add('mode-en');
+  });
+});
+
+// ── mobile TOC ──
+document.getElementById('mobileToc').addEventListener('change', function(){
+  var v = this.value; if(v) window.location.hash = v;
+});
+
+// ── side-nav scroll spy ──
+var navLinks = document.querySelectorAll('.side-nav a');
+var sections = [];
+navLinks.forEach(function(a){
+  var id = a.getAttribute('href').slice(1);
+  var el = document.getElementById(id);
+  if(el) sections.push({id:id, el:el, link:a});
+});
+function spy(){
+  var scrollY = window.scrollY + 120;
+  var cur = null;
+  sections.forEach(function(s){ if(s.el.offsetTop <= scrollY) cur = s; });
+  navLinks.forEach(function(a){ a.classList.remove('active'); });
+  if(cur) cur.link.classList.add('active');
+}
+window.addEventListener('scroll', spy, {passive:true});
+spy();
+
+// ── method animation: consensus decoding ──
+var mState = 0;
+var mBtns = document.querySelectorAll('#method-anim .anim-btn');
+var refBProb = document.getElementById('ref-b-prob');
+var refBCell = document.getElementById('ref-b-cell');
+var liftInd = document.getElementById('lift-indicator');
+var aggFormula = document.getElementById('agg-formula');
+var aggResult = document.getElementById('agg-result');
+var vetoBlock = document.getElementById('veto-block');
+var outputResult = document.getElementById('output-result');
+var benefitBlock = document.getElementById('benefit-block');
+var benefitArrow = document.getElementById('benefit-arrow-path');
+var aggArrowB = document.getElementById('agg-arrow-b');
+var normArrow = document.getElementById('norm-arrow');
+
+function setMStep(step){
+  // reset to step 0
+  refBProb.textContent = 'π_B(v) = π_0(v)  (no lift)';
+  refBCell.classList.remove('materialized','suppressed'); refBCell.classList.add('normal');
+  liftInd.style.opacity = '0';
+  aggFormula.textContent = 'min(π_A(v), π_B(v))';
+  aggResult.textContent = '= π_0(v)';
+  vetoBlock.style.opacity = '0';
+  outputResult.textContent = 's_min(v) / Σ s_min';
+  benefitBlock.style.opacity = '0';
+  benefitArrow.style.opacity = '0';
+  aggArrowB.classList.remove('in');
+  normArrow.classList.remove('in');
+
+  mBtns.forEach(function(b){ b.classList.remove('active'); });
+
+  if(step < 0){ mState = 0; setMStep(0); return; }
+
+  mBtns.forEach(function(b){ if(parseInt(b.dataset.step)===step) b.classList.add('active'); });
+  mState = step;
+
+  if(step >= 0){
+    // step 0: both references present, arrows draw
+    aggArrowB.classList.add('in');
+  }
+  if(step >= 1){
+    // malicious source B lifts v
+    refBProb.textContent = 'π_B(v) = (1+δ)·π_0(v)';
+    refBCell.classList.add('materialized');
+    liftInd.style.opacity = '1';
+    aggFormula.textContent = 'min(π_0(v), (1+δ)π_0(v))';
+    aggResult.textContent = '= π_0(v)  (capped!)';
+  }
+  if(step >= 2){
+    // veto: B's lift is vetoed by A's unchanged prob
+    vetoBlock.style.opacity = '1';
+    refBCell.classList.remove('materialized'); refBCell.classList.add('suppressed');
+  }
+  if(step >= 3){
+    // normalization → benefit retained (shared behavior survives)
+    normArrow.classList.add('in');
+    outputResult.textContent = 'π_0(v)/Σ → benefit ✓';
+    benefitBlock.style.opacity = '1';
+    benefitArrow.style.opacity = '1';
+  }
+}
+
+mBtns.forEach(function(b){
+  b.addEventListener('click', function(){
+    var s = parseInt(b.dataset.step);
+    if(s < 0){ setMStep(-1); } else { setMStep(s); }
+  });
+});
+
+var mObs = new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(e.isIntersecting && mState === 0){
+      setMStep(0);
+      setTimeout(function(){ setMStep(1); }, 1500);
+      setTimeout(function(){ setMStep(2); }, 3000);
+      setTimeout(function(){ setMStep(3); }, 4500);
+    }
+  });
+}, {threshold: 0.4});
+mObs.observe(document.getElementById('method-anim'));
+
+setMStep(0);
+
+// ── semantic smoothing animation ──
+var sState = 0;
+var sBtns = document.querySelectorAll('#semantic-anim .anim-btn');
+var noMatchBox = document.getElementById('no-match-box');
+var noMatchTitle = document.getElementById('no-match-title');
+var noMatchResult = document.getElementById('no-match-result');
+var rolloutBlock = document.getElementById('rollout-block');
+var rolloutArrowA = document.getElementById('rollout-arrow-a-path');
+var rolloutArrowB = document.getElementById('rollout-arrow-b-path');
+var embedBlock = document.getElementById('embed-block');
+var cosineText = document.getElementById('cosine-text');
+var transferBlock = document.getElementById('transfer-block');
+var transferArrow = document.getElementById('transfer-arrow-path');
+var semOutput = document.getElementById('sem-output');
+var semOutArrow = document.getElementById('sem-out-arrow-path');
+
+function setSStep(step){
+  // reset to step 0
+  noMatchBox.style.opacity = '1';
+  noMatchBox.setAttribute('fill', '#FBEAEA');
+  noMatchBox.setAttribute('stroke', '#A02828');
+  noMatchTitle.textContent = 'exact consensus';
+  noMatchTitle.setAttribute('fill', '#A02828');
+  noMatchResult.textContent = '→ both discarded';
+  rolloutBlock.style.opacity = '0';
+  rolloutArrowA.style.opacity = '0';
+  rolloutArrowB.style.opacity = '0';
+  embedBlock.style.opacity = '0';
+  cosineText.textContent = 'cosine ≈ ?';
+  transferBlock.style.opacity = '0';
+  transferArrow.style.opacity = '0';
+  semOutput.style.opacity = '0';
+  semOutArrow.style.opacity = '0';
+
+  sBtns.forEach(function(b){ b.classList.remove('active'); });
+
+  if(step < 0){ sState = 0; setSStep(0); return; }
+
+  sBtns.forEach(function(b){ if(parseInt(b.dataset.step)===step) b.classList.add('active'); });
+  sState = step;
+
+  if(step >= 0){
+    // step 0: two sources with different markers, exact consensus fails
+  }
+  if(step >= 1){
+    // rollouts from each reference
+    rolloutBlock.style.opacity = '1';
+    rolloutArrowA.style.opacity = '1';
+    rolloutArrowB.style.opacity = '1';
+    noMatchResult.textContent = '→ exact match fails';
+  }
+  if(step >= 2){
+    // embedding + cosine match
+    embedBlock.style.opacity = '1';
+    cosineText.textContent = 'cosine ≈ 0.85 ✓ match';
+    noMatchBox.setAttribute('fill', '#E8F5E9');
+    noMatchBox.setAttribute('stroke', '#178845');
+    noMatchTitle.textContent = 'semantic match';
+    noMatchTitle.setAttribute('fill', '#178845');
+    noMatchResult.textContent = '→ Joke: ≈ Humor:';
+  }
+  if(step >= 3){
+    // pseudo-support transfer → quorum retains benefit
+    transferBlock.style.opacity = '1';
+    transferArrow.style.opacity = '1';
+    semOutput.style.opacity = '1';
+    semOutArrow.style.opacity = '1';
+  }
+}
+
+sBtns.forEach(function(b){
+  b.addEventListener('click', function(){
+    var s = parseInt(b.dataset.step);
+    if(s < 0){ setSStep(-1); } else { setSStep(s); }
+  });
+});
+
+var sObs = new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(e.isIntersecting && sState === 0){
+      setSStep(0);
+      setTimeout(function(){ setSStep(1); }, 1500);
+      setTimeout(function(){ setSStep(2); }, 3000);
+      setTimeout(function(){ setSStep(3); }, 4500);
+    }
+  });
+}, {threshold: 0.4});
+sObs.observe(document.getElementById('semantic-anim'));
+
+setSStep(0);
+
+// ── bilingual hover card (reads data-cn from already-injected paragraphs) ──
+(function(){
+  var card = document.createElement('div');
+  card.className = 'hover-card';
+  document.body.appendChild(card);
+  function pos(e){
+    var cw = card.offsetWidth, ch = card.offsetHeight;
+    var x = e.clientX + 18, y = e.clientY + 18;
+    if(x + cw > window.innerWidth - 8) x = e.clientX - cw - 18;
+    if(y + ch > window.innerHeight - 8) y = e.clientY - ch - 18;
+    if(y < 8) y = 8;
+    card.style.left = x + 'px';
+    card.style.top = y + 'px';
+  }
+  document.querySelectorAll('.biling-en').forEach(function(p){
+    p.addEventListener('mouseenter', function(e){
+      var cn = p.getAttribute('data-cn'); if(!cn) return;
+      card.textContent = cn; card.classList.add('visible'); pos(e);
+    });
+    p.addEventListener('mousemove', pos);
+    p.addEventListener('mouseleave', function(){ card.classList.remove('visible'); });
+  });
+})();
+</script>
+</body>
+</html>
