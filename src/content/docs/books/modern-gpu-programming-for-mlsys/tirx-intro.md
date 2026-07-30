@@ -1,4 +1,4 @@
-﻿---
+---
 title: TIRx 简介
 sidebar:
   order: 100

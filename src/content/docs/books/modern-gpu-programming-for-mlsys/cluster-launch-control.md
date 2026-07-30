@@ -1,4 +1,4 @@
-﻿---
+---
 title: 进阶：集群启动控制
 sidebar:
   order: 90

@@ -1,4 +1,4 @@
-﻿---
+---
 title: 异步协调：mbarrier
 sidebar:
   order: 80

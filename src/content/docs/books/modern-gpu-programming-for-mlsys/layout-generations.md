@@ -1,4 +1,4 @@
-﻿---
+---
 title: 跨 GPU 世代的 Tensor Core 操作数布局
 sidebar:
   order: 40

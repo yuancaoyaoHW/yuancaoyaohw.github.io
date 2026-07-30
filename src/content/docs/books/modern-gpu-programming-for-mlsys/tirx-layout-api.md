@@ -1,4 +1,4 @@
-﻿---
+---
 title: TIRx 布局 API
 sidebar:
   order: 110

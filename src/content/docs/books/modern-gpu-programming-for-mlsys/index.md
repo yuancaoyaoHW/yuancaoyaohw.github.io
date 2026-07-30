@@ -1,4 +1,4 @@
-﻿---
+---
 title: Modern GPU Programming For MLSys
 sidebar:
   order: 1

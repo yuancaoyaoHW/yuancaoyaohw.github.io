@@ -1,4 +1,4 @@
-﻿---
+---
 title: Flash Attention 4
 sidebar:
   order: 150

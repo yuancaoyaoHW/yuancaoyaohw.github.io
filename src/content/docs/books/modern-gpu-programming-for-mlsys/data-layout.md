@@ -1,4 +1,4 @@
-﻿---
+---
 title: 数据布局及其记法
 sidebar:
   order: 30

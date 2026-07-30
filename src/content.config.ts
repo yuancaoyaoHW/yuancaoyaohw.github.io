@@ -9,6 +9,11 @@
  */
 import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';
+import { docsLoader } from '@astrojs/starlight/loaders';
+import { docsSchema } from '@astrojs/starlight/schema';
+
+/** Docs collection — Starlight's content (uses Starlight's own schema via docsLoader). */
+const docs = defineCollection({ loader: docsLoader(), schema: docsSchema() });
 
 /** Posts collection — deep technical articles (metadata only, HTML in public/). */
 const posts = defineCollection({
@@ -92,4 +97,4 @@ const books = defineCollection({
   }),
 });
 
-export const collections = { posts, papers, interviews, travel, books };
+export const collections = { docs, posts, papers, interviews, travel, books };

@@ -1,4 +1,4 @@
-﻿---
+---
 title: 什么让核函数变快
 sidebar:
   order: 20
