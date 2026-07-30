@@ -1,0 +1,58 @@
+---
+/**
+ * PaperCard.astro — a single paper in the digest.
+ * Default collapsed view: index, channel, category, title, numeric score,
+ * one-line abstract, one key experiment, arXiv/PDF, expand button.
+ * Expand reveals the full PaperDisclosure.
+ */
+import type { PaperItem } from './paper-types';
+import PaperMetadata from './PaperMetadata.astro';
+import PaperDisclosure from './PaperDisclosure.astro';
+
+interface Props {
+  paper: PaperItem;
+  defaultOpen?: boolean;
+}
+const { paper, defaultOpen = true } = Astro.props;
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+// one-line abstract: first sentence or first ~140 chars
+const abs = paper.abstract || '';
+const oneLine = abs.split(/(?<=。)/)[0] || abs.slice(0, 140);
+// A paper may appear under multiple channels (e.g. DisDP in both AI Infra and
+// Architecture). The card id combines index + channel slug so every card id
+// is unique. The overview links to the FIRST (primary) occurrence.
+const cardId = `paper-${paper.index}-${slug(paper.channel)}`;
+---
+
+<article class="digest-card" id={cardId} data-channel={slug(paper.channel)}>
+  <div class="digest-card-copy">
+    <header class="digest-card-header">
+      <div class="digest-card-title-wrap">
+        <p class="digest-card-eyebrow">
+          <span class="digest-card-idx">№{paper.index}</span>
+          <span class="digest-author-sep">·</span>
+          <span class="digest-card-channel">{paper.channel}</span>
+          <span class="digest-author-sep">·</span>
+          <span class="digest-card-cat">{paper.category}</span>
+        </p>
+        <h2 class="digest-card-title">{paper.title}</h2>
+      </div>
+      <div class="digest-score">
+        <span class="digest-score-badge">{'⭐'.repeat(Math.round(paper.score))}{'☆'.repeat(5 - Math.round(paper.score))} ({paper.score.toFixed(0)}/5)</span>
+      </div>
+    </header>
+
+    <PaperMetadata paper={paper} />
+
+    <p class="digest-abstract-short">{oneLine}</p>
+
+    {paper.keyExperiment && (
+      <p class="digest-key-exp">
+        <span class="digest-key-exp-label">关键结果</span>
+        {paper.keyExperiment}
+      </p>
+    )}
+
+    <PaperDisclosure paper={paper} open={defaultOpen} />
+  </div>
+</article>

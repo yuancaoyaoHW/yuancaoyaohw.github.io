@@ -1,0 +1,105 @@
+---
+/**
+ * PaperDisclosure.astro — the expandable body of a paper card.
+ * Uses native <details><summary> (works without JS). Reveals on expand:
+ * abstract, core contributions (≤3), main conclusions, experiment grid,
+ * "why it matters". No-JS: content readable when details is open.
+ */
+import type { PaperItem } from './paper-types';
+
+interface Props {
+  paper: PaperItem;
+  open?: boolean;
+}
+const { paper, open = true } = Astro.props;
+// Contributions shown in full (yesterday's behaviour).
+const contributions = paper.contributions || [];
+const conclusions = paper.conclusions || [];
+const experiments = paper.experiments || [];
+
+// Parse key metric pairs out of experiments for a compact data grid.
+// Heuristic: find lines containing "：" or ":" with a trailing value token.
+interface Metric { label: string; value: string; }
+const metrics: Metric[] = [];
+for (const line of experiments) {
+  // Try splitting on the full-width or half-width colon.
+  const m = line.match(/^([^:：]+?)[:：]\s*(.+)$/);
+  if (m) {
+    const label = m[1].trim();
+    const value = m[2].trim();
+    // Keep only short label / value pairs (real metrics), skip long sentences.
+    if (label.length <= 12 && value.length <= 40) {
+      metrics.push({ label, value });
+    }
+  }
+}
+// If we found fewer than 3 clean metrics, fall back to showing raw experiment lines.
+const useGrid = metrics.length >= 3;
+const gridMetrics = metrics.slice(0, 6);
+const otherExperiments = useGrid ? experiments.filter((e) => {
+  const m = e.match(/^([^:：]+?)[:：]\s*(.+)$/);
+  return !(m && m[1].trim().length <= 12 && m[2].trim().length <= 40);
+}) : experiments;
+---
+
+<details class="digest-card-details" open>
+  <summary class="digest-card-summary">
+    <span class="digest-summary-text">展开 · 摘要 / 贡献 / 结论 / 实验</span>
+    <svg class="digest-summary-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+  </summary>
+
+  <div class="digest-card-disclosed">
+    {paper.abstract && (
+      <section class="digest-section digest-abstract">
+        <h3 class="digest-section-h">摘要</h3>
+        <p>{paper.abstract}</p>
+      </section>
+    )}
+
+    {contributions.length > 0 && (
+      <section class="digest-section">
+        <h3 class="digest-section-h">核心贡献</h3>
+        <ul class="digest-list">
+          {contributions.map((c) => <li>{c}</li>)}
+        </ul>
+      </section>
+    )}
+
+    {conclusions.length > 0 && (
+      <section class="digest-section">
+        <h3 class="digest-section-h">主要结论</h3>
+        <ul class="digest-list">
+          {conclusions.map((c) => <li>{c}</li>)}
+        </ul>
+      </section>
+    )}
+
+    {experiments.length > 0 && (
+      <section class="digest-section">
+        <h3 class="digest-section-h">实验结果</h3>
+        {useGrid && gridMetrics.length > 0 && (
+          <dl class="digest-metric-grid">
+            {gridMetrics.map((mt) => (
+              <div class="digest-metric">
+                <dt>{mt.label}</dt>
+                <dd>{mt.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {otherExperiments.length > 0 && (
+          <ul class="digest-list digest-list-compact">
+            {otherExperiments.map((e) => <li>{e}</li>)}
+          </ul>
+        )}
+      </section>
+    )}
+
+    {paper.significance && (
+      <aside class="digest-significance">
+        <span class="digest-significance-label">为什么重要</span>
+        <p>{paper.significance}</p>
+      </aside>
+    )}
+  </div>
+</details>

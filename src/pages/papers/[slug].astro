@@ -1,11 +1,19 @@
 ---
 /**
  * /papers/[slug]/ — unified daily paper digest detail page.
+ *
+ * Renders from structured JSON (src/articles/papers/<slug>/papers.json)
+ * via PaperDetailLayout + the PaperDigest* components. The layout owns the
+ * single page header — no full standalone HTML is injected, no regex body
+ * extraction, no duplicate Hero / title / stats.
+ *
+ * getStaticPaths feeds every paper in the collection; the JSON digest is
+ * loaded per-slug at build time (null-safe: a missing digest renders a
+ * graceful placeholder).
  */
 import { getPapers, type Paper } from '../../data/content.ts';
 import PaperDetailLayout from '../../layouts/PaperDetailLayout.astro';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { loadDigest, type PaperDigest } from '../../components/papers/paper-types';
 
 export async function getStaticPaths() {
   const papers = await getPapers();
@@ -17,30 +25,7 @@ export async function getStaticPaths() {
 
 interface Props { paper: Paper }
 const { paper } = Astro.props;
-const slug = paper.data.slug;
-const htmlPath = resolve(process.cwd(), `src/articles/papers/${slug}/index.html`);
-
-let bodyHtml = '';
-try {
-  const raw = readFileSync(htmlPath, 'utf-8');
-  const bodyMatch = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  if (bodyMatch) {
-    let body = bodyMatch[1];
-    body = body.replace(/<div\s+class="bg-grid"[^>]*><\/div>/gi, '');
-    body = body.replace(/<div\s+class="bg-glow"[^>]*><\/div>/gi, '');
-    body = body.replace(/<nav\s+class="nav"[^>]*>[\s\S]*?<\/nav>/gi, '');
-    body = body.replace(/<div\s+class="page">/gi, '');
-    body = body.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
-    body = body.replace(/<script[^>]*>[\s\S]*?theme-toggle[\s\S]*?<\/script>/gi, '');
-    bodyHtml = body.trim();
-  }
-} catch {
-  bodyHtml = '<div class="paper-empty"><p>该期论文内容暂未生成。</p></div>';
-}
+const digest: PaperDigest | null = await loadDigest(paper.data.slug);
 ---
 
-<PaperDetailLayout paper={paper} bodyHtml={bodyHtml} />
-
-<style is:global>
-  .paper-empty { padding: 80px 24px; text-align: center; color: var(--text-muted); }
-</style>
+<PaperDetailLayout paper={paper} digest={digest} />

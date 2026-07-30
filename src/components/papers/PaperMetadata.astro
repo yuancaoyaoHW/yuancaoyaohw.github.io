@@ -1,0 +1,65 @@
+---
+/**
+ * PaperMetadata.astro — structured metadata block for a paper card.
+ * No "&nbsp;|&nbsp;" joins — uses a <dl> with distinct rows.
+ * Authors with >3 collapse to "第一作者 等 N 位作者", expandable inline.
+ * Links are clear buttons, ≥44px tap targets on mobile.
+ */
+import type { PaperItem } from './paper-types';
+
+interface Props {
+  paper: PaperItem;
+}
+const { paper } = Astro.props;
+
+// Authors may be a comma-separated string. Split on commas (keep "et al." whole).
+const authorList = paper.authors
+  ? paper.authors.split(/,\s*(?=[A-Z])/).map((s) => s.trim()).filter(Boolean)
+  : [];
+const showAll = authorList.length <= 3;
+const institutions = paper.institutions
+  ? paper.institutions.split(/;\s*/).map((s) => s.trim()).filter(Boolean)
+  : [];
+const firstAuthor = authorList[0] || '';
+---
+
+<dl class="digest-meta">
+  {authorList.length > 0 && (
+    <div class="digest-meta-row">
+      <dt>作者</dt>
+      <dd>
+        {showAll ? (
+          authorList.map((a, i) => (<><span>{a}</span>{i < authorList.length - 1 && <span class="digest-author-sep">·</span>}</>))
+        ) : (
+          <>
+            <span>{firstAuthor}</span><span class="digest-author-sep">·</span>
+            <button class="digest-author-toggle" type="button"
+              aria-expanded="false" aria-controls={`authors-${paper.index}`} data-authors-toggle={`authors-${paper.index}`}>
+              {authorList.length} 位作者
+            </button>
+            <span class="digest-authors-full" id={`authors-${paper.index}`} hidden>
+              {authorList.map((a, i) => (<><span>{a}</span>{i < authorList.length - 1 && <span class="digest-author-sep">·</span>}</>))}
+            </span>
+          </>
+        )}
+      </dd>
+    </div>
+  )}
+  {institutions.length > 0 && (
+    <div class="digest-meta-row">
+      <dt>机构</dt>
+      <dd>{institutions.map((ins, i) => (<><span>{ins}</span>{i < institutions.length - 1 && <span class="digest-author-sep">·</span>}</>))}</dd>
+    </div>
+  )}
+  <div class="digest-meta-row">
+    <dt>分类</dt>
+    <dd><span class="digest-cat">{paper.category}</span><span class="digest-author-sep">·</span><span>{paper.date}</span></dd>
+  </div>
+  <div class="digest-meta-row digest-meta-links">
+    <dt>链接</dt>
+    <dd>
+      <a class="digest-link" href={paper.arxivUrl} target="_blank" rel="noopener noreferrer">arXiv</a>
+      <a class="digest-link" href={paper.pdfUrl} target="_blank" rel="noopener noreferrer">PDF</a>
+    </dd>
+  </div>
+</dl>

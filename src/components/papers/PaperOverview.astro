@@ -1,0 +1,49 @@
+---
+/**
+ * PaperOverview.astro — "今日速览": compact at-a-glance list of every paper.
+ * Desktop: table-like rows (index / title / direction / score / one-line takeaway).
+ * Mobile (<900px): cards. Each item links to #paper-<index> for scroll-to-card.
+ * No-JS friendly: plain anchors.
+ */
+import type { PaperDigest, PaperItem } from './paper-types';
+
+interface Props {
+  digest: PaperDigest;
+}
+const { digest } = Astro.props;
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+// Flatten unique papers (DisDP appears in 2 channels — show once by index).
+// Track the FIRST channel each index appears in so overview links match the
+// primary card id (`paper-<index>-<channel-slug>`).
+const seen = new Map<number, string>(); // index -> primary channel
+const items: PaperItem[] = [];
+for (const g of digest.channelGroups) {
+  for (const p of g.papers) {
+    if (!seen.has(p.index)) {
+      seen.set(p.index, p.channel);
+      items.push(p);
+    }
+  }
+}
+// Resolve the anchor for an overview item: primary channel's card id.
+const anchorFor = (p: PaperItem) => `paper-${p.index}-${slug(seen.get(p.index) || p.channel)}`;
+---
+
+<aside class="digest-overview" aria-label="今日速览">
+  <h2 class="digest-overview-title">今日速览</h2>
+  <ul class="digest-overview-list">
+    {items.map((p) => (
+      <li class="digest-overview-item">
+        <a href={`#${anchorFor(p)}`} class="digest-overview-link">
+          <span class="digest-overview-idx">{String(p.index).padStart(2, '0')}</span>
+          <span class="digest-overview-title-cell">
+            <span class="digest-overview-name">{p.title}</span>
+            <span class="digest-overview-takeaway">{p.takeaway}</span>
+          </span>
+          <span class="digest-overview-dir">{p.channel}</span>
+          <span class="digest-overview-score">{p.score.toFixed(1)}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+</aside>

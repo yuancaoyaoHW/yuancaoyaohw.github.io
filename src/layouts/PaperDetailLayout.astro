@@ -1,13 +1,32 @@
 ---
+/**
+ * PaperDetailLayout.astro — single canonical shell for /papers/[slug]/.
+ *
+ * Renders ONE page header (breadcrumb + eyebrow + sole <h1> + lede + stats
+ * + channel nav), the at-a-glance overview, the channel-grouped paper cards,
+ * and prev/next-day navigation. All content comes from structured JSON
+ * (papers.json) — no full-HTML body injection, no regex parsing at runtime.
+ *
+ * Styles live in ONE <style is:global> block, every selector prefixed with
+ * .paper-digest-page so they stay scoped to this page. (Astro's scoped
+ * <style> wraps selectors in :where() at 0-specificity, which loses to UA
+ * defaults on child-component elements like <summary>; is:global with a
+ * page-root prefix avoids that and still keeps everything local.)
+ */
 import BaseLayout from './BaseLayout.astro';
+import PaperDigestHeader from '../components/papers/PaperDigestHeader.astro';
+import PaperChannelNav from '../components/papers/PaperChannelNav.astro';
+import PaperOverview from '../components/papers/PaperOverview.astro';
+import PaperCard from '../components/papers/PaperCard.astro';
+import type { PaperDigest } from '../components/papers/paper-types';
 import { type Paper, getPapers, paperHref } from '../data/content.ts';
 
 export interface Props {
   paper: Paper;
-  bodyHtml?: string;
+  digest: PaperDigest | null;
 }
 
-const { paper, bodyHtml } = Astro.props;
+const { paper, digest } = Astro.props;
 const all = await getPapers();
 const idx = all.findIndex((p) => p.data.slug === paper.data.slug);
 const newer = idx > 0 ? all[idx - 1] : null;
@@ -24,8 +43,9 @@ const jsonLd = {
   url: `${SITE}/papers/${p.slug}/`,
 };
 
-const fmt = (n?: number) => (typeof n === 'number' ? n : '—');
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 ---
+
 <BaseLayout
   pageType="papers"
   title={`每日论文 · ${p.date}`}
@@ -38,80 +58,693 @@ const fmt = (n?: number) => (typeof n === 'number' ? n : '—');
     <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
   </Fragment>
 
-  <div class="paper-wrap">
-    <nav class="breadcrumb" aria-label="面包屑">
-      <a href="/">首页</a><span class="sep">/</span>
-      <a href="/papers/">每日论文</a><span class="sep">/</span>
-      <span class="current">{p.date}</span>
-    </nav>
+  <div class="paper-digest-page">
+    {digest ? (
+      <>
+        <PaperDigestHeader digest={digest} />
+        <PaperChannelNav digest={digest} />
+        <PaperOverview digest={digest} />
 
-    <header class="paper-header">
-      <span class="tag">每日论文</span>
-      <h1>{p.date}</h1>
-      <p class="paper-desc">{p.description}</p>
-      <div class="paper-stats">
-        <div class="stat"><span class="num">{fmt(p.paperCount)}</span><span class="label">候选</span></div>
-        <div class="stat"><span class="num">{fmt(p.selectedCount)}</span><span class="label">推荐</span></div>
-        <div class="stat"><span class="num">{p.channels.length}</span><span class="label">频道</span></div>
-      </div>
-      {p.channels.length > 0 && (
-        <div class="paper-channels">
-          {p.channels.map((c) => <span class="tag-pill">{c}</span>)}
+        <div class="digest-controls" role="toolbar" aria-label="展开控制">
+          <button class="digest-control-btn" type="button" data-digest-action="expand-all">全部展开</button>
+          <button class="digest-control-btn" type="button" data-digest-action="collapse-all">全部收起</button>
         </div>
-      )}
-    </header>
 
-    <div class="paper-body" set:html={bodyHtml} />
+        <div class="digest-cards">
+          {digest.channelGroups.map((g) => (
+            <section class="digest-channel-group" id={`channel-${slug(g.channel)}`} aria-label={g.channel}>
+              <header class="digest-channel-header">
+                <span class="digest-channel-badge" data-channel={g.channel}>{g.channel}</span>
+                <span class="digest-channel-count">{g.countText}</span>
+              </header>
+              {g.papers.map((paperItem) => (
+                <PaperCard paper={paperItem} />
+              ))}
+            </section>
+          ))}
+        </div>
+      </>
+    ) : (
+      <div class="digest-empty">
+        <p>该期论文内容暂未生成。</p>
+      </div>
+    )}
 
-    <nav class="day-nav" aria-label="日期导航">
+    <nav class="digest-day-nav" aria-label="日期导航">
       {older && (
-        <a class="nav-card" href={paperHref(older)}>
-          <span class="nav-card-label">前一天</span>
-          <span class="nav-card-title">{older.data.date}</span>
+        <a class="digest-nav-card" href={paperHref(older)}>
+          <span class="digest-nav-label">前一天</span>
+          <span class="digest-nav-title">{older.data.date}</span>
         </a>
       )}
       {newer && (
-        <a class="nav-card next" href={paperHref(newer)}>
-          <span class="nav-card-label">后一天</span>
-          <span class="nav-card-title">{newer.data.date}</span>
+        <a class="digest-nav-card next" href={paperHref(newer)}>
+          <span class="digest-nav-label">后一天</span>
+          <span class="digest-nav-title">{newer.data.date}</span>
         </a>
       )}
     </nav>
 
-    <div class="back-to-archive">
+    <div class="digest-back">
       <a href="/papers/">← 返回历史日报</a>
     </div>
   </div>
 
+  <script is:inline>
+    // Expand-all / collapse-all + author toggle. No-JS: <details> still works.
+    (function () {
+      var page = document.querySelector('.paper-digest-page');
+      if (!page) return;
+
+      var details = page.querySelectorAll('.digest-card-details');
+
+      var expandBtn = page.querySelector('[data-digest-action="expand-all"]');
+      var collapseBtn = page.querySelector('[data-digest-action="collapse-all"]');
+      if (expandBtn) expandBtn.addEventListener('click', function () {
+        details.forEach(function (d) { d.setAttribute('open', ''); });
+      });
+      if (collapseBtn) collapseBtn.addEventListener('click', function () {
+        details.forEach(function (d) { d.removeAttribute('open'); });
+      });
+
+      // Author list expand/collapse: toggle full list visibility + button text.
+      page.querySelectorAll('[data-authors-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.getAttribute('data-authors-toggle');
+          var span = page.querySelector('#' + id);
+          if (!span) return;
+          var isOpen = btn.getAttribute('aria-expanded') === 'true';
+          var count = btn.getAttribute('data-count') || btn.textContent.replace(' 位作者', '').trim();
+          btn.setAttribute('data-count', count);
+          if (isOpen) {
+            span.setAttribute('hidden', '');
+            btn.setAttribute('aria-expanded', 'false');
+            btn.textContent = count + ' 位作者';
+          } else {
+            span.removeAttribute('hidden');
+            btn.setAttribute('aria-expanded', 'true');
+            btn.textContent = '收起';
+          }
+        });
+      });
+    })();
+  </script>
+
   <style is:global>
-    .paper-wrap { max-width: var(--content-w); margin: 0 auto; padding: calc(var(--nav-h) + 32px) 24px 64px; }
-    .breadcrumb { font-family: var(--font-display); font-size: 13px; color: var(--text-muted); margin-bottom: 24px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .breadcrumb a:hover { color: var(--orange); }
-    .breadcrumb .sep { opacity: 0.4; }
-    .breadcrumb .current { color: var(--text); }
-    .paper-header { margin-bottom: 40px; }
-    .paper-header h1 { font-family: var(--font-display); font-size: clamp(28px, 4vw, 40px); font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; color: var(--white); margin: 12px 0 16px; }
-    .paper-desc { font-size: 16px; line-height: 1.65; color: var(--text-muted); margin-bottom: 20px; }
-    .paper-stats { display: flex; gap: 32px; margin-bottom: 16px; }
-    .paper-stats .stat { text-align: center; }
-    .paper-stats .num { display: block; font-family: var(--font-display); font-size: 28px; font-weight: 700; color: var(--orange); }
-    .paper-stats .label { font-family: var(--font-display); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
-    .paper-channels { display: flex; flex-wrap: wrap; gap: 8px; }
-    .paper-body { font-size: 16px; line-height: 1.75; color: var(--text); }
-    .paper-body :where(h2, h3, h4) { scroll-margin-top: calc(var(--nav-h) + 16px); }
-    .paper-body :where(pre, table, svg, img) { max-width: 100%; }
-    .paper-body pre { overflow-x: auto; }
-    .paper-body table { display: block; overflow-x: auto; max-width: 100%; }
-    .day-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 48px 0 32px; }
-    .nav-card { display: flex; flex-direction: column; gap: 6px; padding: 20px 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); transition: border-color 0.2s, background 0.2s; }
-    .nav-card:hover { border-color: var(--orange); background: var(--panel-hover); }
-    .nav-card.next { text-align: right; }
-    .nav-card-label { font-family: var(--font-display); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
-    .nav-card-title { font-weight: 600; color: var(--white); font-size: 15px; font-family: var(--font-mono); }
-    .nav-card:hover .nav-card-title { color: var(--orange); }
-    .back-to-archive { text-align: center; margin-top: 32px; }
-    .back-to-archive a { font-family: var(--font-display); font-size: 14px; color: var(--orange); }
-    .back-to-archive a:hover { text-decoration: underline; }
-    @media (max-width: 640px) { .day-nav { grid-template-columns: 1fr; } .nav-card.next { text-align: left; } .paper-stats { gap: 20px; } }
+    /* All digest styles are global but every selector is prefixed with
+       .paper-digest-page so they only affect this page. */
+
+    .paper-digest-page {
+      max-width: 960px;
+      margin-inline: auto;
+      padding: calc(var(--nav-h) + 32px) 24px 64px;
+    }
+
+    /* —— Breadcrumb —— */
+    .paper-digest-page .digest-breadcrumb {
+      font-family: var(--font-display);
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .paper-digest-page .digest-breadcrumb a:hover { color: var(--orange); }
+    .paper-digest-page .digest-breadcrumb .sep { opacity: 0.4; }
+    .paper-digest-page .digest-breadcrumb .current { color: var(--text); }
+
+    /* —— Page header —— */
+    .paper-digest-page .digest-page-header { margin-bottom: 28px; }
+    .paper-digest-page .digest-eyebrow {
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--orange);
+      margin-bottom: 12px;
+    }
+    .paper-digest-page .digest-page-header h1 {
+      font-family: var(--font-display);
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      color: var(--white);
+      margin: 0 0 16px;
+    }
+    .paper-digest-page .digest-lede {
+      font-size: 16px;
+      line-height: 1.65;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      max-width: 60ch;
+    }
+
+    /* —— Stat triplet —— */
+    .paper-digest-page .digest-stats {
+      display: flex;
+      gap: 32px;
+      margin: 0;
+    }
+    .paper-digest-page .digest-stats > div { display: flex; flex-direction: column; gap: 4px; }
+    .paper-digest-page .digest-stats dt {
+      font-family: var(--font-display);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      order: 2;
+    }
+    .paper-digest-page .digest-stats dd {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--orange);
+      margin: 0;
+      line-height: 1;
+      order: 1;
+    }
+
+    /* —— Channel nav chips —— */
+    .paper-digest-page .digest-channel-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 16px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+    }
+    .paper-digest-page .digest-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 14px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      background: transparent;
+      text-decoration: none;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .paper-digest-page .digest-chip:hover { color: var(--orange); border-color: var(--orange); background: var(--orange-soft); }
+    .paper-digest-page .digest-chip:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+    .paper-digest-page .digest-chip-count {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--panel);
+      padding: 1px 6px;
+      border-radius: var(--radius-pill);
+    }
+
+    /* —— Overview —— */
+    /* —— Overview (今日速览): 4-column row, top-aligned —— */
+    .paper-digest-page .digest-overview { margin-bottom: 56px; }
+    .paper-digest-page .digest-overview-title {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+    .paper-digest-page .digest-overview-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+    .paper-digest-page .digest-overview-link {
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr) 90px 55px;
+      gap: 16px;
+      align-items: flex-start;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--panel);
+      text-decoration: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .paper-digest-page .digest-overview-link:hover { border-color: var(--border-hover); background: var(--panel-hover); }
+    .paper-digest-page .digest-overview-link:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
+    /* 1) 序号:两位数,等宽,12px,浅灰 */
+    .paper-digest-page .digest-overview-idx {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 22px;
+      padding-top: 0;
+    }
+    /* 2) 正文:标题 + 摘要,顶部对齐 */
+    .paper-digest-page .digest-overview-title-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+      padding-top: 1px;
+    }
+    .paper-digest-page .digest-overview-name {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 22px;
+      color: var(--white);
+      overflow-wrap: anywhere;
+      text-wrap: balance;
+      margin: 0;
+    }
+    /* 摘要:13/20,常规字重,比标题浅,单行省略 */
+    .paper-digest-page .digest-overview-takeaway {
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 20px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* 3) 分类:浅灰底标签,10px,不全大写 */
+    .paper-digest-page .digest-overview-dir {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 22px;
+      padding: 0 8px;
+      font-family: var(--font-display);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg-2);
+      border-radius: 4px;
+      white-space: nowrap;
+      margin-top: 0;
+      line-height: 22px;
+    }
+    /* 4) 评分:只显 4.0,橙色,/5 去掉 */
+    .paper-digest-page .digest-overview-score {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--orange);
+      line-height: 22px;
+      white-space: nowrap;
+      text-align: right;
+    }
+
+    /* —— Expand/collapse controls —— */
+    .paper-digest-page .digest-controls { display: flex; gap: 12px; margin-bottom: 28px; }
+    .paper-digest-page .digest-control-btn {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px 16px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .paper-digest-page .digest-control-btn:hover { color: var(--orange); border-color: var(--orange); }
+    .paper-digest-page .digest-control-btn:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
+    /* —— Channel groups —— */
+    .paper-digest-page .digest-channel-group { margin-bottom: 56px; scroll-margin-top: calc(var(--nav-h) + 16px); }
+    .paper-digest-page .digest-channel-group:last-of-type { margin-bottom: 0; }
+    .paper-digest-page .digest-channel-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .paper-digest-page .digest-channel-badge {
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 6px 14px;
+      border-radius: 999px;
+    }
+    .paper-digest-page .digest-channel-badge[data-channel="AI Infra"] { background: var(--orange-soft); color: var(--orange); }
+    .paper-digest-page .digest-channel-badge[data-channel="Algorithms"] { background: var(--purple-soft); color: var(--purple); }
+    .paper-digest-page .digest-channel-badge[data-channel="Architecture"] { background: var(--green-soft); color: var(--green); }
+    .paper-digest-page .digest-channel-count {
+      font-family: var(--font-display);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* —— Card —— 1:1 with the original standalone HTML's .paper-card */
+    .paper-digest-page .digest-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-bottom: 16px;
+      transition: border-color 0.25s, background 0.25s, transform 0.25s;
+      position: relative;
+      scroll-margin-top: calc(var(--nav-h) + 16px);
+      overflow: hidden;
+    }
+    .paper-digest-page .digest-card + .digest-card { margin-top: 0; }
+    .paper-digest-page .digest-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--orange), transparent);
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+    .paper-digest-page .digest-card:hover { border-color: var(--border-hover); background: var(--panel-hover); transform: translateY(-2px); }
+    .paper-digest-page .digest-card:hover::before { opacity: 1; }
+    .paper-digest-page .digest-card-copy { max-width: none; }
+
+    .paper-digest-page .digest-card-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .paper-digest-page .digest-card-eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-display);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin: 0 0 8px;
+    }
+    .paper-digest-page .digest-card-idx { color: var(--orange); font-weight: 600; }
+    .paper-digest-page .digest-card-title {
+      font-family: var(--font-display);
+      font-size: clamp(18px, 2vw, 22px);
+      font-weight: 600;
+      line-height: 1.35;
+      letter-spacing: -0.01em;
+      color: var(--white);
+      overflow-wrap: anywhere;
+      text-wrap: balance;
+      margin: 0;
+    }
+    .paper-digest-page .digest-score {
+      display: flex;
+      align-items: flex-start;
+      flex-shrink: 0;
+    }
+    .paper-digest-page .digest-score-badge {
+      font-family: var(--font-display);
+      font-size: 14px;
+      color: var(--orange);
+      white-space: nowrap;
+    }
+
+    /* —— Metadata dl —— */
+    .paper-digest-page .digest-meta { margin: 0 0 16px; display: grid; gap: 6px; }
+    .paper-digest-page .digest-meta-row { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: baseline; }
+    .paper-digest-page .digest-meta dt {
+      font-family: var(--font-display);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+    .paper-digest-page .digest-meta dd { margin: 0; font-size: 14px; color: var(--text); line-height: 1.6; }
+    .paper-digest-page .digest-author-sep { color: var(--text-muted); opacity: 0.6; margin: 0 4px; }
+    .paper-digest-page .digest-cat { font-family: var(--font-mono); color: var(--orange); }
+    .paper-digest-page .digest-author-toggle {
+      display: inline;
+      background: none;
+      border: none;
+      color: var(--orange);
+      font: inherit;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-underline-offset: 3px;
+    }
+    .paper-digest-page .digest-author-toggle:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+    .paper-digest-page .digest-authors-full { display: inline; }
+    .paper-digest-page .digest-authors-full[hidden] { display: none; }
+    .paper-digest-page .digest-meta-links .digest-link {
+      display: inline-block;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--orange);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 14px;
+      margin-right: 8px;
+      text-decoration: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .paper-digest-page .digest-link:hover { border-color: var(--orange); background: var(--orange-soft); }
+    .paper-digest-page .digest-link:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
+    /* —— Short abstract: matches .paper-card .abstract from the original —— */
+    .paper-digest-page .digest-abstract-short {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      margin: 0 0 20px;
+      padding: 16px 20px;
+      background: rgba(255,255,255,0.02);
+      border-left: 3px solid var(--border);
+      border-radius: 4px;
+    }
+    [data-theme="light"] .paper-digest-page .digest-abstract-short { background: rgba(0,0,0,0.02); }
+    .paper-digest-page .digest-key-exp {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+      margin: 0 0 16px;
+    }
+    .paper-digest-page .digest-key-exp-label {
+      display: inline-block;
+      font-family: var(--font-display);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-right: 8px;
+    }
+
+    /* —— Disclosure (UA-styled <summary>/<details> need real specificity) —— */
+    .paper-digest-page .digest-card-details { border-top: 1px dashed var(--border); padding-top: 12px; }
+    .paper-digest-page .digest-card-summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin: 0;
+    }
+    .paper-digest-page .digest-card-summary::-webkit-details-marker { display: none; }
+    .paper-digest-page .digest-card-summary::marker { display: none; content: ''; }
+    .paper-digest-page .digest-card-summary:hover { color: var(--orange); }
+    .paper-digest-page .digest-card-summary:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+    .paper-digest-page .digest-summary-chevron {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      display: inline-block;
+      transition: transform 0.2s;
+    }
+    .paper-digest-page .digest-card-details[open] .digest-summary-chevron { transform: rotate(180deg); }
+    .paper-digest-page .digest-card-disclosed { padding-top: 16px; }
+
+    /* —— Sections inside disclosure: match original .paper-card h4 / ul / .significance —— */
+    .paper-digest-page .digest-section { margin-bottom: 16px; }
+    .paper-digest-page .digest-section:last-of-type { margin-bottom: 0; }
+    .paper-digest-page .digest-section-h {
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--orange);
+      margin: 20px 0 10px;
+    }
+    .paper-digest-page .digest-section:first-of-type .digest-section-h { margin-top: 0; }
+    .paper-digest-page .digest-section p { font-size: 14px; line-height: 1.7; color: var(--text-muted); margin: 0; }
+    .paper-digest-page .digest-list { list-style: none; padding: 0; margin: 0 0 16px; }
+    .paper-digest-page .digest-list li {
+      position: relative;
+      padding-left: 18px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .paper-digest-page .digest-list li::before {
+      content: "▸";
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--orange);
+    }
+    .paper-digest-page .digest-list-compact li { font-size: 14px; line-height: 1.7; color: var(--text-muted); }
+    .paper-digest-page .digest-list-compact li::before { content: "▸"; }
+    .paper-digest-page .digest-list-compact { padding-left: 0; }
+    .paper-digest-page .digest-more-note { font-size: 12px; color: var(--text-muted); margin: 8px 0 0; font-style: italic; }
+
+    /* —— Metric grid —— */
+    .paper-digest-page .digest-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin: 0 0 12px;
+      padding: 0;
+      overflow: hidden;
+    }
+    .paper-digest-page .digest-metric {
+      background: var(--panel);
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .paper-digest-page .digest-metric dt {
+      font-family: var(--font-display);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+    .paper-digest-page .digest-metric dd {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--orange);
+      margin: 0;
+    }
+
+    /* —— Significance: matches original .paper-card .significance —— */
+    .paper-digest-page .digest-significance {
+      padding: 14px 18px;
+      background: var(--orange-soft);
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.6;
+      margin-top: 16px;
+      border-left: none;
+    }
+    .paper-digest-page .digest-significance-label {
+      display: inline;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--orange);
+      margin-right: 6px;
+    }
+    .paper-digest-page .digest-significance p { font-size: 14px; line-height: 1.6; color: var(--text); margin: 0; display: inline; }
+
+    /* —— Day nav —— */
+    .paper-digest-page .digest-day-nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 56px 0 32px;
+    }
+    .paper-digest-page .digest-nav-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 20px 24px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      text-decoration: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .paper-digest-page .digest-nav-card:hover { border-color: var(--orange); background: var(--panel-hover); }
+    .paper-digest-page .digest-nav-card:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+    .paper-digest-page .digest-nav-card.next { text-align: right; }
+    .paper-digest-page .digest-nav-label {
+      font-family: var(--font-display);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+    .paper-digest-page .digest-nav-title {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--white);
+      font-size: 15px;
+    }
+    .paper-digest-page .digest-nav-card:hover .digest-nav-title { color: var(--orange); }
+
+    .paper-digest-page .digest-back { text-align: center; margin-top: 32px; }
+    .paper-digest-page .digest-back a { font-family: var(--font-display); font-size: 14px; color: var(--orange); }
+    .paper-digest-page .digest-back a:hover { text-decoration: underline; }
+
+    .paper-digest-page .digest-empty { padding: 80px 24px; text-align: center; color: var(--text-muted); }
+
+    /* —— Responsive —— */
+    @media (max-width: 1200px) {
+      .paper-digest-page { max-width: 920px; }
+    }
+
+    @media (max-width: 900px) {
+      .paper-digest-page { padding-inline: 24px; }
+      .paper-digest-page .digest-overview-link {
+        grid-template-columns: 28px minmax(0, 1fr) 80px 45px;
+        gap: 10px;
+        padding: 10px 14px;
+      }
+      .paper-digest-page .digest-overview-takeaway { display: none; }
+      .paper-digest-page .digest-overview-dir { height: 20px; padding: 0 6px; font-size: 9px; }
+      .paper-digest-page .digest-card-header { grid-template-columns: 1fr; }
+      .paper-digest-page .digest-score { justify-self: start; }
+    }
+
+    @media (max-width: 640px) {
+      .paper-digest-page { padding-inline: 18px; }
+      .paper-digest-page .digest-card { padding: 20px; border-radius: 10px; }
+      .paper-digest-page .digest-stats { gap: 20px; }
+      .paper-digest-page .digest-stats dd { font-size: 24px; }
+      .paper-digest-page .digest-channel-nav { padding: 12px 0; }
+      .paper-digest-page .digest-control-btn,
+      .paper-digest-page .digest-chip,
+      .paper-digest-page .digest-link {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+      }
+      .paper-digest-page .digest-meta-row { grid-template-columns: 52px 1fr; }
+      .paper-digest-page .digest-day-nav { grid-template-columns: 1fr; }
+      .paper-digest-page .digest-nav-card.next { text-align: left; }
+      .paper-digest-page .digest-overview-link {
+        grid-template-columns: 24px minmax(0, 1fr) 70px 40px;
+        gap: 8px;
+        padding: 10px 12px;
+      }
+      .paper-digest-page .digest-overview-name { font-size: 14px; line-height: 20px; }
+      html { overflow-x: hidden; }
+    }
   </style>
 </BaseLayout>
