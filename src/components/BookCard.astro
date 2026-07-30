@@ -3,7 +3,13 @@ import type { Book } from '../data/content.ts';
 
 interface Props { book: Book; }
 const { book } = Astro.props;
-const statusLabel = book.data.status === 'complete' ? '完结' : book.data.status === 'stub' ? '占位' : '连载中';
+// Status label — use clear human wording, not internal enum.
+const statusLabel =
+  book.data.status === 'complete' ? '已完结'
+  : book.data.status === 'stub' ? '规划中'
+  : '持续翻译中';
+// Only show chapter count when it is a real positive number.
+const showChapters = typeof book.data.chapters === 'number' && book.data.chapters! > 0;
 ---
 <a class="card book-card" href={book.data.href} data-type="电子书">
   <span class="tag">{book.data.tag}</span>
@@ -11,8 +17,12 @@ const statusLabel = book.data.status === 'complete' ? '完结' : book.data.statu
   <span class="card-desc">{book.data.description}</span>
   <span class="card-meta">
     <span>{statusLabel}</span>
-    {book.data.chapters && book.data.chapters > 0 && (<><span class="meta-sep">·</span><span>{book.data.chapters} 章</span></>)}
-    {book.data.external && <><span class="meta-sep">·</span><span>外部站</span></>}
+    {showChapters && (<><span class="meta-sep">·</span><span>{book.data.chapters} 章</span></>)}
+    {book.data.external && <><span class="meta-sep">·</span><span>外部项目</span></>}
+  </span>
+  <span class="go">
+    {book.data.external ? '访问项目' : '开始阅读'}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
   </span>
 </a>
 

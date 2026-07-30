@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PostCard from '../../components/PostCard.astro';
-import { TOPICS, getPostsForTopic, getLatestPaper, type Topic } from '../../data/content.ts';
+import { TOPICS, getPostsForTopic, getPapersForTopic, getBookChaptersForTopic, type Topic } from '../../data/content.ts';
 
 export async function getStaticPaths() {
   return TOPICS.map((t) => ({ params: { topic: t.slug }, props: { topic: t } }));
@@ -10,9 +10,9 @@ export async function getStaticPaths() {
 interface Props { topic: Topic; }
 const { topic } = Astro.props;
 const posts = await getPostsForTopic(topic);
-const latestPaper = await getLatestPaper();
+const relatedPapers = await getPapersForTopic(topic, 3);
+const bookChapters = await getBookChaptersForTopic(topic);
 
-// Split into "入门" (featured) and "深入" (rest)
 const featured = posts.filter((p) => p.data.featured);
 const deep = posts.filter((p) => !p.data.featured);
 ---
@@ -34,7 +34,6 @@ const deep = posts.filter((p) => !p.data.featured);
     </div>
   </section>
 
-  <!-- Intro -->
   <section class="section" style="padding-top:32px;">
     <div class="section-inner narrow">
       <p class="section-label">主题介绍</p>
@@ -44,7 +43,6 @@ const deep = posts.filter((p) => !p.data.featured);
     </div>
   </section>
 
-  <!-- Recommended reading order -->
   {posts.length > 0 && (
     <section class="section" style="padding-top:32px;">
       <div class="section-inner narrow">
@@ -61,7 +59,6 @@ const deep = posts.filter((p) => !p.data.featured);
     </section>
   )}
 
-  <!-- Intro articles -->
   {featured.length > 0 && (
     <section class="section" style="padding-top:32px;">
       <div class="section-inner">
@@ -73,7 +70,6 @@ const deep = posts.filter((p) => !p.data.featured);
     </section>
   )}
 
-  <!-- Deep articles -->
   {deep.length > 0 && (
     <section class="section" style="padding-top:32px;">
       <div class="section-inner">
@@ -85,21 +81,40 @@ const deep = posts.filter((p) => !p.data.featured);
     </section>
   )}
 
-  <!-- Related paper digest -->
-  {latestPaper && (
+  {relatedPapers.length > 0 && (
     <section class="section" style="padding-top:32px;">
       <div class="section-inner">
-        <p class="section-label">最新论文日报</p>
-        <a class="card" href={`/papers/${latestPaper.data.slug}/`}>
-          <span class="tag">{latestPaper.data.selectedCount} 推荐</span>
-          <span class="card-title">{latestPaper.data.date} 论文日报</span>
-          <span class="card-desc">{latestPaper.data.description.slice(0, 120)}…</span>
-        </a>
+        <p class="section-label">相关论文</p>
+        <div class="post-list">
+          {relatedPapers.map((p) => (
+            <a class="card" href={`/papers/${p.data.slug}/`}>
+              <span class="tag">{p.data.selectedCount ?? '—'} 推荐</span>
+              <span class="card-title">{p.data.date} 论文日报</span>
+              <span class="card-desc">{p.data.description.slice(0, 140)}…</span>
+            </a>
+          ))}
+        </div>
       </div>
     </section>
   )}
 
-  <!-- Related topics -->
+  {bookChapters.length > 0 && (
+    <section class="section" style="padding-top:32px;">
+      <div class="section-inner">
+        <p class="section-label">电子书章节</p>
+        <div class="post-list">
+          {bookChapters.map((ch) => (
+            <a class="card" href={ch.href}>
+              <span class="tag">{ch.book}</span>
+              <span class="card-title">{ch.title}</span>
+              <span class="go">阅读 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
   <section class="section" style="padding-top:32px;">
     <div class="section-inner">
       <p class="section-label">相关主题</p>

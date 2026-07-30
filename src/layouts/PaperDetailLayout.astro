@@ -1,0 +1,117 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { type Paper, getPapers, paperHref } from '../data/content.ts';
+
+export interface Props {
+  paper: Paper;
+  bodyHtml?: string;
+}
+
+const { paper, bodyHtml } = Astro.props;
+const all = await getPapers();
+const idx = all.findIndex((p) => p.data.slug === paper.data.slug);
+const newer = idx > 0 ? all[idx - 1] : null;
+const older = idx < all.length - 1 ? all[idx + 1] : null;
+
+const p = paper.data;
+const SITE = 'https://yuancaoyaohw.github.io';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: `${p.date} 每日论文推荐`,
+  description: p.description,
+  datePublished: p.date,
+  url: `${SITE}/papers/${p.slug}/`,
+};
+
+const fmt = (n?: number) => (typeof n === 'number' ? n : '—');
+---
+<BaseLayout
+  pageType="papers"
+  title={`每日论文 · ${p.date}`}
+  description={p.description}
+  canonical={`/papers/${p.slug}/`}
+  ogType="article"
+  publishedDate={p.date}
+>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </Fragment>
+
+  <div class="paper-wrap">
+    <nav class="breadcrumb" aria-label="面包屑">
+      <a href="/">首页</a><span class="sep">/</span>
+      <a href="/papers/">每日论文</a><span class="sep">/</span>
+      <span class="current">{p.date}</span>
+    </nav>
+
+    <header class="paper-header">
+      <span class="tag">每日论文</span>
+      <h1>{p.date}</h1>
+      <p class="paper-desc">{p.description}</p>
+      <div class="paper-stats">
+        <div class="stat"><span class="num">{fmt(p.paperCount)}</span><span class="label">候选</span></div>
+        <div class="stat"><span class="num">{fmt(p.selectedCount)}</span><span class="label">推荐</span></div>
+        <div class="stat"><span class="num">{p.channels.length}</span><span class="label">频道</span></div>
+      </div>
+      {p.channels.length > 0 && (
+        <div class="paper-channels">
+          {p.channels.map((c) => <span class="tag-pill">{c}</span>)}
+        </div>
+      )}
+    </header>
+
+    <div class="paper-body" set:html={bodyHtml} />
+
+    <nav class="day-nav" aria-label="日期导航">
+      {older && (
+        <a class="nav-card" href={paperHref(older)}>
+          <span class="nav-card-label">前一天</span>
+          <span class="nav-card-title">{older.data.date}</span>
+        </a>
+      )}
+      {newer && (
+        <a class="nav-card next" href={paperHref(newer)}>
+          <span class="nav-card-label">后一天</span>
+          <span class="nav-card-title">{newer.data.date}</span>
+        </a>
+      )}
+    </nav>
+
+    <div class="back-to-archive">
+      <a href="/papers/">← 返回历史日报</a>
+    </div>
+  </div>
+
+  <style is:global>
+    .paper-wrap { max-width: var(--content-w); margin: 0 auto; padding: calc(var(--nav-h) + 32px) 24px 64px; }
+    .breadcrumb { font-family: var(--font-display); font-size: 13px; color: var(--text-muted); margin-bottom: 24px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .breadcrumb a:hover { color: var(--orange); }
+    .breadcrumb .sep { opacity: 0.4; }
+    .breadcrumb .current { color: var(--text); }
+    .paper-header { margin-bottom: 40px; }
+    .paper-header h1 { font-family: var(--font-display); font-size: clamp(28px, 4vw, 40px); font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; color: var(--white); margin: 12px 0 16px; }
+    .paper-desc { font-size: 16px; line-height: 1.65; color: var(--text-muted); margin-bottom: 20px; }
+    .paper-stats { display: flex; gap: 32px; margin-bottom: 16px; }
+    .paper-stats .stat { text-align: center; }
+    .paper-stats .num { display: block; font-family: var(--font-display); font-size: 28px; font-weight: 700; color: var(--orange); }
+    .paper-stats .label { font-family: var(--font-display); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+    .paper-channels { display: flex; flex-wrap: wrap; gap: 8px; }
+    .paper-body { font-size: 16px; line-height: 1.75; color: var(--text); }
+    .paper-body :where(h2, h3, h4) { scroll-margin-top: calc(var(--nav-h) + 16px); }
+    .paper-body :where(pre, table, svg, img) { max-width: 100%; }
+    .paper-body pre { overflow-x: auto; }
+    .paper-body table { display: block; overflow-x: auto; max-width: 100%; }
+    .day-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 48px 0 32px; }
+    .nav-card { display: flex; flex-direction: column; gap: 6px; padding: 20px 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); transition: border-color 0.2s, background 0.2s; }
+    .nav-card:hover { border-color: var(--orange); background: var(--panel-hover); }
+    .nav-card.next { text-align: right; }
+    .nav-card-label { font-family: var(--font-display); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+    .nav-card-title { font-weight: 600; color: var(--white); font-size: 15px; font-family: var(--font-mono); }
+    .nav-card:hover .nav-card-title { color: var(--orange); }
+    .back-to-archive { text-align: center; margin-top: 32px; }
+    .back-to-archive a { font-family: var(--font-display); font-size: 14px; color: var(--orange); }
+    .back-to-archive a:hover { text-decoration: underline; }
+    @media (max-width: 640px) { .day-nav { grid-template-columns: 1fr; } .nav-card.next { text-align: left; } .paper-stats { gap: 20px; } }
+  </style>
+</BaseLayout>

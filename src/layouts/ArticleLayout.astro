@@ -1,0 +1,144 @@
+---
+/**
+ * ArticleLayout.astro — shell for regular blog detail pages.
+ * Wraps BaseLayout. Adds breadcrumb, article header, body slot,
+ * prev/next, related posts, back-to-archive.
+ */
+import BaseLayout from './BaseLayout.astro';
+import { type Post, getRelatedPosts, getPublishedPosts, postHref } from '../data/content.ts';
+
+export interface Props {
+  post: Post;
+  bodyHtml?: string;
+}
+
+const { post, bodyHtml } = Astro.props;
+const related = await getRelatedPosts(post, 3);
+
+const all = await getPublishedPosts();
+const idx = all.findIndex((p) => p.data.slug === post.data.slug);
+const prev = idx > 0 ? all[idx - 1] : null;
+const next = idx < all.length - 1 ? all[idx + 1] : null;
+
+const tags = post.data.tags ?? [];
+const pubDate = post.data.publishedDate;
+const updDate = post.data.updatedDate;
+const rt = post.data.readingTime;
+
+const SITE = 'https://yuancaoyaohw.github.io';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: pubDate,
+  dateModified: updDate || pubDate,
+  author: { '@type': 'Person', name: 'yuancaoyaohw', url: 'https://github.com/yuancaoyaoHW' },
+  publisher: { '@type': 'Organization', name: 'yuancaoyaohw' },
+  mainEntityOfPage: `${SITE}/blog/${post.data.slug}/`,
+};
+---
+<BaseLayout
+  pageType="blog"
+  title={post.data.title}
+  description={post.data.description}
+  canonical={`/blog/${post.data.slug}/`}
+  ogType="article"
+  publishedDate={pubDate}
+  updatedDate={updDate}
+>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </Fragment>
+
+  <article class="article-wrap">
+    <nav class="breadcrumb" aria-label="面包屑">
+      <a href="/">首页</a><span class="sep">/</span>
+      <a href="/blog/">深度文章</a><span class="sep">/</span>
+      <span class="current">{post.data.title}</span>
+    </nav>
+
+    <header class="article-header">
+      <span class="tag">{post.data.category}</span>
+      <h1>{post.data.title}</h1>
+      <p class="article-desc">{post.data.description}</p>
+      <div class="article-meta">
+        <span>📅 {pubDate}</span>
+        {updDate && <span>· ✏️ {updDate}</span>}
+        {rt && <span>· ⏱️ {rt} min</span>}
+      </div>
+      {tags.length > 0 && (
+        <div class="article-tags">
+          {tags.map((t) => <span class="tag-pill">{t}</span>)}
+        </div>
+      )}
+    </header>
+
+    <div class="article-body" set:html={bodyHtml} />
+
+    <nav class="article-footer-nav" aria-label="文章导航">
+      {next && (
+        <a class="nav-card prev" href={postHref(next)}>
+          <span class="nav-card-label">上一篇</span>
+          <span class="nav-card-title">{next.data.title}</span>
+        </a>
+      )}
+      {prev && (
+        <a class="nav-card next" href={postHref(prev)}>
+          <span class="nav-card-label">下一篇</span>
+          <span class="nav-card-title">{prev.data.title}</span>
+        </a>
+      )}
+    </nav>
+
+    {related.length > 0 && (
+      <section class="related-posts">
+        <p class="section-label">相关文章</p>
+        <div class="post-list">
+          {related.map((p) => (
+            <a class="card" href={postHref(p)}>
+              <span class="tag">{p.data.category}</span>
+              <span class="card-title">{p.data.title}</span>
+              <span class="card-desc">{p.data.description}</span>
+              <span class="card-meta"><span>{p.data.publishedDate}</span></span>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+
+    <div class="back-to-archive">
+      <a href="/blog/">← 返回全部文章</a>
+    </div>
+  </article>
+
+  <style is:global>
+    .article-wrap { max-width: var(--content-w-narrow); margin: 0 auto; padding: calc(var(--nav-h) + 32px) 24px 64px; }
+    .breadcrumb { font-family: var(--font-display); font-size: 13px; color: var(--text-muted); margin-bottom: 24px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .breadcrumb a:hover { color: var(--orange); }
+    .breadcrumb .sep { opacity: 0.4; }
+    .breadcrumb .current { color: var(--text); }
+    .article-header { margin-bottom: 40px; }
+    .article-header h1 { font-family: var(--font-display); font-size: clamp(28px, 4vw, 40px); font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; color: var(--white); margin: 12px 0 16px; }
+    .article-desc { font-size: 17px; line-height: 1.6; color: var(--text-muted); margin-bottom: 16px; }
+    .article-meta { font-family: var(--font-display); font-size: 13px; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .article-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .article-body { font-size: 16px; line-height: 1.8; color: var(--text); }
+    .article-body :where(h2, h3, h4) { scroll-margin-top: calc(var(--nav-h) + 16px); }
+    .article-body :where(pre, code, table, svg, img) { max-width: 100%; }
+    .article-body pre { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; font-family: var(--font-mono); font-size: 14px; line-height: 1.6; }
+    .article-body table { display: block; overflow-x: auto; max-width: 100%; }
+    .article-footer-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 48px 0 32px; }
+    .nav-card { display: flex; flex-direction: column; gap: 6px; padding: 20px 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); transition: border-color 0.2s, background 0.2s; }
+    .nav-card:hover { border-color: var(--orange); background: var(--panel-hover); }
+    .nav-card.next { text-align: right; }
+    .nav-card-label { font-family: var(--font-display); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+    .nav-card-title { font-weight: 600; color: var(--white); font-size: 15px; }
+    .nav-card:hover .nav-card-title { color: var(--orange); }
+    .related-posts { margin: 32px 0; }
+    .back-to-archive { text-align: center; margin-top: 32px; }
+    .back-to-archive a { font-family: var(--font-display); font-size: 14px; color: var(--orange); }
+    .back-to-archive a:hover { text-decoration: underline; }
+    @media (max-width: 640px) { .article-footer-nav { grid-template-columns: 1fr; } }
+  </style>
+</BaseLayout>

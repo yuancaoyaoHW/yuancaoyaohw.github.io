@@ -1,0 +1,63 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { type Post } from '../data/content.ts';
+
+export interface Props {
+  post: Post;
+  headHtml?: string;
+  bodyHtml?: string;
+}
+
+const { post, headHtml, bodyHtml } = Astro.props;
+const SITE = 'https://yuancaoyaohw.github.io';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: post.data.publishedDate,
+  dateModified: post.data.updatedDate || post.data.publishedDate,
+  author: { '@type': 'Person', name: 'yuancaoyaohw', url: 'https://github.com/yuancaoyaoHW' },
+  mainEntityOfPage: `${SITE}/blog/${post.data.slug}/`,
+};
+---
+<BaseLayout
+  pageType="blog"
+  title={post.data.title}
+  description={post.data.description}
+  canonical={`/blog/${post.data.slug}/`}
+  ogType="article"
+  publishedDate={post.data.publishedDate}
+  updatedDate={post.data.updatedDate}
+>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    {headHtml && <Fragment set:html={headHtml} />}
+  </Fragment>
+
+  <nav class="interactive-breadcrumb" aria-label="面包屑">
+    <a href="/">首页</a><span class="sep">/</span>
+    <a href="/blog/">深度文章</a><span class="sep">/</span>
+    <span class="current">{post.data.title}</span>
+  </nav>
+
+  <div class="interactive-body" set:html={bodyHtml} />
+
+  <div class="back-to-archive">
+    <a href="/blog/">← 返回全部文章</a>
+  </div>
+
+  <style is:global>
+    .interactive-breadcrumb { max-width: var(--content-w); margin: 0 auto; padding: calc(var(--nav-h) + 16px) 24px 8px; font-family: var(--font-display); font-size: 13px; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .interactive-breadcrumb a:hover { color: var(--orange); }
+    .interactive-breadcrumb .sep { opacity: 0.4; }
+    .interactive-breadcrumb .current { color: var(--text); }
+    .interactive-body { position: relative; z-index: 1; }
+    .interactive-body :where(svg, img, pre, table) { max-width: 100%; }
+    .interactive-body pre { overflow-x: auto; }
+    .interactive-body table { display: block; overflow-x: auto; max-width: 100%; }
+    .back-to-archive { max-width: var(--content-w); margin: 0 auto; text-align: center; padding: 24px; border-top: 1px solid var(--border); }
+    .back-to-archive a { font-family: var(--font-display); font-size: 14px; color: var(--orange); }
+    .back-to-archive a:hover { text-decoration: underline; }
+  </style>
+</BaseLayout>

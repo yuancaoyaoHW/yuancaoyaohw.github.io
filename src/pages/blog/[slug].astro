@@ -1,0 +1,75 @@
+---
+/**
+ * /blog/[slug]/ — unified blog detail page.
+ * Reads metadata from the `posts` collection and the article body from the
+ * standalone HTML at public/blog/<slug>/index.html. Strips injected nav
+ * (data-sn-* blocks, old footer, old theme scripts) so the page uses the
+ * unified BaseLayout chrome via ArticleLayout / InteractiveArticleLayout.
+ */
+import { getPublishedPosts, type Post } from '../../data/content.ts';
+import ArticleLayout from '../../layouts/ArticleLayout.astro';
+import InteractiveArticleLayout from '../../layouts/InteractiveArticleLayout.astro';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+export async function getStaticPaths() {
+  const posts = await getPublishedPosts();
+  return posts.map((post) => ({
+    params: { slug: post.data.slug },
+    props: { post },
+  }));
+}
+
+interface Props { post: Post }
+const { post } = Astro.props;
+const slug = post.data.slug;
+const htmlPath = resolve(process.cwd(), `src/articles/blog/${slug}/index.html`);
+
+let bodyHtml = '';
+let headHtml = '';
+let raw = '';
+try {
+  raw = readFileSync(htmlPath, 'utf-8');
+} catch {
+  bodyHtml = `<div class="external-notice"><p>本文发布在外部站点。</p><a class="btn btn-primary" href="${post.data.externalHref || '#'}">访问原文 →</a></div>`;
+}
+
+if (raw) {
+  const headMatch = raw.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+  if (headMatch) {
+    let head = headMatch[1];
+    head = head.replace(/<link[^>]*href="[^"]*\/styles\/tokens\.css"[^>]*>/gi, '');
+    head = head.replace(/<script[^>]*>[^<]*?localStorage[^<]*?data-theme[^<]*?<\/script>/gis, '');
+    headHtml = head;
+  }
+  const bodyMatch = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) {
+    let body = bodyMatch[1];
+    body = body.replace(/<style\s+data-sn-hide-old[^>]*>[\s\S]*?<\/style>/gi, '');
+    body = body.replace(/<style\s+data-sn-nav[^>]*>[\s\S]*?<\/style>/gi, '');
+    body = body.replace(/<nav\s+class="sn-nav"[^>]*>[\s\S]*?<\/nav>/gi, '');
+    body = body.replace(/<script\s+data-sn-pad[^>]*>[\s\S]*?<\/script>/gi, '');
+    body = body.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, (m) => {
+      if (/Semantic Paper Radar|hermes-agent|yuancaoyaohw|© 2026/i.test(m)) return '';
+      return m;
+    });
+    body = body.replace(/<script[^>]*>[^<]*?function\s+toggleTheme[\s\S]*?<\/script>/gi, '');
+    body = body.replace(/<script[^>]*>[^<]*?kv-radar-theme[\s\S]*?<\/script>/gi, '');
+    bodyHtml = body.trim();
+  }
+}
+
+const isInteractive = post.data.hasAnimation;
+---
+
+{isInteractive ? (
+  <InteractiveArticleLayout post={post} headHtml={headHtml} bodyHtml={bodyHtml} />
+) : (
+  <ArticleLayout post={post} bodyHtml={bodyHtml} />
+)}
+
+<style is:global>
+  .external-notice { max-width: 560px; margin: 80px auto; text-align: center; padding: 48px 24px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+  .external-notice p { font-size: 17px; color: var(--text); margin-bottom: 24px; }
+  .external-notice .btn-primary { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border-radius: var(--radius); background: var(--orange); color: #fff; font-family: var(--font-display); font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; }
+</style>

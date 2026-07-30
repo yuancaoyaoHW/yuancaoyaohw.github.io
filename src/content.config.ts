@@ -19,6 +19,8 @@ const posts = defineCollection({
     publishedDate: z.string(),
     updatedDate: z.string().optional(),
     category: z.enum(['llm-serving', 'speculative-decoding', 'kv-cache', 'gpu', 'moe', 'inference-engine', 'safety', 'survey']).optional(),
+    primaryTopic: z.enum(['llm-serving', 'speculative-decoding', 'kv-cache', 'gpu', 'moe', 'inference-engine']).optional(),
+    secondaryTopics: z.array(z.string()).default([]),
     tags: z.array(z.string()).default([]),
     featured: z.boolean().default(false),
     draft: z.boolean().default(false),

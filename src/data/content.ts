@@ -104,32 +104,77 @@ export async function getPostsByYear(): Promise<{ year: string; posts: Post[] }[
   return [...byYear.entries()].map(([year, ps]) => ({ year, posts: ps })).sort((a, b) => (a.year < b.year ? 1 : -1));
 }
 
-/** Topic registry — drives /topics/ pages. */
+/**
+ * Topic registry — drives /topics/ pages.
+ * primaryTopic classification: posts appear in at most one topic's main list.
+ * paperTags: filter related papers. bookSlug: auto-link Starlight chapters.
+ */
 export interface Topic {
   slug: string;
   label: string;
   description: string;
-  /** Match posts by tag OR category. */
   matchTags: string[];
   matchCategory?: string;
+  paperTags?: string[];
+  bookSlug?: string;
 }
 
 export const TOPICS: Topic[] = [
-  { slug: 'llm-serving', label: 'LLM Serving', description: '推理引擎架构、调度、KV cache 与生产部署。', matchTags: ['LLM Serving', 'Scheduling'], matchCategory: 'llm-serving' },
-  { slug: 'speculative-decoding', label: 'Speculative Decoding', description: '投机解码：树起草、扩散 draft、验证与吞吐。', matchTags: ['Speculative Decoding'], matchCategory: 'speculative-decoding' },
-  { slug: 'kv-cache', label: 'KV Cache', description: 'KV cache 管理、offload、分页与压缩池化。', matchTags: ['KV Cache'], matchCategory: 'kv-cache' },
-  { slug: 'gpu', label: 'GPU', description: 'GPU 执行模型、Tensor Core、TMA、kernel 优化。', matchTags: ['GPU', 'Megakernel'], matchCategory: 'gpu' },
-  { slug: 'moe', label: 'MoE', description: '混合专家：路由、负载均衡、可实现性。', matchTags: ['MoE'], matchCategory: 'moe' },
-  { slug: 'inference-engine', label: 'Inference Engine', description: '端到端推理引擎源码与架构对比。', matchTags: ['Inference Engine', 'RTP-LLM', 'vLLM'], matchCategory: 'inference-engine' },
+  { slug: 'llm-serving', label: 'LLM Serving', description: '推理引擎架构、调度、KV cache 与生产部署。', matchTags: ['LLM Serving', 'Scheduling'], matchCategory: 'llm-serving', paperTags: ['llm-serving', 'scheduling', 'inference', 'serving'] },
+  { slug: 'speculative-decoding', label: 'Speculative Decoding', description: '投机解码：树起草、扩散 draft、验证与吞吐。', matchTags: ['Speculative Decoding'], matchCategory: 'speculative-decoding', paperTags: ['speculative-decoding', 'speculative', 'draft', 'verification'] },
+  { slug: 'kv-cache', label: 'KV Cache', description: 'KV cache 管理、offload、分页与压缩池化。', matchTags: ['KV Cache'], matchCategory: 'kv-cache', paperTags: ['kv-cache', 'kv', 'cache', 'memory-management', 'pagedattention'] },
+  { slug: 'gpu', label: 'GPU', description: 'GPU 执行模型、Tensor Core、TMA、kernel 优化。', matchTags: ['GPU', 'Megakernel'], matchCategory: 'gpu', paperTags: ['gpu', 'cuda', 'tensor-core', 'tma', 'kernel', 'flash-attention'], bookSlug: 'modern-gpu-programming-for-mlsys' },
+  { slug: 'moe', label: 'MoE', description: '混合专家：路由、负载均衡、可实现性。', matchTags: ['MoE'], matchCategory: 'moe', paperTags: ['moe', 'mixture-of-experts', 'expert', 'routing'] },
+  { slug: 'inference-engine', label: 'Inference Engine', description: '端到端推理引擎源码与架构对比。', matchTags: ['Inference Engine', 'RTP-LLM', 'vLLM'], matchCategory: 'inference-engine', paperTags: ['inference-engine', 'vllm', 'rtp-llm', 'engine'] },
 ];
 
-/** Posts for a topic (by tag or category match). */
+/** Posts for a topic — classified by primaryTopic (falls back to category). */
 export async function getPostsForTopic(topic: Topic): Promise<Post[]> {
   const posts = await getPublishedPosts();
   return posts.filter((p) =>
-    p.data.tags.some((t) => topic.matchTags.includes(t)) ||
-    (topic.matchCategory && p.data.category === topic.matchCategory)
+    (p.data.primaryTopic && p.data.primaryTopic === topic.slug) ||
+    (!p.data.primaryTopic && p.data.category === topic.matchCategory)
   );
+}
+
+/** Papers related to a topic — filtered by paperTags against description/channels/highlights. */
+export async function getPapersForTopic(topic: Topic, limit = 3): Promise<Paper[]> {
+  if (!topic.paperTags || topic.paperTags.length === 0) return [];
+  const papers = await getPapers();
+  const tags = topic.paperTags.map((t) => t.toLowerCase());
+  const scored = papers.map((p) => {
+    const hay = (
+      p.data.description + ' ' +
+      p.data.channels.join(' ') + ' ' +
+      p.data.highlights.map((h) => h.name + ' ' + (h.note || '')).join(' ')
+    ).toLowerCase();
+    const score = tags.reduce((s, t) => s + (hay.includes(t) ? 1 : 0), 0);
+    return { p, score };
+  }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score).slice(0, limit);
+  return scored.map((x) => x.p);
+}
+
+/** Starlight book chapters for a topic — reads .md files from src/content/docs/books/<bookSlug>/. */
+export async function getBookChaptersForTopic(topic: Topic): Promise<{ title: string; href: string; book: string }[]> {
+  if (!topic.bookSlug) return [];
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const dir = resolve(process.cwd(), `src/content/docs/books/${topic.bookSlug}`);
+  let files: string[] = [];
+  try { files = readdirSync(dir).filter((f: string) => f.endsWith('.md') && f !== 'index.md'); } catch { return []; }
+  const chapters = files.map((f) => {
+    const txt = readFileSync(`${dir}/${f}`, 'utf-8');
+    let title = f.replace(/\.md$/, '');
+    const fm = txt.match(/^[﻿\s]*---[\s\S]*?title:\s*(.+?)\s*$/m);
+    if (fm) title = fm[1].replace(/['"]/g, '');
+    else {
+      const h1 = txt.match(/^#\s+(.+)$/m);
+      if (h1) title = h1[1];
+    }
+    const slug = f.replace(/\.md$/, '');
+    return { title, href: `/books/${topic.bookSlug}/${slug}/`, book: topic.bookSlug! };
+  }).sort((a, b) => a.title.localeCompare(b.title));
+  return chapters;
 }
 
 /** Related posts — share at least one tag, excluding self, top N. */

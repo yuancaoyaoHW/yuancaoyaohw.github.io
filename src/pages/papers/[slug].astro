@@ -1,0 +1,46 @@
+---
+/**
+ * /papers/[slug]/ — unified daily paper digest detail page.
+ */
+import { getPapers, type Paper } from '../../data/content.ts';
+import PaperDetailLayout from '../../layouts/PaperDetailLayout.astro';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+export async function getStaticPaths() {
+  const papers = await getPapers();
+  return papers.map((paper) => ({
+    params: { slug: paper.data.slug },
+    props: { paper },
+  }));
+}
+
+interface Props { paper: Paper }
+const { paper } = Astro.props;
+const slug = paper.data.slug;
+const htmlPath = resolve(process.cwd(), `src/articles/papers/${slug}/index.html`);
+
+let bodyHtml = '';
+try {
+  const raw = readFileSync(htmlPath, 'utf-8');
+  const bodyMatch = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) {
+    let body = bodyMatch[1];
+    body = body.replace(/<div\s+class="bg-grid"[^>]*><\/div>/gi, '');
+    body = body.replace(/<div\s+class="bg-glow"[^>]*><\/div>/gi, '');
+    body = body.replace(/<nav\s+class="nav"[^>]*>[\s\S]*?<\/nav>/gi, '');
+    body = body.replace(/<div\s+class="page">/gi, '');
+    body = body.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
+    body = body.replace(/<script[^>]*>[\s\S]*?theme-toggle[\s\S]*?<\/script>/gi, '');
+    bodyHtml = body.trim();
+  }
+} catch {
+  bodyHtml = '<div class="paper-empty"><p>该期论文内容暂未生成。</p></div>';
+}
+---
+
+<PaperDetailLayout paper={paper} bodyHtml={bodyHtml} />
+
+<style is:global>
+  .paper-empty { padding: 80px 24px; text-align: center; color: var(--text-muted); }
+</style>
