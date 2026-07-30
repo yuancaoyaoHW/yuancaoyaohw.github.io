@@ -1,9 +1,16 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
   site: 'https://yuancaoyaohw.github.io',
   integrations: [
+    sitemap({
+      filter: (page) => {
+        // Exclude Starlight's internal search/asset pages from sitemap
+        return !page.includes('/pagefind/') && !page.includes('/_astro/');
+      },
+    }),
     starlight({
       title: 'yuancaoyaohw',
       defaultLocale: 'root',

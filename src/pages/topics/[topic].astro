@@ -1,0 +1,113 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostCard from '../../components/PostCard.astro';
+import { TOPICS, getPostsForTopic, getLatestPaper, type Topic } from '../../data/content.ts';
+
+export async function getStaticPaths() {
+  return TOPICS.map((t) => ({ params: { topic: t.slug }, props: { topic: t } }));
+}
+
+interface Props { topic: Topic; }
+const { topic } = Astro.props;
+const posts = await getPostsForTopic(topic);
+const latestPaper = await getLatestPaper();
+
+// Split into "入门" (featured) and "深入" (rest)
+const featured = posts.filter((p) => p.data.featured);
+const deep = posts.filter((p) => !p.data.featured);
+---
+<BaseLayout
+  pageType="topics"
+  title={topic.label}
+  description={topic.description}
+  canonical={`/topics/${topic.slug}/`}
+>
+  <section class="hero" style="padding-top:calc(var(--nav-h) + 48px);padding-bottom:32px;">
+    <div class="hero-inner">
+      <span class="eyebrow">Topic · {posts.length} 篇文章</span>
+      <h1>{topic.label}</h1>
+      <p class="lede">{topic.description}</p>
+      <div class="hero-actions" style="margin-top:24px;">
+        <a href="/blog/" class="btn btn-ghost">全部文章</a>
+        <a href="/topics/" class="btn btn-ghost">所有主题</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Intro -->
+  <section class="section" style="padding-top:32px;">
+    <div class="section-inner narrow">
+      <p class="section-label">主题介绍</p>
+      <div style="font-size:16px;line-height:1.7;color:var(--text);">
+        <p>{topic.description}本主题汇集相关深度文章,按入门与深入分层组织。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recommended reading order -->
+  {posts.length > 0 && (
+    <section class="section" style="padding-top:32px;">
+      <div class="section-inner narrow">
+        <p class="section-label">推荐阅读顺序</p>
+        <ol style="padding-left:20px;line-height:2.2;">
+          {posts.map((p) => (
+            <li>
+              <a href={`/blog/${p.data.slug}/`} style="color:var(--orange);font-weight:600;">{p.data.title}</a>
+              <span style="color:var(--text-muted);font-size:13px;"> — {p.data.publishedDate}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  )}
+
+  <!-- Intro articles -->
+  {featured.length > 0 && (
+    <section class="section" style="padding-top:32px;">
+      <div class="section-inner">
+        <p class="section-label">入门文章</p>
+        <div class="post-list">
+          {featured.map((post) => <PostCard post={post} />)}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- Deep articles -->
+  {deep.length > 0 && (
+    <section class="section" style="padding-top:32px;">
+      <div class="section-inner">
+        <p class="section-label">深入文章</p>
+        <div class="post-list">
+          {deep.map((post) => <PostCard post={post} />)}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- Related paper digest -->
+  {latestPaper && (
+    <section class="section" style="padding-top:32px;">
+      <div class="section-inner">
+        <p class="section-label">最新论文日报</p>
+        <a class="card" href={`/papers/${latestPaper.data.slug}/`}>
+          <span class="tag">{latestPaper.data.selectedCount} 推荐</span>
+          <span class="card-title">{latestPaper.data.date} 论文日报</span>
+          <span class="card-desc">{latestPaper.data.description.slice(0, 120)}…</span>
+        </a>
+      </div>
+    </section>
+  )}
+
+  <!-- Related topics -->
+  <section class="section" style="padding-top:32px;">
+    <div class="section-inner">
+      <p class="section-label">相关主题</p>
+      <div class="topic-grid">
+        {TOPICS.filter((t) => t.slug !== topic.slug).map((t) => (
+          <a class="topic-chip" href={`/topics/${t.slug}/`}>{t.label}</a>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,116 +1,122 @@
 ---
-import { blogPosts } from '../../data/blogPosts.ts';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CompactPostRow from '../../components/CompactPostRow.astro';
+import { getPostsByYear, getAllTags } from '../../data/content.ts';
+
+const postsByYear = await getPostsByYear();
+const allTags = await getAllTags();
+const totalPosts = postsByYear.reduce((s, y) => s + y.posts.length, 0);
 ---
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>博客 - yuancaoyaohw</title>
-    <meta name="description" content="yuancaoyaohw 的博客入口" />
-    <style>
-      body {
-        margin: 0;
-        min-height: 100vh;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        line-height: 1.6;
-        background: #f7f8fa;
-        color: #1a1a2e;
-      }
+<BaseLayout
+  pageType="blog"
+  title="深度文章"
+  description="AI Infra、LLM 推理、GPU 优化与系统技术的深度解读文章归档。"
+  canonical="/blog/"
+>
+  <!-- Compact Archive Hero -->
+  <section class="archive-hero">
+    <div class="section-inner">
+      <span class="eyebrow">Article Archive · {totalPosts} 篇</span>
+      <h1>深度文章</h1>
+      <p class="archive-lede">关于 LLM Serving、GPU、KV Cache、推测解码与系统优化的技术文章。</p>
+    </div>
+  </section>
 
-      main {
-        width: min(860px, calc(100% - 32px));
-        margin: 0 auto;
-        padding: 56px 0;
-      }
+  <section class="section" style="padding-top:0;">
+    <div class="section-inner wide">
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <input type="text" id="search-filter" placeholder="按标题或关键词筛选…" aria-label="筛选文章" />
+        <select id="tag-filter" aria-label="按标签筛选">
+          <option value="">全部标签</option>
+          {allTags.map((t) => <option value={t.tag}>{t.tag} ({t.count})</option>)}
+        </select>
+        <button class="filter-clear" id="clear-filters" type="button">清除</button>
+      </div>
 
-      a {
-        color: #2457d6;
-        font-weight: 700;
-        text-decoration: none;
-      }
+      <div id="post-count" style="font-size:13px;color:var(--text-muted);margin-bottom:16px;font-family:var(--font-display);">
+        共 {totalPosts} 篇
+      </div>
 
-      .post-list {
-        list-style: none;
-        padding: 0;
-        margin: 32px 0;
-      }
-
-      .post-card {
-        background: #fff;
-        border: 1px solid #e4e7eb;
-        border-radius: 8px;
-        padding: 24px 28px;
-        margin-bottom: 16px;
-        transition: box-shadow .15s, border-color .15s;
-      }
-
-      .post-card:hover {
-        border-color: #76b900;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-      }
-
-      .post-card a {
-        display: block;
-      }
-
-      .post-tag {
-        display: inline-block;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: #3f8500;
-        background: #eef7e0;
-        padding: 2px 8px;
-        border-radius: 3px;
-        margin-bottom: 8px;
-      }
-
-      .post-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #1a1a2e;
-        margin: 0 0 6px;
-        line-height: 1.4;
-      }
-
-      .post-desc {
-        font-size: 14px;
-        font-weight: 400;
-        color: #6c757d;
-        margin: 0;
-        line-height: 1.5;
-      }
-
-      .post-date {
-        font-size: 12px;
-        color: #898989;
-        font-family: ui-monospace, monospace;
-        margin-top: 8px;
-        display: block;
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>博客</h1>
-      <p>这里会放较短的技术文章、读书笔记和项目记录。</p>
-
-      <ul class="post-list">
-        {blogPosts.map((post) => (
-          <li class="post-card">
-            <a href={post.href}>
-              <span class="post-tag">{post.tag}</span>
-              <p class="post-title">{post.title}</p>
-              <p class="post-desc">{post.description}</p>
-              <span class="post-date">{post.date}</span>
-            </a>
-          </li>
+      <!-- Year-grouped archive -->
+      <div id="archive">
+        {postsByYear.map((yg, idx) => (
+          <div class="year-group" data-year={yg.year} data-collapsed={idx === 0 ? undefined : ''}>
+            <h2>
+              {yg.year}
+              <span class="year-count">{yg.posts.length} 篇</span>
+              <button class="year-toggle" aria-label={`切换 ${yg.year} 年折叠`}></button>
+            </h2>
+            <div class="year-items">
+              {yg.posts.map((post) => <CompactPostRow post={post} />)}
+            </div>
+          </div>
         ))}
-      </ul>
+      </div>
 
-      <p><a href="/">返回首页</a></p>
-    </main>
-  </body>
-</html>
+      <!-- Empty state -->
+      <div class="empty-state" id="empty-state" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <p>没有匹配的文章。试试清除筛选条件。</p>
+      </div>
+    </div>
+  </section>
+
+  <script is:inline>
+    (function () {
+      var searchInput = document.getElementById('search-filter');
+      var tagSelect = document.getElementById('tag-filter');
+      var clearBtn = document.getElementById('clear-filters');
+      var countEl = document.getElementById('post-count');
+      var emptyEl = document.getElementById('empty-state');
+      var groups = Array.from(document.querySelectorAll('.year-group'));
+
+      function applyFilter() {
+        var q = searchInput.value.trim().toLowerCase();
+        var tag = tagSelect.value;
+        var visibleTotal = 0;
+        groups.forEach(function (g) {
+          var rows = Array.from(g.querySelectorAll('.compact-row'));
+          var yearVisible = 0;
+          rows.forEach(function (r) {
+            var title = r.querySelector('.row-title') ? r.querySelector('.row-title').textContent.toLowerCase() : '';
+            var tags = r.querySelector('.row-tags') ? r.querySelector('.row-tags').textContent.toLowerCase() : '';
+            var matchQ = !q || title.indexOf(q) !== -1 || tags.indexOf(q) !== -1;
+            var matchTag = !tag || tags.indexOf(tag.toLowerCase()) !== -1;
+            var show = matchQ && matchTag;
+            r.style.display = show ? '' : 'none';
+            if (show) yearVisible++;
+          });
+          g.style.display = yearVisible > 0 ? '' : 'none';
+          visibleTotal += yearVisible;
+        });
+        countEl.textContent = visibleTotal > 0 ? '共 ' + visibleTotal + ' 篇' : '无匹配文章';
+        emptyEl.style.display = visibleTotal > 0 ? 'none' : '';
+      }
+
+      var debounce;
+      searchInput.addEventListener('input', function () {
+        clearTimeout(debounce);
+        debounce = setTimeout(applyFilter, 150);
+      });
+      tagSelect.addEventListener('change', applyFilter);
+      clearBtn.addEventListener('click', function () {
+        searchInput.value = '';
+        tagSelect.value = '';
+        applyFilter();
+        searchInput.focus();
+      });
+
+      // Year toggle
+      groups.forEach(function (g) {
+        var h2 = g.querySelector('h2');
+        h2.addEventListener('click', function () {
+          if (g.hasAttribute('data-collapsed')) g.removeAttribute('data-collapsed');
+          else g.setAttribute('data-collapsed', '');
+        });
+      });
+
+      applyFilter();
+    })();
+  </script>
+</BaseLayout>

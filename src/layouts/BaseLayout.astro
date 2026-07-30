@@ -1,0 +1,305 @@
+---
+/**
+ * BaseLayout.astro — shared shell for all non-Starlight pages.
+ * Provides: theme bootstrap, Header (desktop nav + "更多" dropdown),
+ * MobileMenu (real drawer), Footer, theme toggle, search trigger,
+ * background layers, skip link. Preserves existing visual identity.
+ *
+ * Props:
+ *   title       – <title> text (page-specific, appended to site name)
+ *   description – meta description
+ *   canonical   – canonical URL path (e.g. "/blog/")
+ *   pageType    – used to mark active nav: 'home' | 'blog' | 'papers' | 'books' | 'topics' | 'more'
+ *   ogType     – 'website' | 'article'
+ *   publishedDate / updatedDate – for article JSON-LD
+ *   noIndex    – if true, adds <meta name="robots" content="noindex">
+ */
+export interface Props {
+  title?: string;
+  description?: string;
+  canonical?: string;
+  pageType?: 'home' | 'blog' | 'papers' | 'books' | 'topics' | 'more' | 'other';
+  ogType?: 'website' | 'article';
+  publishedDate?: string;
+  updatedDate?: string;
+  noIndex?: boolean;
+  activeMore?: string; // 'interview' | 'travel' | 'about'
+}
+
+const {
+  title = '',
+  description = '深入理解 LLM 推理、Serving、GPU Kernel 与系统优化。',
+  canonical,
+  pageType = 'other',
+  ogType = 'website',
+  publishedDate,
+  updatedDate,
+  noIndex = false,
+  activeMore,
+} = Astro.props;
+
+const SITE = 'https://yuancaoyaohw.github.io';
+const fullTitle = title ? `${title} · yuancaoyaohw` : 'AI Infra Blogs · yuancaoyaohw';
+const canonicalURL = canonical ? `${SITE}${canonical}` : undefined;
+
+const moreItems = [
+  { href: '/blog/interview-qa/', label: '面经', page: 'interview' },
+  { href: '/#travel', label: '旅行', page: 'travel' },
+  { href: 'https://github.com/yuancaoyaoHW', label: '关于我', page: 'about' },
+];
+const isActiveMore = activeMore;
+---
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {canonicalURL && <link rel="canonical" href={canonicalURL} />}
+    {noIndex && <meta name="robots" content="noindex" />}
+
+    <!-- Open Graph -->
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={title || 'AI Infra Blogs'} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalURL || SITE} />
+    <meta property="og:site_name" content="yuancaoyaohw" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title || 'AI Infra Blogs'} />
+    <meta name="twitter:description" content={description} />
+
+    <!-- Fonts: preconnect + non-blocking -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Theme bootstrap: prevent FOUC by setting data-theme before first paint -->
+    <script is:inline>
+      (function () {
+        var stored = localStorage.getItem('theme');
+        var theme = stored || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+
+    <link rel="stylesheet" href="/styles/tokens.css" />
+    <slot name="head" />
+  </head>
+  <body>
+    <a href="#main" class="skip-link">跳到正文</a>
+
+    <!-- Background -->
+    <div class="bg-grid" aria-hidden="true"></div>
+    <div class="bg-glow" aria-hidden="true"></div>
+
+    <!-- Desktop nav -->
+    <nav class="nav" aria-label="主导航">
+      <a href="/" class="brand">
+        <span class="brand-dot" aria-hidden="true"></span>
+        yuancaoyaohw
+      </a>
+      <div class="nav-links">
+        <a href="/" aria-current={pageType === 'home' ? 'page' : undefined} class={pageType === 'home' ? 'active' : ''}>首页</a>
+        <a href="/blog/" aria-current={pageType === 'blog' ? 'page' : undefined} class={pageType === 'blog' ? 'active' : ''}>深度文章</a>
+        <a href="/papers/" aria-current={pageType === 'papers' ? 'page' : undefined} class={pageType === 'papers' ? 'active' : ''}>每日论文</a>
+        <a href="/books/modern-gpu-programming-for-mlsys/" aria-current={pageType === 'books' ? 'page' : undefined} class={pageType === 'books' ? 'active' : ''}>电子书</a>
+        <a href="/topics/" aria-current={pageType === 'topics' ? 'page' : undefined} class={pageType === 'topics' ? 'active' : ''}>主题</a>
+        <div class="nav-more" id="nav-more">
+          <button class="nav-more-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="nav-more-menu">
+            更多
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="nav-more-menu" id="nav-more-menu" role="menu">
+            {moreItems.map((item) => (
+              <a href={item.href} role="menuitem" class={isActiveMore === item.page ? 'active' : ''}>
+                {item.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button class="theme-toggle" aria-label="搜索全站" title="搜索 (⌘K)" id="search-trigger-nav" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        </button>
+        <button class="theme-toggle" aria-label="切换主题" title="切换深/浅色主题" id="theme-toggle" type="button">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="https://github.com/yuancaoyaoHW" class="cta" aria-label="GitHub 仓库">GitHub</a>
+      </div>
+      <button class="nav-hamburger" aria-label="打开菜单" aria-controls="mobile-drawer" aria-expanded="false" id="hamburger" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+    </nav>
+
+    <!-- Mobile drawer -->
+    <div class="mobile-drawer-backdrop" id="drawer-backdrop" data-open={false}></div>
+    <aside class="mobile-drawer" id="mobile-drawer" aria-label="移动端导航">
+      <a href="/" aria-current={pageType === 'home' ? 'page' : undefined} class={pageType === 'home' ? 'active' : ''}>首页 <span class="chev">›</span></a>
+      <a href="/blog/" aria-current={pageType === 'blog' ? 'page' : undefined} class={pageType === 'blog' ? 'active' : ''}>深度文章 <span class="chev">›</span></a>
+      <a href="/papers/" aria-current={pageType === 'papers' ? 'page' : undefined} class={pageType === 'papers' ? 'active' : ''}>每日论文 <span class="chev">›</span></a>
+      <a href="/books/modern-gpu-programming-for-mlsys/" aria-current={pageType === 'books' ? 'page' : undefined} class={pageType === 'books' ? 'active' : ''}>电子书 <span class="chev">›</span></a>
+      <a href="/topics/" aria-current={pageType === 'topics' ? 'page' : undefined} class={pageType === 'topics' ? 'active' : ''}>主题 <span class="chev">›</span></a>
+      <div class="drawer-section-label">更多</div>
+      {moreItems.map((item) => (
+        <a href={item.href} class={isActiveMore === item.page ? 'active' : ''}>{item.label} <span class="chev">›</span></a>
+      ))}
+      <div class="drawer-actions">
+        <button class="theme-toggle" aria-label="切换主题" type="button" id="theme-toggle-mobile">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="https://github.com/yuancaoyaoHW" class="cta">GitHub</a>
+      </div>
+    </aside>
+
+    <main id="main" class="page">
+      <slot />
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <div class="footer-links">
+        <a href="/blog/">深度文章</a>
+        <a href="/papers/">每日论文</a>
+        <a href="/books/modern-gpu-programming-for-mlsys/">电子书</a>
+        <a href="/topics/">主题</a>
+        <a href="/blog/interview-qa/">面经</a>
+      </div>
+      <p>© {new Date().getFullYear()} yuancaoyaohw · AI Infra · LLM Serving · GPU · 由 Astro 与 Starlight 驱动</p>
+    </footer>
+
+    <!-- Search dialog placeholder (Pagefind loaded on demand) -->
+    <div class="search-dialog" id="search-dialog" role="dialog" aria-modal="true" aria-label="全站搜索">
+      <div class="search-dialog-inner">
+        <input type="text" id="search-input" placeholder="搜索深度文章、论文、电子书…" autocomplete="off" />
+        <div class="search-results" id="search-results"></div>
+        <div class="search-dialog-hint">
+          <span>按 <kbd>Esc</kbd> 关闭</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> 选择 · <kbd>↵</kbd> 打开</span>
+        </div>
+      </div>
+    </div>
+
+    <script is:inline>
+      // === Theme toggle ===
+      (function () {
+        function toggle() {
+          var cur = document.documentElement.getAttribute('data-theme');
+          var next = cur === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          localStorage.setItem('theme', next);
+        }
+        document.querySelectorAll('#theme-toggle, #theme-toggle-mobile').forEach(function (b) {
+          b.addEventListener('click', toggle);
+        });
+      })();
+
+      // === Mobile drawer ===
+      (function () {
+        var burger = document.getElementById('hamburger');
+        var drawer = document.getElementById('mobile-drawer');
+        var backdrop = document.getElementById('drawer-backdrop');
+        function open() {
+          drawer.setAttribute('data-open', 'true');
+          backdrop.setAttribute('data-open', 'true');
+          burger.setAttribute('aria-expanded', 'true');
+          document.body.style.overflow = 'hidden';
+        }
+        function close() {
+          drawer.removeAttribute('data-open');
+          backdrop.removeAttribute('data-open');
+          burger.setAttribute('aria-expanded', 'false');
+          document.body.style.overflow = '';
+        }
+        burger.addEventListener('click', open);
+        backdrop.addEventListener('click', close);
+        drawer.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', close); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+      })();
+
+      // === "更多" dropdown (click + hover-friendly, closes on outside click) ===
+      (function () {
+        var more = document.getElementById('nav-more');
+        if (!more) return;
+        var trigger = more.querySelector('.nav-more-trigger');
+        trigger.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var isOpen = more.getAttribute('data-open') === 'true';
+          if (isOpen) { more.removeAttribute('data-open'); trigger.setAttribute('aria-expanded', 'false'); }
+          else { more.setAttribute('data-open', 'true'); trigger.setAttribute('aria-expanded', 'true'); }
+        });
+        document.addEventListener('click', function (e) {
+          if (!more.contains(e.target)) {
+            more.removeAttribute('data-open');
+            trigger.setAttribute('aria-expanded', 'false');
+          }
+        });
+      })();
+
+      // === Search dialog (Pagefind lazy-loaded) ===
+      (function () {
+        var dialog = document.getElementById('search-dialog');
+        var input = document.getElementById('search-input');
+        var resultsEl = document.getElementById('search-results');
+        var pagefindPromise = null;
+        function loadPagefind() {
+          if (!pagefindPromise) {
+            pagefindPromise = (async function () {
+              try {
+                window.pagefind = await import('/pagefind/pagefind-ui.js');
+                await window.pagefind.init();
+              } catch (e) {
+                resultsEl.innerHTML = '<div class="search-empty">搜索索引加载失败,请稍后再试。</div>';
+              }
+            })();
+          }
+          return pagefindPromise;
+        }
+        function open() {
+          dialog.setAttribute('data-open', 'true');
+          setTimeout(function () { input.focus(); }, 50);
+          loadPagefind();
+        }
+        function close() {
+          dialog.removeAttribute('data-open');
+          input.value = '';
+          resultsEl.innerHTML = '';
+        }
+        var navSearch = document.getElementById('search-trigger-nav');
+        if (navSearch) navSearch.addEventListener('click', open);
+        document.addEventListener('keydown', function (e) {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); open(); }
+          if (e.key === 'Escape' && dialog.hasAttribute('data-open')) close();
+        });
+        var selectedIdx = -1;
+        async function runSearch(q) {
+          if (!window.pagefind) { resultsEl.innerHTML = '<div class="search-empty">索引加载中…</div>'; return; }
+          if (!q.trim()) { resultsEl.innerHTML = ''; return; }
+          var search = await window.pagefind.search(q);
+          var top = search.results.slice(0, 8);
+          if (!top.length) { resultsEl.innerHTML = '<div class="search-empty">未找到相关内容。</div>'; return; }
+          var html = '';
+          for (var r of top) {
+            var data = await r.data();
+            var type = data.meta && data.meta.type ? data.meta.type : '文章';
+            var excerpt = data.excerpt ? data.excerpt.replace(/<[^>]*>/g, '') : '';
+            html += '<a class="result" href="' + data.url + '"><div class="result-type">' + type + '</div><div class="result-title">' + data.meta.title + '</div><div class="result-excerpt">' + excerpt + '</div></a>';
+          }
+          resultsEl.innerHTML = html;
+        }
+        var debounceTimer;
+        input.addEventListener('input', function (e) {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(function () { runSearch(input.value); }, 200);
+        });
+      })();
+    </script>
+  </body>
+</html>
