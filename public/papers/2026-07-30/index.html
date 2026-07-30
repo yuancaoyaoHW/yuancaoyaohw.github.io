@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <meta name="description" content="2026-07-30 每日论文推荐 — AI Infra / Algorithms / Architecture 三频道" />
+  <title>每日论文 · 2026-07-30</title>
+  <script>
+      // 防止主题闪烁：在首次绘制前根据存储/系统偏好设置 data-theme
+      (function () {
+        var stored = localStorage.getItem('theme');
+        var theme = stored || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+  <style>
+    :root {
+      --font-display: "Bricolage Grotesque", Arial, sans-serif;
+      --font-body: "Inter", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      --radius: 10px;
+    }
+    [data-theme="dark"] {
+      --black: #080D10;
+      --bg-1: #0B1117;
+      --bg-2: #0E141C;
+      --panel: #131A24;
+      --panel-hover: #18212E;
+      --white: #FFFFFF;
+      --orange: #FF7A00;
+      --orange-soft: rgba(255, 122, 0, 0.12);
+      --text: #E7ECF3;
+      --text-muted: #7C8699;
+      --border: #1E2733;
+      --border-hover: #2A3744;
+      --nav-bg: rgba(8, 13, 16, 0.72);
+      --grid-line: rgba(255, 255, 255, 0.025);
+      --glow-1: rgba(255, 122, 0, 0.12);
+      --glow-2: rgba(255, 122, 0, 0.07);
+      --purple: #5A4099;
+      --purple-soft: rgba(90, 64, 153, 0.12);
+      --green: #178845;
+      --green-soft: rgba(23, 136, 69, 0.12);
+    }
+    [data-theme="light"] {
+      --black: #FAFAF7;
+      --bg-1: #F4F4EF;
+      --bg-2: #EFEEE9;
+      --panel: #FFFFFF;
+      --panel-hover: #F8F8F3;
+      --white: #1A1F26;
+      --orange: #E8620F;
+      --orange-soft: rgba(232, 98, 15, 0.10);
+      --text: #2C3338;
+      --text-muted: #6A737B;
+      --border: #E2E3DD;
+      --border-hover: #CFD0C8;
+      --nav-bg: rgba(250, 250, 247, 0.74);
+      --grid-line: rgba(0, 0, 0, 0.035);
+      --glow-1: rgba(232, 98, 15, 0.08);
+      --glow-2: rgba(232, 98, 15, 0.05);
+      --purple: #7B5CC9;
+      --purple-soft: rgba(123, 92, 201, 0.10);
+      --green: #1A9C52;
+      --green-soft: rgba(26, 156, 82, 0.10);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--black);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+    a { color: inherit; text-decoration: none; }
+    .bg-glow {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(50% 40% at 85% 5%, var(--glow-1) 0%, transparent 60%),
+        radial-gradient(35% 25% at 20% 35%, var(--glow-2) 0%, transparent 60%);
+    }
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(ellipse 90% 70% at 50% 20%, black 20%, transparent 75%);
+      -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 20%, black 20%, transparent 75%);
+    }
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      background: var(--nav-bg);
+      border-bottom: 1px solid var(--border);
+      color: var(--white);
+      padding: 16px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      font-family: var(--font-display);
+    }
+    .nav .brand { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; color: var(--white); }
+    .nav .nav-links { display: flex; gap: 28px; align-items: center; }
+    .nav .nav-links a { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); transition: color 0.2s; }
+    .nav .nav-links a:hover { color: var(--white); }
+    .nav .nav-links a.active { color: var(--orange); }
+    .page { position: relative; z-index: 1; }
+    .hero { padding: 140px 32px 60px; }
+    .hero-inner { max-width: 900px; margin: 0 auto; }
+    .hero .eyebrow {
+      display: inline-block; font-family: var(--font-display);
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--orange); margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 500; line-height: 1.15; letter-spacing: -0.03em;
+      margin-bottom: 24px; color: var(--white);
+    }
+    .hero h1 .accent { color: var(--orange); }
+    .hero .lede { max-width: 560px; font-size: 17px; line-height: 1.65; color: var(--text-muted); }
+    .hero .stats {
+      display: flex; gap: 32px; margin-top: 32px;
+      font-family: var(--font-display);
+    }
+    .hero .stat { text-align: center; }
+    .hero .stat .num { font-size: 28px; font-weight: 700; color: var(--orange); }
+    .hero .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+    .section { padding: 48px 32px; }
+    .section-inner { max-width: 900px; margin: 0 auto; }
+    .section-label {
+      font-family: var(--font-display); font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.14em;
+      color: var(--text-muted); margin-bottom: 28px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .section-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+    .channel-group { margin-bottom: 56px; }
+    .channel-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 24px;
+    }
+    .channel-badge {
+      font-family: var(--font-display); font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      padding: 6px 14px; border-radius: 999px;
+    }
+    .paper-card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px 32px; margin-bottom: 16px;
+      transition: border-color 0.25s, background 0.25s, transform 0.25s;
+      position: relative; overflow: hidden;
+    }
+    .paper-card::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--orange), transparent);
+      opacity: 0; transition: opacity 0.25s;
+    }
+    .paper-card:hover { border-color: var(--border-hover); background: var(--panel-hover); transform: translateY(-2px); }
+    .paper-card:hover::before { opacity: 1; }
+    .paper-card .paper-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+    .paper-card h3 {
+      font-family: var(--font-display); font-size: 20px; font-weight: 600;
+      line-height: 1.3; letter-spacing: -0.01em; color: var(--white);
+    }
+    .paper-card .score-badge { flex-shrink: 0; font-family: var(--font-display); font-size: 14px; color: var(--orange); white-space: nowrap; }
+    .paper-card .meta { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.6; }
+    .paper-card .meta strong { color: var(--text); font-weight: 600; }
+    .paper-card .meta a { color: var(--orange); }
+    .paper-card .meta a:hover { text-decoration: underline; }
+    .paper-card .abstract {
+      font-size: 14px; color: var(--text-muted); line-height: 1.7;
+      padding: 16px 20px; background: rgba(255,255,255,0.02);
+      border-left: 3px solid var(--border); border-radius: 4px; margin-bottom: 20px;
+    }
+    [data-theme="light"] .paper-card .abstract { background: rgba(0,0,0,0.02); }
+    .paper-card h4 {
+      font-family: var(--font-display); font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.1em; color: var(--orange);
+      margin-bottom: 10px; margin-top: 20px;
+    }
+    .paper-card h4:first-of-type { margin-top: 0; }
+    .paper-card ul { list-style: none; padding: 0; margin: 0 0 16px; }
+    .paper-card ul li {
+      font-size: 14px; line-height: 1.7; color: var(--text-muted);
+      padding-left: 18px; position: relative; margin-bottom: 6px;
+    }
+    .paper-card ul li::before {
+      content: "▸"; position: absolute; left: 0; color: var(--orange);
+    }
+    .paper-card .significance {
+      padding: 14px 18px; background: var(--orange-soft);
+      border-radius: 6px; font-size: 14px; color: var(--text); line-height: 1.6;
+      margin-top: 16px;
+    }
+    .paper-card .significance strong { color: var(--orange); }
+    footer { padding: 40px 32px; text-align: center; font-size: 13px; font-family: var(--font-display); color: var(--text-muted); border-top: 1px solid var(--border); }
+    footer a { color: var(--orange); }
+    /* —— 主题切换按钮 —— */
+    .theme-toggle {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; padding: 0;
+      border: 1px solid var(--border-hover); border-radius: var(--radius);
+      background: transparent; color: var(--text-muted);
+      cursor: pointer; transition: color 0.2s, border-color 0.2s; flex-shrink: 0;
+    }
+    .theme-toggle:hover { color: var(--orange); border-color: var(--orange); }
+    .theme-toggle svg { width: 16px; height: 16px; }
+    [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+    [data-theme="light"] .theme-toggle .icon-sun { display: none; }
+
+    @media (max-width: 640px) {
+      .nav { padding: 14px 20px; }
+      .nav .nav-links { gap: 16px; }
+      .nav .nav-links a:not(.cta) { display: none; }
+      .hero { padding: 110px 20px 48px; }
+      .section { padding: 36px 20px; }
+      .paper-card { padding: 24px; }
+      .paper-card .paper-header { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+  <div class="page">
+    <nav class="nav">
+      <a href="/" class="brand">yuancaoyaohw</a>
+      <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="/papers/" class="active">每日论文</a>
+        <a href="/#posts">博客</a>
+        <a href="/#travel">旅游攻略</a>
+        <button class="theme-toggle" aria-label="切换主题" title="切换深/浅色主题">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </nav>
+    <section class="hero">
+      <div class="hero-inner">
+        <span class="eyebrow">Daily Papers · 2026-07-30</span>
+        <h1>每日<span class="accent">论文</span>推荐</h1>
+        <p class="lede">AI Infra / Algorithms / Architecture 三频道自动抓取与评审,每日精选 score≥4 的论文。今日 9 篇推荐覆盖 SmartNIC 全解耦分布式训练、可验证联邦学习车联网、层异质混合注意力、Sheaf GNN 检查点依赖审计、李代数 SVD 实时成像、CoT 蒸馏表格重排、稀疏跨模态路由、变长语义 ID 生成式推荐与语言学规则提示词压缩等方向。</p>
+        <div class="stats">
+          <div class="stat"><div class="num">9</div><div class="label">推荐论文</div></div>
+          <div class="stat"><div class="num">3</div><div class="label">频道</div></div>
+          <div class="stat"><div class="num">10</div><div class="label">候选池</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-inner">
+
+        <!-- AI Infra -->
+        <div class="channel-group">
+          <div class="channel-header">
+            <span class="channel-badge" style="background: rgba(255,122,0,0.12); color: #FF7A00;">AI Infra</span>
+            <span style="font-family: var(--font-display); font-size: 12px; color: var(--text-muted);">5 篇推荐</span>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>DisDP: Disaggregating Compute, Network, and Storage for Model-Sharded Data-Parallel Training</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Mo Sun, Zihan Yang, Changyue Liao, Yingtao Li, Jie Zhang &nbsp;|&nbsp;
+              <strong>机构:</strong> Zhejiang University &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.DC &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2409.00918">arXiv</a> · <a href="https://arxiv.org/pdf/2409.00918.pdf">PDF</a>
+            </div>
+            <div class="abstract">模型分片数据并行(MSDP,如 ZeRO)将模型状态均匀分片到所有 GPU 上,因其低显存需求被 Llama 和 DeepSeek 等大规模预训练广泛采用。然而 MSDP 引入了额外的网络集合通信(AllGather 和 ReduceScatter)开销,其执行时间因 CPU/GPU 计算、NCCL 网络与优化器状态的串行执行而增加 41%。DisDP 提出首个将计算、网络和存储三者完全解耦的分布式数据并行架构,使 GPU 仅专注于计算,从而最大化 GPU 利用率。核心思想是将集合通信完全卸载到 SmartNIC/SmartSwitch,将存储卸载到 SmartSwitch 增强的参数服务器。在 8 个分布式 GPU 上训练 175B 模型时,DisDP 比最先进训练系统快 3.98 倍。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>首个将模型分片数据并行(MSDP)的计算、网络(集合通信)、存储(优化器)三者完全解耦的架构 DisDP,使 GPU 仅专注计算以最大化利用率</li>
+              <li>提出基于 FPGA SmartNIC 管理的无干扰集合通信库,将 AllGather/ReduceScatter 从 GPU 卸载到 SmartNIC,消除 GEMM 与集合内核间的 SM 及显存带宽竞争(网络解耦)</li>
+              <li>提出 SmartSwitch 辅助的 many-to-one 可靠协议,解决单参数服务器(PS)服务海量 worker 时的 incast 与可靠性包风暴问题,使单台 PS 即可线性扩展服务任意数量 worker(存储解耦)</li>
+              <li>提出 step-centric 优化器流水线,替代传统 layer-centric 流水线,最大化 PS 端 CPU 线程利用率以线速消费聚合梯度</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>完全解耦设计是关键:仅优化 GPU 调度或仅做交换机内聚合均无法解决 GEMM 与集合通信间的显存带宽竞争,需三者完全解耦才能彻底重叠计算与通信</li>
+              <li>在相对低速网络(100Gbps 以太网)下的全解耦设计,优于在高速 NVLink(4.8Tbps)下的传统聚合式基础设施,论证了"解耦优先于堆砌带宽"的设计理念</li>
+              <li>DisDP 的硬件加速 many-to-one 集合通信将依赖链压缩为 worker 与 PS 间的少数几跳,支持高效的大 DP 度 3D 并行,线性扩展至 256 度 DP</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>测试平台:8×1-A100 GPU+1 CPU、100Gbps 网络;在 175B 模型上 DisDP 吞吐达 134 token/s,较 ZeRO-Infinity 提升 3.98×</li>
+              <li>模型规模 13B–175B 区间,DisDP 的 MFU 较 ZeRO-3 与 ZeRO-Infinity 分别提升至少 2.04× 与 2.34×,且在 276B 模型上仍保持 59% MFU</li>
+              <li>成本效益:DisDP 仅需 DGX 集群 60% 的 capex,吞吐反超 1.17×,实现 1.96× throughput-per-dollar 优于 ZeRO-Offload on DGX</li>
+              <li>扩展性:ASTRA-sim 模拟 175B(TP8/PP16)下,256 度 DP 时 DisDP 较 ZeRO-Infinity(PAT)快 2.0×、较 ring 算法快 15.1×,呈近线性扩展</li>
+              <li>收敛性:OPT-66B 微调(3 天 ZeRO-Infinity vs 12 小时 DisDP),两者 loss 曲线基本重合,证明无精度损失</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 首个将计算/网络/存储三者完全解耦的 MSDP 架构,以 100Gbps 低速网络超越 4.8Tbps NVLink 的聚合式设计,在大规模分布式训练基础设施领域具有范式转变意义</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>Nautilus: A Verifiable Hierarchical Federated Learning Framework for Vehicular-Edge-Cloud Systems</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Linyang Wu, Linpeng Jia, Hanwen Zhang, Tiantian Duan, Yi Sun &nbsp;|&nbsp;
+              <strong>机构:</strong> Institute of Computing Technology, CAS; University of Chinese Academy of Sciences; Beihang University; Shandong Key Laboratory of Blockchain Finance &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.DC &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2606.23017">arXiv</a> · <a href="https://arxiv.org/pdf/2606.23017.pdf">PDF</a>
+            </div>
+            <div class="abstract">联邦学习(FL)为车联网场景实现隐私保护协作学习,但车-边-云资源的极端异构性严重限制系统效率。动态调度策略可缓解该问题,但引入新的信任挑战:在不泄露隐私的前提下验证公平调度决策和客户端压缩指令的忠实执行仍是开放难题。Nautilus 提出可验证高效联邦学习框架:多维资源感知调度算法根据车辆带宽、延迟和算力动态分配压缩比和训练任务;零知识证明(ZKP)机制确保调度公平性和执行合规性。实验表明该框架减少通信开销并加速收敛,同时保证系统完整性。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>分层能力矩阵调度算法:按带宽/算力对车辆分级,分配自适应 Top-K 压缩、量化和训练轮次以最大化并行效率,含收敛感知稀疏调整和双向(上行/下行)自适应量化</li>
+              <li>基于区块链的乐观验证机制:5% 随机抽查触发零知识证明(ZKP)挑战,不合规节点面临自动链上惩罚,在全验证开销≤5% 下实现≥99% 检测率,对抗搭便车和不公平调度</li>
+              <li>FISCO BCOS 原型实现,集成链下 ZKP、分层 RSU 辅助聚合和轻量级链上验证于可部署的车-边-云(VEC)工作流中</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>Nautilus 通过结合自适应网络感知调度、分层可信聚合和轻量级零知识验证,联合解决了异构 VEC 联邦学习中的效率和可信度问题</li>
+              <li>对比 FedAvg,在 10/30/50 节点下训练时间分别降低 39.3%/53.2%/59.9%,精度损失≤1.5 个百分点,且异构性越强优势越大</li>
+              <li>乐观验证使逐节点证明成本在规模扩展时可忽略(每轮仅约 5% 抽查);未来工作目标为批量证明和边缘节点硬件加速</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>最终收敛:50 节点时 Nautilus 仅用 FedAvg 的 40.1% 和 zkFL 的 32.1% 训练时间,精度差距<1.5pt</li>
+              <li>通信:50 节点总流量仅为 FedAvg/zkFL 的 16.7%(降低 83.3%),通过双向 Top-K 稀疏化+自适应量化实现</li>
+              <li>安全评估:100k 蒙特卡洛试验/100 轮,p=5% 审计在 2.5 次/轮下实现 99.399% 检测率;理论与仿真差距≤0.185pt;共谋和自适应攻击者仍被≥99.988% 检测</li>
+              <li>压缩消融:自适应 ρ 策略节省 91.22% 通信并恢复 3.26 精度点,优于激进固定比变体</li>
+              <li>链上开销:调度存储+抽查验证仅占一轮的 1.6%,vs 88.3% 本地训练和 10.1% 通信,验证从不成为瓶颈</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 在车联网联邦学习中首次联合解决效率与可信度问题,通过 ZKP 乐观验证以≤5% 开销实现≥99% 检测率,对异构边缘 AI 系统的部署有直接价值</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>GLIDE: Guided Layerwise Hybrid Attention for Efficient LLM Inference</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Vimal William, Ravi Tandon, Jyotikrishna Dass &nbsp;|&nbsp;
+              <strong>机构:</strong> University of Arizona &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2607.24788">arXiv</a> · <a href="https://arxiv.org/pdf/2607.24788.pdf">PDF</a>
+            </div>
+            <div class="abstract">随着大语言模型扩展到越来越长的上下文,KV cache 在解码过程中的内存 I/O 和计算开销成为主要吞吐瓶颈。GLIDE 提出一种引导式逐层混合注意力,将滑动窗口 softmax 注意力与线性循环聚合策略性整合。GLIDE 的动机是层异质性:早期层对 softmax 移除高度敏感,而深层显示冗余并容忍用线性替代积极替换。GLIDE 引入逐层自适应机制,每层在高效线性循环与可变大小 softmax 窗口间平衡。与均匀混合方法不同,GLIDE 非均匀地压缩 softmax 足迹,减少 KV cache I/O 同时保留最关键的表达能力。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>系统性实证研究揭示注意力线性化敏感性的层异质性:早期层高度敏感(完全线性化导致灾难性崩溃至约 36% 精度),而深层容忍积极线性化且仅有最小退化</li>
+              <li>GLIDE 框架:非均匀逐层混合注意力,按深度依赖地分配 softmax/线性注意力(早期=全 softmax,中期=通过 δ 部分线性化,晚期=全线性),使用单一标量 δ 和块级分配,减少配置搜索空间</li>
+              <li>架构无关模块,兼容现有基于保留的混合模型(Liger, LoLCats, BASEED),使用任意不可学习 φ-kernel,结合 LoRA PEFT 恢复性能而无需完整重训练</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>均匀逐层混合次优;深度依赖的非均匀分配实现更优的效率-精度帕累托前沿</li>
+              <li>GLIDE 保留 92-96% 基线精度的同时,KV cache I/O 比原生 softmax 低 45x-93x</li>
+              <li>δ-分配实现二次与线性注意力机制间的连续次二次插值;中间层部分线性化在最终块线性化后几乎不增加额外成本,而完全线性化(w,w,w)有灾难性损害(约 34%)</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>在 Llama-3-8B/Mistral-7B 上六个基准测试:原生 softmax 72.16%/72.55% 均值;微调 GLIDE (0,0,w) 恢复至~68-70%(96% 基线)在 88 MB/token(45x 降低),(0,15w/16,w) 达 66-68% 在 43 MB/token(93x 更高效,92% 基线)</li>
+              <li>端到端延迟:原生 softmax 在 8K 以上 OOM,而 GLIDE 扩展至 32K(Llama (0,15w/16,w): 32K 时 2638s),比混合基线快 1.4-2x</li>
+              <li>注意力延迟:线性层贡献常量~7ms 不论序列长度(比 softmax 降低 17.4x);平均 token 间延迟从~180ms 降至 55ms(3.3x 加速)</li>
+              <li>128K tokens 时基线累积 17.5GB KV I/O vs GLIDE 非均匀配置 5.2-11.0GB(最多 3.2x 降低),支持 2-3x 更多并发用户</li>
+              <li>消融证实完全线性化(w,w,w)退化至~34%,验证完全 softmax 移除有害,适度非均匀线性化最优</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 揭示了注意力线性化的层异质性规律,GLIDE 非均匀分配策略在保留 92-96% 精度的同时将 KV cache I/O 降低 45-93 倍,对长上下文 LLM 推理效率有直接工程价值</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>Learned, Relied Upon, or Necessary? Separating Checkpoint Dependence from Task-Level Value in Sheaf GNNs</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Yi Liu &nbsp;|&nbsp;
+              <strong>机构:</strong> University of Science and Technology of China &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.LG &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2607.25387">arXiv</a> · <a href="https://arxiv.org/pdf/2607.25387.pdf">PDF</a>
+            </div>
+            <div class="abstract">Sheaf 图神经网络中学习到的限制映射常被视为模型已发现有用边几何的证据。该结论既不从参数位移也不从事后消融得出:两者均可展示一个检查点的组织方式,而无法回答学习到的传输是否在模型其余部分适应后仍有帮助。本文用两个估计量分离这些声明:检查点依赖干预固定预测器的映射,协议相对替换重训匹配的模型族以移除映射容量、边变化或持久边指派。任务零定理表明声明可分歧的原因:标签仅识别被传输的分类器方向,在每个完整 d×d 映射中留下 d²-d 个不可见自由度。精确帧模型给出依赖变为不可替换任务价值的边界。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>提出证据阶梯式审计框架,严格区分三个易混淆声明:映射移动、检查点依赖和协议相对替换,定义固定检查点依赖 R_q 和协议相对替换边际 N_B,明确大的 R_q 可与非正 N_B 共存</li>
+              <li>理论上证明"任务零子空间"定理:对完整 d×d 限制映射,标签监督仅识别被传输的分类器方向,留下 d²-d 个对任务不可见的自由度;构造精确帧对齐任务模型给出依赖与替换分叉的闭式边界</li>
+              <li>对公开 NSD、DNSD、DSNN 代码库实施审计:固定/重采样置换、层共享映射、参数匹配的通道适配器等控制,分离持久边指派与全局矩阵分布的作用</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>学习到的限制映射可以移动、控制某个检查点,但在重训练后仍可被替换——即依赖不必构成任务级不可或缺的边几何;事后消融本质上是依赖测试,更强的几何声称必须配合匹配重训练</li>
+              <li>Roman-Empire 在七个控制下保留了持久边指派优势(套件不可替换),而其余四个 DNSD 基准允许匹配替换,说明同一"大干预效应"可对应不同的科学问题</li>
+              <li>不可替换价值受算子、训练预算、验证规则和控制套件索引:NSD 算子逆转了 Roman-Empire 的排序,DSNN 在 Texas 上允许重采样替换</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>五个 DNSD 基准(Roman-Empire、Amazon-Ratings、Questions、Tolokers、Minesweeper)×十个官方 split:全部 50 个 Full 检查点均使用其映射(R_I>0),但仅 Roman-Empire 的 Full−Resampled-F 配对区间排除零(Δ_ρ=+.0675)</li>
+              <li>Minesweeper 上身份干预移除 .371 AUROC(看似强依赖),但重训后 Shared-F 反超 Full .0135——最清晰的"依赖但可替换"实例</li>
+              <li>Amazon-Ratings/Questions/Tolokers 的 Full−Resampled-F 区间均跨零(.0024/−.0025/−.0027),重采样训练在阻止持久指派的同时恢复任务</li>
+              <li>DSNN 迁移实验:Texas 上 native/fixed/resampled 分别 .800/.800/.814,重采样反超,替换模式跨算子成立</li>
+              <li>100 次(20 seed×5 η)仅标签帧实验精确复现依赖-替换分叉:η=0 时映射可在 nuisance 坐标非恒等但分类无关,η=1 时身份平均降至随机,与定理2闭式预测一致</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 首次将 Sheaf GNN 中"检查点依赖"与"任务级价值"严格分离,理论+实证揭示了消融研究的常见误读,为图神经网络可解释性研究提供了严谨的方法论框架</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>Quasi-SVD: Learning a Lie-constrained matrix factorisation for real-time imaging</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Christopher Hahne &nbsp;|&nbsp;
+              <strong>机构:</strong> University of Bern &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.CV &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2607.25967">arXiv</a> · <a href="https://arxiv.org/pdf/2607.25967.pdf">PDF</a>
+            </div>
+            <div class="abstract">奇异值分解(SVD)是计算成像中矩阵分解任务的基础,医疗应用日益需要实时处理。然而 SVD 算法本质上是顺序性的,限制了实时 GPU 吞吐量。本研究引入 Quasi-SVD,一个可微的、完全并行化的 GPU 矩阵分解框架。它不强制两个因子的正交性,而是通过李代数参数化保证单一因子的精确正交性,同时通过软约束恢复其余分量,实现无需迭代奇异向量优化的高效并行分解。在超声定位显微镜和穆勒矩阵偏振测量两类医疗成像任务上,实现 SSIM=0.89-0.94 的重建保真度和 3-20 倍加速,吞吐量超过 25 FPS。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>首次将李代数矩阵指数应用于学习型 SVD 的单一因子以强制精确正交性,消除仅靠软惩罚方法所产生的数值漂移</li>
+              <li>提出完全可微、GPU 原生并行的架构,在 3×3 至 500×500 真实影像数据上较算法基线实现 3–20× 加速且保持分解精度</li>
+              <li>在 ULM(超声定位显微镜)与 MMP(穆勒矩阵偏振测量)两类互补任务上验证吞吐量在临床矩阵规模下超过 25 FPS,使原本离线或亚实时的流程具备可部署性</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>Quasi-SVD 是一种面向大规模 GPU 并行的李代数信息驱动可微 SVD 逼近:通过斜对称参数化与矩阵指数解析地施加正交性并放宽奇异值精确度,在保证结构约束的同时实现实时性能</li>
+              <li>在偏振与超声基准上,李约束模型重建保真度优于非约束基线且显著降低计算开销</li>
+              <li>其逐像素形式具备强领域迁移能力,为嵌入式临床设备的硬件感知边缘部署提供潜力</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>重建保真度 SSIM=0.89–0.94,相对 cuSOLVER 与随机化 SVD 加速 3–20×,吞吐量超 25 FPS</li>
+              <li>ULM(500×500) 上 LieNN+RNN 取得最高 SSIM≈0.89 且正交性与相对误差均低</li>
+              <li>LieNN 提供最佳因子矩阵逼近——MMP 下 SVD 运行时减半、ULM 下达 20× 加速</li>
+              <li>在独立 MMP 仪器(MUC 公共数据)上完成领域迁移测试,相对性能一致(绝对精度有所牺牲)</li>
+              <li>在 Nvidia H100 上的矩阵尺寸/批大小扫描显示随数据规模增大,本方法相对经典 SVD 的绝对优势显著扩大</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 利用李代数约束实现 GPU 原生并行 SVD 逼近,在医疗实时成像场景中达到 25 FPS 吞吐与 3-20× 加速,为嵌入式临床设备的实时矩阵分解提供了新范式</div>
+          </div>
+
+        </div>
+
+        <!-- Algorithms -->
+        <div class="channel-group">
+          <div class="channel-header">
+            <span class="channel-badge" style="background: rgba(90,64,153,0.12); color: #5A4099;">Algorithms</span>
+            <span style="font-family: var(--font-display); font-size: 12px; color: var(--text-muted);">4 篇推荐</span>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>TabRank: Chain-of-Thought Distillation for Table Re-Rankers</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Adarsh Singh, Kushal Raj Bhandari, Jianxi Gao, Soham Dan, Vivek Gupta &nbsp;|&nbsp;
+              <strong>机构:</strong> Arizona State University; Rensselaer Polytechnic Institute; Scale AI &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.CL &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2607.25182">arXiv</a> · <a href="https://arxiv.org/pdf/2607.25182.pdf">PDF</a>
+            </div>
+            <div class="abstract">检索相关表格以回答问题是结构化信息检索的关键任务。多阶段检索系统依赖重排器精炼一阶段检索器产生的候选列表。近年来,配备显式思维链(CoT)推理的大型推理模型(LRM)在非结构化段落检索中展现了显著提升。TabRank 提出训练推理重排器用于表格检索的框架,首先构建包含 6728 条推理轨迹的综合数据集,然后探索两种训练变体:显式 CoT 蒸馏和条件推理蒸馏(将教师推理轨迹作为提示上下文条件)。在多个表格检索数据集上,TabRank 显著提升性能,HybridQA +30.5%、SQA +15.2%、TabFact +52.9%、TATQA +13.1%。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>提出条件推理蒸馏(CoTCond):将教师(DeepSeek-R1)生成的推理轨迹作为输入提示的上下文条件,而非自回归生成目标,仅对最终排序输出计算损失,在保留推理信号的同时避免轨迹模仿带来的过拟合风险</li>
+              <li>在 NQ-Tables 上构建并公开包含 6728 条 DeepSeek-R1 蒸馏推理轨迹的数据集,支持推理感知的表格检索研究复现</li>
+              <li>首次将推理增强重排序应用于结构化表格数据,并验证仅用单表监督训练即可零架构修改地泛化到多表检索场景</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>条件推理蒸馏(CoTCond)作为标准 CoT 蒸馏的原理性替代,使模型能利用教师生成的推理而无需逐 token 复现长推理轨迹,获得更好的泛化、更强的排序精度和更低的推理成本</li>
+              <li>推理监督显著提升跨域和多样多表问答基准的检索质量</li>
+              <li>CoTCond 的指标提升主要源于消除结构性生成失败(畸形输出、重复预测、空输出),而非细粒度重排序——基础模型重复预测占比分别达 16.8%/33.7%,CoTCond 降至 3% 以下</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>CoTCond 在 Multi-Table QA Benchmark 全部 4 个子集上均为最优;相对基础模型(Qwen3-8B),Acc@10 提升:HybridQA +30.5%(0.6200→0.8091)、SQA +15.2%(0.7095→0.8176)、TAT-QA +13.1%(0.3785→0.4282)、TabFact +52.9%(0.3816→0.5835)</li>
+              <li>CoTCond 在每个基准上均超越标准 CoT 蒸馏 CoTGen(同一教师数据,不同呈现方式),如 HybridQA Acc@10 0.8091 vs 0.7624、TabFact 0.5835 vs 0.5614——证明推理监督作为条件上下文比作为模仿目标更有效</li>
+              <li>增益在基础模型最弱处最大(TabFact 基础 Acc@10 最低 0.3816,增益最大);TAT-QA 为跨域(金融年报 vs Wikipedia),CoTCond 仍是唯一在每个指标上都显著提升的方法</li>
+              <li>推理效率:CoTCond 推理时生成更短推理轨迹,平均 token 数低于 CoTGen(HybridQA 2634 vs 2983、TabFact 2454 vs 3716),延迟与成本更低</li>
+              <li>误差分析揭示基础模型受结构性输出失败困扰(重复预测 TabFact 16.8%、TAT-QA 33.7%),CoTCond 几乎消除此类失败(各数据集均<3%)。训练用 LoRA,2×NVIDIA H200,18 小时,batch 64,lr 5e-5</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 提出条件推理蒸馏策略,将 CoT 从"生成目标"转变为"条件上下文",在表格检索任务上实现 +13-53% 精度提升,为推理增强 IR 提供了更高效的训练范式</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>Salient Knowledge Pathways: Sparse Cross-Modal Routing for Efficient Knowledge-Intensive Multimodal Question Answering</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Noor Islam S. Mohammad, Uluğ Bayazıt &nbsp;|&nbsp;
+              <strong>机构:</strong> Istanbul Technical University (ITU) &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.AI &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2607.25422">arXiv</a> · <a href="https://arxiv.org/pdf/2607.25422.pdf">PDF</a>
+            </div>
+            <div class="abstract">知识密集型多模态问答(KI-MMQA)位于三个昂贵原语的交叉点:长视觉 token 序列、大型外部语料库的密集检索和完整跨模态融合。现有系统对每个查询均匀支付所有三项成本,尽管只有一小部分视觉内容和检索知识实际相关。SKIP 引入统一推理架构,沿由问题、图像和难度估计联合条件的稀疏通路路由计算。SKIP 结合问题引导视觉 token 剪枝、区域条件稀疏检索、二部稀疏跨注意力,以及带有自适应预算控制器的推测知识验证。在五个 KI-MMQA 基准上,SKIP 匹配或超过强密集基线精度,同时使用 3.4-6.8× 更少 FLOPs 和 2.7× 更低延迟。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>SKIP:统一推理架构,沿稀疏的、问题条件通路跨视觉编码、检索和跨模态融合路由计算,结合五个学习组件——问题引导视觉显著性(QVS)、区域条件稀疏检索(RCSR)、二部稀疏跨注意力(BSCA)、难度自适应预算控制器(DBC)和推测知识验证(SKV)</li>
+              <li>首个非空的信息瓶颈稀疏界限:最优视觉 token 保留率在分段 Lipschitz 问题-图像互信息假设下以 O(√(V log(1/ε))) 缩放,具有有界精度退化保证</li>
+              <li>将投机解码从 token 生成扩展到知识访问:SKV 快速通道 34-41% 查询,精度代价可忽略</li>
+              <li>首个在单一问题条件路由策略下联合优化视觉和检索稀疏性的系统</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>知识密集型多模态推理远比当前密集系统假设的更稀疏;跨模态和检索联合应用稀疏性产生大量余量</li>
+              <li>SKIP 在精度上匹配或超过强密集基线,同时使用 3.4–6.8× 更少 FLOPs 和 2.7× 更低延迟,验证了设计</li>
+              <li>经验稀疏甜蜜点紧密匹配理论 O(1/√V) 预测,证明问题条件显著性捕获了 KI-MMQA 查询的真实低维结构</li>
+              <li>稀疏性是 KI-MMQA 中信息流的结构属性;正确设计原则是在信息瓶颈最紧处剪枝</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>主实验(5 基准, 7B 骨干):SKIP 在 OK-VQA(63.2)、A-OKVQA(58.4)、InfoSeek(30.7)、Enc-VQA(24.3)、ViQuAE(37.4) 上取得最高精度——比 RA-CM3 +2.7/+3.1/+4.3/+3.4/+1.8 pts——在 0.42 TFLOPs/305ms vs 1.71 TFLOPs/820ms(4.07× 更少 FLOPs, 2.69× 更快)</li>
+              <li>SKIP 在所有基准上比最强基线快 2.5-2.9×(A100-80GB),并在 5× 更少计算下保持>59% OK-VQA 精度</li>
+              <li>消融:QVS 关键(同 FLOPs 下随机剪枝−9.1 pts);BSCA 是主导计算节省者(密集替换使 FLOPs 三倍换取+0.3 pts);RCSR +3.5 pts;SKV 节省 40% FLOPs 且无可测精度损失</li>
+              <li>QVS 在仅 11% 视觉保留下达到无剪枝精度的 99%,vs 随机/DynamicViT 的 0.30-0.50;经验甜蜜点落在理论预测的 0.06-0.13 范围内</li>
+              <li>失败模式分析:36.8% 遗漏的 OK-VQA 查询——组合多跳检索(15%)、长尾实体(38%)、遮挡下计数(12%)——指向具体下一步</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 首个在单一问题条件路由策略下联合优化视觉和检索稀疏性的系统,附带非空信息瓶颈理论界限,在 5 个基准上以 4-7× 更少 FLOPs 匹配密集基线精度</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>VaLiDRec: Variable-Length LLM-Aligned Semantic IDs for Generative Recommendation</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Shutong Qiao, Wei Yuan, Tong Chen, Hao Wang, Quoc Viet Hung Nguyen &nbsp;|&nbsp;
+              <strong>机构:</strong> University of Queensland; Computer Network Information Center, CAS; Griffith University &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.IR &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2607.25209">arXiv</a> · <a href="https://arxiv.org/pdf/2607.25209.pdf">PDF</a>
+            </div>
+            <div class="abstract">生成式推荐通常使用通过聚类和量化构建的固定长度语义标识符(SID)表示物品。然而这些人工码本可能过度压缩物品语义,与预训练 LLM 词表不对齐,且需要昂贵的自回归解码。VaLiDRec 提出基于变长、LLM 对齐语义标识符的生成式推荐框架。直接从预训练 LLM 原生词表中选取信息量高的 token 作为物品 ID,通过 token 重要性估计、语义质量感知剪枝和碰撞感知精炼,使 ID 长度自适应物品语义复杂度。通过图感知软提示注入协同信号,将推荐重构为 token-set 预测和 token 级物品打分,消除自回归 SID 生成和 beam search。在四个真实数据集上一致超越强基线,零样本冷启动表现更优,推理速度比 LC-Rec 快 87.49 倍。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>提出变长、LLM 对齐的语义 ID 构建方法:直接从预训练 LLM 原生词表中选取信息量高的 token 作为物品 ID,通过 token 重要性估计、语义质量感知剪枝与碰撞感知精炼,使 ID 长度自适应物品语义复杂度</li>
+              <li>提出图感知软提示的 token-set 推荐框架:通过图感知软提示注入协同信号,把推荐重构为 token-set 并行预测+token 级物品打分,天然支持变长 ID 并消除自回归解码与 beam search</li>
+              <li>在多真实数据集上系统验证了相对序列与生成式基线的一致性提升、更优推理效率、更强零样本冷启动与更高语义保留率</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>LLM 原生的变长语义 ID 为生成式推荐提供了更具表达力且更高效的范式,在四个数据集的全部指标上一致超越强序列与生成式基线</li>
+              <li>以一次前向的并行 token 打分替代自回归 SID 生成,在同等 LLM 骨干下实现比 LC-Rec 快 87.49 倍的推理(0.078s vs 6.824s)</li>
+              <li>该框架在零样本物品冷启动上表现更优,验证了 LLM 对齐 SID 对未见物品的泛化能力</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>总体性能(Amazon-2018 四域):VaLiDRec 在 Recall@5/10/20 与 NDCG@5/10/20 上一致取得最佳;如 Luxury Recall@20 达 0.3992,优于 RPG 0.3552、LC-Rec 0.2955</li>
+              <li>零样本物品冷启动:Luxury 上 VaLiDRec 的 Recall@50=0.1975、Recall@100=0.2571、NDCG@100=0.0672,超越 RPG 与 LC-Rec</li>
+              <li>效率:每测试样本 0.078s 对 LC-Rec 的 6.824s(beam=100),87.49 倍加速,以单次 LLM 前向替代 O(BL) 自回归解码</li>
+              <li>SID 质量:精炼后语义质量从 0.9023–0.9245 升至 0.9461–0.9529,≥0.95 占比达 83%–94%,平均长度缩短,最终碰撞率为 0</li>
+              <li>消融:去除图感知软提示性能下降最大(尤以 Arts 为甚),去除 SID 精炼/排序损失/对比损失亦各自降性能,证明组件互补</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 以 LLM 原生变长 token 构建 SID 并以一次前行替代自回归生成,实现 87.49× 推理加速,同时保持/提升精度和零样本冷启动,为生成式推荐提供了更高效的范式</div>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>Every Time I Hire a Linguist, Inference Costs Go Down: On Linguistic Rules as Effective Prompt Compressors</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Jianfei Ma, Zhaoxin Feng, Emmanuele Chersoni, Si Chen &nbsp;|&nbsp;
+              <strong>机构:</strong> The Hong Kong Polytechnic University &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.CL &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2607.25335">arXiv</a> · <a href="https://arxiv.org/pdf/2607.25335.pdf">PDF</a>
+            </div>
+            <div class="abstract">提示词压缩缩短 LLM 输入以降低推理成本,现有方法通过 LM 前向传播评分 token 重要性。这种细粒度、高成本的 token 选择是否必要仍存疑。压缩需要识别信息内容,语言学研究早已通过可操作化为确定性规则的方式解决。本文探索纯语言规则能否作为有效提示词压缩器:在 42 个涵盖词法、句法、语义和话语层次的种子上进行 LLM 指导的进化搜索,仅使用标准 spaCy 处理流程,无需 LM 前向传播。在短文、多文档推理和对话记忆 QA 数据集上,进化压缩器达到与近期先进提示词压缩策略相似的性能,仅需 CPU 端处理。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>引入首批围绕显式语言规则构建的提示词压缩框架之一,通过 LLM 指导的进化搜索在 42 个涵盖词法、句法、语义和话语层次的种子上进行演进,仅使用标准 spaCy 处理流程,无需 LM 前向传递</li>
+              <li>表明基于规则的压缩器在无需 LM 前向传递的情况下,在许多长文档设置中能够达到与近期先进提示词压缩策略相似的性能范围,在两个数据集上具有较低的跨模型变异性</li>
+              <li>分析性洞察:有效的压缩器融合了多个语言层次的信号,随着压缩变深,最佳粒度从词元转移到句子</li>
+              <li>设计双路径评估协议(直接准确率 D 和重构准确率 R),以 min(D,R) 作为适应度,平衡压缩质量和重构保真度</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>仅凭语言规则即可作为有效的提示词压缩器,在无需 LM 前向传递和仅使用 CPU 端处理的情况下,在许多长文档设置中实现与近期先进方法相似的性能范围</li>
+              <li>性能在轻度至中度压缩(1.5×–2.5×)下最强,随着压缩变得更具侵略性(4×, 6×)而下降</li>
+              <li>进化分析揭示有效的压缩器始终融合跨语言层次的信号,随着压缩比例增加,主导压缩单元从词元修剪转向句子提取</li>
+              <li>演进的压缩器无需重新演进或重新调优即可迁移到分布外(OOD)任务</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>在 Direct 准确率方面,该方法在 4 个数据集和 4 个压缩比例的 12 个单元中有 3 个表现最佳,主要在长文档设置(Qasper 1.5×, Multi-doc QA 1.5×, LongMemEval 2.5×);RACE 短篇多选文档是明显弱点</li>
+              <li>实现了 RACE 上最低的跨模型变异性(CV),在 Multi-doc QA 上属于最稳定的方法之一,在 Qasper 和 LongMemEval 上具有竞争力;12 个长文档 Direct 准确率比较在统计学上均无定论</li>
+              <li>无需重新演进即可迁移至 OOD QA(在 2.5× 和 4× 处获得最高 Direct 判定准确率)、摘要和分类任务,保持在最强基准 0.25 个百分点以内</li>
+              <li>在所有目标比例下实现了接近零的压缩比例偏差,而几个基于 LM 的基准(LLMLingua, LongLLMLingua, LLMLingua-2)随着压缩程度增加而表现出漂移</li>
+              <li>进化分析:1.5×–4× 的最佳压缩器始终融合了所有四个语言层次的规则;在 6× 时,操作主要由话语/句法主导;主导压缩单元从词元级评分(1.5×)转变为句子提取(6×)</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 证明纯语言学规则(无需 LM 前向传播)可作为有效提示词压缩器,在 CPU 端即可达到与 LM-based 方法相似性能,为降低 LLM 推理成本提供了零 GPU 开销的新路径</div>
+          </div>
+
+        </div>
+
+        <!-- Architecture -->
+        <div class="channel-group">
+          <div class="channel-header">
+            <span class="channel-badge" style="background: rgba(23,136,69,0.12); color: #178845;">Architecture</span>
+            <span style="font-family: var(--font-display); font-size: 12px; color: var(--text-muted);">1 篇推荐</span>
+          </div>
+
+          <div class="paper-card">
+            <div class="paper-header">
+              <h3>DisDP: Disaggregating Compute, Network, and Storage for Model-Sharded Data-Parallel Training</h3>
+              <span class="score-badge">⭐⭐⭐⭐☆ (4/5)</span>
+            </div>
+            <div class="meta">
+              <strong>作者:</strong> Mo Sun, Zihan Yang, Changyue Liao, Yingtao Li, Jie Zhang &nbsp;|&nbsp;
+              <strong>机构:</strong> Zhejiang University &nbsp;|&nbsp;
+              <strong>分类:</strong> cs.DC &nbsp;|&nbsp;
+              <strong>日期:</strong> 2026-07-29<br/>
+              <a href="https://arxiv.org/abs/2409.00918">arXiv</a> · <a href="https://arxiv.org/pdf/2409.00918.pdf">PDF</a>
+            </div>
+            <div class="abstract">模型分片数据并行(MSDP,如 ZeRO)将模型状态均匀分片到所有 GPU 上,因其低显存需求被 Llama 和 DeepSeek 等大规模预训练广泛采用。然而 MSDP 引入了额外的网络集合通信开销,其执行时间因 CPU/GPU 计算、NCCL 网络与优化器状态的串行执行而增加 41%。DisDP 提出首个将计算、网络和存储三者完全解耦的分布式数据并行架构,使 GPU 仅专注于计算。核心思想是将集合通信完全卸载到 SmartNIC/SmartSwitch,将存储卸载到 SmartSwitch 增强的参数服务器。在 8 个分布式 GPU 上训练 175B 模型时,DisDP 比最先进训练系统快 3.98 倍。</div>
+            <h4>核心贡献</h4>
+            <ul>
+              <li>首个将 MSDP 的计算、网络(集合通信)、存储(优化器)三者完全解耦的架构,使 GPU 仅专注计算以最大化利用率</li>
+              <li>基于 FPGA SmartNIC 的无干扰集合通信库,将 AllGather/ReduceScatter 从 GPU 卸载到 SmartNIC,消除 GEMM 与集合内核间的 SM 及显存带宽竞争</li>
+              <li>SmartSwitch 辅助的 many-to-one 可靠协议,解决单参数服务器服务海量 worker 时的 incast 与可靠性包风暴问题</li>
+              <li>step-centric 优化器流水线,替代传统 layer-centric 流水线,最大化 PS 端 CPU 线程利用率</li>
+            </ul>
+            <h4>主要结论</h4>
+            <ul>
+              <li>完全解耦设计是关键:需三者完全解耦才能彻底重叠计算与通信,仅优化调度或单一聚合均不够</li>
+              <li>100Gbps 低速网络下的全解耦设计优于 4.8Tbps NVLink 的传统聚合式基础设施,论证了"解耦优先于堆砌带宽"</li>
+              <li>线性扩展至 256 度 DP,支持高效的大 DP 度 3D 并行</li>
+            </ul>
+            <h4>实验结果</h4>
+            <ul>
+              <li>8×A100+100Gbps 网络训练 175B 模型:DisDP 吞吐 134 token/s,较 ZeRO-Infinity 提升 3.98×</li>
+              <li>13B–175B 模型:MFU 较 ZeRO-3/ZeRO-Infinity 分别提升 2.04×/2.34×,276B 上仍保持 59% MFU</li>
+              <li>成本效益:仅需 DGX 60% capex,1.96× throughput-per-dollar 优于 ZeRO-Offload on DGX</li>
+              <li>ASTRA-sim 模拟:256 度 DP 时 DisDP 较 ZeRO-Infinity(PAT)快 2.0×、较 ring 快 15.1×</li>
+              <li>收敛性:OPT-66B 微调(3 天 vs 12 小时),loss 曲线基本重合,无精度损失</li>
+            </ul>
+            <div class="significance"><strong>为什么重要:</strong> 作为训练架构创新,DisDP 以计算/网络/存储三者完全解耦的范式重新定义了分布式训练基础设施设计,对大规模 LLM 预训练具有直接工程价值</div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <footer>
+      <p>© 2026 yuancaoyaohw · 每日论文由 Hermes Agent + paper-recommendation 技能自动生成 · <a href="https://github.com/yuancaoyaoHW">GitHub</a></p>
+    </footer>
+  </div>
+    <script>
+      (function () {
+        var btn = document.querySelector('.theme-toggle');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var current = document.documentElement.getAttribute('data-theme');
+          var next = current === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          localStorage.setItem('theme', next);
+        });
+      })();
+    </script>
+</body>
+</html>
