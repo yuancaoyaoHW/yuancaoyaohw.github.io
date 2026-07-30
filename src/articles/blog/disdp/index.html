@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<title>DisDP：把计算、网络、存储全解耦 — 论文详解</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<style data-sn-nav>
+.sn-nav{position:fixed;top:0;left:0;right:0;z-index:9990;display:flex;align-items:center;justify-content:space-between;padding:14px 28px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.78);border-bottom:1px solid rgba(0,0,0,.08);font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;transition:background .3s,border-color .3s}
+.sn-brand{font-size:16px;font-weight:600;letter-spacing:-.02em;color:#1a1f26;text-decoration:none}
+.sn-brand .sn-dot{color:#E8620F}
+.sn-links{display:flex;align-items:center;gap:24px}
+.sn-links a{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:#6a737b;text-decoration:none;transition:color .2s}
+.sn-links a:hover{color:#1a1f26}
+.sn-links a.is-active{color:#E8620F}
+.sn-toggle{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:1px solid rgba(0,0,0,.15);border-radius:8px;background:transparent;color:#6a737b;cursor:pointer;flex-shrink:0;transition:color .2s,border-color .2s}
+.sn-toggle:hover{color:#E8620F;border-color:#E8620F}
+.sn-toggle svg{width:15px;height:15px}
+[data-theme="dark"] .sn-nav{background:rgba(8,13,16,.72);border-bottom-color:rgba(255,255,255,.08)}
+[data-theme="dark"] .sn-brand{color:#fff}
+[data-theme="dark"] .sn-brand .sn-dot{color:#FF7A00}
+[data-theme="dark"] .sn-links a{color:#7C8699}
+[data-theme="dark"] .sn-links a:hover{color:#E7ECF3}
+[data-theme="dark"] .sn-links a.is-active{color:#FF7A00}
+[data-theme="dark"] .sn-toggle{border-color:rgba(255,255,255,.15);color:#7C8699}
+[data-theme="dark"] .sn-toggle:hover{color:#FF7A00;border-color:#FF7A00}
+.sn-toggle .sn-moon{display:none}
+[data-theme="dark"] .sn-toggle .sn-sun{display:none}
+[data-theme="dark"] .sn-toggle .sn-moon{display:inline-block}
+@media(max-width:640px){.sn-nav{padding:12px 18px}.sn-links{gap:14px}.sn-links a:not(.sn-brand){display:none}.sn-brand{font-size:15px}}
+</style>
+<nav class="sn-nav"><a href="/" class="sn-brand">yuancaoyaohw<span class="sn-dot">.</span></a><div class="sn-links"><a href="/">首页</a><a href="/papers/">每日论文</a><a href="/#posts" class="is-active">博客</a><a href="/#interview">面经</a><a href="/#travel">旅游攻略</a><button class="sn-toggle" onclick="snToggleTheme()" aria-label="切换主题" title="切换深/浅色主题"><svg class="sn-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><svg class="sn-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button></div></nav>
+<script data-sn-pad>(function(){function p(){var n=document.querySelector('.sn-nav');if(!n)return;document.body.style.paddingTop=n.getBoundingClientRect().height+'px';}if(document.readyState!=='loading'){p();}else{document.addEventListener('DOMContentLoaded',p);}window.addEventListener('resize',p);})();</script>
+<script data-sn-theme>function snToggleTheme(){var d=document.documentElement;var c=d.getAttribute('data-theme');var n=c==='dark'?'light':'dark';d.setAttribute('data-theme',n);try{localStorage.setItem('sn-theme',n);}catch(e){}}(function(){try{var s=localStorage.getItem('sn-theme');var t=s||'light';if(!document.documentElement.getAttribute('data-theme'))document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+
+
+<!-- ==================== Header ==================== -->
+<header>
+  <div class="page">
+    <span class="badge">ISCA 2024 · 分布式训练</span>
+    <h1>DisDP：把计算、网络、存储全解耦</h1>
+    <p class="subtitle">让 GPU 只做 GEMM，通信卸到 SmartNIC，优化器卸到单台 PS</p>
+    <p class="meta">
+      arXiv: <a href="https://arxiv.org/abs/2409.00918" target="_blank">2409.00918v2</a> ·
+      作者: Mo Sun, Zihan Yang 等 (浙大) ·
+      2024-09-02 · cs.DC
+    </p>
+  </div>
+</header>
+
+<!-- ==================== Sticky TOC ==================== -->
+<nav class="toc">
+  <div class="toc-inner">
+    <a href="#ch0">核心思想</a>
+    <a href="#ch1">为什么慢</a>
+    <a href="#ch2">DisDP 架构</a>
+    <a href="#ch3">SmartNIC</a>
+    <a href="#ch4">可靠协议</a>
+    <a href="#ch5">优化器</a>
+    <a href="#ch6">实验</a>
+    <a href="#ch7">权衡</a>
+  </div>
+</nav>
+
+<main class="page">
+
+<!-- ==================== 第0章: 核心思想 ==================== -->
+<section class="chapter" id="ch0">
+  <h2 class="chapter-title"><span class="num">0</span>核心思想：让 GPU 只做计算</h2>
+
+  <div class="callout why">
+    <div class="callout-title">💡 核心矛盾</div>
+    <p>大模型训练采用 <strong>ZeRO / FSDP</strong> 这类<strong>模型分片数据并行（MSDP）</strong>，把模型状态均匀切片分布在所有 GPU 上。但 MSDP 引入大量 <code>AllGather</code> / <code>ReduceScatter</code> 通信操作 —— 通信比计算多花 <strong>1.25×–4.5×</strong> 的时间，8 卡训练 175B 模型的 <strong>MFU 仅 15%</strong>。瓶颈不是「网络太慢」，而是 <strong>GEMM 计算核与 collective 通信核在同一颗 GPU 上互相干扰</strong>：GPU 非抢占式调度让占满全部 SM 的 GEMM 阻塞下一轮通信核启动。</p>
+  </div>
+
+  <div class="callout insight">
+    <div class="callout-title">🎯 DisDP 的解法</div>
+    <p><strong>解耦（Disaggregation）</strong>：把原本挤在 GPU 上的「计算 / 网络（collectives）/ 存储（optimizer）」三件事，分别卸载到 <strong>GPU / SmartNIC+SmartSwitch / 单台 PS</strong> 三种专门硬件上。GPU 退回它被设计出来的本职工作 —— 只做 GEMM，把利用率从 15% 拉到 ~59%。一句话：<strong>不是把网络做得更快，而是把通信从 GPU 上挪走</strong>。</p>
+  </div>
+
+  <p>论文甚至证明：DisDP 在 100Gbps 以太网上比 ZeRO-Offload 在 4.8Tbps NVLink 上还快 2.22× —— 因为后者仍然受困于「同一颗 GPU 既算又收」的根本矛盾。</p>
+</section>
+
+<!-- ==================== 第1章: 为什么 MSDP 慢 ==================== -->
+<section class="chapter" id="ch1">
+  <h2 class="chapter-title"><span class="num">1</span>为什么 MSDP 训练只有 15% MFU</h2>
+
+  <h3>1.1 计算-通信干扰：GPU 非抢占式调度的致命伤</h3>
+  <p>直觉上，collective 核只占 GPU <strong>几个 SM（≤10%）</strong>，应该很容易和 GEMM 重叠。但 GPU 采用<strong>非抢占式调度</strong>：一个计算密集的 GEMM 核一旦占满所有 SM，<strong>会阻塞后续 collective 核的启动</strong>，即使 collective 有最高优先级、即使两者无数据依赖。</p>
+  <p>即便用 <strong>MPS</strong> 静态切分 SM 来消除计算单元争用（但 MPS 不兼容 dynamic parallelism 和 CUDA graph，LLM 训练框架强依赖这两个特性，实战不可用），还有第二层争用：<strong>GPU 显存带宽 / L2 cache 争用</strong>。论文实测，并发 GEMM 仍让 NCCL AllReduce 的算法带宽下降 <strong>30%</strong>。</p>
+  <div class="formula">
+    算法带宽定义：<br>
+    $$BW_{\rm alg} = \frac{S}{t}$$<br>
+    <span class="math-note">S = collective 数据总量，t = collective 执行时间。GEMM 并发让 t 变大 → BW 下降。</span>
+  </div>
+  <p>论文的关键发现：把 GEMM 核和「外部 PCIe 设备（如 FPGA NIC）通过 DMA 读写 GPU 显存」并发跑，<strong>几乎无干扰</strong>。这正是把 collective 整栈搬到 SmartNIC 的动机 —— 走 DMA 而非 GPU SM，从根上消除干扰。</p>
+
+  <h3>1.2 为什么 SmartSwitch 救不了 MSDP</h3>
+  <p>SmartSwitch（如 SHARP、SwitchML）通过 in-network aggregation 能为 MRDP 优化 AllReduce。但 MSDP 用的是 <strong>AllGather (AG) + ReduceScatter (RS)</strong>，论文证明 SmartSwitch 对这两个 collective <strong>无法降低通信时间</strong>，原因是发送/接收流量的不对称：</p>
+  <div class="formula">
+    N 个 worker 对总数据 S 做 collective。无 SmartSwitch 时每个 worker：<br>
+    $$\text{send} = \text{recv} = \frac{(N-1)S}{N}$$<br><br>
+    SmartSwitch 帮 AG：发送降到 $$S/N$$，但接收仍为 $$(N-1)S/N$$<br>
+    SmartSwitch 帮 RS：接收降到 $$S/N$$，但发送仍为 $$(N-1)S/N$$<br><br>
+    <span class="math-note">通信时间 = max(发送, 接收) / 带宽。SmartSwitch 只压低了单向，另一向仍是瓶颈 → 时间不变。</span>
+  </div>
+
+  <h3>1.3 参数服务器（MiSDP）的扩展性陷阱</h3>
+  <p>MiSDP 把模型状态挪到 PS：worker 只 push 梯度 + pull 参数，通信量比 MSDP 少最多 1/3。但要<strong>线速</strong>处理 16 个 100Gbps worker 的梯度，需要 <strong>13 台额外 CPU 机器</strong>做非协同 PS。瓶颈在 PS 的<strong>内存子系统</strong>：worker 越多，PS 要消费的部分梯度越多，内存压力线性上升。</p>
+
+  <div class="anim-frame" id="anim1">
+    <div class="anim-header">
+      <div class="anim-title">动画 1 · 三种 DP 架构的资源摆放</div>
+      <div class="anim-sub">ZeRO-Infinity（全聚合）→ SwitchML（半解耦）→ DisDP（全解耦）</div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg1" class="anim-svg" viewBox="0 0 820 360" role="img" aria-label="三种 DP 架构对比"></svg></div>
+    <div class="anim-controls">
+      <button class="btn btn-prev">‹ 上一步</button>
+      <button class="btn btn-play">▶ 播放</button>
+      <button class="btn btn-next">下一步 ›</button>
+      <button class="btn btn-reset">↺ 重置</button>
+      <span class="anim-speed"><label>速度 <input type="range" min="0.5" max="2.5" step="0.1" value="1"> <span class="speed-val">1.0×</span></label></span>
+      <span class="anim-step-info">步骤 <span class="step-cur">1</span> / <span class="step-total">3</span></span>
+    </div>
+    <div class="anim-status">
+      <div class="step-title"></div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    </div>
+    <div class="anim-desc"></div>
+  </div>
+</section>
+
+<!-- ==================== 第2章: DisDP 架构 ==================== -->
+<section class="chapter" id="ch2">
+  <h2 class="chapter-title"><span class="num">2</span>DisDP：计算-网络-存储三路解耦</h2>
+  <p>DisDP 的硬件由三部分组成：① 每张 GPU 配一块 <strong>FPGA SmartNIC</strong>，跑无干扰 collective；② 一台 <strong>SmartSwitch</strong>，聚合梯度 + 广播参数 + 维护多对一可靠连接；③ <strong>单台 PS</strong>（可扩展 CPU 服务器），跑 out-of-core Adam。GPU 只管 forward/backward 的 GEMM。</p>
+  <p>软件接口极简：<code>push(buf, len)</code> / <code>pull(buf, len)</code> / <code>wait(handle)</code>。push 和 pull 在 SmartNIC 上是<strong>两条独立流（独立硬件模块）</strong>，可并发跑以榨干双工带宽。</p>
+
+  <div class="anim-frame" id="anim2">
+    <div class="anim-header">
+      <div class="anim-title">动画 2 · DisDP 一次训练迭代的数据流</div>
+      <div class="anim-sub">前向 pull 参数 → 反向 push 梯度 → SmartSwitch 聚合 → PS 跑 Adam → 反向 pull 新参数</div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg2" class="anim-svg" viewBox="0 0 820 380" role="img" aria-label="DisDP 数据流"></svg></div>
+    <div class="anim-controls">
+      <button class="btn btn-prev">‹ 上一步</button>
+      <button class="btn btn-play">▶ 播放</button>
+      <button class="btn btn-next">下一步 ›</button>
+      <button class="btn btn-reset">↺ 重置</button>
+      <span class="anim-speed"><label>速度 <input type="range" min="0.5" max="2.5" step="0.1" value="1"> <span class="speed-val">1.0×</span></label></span>
+      <span class="anim-step-info">步骤 <span class="step-cur">1</span> / <span class="step-total">5</span></span>
+    </div>
+    <div class="anim-status">
+      <div class="step-title"></div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    </div>
+    <div class="anim-desc"></div>
+  </div>
+
+  <h3 id="ch3">2.1 SmartNIC 无干扰通信：为什么必须是 FPGA</h3>
+  <p>朴素方案是把 collective 卸到 <strong>SoC SmartNIC（如 BlueField）</strong>，但它有两个致命瓶颈，且短期内无解：</p>
+  <div class="grid-2col">
+    <div class="card-mini">
+      <div class="card-mini-title">问题 1 · 内部交换链路争用</div>
+      <p>Off-path SmartNIC 的 host/NIC/Arm 通过<strong>内部交换</strong>连接，Arm 以 lookaside 方式处理流量 → push/pull 要在 Arm 和内部交换间来回，<strong>Arm-交换 PCIe 链路</strong>成瓶颈。BlueField-2 并发 push/pull 需 400Gbps Arm-交换带宽，实际只有 250Gbps。</p>
+    </div>
+    <div class="card-mini">
+      <div class="card-mini-title">问题 2 · Arm 显存带宽瓶颈</div>
+      <p>大 working set 无法被缓存 → 流量在 host↔Arm 显存↔网络间搬运，<strong>每方向 2× 显存访问</strong>。BlueField-2 需 800Gbps 显存带宽服务 200Gbps 包，实际只有 204.8Gbps → 仅 20% 线路利用率。BlueField-3 仍未解决。</p>
+    </div>
+  </div>
+  <p>论文改用 <strong>FPGA SmartNIC（Xilinx U50）</strong>：on-path 架构在硬件流水线里处理包（消除内部交换争用），流水线级之间用<strong>片上 SRAM</strong>暂存（避免 off-chip DRAM 带宽瓶颈），从而打到线速。</p>
+
+  <div class="anim-frame" id="anim3">
+    <div class="anim-header">
+      <div class="anim-title">动画 3 · SoC SmartNIC 为何打不到线速，FPGA 为何可以</div>
+      <div class="anim-sub">SoC：Arm-交换链路 + 2× 显存访问 两大瓶颈；FPGA：on-path 流水线 + 片上 SRAM</div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg3" class="anim-svg" viewBox="0 0 820 340" role="img" aria-label="SoC vs FPGA SmartNIC"></svg></div>
+    <div class="anim-controls">
+      <button class="btn btn-prev">‹ 上一步</button>
+      <button class="btn btn-play">▶ 播放</button>
+      <button class="btn btn-next">下一步 ›</button>
+      <button class="btn btn-reset">↺ 重置</button>
+      <span class="anim-speed"><label>速度 <input type="range" min="0.5" max="2.5" step="0.1" value="1"> <span class="speed-val">1.0×</span></label></span>
+      <span class="anim-step-info">步骤 <span class="step-cur">1</span> / <span class="step-total">3</span></span>
+    </div>
+    <div class="anim-status">
+      <div class="step-title"></div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    </div>
+    <div class="anim-desc"></div>
+  </div>
+
+  <h3 id="ch4">2.2 SmartSwitch 多对一可靠协议</h3>
+  <p>单台 PS 要服务几十个 worker，每条 reliable 连接都要 ACK 包，worker 越多 PS 的网络 IOPS 越快被耗尽。论文测：传统 one-to-one reliable 连接下，32 worker 吞吐降到 30Gbps，64 worker 降到 18Gbps。</p>
+  <p>DisDP 的解法：<strong>周期性 heartbeat 包 + SmartSwitch 聚合 ACK</strong>。每个 worker/PS 周期发 heartbeat，含 <code>Ack</code>（下一期望序列号）和 <code>Credit</code>（能接收的最大序列号）。SmartSwitch 维护一张 heartbeat 表，对各 worker 的 Ack/Credit 做<strong>最小聚合</strong>，只向 PS 发<strong>一个</strong>聚合 heartbeat。于是 PS 每个 heartbeat 周期只收发各一个 ACK，与 worker 数无关。RTO ~250μs。</p>
+  <p>注意：让 SmartSwitch 自己做 endpoint 跑完整 reliable 协议不可行 —— Tofino 流水线 ≤20 级，而 reliable RDMA/TCP 需 >50 级。</p>
+
+  <div class="anim-frame" id="anim4">
+    <div class="anim-header">
+      <div class="anim-title">动画 4 · 多对一可靠协议：PS 的 IOPS 怎么被救回来</div>
+      <div class="anim-sub">传统每包 ACK：ACK 风暴耗尽 PS IOPS；DisDP：SmartSwitch 聚合 heartbeat，PS 每周期只 1 个 ACK</div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg4" class="anim-svg" viewBox="0 0 820 360" role="img" aria-label="可靠协议对比"></svg></div>
+    <div class="anim-controls">
+      <button class="btn btn-prev">‹ 上一步</button>
+      <button class="btn btn-play">▶ 播放</button>
+      <button class="btn btn-next">下一步 ›</button>
+      <button class="btn btn-reset">↺ 重置</button>
+      <span class="anim-speed"><label>速度 <input type="range" min="0.5" max="2.5" step="0.1" value="1"> <span class="speed-val">1.0×</span></label></span>
+      <span class="anim-step-info">步骤 <span class="step-cur">1</span> / <span class="step-total">4</span></span>
+    </div>
+    <div class="anim-status">
+      <div class="step-title"></div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    </div>
+    <div class="anim-desc"></div>
+  </div>
+
+  <h3 id="ch5">2.3 步骤中心优化器流水线</h3>
+  <p>100B 模型的 optimizer 状态远大于单机内存，传统做法用多台 CPU 服务器。DisDP 想用<strong>单台 PS</strong>跑 out-of-core Adam，反向阶段要 6 个步骤：① SSD→CPU 读参数 ② push 参数到 SmartNIC ③ pull 梯度到 CPU ④ SSD→CPU 读 12B 模型状态 ⑤ CPU 跑 Adam（17 FLOPs/元素）⑥ 写回 SSD。反向阶段需求：99 GFLOPS 计算、349 GB/s 显存带宽、81.4 GB/s SSD 带宽。</p>
+  <p>朴素<strong>层中心（layer-centric）流水线</strong>给每层分配固定线程。但 Step 5（CPU Adam）要 32 线程才线速，其余步骤只需 1 线程 → 每层都要占 32 线程，<strong>并行度被线程数卡死</strong>，流水线出现气泡。</p>
+  <p>DisDP 的<strong>步骤中心（step-centric）流水线</strong>按<strong>步骤</strong>而非按层分配线程：每个步骤一次处理一层，层在步骤间轮转。这样可以给 Step 5 分 32 线程、其余步骤分少线程，<strong>37 个线程就能跑满整条流水线</strong>。单台 6730P（PCIe Gen5 + 12 SSD）足以线速服务任意多 worker。</p>
+
+  <div class="anim-frame" id="anim5">
+    <div class="anim-header">
+      <div class="anim-title">动画 5 · 层中心 vs 步骤中心优化器流水线</div>
+      <div class="anim-sub">层中心：每层占 32 线程，气泡多；步骤中心：按步骤分线程，37 线程跑满</div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg5" class="anim-svg" viewBox="0 0 820 360" role="img" aria-label="优化器流水线对比"></svg></div>
+    <div class="anim-controls">
+      <button class="btn btn-prev">‹ 上一步</button>
+      <button class="btn btn-play">▶ 播放</button>
+      <button class="btn btn-next">下一步 ›</button>
+      <button class="btn btn-reset">↺ 重置</button>
+      <span class="anim-speed"><label>速度 <input type="range" min="0.5" max="2.5" step="0.1" value="1"> <span class="speed-val">1.0×</span></label></span>
+      <span class="anim-step-info">步骤 <span class="step-cur">1</span> / <span class="step-total">4</span></span>
+    </div>
+    <div class="anim-status">
+      <div class="step-title"></div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+    </div>
+    <div class="anim-desc"></div>
+  </div>
+</section>
+
+<!-- ==================== 第3章: 实验 ==================== -->
+<section class="chapter" id="ch6">
+  <h2 class="chapter-title"><span class="num">3</span>实验结果：解耦比堆带宽更值</h2>
+  <p>原型用 Xilinx U50 FPGA 做 SmartNIC，8 台单 A100 机器 + 1 台 PS，100Gbps 网络。</p>
+  <table class="data-table">
+    <thead><tr><th>对比</th><th>结果</th><th>原因（WHY）</th></tr></thead>
+    <tbody>
+      <tr><td>DisDP vs ZeRO-Infinity（175B，8×A100）</td><td>3.98× 吞吐（134 vs 34 token/s）</td><td>消除 GEMM-collective 干扰 + SmartSwitch 降通信 20%</td></tr>
+      <tr><td>DisDP vs ZeRO-3 / ATP（1.3B）</td><td>2.90× / 6.28×</td><td>DisDP 用慢 SSD 但无干扰，仍胜过用快 GPU 显存的基线</td></tr>
+      <tr><td>DisDP vs ZeRO-Inf+MPS / +Preemp</td><td>DisDP 是其 3.05× / 3.04×</td><td>仅消除 SM 争用不够，显存带宽争用仍在 → 必须全解耦</td></tr>
+      <tr><td>DisDP vs ZeRO-Infinity+SHARP</td><td>2.38–3.35×</td><td>SHARP 只做 in-switch 聚合，计算-通信干扰未除</td></tr>
+      <tr><td>DisDP (100Gbps 以太) vs ZeRO-Offload (4.8Tbps NVLink)</td><td>2.22×</td><td>慢网+解耦 > 快网+聚合；micro-batch≥16 时计算盖过通信</td></tr>
+      <tr><td>DisDP 256-degree DP（ASTRA-sim）</td><td>2.0× vs PAT / 15.1× vs ring</td><td>硬件加速的多对一 collective 把依赖链压到几跳</td></tr>
+      <tr><td>成本效率（32 GPU，175B）</td><td>1.96× 吞吐/美元 vs DGX ZeRO-Offload</td><td>DisDP 只花 DGX 60% 的 capex</td></tr>
+    </tbody>
+  </table>
+  <div class="callout key">
+    <div class="callout-title">⚠ 关键反直觉</div>
+    <p>ZeRO-Inf+MPS 和 ZeRO-Inf+Preemp 这两种「理论上消除了 SM 争用」的优化，吞吐<strong>几乎一样</strong>（差 0.1%–0.4%），且都只有 DisDP 的 ~33%。这证明：<strong>计算-通信干扰的根因是 GPU SM 争用 + 显存带宽争用叠加</strong>，只解一个不够，必须把通信整个搬出 GPU。</p>
+  </div>
+  <p>消融：① SmartNIC 卸载贡献 1.58×（大 batch 下计算与通信时间相当，重叠收益最大）；② 多对一协议贡献 1.10×（PS 不再 colocated，反向通信量降）；③ 步骤中心流水线贡献 1.10–1.17×（让 PS 不成瓶颈）。三者叠加，缺一不可。</p>
+</section>
+
+<!-- ==================== 第4章: 权衡 ==================== -->
+<section class="chapter" id="ch7">
+  <h2 class="chapter-title"><span class="num">4</span>权衡、局限与启示</h2>
+  <div class="grid-2col">
+    <div class="card-mini">
+      <div class="card-mini-title">代价 · 额外硬件</div>
+      <p>每张 GPU 要配一块 FPGA SmartNIC（U50），还要一台 SmartSwitch + 一台专用 PS。虽然总 capex 只有 DGX 的 60%，但<strong>部署门槛</strong>比纯 GPU 集群高 —— 需要可编程交换机和 FPGA 开发能力。</p>
+    </div>
+    <div class="card-mini">
+      <div class="card-mini-title">代价 · SmartNIC DMA 弱</div>
+      <p>U50 的 DMA 能力（outstanding PCIe transactions）比 CX-5 NIC 弱，2 GPU 无并发 GEMM 时 DisDP 反而比 NCCL AllReduce 慢 28%。需要更强的 SmartNIC 才能全面追平。</p>
+    </div>
+    <div class="card-mini">
+      <div class="card-mini-title">局限 · U50 算力</div>
+      <p>FPGA 的 collective 处理模块资源占用受 U50 规模限制，更复杂 collective（如 TP 的 AllReduce）是否能在单块 FPGA 线速处理，论文未充分讨论。</p>
+    </div>
+    <div class="card-mini">
+      <div class="card-mini-title">启示 · 解耦 > 堆带宽</div>
+      <p>最深刻的结论：在 100Gbps + 全解耦下，micro-batch≥16 时计算时间盖过通信，<strong>100Gbps 够用，不必上 NVLink</strong>。慢网+专用卸载硬件，比快网+GPU 兼职更经济。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 参考文献 ==================== -->
+<section class="chapter">
+  <h2 class="chapter-title"><span class="num">5</span>参考文献</h2>
+  <ul class="ref-list">
+    <li>Sun, M., Yang, Z., Liao, C., et al. <em>DisDP: Disaggregating Compute, Network, and Storage for Model-Sharded Data-Parallel Training</em>. arXiv:2409.00918v2, 2024. (ISCA 2024)</li>
+    <li>Rajbhandari, S. et al. <em>ZeRO-Infinity / ZeRO-Offload / ZeRO-3</em> (DeepSpeed). MSDP 基线。</li>
+    <li>Sapio, A. et al. <em>SwitchML</em>. In-network aggregation 先驱。</li>
+    <li>NVIDIA. <em>SHARP</em>. InfiniBand in-switch aggregation。</li>
+    <li>NVIDIA. <em>BlueField-2/3 DPU</em>. SoC SmartNIC 内存带宽规格。</li>
+    <li>Grajkowski, L. et al. <em>ATP</em>. SmartSwitch-enhanced MRDP。</li>
+    <li>DeepSeek. <em>专用网络处理器</em>思想，DisDP 的灵感来源。</li>
+  </ul>
+  <p class="ref-note">论文全文：<a href="https://arxiv.org/html/2409.00918v2" target="_blank" rel="noopener">arxiv.org/html/2409.00918v2</a></p>
+</section>
+
+</main>
+
+<button class="back-to-top" aria-label="回到顶部">↑</button>
+
+<script src="assets/anim.js"></script>
+</body>
+</html>
