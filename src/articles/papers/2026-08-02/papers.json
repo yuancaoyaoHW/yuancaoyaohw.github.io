@@ -1,0 +1,346 @@
+{
+  "date": "2026-08-02",
+  "title": "2026-08-02 论文精选",
+  "lede": "今日关注：KV cache语义化缓存、MLA推测解码功能重构、量化对Agent的隐性损伤——以及注意力残差多头化、RL微调动态提示选择等新进展",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 50
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SemPIC: Learning Semantic Position-Independent KV Caches",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-02",
+          "authors": "Hui Xie, Peng Xiao, Yutong Deng, Shuoran Dou, Jian Yang, Jinyang Guo",
+          "institutions": "未标注",
+          "abstract": "长上下文检索和Agent工作负载反复重用相同文档，但指令、历史和文档顺序不断变化。Prefix caching无法利用这种重用，而位置无关缓存（PIC）因独立编译的KV状态缺乏未来上下文而不可靠。本文提出SemPIC，通过行为蒸馏训练LoRA Writer编译原生逐层文档KV，同时保留预训练解码器作为不变的Reader。适应仅限于离线缓存构建，保留标准KV接口和缓存命中解码路径。还引入KV Gradient Checkpointing，在不切断缓存KV梯度的情况下减少峰值训练内存。在三个模型和四个任务上，SemPIC将平均micro-F1从KV Packet的0.53提升至0.60，接近Full Recompute的0.62。",
+          "contributions": [
+            "提出SemPIC框架，通过LoRA Writer行为蒸馏生成语义无关位置KV缓存，不修改推理路径",
+            "引入KV Gradient Checkpointing技术，在不切断缓存KV梯度的情况下降低峰值训练显存",
+            "证明位置无关缓存的核心瓶颈在于文档表示本身的适应性，而非仅靠边界条件"
+          ],
+          "conclusions": [
+            "语义感知的KV缓存编译可将位置无关缓存性能从0.53提升至0.60，接近全量重计算的0.62",
+            "将适应限制在离线缓存构建阶段，完全保留标准KV接口和缓存命中解码路径，工程友好"
+          ],
+          "experiments": [
+            "在三个模型和四个任务上评估，平均micro-F1从0.53提升至0.60（Full Recompute为0.62）",
+            "诊断显示边界条件基线显著减少可重用块边界附近的注意力偏差，但内部和任务级别仍有残差"
+          ],
+          "significance": "为长上下文Agent工作负载的KV缓存重用提供了实用的语义化方案，无需修改推理路径",
+          "arxivUrl": "https://arxiv.org/abs/2607.28069",
+          "pdfUrl": "https://arxiv.org/pdf/2607.28069.pdf",
+          "index": 1,
+          "takeaway": "通过LoRA Writer行为蒸馏实现语义无关位置KV缓存，F1从0.53提升至0.60",
+          "keyExperiment": "三个模型四个任务上micro-F1从0.53提升至0.60，接近Full Recompute的0.62"
+        },
+        {
+          "title": "Beyond KV Reconstruction: Functional Reconstruction for MLA Draft Models in Speculative Decoding",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-02",
+          "authors": "Weiye Shi, Fanxu Meng, Muhan Zhang",
+          "institutions": "未标注",
+          "abstract": "多头潜在注意力（MLA）对长上下文LLM推理越来越重要，因为紧凑的潜在状态替代了不断增长的KV缓存并减少了解码内存流量。然而，大多数有能力的开源检查点使用MHA/GQA，因此需要转换以在不从头训练的情况下获得MLA的缓存效率。推测解码提供了互补加速，但其加速取决于草稿提议与目标验证之间的一致性。本文发现直接MHA/GQA到MLA的转换会显著降低这种一致性：低秩分解和RoPE处理引入的注意力函数误差在独立生成中可容忍，但大幅降低草稿token接受率。因此将MLA草稿构建形式化为功能重构而非缓存压缩，端到端方法优化每个转换后的MLA注意力模块以复现其原始MHA/GQA对应模块在校准隐藏状态上的输出投影后响应。",
+          "contributions": [
+            "发现直接MHA/GQA到MLA转换会显著降低推测解码的草稿token接受率",
+            "提出功能重构方法，将MLA草稿构建从缓存压缩重新定义为函数行为复现",
+            "方法与转换器无关、后转换阶段执行，保留转换后的缓存和推理图，无需验证器logits或监督"
+          ],
+          "conclusions": [
+            "功能重构在64个匹配任务单元中有37个显著提升接受率，26个基本不变，仅1个显著下降",
+            "将MLA草稿构建框架从KV重建转向功能重建，是推测解码效率的关键",
+            "方法适用于任意MHA/GQA到MLA的转换器，无需额外验证器监督"
+          ],
+          "experiments": [
+            "评估192种模型-转换器-后端-方法-任务配置，覆盖四种Llama/Qwen草稿-目标对",
+            "使用0.5个百分点报告容差，功能重构在37/64个匹配任务单元中显著提升接受率",
+            "涵盖TransMLA和MHA2MLA两种转换器，HF和vLLM两种后端"
+          ],
+          "significance": "为MLA模型在推测解码中的实际部署提供了关键的功能重构方法，解决转换后接受率下降问题",
+          "arxivUrl": "https://arxiv.org/abs/2607.27269",
+          "pdfUrl": "https://arxiv.org/pdf/2607.27269.pdf",
+          "index": 2,
+          "takeaway": "将MLA草稿构建从缓存压缩转向功能重构，192组配置中37/64个任务接受率显著提升",
+          "keyExperiment": "192种配置评估，功能重构在37/64个匹配任务单元中显著提升草稿token接受率"
+        },
+        {
+          "title": "Flat Score, Amplified Failures: How the Error Budget Masks Damage in Quantized LLM Agents",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-02",
+          "authors": "Jiwon Jang, Kisu Yang, Heuiseok Lim, Hyunwoo Park",
+          "institutions": "未标注",
+          "abstract": "4位权重量化被广泛报告为几乎无损。本文在多轮工具调用Agent场景下测试这一主张。在τ²-bench上，跨两个开源模型族（dense和MoE变体）和两个领域（8个单元，每个456集，16/8/4位权重），量化在标准指标上确实看起来免费。没有任何单元显示通过多重比较校正的分数变化。但过程讲述了不同故事：量化将模型在全精度下已有的失败（电信中的工具名幻觉，零售实体错误有相同方向趋势）放大约2.5倍（每任务+17.6分），同时几乎没有创造新失败。每个精度下失败集相同（排名相关性≥0.94，0.18%新事件）。分数保持平坦是因为基准测试的十错误预算吸收了额外失败。",
+          "contributions": [
+            "揭示4位量化在Agent场景下的隐性损伤：标准分数看似无损，但实际放大约2.5倍已有失败",
+            "证明分数平坦是因为基准测试的错误预算吸收了额外失败，而非量化真的无损",
+            "提出两个诊断指标——每通道错误率和缩减预算下的成功率——均可从现有基准日志中提取"
+          ],
+          "conclusions": [
+            "量化不创造新失败类型，而是放大模型已有的弱点（工具名幻觉+17.6分/任务，约2.5倍）",
+            "将错误预算从10缩减到2即可重新暴露17分的分数差距",
+            "针对性错误修复提示可在精确且仅在量化损伤处移除损害"
+          ],
+          "experiments": [
+            "8个单元×456集，16/8/4位权重，跨dense和MoE两个模型族、电信和零售两个领域",
+            "量化将工具名幻觉放大约2.5倍（+17.6分/任务），失败集排名相关性≥0.94",
+            "错误预算从10缩减到2后重新暴露17分差距，针对性修复提示精确移除损伤"
+          ],
+          "significance": "颠覆了4位量化在Agent场景无损的共识，提供了从现有日志即可提取的量化损伤诊断方法",
+          "arxivUrl": "https://arxiv.org/abs/2607.27275",
+          "pdfUrl": "https://arxiv.org/pdf/2607.27275.pdf",
+          "index": 3,
+          "takeaway": "4位量化在Agent场景放大已有失败2.5倍，标准分数因错误预算吸收而掩盖了实际损伤",
+          "keyExperiment": "8单元456集评估，量化放大约2.5倍已有失败，缩减错误预算后暴露17分差距"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Contrastive Reinforced Policy Optimization via Privileged Self-Distillation",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-02",
+          "authors": "Xingjian Wu, Junlin Liu, Xingchen Liu, Xuhang Zhu, Jianing Wang, Linsen Guo, Xiaoyu Li, Xuezhi Cao, Xunliang Cai",
+          "institutions": "未标注",
+          "abstract": "LLM后训练越来越依赖可验证奖励强化学习（RLVR）或在线策略自蒸馏（OPSD）。OPSD提供密集的logit级监督，但本质上因自教师特权信息而存在暴露偏差。在多轮Agent设置中，这导致推理路线收敛和优化方向丢失。本文提出对比增强策略优化（CRPO），从对比学习视角重新定义Agent OPSD。利用预测熵区分正位置（反思性探索）和负位置（暴露偏差），进行组间对比以保留可靠的细粒度优化信号。在13个具有挑战性的推理和深度搜索基准上评估，CRPO持续优于现有强化学习和自蒸馏基线，显著增强长时交互中的训练稳定性和泛化能力。",
+          "contributions": [
+            "从对比学习视角重新定义Agent自蒸馏，解决OPSD的暴露偏差问题",
+            "利用预测熵区分正位置（反思探索）和负位置（暴露偏差），进行组间对比",
+            "在13个推理和深度搜索基准上持续优于现有RL和自蒸馏方法"
+          ],
+          "conclusions": [
+            "对比视角的Agent自蒸馏可有效保留可靠的细粒度优化信号，避免推理路线收敛",
+            "CRPO在长时交互中显著增强训练稳定性和泛化能力",
+            "预测熵是区分反思探索与暴露偏差的有效信号"
+          ],
+          "experiments": [
+            "在13个推理和深度搜索基准上评估，持续优于RL和自蒸馏基线",
+            "显著增强长时交互中的训练稳定性和泛化能力"
+          ],
+          "significance": "为多轮Agent场景下的自蒸馏训练提供了暴露偏差的系统解决方案",
+          "arxivUrl": "https://arxiv.org/abs/2607.28026",
+          "pdfUrl": "https://arxiv.org/pdf/2607.28026.pdf",
+          "index": 4,
+          "takeaway": "从对比学习视角解决Agent自蒸馏的暴露偏差，13个基准持续优于现有方法",
+          "keyExperiment": "13个推理和深度搜索基准上持续优于RL和自蒸馏基线，增强长时交互稳定性"
+        },
+        {
+          "title": "Kalman Meets Curriculum: Efficient Dynamic Prompt Selection for Adaptive RL Finetuning",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-02",
+          "authors": "Haodong Zhu, Yangyang Ren, Yanjing Li, Sheng Xu, Haiguang Liu, Linlin Yang, Baochang Zhang",
+          "institutions": "未标注",
+          "abstract": "RL微调显著增强LLM的推理能力，但其效果关键取决于为当前策略选择适当难度的提示。这在训练过程中具有挑战性，因为提示难度不断演变。现有在线方法面临权衡：基于评估的方法准确但昂贵，基于预测的方法高效但通常假设静态难度。本文提出卡尔曼引导提示选择（KGPS），将提示选择重新定义为动态状态估计问题而非静态难度预测。KGPS使用线性高斯状态空间模型在logit空间建模每个提示的潜在成功率，过程噪声与策略更新幅度耦合，使不确定性在策略变化较大时增加。卡尔曼滤波器维护校准的高斯后验，通过最大化后验期望训练效用来选择提示，偏向中等难度提示并自然回访不确定的提示。",
+          "contributions": [
+            "将RL微调的提示选择重新形式化为动态状态估计问题，而非静态难度预测",
+            "过程噪声与策略更新幅度耦合，使不确定性在策略变化较大时自动增加",
+            "无需额外rollout，仅需标准策略训练即可自适应策略漂移"
+          ],
+          "conclusions": [
+            "KGPS在数学、规划和几何推理基准上持续提升最终准确率和rollout效率",
+            "在DeepSeek-R1-Distill-7B上，KGPS使用83%更少的rollout同时提升平均性能0.12分",
+            "建立了在线提示选择方法中的SOTA性能"
+          ],
+          "experiments": [
+            "在DeepSeek-R1-Distill-7B上，KGPS使用83%更少的rollout，同时6个数学推理基准平均提升0.12分",
+            "跨数学、规划和几何推理基准及多种RL算法评估，持续提升准确率和rollout效率"
+          ],
+          "significance": "将卡尔曼滤波引入RL微调的提示选择，以零额外rollout实现动态难度适应",
+          "arxivUrl": "https://arxiv.org/abs/2607.27610",
+          "pdfUrl": "https://arxiv.org/pdf/2607.27610.pdf",
+          "index": 5,
+          "takeaway": "卡尔曼滤波动态估计提示难度，DeepSeek-R1-Distill-7B上减少83% rollout",
+          "keyExperiment": "DeepSeek-R1-Distill-7B上KGPS使用83%更少rollout，6个数学基准平均提升0.12分"
+        },
+        {
+          "title": "SDO: Structure-Aware Data Organization for Efficient LLM Post-Training",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-02",
+          "authors": "Jinliang Gao, Ning Yang, Hai Wang, Baili Xiao, Pin Lyu",
+          "institutions": "未标注",
+          "abstract": "LLM后训练昂贵，现有效率改进主要关注选择信息性样本或设计训练计划。但数据组织本身通常被视为静态预处理步骤：基于嵌入的分组方法在训练前构建固定分区，无法适应优化过程中不断变化的样本暴露。本文提出SDO（结构感知数据组织），一个即插即用的数据组织框架，具有暴露驱动的反馈机制，根据表示空间结构组织小批组合和样本暴露。SDO在每个epoch上对冻结的外部嵌入操作，避免模型预热训练开销：epoch内，局部感知批处理通过KNN邻域遍历形成连贯小批次；epoch间，暴露平衡调度记录每样本参与并降低过度暴露样本的采样概率以保持长期覆盖。跨SFT、DPO和GRPO，SDO加速收敛，最大增益在早中阶段。",
+          "contributions": [
+            "提出即插即用的数据组织框架SDO，根据表示空间结构动态组织小批组合",
+            "epoch内局部感知批处理（KNN邻域遍历）+ epoch间暴露平衡调度，双重机制",
+            "跨SFT、DPO和GRPO三种后训练范式统一有效，在冻结嵌入上操作无需模型预热"
+          ],
+          "conclusions": [
+            "SDO在SFT、DPO和GRPO上均加速收敛，最大增益在早中阶段",
+            "生成更连贯的梯度，在问题类型间产生更平衡的准确率",
+            "不永久排除任何训练样本，保持长期覆盖"
+          ],
+          "experiments": [
+            "跨SFT、DPO和GRPO三种后训练范式评估，均加速收敛",
+            "最大增益出现在训练早中阶段，产生更连贯的梯度和更平衡的准确率"
+          ],
+          "significance": "将数据组织从静态预处理提升为动态优化过程，即插即用于SFT/DPO/GRPO",
+          "arxivUrl": "https://arxiv.org/abs/2607.27273",
+          "pdfUrl": "https://arxiv.org/pdf/2607.27273.pdf",
+          "index": 6,
+          "takeaway": "结构感知数据组织跨SFT/DPO/GRPO加速收敛，最大增益在训练早中阶段",
+          "keyExperiment": "跨SFT、DPO和GRPO三种范式评估，加速收敛，产生更平衡的准确率"
+        },
+        {
+          "title": "Group-Reflective Self-Distillation for Agentic Reinforcement Learning",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-02",
+          "authors": "Binbin Zheng, Zijun Xie, Guanqun Zhao, Enlei Gong, Xing Ma, Xiaoliang Fu, Zeyu Chen",
+          "institutions": "未标注",
+          "abstract": "RLVR对训练LLM Agent有效，但终端奖励仅提供粗粒度的轨迹级监督，成功行为、重复错误和偶然选择被纠缠在同一个结果信号中。现有Agent自蒸馏方法用自然语言技能丰富稀疏监督，但外部检索或更强模型从单轨迹提取的技能可能与当前经验不匹配、超出策略能力或路径特定。本文提出组反思自蒸馏（GRSD），从策略自身验证rollout中推导能力对齐和结果区分的指导。对每个提示，策略反思验证组中的每条验证轨迹，stop-gradient快照对比成功和失败rollout的反思来构建组级特权指导。在此指导下，自教师通过调节基于结果的advantage来细化轮级信用分配，同时保留验证器确定的学习方向。",
+          "contributions": [
+            "从策略自身验证rollout推导指导，而非依赖外部技能检索或更强模型提取",
+            "stop-gradient快照对比成功/失败轨迹反思，构建组级特权指导",
+            "自教师调节轮级信用分配同时保留验证器确定的学习方向"
+          ],
+          "conclusions": [
+            "GRSD持续优于竞争基线，在未见任务上泛化更有效",
+            "从策略自身经验推导的指导比外部检索技能更匹配当前能力和经验"
+          ],
+          "experiments": [
+            "跨多个Agent环境和模型规模评估，持续优于竞争基线",
+            "在未见任务上展示更有效的泛化能力"
+          ],
+          "significance": "为Agent RL提供自给自足的密集监督方案，无需外部技能检索或更强模型",
+          "arxivUrl": "https://arxiv.org/abs/2607.28076",
+          "pdfUrl": "https://arxiv.org/pdf/2607.28076.pdf",
+          "index": 7,
+          "takeaway": "从策略自身rollout推导密集监督，无需外部技能检索，持续优于基线",
+          "keyExperiment": "跨多个Agent环境和模型规模，持续优于竞争基线，泛化到未见任务"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Multi-Head Attention Residuals",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-02",
+          "authors": "Cheng Luo, Zefan Cai, Junjie Hu",
+          "institutions": "未标注",
+          "abstract": "Transformer通过单一加性残差流在深度上传播信息：每个子层仅读取最新状态。注意力残差通过让每个子层通过学习的softmax关注深度历史来放松这一限制。但该读取使用整个宽度共享的单一查询，因此每个特征子空间必须通过一个分布读取深度历史。这种强制妥协的代价随子空间对读取哪层的分歧增大而增长，而分歧随模型宽度增长。本文提出多头注意力残差（MHAR）：路由查询重塑为H个逐子空间头，每个有自己的softmax。读取变为块对角，重塑零参数增加且计算可忽略，H=1精确恢复注意力残差。在去重Nemotron基础退火语料上从头训练，MHAR在100M、350M和1B上改进验证损失（-0.061、-0.149和-0.140），每个设置中均为最佳结果。",
+          "contributions": [
+            "提出MHAR：将注意力残差的路由查询分解为H个逐子空间头，实现块对角深度读取",
+            "零参数增加、可忽略计算开销，H=1精确恢复原始注意力残差",
+            "发现头数是真实设计轴：验证损失对H呈U型，H=4或H=8为平坦最优"
+          ],
+          "conclusions": [
+            "MHAR在100M到1B三个尺度上持续改进验证损失，增益随规模增大",
+            "H=8适合大规模模型，过度分裂（H=16）会回吐部分增益",
+            "训练查询的探针证实子空间分歧是增益的底层驱动力"
+          ],
+          "experiments": [
+            "100M/350M/1B三尺度验证损失分别降低0.061/0.149/0.140，每设置均最佳",
+            "融合Triton路由内核将注意力残差训练吞吐量从0.2-0.5x提升至0.55-0.88x基线",
+            "8B中途训练：delta注意力残差转换获得GSM8K +3.2和GPQA +3.1提升"
+          ],
+          "significance": "揭示了Transformer残差流中子空间分歧的结构性问题，以零参数提供优雅解决方案",
+          "arxivUrl": "https://arxiv.org/abs/2607.27230",
+          "pdfUrl": "https://arxiv.org/pdf/2607.27230.pdf",
+          "index": 8,
+          "takeaway": "零参数将注意力残差路由查询分头化，100M-1B三尺度验证损失持续降低，8B获GSM8K+3.2",
+          "keyExperiment": "100M/350M/1B验证损失降低0.061/0.149/0.140；8B中途训练GSM8K+3.2、GPQA+3.1"
+        },
+        {
+          "title": "KernelGenBench: A Multi-Source and Multi-Chip Benchmark for LLM-based Kernel Generation",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-02",
+          "authors": "Peiyu Zang, Jian Tao, Jialing Zhang, Yichen Yuan, Wentao Zhang, Guang Liu, Yonghua Lin",
+          "institutions": "未标注",
+          "abstract": "LLM大幅增加了对高效加速器内核的需求，但内核开发仍然是高度专业化和劳动密集型任务。LLM和Agent框架的兴起为自动内核生成提供了有前途的路径。然而，尽管进展迅速，仍没有全面的基准来严格评估LLM生成的内核跨多样算子源或异构硬件平台的性能。本文提出KernelGenBench，一个统一基准，系统评估LLM和Agent生成的Triton内核。包含两个互补子基准：KernelGenBench-MS（多源），评估来自三个超越标准PyTorch中心任务的210个算子；KernelGenBench-MC（多芯片），使用110个算子子集测量六个异构硬件平台的性能可移植性。大规模评估消耗超过150亿token。",
+          "contributions": [
+            "提出首个统一的LLM内核生成跨源跨芯片基准KernelGenBench",
+            "评估210算子×3来源+110算子×6硬件平台，消耗超150亿token的大规模评估",
+            "揭示Agent方法优于纯LLM采样、跨平台严重退化、生成成本极高三项关键发现"
+          ],
+          "conclusions": [
+            "Agent方法持续优于纯LLM采样方法，cuBLAS算子对所有方法最具挑战性",
+            "跨硬件平台性能差异显著，AutoKernel从NVIDIA的87%骤降至Platform E的25%",
+            "自动内核生成仍然成本高昂，专用Agent平均每成功算子消耗511万token"
+          ],
+          "experiments": [
+            "大规模评估消耗超150亿token，覆盖210算子×3来源和110算子×6硬件平台",
+            "AutoKernel跨平台从87%（NVIDIA）骤降至25%（Platform E）",
+            "专用Agent平均每成功算子511万token（AKO4all达519万），比简单LLM采样高数个数量级"
+          ],
+          "significance": "首个系统评估LLM/Agent内核生成能力的跨源跨芯片基准，揭示了关键瓶颈",
+          "arxivUrl": "https://arxiv.org/abs/2607.27231",
+          "pdfUrl": "https://arxiv.org/pdf/2607.27231.pdf",
+          "index": 9,
+          "takeaway": "首个LLM内核生成跨源跨芯片基准，150亿token评估揭示跨平台退化和高成本",
+          "keyExperiment": "150亿token评估：AutoKernel跨平台87%→25%，专用Agent每算子511万token"
+        },
+        {
+          "title": "Towards joint scaling laws with optimal batch size schedules",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-02",
+          "authors": "Jiaxiang Li, Zhiqi Bu, Shiyun Xu",
+          "institutions": "未标注",
+          "abstract": "现代深度学习通常在整个训练过程中保持批量大小静态，从而忽略了学习率和批量大小对训练动态的联合效应。本文通过凸优化视角研究深度学习动态，推导出联合表征损失在两个调度中的关系，适用于通用优化器和模型架构。该表征产生给定任意学习率调度的闭式最优批量大小调度，进一步导出联合缩放律，持续优于静态批量大小基线，突显了动态批量大小调度在大语言模型训练中的重要性。",
+          "contributions": [
+            "通过凸优化视角推导学习率和批量大小对训练动态的联合表征",
+            "给出任意学习率调度的闭式最优批量大小调度公式",
+            "联合缩放律持续优于静态批量大小基线"
+          ],
+          "conclusions": [
+            "动态批量大小调度在大语言模型训练中具有显著重要性",
+            "闭式最优调度适用于通用优化器和模型架构",
+            "联合缩放律为训练效率提供新的理论框架"
+          ],
+          "experiments": [
+            "联合缩放律持续优于静态批量大小基线",
+            "闭式最优调度适用于通用优化器和模型架构"
+          ],
+          "significance": "从凸优化角度为LLM训练的批量大小调度提供闭式最优解和联合缩放律",
+          "arxivUrl": "https://arxiv.org/abs/2607.27731",
+          "pdfUrl": "https://arxiv.org/pdf/2607.27731.pdf",
+          "index": 10,
+          "takeaway": "凸优化推导闭式最优批量大小调度，联合缩放律持续优于静态基线",
+          "keyExperiment": "联合缩放律持续优于静态批量大小基线，适用于通用优化器和架构"
+        }
+      ]
+    }
+  ]
+}
