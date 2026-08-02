@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>超越 KV 重建：MLA 草稿模型的功能重建</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+:root {
+  --bg: #fafafa; --fg: #1a1a2e; --fg-soft: #444; --fg-muted: #888;
+  --accent: #6c5ce7; --accent-soft: #a29bfe; --accent-bg: #eeeafe;
+  --green: #00b894; --green-soft: #55efc4; --green-bg: #e0f8f4;
+  --red: #e74c3c; --red-soft: #fab1a0; --red-bg: #fdf0ee;
+  --orange: #fdcb6e; --orange-bg: #fff8e7;
+  --blue: #0984e3; --blue-soft: #74b9ff; --blue-bg: #e8f4fd;
+  --border: #ddd; --card-bg: #fff; --code-bg: #f4f4f4;
+  --disabled: #c8c8c8; --focus: #6c5ce7;
+  --toc-w: 240px; --content-w: 860px;
+  --layer-ms: 300ms;
+}
+[data-theme="dark"] {
+  --bg: #1a1a2e; --fg: #e0e0e0; --fg-soft: #bbb; --fg-muted: #888;
+  --accent: #a29bfe; --accent-soft: #6c5ce7; --accent-bg: #2a2a4e;
+  --green: #55efc4; --green-soft: #00b894; --green-bg: #1a3a32;
+  --red: #fab1a0; --red-soft: #e74c3c; --red-bg: #3a1a1a;
+  --orange: #fdcb6e; --orange-bg: #2a2614;
+  --blue: #74b9ff; --blue-soft: #0984e3; --blue-bg: #1a2a3a;
+  --border: #333; --card-bg: #252535; --code-bg: #1e1e2e;
+  --disabled: #555; --focus: #a29bfe;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+
+.content { width: var(--content-w); flex-shrink: 0; }
+section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-orange { background: var(--orange-bg); border-color: var(--orange); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: center; }
+th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.loss { color: var(--red); font-weight: 600; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--blue-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 620px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: #fff; }
+.badge-green { background: var(--green); color: #fff; }
+.badge-blue { background: var(--blue); color: #fff; }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: #fff; }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+.footer { text-align: center; padding: 30px; color: var(--fg-muted); font-size: 13px; border-top: 1px solid var(--border); }
+.footer a { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 720px) {
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc">
+  <h3>导航</h3>
+  <a href="#hook">核心思想</a>
+  <a href="#bg">背景：MLA 与投机解码</a>
+  <a href="#problem">问题：转换 ≠ 草稿保持</a>
+  <a href="#rank">误差源一：秩瓶颈</a>
+  <a href="#rope">误差源二：RoPE 处理</a>
+  <a href="#acceptance">为什么影响接受率</a>
+  <a href="#method">功能重建方法</a>
+  <a href="#loss">E2E 损失函数</a>
+  <a href="#results">实验结果</a>
+  <a href="#summary">总结与框架</a>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>超越 KV 重建：MLA 草稿模型的功能重建</h1>
+  <p class="tagline">将 MHA/GQA 转换为 MLA 可以压缩 KV cache、降低推理内存带宽，但转换引入的秩瓶颈和 RoPE 误差会改变注意力输出——这在独立生成中几乎无害，却在投机解码中导致草稿接受率骤降。本文提出端到端功能重建，在训练阶段让转换后的 MLA 注意力模块复现原始 MHA/GQA 块的 post-W<sub>O</sub> 响应，不改推理图、不需验证器监督。</p>
+  <div class="badges">
+    <span class="badge badge-accent">MLA</span>
+    <span class="badge badge-blue">Speculative Decoding</span>
+    <span class="badge badge-green">arXiv 2607.27269</span>
+  </div>
+</section>
+
+<section id="bg">
+  <h2>背景：MLA 与投机解码的两条加速路线</h2>
+  <p>大模型推理越来越受限于<strong>内存带宽</strong>而非算力。自回归解码时，每个 token 都要读取不断增长的 KV cache，服务延迟和吞吐高度依赖 cache 的表示效率。</p>
+
+  <h3>GQA：减少 KV 头数</h3>
+  <p>分组查询注意力（GQA）通过共享 KV 头来减少 cache 大小——多个查询头共用一组 K/V。但 GQA 仍然存储显式的 key 和 value 张量，cache 体积仍与序列长度线性增长。</p>
+
+  <h3>MLA：用 latent cache 替代显式 KV</h3>
+  <p>多头潜在注意力（MLA，DeepSeek-V2/V3 采用）更进一步：不再缓存完整的 K/V 矩阵，而是缓存一个低维 latent 向量 $c_j = W^{DKV} h_j \in \mathbb{R}^r$ 加一个小型位置分量 $k^{PE}_j$。非位置 K/V 从 latent 通过 absorbed projections 恢复：</p>
+  <p>$$[K_{nope}; V] = W^{UKV} \cdot c_j$$</p>
+  <p>这意味着 cache 中只存 $r$ 维 latent 而非完整的 $m = G(d_k^{nope} + d_v)$ 维 K/V，在 $r \ll m$ 时大幅压缩。问题在于：大多数能力强的开源模型（Llama、Qwen）使用 MHA/GQA，不是 MLA——需要<strong>转换</strong>。</p>
+
+  <h3>投机解码：用草稿换吞吐</h3>
+  <p>投机解码用一个小的草稿模型并行提议多个 token，目标模型一次性验证。当草稿提议与目标一致时，多个 token 被接受、目标模型前进多步。<strong>接受率</strong>直接决定加速比。</p>
+
+  <div class="callout callout-blue">
+    <strong>关键张力：</strong>MLA 优化的是 cache 效率（降低内存带宽），投机解码优化的是吞吐（并行验证）。两者本可叠加——MLA 草稿模型既省 cache 又加速推理。但论文发现：转换后的 MLA 模型可能是高效生成器，却是糟糕的草稿模型。
+  </div>
+
+  <div class="anim-frame" id="anim1-frame">
+    <div class="anim-header">
+      <span class="anim-title">GQA vs MLA Cache 结构对比</span>
+      <div class="anim-controls">
+        <button class="btn-prev" disabled>◀ 上一步</button>
+        <button class="btn-play">▶ 播放</button>
+        <button class="btn-next">下一步 ▶</button>
+        <button class="btn-reset">重置</button>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 360" width="820" height="360"></svg></div>
+    <div class="anim-status">
+      <span class="step-info">步骤 1/4</span>
+      <span class="step-desc">GQA：每个 KV 组存完整 K 和 V 矩阵，cache 随序列线性增长</span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#e74c3c"></span> 显式 K/V cache</span>
+      <span><span class="dot" style="background:#00b894"></span> latent cache</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 吸收投影</span>
+    </div>
+  </div>
+</section>
+
+<section id="problem">
+  <h2>问题：转换成功 ≠ 草稿可用</h2>
+  <p>现有转换方法（TransMLA、MHA2MLA）能将 MHA/GQA 检查点映射为可执行的 MLA 参数化——cache 拓扑正确、模型能生成连贯文本。但论文指出一个容易被忽略的失败模式：</p>
+
+  <div class="callout callout-red">
+    <strong>核心发现：</strong>一个转换后的 MLA 模型可能是<strong>高效的生成器</strong>，却是<strong>糟糕的草稿模型</strong>。转换改变了注意力输出的概率分布，导致草稿提议与目标验证不一致，接受率骤降。
+  </div>
+
+  <h3>三种嵌套的成功标准</h3>
+  <p>论文将"成功"拆解为三个层级，暴露了转换与草稿之间的根本矛盾：</p>
+  <table>
+    <tr><th>层级</th><th>问题</th><th>转换方法是否满足</th></tr>
+    <tr><td><strong>结构有效性</strong></td><td>检查点能否映射为可执行的 MLA 参数化（latent rank、RoPE 路径、cache 预算正确）</td><td>✓ TransMLA/MHA2MLA 解决了这一层</td></tr>
+    <tr><td><strong>功能保真度</strong></td><td>该参数化在真实隐状态上是否复现原始注意力块的映射</td><td>✗ 转换后的功能残差未被优化</td></tr>
+    <tr><td><strong>草稿效用</strong></td><td>结果分布与目标模型足够一致以产生长接受序列</td><td>✗ 接受率可能严重下降</td></tr>
+  </table>
+
+  <p>关键洞察是：因子级别的误差（$Q$、$K$、$V$ 的重建误差）只是间接代理——注意力组合了低秩投影、RoPE、softmax、value 聚合和 $W_O$ 才影响残差流。小误差可以相互抵消，而一个局部 logit 扰动可能跨越 token 排名边界、急剧降低接受率。因此评估不应止步于 cache 有效性或独立生成质量，还应包括<strong>接口级功能指标</strong>和<strong>匹配草稿接受率</strong>。</p>
+
+  <div class="anim-frame" id="anim2-frame">
+    <div class="anim-header">
+      <span class="anim-title">三种成功标准的嵌套关系</span>
+      <div class="anim-controls">
+        <button class="btn-prev" disabled>◀ 上一步</button>
+        <button class="btn-play">▶ 播放</button>
+        <button class="btn-next">下一步 ▶</button>
+        <button class="btn-reset">重置</button>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 340" width="820" height="340"></svg></div>
+    <div class="anim-status">
+      <span class="step-info">步骤 1/3</span>
+      <span class="step-desc">结构有效性：检查点 → 可执行的 MLA 参数化</span>
+    </div>
+  </div>
+</section>
+
+<section id="rank">
+  <h2>误差源一：秩瓶颈</h2>
+  <p>MLA 将所有 KV 组的非位置 key 和 value 堆叠后从 latent 恢复：</p>
+  <p>$$[K_{nope}; V] = W^{UKV} \cdot W^{DKV} \cdot h_j$$</p>
+  <p>其中 $W^{DKV} \in \mathbb{R}^{r \times D}$，$W^{UKV} \in \mathbb{R}^{m \times r}$，$m = G(d_k^{nope} + d_v)$。要精确复现这个堆叠线性映射，需要：</p>
+  <p>$$\text{rank}(W^K W^V) \leq r$$</p>
+  <p>右端秩至多为 $r$。当原始映射的秩超过 $r$ 时，选定的压缩因子化<strong>无法精确复现</strong> K/V 投影，必然留下残差。</p>
+
+  <div class="callout callout-orange">
+    <strong>为什么这很重要：</strong>这个秩条件是一个直接映射重建的判定——它既不排除所有功能等价的注意力参数化，也不否定足够大 rank 下的精确 MLA 重写。它说明的是：<strong>激进压缩、cache 有效的转换通常是原始 K/V 投影的近似</strong>。
+  </div>
+
+  <div class="anim-frame" id="anim3-frame">
+    <div class="anim-header">
+      <span class="anim-title">秩瓶颈：低秩分解的信息损失</span>
+      <div class="anim-controls">
+        <button class="btn-prev" disabled>◀ 上一步</button>
+        <button class="btn-play">▶ 播放</button>
+        <button class="btn-next">下一步 ▶</button>
+        <button class="btn-reset">重置</button>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 360" width="820" height="360"></svg></div>
+    <div class="anim-status">
+      <span class="step-info">步骤 1/4</span>
+      <span class="step-desc">原始 GQA：K/V 投影的完整秩</span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#e74c3c"></span> 原始映射（高秩）</span>
+      <span><span class="dot" style="background:#00b894"></span> latent 瓶颈（r 维）</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> 不可恢复的残差</span>
+    </div>
+  </div>
+</section>
+
+<section id="rope">
+  <h2>误差源二：RoPE 处理</h2>
+  <p>秩瓶颈不是唯一的失配。转换流水线还必须选择如何处理旋转位置编码（RoPE）。为使误差显式化，将原始 key 拆分为 $k_j = k_j^{keep} + k_j^{drop}$，其中 $k_j^{keep}$ 保留在旋转路径上，$k_j^{drop}$ 移至非位置路径。转换后的 query 为 $\hat{q}_t = q_t + \delta q_t$，重建的保留 key 为 $\hat{k}_j^{keep} = k_j^{keep} + \delta k_j$。</p>
+
+  <p>原始 logit 为 $\frac{q_t^\top R_{tj}(k_j^{keep} + k_j^{drop})}{\sqrt{d_k}}$，转换后 logit 为 $\frac{(q_t + \delta q_t)^\top [R_{tj}(k_j^{keep} + \delta k_j) + k_j^{drop}]}{\sqrt{d_k}}$。精确差为：</p>
+  <p>$$\hat{s}_{tj} - s_{tj} = \frac{1}{\sqrt{d_k}} \Big[ q_t^\top R_{tj} \delta k_j + q_t^\top (I - R_{tj}) k_j^{drop} + \delta q_t^\top R_{tj}(k_j^{keep} + \delta k_j) + \delta q_t^\top k_j^{drop} \Big]$$</p>
+
+  <div class="callout callout-accent">
+    <strong>四项误差分解：</strong>
+    <ul>
+      <li><strong>第一项</strong> $q_t^\top R_{tj} \delta k_j$：保留 key 重建误差</li>
+      <li><strong>第二项</strong> $q_t^\top (I - R_{tj}) k_j^{drop}$：位置路径误差（RoPE 路由偏差）</li>
+      <li><strong>第三项</strong> $\delta q_t^\top R_{tj}(k_j^{keep} + \delta k_j)$：query 扰动及其与 key 重建的交互</li>
+      <li><strong>第四项</strong> $\delta q_t^\top k_j^{drop}$：query 扰动与非位置路径的交互</li>
+    </ul>
+  </div>
+
+  <p>这个分解揭示了：转换引入的注意力 logit 误差来自多个来源——低秩 KV 压缩的残差、RoPE 拆分路由的偏差、query 重建的扰动，以及它们之间的交互项。Softmax 将 logit 残差映射为注意力权重误差，输出残差还额外继承 value 重建误差。</p>
+</section>
+
+<section id="acceptance">
+  <h2>为什么影响接受率</h2>
+  <p>注意力 logit 的微小残差在独立生成中可能无害——softmax 是平滑的、后续层可以部分修正。但投机解码对 token 级别的<strong>排名一致性</strong>极其敏感。</p>
+
+  <h3>贪心解码的接受条件</h3>
+  <p>论文使用贪心解码验证。在固定上下文 $x$ 下，单 token 接受事件为：</p>
+  <p>$$\alpha_{\text{greedy}}(x) = \mathbf{1}\!\left[\arg\max_y p_D^x(y) = \arg\max_y p_T^x(y)\right]$$</p>
+  <p>即草稿模型和目标模型的 top-1 token 相同时才接受。这是一个<strong>离散事件</strong>——即使 logit 残差很小，只要它翻转了 top-ranked token，接受就从 1 变 0。</p>
+
+  <h3>随机采样的接受上界</h3>
+  <p>对于随机拒绝采样验证，单 token 期望接受率为：</p>
+  <p>$$\alpha_{\text{sample}}(x) = \sum_y \min\!\left(p_D^x(y), p_T^x(y)\right) = 1 - \text{TV}\!\left(p_D^x, p_T^x\right)$$</p>
+  <p>其中 TV 是总变差距离。MLA 转换增大了 $p_D$ 和 $p_T$ 之间的分布距离，直接压低接受上界。</p>
+
+  <div class="callout callout-red">
+    <strong>核心矛盾：</strong>局部注意力残差与最终接受率之间<strong>没有单调关系保证</strong>。后续层可能衰减残差、放大残差，或将其投影到与决策无关的方向。功能重建是一个训练时代理——意在保持原始草稿的条件行为，其接受率效果是经验测量的而非理论保证的。
+  </div>
+
+  <div class="anim-frame" id="anim4-frame">
+    <div class="anim-header">
+      <span class="anim-title">从 logit 残差到接受率下降</span>
+      <div class="anim-controls">
+        <button class="btn-prev" disabled>◀ 上一步</button>
+        <button class="btn-play">▶ 播放</button>
+        <button class="btn-next">下一步 ▶</button>
+        <button class="btn-reset">重置</button>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 380" width="820" height="380"></svg></div>
+    <div class="anim-status">
+      <span class="step-info">步骤 1/4</span>
+      <span class="step-desc">原始 GQA：草稿与目标 logit 一致，接受</span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#00b894"></span> 接受</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 拒绝</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> logit 残差</span>
+    </div>
+  </div>
+</section>
+
+<section id="method">
+  <h2>功能重建方法</h2>
+  <p>论文提出端到端（E2E）功能重建——一个转换器无关、纯训练时、后转换阶段的精修步骤。</p>
+
+  <h3>核心思路</h3>
+  <p>对于每一层 $\ell$ 和校准 minibatch $b$，用缓存的层输入 $H_b^\ell$ 同时送入<strong>冻结的原始 GQA 注意力块</strong>和<strong>可训练的转换后 MLA 注意力块</strong>。两者的 post-$W_O$ 输出定义一个 masked MSE 功能误差。梯度只通过原始路径的 stop-gradient，仅更新转换器引入的 query 和 KV 投影；$W_O$ 保持冻结。</p>
+
+  <div class="callout callout-green">
+    <strong>方法特点：</strong>
+    <ul>
+      <li><strong>转换器无关</strong>：从 TransMLA 或 MHA2MLA 转换后的检查点出发，不使用转换器的局部转换目标</li>
+      <li><strong>纯训练时</strong>：不引入额外推理操作、参数分支或 cache 状态</li>
+      <li><strong>无验证器监督</strong>：不需要验证器 logits、激活值、基准标签或生成目标</li>
+      <li><strong>保持 cache 拓扑</strong>：latent rank、retained-RoPE 宽度、cache 预算全部不变</li>
+    </ul>
+  </div>
+
+  <h3>为什么是 post-W<sub>O</sub> 而非因子级</h3>
+  <p>转换器局部的投影重建目标是因子级别的——试图逐个复现 $W^K$、$W^V$ 等。但论文的关键洞察是：注意力在影响残差流之前组合了低秩投影、RoPE、softmax、value 聚合和 $W_O$。因子级误差只是间接代理——小误差可相互抵消，而局部 logit 扰动可跨越排名边界。</p>
+  <p>Post-$W_O$ 匹配训练的是完整注意力变换的可观测输出，而非某个转换器特定的因子化。这使得同一个目标可以精修 TransMLA 和 MHA2MLA 检查点——因为它在共享的功能接口上操作，而非假设每个转换器留下相同的误差。</p>
+
+  <div class="anim-frame" id="anim5-frame">
+    <div class="anim-header">
+      <span class="anim-title">E2E 功能重建训练流程</span>
+      <div class="anim-controls">
+        <button class="btn-prev" disabled>◀ 上一步</button>
+        <button class="btn-play">▶ 播放</button>
+        <button class="btn-next">下一步 ▶</button>
+        <button class="btn-reset">重置</button>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg5" viewBox="0 0 820 400" width="820" height="400"></svg></div>
+    <div class="anim-status">
+      <span class="step-info">步骤 1/4</span>
+      <span class="step-desc">校准隐状态送入两个注意力块</span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> 冻结路径</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 可训练路径</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 功能误差</span>
+    </div>
+  </div>
+</section>
+
+<section id="loss">
+  <h2>E2E 损失函数</h2>
+  <p>对于层 $\ell$ 和校准 minibatch $b$，令 $H_b^\ell \in \mathbb{R}^{T_b \times D}$ 包含缓存的层输入，$M_b \in \{0,1\}^{T_b}$ 标记有效 token（在隐藏维度上广播）。每层独立优化：</p>
+  <p>$$\mathcal{L}_{\text{E2E}}^{(\ell)} = \mathbb{E}_b \left[ \frac{\left\| M_b \odot \left( A_{\text{MLA}}^\ell(H_b^\ell) - \operatorname{sg}\!\left[A_{\text{orig}}^\ell(H_b^\ell)\right] \right) \right\|_F^2}{D \sum_t M_{b,t}} \right]$$</p>
+
+  <h3>公式分解</h3>
+  <table>
+    <tr><th>符号</th><th>含义</th></tr>
+    <tr><td>$A_{\text{MLA}}^\ell(H_b^\ell)$</td><td>转换后 MLA 注意力块（含 $W_O$）的输出</td></tr>
+    <tr><td>$A_{\text{orig}}^\ell(H_b^\ell)$</td><td>原始 GQA 注意力块（含 $W_O$）的输出</td></tr>
+    <tr><td>$\operatorname{sg}[\cdot]$</td><td>stop-gradient：原始路径不接收梯度</td></tr>
+    <tr><td>$M_b \odot$</td><td>有效 token 掩码：只计算有效位置的误差</td></tr>
+    <tr><td>$\|\cdot\|_F^2$</td><td>Frobenius 范数平方：所有隐藏通道的平方误差之和</td></tr>
+    <tr><td>$D \sum_t M_{b,t}$</td><td>归一化因子：每个有效 token 的每个隐藏通道取平均</td></tr>
+  </table>
+
+  <div class="callout callout-blue">
+    <strong>"E2E"的含义：</strong>指从层输入到 post-$W_O$ 输出的完整注意力功能。因此该目标联合覆盖了 RoPE 处理误差和低秩 KV 转换误差——不像转换器局部目标只优化其中一个。损失不要求 Eq.(7) 的秩条件精确成立；它在固定压缩 MLA 函数族中搜索更近的功能匹配。
+  </div>
+
+  <h3>初始化策略</h3>
+  <p>令 $\mathcal{C}$ 为基础 MHA/GQA → MLA 转换器。E2E 取 $\mathcal{C}(\theta_{\text{orig}})$ 作为初始化，但不复用 $\mathcal{C}$ 的局部转换目标。它只需要原始注意力块、初始化后的 MLA 块和校准隐状态。因此同一个 E2E 目标可以精修 TransMLA 和 MHA2MLA 检查点，同时保持所选转换器产生的 cache 拓扑。</p>
+</section>
+
+<section id="results">
+  <h2>实验结果</h2>
+  <h3>实验矩阵</h3>
+  <p>192 个方法-任务配置，覆盖四个维度：</p>
+  <table>
+    <tr><th>维度</th><th>取值</th></tr>
+    <tr><td>模型族</td><td>Llama-1B/3B → Llama-8B；Qwen-1.5B/3B → Qwen-7B</td></tr>
+    <tr><td>转换器</td><td>TransMLA、MHA2MLA</td></tr>
+    <tr><td>推理后端</td><td>HuggingFace (HF)、vLLM</td></tr>
+    <tr><td>任务</td><td>HumanEval（代码）、Alpaca（指令）、NQ（问答）、CNN/DM（摘要）</td></tr>
+  </table>
+  <p>每个配置 200 prompts，贪心解码，最多 128 token，BF16，batch size 1。报告容差为 0.5 pp（接受率）或 0.5 tok/s（吞吐）——这是描述性容差，非置信区间。</p>
+
+  <h3>匹配单元结果</h3>
+  <p>在 64 个匹配任务单元（Fixed model-converter-backend-task）中，功能重建 vs Partial RoPE 重建的对比：</p>
+  <table>
+    <tr><th>结果</th><th>单元数</th><th>占比</th></tr>
+    <tr><td class="gain">显著改善</td><td>37</td><td>57.8%</td></tr>
+    <tr><td>实际不变</td><td>26</td><td>40.6%</td></tr>
+    <tr><td class="loss">显著下降</td><td>1</td><td>1.6%</td></tr>
+  </table>
+  <p>即 38 个容差外的变化中有 37 个偏向功能重建。唯一的显著下降是 Qwen-3B + TransMLA + vLLM 在 CNN/DM 上的 $-0.55$ pp（仅超出容差 0.05 pp）。</p>
+
+  <h3>关键发现：Llama/Qwen × TransMLA/MHA2MLA 交叉模式</h3>
+  <table>
+    <tr><th></th><th>Llama + TransMLA</th><th>Llama + MHA2MLA</th><th>Qwen + TransMLA</th><th>Qwen + MHA2MLA</th></tr>
+    <tr><td>改善单元</td><td class="gain">16/16 全部改善</td><td>0/16 全部持平</td><td>6 改善</td><td class="gain">15/16 改善</td></tr>
+    <tr><td>不变单元</td><td>0</td><td>16/16</td><td>9</td><td>1</td></tr>
+    <tr><td>下降单元</td><td>0</td><td>0</td><td>1（CNN/DM, vLLM）</td><td>0</td></tr>
+  </table>
+
+  <div class="callout callout-accent">
+    <strong>交叉模式的意义：</strong>同一个 post-$W_O$ 目标对 Llama-TransMLA 和 Qwen-MHA2MLA 最一致有效，而 Llama-MHA2MLA 几乎无可测空间、Qwen-TransMLA 更后端敏感。这排除了"转换器专用"解释——功能重建的通用性来自将目标放在共享功能接口上，而非假设每个转换器留下相同误差。转换器固定了可表示的 MLA 函数类及其初始化，模型架构和 rank 分配决定剩余的近似残差。
+  </div>
+
+  <h3>恢复率分析</h3>
+  <p>功能重建能校正可由有效转换块表示的近似误差，但<strong>不能</strong>创造缺失的 latent rank 或修复不兼容的张量并行/核实现。例如：</p>
+  <ul>
+    <li>Qwen-3B + MHA2MLA + HF, CNN/DM：Original 58.82% → Partial 54.00% → Ours 56.29%（部分恢复）</li>
+    <li>Llama-1B + TransMLA + HF, HumanEval：Original 77.75% → Partial 67.61% → Ours 71.53%</li>
+    <li>Qwen-3B + TransMLA + vLLM, NQ：Original 71.03% → Partial 10.95% → Ours 12.73%（转换损失过大，恢复有限）</li>
+  </ul>
+
+  <h3>吞吐影响</h3>
+  <p>功能重建是纯训练时方法，不引入额外推理操作。12 个单元显著更快，50 个不变，2 个略慢。37 个接受率改善的单元中，12 个同时显著提速。但论文坦诚：这并未建立相对于未转换草稿的端到端加速——绝对 GQA→MLA 吞吐差异混合了模型保真度和 kernel 成熟度。</p>
+</section>
+
+<section id="summary">
+  <h2>总结与三级工作流</h2>
+  <p>论文的核心论点是：<strong>MLA 转换和草稿效用是不同的目标</strong>。一个转换后的 MLA 检查点可能是有效的生成器，却是糟糕的投机草稿——因为 latent cache 施加秩约束、RoPE 处理扰动注意力 logit。</p>
+
+  <h3>三级工作流</h3>
+  <table>
+    <tr><th>层级</th><th>任务</th><th>验证方法</th></tr>
+    <tr><td><strong>1. 转换</strong></td><td>建立 cache 高效的参数化</td><td>验证 RoPE、张量并行、kernel 正确性</td></tr>
+    <tr><td><strong>2. 功能重建</strong></td><td>在固定部署预算下优化转换后注意力映射</td><td>E2E MSE 损失 + 校准隐状态</td></tr>
+    <tr><td><strong>3. 部署验证</strong></td><td>测量匹配接受率和后端吞吐</td><td>匹配单元 Partial–Ours 对比</td></tr>
+  </table>
+
+  <div class="callout callout-green">
+    <strong>方法论意义：</strong>将这三个层级分离使失败可诊断——结构测试定位表示或运行时错误，功能测试暴露可恢复的近似误差，投机评估测量决策级价值。latent rank 应被视为<strong>资源约束</strong>而非质量证书。功能残差可用于跨层分配 rank、在初始化间选择、决定何处重建容量产生最大草稿级回报。
+  </div>
+
+  <h3>局限与展望</h3>
+  <p>实验矩阵虽含 192 个配置，但规模仍有限：两个模型族、不超过 8B 的四对草稿-目标、四个 200-prompt 基准、128 token 生成上限、单种子。功能重建通常只恢复相对于原始 GQA 的<strong>部分</strong>接受率损失，且在转换器-后端严重失配时恢复有限。更强的序列级重建和转换-运行时协同设计需要进一步探索。</p>
+
+  <div class="callout callout-blue">
+    <strong>核心教训：</strong>功能重建是一个通用的后转换精修步骤，而转换器质量和优化的 MLA kernel 仍然是强投机解码加速的前提。MLA 转换不应止步于 cache 压缩——必须经过功能验证和接受率测试才能成为有效的草稿模型。
+  </div>
+
+  <p style="text-align:center; margin-top:30px;">
+    <a href="https://arxiv.org/abs/2607.27269" target="_blank" style="color:var(--accent); font-weight:600;">论文原文 →</a>
+  </p>
+</section>
+
+</div>
+</div>
+
+<div class="footer">
+  <p>深度技术分析 · <a href="https://arxiv.org/abs/2607.27269">arXiv:2607.27269</a> · Weiye Shi, Fanxu Meng, Muhan Zhang · 2026-07-29</p>
+</div>
+
+<script>
+// ============ ANIMATION ENGINE ============
+function AnimEngine(svg, config) {
+  this.svg = svg;
+  this.svgId = svg.id;
+  this.steps = config.steps;
+  this.currentStep = 0;
+  this.playing = false;
+  this.speed = 1;
+  this.timer = null;
+  this.layer = null;
+  this._initDefs();
+  this._initControls();
+  this._initSceneSelect();
+}
+AnimEngine.prototype._uid = function(suffix) {
+  return this.svgId + "-" + suffix;
+};
+AnimEngine.prototype._initDefs = function() {
+  var defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  var mk = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+  mk.setAttribute("id", this._uid("arr"));
+  mk.setAttribute("viewBox", "0 0 10 10");
+  mk.setAttribute("refX", "9");
+  mk.setAttribute("refY", "5");
+  mk.setAttribute("markerWidth", "6");
+  mk.setAttribute("markerHeight", "6");
+  mk.setAttribute("orient", "auto");
+  var p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p.setAttribute("d", "M0,0 L10,5 L0,10 z");
+  p.setAttribute("fill", "#888");
+  mk.appendChild(p);
+  defs.appendChild(mk);
+  var mk2 = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+  mk2.setAttribute("id", this._uid("arrR"));
+  mk2.setAttribute("viewBox", "0 0 10 10");
+  mk2.setAttribute("refX", "9");
+  mk2.setAttribute("refY", "5");
+  mk2.setAttribute("markerWidth", "6");
+  mk2.setAttribute("markerHeight", "6");
+  mk2.setAttribute("orient", "auto");
+  var p2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p2.setAttribute("d", "M0,0 L10,5 L0,10 z");
+  p2.setAttribute("fill", "#e74c3c");
+  mk2.appendChild(p2);
+  defs.appendChild(mk2);
+  var mk3 = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+  mk3.setAttribute("id", this._uid("arrG"));
+  mk3.setAttribute("viewBox", "0 0 10 10");
+  mk3.setAttribute("refX", "9");
+  mk3.setAttribute("refY", "5");
+  mk3.setAttribute("markerWidth", "6");
+  mk3.setAttribute("markerHeight", "6");
+  mk3.setAttribute("orient", "auto");
+  var p3 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p3.setAttribute("d", "M0,0 L10,5 L0,10 z");
+  p3.setAttribute("fill", "#00b894");
+  mk3.appendChild(p3);
+  defs.appendChild(mk3);
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype._initControls = function() {
+  var frame = this.svg.closest(".anim-frame");
+  if (!frame) return;
+  var self = this;
+  var prev = frame.querySelector(".btn-prev");
+  var play = frame.querySelector(".btn-play");
+  var next = frame.querySelector(".btn-next");
+  var reset = frame.querySelector(".btn-reset");
+  if (prev) prev.addEventListener("click", function() { self.prev(); });
+  if (play) play.addEventListener("click", function() { self.toggle(); });
+  if (next) next.addEventListener("click", function() { self.next(); });
+  if (reset) reset.addEventListener("click", function() { self.reset(); });
+  this.btnPrev = prev;
+  this.btnPlay = play;
+  this.btnNext = next;
+};
+AnimEngine.prototype._initSceneSelect = function() {};
+AnimEngine.prototype._render = function(step, index) {
+  if (this.layer) this.layer.remove();
+  this.layer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  this.layer.setAttribute("class", "anim-layer");
+  this.svg.appendChild(this.layer);
+  this._ctx = { layer: this.layer };
+  step.render(this);
+  this.currentStep = index;
+  this._updateUI(index);
+};
+AnimEngine.prototype._updateUI = function(index) {
+  var frame = this.svg.closest(".anim-frame");
+  if (!frame) return;
+  var total = this.steps.length;
+  var stepInfo = frame.querySelector(".step-info");
+  var stepDesc = frame.querySelector(".step-desc");
+  if (stepInfo) stepInfo.textContent = "步骤 " + (index + 1) + "/" + total;
+  if (stepDesc && this.steps[index].desc) stepDesc.innerHTML = this.steps[index].desc;
+  if (this.btnPrev) this.btnPrev.disabled = (index === 0);
+  if (this.btnNext) this.btnNext.disabled = (index === total - 1);
+};
+AnimEngine.prototype.goTo = function(index) {
+  index = Math.max(0, Math.min(this.steps.length - 1, index));
+  this._render(this.steps[index], index);
+};
+AnimEngine.prototype.next = function() {
+  if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1);
+};
+AnimEngine.prototype.prev = function() {
+  if (this.currentStep > 0) this.goTo(this.currentStep - 1);
+};
+AnimEngine.prototype.toggle = function() {
+  this.playing = !this.playing;
+  if (this.btnPlay) this.btnPlay.textContent = this.playing ? "⏸ 暂停" : "▶ 播放";
+  if (this.playing) {
+    var self = this;
+    this.timer = setInterval(function() {
+      if (self.currentStep >= self.steps.length - 1) {
+        self.pause();
+        self.goTo(0);
+      } else {
+        self.next();
+      }
+    }, 2500 / this.speed);
+  } else {
+    this.pause();
+  }
+};
+AnimEngine.prototype.pause = function() {
+  this.playing = false;
+  if (this.timer) { clearInterval(this.timer); this.timer = null; }
+  if (this.btnPlay) this.btnPlay.textContent = "▶ 播放";
+};
+AnimEngine.prototype.reset = function() {
+  this.pause();
+  this.goTo(0);
+};
+AnimEngine.prototype.draw = function(tag, attrs, parent) {
+  parent = parent || this.layer;
+  var el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (var k in attrs) el.setAttribute(k, attrs[k]);
+  parent.appendChild(el);
+  return el;
+};
+AnimEngine.prototype.rect = function(x, y, w, h, fill, stroke, opts) {
+  opts = opts || {};
+  var el = this.draw("rect", Object.assign({ x: x, y: y, width: w, height: h, fill: fill || "none", stroke: stroke || "none" }, opts));
+  return el;
+};
+AnimEngine.prototype.text = function(x, y, str, opts) {
+  opts = opts || {};
+  var el = this.draw("text", Object.assign({ x: x, y: y }, opts));
+  el.textContent = str;
+  return el;
+};
+AnimEngine.prototype.line = function(x1, y1, x2, y2, stroke, opts) {
+  opts = opts || {};
+  return this.draw("line", Object.assign({ x1: x1, y1: y1, x2: x2, y2: y2, stroke: stroke || "#888" }, opts));
+};
+AnimEngine.prototype.path = function(d, stroke, opts) {
+  opts = opts || {};
+  return this.draw("path", Object.assign({ d: d, fill: "none", stroke: stroke || "#888" }, opts));
+};
+
+// Color palette
+var C = {
+  bg: "var(--bg)", card: "var(--card-bg)", border: "var(--border)",
+  text: "var(--fg)", textSoft: "var(--fg-soft)", textMute: "var(--fg-muted)",
+  accent: "#6c5ce7", accentSoft: "#a29bfe", accentBg: "var(--accent-bg)",
+  green: "#00b894", greenBg: "var(--green-bg)", greenSoft: "#55efc4",
+  red: "#e74c3c", redBg: "var(--red-bg)", redSoft: "#fab1a0",
+  blue: "#0984e3", blueBg: "var(--blue-bg)", blueSoft: "#74b9ff",
+  orange: "#fdcb6e", orangeBg: "var(--orange-bg)",
+  white: "var(--card-bg)", grey: "#888"
+};
+
+// ============ SCENE 1: GQA vs MLA Cache ============
+function scene1Build() {
+  var W = 820;
+  return [
+    {
+      short: "GQA Cache",
+      desc: "GQA：每个 KV 组存完整 K 和 V 矩阵，cache 随序列线性增长",
+      render: function(e) {
+        e.text(W/2, 24, "GQA：显式 KV Cache", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Show 4 KV groups with explicit K/V
+        var groups = ["组 1", "组 2", "组 3", "组 4"];
+        groups.forEach(function(g, i) {
+          var x = 80 + i * 170;
+          e.rect(x, 50, 140, 220, C.redBg, C.red, { rx: 8, "stroke-width": 2 });
+          e.text(x + 70, 72, g, { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+          // K boxes
+          e.rect(x + 20, 85, 100, 50, C.white, C.red, { rx: 4 });
+          e.text(x + 70, 105, "Key", { "text-anchor": "middle", "font-size": 14, fill: C.red });
+          e.text(x + 70, 122, "d_k 维", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+          // V boxes
+          e.rect(x + 20, 150, 100, 50, C.white, C.red, { rx: 4 });
+          e.text(x + 70, 170, "Value", { "text-anchor": "middle", "font-size": 14, fill: C.red });
+          e.text(x + 70, 187, "d_v 维", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+          // Size label
+          e.text(x + 70, 230, "× T (seq len)", { "text-anchor": "middle", "font-size": 11, fill: C.red, "font-weight": "bold" });
+        });
+        e.text(W/2, 300, "Cache 大小 = G × (d_k + d_v) × T", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(W/2, 325, "随序列长度 T 线性增长，每层都存", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "MLA latent",
+      desc: "MLA：只缓存低维 latent 向量 $c_j$ + 位置分量 $k^{PE}_j$",
+      render: function(e) {
+        e.text(W/2, 24, "MLA：Latent Cache", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Show compressed latent
+        e.rect(250, 50, 320, 220, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(410, 72, "MLA 层", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        // Latent vector
+        e.rect(280, 85, 120, 60, C.white, C.green, { rx: 4 });
+        e.text(340, 105, "latent $c_j$", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        e.text(340, 122, "r 维", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        // Position key
+        e.rect(430, 85, 120, 60, C.white, C.green, { rx: 4 });
+        e.text(490, 105, "$k^{PE}_j$", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        e.text(490, 122, "位置分量", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        // Absorbed projections
+        e.text(410, 170, "$\\downarrow$ $W^{UKV}$ 吸收投影", { "text-anchor": "middle", "font-size": 13, fill: C.accent, "font-weight": "bold" });
+        // Recovered K/V (dashed = computed, not stored)
+        e.rect(280, 190, 260, 50, "none", C.accent, { rx: 4, "stroke-dasharray": "5,3" });
+        e.text(410, 210, "$[K_{nope}; V]$ = $W^{UKV} c_j$（运行时恢复）", { "text-anchor": "middle", "font-size": 12, fill: C.accent });
+        e.text(W/2, 300, "Cache 大小 = r × T （$r \\ll G(d_k + d_v)$）", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 325, "大幅压缩，但 latent → K/V 是有损映射", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "转换",
+      desc: "转换：MHA/GQA → MLA 用 TransMLA 或 MHA2MLA 建立初始参数化",
+      render: function(e) {
+        e.text(W/2, 24, "转换：GQA → MLA", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Left: GQA
+        e.rect(40, 60, 200, 200, C.redBg, C.red, { rx: 8, "stroke-width": 2 });
+        e.text(140, 82, "原始 GQA", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(140, 110, "显式 K/V cache", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.text(140, 130, "$W^K, W^V$ 投影", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.text(140, 160, "rank = $G(d_k + d_v)$", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        // Arrow
+        e.path("M250,160 L340,160", C.accent, { "stroke-width": 3, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.text(295, 148, "TransMLA /", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        e.text(295, 175, "MHA2MLA", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        // Right: MLA
+        e.rect(350, 60, 200, 200, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(450, 82, "转换后 MLA", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(450, 110, "latent cache", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.text(450, 130, "$W^{DKV}, W^{UKV}$", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.text(450, 160, "rank ≤ r", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        // Warning
+        e.rect(580, 60, 200, 200, C.orangeBg, C.orange, { rx: 8, "stroke-width": 2, "stroke-dasharray": "5,3" });
+        e.text(680, 82, "⚠ 问题", { "text-anchor": "middle", "font-size": 14, fill: C.orange, "font-weight": "bold" });
+        e.text(680, 110, "结构有效 ✓", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        e.text(680, 135, "功能保真 ✗", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(680, 160, "草稿效用 ✗", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(680, 195, "接受率下降", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(W/2, 300, "转换建立 cache 拓扑，但不保证功能等价", { "text-anchor": "middle", "font-size": 14, fill: C.orange, "font-weight": "bold" });
+        e.text(W/2, 325, "秩瓶颈 + RoPE 处理 = 注意力输出残差", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "E2E 修复",
+      desc: "E2E 功能重建：冻结原始块，训练 MLA 的 Q/KV 投影匹配 post-$W_O$ 输出",
+      render: function(e) {
+        e.text(W/2, 24, "E2E 功能重建：修复功能残差", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Calibration states
+        e.rect(30, 50, 120, 60, C.blueBg, C.blue, { rx: 6 });
+        e.text(90, 75, "校准隐状态", { "text-anchor": "middle", "font-size": 12, fill: C.blue, "font-weight": "bold" });
+        e.text(90, 92, "$H_b^\\ell$", { "text-anchor": "middle", "font-size": 14, fill: C.blue });
+        // Split to two paths
+        e.path("M150,80 L230,60", C.blue, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.path("M150,80 L230,150", C.blue, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        // Frozen GQA path
+        e.rect(240, 40, 160, 70, C.blueBg, C.blue, { rx: 6, "stroke-width": 2 });
+        e.text(320, 60, "冻结 GQA 块", { "text-anchor": "middle", "font-size": 12, fill: C.blue, "font-weight": "bold" });
+        e.text(320, 78, "$A_{orig}^\\ell(H_b^\\ell)$", { "text-anchor": "middle", "font-size": 12, fill: C.blue });
+        e.text(320, 95, "sg [ stop-grad ]", { "text-anchor": "middle", "font-size": 10, fill: C.textMute });
+        // Trainable MLA path
+        e.rect(240, 130, 160, 70, C.accentBg, C.accent, { rx: 6, "stroke-width": 2 });
+        e.text(320, 150, "可训练 MLA 块", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        e.text(320, 168, "$A_{MLA}^\\ell(H_b^\\ell)$", { "text-anchor": "middle", "font-size": 12, fill: C.accent });
+        e.text(320, 185, "更新 Q, KV 投影", { "text-anchor": "middle", "font-size": 10, fill: C.textMute });
+        // Outputs
+        e.path("M400,75 L500,110", C.blue, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.path("M400,165 L500,120", C.accent, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        // MSE loss
+        e.rect(510, 80, 160, 60, C.redBg, C.red, { rx: 6, "stroke-width": 2 });
+        e.text(590, 100, "masked MSE", { "text-anchor": "middle", "font-size": 12, fill: C.red, "font-weight": "bold" });
+        e.text(590, 120, "post-$W_O$ 匹配", { "text-anchor": "middle", "font-size": 11, fill: C.red });
+        // Grad backflow
+        e.path("M590,140 Q590,200 320,210 Q320,210 320,200", C.accent, { "stroke-width": 2, "stroke-dasharray": "5,3", "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.text(430, 235, "← 梯度回流（仅 Q/KV） ←", { "text-anchor": "middle", "font-size": 11, fill: C.accent, "font-weight": "bold" });
+        // Result
+        e.rect(700, 80, 100, 60, C.greenBg, C.green, { rx: 6, "stroke-width": 2 });
+        e.text(750, 100, "接受率", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        e.text(750, 120, "↑ 改善", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.path("M670,110 L700,110", C.green, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        e.text(W/2, 310, "不改推理图 · 不需验证器 · 不改 cache 拓扑", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 335, "仅训练时优化，部署时零开销", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    }
+  ];
+}
+
+// ============ SCENE 2: Three Success Criteria ============
+function scene2Build() {
+  var W = 820;
+  return [
+    {
+      short: "结构有效",
+      desc: "结构有效性：检查点 → 可执行的 MLA 参数化（latent rank、RoPE 路径、cache 预算正确）",
+      render: function(e) {
+        e.text(W/2, 24, "第一层：结构有效性", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Checkpoint → MLA params
+        e.rect(100, 60, 180, 80, C.redBg, C.red, { rx: 8 });
+        e.text(190, 85, "MHA/GQA", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(190, 105, "检查点", { "text-anchor": "middle", "font-size": 13, fill: C.red });
+        e.text(190, 125, "$\\theta_{orig}$", { "text-anchor": "middle", "font-size": 13, fill: C.red });
+        // Arrow
+        e.path("M290,100 L390,100", C.accent, { "stroke-width": 3, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.text(340, 88, "转换 $\\mathcal{C}$", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        // MLA
+        e.rect(400, 60, 180, 80, C.greenBg, C.green, { rx: 8 });
+        e.text(490, 85, "MLA 参数化", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(490, 105, "可执行 ✓", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        e.text(490, 125, "cache 拓扑正确 ✓", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        // Checkmarks
+        e.rect(620, 60, 160, 80, C.greenBg, C.green, { rx: 8, "stroke-dasharray": "4,2" });
+        e.text(700, 85, "✓ latent rank", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        e.text(700, 105, "✓ RoPE 路径", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        e.text(700, 125, "✓ cache 预算", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        e.text(W/2, 180, "TransMLA / MHA2MLA 解决了这一层", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 210, "模型能生成连贯文本，cache 压缩正确", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        e.text(W/2, 250, "但这够吗？", { "text-anchor": "middle", "font-size": 16, fill: C.orange, "font-weight": "bold" });
+      }
+    },
+    {
+      short: "功能保真",
+      desc: "功能保真度：该参数化在真实隐状态上是否复现原始注意力块的映射？转换引入的残差未被优化",
+      render: function(e) {
+        e.text(W/2, 24, "第二层：功能保真度", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Two blocks side by side
+        e.rect(80, 60, 200, 120, C.blueBg, C.blue, { rx: 8, "stroke-width": 2 });
+        e.text(180, 85, "原始 GQA 块", { "text-anchor": "middle", "font-size": 14, fill: C.blue, "font-weight": "bold" });
+        e.text(180, 110, "$A_{orig}^\\ell(H_b^\\ell)$", { "text-anchor": "middle", "font-size": 13, fill: C.blue });
+        e.text(180, 135, "post-$W_O$ 输出", { "text-anchor": "middle", "font-size": 12, fill: C.blue });
+        e.text(180, 160, "（冻结参考）", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        e.rect(440, 60, 200, 120, C.redBg, C.red, { rx: 8, "stroke-width": 2 });
+        e.text(540, 85, "转换后 MLA 块", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(540, 110, "$A_{MLA}^\\ell(H_b^\\ell)$", { "text-anchor": "middle", "font-size": 13, fill: C.red });
+        e.text(540, 135, "post-$W_O$ 输出", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(540, 160, "（有残差 ✗）", { "text-anchor": "middle", "font-size": 11, fill: C.red });
+        // Delta
+        e.text(360, 115, "$\\neq$", { "text-anchor": "middle", "font-size": 28, fill: C.red, "font-weight": "bold" });
+        e.rect(350, 145, 20, 20, "none", "none", {});
+        // Residual
+        e.rect(680, 60, 100, 120, C.orangeBg, C.orange, { rx: 8, "stroke-dasharray": "5,3" });
+        e.text(730, 90, "功能", { "text-anchor": "middle", "font-size": 13, fill: C.orange, "font-weight": "bold" });
+        e.text(730, 110, "残差", { "text-anchor": "middle", "font-size": 13, fill: C.orange, "font-weight": "bold" });
+        e.text(730, 140, "$\\Delta A^\\ell$", { "text-anchor": "middle", "font-size": 14, fill: C.orange });
+        e.text(730, 165, "未被优化", { "text-anchor": "middle", "font-size": 11, fill: C.red });
+        // Arrow
+        e.path("M640,120 L680,120", C.orange, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.text(W/2, 220, "结构正确 ≠ 功能等价", { "text-anchor": "middle", "font-size": 16, fill: C.red, "font-weight": "bold" });
+        e.text(W/2, 250, "秩瓶颈 + RoPE 处理 = 注意力输出有残差", { "text-anchor": "middle", "font-size": 13, fill: C.textMute });
+        e.text(W/2, 275, "独立生成可能无害，但草稿提议分布已改变", { "text-anchor": "middle", "font-size": 13, fill: C.textMute });
+      }
+    },
+    {
+      short: "草稿效用",
+      desc: "草稿效用：结果分布与目标模型足够一致以产生长接受序列？接受率可能严重下降",
+      render: function(e) {
+        e.text(W/2, 24, "第三层：草稿效用", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Draft model
+        e.rect(60, 60, 160, 80, C.accentBg, C.accent, { rx: 8, "stroke-width": 2 });
+        e.text(140, 85, "MLA 草稿", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(140, 105, "$p_D^x(y)$", { "text-anchor": "middle", "font-size": 13, fill: C.accent });
+        e.text(140, 125, "提议 token", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        // Target model
+        e.rect(600, 60, 160, 80, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(680, 85, "目标模型", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(680, 105, "$p_T^x(y)$", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        e.text(680, 125, "验证 token", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        // Comparison
+        e.text(410, 95, "排名一致？", { "text-anchor": "middle", "font-size": 16, fill: C.text, "font-weight": "bold" });
+        e.text(410, 120, "$\\arg\\max p_D = \\arg\\max p_T$ ?", { "text-anchor": "middle", "font-size": 14, fill: C.orange });
+        // Results
+        e.rect(100, 170, 200, 60, C.greenBg, C.green, { rx: 6 });
+        e.text(200, 195, "✓ 接受（一致）", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(200, 215, "多 token 并行验证", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        e.rect(520, 170, 200, 60, C.redBg, C.red, { rx: 6 });
+        e.text(620, 195, "✗ 拒绝（不一致）", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(620, 215, "草稿变开销", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        // Arrows from comparison
+        e.path("M350,130 Q250,150 200,170", C.green, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        e.path("M470,130 Q570,150 620,170", C.red, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrR") + ")" });
+        e.text(W/2, 270, "转换残差 → logit 扰动 → token 排名翻转 → 接受率下降", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(W/2, 300, "结构有效 + 功能残差 = 草稿效用受损", { "text-anchor": "middle", "font-size": 13, fill: C.textMute });
+      }
+    }
+  ];
+}
+
+// ============ SCENE 3: Rank Bottleneck ============
+function scene3Build() {
+  var W = 820;
+  return [
+    {
+      short: "原始 GQA",
+      desc: "原始 GQA：K/V 投影的完整秩，$\\text{rank}(W^K W^V)$ 可达 $G(d_k + d_v)$",
+      render: function(e) {
+        e.text(W/2, 24, "原始 GQA：完整秩 K/V 投影", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Hidden state
+        e.rect(30, 80, 100, 200, C.blueBg, C.blue, { rx: 6 });
+        e.text(80, 100, "隐状态", { "text-anchor": "middle", "font-size": 12, fill: C.blue, "font-weight": "bold" });
+        e.text(80, 120, "$h_j$", { "text-anchor": "middle", "font-size": 14, fill: C.blue });
+        e.text(80, 250, "D 维", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        // K/V projections
+        e.path("M130,140 L240,100", C.red, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrR") + ")" });
+        e.path("M130,200 L240,220", C.red, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrR") + ")" });
+        // K matrix
+        e.rect(250, 70, 180, 80, C.redBg, C.red, { rx: 6, "stroke-width": 2 });
+        e.text(340, 92, "$W^K$（Key 投影）", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(340, 115, "维度: $D \\times G \\cdot d_k$", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(340, 135, "rank = $G \\cdot d_k$", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        // V matrix
+        e.rect(250, 170, 180, 80, C.redBg, C.red, { rx: 6, "stroke-width": 2 });
+        e.text(340, 192, "$W^V$（Value 投影）", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(340, 215, "维度: $D \\times G \\cdot d_v$", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(340, 235, "rank = $G \\cdot d_v$", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        // Stacked
+        e.rect(500, 70, 160, 180, "none", C.red, { rx: 6, "stroke-dasharray": "5,3", "stroke-width": 2 });
+        e.text(580, 95, "堆叠 $[K; V]$", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(580, 120, "rank = $G(d_k + d_v)$", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(580, 150, "完整信息", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        e.text(580, 170, "无信息损失", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        e.path("M430,110 L500,110", C.red, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrR") + ")" });
+        e.path("M430,210 L500,210", C.red, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrR") + ")" });
+        e.text(W/2, 300, "原始映射：$[K_{nope}; V] = W^K W^V \\cdot h_j$，秩可达 $m = G(d_k^{nope} + d_v)$", { "text-anchor": "middle", "font-size": 13, fill: C.textSoft });
+        e.text(W/2, 325, "所有信息完整保留", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+      }
+    },
+    {
+      short: "MLA 压缩",
+      desc: "MLA 压缩：$[K_{nope}; V] = W^{UKV} \\cdot W^{DKV} \\cdot h_j$，中间 latent 维度 $r$ 限制秩",
+      render: function(e) {
+        e.text(W/2, 24, "MLA 压缩：低秩 latent 瓶颈", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Hidden state
+        e.rect(30, 120, 80, 120, C.blueBg, C.blue, { rx: 6 });
+        e.text(70, 140, "隐状态", { "text-anchor": "middle", "font-size": 12, fill: C.blue, "font-weight": "bold" });
+        e.text(70, 160, "$h_j$", { "text-anchor": "middle", "font-size": 14, fill: C.blue });
+        e.text(70, 240, "D 维", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        // W^DKV (down projection)
+        e.path("M110,160 L170,160", C.green, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        e.rect(170, 130, 100, 60, C.greenBg, C.green, { rx: 6, "stroke-width": 2 });
+        e.text(220, 150, "$W^{DKV}$", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(220, 172, "$D \\to r$", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        // Latent vector (narrow!)
+        e.path("M270,160 L320,160", C.green, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        e.rect(320, 130, 60, 60, C.greenBg, C.green, { rx: 6, "stroke-width": 3 });
+        e.text(350, 150, "$c_j$", { "text-anchor": "middle", "font-size": 16, fill: C.green, "font-weight": "bold" });
+        e.text(350, 172, "r 维", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        // Bottleneck indicator
+        e.text(350, 115, "← 瓶颈 →", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        // W^UKV (up projection)
+        e.path("M380,160 L430,160", C.green, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        e.rect(430, 130, 100, 60, C.greenBg, C.green, { rx: 6, "stroke-width": 2 });
+        e.text(480, 150, "$W^{UKV}$", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(480, 172, "$r \\to m$", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        // Output
+        e.path("M530,160 L580,160", C.green, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        e.rect(580, 120, 160, 80, C.redBg, C.red, { rx: 6, "stroke-dasharray": "5,3" });
+        e.text(660, 145, "$[K_{nope}; V]$", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(660, 168, "rank ≤ r", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(660, 188, "（近似）", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        // Rank condition
+        e.rect(580, 220, 160, 50, C.orangeBg, C.orange, { rx: 6 });
+        e.text(660, 240, "rank ≤ r", { "text-anchor": "middle", "font-size": 14, fill: C.orange, "font-weight": "bold" });
+        e.text(660, 258, "$r \\ll m = G(d_k + d_v)$", { "text-anchor": "middle", "font-size": 12, fill: C.orange });
+        e.text(W/2, 305, "当原始映射秩 > r 时，低秩因子化无法精确复现 K/V", { "text-anchor": "middle", "font-size": 13, fill: C.textSoft });
+        e.text(W/2, 330, "必然留下残差 → 注意力输出偏差", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+      }
+    },
+    {
+      short: "信息损失",
+      desc: "不可恢复的残差：当 $\\text{rank}(W^K W^V) > r$ 时，转换后 K/V 必然有偏差",
+      render: function(e) {
+        e.text(W/2, 24, "秩瓶颈：不可恢复的信息", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Show a matrix decomposition
+        // Original full-rank space
+        e.rect(50, 60, 300, 200, C.redBg, C.red, { rx: 8, "stroke-width": 2 });
+        e.text(200, 82, "原始 K/V 映射空间", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(200, 105, "rank = $m = G(d_k^{nope} + d_v)$", { "text-anchor": "middle", "font-size": 13, fill: C.red });
+        // Grid representing full rank
+        for (var i = 0; i < 6; i++) {
+          for (var j = 0; j < 4; j++) {
+            e.rect(80 + j * 50, 120 + i * 20, 45, 16, C.redBg, C.red, { "stroke-width": 1, opacity: 0.6 });
+          }
+        }
+        e.text(200, 250, "完整信息", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        // Latent subspace
+        e.rect(400, 60, 150, 200, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(475, 82, "latent 子空间", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(475, 105, "rank ≤ r", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        for (var i = 0; i < 3; i++) {
+          e.rect(420, 120 + i * 30, 110, 24, C.greenBg, C.green, { "stroke-width": 1, opacity: 0.6 });
+        }
+        e.text(475, 250, "可恢复部分", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        // Residual
+        e.rect(600, 60, 180, 200, C.orangeBg, C.orange, { rx: 8, "stroke-width": 2, "stroke-dasharray": "5,3" });
+        e.text(690, 82, "残差空间", { "text-anchor": "middle", "font-size": 14, fill: C.orange, "font-weight": "bold" });
+        e.text(690, 105, "rank = $m - r$", { "text-anchor": "middle", "font-size": 13, fill: C.orange, "font-weight": "bold" });
+        e.text(690, 130, "不可恢复", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(690, 155, "的信息损失", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        // Residual representation
+        for (var i = 0; i < 3; i++) {
+          for (var j = 0; j < 2; j++) {
+            e.rect(620 + j * 70, 180 + i * 20, 65, 16, C.orangeBg, C.orange, { "stroke-width": 1, opacity: 0.5 });
+          }
+        }
+        e.text(690, 250, "MLA 无法表示", { "text-anchor": "middle", "font-size": 13, fill: C.orange, "font-weight": "bold" });
+        // Arrows
+        e.path("M350,160 L400,160", C.green, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        e.text(375, 148, "投影", { "text-anchor": "middle", "font-size": 11, fill: C.green });
+        e.path("M550,160 L600,160", C.orange, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.text(575, 148, "丢弃", { "text-anchor": "middle", "font-size": 11, fill: C.orange });
+        e.text(W/2, 300, "条件：$\\text{rank}(W^K W^V) > r \\Rightarrow$ 精确复现不可能", { "text-anchor": "middle", "font-size": 14, fill: C.text, "font-weight": "bold" });
+        e.text(W/2, 325, "激进压缩 = 更小 cache 但更大残差 = 草稿接受率风险", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "E2E 修复",
+      desc: "E2E 不要求秩条件精确成立，而是在固定压缩 MLA 函数族中搜索更近的功能匹配",
+      render: function(e) {
+        e.text(W/2, 24, "E2E：在固定 rank 内优化功能匹配", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Original output
+        e.rect(50, 60, 160, 80, C.blueBg, C.blue, { rx: 6, "stroke-width": 2 });
+        e.text(130, 85, "原始输出", { "text-anchor": "middle", "font-size": 13, fill: C.blue, "font-weight": "bold" });
+        e.text(130, 105, "$A_{orig}^\\ell$", { "text-anchor": "middle", "font-size": 14, fill: C.blue });
+        e.text(130, 125, "（冻结）", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        // Before E2E
+        e.rect(260, 60, 160, 80, C.redBg, C.red, { rx: 6, "stroke-width": 2 });
+        e.text(340, 85, "转换后（前）", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(340, 105, "$A_{MLA}^{before}$", { "text-anchor": "middle", "font-size": 14, fill: C.red });
+        e.text(340, 125, "大残差 ✗", { "text-anchor": "middle", "font-size": 12, fill: C.red, "font-weight": "bold" });
+        // After E2E
+        e.rect(470, 60, 160, 80, C.greenBg, C.green, { rx: 6, "stroke-width": 2 });
+        e.text(550, 85, "E2E 重建后", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(550, 105, "$A_{MLA}^{after}$", { "text-anchor": "middle", "font-size": 14, fill: C.green });
+        e.text(550, 125, "小残差 ✓", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        // Error bars
+        e.text(210, 110, "大 $\\Delta$", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.path("M210,120 L250,120", C.red, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrR") + ")" });
+        e.text(420, 110, "小 $\\delta$", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.path("M420,120 L460,120", C.green, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        // Training arrow
+        e.path("M340,140 Q340,200 550,200 Q550,200 550,140", C.accent, { "stroke-width": 2, "stroke-dasharray": "5,3", "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.text(445, 220, "← E2E 训练（masked MSE） →", { "text-anchor": "middle", "font-size": 13, fill: C.accent, "font-weight": "bold" });
+        // Key insight
+        e.rect(660, 60, 130, 80, C.accentBg, C.accent, { rx: 6, "stroke-width": 2 });
+        e.text(725, 82, "关键洞察", { "text-anchor": "middle", "font-size": 13, fill: C.accent, "font-weight": "bold" });
+        e.text(725, 102, "rank 不变", { "text-anchor": "middle", "font-size": 12, fill: C.accent });
+        e.text(725, 120, "cache 不变", { "text-anchor": "middle", "font-size": 12, fill: C.accent });
+        e.text(725, 138, "推理零开销", { "text-anchor": "middle", "font-size": 12, fill: C.accent });
+        e.text(W/2, 260, "在固定 rank 约束内搜索更好的功能匹配", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 285, "不能创造缺失的 latent rank，但能优化可表示的部分", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        e.text(W/2, 310, "→ 接受率改善 37/64 单元，26 持平，仅 1 下降", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+      }
+    }
+  ];
+}
+
+// ============ SCENE 4: From Logit Residual to Acceptance ============
+function scene4Build() {
+  var W = 820;
+  return [
+    {
+      short: "原始一致",
+      desc: "原始 GQA 草稿：草稿与目标 logit 排名一致，top-1 token 相同 → 接受",
+      render: function(e) {
+        e.text(W/2, 24, "原始 GQA：草稿与目标一致", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Draft
+        e.rect(50, 50, 250, 100, C.accentBg, C.accent, { rx: 8, "stroke-width": 2 });
+        e.text(175, 72, "草稿模型（GQA）", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(175, 95, "top-1: token_A", { "text-anchor": "middle", "font-size": 14, fill: C.accent });
+        e.text(175, 120, "$\\arg\\max p_D^x = A$", { "text-anchor": "middle", "font-size": 13, fill: C.accent });
+        // Target
+        e.rect(520, 50, 250, 100, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(645, 72, "目标模型", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(645, 95, "top-1: token_A", { "text-anchor": "middle", "font-size": 14, fill: C.green });
+        e.text(645, 120, "$\\arg\\max p_T^x = A$", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        // Match
+        e.text(410, 95, "= ✓", { "text-anchor": "middle", "font-size": 28, fill: C.green, "font-weight": "bold" });
+        // Result
+        e.rect(250, 180, 320, 60, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(410, 205, "✓ 接受 — 多 token 并行验证", { "text-anchor": "middle", "font-size": 15, fill: C.green, "font-weight": "bold" });
+        e.text(410, 225, "$\\alpha_{greedy} = 1$", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        // Logit distributions
+        e.text(W/2, 275, "logit 分布一致 → softmax → 排名一致 → 接受", { "text-anchor": "middle", "font-size": 13, fill: C.textSoft });
+        e.text(W/2, 300, "投机解码加速生效", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+      }
+    },
+    {
+      short: "转换后",
+      desc: "转换后 MLA：logit 残差 → softmax 扰动 → top-1 排名可能翻转 → 拒绝",
+      render: function(e) {
+        e.text(W/2, 24, "转换后 MLA：logit 残差翻转排名", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Draft (MLA)
+        e.rect(50, 50, 250, 100, C.accentBg, C.accent, { rx: 8, "stroke-width": 2 });
+        e.text(175, 72, "草稿模型（MLA）", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(175, 95, "top-1: token_B ← 翻转!", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(175, 120, "$\\arg\\max p_D^x = B$", { "text-anchor": "middle", "font-size": 13, fill: C.red });
+        // Target
+        e.rect(520, 50, 250, 100, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(645, 72, "目标模型", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(645, 95, "top-1: token_A", { "text-anchor": "middle", "font-size": 14, fill: C.green });
+        e.text(645, 120, "$\\arg\\max p_T^x = A$", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        // Mismatch
+        e.text(410, 95, "≠ ✗", { "text-anchor": "middle", "font-size": 28, fill: C.red, "font-weight": "bold" });
+        // Logit residual
+        e.rect(250, 165, 320, 40, C.orangeBg, C.orange, { rx: 6, "stroke-dasharray": "5,3" });
+        e.text(410, 190, "logit 残差 $\\hat{s}_{tj} - s_{tj}$ 翻转了 top-1", { "text-anchor": "middle", "font-size": 13, fill: C.orange, "font-weight": "bold" });
+        // Result
+        e.rect(250, 220, 320, 60, C.redBg, C.red, { rx: 8, "stroke-width": 2 });
+        e.text(410, 245, "✗ 拒绝 — 草稿变开销", { "text-anchor": "middle", "font-size": 15, fill: C.red, "font-weight": "bold" });
+        e.text(410, 265, "$\\alpha_{greedy} = 0$", { "text-anchor": "middle", "font-size": 13, fill: C.red });
+        // Pipeline
+        e.text(W/2, 310, "秩瓶颈 + RoPE → logit 残差 → softmax → 排名翻转 → 拒绝", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(W/2, 335, "即使残差很小，只要翻转 top-1，接受就从 1→0", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "E2E 修复",
+      desc: "E2E 重建：减小功能残差 → logit 更接近 → 排名恢复一致 → 接受率改善",
+      render: function(e) {
+        e.text(W/2, 24, "E2E 重建：恢复排名一致性", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Draft (MLA after E2E)
+        e.rect(50, 50, 250, 100, C.accentBg, C.accent, { rx: 8, "stroke-width": 2 });
+        e.text(175, 72, "草稿模型（MLA + E2E）", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(175, 95, "top-1: token_A ← 恢复!", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(175, 120, "$\\arg\\max p_D^x = A$", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        // Target
+        e.rect(520, 50, 250, 100, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(645, 72, "目标模型", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(645, 95, "top-1: token_A", { "text-anchor": "middle", "font-size": 14, fill: C.green });
+        e.text(645, 120, "$\\arg\\max p_T^x = A$", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        // Match
+        e.text(410, 95, "= ✓", { "text-anchor": "middle", "font-size": 28, fill: C.green, "font-weight": "bold" });
+        // Small residual
+        e.rect(250, 165, 320, 40, C.greenBg, C.green, { rx: 6, "stroke-dasharray": "5,3" });
+        e.text(410, 190, "功能残差减小 → logit 排名恢复一致", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        // Result
+        e.rect(250, 220, 320, 60, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(410, 245, "✓ 接受 — 接受率改善", { "text-anchor": "middle", "font-size": 15, fill: C.green, "font-weight": "bold" });
+        e.text(410, 265, "$\\alpha_{greedy} = 1$", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        e.text(W/2, 310, "E2E 不保证单调改善（局部残差 ≠ 端到端排名）", { "text-anchor": "middle", "font-size": 13, fill: C.orange, "font-weight": "bold" });
+        e.text(W/2, 335, "但经验上 37/64 单元显著改善", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+      }
+    },
+    {
+      short: "结果统计",
+      desc: "192 配置统计：37/64 改善 · 26/64 持平 · 1/64 下降 — 38 个容差外变化中 37 个偏向 E2E",
+      render: function(e) {
+        e.text(W/2, 24, "结果统计：64 个匹配单元", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Bar chart
+        var barY = 80;
+        var barH = 180;
+        var total = 64;
+        // Improved
+        var improvedW = (37 / total) * 600;
+        e.rect(100, barY, improvedW, barH, C.greenBg, C.green, { rx: 4, "stroke-width": 2 });
+        e.text(100 + improvedW / 2, barY + 30, "37", { "text-anchor": "middle", "font-size": 32, fill: C.green, "font-weight": "bold" });
+        e.text(100 + improvedW / 2, barY + 55, "显著改善", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(100 + improvedW / 2, barY + 75, "57.8%", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        e.text(100 + improvedW / 2, barY + barH - 15, "+0.68 ~ +4.23 pp", { "text-anchor": "middle", "font-size": 11, fill: C.green });
+        // Unchanged
+        var unchangedStart = 100 + improvedW;
+        var unchangedW = (26 / total) * 600;
+        e.rect(unchangedStart, barY, unchangedW, barH, "var(--code-bg)", C.grey, { rx: 4, "stroke-width": 2 });
+        e.text(unchangedStart + unchangedW / 2, barY + 30, "26", { "text-anchor": "middle", "font-size": 32, fill: C.textSoft, "font-weight": "bold" });
+        e.text(unchangedStart + unchangedW / 2, barY + 55, "持平", { "text-anchor": "middle", "font-size": 14, fill: C.textSoft, "font-weight": "bold" });
+        e.text(unchangedStart + unchangedW / 2, barY + 75, "40.6%", { "text-anchor": "middle", "font-size": 13, fill: C.textMute });
+        e.text(unchangedStart + unchangedW / 2, barY + barH - 15, "≤ 0.5 pp", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        // Decreased
+        var decStart = unchangedStart + unchangedW;
+        var decW = (1 / total) * 600;
+        e.rect(decStart, barY, Math.max(decW, 10), barH, C.redBg, C.red, { rx: 4, "stroke-width": 2 });
+        e.text(decStart + 30, barY + 30, "1", { "text-anchor": "middle", "font-size": 28, fill: C.red, "font-weight": "bold" });
+        e.text(decStart + 30, barY + 55, "下降", { "text-anchor": "middle", "font-size": 12, fill: C.red, "font-weight": "bold" });
+        e.text(decStart + 30, barY + 75, "1.6%", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(decStart + 30, barY + barH - 15, "-0.55 pp", { "text-anchor": "middle", "font-size": 10, fill: C.red });
+        // Summary
+        e.text(W/2, 290, "38 个容差外变化中 37 个偏向 E2E 功能重建", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 320, "覆盖 Llama/Qwen × TransMLA/MHA2MLA × HF/vLLM × 4 任务", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        e.text(W/2, 345, "192 个方法-任务配置 · 38400 次生成", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+      }
+    }
+  ];
+}
+
+// ============ SCENE 5: E2E Training Flow ============
+function scene5Build() {
+  var W = 820;
+  return [
+    {
+      short: "输入",
+      desc: "校准隐状态 $H_b^\\ell$ 送入两个注意力块：冻结的原始 GQA 和可训练的转换后 MLA",
+      render: function(e) {
+        e.text(W/2, 24, "Step 1：校准隐状态双路输入", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Calibration data
+        e.rect(250, 50, 320, 70, C.blueBg, C.blue, { rx: 8, "stroke-width": 2 });
+        e.text(410, 72, "校准隐状态", { "text-anchor": "middle", "font-size": 14, fill: C.blue, "font-weight": "bold" });
+        e.text(410, 95, "$H_b^\\ell \\in \\mathbb{R}^{T_b \\times D}$", { "text-anchor": "middle", "font-size": 13, fill: C.blue });
+        // Split
+        e.path("M350,120 L200,170", C.blue, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.path("M470,120 L620,170", C.blue, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        // Frozen GQA
+        e.rect(100, 170, 200, 100, C.blueBg, C.blue, { rx: 8, "stroke-width": 3 });
+        e.text(200, 192, "冻结 GQA 块", { "text-anchor": "middle", "font-size": 14, fill: C.blue, "font-weight": "bold" });
+        e.text(200, 215, "$A_{orig}^\\ell(H_b^\\ell)$", { "text-anchor": "middle", "font-size": 13, fill: C.blue });
+        e.text(200, 235, "含 $W_O$（冻结）", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        e.text(200, 255, "🔒 不更新", { "text-anchor": "middle", "font-size": 12, fill: C.blue, "font-weight": "bold" });
+        // Trainable MLA
+        e.rect(520, 170, 200, 100, C.accentBg, C.accent, { rx: 8, "stroke-width": 3 });
+        e.text(620, 192, "可训练 MLA 块", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(620, 215, "$A_{MLA}^\\ell(H_b^\\ell)$", { "text-anchor": "middle", "font-size": 13, fill: C.accent });
+        e.text(620, 235, "含 $W_O$（冻结）", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        e.text(620, 255, "🔧 更新 Q/KV 投影", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        e.text(W/2, 320, "同一输入送入两个注意力块 — 原始路径冻结，MLA 路径可训练", { "text-anchor": "middle", "font-size": 13, fill: C.textSoft });
+        e.text(W/2, 345, "$W_O$ 在两侧均冻结，仅更新转换器引入的 Q 和 KV 投影", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "输出对比",
+      desc: "两个块产生 post-$W_O$ 输出：$A_{orig}$ 带 stop-gradient，$A_{MLA}$ 可回传梯度",
+      render: function(e) {
+        e.text(W/2, 24, "Step 2：Post-$W_O$ 输出对比", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // GQA output
+        e.rect(100, 50, 200, 60, C.blueBg, C.blue, { rx: 6, "stroke-width": 2 });
+        e.text(200, 72, "GQA 输出", { "text-anchor": "middle", "font-size": 14, fill: C.blue, "font-weight": "bold" });
+        e.text(200, 95, "$\\operatorname{sg}[A_{orig}^\\ell]$", { "text-anchor": "middle", "font-size": 13, fill: C.blue });
+        // MLA output
+        e.rect(520, 50, 200, 60, C.accentBg, C.accent, { rx: 6, "stroke-width": 2 });
+        e.text(620, 72, "MLA 输出", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(620, 95, "$A_{MLA}^\\ell$", { "text-anchor": "middle", "font-size": 13, fill: C.accent });
+        // Stop gradient indicator
+        e.text(200, 130, "🔒 sg = stop-grad", { "text-anchor": "middle", "font-size": 12, fill: C.blue, "font-weight": "bold" });
+        e.text(620, 130, "🔧 梯度可回传", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+        // Arrows to loss
+        e.path("M200,140 L350,200", C.blue, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.path("M620,140 L470,200", C.accent, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        // Mask
+        e.rect(250, 160, 120, 40, C.orangeBg, C.orange, { rx: 4, "stroke-dasharray": "4,2" });
+        e.text(310, 185, "$M_b$（掩码）", { "text-anchor": "middle", "font-size": 12, fill: C.orange });
+        e.path("M310,200 L380,215", C.orange, { "stroke-width": 1.5, "stroke-dasharray": "4,2", "marker-end": "url(#" + e._uid("arr") + ")" });
+        // Loss
+        e.rect(350, 195, 170, 70, C.redBg, C.red, { rx: 8, "stroke-width": 2 });
+        e.text(435, 217, "masked MSE", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(435, 240, "$\\|M \\odot (A_{MLA} - \\text{sg}[A_{orig}])\\|_F^2$", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(435, 258, "post-$W_O$ 匹配", { "text-anchor": "middle", "font-size": 11, fill: C.red });
+        e.text(W/2, 310, "关键：匹配的是完整注意力功能（层输入→post-$W_O$），而非单因子", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.text(W/2, 335, "联合覆盖 RoPE 误差 + 低秩 KV 误差", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        e.text(W/2, 360, "校准隐状态提供运行分布，冻结原始块提供稳定功能参考", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "梯度更新",
+      desc: "梯度仅回传至 MLA 的 Q/KV 投影，$W_O$ 和非注意力参数保持冻结",
+      render: function(e) {
+        e.text(W/2, 24, "Step 3：梯度仅更新 Q/KV 投影", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Loss
+        e.rect(310, 50, 200, 50, C.redBg, C.red, { rx: 6, "stroke-width": 2 });
+        e.text(410, 80, "$\\mathcal{L}_{E2E}^{(\\ell)}$", { "text-anchor": "middle", "font-size": 16, fill: C.red, "font-weight": "bold" });
+        // Grad arrow down
+        e.path("M410,100 L410,140", C.accent, { "stroke-width": 3, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.text(440, 125, "$\\nabla$", { "text-anchor": "middle", "font-size": 16, fill: C.accent, "font-weight": "bold" });
+        // MLA block expanded
+        e.rect(200, 140, 420, 120, C.accentBg, C.accent, { rx: 8, "stroke-width": 2 });
+        e.text(410, 160, "MLA 注意力块", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        // Q projection (trainable)
+        e.rect(220, 175, 80, 40, C.greenBg, C.green, { rx: 4, "stroke-width": 2 });
+        e.text(260, 192, "$W^Q$", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(260, 207, "✓ 训练", { "text-anchor": "middle", "font-size": 10, fill: C.green });
+        // KV projections (trainable)
+        e.rect(320, 175, 80, 40, C.greenBg, C.green, { rx: 4, "stroke-width": 2 });
+        e.text(360, 192, "$W^{DKV}$", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        e.text(360, 207, "✓ 训练", { "text-anchor": "middle", "font-size": 10, fill: C.green });
+        e.rect(420, 175, 80, 40, C.greenBg, C.green, { rx: 4, "stroke-width": 2 });
+        e.text(460, 192, "$W^{UKV}$", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        e.text(460, 207, "✓ 训练", { "text-anchor": "middle", "font-size": 10, fill: C.green });
+        // WO (frozen)
+        e.rect(520, 175, 80, 40, C.blueBg, C.blue, { rx: 4, "stroke-width": 2, "stroke-dasharray": "4,2" });
+        e.text(560, 192, "$W_O$", { "text-anchor": "middle", "font-size": 13, fill: C.blue, "font-weight": "bold" });
+        e.text(560, 207, "🔒 冻结", { "text-anchor": "middle", "font-size": 10, fill: C.blue });
+        // Other params
+        e.rect(220, 225, 380, 25, "var(--code-bg)", C.grey, { rx: 4, "stroke-dasharray": "3,2" });
+        e.text(410, 242, "🔒 MLP/Embedding/Norm 等非注意力参数：全部冻结", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        e.text(W/2, 300, "仅更新转换器引入的 Q 和 KV 投影 — 最小化干预", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 325, "$W_O$ 冻结防止原始输出投影被漂移", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        e.text(W/2, 350, "每层独立优化，不需跨层协调", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "部署",
+      desc: "训练完成后，MLA 草稿部署时零额外开销 — 推理图、cache 结构、参数量全部不变",
+      render: function(e) {
+        e.text(W/2, 24, "Step 4：部署 — 零推理开销", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.text });
+        // Training phase
+        e.rect(50, 50, 280, 140, C.accentBg, C.accent, { rx: 8, "stroke-width": 2 });
+        e.text(190, 72, "训练阶段", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(190, 95, "E2E 功能重建", { "text-anchor": "middle", "font-size": 13, fill: C.accent });
+        e.text(190, 120, "校准隐状态", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.text(190, 140, "masked MSE 损失", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.text(190, 160, "更新 Q/KV 投影", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        // Arrow
+        e.path("M340,120 L440,120", C.green, { "stroke-width": 3, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        e.text(390, 108, "完成", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        // Deploy phase
+        e.rect(460, 50, 310, 140, C.greenBg, C.green, { rx: 8, "stroke-width": 2 });
+        e.text(615, 72, "推理部署", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(615, 95, "标准 MLA 推理", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        e.text(615, 120, "✓ 无额外操作", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        e.text(615, 140, "✓ 无参数分支", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        e.text(615, 160, "✓ cache 拓扑不变", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+        e.text(615, 180, "✓ 接受率改善", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        // Bottom callouts
+        e.rect(100, 220, 280, 60, C.greenBg, C.green, { rx: 6 });
+        e.text(240, 242, "训练时成本", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(240, 262, "校准数据 + 少量梯度更新", { "text-anchor": "middle", "font-size": 12, fill: C.textSoft });
+        e.rect(440, 220, 280, 60, C.greenBg, C.green, { rx: 6 });
+        e.text(580, 242, "推理时成本", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(580, 262, "零 — 与未优化完全相同", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 320, "功能重建不是新的 cache 设计", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(W/2, 345, "而是在固定函数族和内存预算内搜索更好的功能", { "text-anchor": "middle", "font-size": 13, fill: C.textMute });
+        e.text(W/2, 370, "→ 改善接受率项，草稿成本不变", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+      }
+    }
+  ];
+}
+
+// ============ INIT ============
+var engines = {};
+var sceneBuilders = {
+  svg1: scene1Build,
+  svg2: scene2Build,
+  svg3: scene3Build,
+  svg4: scene4Build,
+  svg5: scene5Build
+};
+
+function initScene(svgId) {
+  if (engines[svgId]) return engines[svgId];
+  var svg = document.getElementById(svgId);
+  if (!svg) return null;
+  var buildFn = sceneBuilders[svgId];
+  if (!buildFn) return null;
+  var steps = buildFn();
+  var eng = new AnimEngine(svg, { steps: steps });
+  engines[svgId] = eng;
+  eng.goTo(0);
+  return eng;
+}
+
+function toggleTheme() {
+  var cur = document.documentElement.getAttribute("data-theme");
+  if (cur === "dark") {
+    document.documentElement.removeAttribute("data-theme");
+    var tb = document.querySelector(".theme-toggle"); if (tb) tb.textContent = "🌙";
+    localStorage.setItem("theme", "light");
+  } else {
+    document.documentElement.setAttribute("data-theme", "dark");
+    var tb2 = document.querySelector(".theme-toggle"); if (tb2) tb2.textContent = "☀️";
+    localStorage.setItem("theme", "dark");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  if (localStorage.getItem("theme") === "dark") toggleTheme();
+  ["svg1", "svg2", "svg3", "svg4", "svg5"].forEach(function (id) { initScene(id); });
+
+  var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        var id = entry.target.id;
+        tocLinks.forEach(function (l) { l.classList.remove("active"); });
+        var link = document.querySelector('.toc a[href="#' + id + '"]');
+        if (link) { link.classList.add("active"); link.scrollIntoView({ block: "nearest" }); }
+      }
+    });
+  }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+  document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+  var backTop = document.getElementById("backTop");
+  window.addEventListener("scroll", function () {
+    if (window.scrollY > 600) backTop.classList.add("visible");
+    else backTop.classList.remove("visible");
+  });
+
+  tocLinks.forEach(function (a) {
+    a.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      var id = a.getAttribute("href").slice(1);
+      var target = document.getElementById(id);
+      if (target) target.scrollIntoView({ behavior: "smooth" });
+    });
+  });
+});
+</script>
+</body>
+</html>
