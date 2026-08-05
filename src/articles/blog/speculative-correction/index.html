@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speculative Correction：扩散语言模型的先草稿后精修解码</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+:root {
+  --bg: #fafafa; --fg: #1a1a2e; --fg-soft: #444; --fg-muted: #888;
+  --accent: #6c5ce7; --accent-soft: #a29bfe; --accent-bg: #eeeafe;
+  --green: #00b894; --green-soft: #55efc4; --green-bg: #e0f8f4;
+  --red: #e74c3c; --red-soft: #fab1a0; --red-bg: #fdf0ee;
+  --orange: #fdcb6e; --orange-bg: #fff8e7;
+  --blue: #0984e3; --blue-soft: #74b9ff; --blue-bg: #e8f4fd;
+  --border: #ddd; --card-bg: #fff; --code-bg: #f4f4f4;
+  --disabled: #c8c8c8; --focus: #6c5ce7;
+  --toc-w: 240px; --content-w: 860px;
+  --layer-ms: 300ms;
+}
+[data-theme="dark"] {
+  --bg: #1a1a2e; --fg: #e0e0e0; --fg-soft: #bbb; --fg-muted: #888;
+  --accent: #a29bfe; --accent-soft: #6c5ce7; --accent-bg: #2a2a4e;
+  --green: #55efc4; --green-soft: #00b894; --green-bg: #1a3a32;
+  --red: #fab1a0; --red-soft: #e74c3c; --red-bg: #3a1a1a;
+  --orange: #fdcb6e; --orange-bg: #2a2614;
+  --blue: #74b9ff; --blue-soft: #0984e3; --blue-bg: #1a2a3a;
+  --border: #333; --card-bg: #252535; --code-bg: #1e1e2e;
+  --disabled: #555; --focus: #a29bfe;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+
+.content { width: var(--content-w); flex-shrink: 0; }
+section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-orange { background: var(--orange-bg); border-color: var(--orange); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: center; white-space: nowrap; }
+th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--blue-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 620px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: #fff; }
+.badge-green { background: var(--green); color: #fff; }
+.badge-blue { background: var(--blue); color: #fff; }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: #fff; }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.anim-err { fill: var(--red); font-size: 13px; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+.footer { text-align: center; padding: 30px; color: var(--fg-muted); font-size: 13px; border-top: 1px solid var(--border); }
+.footer a { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 960px) {
+  .layout { flex-direction: column; gap: 0; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; margin-bottom: 16px; max-height: 200px; }
+  .toc h3 { cursor: pointer; }
+  .toc.collapsed .toc a { display: none; }
+  .content { width: 100%; }
+  section { padding: 18px; }
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  section { padding: 14px; }
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc" id="tocNav">
+  <h3 onclick="toggleToc()">导航</h3>
+  <a href="#hook">核心思想</a>
+  <a href="#bg">背景：DLM 与 Block-AR</a>
+  <a href="#problem">问题：逐块生成的局限</a>
+  <a href="#method">方法：先草稿后精修</a>
+  <a href="#flash-flash">配置一：Flash-Flash 自精修</a>
+  <a href="#mini-flash">配置二：Mini-Flash 投机纠正</a>
+  <a href="#ablation">因果消融：为何有效</a>
+  <a href="#diagnosis">纠错诊断</a>
+  <a href="#summary">总结</a>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>Speculative Correction</h1>
+  <p class="tagline"><strong>Draft-then-Refine Decoding for Diffusion Language Models</strong></p>
+  <p class="tagline">扩散语言模型（DLM）可双向修订 token，但标准解码流程将其适配为逐块从左到右生成，限制了全局修订能力。本文提出<strong>先草稿后精修</strong>：先用 block-AR 快速生成完整草稿，再用双向扩散精修整个响应。</p>
+  <div class="badges">
+    <span class="badge badge-accent">GSM8K-512: 0.850→0.907, 1.22×</span>
+    <span class="badge badge-green">HumanEval: 0.415→0.622</span>
+    <span class="badge badge-blue">NUS · arXiv 2608.02625</span>
+  </div>
+</section>
+
+<section id="bg">
+  <h2>背景：扩散语言模型与 Block-AR 解码</h2>
+  <p>扩散语言模型（DLM, 如 LLaDA）是一种<strong>非自回归</strong>生成范式：它从全掩码出发，通过迭代去噪同时预测整块 token，天生具备<strong>双向上下文感知</strong>能力——每个位置的生成可参考左右两侧的 token。</p>
+  <h3>Block-AR：将 DLM 适配为自回归</h3>
+  <p>为了让 DLM 生成任意长度的响应，标准做法是<strong>Block-AR 解码</strong>：将响应划分为若干固定大小的块（block），按从左到右的顺序逐块生成。每个块内部用扩散去噪并行生成，但块与块之间是严格串行的——第 $k$ 个块以第 $1,\ldots,k-1$ 个块的输出为条件，一旦生成便<strong>不可回溯修订</strong>。</p>
+  <div class="callout callout-blue">
+    <strong>Block-AR 的本质：</strong> 它把一个双向的生成模型"压"成了单向流水线。块内享有扩散的双向优势，块间却退化为自回归的逐块推进——前面块里的错误会传播到后面，且无法回头修正。
+  </div>
+</section>
+
+<section id="problem">
+  <h2>问题：逐块生成限制了全局修订</h2>
+  <p>Block-AR 解码的根本局限在于：DLM 的双向修订能力<strong>被块边界切断</strong>。每个块生成完毕后即被"冻结"，后续块只能以它为条件往前推进，无法回头修订。这意味着：</p>
+  <ul>
+    <li><strong>块内最优 ≠ 全局最优：</strong> 每个块在生成时只看到左边的已确定块，看不到右边的未来块。一个在局部看来合理的 token，放在全局上下文中可能是错的。</li>
+    <li><strong>错误传播不可逆：</strong> 第一个块中的错误会条件化地影响后续所有块，而 DLM 本有的双向能力无法跨块行使纠错。</li>
+    <li><strong>浪费了 DLM 的核心优势：</strong> 扩散模型的价值在于"可以同时修订所有位置"，Block-AR 把这个能力限制在了块内。</li>
+  </ul>
+  <div class="anim-frame" id="anim1">
+    <div class="anim-header">
+      <span class="anim-title">动画 1：Block-AR 逐块生成 vs Draft-then-Refine 先草稿后精修</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg1" viewBox="0 0 820 400" width="820" height="400" role="img" aria-label="Block-AR 与 Draft-then-Refine 对比动画"></svg>
+    </div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> 待生成块</span>
+      <span><span class="dot" style="background:#00b894"></span> 已确定块</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> 草稿块</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 精修中</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 含错误</span>
+    </div>
+  </div>
+</section>
+
+<section id="method">
+  <h2>方法：先草稿后精修（Draft-then-Refine）</h2>
+  <p>Speculative Correction 的核心洞察是：<strong>Block-AR 的正确角色不是"最终生成器"，而是"快速初始化器"</strong>。与其逐块生成并冻结，不如先用 Block-AR 快速跑完整个响应得到一个完整草稿，然后用 DLM 的双向扩散能力对<strong>整个草稿</strong>做全局精修。</p>
+  <h3>两阶段流程</h3>
+  <ol>
+    <li><strong>草稿阶段（Draft）：</strong> 用 Block-AR 解码快速生成 $K$ 个块的完整草稿。每个块仅用少量去噪步 $T_d$ 做粗略初始化——不需要完美，只需提供一个合理的全局结构起点。</li>
+    <li><strong>精修阶段（Refine）：</strong> 对整个草稿（所有 $K$ 个块同时）执行 $T_r$ 步双向扩散去噪。此时所有位置都能同时看到左右上下文，DLM 的双向修订能力得以充分发挥。</li>
+  </ol>
+  <h3>成本模型与加速条件</h3>
+  <p>总去噪步数为 $K \times T_d + T_r$（$K$ 个块各 $T_d$ 步草稿 + 全局 $T_r$ 步精修）。对比标准 Block-AR 的 $K \times T_{\text{block}}$（$K$ 个块各 $T_{\text{block}}$ 步），加速条件为：</p>
+  <p style="text-align:center; font-size:16px;">$$K \cdot T_d + T_r \lt K \cdot T_{\text{block}}$$</p>
+  <p>由于草稿阶段每块只需很少的去噪步（$T_d \ll T_{\text{block}}$），而精修阶段全局 $T_r$ 步的代价不随块数 $K$ 线性增长，在 $K$ 较大时容易满足加速条件。</p>
+  <div class="callout callout-green">
+    <strong>为什么这样更有效：</strong> 标准解码的每个块在生成时只能看到左边已冻结的块，是局部最优；而精修阶段所有位置同时去噪，每个位置都能参考全局上下文做修订——DLM 的双向能力终于在整个响应上行使，而非被块边界限制。草稿提供了一个让全局精修快速收敛的良好初始化。
+  </div>
+  <div class="callout callout-orange">
+    <strong>与投机解码（Speculative Decoding）的区别：</strong> 投机解码是<strong>token 级</strong>的接受/拒绝——起草器生成若干 token，目标模型逐个验证并接受或拒绝。而 Speculative Correction 是<strong>完整草稿 + 全局双向修订</strong>——先有一个完整的草稿响应，再用扩散模型对整个响应做迭代精修，不存在 token 级的接受/拒绝机制。名称中的"投机"指的是"投机地先用低成本跑一个完整草稿，再用高成本精修全局修订"。
+  </div>
+</section>
+
+<section id="flash-flash">
+  <h2>配置一：Flash-Flash 自精修</h2>
+  <p>最直接的配置是<strong>用同一个 DLM（LLaDA2.1-Flash）既做草稿又做精修</strong>。这验证了一个关键假设：同一个模型可以先快速生成草稿，再对自己的输出做全局双向精修，从而显著提升质量。</p>
+  <h3>实验结果</h3>
+  <table>
+    <tr><th>任务</th><th>Block-AR 基线</th><th>+ 精修</th><th>提升</th><th>速度</th></tr>
+    <tr><td>GSM8K-384</td><td>0.848</td><td>0.899</td><td class="gain">+0.051</td><td class="gain">1.20×</td></tr>
+    <tr><td>GSM8K-512</td><td>0.850</td><td>0.907</td><td class="gain">+0.057</td><td class="gain">1.22×</td></tr>
+    <tr><td>MBPP-384</td><td>0.545</td><td>0.693</td><td class="gain">+0.148</td><td>—</td></tr>
+    <tr><td>HumanEval</td><td>0.415</td><td>0.622</td><td class="gain">+0.207</td><td>—</td></tr>
+  </table>
+  <div class="callout callout-green">
+    <strong>关键发现：</strong> Flash-Flash 在<strong>提升质量的同时加速</strong>——GSM8K-384 从 0.848 升到 0.899 且快 1.20 倍。这证明全局双向精修的收益足以补偿额外的精修开销。HumanEval 的 +0.207 提升尤为显著，说明代码生成任务从全局上下文修订中获益巨大。
+  </div>
+  <div class="anim-frame" id="anim2">
+    <div class="anim-header">
+      <span class="anim-title">动画 2：Flash-Flash 自精修流程</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg2" viewBox="0 0 820 400" width="820" height="400" role="img" aria-label="Flash-Flash 自精修流程动画"></svg>
+    </div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#fdcb6e"></span> Flash 草稿</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> Flash 精修</span>
+      <span><span class="dot" style="background:#00b894"></span> 最终输出</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 草稿中的错误</span>
+    </div>
+  </div>
+</section>
+
+<section id="mini-flash">
+  <h2>配置二：Mini-Flash（投机纠正）</h2>
+  <p>更具实用价值的配置是<strong>异质模型分工</strong>：用轻量的 LLaDA2.1-Mini 快速起草，用更强的 LLaDA2.1-Flash 做全局精修。这类似于经典投机解码中"小模型起草、大模型验证"的分工，但机制完全不同——这里没有 token 级的接受/拒绝，而是"小模型快速跑完整草稿，大模型对整段做双向精修"。</p>
+  <h3>实验结果</h3>
+  <table>
+    <tr><th>任务</th><th>Mini 基线</th><th>Flash 基线</th><th>Mini→Flash</th><th>质量恢复</th><th>速度</th></tr>
+    <tr><td>MATH-384</td><td>0.294</td><td>0.300</td><td>0.294</td><td>79% 差距</td><td class="gain">2.17×</td></tr>
+    <tr><td>MBPP-384</td><td>0.401</td><td>—</td><td>0.568</td><td class="gain">+0.167</td><td class="gain">1.11×</td></tr>
+  </table>
+  <div class="callout callout-accent">
+    <strong>Pareto 前沿而非均匀超越：</strong> Mini-Flash 并不是在所有指标上都超越 Flash 单独使用——MATH-384 上 Mini→Flash 的 0.294 略低于 Flash 直接生成的 0.300（恢复了 Mini 与 Flash 之间约 79% 的质量差距），但换来 2.17 倍加速。它是<strong>质量-速度权衡曲线上的一个 Pareto 前沿点</strong>：当你更看重速度时，Mini-Flash 在可接受的质量损失下大幅加速。
+  </div>
+  <div class="anim-frame" id="anim3">
+    <div class="anim-header">
+      <span class="anim-title">动画 3：Mini-Flash 投机纠正与 Pareto 前沿</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg3" viewBox="0 0 820 400" width="820" height="400" role="img" aria-label="Mini-Flash 投机纠正与 Pareto 前沿动画"></svg>
+    </div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#fdcb6e"></span> Mini 草稿</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> Flash 精修</span>
+      <span><span class="dot" style="background:#00b894"></span> Pareto 前沿</span>
+      <span><span class="dot" style="background:#0984e3"></span> Flash 基线</span>
+    </div>
+  </div>
+</section>
+
+<section id="ablation">
+  <h2>因果消融：为何有效</h2>
+  <p>为了理解 Speculative Correction 的有效性来源，论文设计了系统的因果消融实验，逐一拆解"完整草稿"和"全局精修"各自的贡献。</p>
+  <h3>消融设置</h3>
+  <ul>
+    <li><strong>完整草稿 + 全局精修：</strong> 标准流程（上文描述的方法）。</li>
+    <li><strong>全掩码精修（无草稿）：</strong> 跳过草稿阶段，从全掩码直接做双向扩散精修——相当于让 DLM 从零生成整个响应。</li>
+    <li><strong>局部精修：</strong> 有完整草稿，但精修时每个块只在自己的块内做双向修订（不跨块）。</li>
+    <li><strong>全局精修：</strong> 有完整草稿，精修时所有块同时做双向修订（跨块全局）。</li>
+  </ul>
+  <h3>结果（GSM8K-384）</h3>
+  <table>
+    <tr><th>配置</th><th>GSM8K-384</th><th>MBPP-384</th><th>MATH-384</th></tr>
+    <tr><td>全掩码精修（无草稿）</td><td>0.004</td><td>—</td><td>—</td></tr>
+    <tr><td>草稿基线（不精修）</td><td>0.677</td><td>—</td><td>—</td></tr>
+    <tr><td>局部精修</td><td>0.872</td><td>—</td><td>—</td></tr>
+    <tr><td><strong>全局精修（完整方法）</strong></td><td><strong>0.899</strong></td><td>—</td><td>—</td></tr>
+  </table>
+  <div class="callout callout-red">
+    <strong>完整草稿是有效初始化：</strong> 从全掩码直接精修的得分仅 0.004——几乎完全失败。这说明双向扩散精修<strong>不能从零开始</strong>，需要一个结构合理的完整草稿作为初始化。草稿阶段虽快，但提供了让全局精修快速收敛的起点。
+  </div>
+  <div class="callout callout-green">
+    <strong>全局精修的决定性作用（GSM8K）：</strong> 局部精修已达 0.872（接近全局的 0.899），说明块内双向修订已能修复大部分错误。全局精修额外贡献 +0.027——在数学推理任务（GSM8K）上，跨块上下文修订对涉及多步推理的题目的修正具有决定性意义。
+  </div>
+  <div class="callout callout-orange">
+    <strong>任务差异：</strong> 在 MBPP 和 MATH 上，全局精修相比局部精修的增量较小。这说明这些任务的结构更"局部"——块内修订已足够。因此，<strong>对于异质配置（Mini-Flash），MATH 更适合理解为快速 Pareto 前沿点</strong>（草稿质量已接近 Flash），而 GSM8K 的全局精修收益最显著。
+  </div>
+  <div class="anim-frame" id="anim4">
+    <div class="anim-header">
+      <span class="anim-title">动画 4：因果消融——四种配置的质量对比</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg4" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="因果消融柱状图动画"></svg>
+    </div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#e74c3c"></span> 全掩码（0.004）</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> 草稿基线（0.677）</span>
+      <span><span class="dot" style="background:#0984e3"></span> 局部精修（0.872）</span>
+      <span><span class="dot" style="background:#00b894"></span> 全局精修（0.899）</span>
+    </div>
+  </div>
+</section>
+
+<section id="diagnosis">
+  <h2>纠错诊断：修了多少，引入了多少？</h2>
+  <p>Speculative Correction 的精修阶段不是"只修好不修坏"——它既修复草稿中的错误，也可能引入新的错误。论文统计了 Mini-Flash 配置下精修阶段"修复 vs 引入"的错误数：</p>
+  <table>
+    <tr><th>任务</th><th>修复错误数</th><th>引入错误数</th><th>净收益</th></tr>
+    <tr><td>GSM8K-384</td><td class="gain">111</td><td>19</td><td class="gain">+92</td></tr>
+    <tr><td>MATH-384</td><td class="gain">84</td><td>18</td><td class="gain">+66</td></tr>
+    <tr><td>MBPP-384</td><td class="gain">324</td><td>66</td><td class="gain">+258</td></tr>
+  </table>
+  <div class="callout callout-green">
+    <strong>净收益显著为正：</strong> 所有任务上修复数远超引入数（MBPP 净收益 +258）。这说明全局双向精修确实在系统性地修正草稿错误，而非随机扰动。引入的少量新错误可视为精修过程中"为了修正 A 处错误而连带影响的 B 处"——整体净收益始终为正。
+  </div>
+</section>
+
+<section id="summary">
+  <h2>总结</h2>
+  <p>Speculative Correction 的贡献可以用一句话概括：<strong>让 Block-AR 从"最终生成器"退居为"快速初始化器"，把 DLM 的双向修订能力释放到整个响应上。</strong></p>
+  <h3>核心要点</h3>
+  <ol>
+    <li><strong>重新定位 Block-AR：</strong> Block-AR 适合快速生成结构合理的草稿，但不适合作为最终输出——它的逐块冻结限制了全局最优。</li>
+    <li><strong>全局双向精修：</strong> 对整个草稿做扩散去噪，所有位置同时参考全局上下文修订，DLM 的双向能力得以充分发挥。</li>
+    <li><strong>两种配置覆盖不同场景：</strong> Flash-Flash（同模型自精修）追求质量+加速双赢；Mini-Flash（异质投机纠正）在 Pareto 前沿上用可接受的质量换大幅加速。</li>
+    <li><strong>完整草稿不可或缺：</strong> 全掩码精修几乎完全失败（0.004），证明草稿提供的初始化是精修收敛的必要条件。</li>
+    <li><strong>与投机解码的区别：</strong> 不是 token 级接受/拒绝，而是完整草稿+全局双向修订。</li>
+  </ol>
+  <div class="callout callout-accent">
+    <strong>一句话记忆：</strong> <em>先投机地跑完一个草稿，再让扩散模型带着全局上下文做双向精修——把 DLM 的双向能力从块内释放到全局。</em>
+  </div>
+  <h3>参考</h3>
+  <p style="font-size:13px; color:var(--fg-muted);">Brian K Chen, Chong Wu, Kenji Kawaguchi. <em>Speculative Correction: Draft-then-Refine Decoding for Diffusion Language Models.</em> arXiv:2608.02625, 2026. 新加坡国立大学 (NUS).</p>
+</section>
+
+</div>
+</div>
+
+<footer class="footer">
+  <p>交互式技术解读 · <a href="https://arxiv.org/abs/2608.02625">arXiv:2608.02625</a> · 生成于 2026-08-05</p>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function AnimEngine(svg, opts) {
+    this.svg = svg;
+    this.svgId = svg.id;
+    this.steps = opts.steps || [];
+    this.idx = -1;
+    this.timer = null;
+    this.speed = 1;
+    this.layer = null;
+    this._token = 0;
+    this._initDefs();
+    this._initLayer();
+  }
+
+  AnimEngine.prototype._initDefs = function () {
+    var ns = SVG_NS;
+    var defs = document.createElementNS(ns, "defs");
+    var uid = this.svgId + "-";
+
+    function marker(id, color, orient) {
+      var m = document.createElementNS(ns, "marker");
+      m.setAttribute("id", id);
+      m.setAttribute("viewBox", "0 0 10 10");
+      m.setAttribute("refX", "8");
+      m.setAttribute("refY", "5");
+      m.setAttribute("markerWidth", "7");
+      m.setAttribute("markerHeight", "7");
+      m.setAttribute("orient", orient || "auto");
+      var p = document.createElementNS(ns, "path");
+      p.setAttribute("d", "M0,0 L10,5 L0,10 Z");
+      p.setAttribute("fill", color);
+      m.appendChild(p);
+      return m;
+    }
+    defs.appendChild(marker(uid + "arr", "#6c5ce7", "auto"));
+    defs.appendChild(marker(uid + "arrG", "#00b894", "auto"));
+    defs.appendChild(marker(uid + "arrR", "#e74c3c", "auto"));
+    defs.appendChild(marker(uid + "arrB", "#0984e3", "auto"));
+    defs.appendChild(marker(uid + "arrO", "#fdcb6e", "auto"));
+    this.svg.appendChild(defs);
+  };
+
+  AnimEngine.prototype._initLayer = function () {
+    this.layer = document.createElementNS(SVG_NS, "g");
+    this.layer.setAttribute("class", "anim-layer");
+    this.svg.appendChild(this.layer);
+  };
+
+  AnimEngine.prototype.clear = function () {
+    while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild);
+  };
+
+  AnimEngine.prototype.draw = function (tag, attrs, text) {
+    var el = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (var k in attrs) {
+      if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]);
+    }
+    if (text !== null && text !== undefined && text !== "") el.textContent = text;
+    this.layer.appendChild(el);
+    return el;
+  };
+
+  AnimEngine.prototype.t = function (x, y, str, opts) {
+    opts = opts || {};
+    var lines = String(str).split("\n");
+    var el = this.draw("text", Object.assign({
+      x: x, y: y,
+      "text-anchor": opts.ta || "middle",
+      "font-size": opts.fs || 12,
+      fill: opts.fill || "#444",
+      "font-family": opts.ff || "inherit",
+      "font-weight": opts.fw || "normal"
+    }, opts.attrs || {}), null);
+    if (lines.length === 1) {
+      el.textContent = str;
+    } else {
+      var fs = opts.fs || 12;
+      lines.forEach(function (line, i) {
+        var ts = document.createElementNS(SVG_NS, "tspan");
+        ts.setAttribute("x", x);
+        ts.setAttribute("dy", i === 0 ? 0 : fs * 1.2);
+        ts.textContent = line;
+        el.appendChild(ts);
+      });
+    }
+    return el;
+  };
+
+  AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, opts) {
+    opts = opts || {};
+    var r = this.draw("rect", {
+      x: x, y: y, width: w, height: h,
+      fill: fill || "#fff", stroke: stroke || "#ccc",
+      "stroke-width": opts.sw || 1.5, rx: opts.rx || 4
+    }, null);
+    if (label) {
+      this.t(x + w / 2, y + h / 2 + (opts.labelDy || 4), label, {
+        fs: opts.fs || 11, fill: opts.labelFill || "#fff", fw: opts.fw || "600",
+        ta: "middle"
+      });
+    }
+    return r;
+  };
+
+  AnimEngine.prototype.arrow = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    var mid = opts.curve ? " Q " + opts.cx + "," + opts.cy + " " : "";
+    var d = "M" + x1 + "," + y1 + mid + " L" + x2 + "," + y2;
+    var markerId = "url(#" + this.svgId + "-" + (opts.marker || "arr") + ")";
+    this.draw("path", {
+      d: d, fill: "none", stroke: color || "#6c5ce7",
+      "stroke-width": opts.sw || 2, "marker-end": markerId,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.line = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    this.draw("line", {
+      x1: x1, y1: y1, x2: x2, y2: y2,
+      stroke: color || "#ccc", "stroke-width": opts.sw || 1,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.delay = function () { return 1100 / this.speed; };
+
+  AnimEngine.prototype.goTo = function (i) {
+    if (i < 0 || i >= this.steps.length) return;
+    this._token++;
+    var myToken = this._token;
+    this.idx = i;
+    var step = this.steps[i];
+    this.clear();
+    try {
+      step.render(this);
+    } catch (e) {
+      console.error("render error step " + i + ":", e);
+    }
+    this._updateUI(step, i);
+    if (window.MathJax && window.__mathReady && step.desc) {
+      var descEl = this.svg.parentNode.parentNode.querySelector(".step-desc");
+      if (descEl) {
+        try { MathJax.typesetPromise([descEl]); } catch (e) {}
+      }
+    }
+  };
+
+  AnimEngine.prototype._updateUI = function (step, i) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var info = frame.querySelector(".step-info");
+    var desc = frame.querySelector(".step-desc");
+    if (info) info.textContent = "步骤 " + (i + 1) + " / " + this.steps.length;
+    if (desc) desc.innerHTML = step.desc || step.title || "";
+    var prev = frame.querySelector(".btn-prev");
+    var next = frame.querySelector(".btn-next");
+    if (prev) prev.disabled = (i === 0);
+    if (next) next.disabled = (i === this.steps.length - 1);
+  };
+
+  AnimEngine.prototype.next = function () { if (this.idx < this.steps.length - 1) this.goTo(this.idx + 1); };
+  AnimEngine.prototype.prev = function () { if (this.idx > 0) this.goTo(this.idx - 1); };
+  AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+  AnimEngine.prototype.play = function () {
+    var self = this;
+    if (this.timer) return;
+    this._advance();
+  };
+  AnimEngine.prototype._advance = function () {
+    var self = this;
+    if (this.idx >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
+    this.timer = setTimeout(function () {
+      self.next();
+      self._advance();
+    }, this.delay());
+  };
+  AnimEngine.prototype.pause = function () {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  };
+  AnimEngine.prototype.toggle = function () {
+    if (this.timer) { this.pause(); this._setPlayBtn(false); }
+    else { if (this.idx >= this.steps.length - 1) this.goTo(0); this.play(); this._setPlayBtn(true); }
+  };
+  AnimEngine.prototype._setPlayBtn = function (playing) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var btn = frame.querySelector(".btn-play");
+    if (btn) btn.textContent = playing ? "⏸ 暂停" : "▶ 播放";
+  };
+  AnimEngine.prototype.setSpeed = function (s) {
+    this.speed = s;
+    var frame = this.svg.closest(".anim-frame");
+    if (frame) {
+      var lbl = frame.querySelector(".speed-label");
+      if (lbl) lbl.textContent = s.toFixed(1) + "×";
+    }
+  };
+
+  /* ============ SCENE BUILDERS ============ */
+
+  // Scene 1: Block-AR vs Draft-then-Refine (3 steps)
+  function scene1Build() {
+    var W = 820, H = 400;
+    var C = {
+      blue: "#0984e3", green: "#00b894", orange: "#fdcb6e",
+      accent: "#6c5ce7", red: "#e74c3c", muted: "#b2bec3",
+      fg: "#444", border: "#ddd"
+    };
+    var blockW = 50, blockH = 40, gap = 6;
+    var blocks = 6;
+
+    function drawBase(e, topY, botY, label) {
+      e.t(W / 2, 20, label, { fs: 15, fill: C.accent, fw: "700" });
+      e.t(30, topY - 8, "Block-AR 逐块生成", { fs: 12, fill: C.blue, ta: "start", fw: "600" });
+      e.t(30, botY - 8, "Draft-then-Refine", { fs: 12, fill: C.green, ta: "start", fw: "600" });
+    }
+
+    function drawBlock(e, x, y, state, text) {
+      var fill, stroke;
+      if (state === "done") { fill = C.green; stroke = C.green; }
+      else if (state === "draft") { fill = C.orange; stroke = C.orange; }
+      else if (state === "refine") { fill = C.accent; stroke = C.accent; }
+      else if (state === "error") { fill = C.red; stroke = C.red; }
+      else { fill = "#fff"; stroke = C.muted; }
+      e.rect(x, y, blockW, blockH, text || "", fill, stroke, { fs: 11, labelFill: "#fff", fw: "600" });
+    }
+
+    var startX = 80;
+
+    return [
+      {
+        title: "Block-AR 逐块生成",
+        desc: "Block-AR 按从左到右逐块生成。每个块生成时只看左边已冻结的块，生成后不可回溯修订。块3 中的错误（红）会传播到后续所有块。",
+        render: function (e) {
+          e.clear();
+          var topY = 60, botY = 230;
+          drawBase(e, topY, botY, "Block-AR 解码流程");
+          // Top row: blocks being generated left to right
+          for (var i = 0; i < blocks; i++) {
+            var x = startX + i * (blockW + gap);
+            var state;
+            if (i < 2) state = "done";
+            else if (i === 2) state = "error";
+            else if (i === 3) state = "draft";
+            else state = "pending";
+            drawBlock(e, x, topY, state, "B" + (i + 1));
+          }
+          // Arrow showing left-to-right progression
+          e.arrow(startX, topY + blockH + 8, startX + (blocks - 1) * (blockW + gap) + blockW, topY + blockH + 8, C.blue, { sw: 2 });
+          e.t(W / 2, topY + blockH + 28, "逐块生成 → 前块冻结后不可修订", { fs: 12, fill: C.red });
+          // Note about error propagation
+          e.t(W / 2, 150, "B3 的错误条件化了 B4,B5,B6 的生成", { fs: 12, fill: C.red, fw: "600" });
+          // Bottom: (not used in this step, show comparison label)
+          e.t(W / 2, botY - 20, "（对比见下一步）", { fs: 12, fill: C.muted });
+        }
+      },
+      {
+        title: "Draft-then-Refine: 草稿阶段",
+        desc: "先用 Block-AR 快速跑完所有块得到完整草稿（橙色）。每个块只需少量去噪步 $T_d$ 做粗略初始化——不追求完美，只需全局结构合理。",
+        render: function (e) {
+          e.clear();
+          var topY = 60, botY = 230;
+          drawBase(e, topY, botY, "Draft-then-Refine 草稿阶段");
+          // Top row (Block-AR, dimmed)
+          e.t(W / 2, topY - 25, "（上方对比：Block-AR 逐块冻结）", { fs: 11, fill: C.muted });
+          for (var i = 0; i < blocks; i++) {
+            var x = startX + i * (blockW + gap);
+            drawBlock(e, x, topY, "done", "B" + (i + 1));
+            // dim with overlay
+            e.draw("rect", { x: x, y: topY, width: blockW, height: blockH, fill: "#fff", "fill-opacity": 0.55, stroke: "none" });
+          }
+          // Bottom row: all blocks drafted at once
+          for (var i = 0; i < blocks; i++) {
+            var x2 = startX + i * (blockW + gap);
+            drawBlock(e, x2, botY, "draft", "B" + (i + 1));
+          }
+          // Arrow from top to bottom
+          e.arrow(W / 2, topY + blockH + 10, W / 2, botY - 10, C.orange, { sw: 2 });
+          e.t(W / 2, 170, "快速草稿：所有块同时初始化（少量去噪步 $T_d$）", { fs: 12, fill: C.orange, fw: "600" });
+        }
+      },
+      {
+        title: "Draft-then-Refine: 全局精修",
+        desc: "对整个草稿执行 $T_r$ 步双向扩散去噪。所有位置同时看到左右上下文，DLM 的双向修订能力在全局行使——B3 的错误被修正，整体质量提升。",
+        render: function (e) {
+          e.clear();
+          var topY = 60, botY = 230;
+          drawBase(e, topY, botY, "Draft-then-Refine 全局精修阶段");
+          // Top: draft (dimmed)
+          for (var i = 0; i < blocks; i++) {
+            var x = startX + i * (blockW + gap);
+            drawBlock(e, x, topY, "draft", "B" + (i + 1));
+            e.draw("rect", { x: x, y: topY, width: blockW, height: blockH, fill: "#fff", "fill-opacity": 0.55, stroke: "none" });
+          }
+          // Bottom: all blocks refining simultaneously (purple)
+          for (var i = 0; i < blocks; i++) {
+            var x2 = startX + i * (blockW + gap);
+            drawBlock(e, x2, botY, "refine", "B" + (i + 1));
+          }
+          // Bidirectional arrows showing global refinement
+          e.arrow(W / 2, topY + blockH + 10, W / 2, botY - 10, C.accent, { sw: 2 });
+          // Bidirectional arrows between bottom blocks
+          for (var i = 0; i < blocks - 1; i++) {
+            var x1 = startX + i * (blockW + gap) + blockW;
+            var xa = startX + (i + 1) * (blockW + gap);
+            e.line(x1, botY + blockH / 2, xa, botY + blockH / 2, C.accent, { sw: 1.5, dash: "3,3" });
+          }
+          e.t(W / 2, 170, "全局双向精修：所有块同时去噪，跨块上下文修订", { fs: 12, fill: C.accent, fw: "600" });
+          e.t(W / 2, botY + blockH + 28, "B3 错误被全局修订修正 → 质量提升", { fs: 12, fill: C.green, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  // Scene 2: Flash-Flash self-refinement (3 steps)
+  function scene2Build() {
+    var W = 820, H = 400;
+    var C = {
+      blue: "#0984e3", green: "#00b894", orange: "#fdcb6e",
+      accent: "#6c5ce7", red: "#e74c3c", muted: "#b2bec3"
+    };
+
+    return [
+      {
+        title: "Flash 起草",
+        desc: "LLaDA2.1-Flash 用 Block-AR 快速生成完整草稿。少量去噪步 $T_d$，得到全局结构合理但细节可能有误的草稿。",
+        render: function (e) {
+          e.clear();
+          var cy = 180;
+          // Flash model box
+          e.rect(280, 60, 260, 60, "LLaDA2.1-Flash", C.orange, C.orange, { fs: 14, labelFill: "#fff", fw: "700" });
+          e.t(410, 145, "Block-AR 草稿生成（少量去噪步 $T_d$）", { fs: 12, fill: C.orange, fw: "600" });
+          // Arrow down
+          e.arrow(410, 155, 410, 200, C.orange, { sw: 2 });
+          // Draft blocks
+          var bw = 70, bh = 50, gap = 8;
+          var startX = 410 - (5 * bw + 4 * gap) / 2;
+          for (var i = 0; i < 5; i++) {
+            var x = startX + i * (bw + gap);
+            e.rect(x, 210, bw, bh, "草稿" + (i + 1), C.orange, C.orange, { fs: 11, labelFill: "#fff", fw: "600" });
+          }
+          e.t(410, 290, "完整草稿：结构合理，但存在错误", { fs: 12, fill: C.red });
+          // Error indicators
+          e.t(startX + 2.5 * (bw + gap), 210 + bh + 18, "↑ 部分块含错误", { fs: 11, fill: C.red });
+        }
+      },
+      {
+        title: "Flash 全局精修",
+        desc: "同一个 LLaDA2.1-Flash 对整个草稿做 $T_r$ 步双向扩散去噪。所有位置同时参考全局上下文修订——DLM 的双向能力在完整响应上行使。",
+        render: function (e) {
+          e.clear();
+          // Draft (dimmed)
+          var bw = 70, bh = 50, gap = 8;
+          var startX = 410 - (5 * bw + 4 * gap) / 2;
+          e.t(410, 55, "草稿（来自上一步）", { fs: 12, fill: C.muted });
+          for (var i = 0; i < 5; i++) {
+            var x = startX + i * (bw + gap);
+            e.rect(x, 65, bw, bh, "草稿" + (i + 1), C.orange, C.orange, { fs: 11, labelFill: "#fff", fw: "600" });
+            e.draw("rect", { x: x, y: 65, width: bw, height: bh, fill: "#fff", "fill-opacity": 0.5, stroke: "none" });
+          }
+          // Flash model box (refining)
+          e.rect(280, 145, 260, 55, "LLaDA2.1-Flash", C.accent, C.accent, { fs: 14, labelFill: "#fff", fw: "700" });
+          e.t(410, 220, "全局双向精修（$T_r$ 步去噪）", { fs: 12, fill: C.accent, fw: "600" });
+          // Arrows from draft to model
+          e.arrow(410, 120, 410, 145, C.accent, { sw: 2 });
+          // Refining blocks (purple)
+          for (var i = 0; i < 5; i++) {
+            var x2 = startX + i * (bw + gap);
+            e.rect(x2, 240, bw, bh, "精修" + (i + 1), C.accent, C.accent, { fs: 11, labelFill: "#fff", fw: "600" });
+          }
+          // Bidirectional arrows
+          for (var i = 0; i < 4; i++) {
+            var x1 = startX + i * (bw + gap) + bw;
+            var xa = startX + (i + 1) * (bw + gap);
+            e.line(x1, 265, xa, 265, C.accent, { sw: 1.5, dash: "3,3" });
+          }
+          e.arrow(410, 205, 410, 240, C.accent, { sw: 2 });
+          e.t(410, 325, "所有块同时去噪，跨块上下文修订", { fs: 12, fill: C.accent });
+        }
+      },
+      {
+        title: "最终输出",
+        desc: "精修后的最终输出。GSM8K-384: 0.848→0.899（+0.051），HumanEval: 0.415→0.622（+0.207），且 GSM8K 加速 1.20 倍。同模型自精修有效。",
+        render: function (e) {
+          e.clear();
+          // Final output blocks (green)
+          var bw = 70, bh = 50, gap = 8;
+          var startX = 410 - (5 * bw + 4 * gap) / 2;
+          for (var i = 0; i < 5; i++) {
+            var x = startX + i * (bw + gap);
+            e.rect(x, 100, bw, bh, "输出" + (i + 1), C.green, C.green, { fs: 11, labelFill: "#fff", fw: "600" });
+          }
+          e.t(410, 80, "最终输出（全局精修后）", { fs: 13, fill: C.green, fw: "700" });
+          // Results
+          e.rect(250, 200, 320, 130, "", "#fff", C.border, { sw: 1.5, rx: 8 });
+          e.t(410, 225, "Flash-Flash 实验结果", { fs: 14, fill: C.accent, fw: "700" });
+          e.t(310, 255, "GSM8K-384: 0.848 → 0.899", { fs: 12, fill: C.fg || "#444", ta: "start" });
+          e.t(310, 275, "HumanEval: 0.415 → 0.622", { fs: 12, fill: "#444", ta: "start" });
+          e.t(310, 295, "GSM8K 速度: 1.20× 更快", { fs: 12, fill: C.green, ta: "start", fw: "600" });
+          e.t(310, 315, "同模型自精修 → 质量与速度双赢", { fs: 11, fill: C.green, ta: "start", fw: "600" });
+        }
+      }
+    ];
+  }
+
+  // Scene 3: Mini-Flash speculative correction + Pareto (3 steps)
+  function scene3Build() {
+    var W = 820, H = 400;
+    var C = {
+      blue: "#0984e3", green: "#00b894", orange: "#fdcb6e",
+      accent: "#6c5ce7", red: "#e74c3c", muted: "#b2bec3"
+    };
+
+    return [
+      {
+        title: "Mini 起草 + Flash 精修",
+        desc: "轻量 LLaDA2.1-Mini 用 Block-AR 快速起草，强模型 LLaDA2.1-Flash 对整段草稿做全局双向精修。分工类似投机解码，但无 token 级接受/拒绝。",
+        render: function (e) {
+          e.clear();
+          // Mini model
+          e.rect(100, 80, 200, 55, "LLaDA2.1-Mini", C.orange, C.orange, { fs: 13, labelFill: "#fff", fw: "700" });
+          e.t(200, 155, "快速起草（Block-AR）", { fs: 11, fill: C.orange, fw: "600" });
+          // Arrow to draft
+          e.arrow(200, 140, 200, 170, C.orange, { sw: 2 });
+          // Draft blocks
+          var bw = 55, bh = 40, gap = 6;
+          var startX = 200 - (4 * bw + 3 * gap) / 2;
+          for (var i = 0; i < 4; i++) {
+            var x = startX + i * (bw + gap);
+            e.rect(x, 175, bw, bh, "草稿" + (i + 1), C.orange, C.orange, { fs: 10, labelFill: "#fff", fw: "600" });
+          }
+          // Arrow to Flash
+          e.arrow(560, 195, 460, 195, C.accent, { sw: 2, dash: "5,3" });
+          e.t(510, 185, "完整草稿", { fs: 11, fill: C.accent, fw: "600" });
+          // Flash model
+          e.rect(460, 80, 200, 55, "LLaDA2.1-Flash", C.accent, C.accent, { fs: 13, labelFill: "#fff", fw: "700" });
+          e.t(560, 155, "全局双向精修", { fs: 11, fill: C.accent, fw: "600" });
+          // Arrow from Flash down to refined
+          e.arrow(560, 140, 560, 280, C.accent, { sw: 2 });
+          // Refined output
+          var startX2 = 560 - (4 * bw + 3 * gap) / 2;
+          for (var i = 0; i < 4; i++) {
+            var x2 = startX2 + i * (bw + gap);
+            e.rect(x2, 290, bw, bh, "精修" + (i + 1), C.green, C.green, { fs: 10, labelFill: "#fff", fw: "600" });
+          }
+          e.t(560, 350, "Mini-Flash 输出", { fs: 12, fill: C.green, fw: "600" });
+        }
+      },
+      {
+        title: "MATH-384: Pareto 前沿",
+        desc: "MATH-384 上：Mini 基线 0.294，Flash 基线 0.300，Mini→Flash 0.294。恢复了约 79% 的 Mini-to-Flash 质量差距，但速度快 2.17 倍——Pareto 前沿点。",
+        render: function (e) {
+          e.clear();
+          // Axes
+          var ox = 100, oy = 300, axW = 600, axH = 200;
+          e.line(ox, oy, ox + axW, oy, "#444", { sw: 2 });
+          e.line(ox, oy, ox, oy - axH, "#444", { sw: 2 });
+          e.t(ox + axW + 10, oy + 5, "速度 →", { fs: 11, fill: "#444", ta: "start" });
+          e.t(ox - 10, oy - axH - 5, "质量", { fs: 11, fill: "#444", ta: "end" });
+          // Points
+          // Flash baseline (high quality, low speed) - left top
+          var fx = ox + 80, fy = oy - 150;
+          e.draw("circle", { cx: fx, cy: fy, r: 8, fill: C.blue });
+          e.t(fx + 14, fy - 5, "Flash 基线\n0.300", { fs: 11, fill: C.blue, ta: "start" });
+          // Mini baseline (low quality, high speed) - right bottom
+          var mx = ox + 480, my = oy - 80;
+          e.draw("circle", { cx: mx, cy: my, r: 8, fill: C.red });
+          e.t(mx + 14, my - 5, "Mini 基线\n0.294", { fs: 11, fill: C.red, ta: "start" });
+          // Mini-Flash (Pareto frontier) - high speed, near-Flash quality
+          var mfx = ox + 440, mfy = oy - 90;
+          e.draw("circle", { cx: mfx, cy: mfy, r: 9, fill: C.green });
+          e.t(mfx + 14, mfy + 15, "Mini→Flash\n0.294, 2.17×", { fs: 11, fill: C.green, ta: "start", fw: "600" });
+          // Pareto frontier line (dashed)
+          e.line(fx, fy, mfx, mfy, C.green, { sw: 2, dash: "5,4" });
+          // Quality gap annotation
+          e.t(ox + 300, oy - 180, "质量差距 0.006，恢复 79%", { fs: 11, fill: C.accent, fw: "600" });
+          e.t(ox + 300, oy - 50, "速度大幅提升 2.17×", { fs: 11, fill: C.green, fw: "600" });
+        }
+      },
+      {
+        title: "MBPP-384: 质量大幅提升",
+        desc: "MBPP-384 上：Mini 基线 0.401 → Mini-Flash 0.568（+0.167），且快 1.11 倍。代码生成任务从 Flash 全局精修中获益显著——跨块上下文修订对代码语义至关重要。",
+        render: function (e) {
+          e.clear();
+          // Bar chart
+          var ox = 150, oy = 320, barW = 80, gap = 60;
+          // Y axis
+          e.line(ox, oy, ox, oy - 240, "#444", { sw: 2 });
+          e.line(ox, oy, ox + 400, oy, "#444", { sw: 2 });
+          e.t(ox - 10, oy - 240, "MBPP-384", { fs: 12, fill: C.accent, fw: "700", ta: "end" });
+          // Mini baseline bar
+          var h1 = 0.401 * 400;
+          e.rect(ox + 30, oy - h1, barW, h1, "", C.orange, C.orange, { sw: 0, rx: 2 });
+          e.t(ox + 30 + barW / 2, oy - h1 - 10, "0.401", { fs: 13, fill: C.orange, fw: "700" });
+          e.t(ox + 30 + barW / 2, oy + 18, "Mini 基线", { fs: 11, fill: "#444" });
+          // Mini-Flash bar
+          var h2 = 0.568 * 400;
+          e.rect(ox + 30 + barW + gap, oy - h2, barW, h2, "", C.green, C.green, { sw: 0, rx: 2 });
+          e.t(ox + 30 + barW + gap + barW / 2, oy - h2 - 10, "0.568", { fs: 13, fill: C.green, fw: "700" });
+          e.t(ox + 30 + barW + gap + barW / 2, oy + 18, "Mini→Flash", { fs: 11, fill: "#444" });
+          // Delta annotation
+          e.arrow(ox + 30 + barW + 5, oy - h1 - 20, ox + 30 + barW + gap + barW - 5, oy - h2 - 20, C.accent, { sw: 2, marker: "arr" });
+          e.t(ox + 30 + barW + gap / 2, oy - h1 - 40, "+0.167", { fs: 14, fill: C.accent, fw: "700" });
+          e.t(ox + 30 + barW + gap / 2, oy - h1 - 58, "1.11× 更快", { fs: 11, fill: C.green, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  // Scene 4: Causal ablation bar chart (4 steps)
+  function scene4Build() {
+    var W = 820, H = 420;
+    var C = {
+      red: "#e74c3c", orange: "#fdcb6e", blue: "#0984e3",
+      green: "#00b894", accent: "#6c5ce7", muted: "#b2bec3", fg: "#444"
+    };
+
+    function drawAxes(e, ox, oy, axW, axH) {
+      e.line(ox, oy, ox, oy - axH, "#444", { sw: 2 });
+      e.line(ox, oy, ox + axW, oy, "#444", { sw: 2 });
+      // Y axis ticks (0, 0.2, 0.4, 0.6, 0.8, 1.0)
+      var ticks = [0, 0.2, 0.4, 0.6, 0.8, 1.0];
+      ticks.forEach(function (v) {
+        var y = oy - v * axH;
+        e.line(ox - 5, y, ox, y, "#444", { sw: 1 });
+        e.t(ox - 8, y + 4, v.toFixed(1), { fs: 10, fill: "#888", ta: "end" });
+        if (v > 0) e.line(ox, y, ox + axW, y, "#eee", { sw: 1, dash: "2,3" });
+      });
+      e.t(ox - 35, oy - axH / 2, "GSM8K-384 准确率", { fs: 12, fill: C.accent, fw: "700", ta: "middle" });
+    }
+
+    function drawBar(e, x, oy, axH, w, value, color, label) {
+      var h = value * axH;
+      var y = oy - h;
+      e.rect(x, y, w, h, "", color, color, { sw: 0, rx: 3 });
+      e.t(x + w / 2, y - 8, value.toFixed(3), { fs: 13, fill: color, fw: "700" });
+      e.t(x + w / 2, oy + 20, label, { fs: 10, fill: "#444" });
+    }
+
+    var ox = 120, oy = 340, axW = 640, axH = 260;
+    var barW = 110, gap = 30;
+
+    return [
+      {
+        title: "全掩码精修（无草稿）",
+        desc: "从全掩码直接做双向扩散精修，不经过草稿阶段。GSM8K-384 得分仅 0.004——几乎完全失败。证明完整草稿是精修收敛的<strong>必要初始化</strong>。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 25, "因果消融实验（GSM8K-384）", { fs: 16, fill: C.accent, fw: "700" });
+          drawAxes(e, ox, oy, axW, axH);
+          drawBar(e, ox + 30, oy, axH, barW, 0.004, C.red, "全掩码精修\n（无草稿）");
+          e.t(W / 2, oy - axH - 30, "几乎完全失败 → 草稿不可或缺", { fs: 13, fill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "草稿基线（不精修）",
+        desc: "只有 Block-AR 草稿，不做精修。GSM8K-384 得分 0.677。草稿提供了合理起点，但未经双向修订质量有限。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 25, "因果消融实验（GSM8K-384）", { fs: 16, fill: C.accent, fw: "700" });
+          drawAxes(e, ox, oy, axW, axH);
+          drawBar(e, ox + 30, oy, axH, barW, 0.004, C.red, "全掩码");
+          drawBar(e, ox + 30 + barW + gap, oy, axH, barW, 0.677, C.orange, "草稿基线\n（不精修）");
+          e.t(W / 2, oy - axH - 30, "草稿提供合理起点 0.677", { fs: 13, fill: C.orange, fw: "600" });
+        }
+      },
+      {
+        title: "局部精修",
+        desc: "有完整草稿，但精修时每块只在自己块内做双向修订（不跨块）。GSM8K-384 达 0.872——接近全局精修，说明块内修订已修复大部分错误。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 25, "因果消融实验（GSM8K-384）", { fs: 16, fill: C.accent, fw: "700" });
+          drawAxes(e, ox, oy, axW, axH);
+          drawBar(e, ox + 30, oy, axH, barW, 0.004, C.red, "全掩码");
+          drawBar(e, ox + 30 + barW + gap, oy, axH, barW, 0.677, C.orange, "草稿基线");
+          drawBar(e, ox + 30 + 2 * (barW + gap), oy, axH, barW, 0.872, C.blue, "局部精修\n（块内双向）");
+          e.t(W / 2, oy - axH - 30, "块内修订已修复大部分错误 0.872", { fs: 13, fill: C.blue, fw: "600" });
+        }
+      },
+      {
+        title: "全局精修（完整方法）",
+        desc: "有完整草稿 + 全局双向精修。GSM8K-384 达 0.899——局部精修 0.872 + 全局跨块修订额外 +0.027。在数学推理任务上，跨块上下文修订具有决定性意义。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 25, "因果消融实验（GSM8K-384）", { fs: 16, fill: C.accent, fw: "700" });
+          drawAxes(e, ox, oy, axW, axH);
+          drawBar(e, ox + 30, oy, axH, barW, 0.004, C.red, "全掩码");
+          drawBar(e, ox + 30 + barW + gap, oy, axH, barW, 0.677, C.orange, "草稿基线");
+          drawBar(e, ox + 30 + 2 * (barW + gap), oy, axH, barW, 0.872, C.blue, "局部精修");
+          drawBar(e, ox + 30 + 3 * (barW + gap), oy, axH, barW, 0.899, C.green, "全局精修\n（完整方法）");
+          // Delta annotation
+          var x1 = ox + 30 + 2 * (barW + gap) + barW;
+          var x2 = ox + 30 + 3 * (barW + gap) + barW;
+          e.arrow(x1, oy - 0.872 * axH - 30, x2, oy - 0.899 * axH - 30, C.accent, { sw: 2, marker: "arr" });
+          e.t((x1 + x2) / 2, oy - 0.872 * axH - 45, "+0.027", { fs: 12, fill: C.accent, fw: "700" });
+          e.t(W / 2, oy - axH - 30, "全局跨块修订额外贡献 +0.027 → 0.899", { fs: 13, fill: C.green, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ WIRING ============ */
+
+  var builders = {
+    "svg1": scene1Build,
+    "svg2": scene2Build,
+    "svg3": scene3Build,
+    "svg4": scene4Build
+  };
+  var engines = {};
+
+  function initScene(svgId) {
+    if (engines[svgId]) return engines[svgId];
+    var svg = document.getElementById(svgId);
+    if (!svg) return null;
+    var buildFn = builders[svgId];
+    if (!buildFn) return null;
+    var steps = buildFn();
+    var eng = new AnimEngine(svg, { steps: steps });
+    engines[svgId] = eng;
+    eng.goTo(0);
+    return eng;
+  }
+
+  // Bind controls per frame
+  document.querySelectorAll(".anim-frame").forEach(function (frame) {
+    var svg = frame.querySelector("svg");
+    if (!svg) return;
+    var svgId = svg.id;
+
+    frame.addEventListener("click", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      var target = ev.target;
+      if (target.classList.contains("btn-play")) { eng.toggle(); }
+      else if (target.classList.contains("btn-next")) { eng.pause(); eng._setPlayBtn(false); eng.next(); }
+      else if (target.classList.contains("btn-prev")) { eng.pause(); eng._setPlayBtn(false); eng.prev(); }
+      else if (target.classList.contains("btn-reset")) { eng.reset(); }
+    });
+
+    var slider = frame.querySelector(".speed-slider");
+    if (slider) {
+      slider.addEventListener("input", function () {
+        var eng = engines[svgId];
+        if (eng) eng.setSpeed(parseFloat(slider.value));
+      });
+    }
+
+    // Keyboard
+    frame.setAttribute("tabindex", "0");
+    frame.addEventListener("keydown", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      if (ev.key === "ArrowRight") { ev.preventDefault(); eng.next(); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); eng.prev(); }
+      else if (ev.key === " ") { ev.preventDefault(); eng.toggle(); }
+    });
+  });
+
+  // Theme toggle
+  window.toggleTheme = function () {
+    var html = document.documentElement;
+    if (html.getAttribute("data-theme") === "dark") {
+      html.removeAttribute("data-theme");
+      var tb = document.querySelector(".theme-toggle");
+      if (tb) tb.textContent = "🌙";
+      localStorage.setItem("theme", "light");
+    } else {
+      html.setAttribute("data-theme", "dark");
+      var tb2 = document.querySelector(".theme-toggle");
+      if (tb2) tb2.textContent = "☀️";
+      localStorage.setItem("theme", "dark");
+    }
+  };
+
+  // TOC toggle (mobile)
+  window.toggleToc = function () {
+    var nav = document.getElementById("tocNav");
+    if (nav) nav.classList.toggle("collapsed");
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (localStorage.getItem("theme") === "dark") toggleTheme();
+    ["svg1", "svg2", "svg3", "svg4"].forEach(function (id) { initScene(id); });
+
+    var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var id = entry.target.id;
+          tocLinks.forEach(function (l) { l.classList.remove("active"); });
+          var link = document.querySelector('.toc a[href="#' + id + '"]');
+          if (link) { link.classList.add("active"); link.scrollIntoView({ block: "nearest" }); }
+        }
+      });
+    }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+    document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+    var backTop = document.getElementById("backTop");
+    window.addEventListener("scroll", function () {
+      if (window.scrollY > 600) backTop.classList.add("visible");
+      else backTop.classList.remove("visible");
+    });
+
+    tocLinks.forEach(function (a) {
+      a.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        var id = a.getAttribute("href").slice(1);
+        var target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: "smooth" });
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

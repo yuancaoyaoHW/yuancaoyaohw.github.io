@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Approximate Speculative Decoding：复用贪心后缀的近似投机解码 | 深度解读</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'], ['\\(','\\)']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" defer></script>
+<style>
+:root {
+  --bg: #fafafa; --surface: #ffffff; --border: #e2e8f0;
+  --text: #1a202c; --text2: #4a5568; --text3: #718096;
+  --blue: #3b82f6; --blue-light: #dbeafe; --blue-dark: #1d4ed8;
+  --green: #10b981; --green-light: #d1fae5;
+  --orange: #f59e0b; --orange-light: #fef3c7;
+  --red: #ef4444; --red-light: #fee2e2;
+  --purple: #8b5cf6; --purple-light: #ede9fe;
+  --code-bg: #f7f7f7;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.75;
+}
+.layout { display: flex; max-width: 1280px; margin: 0 auto; gap: 0; }
+.toc {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  width: 240px; flex-shrink: 0; padding: 24px 16px;
+  border-right: 1px solid var(--border); background: var(--surface);
+  font-size: 14px;
+}
+.toc h3 { font-size: 13px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+.toc ul { list-style: none; }
+.toc li { margin-bottom: 6px; }
+.toc a {
+  color: var(--text2); text-decoration: none; display: block; padding: 4px 8px;
+  border-radius: 4px; transition: all 0.15s; border-left: 2px solid transparent;
+}
+.toc a:hover { color: var(--blue); background: var(--blue-light); }
+.toc a.active { color: var(--blue); font-weight: 600; border-left-color: var(--blue); background: var(--blue-light); }
+.content { flex: 1; min-width: 0; padding: 40px 48px; max-width: 860px; }
+.content section { margin-bottom: 48px; }
+h1 { font-size: 28px; font-weight: 700; line-height: 1.3; margin-bottom: 8px; }
+h2 { font-size: 22px; font-weight: 700; margin-top: 40px; margin-bottom: 16px; color: var(--text); border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+h3 { font-size: 18px; font-weight: 600; margin-top: 28px; margin-bottom: 12px; color: var(--text); }
+p { margin-bottom: 14px; color: var(--text2); }
+ul, ol { margin-bottom: 14px; padding-left: 20px; }
+li { margin-bottom: 6px; color: var(--text2); }
+strong { color: var(--text); font-weight: 600; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 0.88em; font-family: 'SF Mono', Consolas, monospace; color: var(--purple); }
+pre { background: var(--code-bg); padding: 14px 18px; border-radius: var(--radius); overflow-x: auto; margin-bottom: 16px; border: 1px solid var(--border); }
+pre code { background: none; padding: 0; color: var(--text); font-size: 13px; }
+.highlight { background: var(--blue-light); padding: 12px 16px; border-radius: var(--radius); border-left: 4px solid var(--blue); margin-bottom: 16px; }
+.highlight strong { color: var(--blue-dark); }
+.callout { background: var(--orange-light); padding: 12px 16px; border-radius: var(--radius); border-left: 4px solid var(--orange); margin-bottom: 16px; }
+.callout strong { color: #92400e; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 14px; }
+th { background: var(--surface); padding: 10px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); color: var(--text); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text2); }
+tr:hover td { background: var(--blue-light); }
+.paper-meta { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 24px; box-shadow: var(--shadow); }
+.paper-meta p { margin-bottom: 4px; font-size: 14px; }
+.anim-container { margin: 24px 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); box-shadow: var(--shadow-md); }
+.anim-header { background: #f8fafc; padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.anim-header h4 { font-size: 14px; font-weight: 600; color: var(--text2); }
+.anim-header .anim-badge { font-size: 12px; color: var(--text3); }
+.anim-frame { padding: 0; display: flex; justify-content: center; background: #fafbfc; }
+.anim-frame svg { max-width: 100%; height: auto; }
+.anim-controls { background: #f8fafc; padding: 8px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.anim-controls button {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  padding: 4px 12px; font-size: 13px; cursor: pointer; color: var(--text2);
+  transition: all 0.15s;
+}
+.anim-controls button:hover { background: var(--blue-light); border-color: var(--blue); color: var(--blue); }
+.anim-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .anim-step-info { font-size: 12px; color: var(--text3); margin-left: auto; }
+.anim-controls .anim-speed { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 4px; }
+.anim-controls input[type=range] { width: 80px; }
+.anim-desc { padding: 8px 16px; font-size: 13px; color: var(--text2); background: var(--surface); border-top: 1px solid var(--border); min-height: 36px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; text-align: center; box-shadow: var(--shadow); }
+.stat-card .stat-val { font-size: 24px; font-weight: 700; color: var(--blue); }
+.stat-card .stat-label { font-size: 12px; color: var(--text3); margin-top: 4px; }
+.back-top {
+  position: fixed; bottom: 24px; right: 24px; width: 40px; height: 40px;
+  background: var(--blue); color: white; border: none; border-radius: 50%;
+  cursor: pointer; font-size: 18px; box-shadow: var(--shadow-md);
+  display: none; z-index: 100; transition: opacity 0.2s;
+}
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+
+/* ===== 响应式：移动端适配 ===== */
+@media (max-width: 768px) {
+  .layout { flex-direction: column; }
+  .toc {
+    position: relative; width: 100%; height: auto; max-height: none;
+    border-right: none; border-bottom: 1px solid var(--border);
+    padding: 12px 16px; font-size: 13px;
+    display: none;
+  }
+  .toc.show { display: block; }
+  .toc-toggle {
+    display: flex; position: sticky; top: 0; z-index: 50;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 10px 16px; align-items: center; gap: 8px;
+    cursor: pointer; font-size: 14px; font-weight: 600; color: var(--blue);
+  }
+  .toc-toggle .arrow { transition: transform 0.2s; }
+  .toc-toggle.open .arrow { transform: rotate(180deg); }
+  .content { padding: 20px 16px; max-width: 100%; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 19px; }
+  h3 { font-size: 16px; }
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  th, td { font-size: 12px; padding: 6px 8px; }
+  .anim-container { margin: 16px 0; }
+  .anim-frame svg { width: 100%; max-width: 100%; }
+  .anim-controls { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+  .anim-controls button { padding: 6px 10px; font-size: 12px; min-height: 36px; }
+  .anim-controls .anim-speed { width: 100%; justify-content: center; margin-top: 4px; }
+  .anim-controls input[type=range] { width: 120px; height: 24px; }
+  .anim-controls .anim-step-info { width: 100%; text-align: center; margin-top: 2px; }
+  .anim-desc { font-size: 12px; padding: 6px 10px; }
+  .stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .highlight, .callout { padding: 10px 12px; }
+  pre { font-size: 12px; padding: 10px 12px; }
+  pre code { font-size: 11px; }
+  .paper-meta { padding: 12px 14px; }
+  .paper-meta p { font-size: 13px; }
+}
+@media (min-width: 769px) {
+  .toc-toggle { display: none; }
+}
+@media (max-width: 480px) {
+  .content { padding: 16px 10px; }
+  h1 { font-size: 20px; }
+  .anim-controls button { padding: 6px 8px; font-size: 11px; }
+  .stat-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<div class="toc-toggle" id="tocToggle">
+<span class="arrow">▼</span> 目录
+</div>
+<aside class="toc">
+<h3>目录</h3>
+<ul>
+<li><a href="#problem">1. 问题：首次不匹配即截断</a></li>
+<li><a href="#idea">2. ASD 核心思路：复用贪心后缀</a></li>
+<li><a href="#budget">3. 三级预算约束</a></li>
+<li><a href="#results">4. 实验结果</a></li>
+<li><a href="#summary">5. 总结</a></li>
+<li><a href="#refs">参考文献</a></li>
+</ul>
+</aside>
+<main class="content">
+
+<h1>Approximate Speculative Decoding：复用贪心后缀的近似投机解码</h1>
+<p style="color:var(--text3);font-size:14px;">arXiv:2608.03447 · 北京大学 · 2026-08-04</p>
+
+<div class="paper-meta">
+<p><strong>论文</strong>: Approximate Speculative Decoding</p>
+<p><strong>作者</strong>: Yuannuo Feng 等</p>
+<p><strong>机构</strong>: 北京大学</p>
+<p><strong>链接</strong>: <a href="https://arxiv.org/abs/2608.03447">arXiv:2608.03447</a></p>
+</div>
+
+<div class="highlight">
+<p><strong>一句话总结</strong>：标准投机解码在首个与目标 argmax 不一致的 draft token 处就截断，丢弃该 token 之后<strong>已被目标模型评分</strong>的整个后缀。ASD 用预算化的最长前缀选择替代二元截断——<strong>接受受限的不匹配</strong>，复用后续连续的目标贪心后缀，无需额外近似决策或目标模型前向传播，零预算时精确退化为标准贪心验证。</p>
+</div>
+
+<section id="problem">
+<h2>1. 问题：首次不匹配即截断</h2>
+<p>投机解码（Speculative Decoding）用一个小而快的 draft 模型并行猜测一个 token 块，再由大而准的目标模型一次性并行验证整个块。<strong>贪心验证</strong>下，解码在<strong>第一个与目标 argmax 不同的 draft token 处停止</strong>，丢弃该位置之后的所有 token——尽管它们已经被目标模型评过分了。</p>
+<p>这造成明显的浪费：</p>
+<ul>
+<li>目标模型已经为 draft 块中每个位置产出了完整的 logit 分布</li>
+<li>第一次不匹配之后的 token，目标模型其实已经算好了 argmax</li>
+<li>但标准协议直接<strong>丢弃</strong>这些已评分后缀，下一轮重新起草</li>
+</ul>
+<p><strong>关键观察</strong>：接受一个不匹配虽然改变了解码轨迹，但如果后续 token 在实现前缀下仍是目标贪心选择，那么<strong>连续后缀可以被复用</strong>——不需要再做任何近似决策或目标模型前向传播。</p>
+
+<div class="anim-container">
+<div class="anim-header">
+<h4>动画 1：标准投机解码的截断问题</h4>
+<span class="anim-badge">3 步</span>
+</div>
+<div class="anim-frame">
+<svg id="svg1" viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+<div class="anim-controls">
+<button class="btn-prev">◀ 上一步</button>
+<button class="btn-play">▶ 播放</button>
+<button class="btn-next">下一步 ▶</button>
+<button class="btn-reset">重置</button>
+<span class="anim-speed">速度 <input type="range" min="0.5" max="3" step="0.5" value="1.5"></span>
+<span class="anim-step-info">0 / 3</span>
+</div>
+<div class="anim-desc"></div>
+</div>
+</section>
+
+<section id="idea">
+<h2>2. ASD 核心思路：复用贪心后缀</h2>
+<p>ASD（Approximate Speculative Decoding）用一个<strong>预算化的最长前缀选择</strong>替代二元首次不匹配截断：</p>
+<ol>
+<li><strong>接受选定不匹配</strong>：不再在首次不一致处停下，而是在三级预算约束允许的范围内，接受最长的可接受前缀</li>
+<li><strong>复用连续目标贪心后缀</strong>：被接受的不匹配之后，如果后续 token 恰好是目标模型在该前缀下的 argmax，则连续后缀直接复用</li>
+<li><strong>无训练无微调</strong>：不改动任何模型权重，只改变验证协议</li>
+</ol>
+<p><strong>为什么有效</strong>：目标模型已经在 draft 块的每个位置算出了完整分布。标准协议丢掉的是"已经算好但没用"的信息。ASD 把这部分免费信息捡回来——只要不匹配的"代价"（logit 遗憾）在预算内，复用就比重新起草更划算。</p>
+
+<div class="callout">
+<p><strong>零预算退化</strong>：当总预算 $B = 0$ 时，ASD 拒绝一切不匹配，精确退化为标准贪心验证。这意味着 ASD 是标准协议的<strong>严格推广</strong>——预算越大，复用越多，加速越明显。</p>
+</div>
+
+<div class="anim-container">
+<div class="anim-header">
+<h4>动画 2：ASD 核心思路</h4>
+<span class="anim-badge">3 步</span>
+</div>
+<div class="anim-frame">
+<svg id="svg2" viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+<div class="anim-controls">
+<button class="btn-prev">◀ 上一步</button>
+<button class="btn-play">▶ 播放</button>
+<button class="btn-next">下一步 ▶</button>
+<button class="btn-reset">重置</button>
+<span class="anim-speed">速度 <input type="range" min="0.5" max="3" step="0.5" value="1.5"></span>
+<span class="anim-step-info">0 / 3</span>
+</div>
+<div class="anim-desc"></div>
+</div>
+</section>
+
+<section id="budget">
+<h2>3. 三级预算约束</h2>
+<p>ASD 不是无脑接受所有不匹配——那样会严重偏离目标模型的贪心轨迹。它通过<strong>三级预算约束</strong>控制近似误差，每一级过滤掉一部分不匹配：</p>
+
+<h3>第一级：局部目标 logit 遗憾门 $g$</h3>
+<p>对每个 token 位置 $i$，计算<strong>logit 遗憾</strong>：</p>
+<p>$$z_i(y_i^*) - z_i(x_i)$$</p>
+<p>其中 $y_i^*$ 是目标模型在该位置的 argmax，$x_i$ 是 draft 选的 token。遗憾为 0 表示 draft 选对了；遗憾越大表示 draft 偏离越严重。门控要求每个被接受的不匹配 token 的遗憾<strong>不超过阈值 $g$</strong>。</p>
+
+<h3>第二级：每块异常上限 $M$</h3>
+<p>每个 draft 块中接受的不匹配 token 数量<strong>不超过 $M$</strong>。防止整块全部不匹配被接受的极端情况。</p>
+
+<h3>第三级：持久请求级遗憾预算 $(B, s)$</h3>
+<p>跨块累积的总遗憾<strong>不超过总预算 $B$</strong>，$s$ 是当前已用预算。这是一个持久的、跨解码块的预算池——早期省下的遗憾可以留给后期使用，整体误差可控。</p>
+
+<div class="anim-container">
+<div class="anim-header">
+<h4>动画 3：三级预算约束（三层过滤）</h4>
+<span class="anim-badge">4 步</span>
+</div>
+<div class="anim-frame">
+<svg id="svg3" viewBox="0 0 800 420" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+<div class="anim-controls">
+<button class="btn-prev">◀ 上一步</button>
+<button class="btn-play">▶ 播放</button>
+<button class="btn-next">下一步 ▶</button>
+<button class="btn-reset">重置</button>
+<span class="anim-speed">速度 <input type="range" min="0.5" max="3" step="0.5" value="1.5"></span>
+<span class="anim-step-info">0 / 4</span>
+</div>
+<div class="anim-desc"></div>
+</div>
+</section>
+
+<section id="results">
+<h2>4. 实验结果</h2>
+<p>ASD 在两个规模上验证了加速效果：</p>
+
+<div class="stat-grid">
+<div class="stat-card">
+<div class="stat-val">+7.78%</div>
+<div class="stat-label">七任务平均吞吐提升<br>Qwen3-14B + DSpark-14B</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">+3.05–15.26%</div>
+<div class="stat-label">单任务吞吐提升区间</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">+10–16%</div>
+<div class="stat-label">验证器接受率提升<br>DeepSeek-V4-Flash (284B)</div>
+</div>
+<div class="stat-card">
+<div class="stat-val">B=0</div>
+<div class="stat-label">零预算精确退化为<br>标准贪心验证</div>
+</div>
+</div>
+
+<h3>Qwen3-14B + DSpark-14B：七任务吞吐</h3>
+<p>以 Qwen3-14B 为目标模型、DSpark-14B 为 draft 模型，在七个基准任务上测试。ASD 在所有任务上都带来了正向提升，平均 +7.78%，最高任务 +15.26%。</p>
+
+<div class="anim-container">
+<div class="anim-header">
+<h4>动画 4：七任务吞吐提升</h4>
+<span class="anim-badge">3 步</span>
+</div>
+<div class="anim-frame">
+<svg id="svg4" viewBox="0 0 800 380" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+<div class="anim-controls">
+<button class="btn-prev">◀ 上一步</button>
+<button class="btn-play">▶ 播放</button>
+<button class="btn-next">下一步 ▶</button>
+<button class="btn-reset">重置</button>
+<span class="anim-speed">速度 <input type="range" min="0.5" max="3" step="0.5" value="1.5"></span>
+<span class="anim-step-info">0 / 3</span>
+</div>
+<div class="anim-desc"></div>
+</div>
+
+<h3>DeepSeek-V4-Flash (284B)：验证器接受率</h3>
+<p>在更大的 DeepSeek-V4-Flash（284B 参数）上，ASD 使 GSM8K 和 MATH-500 的<strong>验证器接受率提升 10%–16%</strong>。接受率越高意味着每轮复用的 token 越多，目标模型前向传播次数越少，端到端吞吐越高。</p>
+
+<div class="callout">
+<p><strong>为什么大模型受益更大</strong>：模型越大，每次目标模型前向传播越昂贵。ASD 复用后缀省下的正是目标模型前向次数——所以模型越大，省下的绝对延迟越多，吞吐提升的相对比例也越显著。</p>
+</div>
+</section>
+
+<section id="summary">
+<h2>5. 总结</h2>
+<div class="highlight">
+<p><strong>核心贡献</strong>：</p>
+<ul>
+<li>用预算化最长前缀选择替代二元首次不匹配截断</li>
+<li>接受受限不匹配，复用后续连续目标贪心后缀，无需额外近似决策或目标前向</li>
+<li>三级预算（局部门 $g$ + 块上限 $M$ + 请求预算 $B$）控制近似误差</li>
+<li>无训练无微调，零预算时精确退化为标准贪心验证</li>
+<li>Qwen3-14B 七任务平均 +7.78%，DeepSeek-V4-Flash 接受率 +10–16%</li>
+</ul>
+</div>
+<p><strong>与标准投机解码对比</strong>：</p>
+<table>
+<tr><th>维度</th><th>标准投机解码</th><th>ASD</th></tr>
+<tr><td>不匹配处理</td><td>首次不匹配即截断</td><td>接受受限不匹配</td></tr>
+<tr><td>已评分后缀</td><td>丢弃（浪费）</td><td>复用连续贪心后缀</td></tr>
+<tr><td>误差控制</td><td>无近似（精确）</td><td>三级预算约束</td></tr>
+<tr><td>额外前向</td><td>每轮重新起草</td><td>复用省去额外前向</td></tr>
+<tr><td>退化行为</td><td>—</td><td>$B=0$ 退化为标准</td></tr>
+</table>
+<p><strong>意义</strong>：ASD 揭示了投机解码中一个被忽视的浪费源——目标模型已经算好但被丢弃的后缀。通过受控地接受这种"免费信息"，ASD 在不牺牲质量可控性的前提下获得了稳定的吞吐提升。这是一个<strong>协议级</strong>的改进，可以叠加在任何现有的投机解码系统之上。</p>
+</section>
+
+<section id="refs">
+<h2>参考文献</h2>
+<ul>
+<li>Feng et al. "Approximate Speculative Decoding" <a href="https://arxiv.org/abs/2608.03447">arXiv:2608.03447</a>, 2026</li>
+<li>Leviathan et al. "Fast Inference from Transformers via Speculative Decoding" ICML 2023</li>
+<li>Cai et al. "Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads" ICML 2024</li>
+<li>Eklund et al. "Accelerating Large Language Model Decoding with Speculative Sampling" 2024</li>
+</ul>
+</section>
+
+</main>
+</div>
+<button class="back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+// ===== AnimEngine (Variant A - Step-based) =====
+class AnimEngine {
+  constructor(svgId, builders) {
+    this.svg = document.getElementById(svgId);
+    this.svgId = svgId;
+    this.builders = builders;
+    this.steps = [];
+    this.currentStep = 0;
+    this.isPlaying = false;
+    this.speed = 1.5;
+    this.timer = null;
+    this.layer = null;
+    this.defs = null;
+    this._initDefs();
+    this._buildSteps();
+    this._bindControls();
+  }
+  _initDefs() {
+    var ns = "http://www.w3.org/2000/svg";
+    var defs = document.createElementNS(ns, "defs");
+    var uid = this.svgId;
+    var colors = {"arr":"#3b82f6","arrG":"#10b981","arrO":"#f59e0b","arrR":"#ef4444","arrP":"#8b5cf6","arrGy":"#9ca3af"};
+    for (var key in colors) {
+      var marker = document.createElementNS(ns, "marker");
+      marker.setAttribute("id", uid + "-" + key);
+      marker.setAttribute("viewBox", "0 0 10 10");
+      marker.setAttribute("refX", "8");
+      marker.setAttribute("refY", "5");
+      marker.setAttribute("markerWidth", "6");
+      marker.setAttribute("markerHeight", "6");
+      marker.setAttribute("orient", "auto-start-reverse");
+      var path = document.createElementNS(ns, "path");
+      path.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+      path.setAttribute("fill", colors[key]);
+      marker.appendChild(path);
+      defs.appendChild(marker);
+    }
+    this.svg.appendChild(defs);
+    this.defs = defs;
+  }
+  _buildSteps() {
+    var self = this;
+    var builders = this.builders;
+    for (var i = 0; i < builders.length; i++) {
+      var step = builders[i](self);
+      if (step) { step.index = i; this.steps.push(step); }
+    }
+  }
+  _uid(suffix) { return this.svgId + "-" + suffix; }
+  _bindControls() {
+    var self = this;
+    var container = this.svg.closest(".anim-container");
+    container.querySelector(".btn-prev").addEventListener("click", function(){ self.prev(); });
+    container.querySelector(".btn-next").addEventListener("click", function(){ self.next(); });
+    container.querySelector(".btn-play").addEventListener("click", function(){ self.toggle(); });
+    container.querySelector(".btn-reset").addEventListener("click", function(){ self.reset(); });
+    var slider = container.querySelector('input[type=range]');
+    if (slider) slider.addEventListener("input", function(){ self.speed = parseFloat(this.value); });
+  }
+  clear() {
+    if (this.layer) { this.layer.remove(); }
+    var ns = "http://www.w3.org/2000/svg";
+    this.layer = document.createElementNS(ns, "g");
+    this.layer.setAttribute("class", "anim-layer");
+    this.svg.appendChild(this.layer);
+  }
+  draw(tag, attrs, parent) {
+    var ns = "http://www.w3.org/2000/svg";
+    var el = document.createElementNS(ns, tag);
+    for (var k in attrs) { el.setAttribute(k, attrs[k]); }
+    if (parent) parent.appendChild(el);
+    else this.layer.appendChild(el);
+    return el;
+  }
+  rect(x, y, w, h, fill, opts) {
+    opts = opts || {};
+    var attrs = { x: x, y: y, width: w, height: h, fill: fill, rx: opts.rx || 6, stroke: opts.stroke || "none", "stroke-width": opts.strokeWidth || 1 };
+    return this.draw("rect", attrs);
+  }
+  t(x, y, str, opts) {
+    opts = opts || {};
+    var attrs = { x: x, y: y, "font-size": opts.size || 14, "font-family": "sans-serif", fill: opts.color || "#1a202c", "text-anchor": opts.anchor || "middle", "font-weight": opts.weight || "normal" };
+    var el = this.draw("text", attrs);
+    el.textContent = str;
+    return el;
+  }
+  line(x1, y1, x2, y2, opts) {
+    opts = opts || {};
+    var attrs = { x1: x1, y1: y1, x2: x2, y2: y2, stroke: opts.color || "#3b82f6", "stroke-width": opts.width || 2, "marker-end": "url(#" + this._uid(opts.marker || "arr") + ")", "stroke-dasharray": opts.dash || "none" };
+    return this.draw("line", attrs);
+  }
+  arrow(x1, y1, x2, y2, opts) { return this.line(x1, y1, x2, y2, opts); }
+  circle(cx, cy, r, fill, opts) {
+    opts = opts || {};
+    var attrs = { cx: cx, cy: cy, r: r, fill: fill, stroke: opts.stroke || "none", "stroke-width": opts.strokeWidth || 1, opacity: opts.opacity || 1 };
+    return this.draw("circle", attrs);
+  }
+  goTo(index) {
+    if (index < 0) index = 0;
+    if (index >= this.steps.length) index = this.steps.length - 1;
+    this.currentStep = index;
+    this.clear();
+    try {
+      this.steps[index].render(this);
+    } catch(e) { console.error("Render error step " + index, e); }
+    this._updateUI(index);
+  }
+  next() {
+    if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1);
+    else this.pause();
+  }
+  prev() { if (this.currentStep > 0) this.goTo(this.currentStep - 1); }
+  toggle() {
+    if (this.isPlaying) this.pause();
+    else this.play();
+  }
+  play() {
+    this.isPlaying = true;
+    var self = this;
+    var container = this.svg.closest(".anim-container");
+    container.querySelector(".btn-play").textContent = "⏸ 暂停";
+    this.timer = setInterval(function() {
+      if (self.currentStep >= self.steps.length - 1) {
+        self.pause();
+        self.goTo(0);
+        return;
+      }
+      self.next();
+    }, 2500 / this.speed);
+  }
+  pause() {
+    this.isPlaying = false;
+    var container = this.svg.closest(".anim-container");
+    container.querySelector(".btn-play").textContent = "▶ 播放";
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+  }
+  reset() { this.pause(); this.goTo(0); }
+  _updateUI(index) {
+    var container = this.svg.closest(".anim-container");
+    var info = container.querySelector(".anim-step-info");
+    var desc = container.querySelector(".anim-desc");
+    if (info) info.textContent = (index + 1) + " / " + this.steps.length;
+    if (desc && this.steps[index] && this.steps[index].desc) desc.innerHTML = this.steps[index].desc;
+    var prevBtn = container.querySelector(".btn-prev");
+    var nextBtn = container.querySelector(".btn-next");
+    if (prevBtn) prevBtn.disabled = (index === 0);
+    if (nextBtn) nextBtn.disabled = (index === this.steps.length - 1);
+  }
+}
+
+// ===== Scene 1: 标准投机解码的截断问题 (3 steps) =====
+var scene1Builders = [
+  function(e) {
+    return {
+      short: "draft 块",
+      desc: "Draft 模型并行生成一个 token 块（如 8 个），目标模型一次性验证整个块。",
+      render: function(eng) {
+        var W = 800;
+        // Draft model box
+        eng.rect(60, 50, 160, 60, "#dbeafe", {rx: 8});
+        eng.t(140, 85, "Draft 模型", {size: 15, weight: "bold", color: "#1d4ed8"});
+        eng.t(140, 102, "(小而快)", {size: 11, color: "#4a5568"});
+        // Target model box
+        eng.rect(580, 50, 160, 60, "#fef3c7", {rx: 8});
+        eng.t(660, 85, "目标模型", {size: 15, weight: "bold", color: "#92400e"});
+        eng.t(660, 102, "(大而准)", {size: 11, color: "#4a5568"});
+        // Arrow from draft to draft block
+        eng.arrow(220, 80, 300, 80, {color: "#8b5cf6", width: 2});
+        eng.t(260, 72, "起草", {size: 11, color: "#8b5cf6"});
+        // Draft token block (8 tokens)
+        var blockY = 160, blockX = 200, tokenW = 50, gap = 4;
+        var tokens = ["t₁","t₂","t₃","t₄","t₅","t₆","t₇","t₈"];
+        for (var i = 0; i < 8; i++) {
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 40, "#e0e7ff", {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 25, tokens[i], {size: 12, color: "#4a5568"});
+        }
+        eng.t(400, 145, "Draft 块（8 tokens）", {size: 13, color: "#718096"});
+        // Arrow to target
+        eng.arrow(500, 120, 620, 115, {color: "#f59e0b", width: 2, marker: "arrO"});
+        eng.t(560, 108, "验证", {size: 11, color: "#92400e"});
+        eng.t(400, 240, "目标模型并行验证整个 draft 块", {size: 14, color: "#4a5568"});
+        eng.t(400, 265, "为每个位置产出 argmax", {size: 13, color: "#718096"});
+      }
+    };
+  },
+  function(e) {
+    return {
+      short: "首次不匹配",
+      desc: "目标模型逐位置比较 argmax。t₃ 处 draft 与目标不一致——首次不匹配出现。",
+      render: function(eng) {
+        var blockY = 100, blockX = 100, tokenW = 70, gap = 6;
+        var draftTokens = ["t₁","t₂","t₃","t₄","t₅","t₆","t₇","t₈"];
+        var targetTokens = ["t₁","t₂","u₃","u₄","u₅","u₆","u₇","u₈"];
+        // Draft row
+        eng.t(60, 90, "Draft:", {size: 13, weight: "bold", color: "#1d4ed8", anchor: "end"});
+        for (var i = 0; i < 8; i++) {
+          var match = draftTokens[i] === targetTokens[i];
+          var fill = match ? "#d1fae5" : "#fee2e2";
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 36, fill, {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 23, draftTokens[i], {size: 12, color: "#1a202c"});
+        }
+        // Target argmax row
+        eng.t(60, 165, "目标 argmax:", {size: 13, weight: "bold", color: "#92400e", anchor: "end"});
+        for (var i = 0; i < 8; i++) {
+          var match = draftTokens[i] === targetTokens[i];
+          var fill = match ? "#d1fae5" : "#fef3c7";
+          eng.rect(blockX + i * (tokenW + gap), 145, tokenW, 36, fill, {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 168, targetTokens[i], {size: 12, color: "#1a202c"});
+        }
+        // Mark first mismatch at t3 (index 2)
+        var mx = blockX + 2 * (tokenW + gap) + tokenW/2;
+        eng.rect(blockX + 2 * (tokenW + gap) - 2, blockY - 2, tokenW + 4, 76, "none", {rx: 4, stroke: "#ef4444", strokeWidth: 3});
+        eng.t(mx, 90, "✗", {size: 16, weight: "bold", color: "#ef4444"});
+        eng.t(mx, 200, "首次不匹配", {size: 12, weight: "bold", color: "#ef4444"});
+        // Match indicators
+        for (var i = 0; i < 2; i++) {
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 90, "✓", {size: 14, color: "#10b981", weight: "bold"});
+        }
+        eng.t(400, 260, "t₃ 起目标 argmax 与 draft 不一致", {size: 14, color: "#4a5568"});
+        eng.t(400, 285, "但 t₄–t₈ 的 argmax 已经算好了", {size: 13, color: "#f59e0b"});
+      }
+    };
+  },
+  function(e) {
+    return {
+      short: "截断丢弃",
+      desc: "标准协议：首次不匹配处截断，t₄–t₈ 虽已被评分但全部丢弃。下一轮重新起草，浪费已计算的目标分布。",
+      render: function(eng) {
+        var blockY = 100, blockX = 100, tokenW = 70, gap = 6;
+        var draftTokens = ["t₁","t₂","t₃","t₄","t₅","t₆","t₇","t₈"];
+        // Accepted (t1, t2) - green
+        for (var i = 0; i < 2; i++) {
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 36, "#d1fae5", {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 23, draftTokens[i], {size: 12, color: "#1a202c"});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 90, "✓ 接受", {size: 10, color: "#10b981", weight: "bold"});
+        }
+        // First mismatch t3 - red, rejected
+        eng.rect(blockX + 2 * (tokenW + gap), blockY, tokenW, 36, "#fee2e2", {rx: 4, stroke: "#ef4444", strokeWidth: 2});
+        eng.t(blockX + 2 * (tokenW + gap) + tokenW/2, blockY + 23, draftTokens[2], {size: 12, color: "#1a202c"});
+        eng.t(blockX + 2 * (tokenW + gap) + tokenW/2, 90, "✗ 截断", {size: 10, color: "#ef4444", weight: "bold"});
+        // Discarded t4-t8 - greyed out with strike
+        for (var i = 3; i < 8; i++) {
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 36, "#f3f4f6", {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 23, draftTokens[i], {size: 12, color: "#9ca3af"});
+          // strike-through line
+          eng.line(blockX + i * (tokenW + gap) + 5, blockY + 18, blockX + i * (tokenW + gap) + tokenW - 5, blockY + 18, {color: "#ef4444", width: 2, marker: ""});
+        }
+        // "已评分但丢弃" label spanning t4-t8
+        var labelX = blockX + 3 * (tokenW + gap);
+        var labelW = 5 * (tokenW + gap) - gap;
+        eng.rect(labelX, 150, labelW, 24, "#fee2e2", {rx: 4, stroke: "#ef4444", strokeWidth: 1});
+        eng.t(labelX + labelW/2, 166, "已评分但丢弃", {size: 11, weight: "bold", color: "#ef4444"});
+        // Scissors / waste arrow
+        eng.arrow(400, 200, 400, 240, {color: "#ef4444", width: 2, marker: "arrR"});
+        eng.t(400, 270, "浪费：目标模型已经算好了 t₄–t₈ 的分布", {size: 14, weight: "bold", color: "#ef4444"});
+        eng.t(400, 295, "但标准协议全部丢弃，下一轮重新起草", {size: 13, color: "#718096"});
+      }
+    };
+  }
+];
+
+// ===== Scene 2: ASD 核心思路 (3 steps) =====
+var scene2Builders = [
+  function(e) {
+    return {
+      short: "draft 块",
+      desc: "同样的 draft 块进入 ASD 验证。目标模型并行评分所有位置。",
+      render: function(eng) {
+        var blockY = 120, blockX = 200, tokenW = 50, gap = 4;
+        var tokens = ["t₁","t₂","t₃","t₄","t₅","t₆","t₇","t₈"];
+        eng.t(400, 80, "ASD 验证", {size: 16, weight: "bold", color: "#3b82f6"});
+        for (var i = 0; i < 8; i++) {
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 40, "#e0e7ff", {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 25, tokens[i], {size: 12, color: "#4a5568"});
+        }
+        eng.t(400, 105, "Draft 块（8 tokens）", {size: 13, color: "#718096"});
+        // Target argmax below
+        var targetTokens = ["t₁","t₂","u₃","u₄","u₅","u₆","u₇","u₈"];
+        eng.t(60, 195, "目标 argmax:", {size: 13, weight: "bold", color: "#92400e", anchor: "end"});
+        for (var i = 0; i < 8; i++) {
+          var match = tokens[i] === targetTokens[i];
+          var fill = match ? "#d1fae5" : "#fef3c7";
+          eng.rect(blockX + i * (tokenW + gap), 180, tokenW, 36, fill, {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 203, targetTokens[i], {size: 12, color: "#1a202c"});
+        }
+        eng.t(400, 250, "目标模型已为所有 8 个位置算出 argmax", {size: 14, color: "#4a5568"});
+        eng.t(400, 275, "t₃ 不匹配，但 t₄–t₈ 的贪心结果已就绪", {size: 13, color: "#f59e0b"});
+      }
+    };
+  },
+  function(e) {
+    return {
+      short: "接受不匹配",
+      desc: "ASD：t₃ 的 logit 遗憾在预算 g 内 → 接受这个不匹配。不再是二元截断，而是预算化最长前缀选择。",
+      render: function(eng) {
+        var blockY = 100, blockX = 100, tokenW = 70, gap = 6;
+        var draftTokens = ["t₁","t₂","t₃","t₄","t₅","t₆","t₇","t₈"];
+        var targetTokens = ["t₁","t₂","u₃","u₄","u₅","u₆","u₇","u₈"];
+        // Draft row
+        eng.t(60, 90, "Draft:", {size: 13, weight: "bold", color: "#1d4ed8", anchor: "end"});
+        for (var i = 0; i < 8; i++) {
+          var match = draftTokens[i] === targetTokens[i];
+          var fill = i < 3 ? "#d1fae5" : (i === 2 ? "#fef3c7" : "#e0e7ff");
+          if (i < 2) fill = "#d1fae5";
+          else if (i === 2) fill = "#fef3c7";
+          else fill = "#e0e7ff";
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 36, fill, {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 23, draftTokens[i], {size: 12, color: "#1a202c"});
+        }
+        // t1, t2 accepted (match)
+        for (var i = 0; i < 2; i++) {
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 90, "✓ 匹配", {size: 10, color: "#10b981", weight: "bold"});
+        }
+        // t3 accepted despite mismatch (within budget)
+        eng.rect(blockX + 2 * (tokenW + gap), blockY, tokenW, 36, "#fef3c7", {rx: 4, stroke: "#f59e0b", strokeWidth: 2});
+        eng.t(blockX + 2 * (tokenW + gap) + tokenW/2, blockY + 23, "t₃", {size: 12, color: "#1a202c", weight: "bold"});
+        eng.t(blockX + 2 * (tokenW + gap) + tokenW/2, 90, "⚠ 接受", {size: 10, color: "#f59e0b", weight: "bold"});
+        // Budget check callout
+        eng.rect(550, 155, 200, 50, "#fef3c7", {rx: 6, stroke: "#f59e0b", strokeWidth: 1});
+        eng.t(650, 175, "logit 遗憾检查", {size: 12, weight: "bold", color: "#92400e"});
+        eng.t(650, 193, "z(u₃) - z(t₃) ≤ g ?", {size: 12, color: "#92400e"});
+        eng.arrow(440, 120, 550, 170, {color: "#f59e0b", width: 2, marker: "arrO", dash: "4,3"});
+        eng.t(400, 250, "t₃ 不匹配但遗憾在预算内 → 接受", {size: 14, color: "#92400e", weight: "bold"});
+        eng.t(400, 275, "这是预算化最长前缀选择，不是二元截断", {size: 13, color: "#718096"});
+      }
+    };
+  },
+  function(e) {
+    return {
+      short: "复用后缀",
+      desc: "t₄–t₈ 恰好是目标在实现前缀下的贪心选择 → 连续后缀直接复用！无需额外近似决策或目标前向传播。",
+      render: function(eng) {
+        var blockY = 100, blockX = 100, tokenW = 70, gap = 6;
+        var draftTokens = ["t₁","t₂","t₃","t₄","t₅","t₆","t₇","t₈"];
+        // t1, t2 - matched, accepted
+        for (var i = 0; i < 2; i++) {
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 36, "#d1fae5", {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 23, draftTokens[i], {size: 12, color: "#1a202c"});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 90, "✓ 匹配", {size: 10, color: "#10b981", weight: "bold"});
+        }
+        // t3 - accepted mismatch
+        eng.rect(blockX + 2 * (tokenW + gap), blockY, tokenW, 36, "#fef3c7", {rx: 4, stroke: "#f59e0b", strokeWidth: 2});
+        eng.t(blockX + 2 * (tokenW + gap) + tokenW/2, blockY + 23, "t₃", {size: 12, color: "#1a202c", weight: "bold"});
+        eng.t(blockX + 2 * (tokenW + gap) + tokenW/2, 90, "⚠ 接受", {size: 10, color: "#f59e0b", weight: "bold"});
+        // t4-t8 - REUSED (green, with recycle icon)
+        for (var i = 3; i < 8; i++) {
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 36, "#d1fae5", {rx: 4, stroke: "#10b981", strokeWidth: 1});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 23, draftTokens[i], {size: 12, color: "#1a202c"});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 90, "♻ 复用", {size: 10, color: "#10b981", weight: "bold"});
+        }
+        // Reuse label spanning t4-t8
+        var labelX = blockX + 3 * (tokenW + gap);
+        var labelW = 5 * (tokenW + gap) - gap;
+        eng.rect(labelX, 150, labelW, 24, "#d1fae5", {rx: 4, stroke: "#10b981", strokeWidth: 1});
+        eng.t(labelX + labelW/2, 166, "连续贪心后缀复用", {size: 11, weight: "bold", color: "#10b981"});
+        // Green arrow down = saved
+        eng.arrow(400, 195, 400, 235, {color: "#10b981", width: 2, marker: "arrG"});
+        eng.t(400, 265, "省下：5 个目标模型前向传播", {size: 14, weight: "bold", color: "#10b981"});
+        eng.t(400, 290, "无需额外近似决策，零额外计算", {size: 13, color: "#718096"});
+      }
+    };
+  }
+];
+
+// ===== Scene 3: 三级预算约束 (4 steps) =====
+var scene3Builders = [
+  function(e) {
+    return {
+      short: "原始块",
+      desc: "Draft 块进入三级过滤。每个 token 都有目标 argmax 和 logit 遗憾值。",
+      render: function(eng) {
+        var blockY = 80, blockX = 120, tokenW = 60, gap = 8;
+        var draftTokens = ["t₁","t₂","t₃","t₄","t₅","t₆"];
+        var regrets = ["0", "0", "0.3", "0.8", "0.1", "1.2"];
+        var matchFlags = [true, true, false, false, false, false];
+        eng.t(400, 50, "Draft 块 → 三级预算过滤", {size: 16, weight: "bold", color: "#3b82f6"});
+        for (var i = 0; i < 6; i++) {
+          var fill = matchFlags[i] ? "#d1fae5" : "#fef3c7";
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 40, fill, {rx: 4});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 25, draftTokens[i], {size: 12, color: "#1a202c"});
+        }
+        // regret values
+        eng.t(60, 135, "遗憾:", {size: 12, weight: "bold", color: "#718096", anchor: "end"});
+        for (var i = 0; i < 6; i++) {
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 135, regrets[i], {size: 11, color: matchFlags[i] ? "#10b981" : "#f59e0b"});
+        }
+        eng.t(400, 180, "绿 = 匹配（遗憾=0）  黄 = 不匹配（遗憾>0）", {size: 13, color: "#4a5568"});
+        eng.t(400, 340, "三个不匹配 token 待过滤", {size: 14, color: "#718096"});
+      }
+    };
+  },
+  function(e) {
+    return {
+      short: "局部门 g",
+      desc: "第一级：每个 token 的 logit 遗憾不超过阈值 g。t₆ 遗憾=1.2 > g=1.0 → 被门拒绝。",
+      render: function(eng) {
+        var blockY = 80, blockX = 120, tokenW = 60, gap = 8;
+        var draftTokens = ["t₁","t₂","t₃","t₄","t₅","t₆"];
+        var regrets = [0, 0, 0.3, 0.8, 0.1, 1.2];
+        var g = 1.0;
+        eng.t(400, 50, "第一级：局部 logit 遗憾门 g = " + g, {size: 15, weight: "bold", color: "#3b82f6"});
+        for (var i = 0; i < 6; i++) {
+          var pass = regrets[i] <= g;
+          var fill = regrets[i] === 0 ? "#d1fae5" : (pass ? "#fef3c7" : "#fee2e2");
+          var stroke = pass ? "none" : "#ef4444";
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 40, fill, {rx: 4, stroke: stroke, strokeWidth: 2});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 25, draftTokens[i], {size: 12, color: "#1a202c"});
+          // pass/fail label
+          if (regrets[i] === 0) {
+            eng.t(blockX + i * (tokenW + gap) + tokenW/2, 70, "✓", {size: 12, color: "#10b981", weight: "bold"});
+          } else if (pass) {
+            eng.t(blockX + i * (tokenW + gap) + tokenW/2, 70, "通过", {size: 9, color: "#f59e0b", weight: "bold"});
+          } else {
+            eng.t(blockX + i * (tokenW + gap) + tokenW/2, 70, "拒绝", {size: 9, color: "#ef4444", weight: "bold"});
+          }
+        }
+        // g threshold line
+        eng.t(60, 135, "遗憾:", {size: 12, weight: "bold", color: "#718096", anchor: "end"});
+        for (var i = 0; i < 6; i++) {
+          var pass = regrets[i] <= g;
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 135, regrets[i].toFixed(1), {size: 11, color: pass ? "#10b981" : "#ef4444", weight: regrets[i] > g ? "bold" : "normal"});
+        }
+        // g threshold bar
+        eng.t(60, 160, "门限:", {size: 12, weight: "bold", color: "#718096", anchor: "end"});
+        for (var i = 0; i < 6; i++) {
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 160, "g=1.0", {size: 10, color: "#718096"});
+        }
+        eng.t(400, 200, "t₆ 遗憾 1.2 > 1.0 → 被门拒绝", {size: 14, color: "#ef4444", weight: "bold"});
+        eng.t(400, 340, "剩余 2 个不匹配 token 进入第二级", {size: 13, color: "#718096"});
+      }
+    };
+  },
+  function(e) {
+    return {
+      short: "块上限 M",
+      desc: "第二级：每个 draft 块中接受的不匹配 token 数不超过 M=3。当前只有 2 个不匹配，未超限 → 全部通过。",
+      render: function(eng) {
+        var blockY = 80, blockX = 120, tokenW = 60, gap = 8;
+        var draftTokens = ["t₁","t₂","t₃","t₄","t₅","t₆"];
+        var regrets = [0, 0, 0.3, 0.8, 0.1, 1.2];
+        var g = 1.0;
+        eng.t(400, 50, "第二级：每块异常上限 M = 3", {size: 15, weight: "bold", color: "#3b82f6"});
+        var mismatchCount = 0;
+        for (var i = 0; i < 6; i++) {
+          var pass = regrets[i] <= g;
+          var isMismatch = regrets[i] > 0;
+          if (isMismatch && pass) mismatchCount++;
+          var fill = regrets[i] === 0 ? "#d1fae5" : (pass ? "#fef3c7" : "#fee2e2");
+          var stroke = pass ? "none" : "#ef4444";
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 40, fill, {rx: 4, stroke: stroke, strokeWidth: 2});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 25, draftTokens[i], {size: 12, color: "#1a202c"});
+        }
+        // Count box
+        eng.rect(300, 145, 200, 50, "#dbeafe", {rx: 6, stroke: "#3b82f6", strokeWidth: 1});
+        eng.t(400, 165, "本块不匹配数", {size: 12, color: "#4a5568"});
+        eng.t(400, 185, mismatchCount + " / M=3", {size: 16, weight: "bold", color: mismatchCount <= 3 ? "#10b981" : "#ef4444"});
+        eng.t(400, 220, "2 ≤ 3 → 未超限，全部通过", {size: 14, color: "#10b981", weight: "bold"});
+        eng.t(400, 340, "进入第三级：持久预算检查", {size: 13, color: "#718096"});
+      }
+    };
+  },
+  function(e) {
+    return {
+      short: "请求预算 B",
+      desc: "第三级：跨块累积遗憾不超过总预算 B。当前已用 s=0.5，本块新增 1.2，总计 1.7 ≤ B=2.0 → 通过！",
+      render: function(eng) {
+        var blockY = 60, blockX = 120, tokenW = 60, gap = 8;
+        var draftTokens = ["t₁","t₂","t₃","t₄","t₅","t₆"];
+        var regrets = [0, 0, 0.3, 0.8, 0.1, 0];  // t6 rejected, so 0 contribution
+        eng.t(400, 30, "第三级：持久请求级遗憾预算 (B, s)", {size: 15, weight: "bold", color: "#3b82f6"});
+        for (var i = 0; i < 5; i++) {
+          var fill = regrets[i] === 0 ? "#d1fae5" : "#d1fae5";
+          eng.rect(blockX + i * (tokenW + gap), blockY, tokenW, 36, fill, {rx: 4, stroke: "#10b981", strokeWidth: 1});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, blockY + 23, draftTokens[i], {size: 12, color: "#1a202c"});
+          eng.t(blockX + i * (tokenW + gap) + tokenW/2, 50, "✓", {size: 12, color: "#10b981", weight: "bold"});
+        }
+        // t6 greyed out (rejected at level 1)
+        eng.rect(blockX + 5 * (tokenW + gap), blockY, tokenW, 36, "#f3f4f6", {rx: 4});
+        eng.t(blockX + 5 * (tokenW + gap) + tokenW/2, blockY + 23, "t₆", {size: 12, color: "#9ca3af"});
+        eng.t(blockX + 5 * (tokenW + gap) + tokenW/2, 50, "✗", {size: 12, color: "#ef4444", weight: "bold"});
+        // Budget bar
+        var barX = 150, barY = 140, barW = 500, barH = 30;
+        var B = 2.0, s_prev = 0.5, delta = 1.2, s_new = s_prev + delta;
+        eng.rect(barX, barY, barW, barH, "#e2e8f0", {rx: 4});
+        // previously used (blue)
+        var prevW = (s_prev / B) * barW;
+        eng.rect(barX, barY, prevW, barH, "#93c5fd", {rx: 4});
+        // this block's addition (green)
+        var deltaW = (delta / B) * barW;
+        eng.rect(barX + prevW, barY, deltaW, barH, "#10b981", {rx: 4});
+        // labels
+        eng.t(barX, barY - 8, "已用 s=" + s_prev.toFixed(1), {size: 11, color: "#3b82f6", anchor: "start"});
+        eng.t(barX + prevW + deltaW/2, barY - 8, "+本块 " + delta.toFixed(1), {size: 11, color: "#10b981", anchor: "middle"});
+        eng.t(barX + barW, barY - 8, "B=" + B.toFixed(1), {size: 12, weight: "bold", color: "#1a202c", anchor: "end"});
+        eng.t(barX + barW/2, barY + barH + 18, "总计 s=" + s_new.toFixed(1) + " ≤ B=" + B.toFixed(1) + " → 通过！", {size: 14, weight: "bold", color: "#10b981"});
+        // Result
+        eng.rect(250, 210, 300, 40, "#d1fae5", {rx: 6, stroke: "#10b981", strokeWidth: 1});
+        eng.t(400, 235, "5 个 token 被接受，1 个被拒绝", {size: 14, weight: "bold", color: "#10b981"});
+        eng.t(400, 300, "三级过滤共同保证：误差可控，加速可期", {size: 13, color: "#4a5568"});
+        eng.t(400, 325, "B=0 时三级全部拒绝 → 退化为标准验证", {size: 12, color: "#718096"});
+      }
+    };
+  }
+];
+
+// ===== Scene 4: 实验结果 - 七任务吞吐提升 (3 steps) =====
+var scene4Builders = [
+  function(e) {
+    return {
+      short: "基准线",
+      desc: "Qwen3-14B + DSpark-14B 七任务基准。标准投机解码的吞吐作为 0% 基准线。",
+      render: function(eng) {
+        var tasks = ["GSM8K","MATH500","HumanEval","MBPP","HellaSwag","ARC-c","TruthfulQA"];
+        var chartX = 100, chartY = 60, chartW = 600, chartH = 240;
+        var barW = (chartW / tasks.length) * 0.6;
+        var gap = (chartW / tasks.length) * 0.4;
+        // Axes
+        eng.line(chartX, chartY + chartH, chartX + chartW, chartY + chartH, {color: "#718096", width: 2, marker: ""});
+        eng.line(chartX, chartY, chartX, chartY + chartH, {color: "#718096", width: 2, marker: ""});
+        eng.t(50, chartY + chartH/2, "吞吐提升 %", {size: 12, color: "#718096", anchor: "middle"});
+        // 0% baseline label
+        eng.t(chartX - 8, chartY + chartH, "0%", {size: 11, color: "#718096", anchor: "end"});
+        // Baseline bars (all at 0)
+        for (var i = 0; i < tasks.length; i++) {
+          var bx = chartX + i * (barW + gap) + gap/2;
+          eng.rect(bx, chartY + chartH - 4, barW, 4, "#e2e8f0", {rx: 2});
+          // task label (rotated)
+          eng.t(bx + barW/2, chartY + chartH + 15, tasks[i], {size: 9, color: "#718096"});
+        }
+        eng.t(400, 30, "标准投机解码（基准）", {size: 16, weight: "bold", color: "#4a5568"});
+        eng.t(400, chartY + chartH + 50, "七任务吞吐均设为 0% 基准线", {size: 13, color: "#718096"});
+      }
+    };
+  },
+  function(e) {
+    return {
+      short: "逐任务",
+      desc: "ASD 在每个任务上都有正向提升。最低 +3.05%，最高 +15.26%。绿色柱表示提升幅度。",
+      render: function(eng) {
+        var tasks = ["GSM8K","MATH500","HumanEval","MBPP","HellaSwag","ARC-c","TruthfulQA"];
+        var gains = [15.26, 12.10, 5.43, 3.05, 8.92, 6.71, 10.45];
+        var chartX = 100, chartY = 60, chartW = 600, chartH = 240;
+        var barW = (chartW / tasks.length) * 0.6;
+        var gap = (chartW / tasks.length) * 0.4;
+        var maxGain = 16;
+        // Axes
+        eng.line(chartX, chartY + chartH, chartX + chartW, chartY + chartH, {color: "#718096", width: 2, marker: ""});
+        eng.line(chartX, chartY, chartX, chartY + chartH, {color: "#718096", width: 2, marker: ""});
+        // Y axis labels
+        for (var v = 0; v <= 16; v += 4) {
+          var y = chartY + chartH - (v / maxGain) * chartH;
+          eng.t(chartX - 8, y + 4, v + "%", {size: 10, color: "#718096", anchor: "end"});
+          eng.line(chartX, y, chartX + chartW, y, {color: "#e2e8f0", width: 1, dash: "2,2", marker: ""});
+        }
+        eng.t(50, chartY + chartH/2, "吞吐提升 %", {size: 12, color: "#718096", anchor: "middle"});
+        // Bars
+        for (var i = 0; i < tasks.length; i++) {
+          var bx = chartX + i * (barW + gap) + gap/2;
+          var bh = (gains[i] / maxGain) * chartH;
+          eng.rect(bx, chartY + chartH - bh, barW, bh, "#10b981", {rx: 2});
+          // gain label on top
+          eng.t(bx + barW/2, chartY + chartH - bh - 6, "+" + gains[i].toFixed(1) + "%", {size: 10, color: "#10b981", weight: "bold"});
+          // task label
+          eng.t(bx + barW/2, chartY + chartH + 15, tasks[i], {size: 9, color: "#718096"});
+        }
+        eng.t(400, 30, "ASD 逐任务吞吐提升", {size: 16, weight: "bold", color: "#3b82f6"});
+        eng.t(400, chartY + chartH + 50, "所有任务正向提升，区间 +3.05% – +15.26%", {size: 13, color: "#4a5568"});
+      }
+    };
+  },
+  function(e) {
+    return {
+      short: "总结",
+      desc: "七任务平均 +7.78%。DeepSeek-V4-Flash (284B) 上验证器接受率 +10–16%。零预算时精确退化为标准验证。",
+      render: function(eng) {
+        var tasks = ["GSM8K","MATH500","HumanEval","MBPP","HellaSwag","ARC-c","TruthfulQA"];
+        var gains = [15.26, 12.10, 5.43, 3.05, 8.92, 6.71, 10.45];
+        var chartX = 100, chartY = 60, chartW = 600, chartH = 240;
+        var barW = (chartW / tasks.length) * 0.6;
+        var gap = (chartW / tasks.length) * 0.4;
+        var maxGain = 16;
+        // Axes
+        eng.line(chartX, chartY + chartH, chartX + chartW, chartY + chartH, {color: "#718096", width: 2, marker: ""});
+        eng.line(chartX, chartY, chartX, chartY + chartH, {color: "#718096", width: 2, marker: ""});
+        for (var v = 0; v <= 16; v += 4) {
+          var y = chartY + chartH - (v / maxGain) * chartH;
+          eng.t(chartX - 8, y + 4, v + "%", {size: 10, color: "#718096", anchor: "end"});
+          eng.line(chartX, y, chartX + chartW, y, {color: "#e2e8f0", width: 1, dash: "2,2", marker: ""});
+        }
+        eng.t(50, chartY + chartH/2, "吞吐提升 %", {size: 12, color: "#718096", anchor: "middle"});
+        // Average line
+        var avg = 7.78;
+        var avgY = chartY + chartH - (avg / maxGain) * chartH;
+        eng.line(chartX, avgY, chartX + chartW, avgY, {color: "#3b82f6", width: 2, dash: "6,3", marker: ""});
+        eng.t(chartX + chartW + 5, avgY + 4, "均值 +7.78%", {size: 11, weight: "bold", color: "#3b82f6", anchor: "start"});
+        // Bars
+        for (var i = 0; i < tasks.length; i++) {
+          var bx = chartX + i * (barW + gap) + gap/2;
+          var bh = (gains[i] / maxGain) * chartH;
+          eng.rect(bx, chartY + chartH - bh, barW, bh, "#10b981", {rx: 2});
+          eng.t(bx + barW/2, chartY + chartH - bh - 6, "+" + gains[i].toFixed(1) + "%", {size: 10, color: "#10b981", weight: "bold"});
+          eng.t(bx + barW/2, chartY + chartH + 15, tasks[i], {size: 9, color: "#718096"});
+        }
+        eng.t(400, 30, "七任务平均 +7.78% | 接受率 +10–16%", {size: 15, weight: "bold", color: "#3b82f6"});
+        eng.t(400, chartY + chartH + 45, "Qwen3-14B + DSpark-14B：平均 +7.78%", {size: 13, weight: "bold", color: "#10b981"});
+        eng.t(400, chartY + chartH + 65, "DeepSeek-V4-Flash (284B)：GSM8K/MATH-500 接受率 +10–16%", {size: 13, color: "#4a5568"});
+      }
+    };
+  }
+];
+
+// ===== Init =====
+var engines = {};
+
+// TOC toggle (mobile)
+var tocToggle = document.getElementById('tocToggle');
+var tocEl = document.querySelector('.toc');
+if (tocToggle && tocEl) {
+  tocToggle.addEventListener('click', function() {
+    tocEl.classList.toggle('show');
+    tocToggle.classList.toggle('open');
+  });
+  tocEl.querySelectorAll('a').forEach(function(link) {
+    link.addEventListener('click', function() {
+      if (window.innerWidth <= 768) {
+        tocEl.classList.remove('show');
+        tocToggle.classList.remove('open');
+      }
+    });
+  });
+}
+function initAll() {
+  engines["svg1"] = new AnimEngine("svg1", scene1Builders);
+  engines["svg2"] = new AnimEngine("svg2", scene2Builders);
+  engines["svg3"] = new AnimEngine("svg3", scene3Builders);
+  engines["svg4"] = new AnimEngine("svg4", scene4Builders);
+  for (var id in engines) engines[id].goTo(0);
+}
+
+// Scroll-spy + back-to-top
+var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+var sections = document.querySelectorAll('section[id]');
+var observer = new IntersectionObserver(function(entries) {
+  entries.forEach(function(entry) {
+    if (entry.isIntersecting) {
+      var id = entry.target.id;
+      tocLinks.forEach(function(link) {
+        if (link.getAttribute('href') === '#' + id) link.classList.add('active');
+        else link.classList.remove('active');
+      });
+    }
+  });
+}, { rootMargin: '-20% 0px -60% 0px' });
+sections.forEach(function(s) { observer.observe(s); });
+
+// Back-to-top
+var backBtn = document.querySelector('.back-top');
+window.addEventListener('scroll', function() {
+  if (window.scrollY > 600) backBtn.classList.add('visible');
+  else backBtn.classList.remove('visible');
+});
+
+// Keyboard controls
+document.addEventListener('keydown', function(e) {
+  var activeEl = document.activeElement;
+  var container = activeEl && activeEl.closest && activeEl.closest('.anim-container');
+  if (!container) {
+    var frames = document.querySelectorAll('.anim-frame');
+    for (var i = 0; i < frames.length; i++) {
+      var rect = frames[i].getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        container = frames[i].closest('.anim-container');
+        break;
+      }
+    }
+  }
+  if (!container) return;
+  var svgId = container.querySelector('svg').id;
+  var eng = engines[svgId];
+  if (!eng) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); eng.next(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); eng.prev(); }
+  if (e.key === ' ') { e.preventDefault(); eng.toggle(); }
+});
+
+// Pause off-view animations
+var frameObserver = new IntersectionObserver(function(entries) {
+  entries.forEach(function(entry) {
+    if (!entry.isIntersecting) {
+      var svg = entry.target.querySelector('svg');
+      if (svg && engines[svg.id]) engines[svg.id].pause();
+    }
+  });
+}, { threshold: 0.08 });
+document.querySelectorAll('.anim-frame').forEach(function(f) { frameObserver.observe(f); });
+
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) {
+    for (var id in engines) engines[id].pause();
+  }
+});
+
+// Init on load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAll);
+} else {
+  initAll();
+}
+</script>
+</body>
+</html>
