@@ -77,6 +77,25 @@ tr:hover td { background: var(--blue-light); }
 .anim-header .anim-badge { font-size: 12px; color: var(--text3); }
 .anim-frame { padding: 0; display: flex; justify-content: center; background: #fafbfc; }
 .anim-frame svg { max-width: 100%; height: auto; }
+/* ===== 场景过渡动画 ===== */
+.anim-frame svg .scene-layer { transition: opacity 430ms cubic-bezier(.22,.61,.36,1), transform 430ms cubic-bezier(.22,.61,.36,1); }
+.anim-frame svg .scene-enter.from-right { opacity: 0; transform: translateX(18px); }
+.anim-frame svg .scene-enter.from-left { opacity: 0; transform: translateX(-18px); }
+.anim-frame svg .scene-layer.scene-active { opacity: 1; transform: translateX(0); }
+.anim-frame svg .scene-exit.to-left.scene-exit-active { opacity: 0; transform: translateX(-14px); }
+.anim-frame svg .scene-exit.to-right.scene-exit-active { opacity: 0; transform: translateX(14px); }
+/* ===== 元素级入场动画 ===== */
+.anim-frame svg .reveal { opacity: 0; transform: translateY(7px); animation: revealUp .48s cubic-bezier(.22,.61,.36,1) forwards; animation-delay: var(--delay, 0ms); transform-box: fill-box; }
+@keyframes revealUp { to { opacity: 1; transform: translateY(0); } }
+/* ===== 进度条 ===== */
+.anim-progress { height: 3px; background: var(--border); position: relative; }
+.anim-progress .bar { height: 100%; background: linear-gradient(90deg, var(--blue), var(--blue-light)); width: 0%; transition: width 380ms cubic-bezier(.22,.61,.36,1); }
+/* ===== 步骤条 Stage Rail ===== */
+.anim-stage-rail { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 8px; }
+.stage-chip { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); cursor: pointer; font-size: 11px; color: var(--text2); transition: all 0.15s; }
+.stage-chip:hover { border-color: var(--blue); color: var(--blue); }
+.stage-chip.done { background: var(--blue-light); color: var(--blue); }
+.stage-chip.active { background: var(--blue); color: #fff; font-weight: 600; }
 .anim-controls { background: #f8fafc; padding: 8px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .anim-controls button {
   background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
@@ -215,6 +234,8 @@ tr:hover td { background: var(--blue-light); }
 <div class="anim-frame">
 <svg id="svg1" viewBox="0 0 800 360" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
+<div class="anim-progress"><div class="bar"></div></div>
+<div class="anim-stage-rail"><button class="stage-chip" data-step="0">问题</button><button class="stage-chip" data-step="1">K_stripped R²</button><button class="stage-chip" data-step="2">单层 vs 多层</button><button class="stage-chip" data-step="3">RoPE 对比</button></div>
 <div class="anim-controls">
 <button class="btn-prev">◀ 上一步</button>
 <button class="btn-play">▶ 播放</button>
@@ -249,6 +270,8 @@ tr:hover td { background: var(--blue-light); }
 <div class="anim-frame">
 <svg id="svg2" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
+<div class="anim-progress"><div class="bar"></div></div>
+<div class="anim-stage-rail"><button class="stage-chip" data-step="0">源 KV</button><button class="stage-chip" data-step="1">Step 1</button><button class="stage-chip" data-step="2">Step 2</button><button class="stage-chip" data-step="3">Step 3</button><button class="stage-chip" data-step="4">完整流水线</button></div>
 <div class="anim-controls">
 <button class="btn-prev">◀ 上一步</button>
 <button class="btn-play">▶ 播放</button>
@@ -309,6 +332,8 @@ tr:hover td { background: var(--blue-light); }
 <div class="anim-frame">
 <svg id="svg3" viewBox="0 0 800 360" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
+<div class="anim-progress"><div class="bar"></div></div>
+<div class="anim-stage-rail"><button class="stage-chip" data-step="0">R² 不预测</button><button class="stage-chip" data-step="1">注意力输出余弦</button><button class="stage-chip" data-step="2">K-concentration</button><button class="stage-chip" data-step="3">MLP 救场</button></div>
 <div class="anim-controls">
 <button class="btn-prev">◀ 上一步</button>
 <button class="btn-play">▶ 播放</button>
@@ -350,6 +375,8 @@ tr:hover td { background: var(--blue-light); }
 <div class="anim-frame">
 <svg id="svg4" viewBox="0 0 800 360" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
+<div class="anim-progress"><div class="bar"></div></div>
+<div class="anim-stage-rail"><button class="stage-chip" data-step="0">64 token</button><button class="stage-chip" data-step="1">8K token</button><button class="stage-chip" data-step="2">32K token</button></div>
 <div class="anim-controls">
 <button class="btn-prev">◀ 上一步</button>
 <button class="btn-play">▶ 播放</button>
@@ -453,6 +480,16 @@ class AnimEngine {
     container.querySelector(".btn-reset").addEventListener("click", function(){ self.reset(); });
     var slider = container.querySelector('input[type=range]');
     if (slider) slider.addEventListener("input", function(){ self.speed = parseFloat(this.value); });
+    // Stage rail chips
+    var chips = container.querySelectorAll(".stage-chip");
+    for (var i = 0; i < chips.length; i++) {
+      (function(chip, idx) {
+        chip.addEventListener("click", function() {
+          self.pause();
+          self.goTo(idx);
+        });
+      })(chips[i], i);
+    }
   }
   clear() {
     if (this.layer) { this.layer.remove(); }
@@ -493,14 +530,58 @@ class AnimEngine {
     return this.draw("circle", attrs);
   }
   goTo(index) {
+    var prev = this.currentStep;
     if (index < 0) index = 0;
     if (index >= this.steps.length) index = this.steps.length - 1;
-    this.currentStep = index;
-    this.clear();
+    var direction = index >= prev ? 1 : -1;
+    this._render2(this.steps[index], index, direction);
+  }
+  _render2(step, index, direction) {
+    var ns = "http://www.w3.org/2000/svg";
+    var oldLayer = this.layer || null;
+    var nextLayer = document.createElementNS(ns, "g");
+    nextLayer.setAttribute("class", "anim-layer scene-layer");
+    this.svg.appendChild(nextLayer);
+    this.layer = nextLayer;
     try {
-      this.steps[index].render(this);
+      step.render(this);
     } catch(e) { console.error("Render error step " + index, e); }
+    this._applyReveal(nextLayer);
+    this.currentStep = index;
     this._updateUI(index);
+    // Scene transition: old layer slides out, new layer slides in
+    if (oldLayer && !this._reducedMotion()) {
+      nextLayer.classList.add("scene-enter", direction > 0 ? "from-right" : "from-left");
+      oldLayer.classList.add("scene-exit", direction > 0 ? "to-left" : "to-right");
+      var self = this;
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          nextLayer.classList.add("scene-active");
+          oldLayer.classList.add("scene-exit-active");
+        });
+      });
+      setTimeout(function() {
+        if (oldLayer.parentNode) oldLayer.parentNode.removeChild(oldLayer);
+        // Remove enter classes so scene-active (opacity:1) is the only opacity rule
+        nextLayer.classList.remove("scene-enter", "from-right", "from-left");
+      }, 520);
+    } else {
+      if (oldLayer) oldLayer.parentNode.removeChild(oldLayer);
+    }
+  }
+  _reducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  _applyReveal(layer) {
+    if (this._reducedMotion()) return;
+    var els = layer.querySelectorAll("rect, text, circle, path");
+    var delay = 60;
+    for (var i = 0; i < els.length; i++) {
+      els[i].style.setProperty("--delay", delay + "ms");
+      els[i].classList.add("reveal");
+      delay += 55;
+      if (delay > 650) delay = 60;
+    }
   }
   next() {
     if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1);
@@ -538,6 +619,16 @@ class AnimEngine {
     var desc = container.querySelector(".anim-desc");
     if (info) info.textContent = (index + 1) + " / " + this.steps.length;
     if (desc && this.steps[index] && this.steps[index].desc) desc.innerHTML = this.steps[index].desc;
+    // Progress bar
+    var bar = container.querySelector(".anim-progress .bar");
+    if (bar) bar.style.width = ((index + 1) / this.steps.length * 100) + "%";
+    // Stage rail chips
+    var chips = container.querySelectorAll(".stage-chip");
+    for (var i = 0; i < chips.length; i++) {
+      var chip = chips[i];
+      chip.classList.toggle("done", i < index);
+      chip.classList.toggle("active", i === index);
+    }
     var prevBtn = container.querySelector(".btn-prev");
     var nextBtn = container.querySelector(".btn-next");
     if (prevBtn) prevBtn.disabled = (index === 0);
