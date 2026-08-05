@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intern-S2-Mobius：知识与推理解耦的基础模型</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+:root {
+  --bg: #fafafa; --fg: #1a1a2e; --fg-soft: #444; --fg-muted: #888;
+  --accent: #6c5ce7; --accent-soft: #a29bfe; --accent-bg: #eeeafe;
+  --green: #00b894; --green-soft: #55efc4; --green-bg: #e0f8f4;
+  --red: #e74c3c; --red-soft: #fab1a0; --red-bg: #fdf0ee;
+  --orange: #fdcb6e; --orange-bg: #fff8e7;
+  --blue: #0984e3; --blue-soft: #74b9ff; --blue-bg: #e8f4fd;
+  --border: #ddd; --card-bg: #fff; --code-bg: #f4f4f4;
+  --disabled: #c8c8c8; --focus: #6c5ce7;
+  --toc-w: 240px; --content-w: 860px;
+  --layer-ms: 300ms;
+}
+[data-theme="dark"] {
+  --bg: #1a1a2e; --fg: #e0e0e0; --fg-soft: #bbb; --fg-muted: #888;
+  --accent: #a29bfe; --accent-soft: #6c5ce7; --accent-bg: #2a2a4e;
+  --green: #55efc4; --green-soft: #00b894; --green-bg: #1a3a32;
+  --red: #fab1a0; --red-soft: #e74c3c; --red-bg: #3a1a1a;
+  --orange: #fdcb6e; --orange-bg: #2a2614;
+  --blue: #74b9ff; --blue-soft: #0984e3; --blue-bg: #1a2a3a;
+  --border: #333; --card-bg: #252535; --code-bg: #1e1e2e;
+  --disabled: #555; --focus: #a29bfe;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+
+.content { width: var(--content-w); flex-shrink: 0; }
+section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-orange { background: var(--orange-bg); border-color: var(--orange); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: center; }
+th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.loss { color: var(--red); font-weight: 600; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--blue-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 620px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: #fff; }
+.badge-green { background: var(--green); color: #fff; }
+.badge-blue { background: var(--blue); color: #fff; }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: #fff; }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+.footer { text-align: center; padding: 30px; color: var(--fg-muted); font-size: 13px; border-top: 1px solid var(--border); }
+.footer a { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 768px) {
+  .layout { flex-direction: column; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; max-height: 220px; overflow-y: auto; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .toc h3 { margin-bottom: 8px; }
+  .toc.collapsed { display: none; }
+  .toc-toggle { display: inline-block; background: var(--accent); color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; margin-bottom: 8px; }
+  .content { width: 100%; }
+  section { padding: 16px; }
+  section h2 { font-size: 20px; }
+  .hook { padding: 24px 16px; }
+  .hook h1 { font-size: 22px; }
+  .hook .tagline { font-size: 14px; }
+  .anim-controls { width: 100%; justify-content: flex-start; }
+  .anim-canvas-wrap { overflow-x: auto; }
+  .anim-canvas-wrap svg { min-width: 600px; }
+  .anim-status { flex-direction: column; align-items: flex-start; gap: 6px; }
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+  .back-top { bottom: 16px; right: 16px; width: 40px; height: 40px; }
+  .theme-toggle { top: 12px; right: 12px; }
+}
+@media (max-width: 480px) {
+  body { font-size: 14px; }
+  section { padding: 12px; }
+  .hook { padding: 18px 12px; }
+  .hook h1 { font-size: 18px; }
+  .hook .tagline { font-size: 13px; }
+  .anim-header { padding: 8px 10px; }
+  .anim-controls button { padding: 4px 8px; font-size: 11px; }
+  .anim-canvas-wrap svg { min-width: 480px; }
+  .anim-legend { font-size: 10px; gap: 10px; }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc" id="toc">
+  <button class="toc-toggle" id="tocToggle" style="display:none" onclick="toggleToc()">▼ 目录</button>
+  <h3>导航</h3>
+  <div id="tocLinks">
+    <a href="#hook">核心思想</a>
+    <a href="#architecture">Mobius-v0 架构</a>
+    <a href="#backward-residual">反向残差连接</a>
+    <a href="#latent-reasoning">动态隐式推理</a>
+    <a href="#efficiency">效率来源</a>
+    <a href="#experiments">实验结果</a>
+    <a href="#related">与主流研究的关系</a>
+    <a href="#potential">四大潜力方向</a>
+    <a href="#deployment">部署信息</a>
+    <a href="#summary">总结</a>
+  </div>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>Intern-S2-Mobius：知识与推理解耦的基础模型</h1>
+  <p class="tagline">传统 Transformer 将 FFN（知识存储）和 Self-Attention（推理）逐层绑定。Mobius-v0 将 FFN 从层级绑定中解耦，构建全局共享的知识向量数据库 Memory，让多个 Reasoner 迭代查询和精修 hidden states。这一架构带来两大原生能力——反向残差连接和动态隐式推理——实现近 4× 端到端推理加速。</p>
+  <div class="badges">
+    <span class="badge badge-accent">Mobius-v0</span>
+    <span class="badge badge-blue">Shanghai AI Lab</span>
+    <span class="badge badge-green">2026-08-05</span>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2>Mobius-v0 架构：解耦知识与推理</h2>
+  <p>传统 Transformer 的每一层都由 Self-Attention + FFN + Add&Normalize 组成，前向逐层传递。FFN 在每一层存储知识，Self-Attention 在每一层执行推理——两者紧密耦合。</p>
+
+  <p>Mobius 将 FFN 从层级绑定中解耦，构建一个<strong>全局共享的知识向量数据库（Memory）</strong>。每一层不再有独立的 FFN，而是由 Reasoner 通过全局共享的 Memory 迭代查询和精修 hidden states。Reasoner 用 cache（hidden states）作为载体，与 Memory 交互。</p>
+
+  <div class="callout callout-accent">
+    <strong>架构对比（图1）：</strong>
+    <ul>
+      <li><strong>(a) Transformer</strong>：每层 = Self-Attn + FFN + Add&Normalize，逐层前向，FFN 与推理绑定</li>
+      <li><strong>(b) Mobius</strong>：每层 = Self-Attn + Global-Shared-Vector-Database + Add&Normalize，Memory 全局共享，Reasoner 用 cache 作为载体</li>
+    </ul>
+  </div>
+
+  <p>这个解耦是 Mobius 两大原生能力的物理基础——当知识不再绑定于特定层，深层和浅层都能访问同一知识库，隐式推理也能在少数层内迭代精修连续向量。</p>
+
+  <div class="anim-frame" id="anim1-frame">
+    <div class="anim-header">
+      <span class="anim-title">架构对比：Transformer vs Mobius</span>
+      <div class="anim-controls">
+        <button class="btn-prev" disabled>◀ 上一步</button>
+        <button class="btn-play">▶ 播放</button>
+        <button class="btn-next">下一步 ▶</button>
+        <button class="btn-reset">重置</button>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 420" width="820" height="420"></svg></div>
+    <div class="anim-status">
+      <span class="step-info">步骤 1/3</span>
+      <span class="step-desc">Transformer：每层绑定 Self-Attn + FFN，逐层前向</span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#e74c3c"></span> Transformer（FFN 绑定）</span>
+      <span><span class="dot" style="background:#00b894"></span> Mobius（共享 Memory）</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> Self-Attention</span>
+    </div>
+  </div>
+</section>
+
+<section id="backward-residual">
+  <h2>反向残差连接：深层访问浅层知识</h2>
+  <p>传统残差连接是<strong>单向</strong>的：浅层信息通过 $h_\ell = h_{\ell-1} + f_\ell(h_{\ell-1})$ 只能向深层传递。深层无法直接访问浅层知识——信息流方向是固定的。</p>
+
+  <p>Mobius 的共享 Memory 改变了这一点。因为所有层共享同一个知识库，<strong>深层可以通过 Memory 访问浅层存入的知识</strong>——这是通过共享知识库间接实现的"反向"残差，不需要直接实现双向残差（对基础设施不友好）。</p>
+
+  <div class="callout callout-green">
+    <strong>效果：</strong>更灵活的跨层知识组合。关键信息可以在任意层被任意层访问，不需要等到信息传递到深层或逐层累积。更少推理步骤即可合成关键信息——深层直接从 Memory 中"回看"浅层已存入的知识。
+  </div>
+
+  <p>关键设计选择：Mobius 不直接实现双向残差连接（这需要修改残差流图，对现有训练/推理基础设施不友好），而是通过共享知识库间接实现反向访问。这是一种"软"反向——知识存储层反向可达，计算流图仍然前向。</p>
+
+  <div class="anim-frame" id="anim2-frame">
+    <div class="anim-header">
+      <span class="anim-title">反向残差连接：单向 vs 双向</span>
+      <div class="anim-controls">
+        <button class="btn-prev" disabled>◀ 上一步</button>
+        <button class="btn-play">▶ 播放</button>
+        <button class="btn-next">下一步 ▶</button>
+        <button class="btn-reset">重置</button>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 400" width="820" height="400"></svg></div>
+    <div class="anim-status">
+      <span class="step-info">步骤 1/3</span>
+      <span class="step-desc">传统残差：浅层 → 深层，单向信息流</span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#e74c3c"></span> 传统单向残差</span>
+      <span><span class="dot" style="background:#00b894"></span> Mobius 双向（经共享 Memory）</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 共享 Memory</span>
+    </div>
+  </div>
+</section>
+
+<section id="latent-reasoning">
+  <h2>动态隐式推理：连续向量优化替代 token 链</h2>
+  <p>传统思维链（CoT）用 <strong>token</strong> 作为信息传递介质。每生成一个 token，它都要遍历所有层完成单次推理。长 CoT 意味着大量 token × 全部层 = 巨大计算量。</p>
+
+  <p>Mobius 改变了推理介质：在<strong>少数几层内</strong>对完整知识库迭代精修<strong>连续 hidden states</strong>。隐式推理将"思考—试错—精修"内化为连续向量优化，不依赖长 token 链。</p>
+
+  <div class="callout callout-blue">
+    <strong>三大特点：</strong>
+    <ul>
+      <li><strong>连续向量优化</strong>替代冗长 token 链——更高信息密度，每个"思考步"携带连续向量而非离散 token</li>
+      <li><strong>多 token 同步解码</strong>——在更深层次才同步解码多个 token，而非逐 token 遍历全层</li>
+      <li><strong>动态分配计算量</strong>——不同 token 根据难度获得不同的隐式迭代深度</li>
+    </ul>
+  </div>
+
+  <p>这是"隐式推理"的核心：把传统 CoT 中显式的、token 串行的"思考—验证—修正"循环，内化为模型内部连续向量空间的迭代优化。模型"想清楚"之后再输出，而不是边输出边想。</p>
+
+  <div class="anim-frame" id="anim3-frame">
+    <div class="anim-header">
+      <span class="anim-title">动态隐式推理：token 链 vs 连续向量迭代</span>
+      <div class="anim-controls">
+        <button class="btn-prev" disabled>◀ 上一步</button>
+        <button class="btn-play">▶ 播放</button>
+        <button class="btn-next">下一步 ▶</button>
+        <button class="btn-reset">重置</button>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 420" width="820" height="420"></svg></div>
+    <div class="anim-status">
+      <span class="step-info">步骤 1/3</span>
+      <span class="step-desc">Transformer：每个 token 遍历全部层</span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#e74c3c"></span> Token 链（逐 token 全层）</span>
+      <span><span class="dot" style="background:#00b894"></span> 连续向量迭代（少数层内）</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 共享 Memory</span>
+    </div>
+  </div>
+</section>
+
+<section id="efficiency">
+  <h2>效率来源：两大机制协同</h2>
+  <p>Mobius 的推理加速不是单一技巧，而是两大原生能力协同的结果：</p>
+
+  <div class="callout callout-accent">
+    <strong>效率来源一：更灵活的激活路径。</strong> 共享存储引入反向残差，加速关键信息合成。传统架构中关键信息需要逐层累积才能到达决策层；Mobius 中任意层可直接从 Memory 取回浅层知识，跳过中间累积步骤。
+  </div>
+
+  <div class="callout callout-accent">
+    <strong>效率来源二：更动态的隐式迭代。</strong> 连续向量优化替代冗长 token 链，更高信息密度。传统 CoT 每步是一个 token（离散、低维信息），需要很多步；Mobius 每步是一个连续向量（高维信息），少数几步即可收敛。
+  </div>
+
+  <p>两者协同：反向残差让"取回知识"更快，隐式迭代让"消化知识"更高效。结果是端到端推理近 4× 加速，且生成轨迹显著更短。</p>
+</section>
+
+<section id="experiments">
+  <h2>实验结果</h2>
+
+  <h3>训练从零实验（7B-A1B MoE, 1TB tokens）</h3>
+  <p>Mobius 用 <strong>62.6%</strong> 的数据（即 626B tokens）达到了 Transformer 用 1TB tokens 训练的 MMLU 分数——<strong>1.6× 数据效率</strong>。</p>
+
+  <div class="callout callout-green">
+    <strong>数据效率</strong>：Mobius 在相同模型规模下，用不到 2/3 的训练数据达到同等 MMLU 表现。解耦的知识库让学习更高效——知识不再绑定于层，可以更自由地组合和复用。
+  </div>
+
+  <h3>持续预训练实验（从 Qwen3.5-35B 继续）</h3>
+  <p>Intern-S2-Mobius-35B 基于 Qwen3.5-35B 继续预训练 + SFT + RL。对比通用任务：</p>
+
+  <table>
+    <thead><tr><th>Benchmark</th><th>Intern-S2-Mobius-35B</th><th>Qwen3.5-35B</th></tr></thead>
+    <tbody>
+      <tr><td>MMLU Pro</td><td class="gain">89.05</td><td>85.31</td></tr>
+      <tr><td>GPQA Diamond</td><td class="gain">80.81</td><td>80.24</td></tr>
+      <tr><td>IMO Bench</td><td class="gain">81.25</td><td>77.50</td></tr>
+      <tr><td>AIME 2026</td><td class="gain">95.31</td><td>92.08</td></tr>
+      <tr><td>HMMT 2026</td><td class="gain">85.51</td><td>78.50</td></tr>
+      <tr><td>UGD hard</td><td class="loss">73.02</td><td>78.02</td></tr>
+      <tr><td>AMO</td><td class="gain">58.00</td><td>50.00</td></tr>
+      <tr><td>SimpleQA</td><td class="gain">28.90</td><td>21.39</td></tr>
+      <tr><td>HLE</td><td class="loss">19.11</td><td>22.40</td></tr>
+      <tr><td><strong>AVG</strong></td><td class="gain"><strong>67.88</strong></td><td>65.05</td></tr>
+    </tbody>
+  </table>
+
+  <p>对比科学任务（知识密集型）：</p>
+
+  <table>
+    <thead><tr><th>Benchmark</th><th>Intern-S2-Mobius-35B</th><th>Qwen3.5-35B</th></tr></thead>
+    <tbody>
+      <tr><td>Biology-Instructions</td><td class="gain">51.40</td><td>3.77</td></tr>
+      <tr><td>Mol-Instructions</td><td class="gain">45.73</td><td>21.70</td></tr>
+      <tr><td>MolecularIQ</td><td class="gain">59.29</td><td>29.13</td></tr>
+      <tr><td><strong>AVG</strong></td><td class="gain"><strong>52.14</strong></td><td>18.20</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-green">
+    <strong>科学任务跃升</strong>：Biology-Instructions 从 3.77 → 51.40（13.6×），MolecularIQ 从 29.13 → 59.29（2.0×）。解耦的知识库让科学领域知识可以更高效地组织和检索——这正是 Mobius 架构的优势场景：知识密集、需要跨域组合。
+  </div>
+
+  <h3>推理效率</h3>
+  <p>近 <strong>4× 端到端推理加速</strong>。具体到各 benchmark 的输出长度压缩：</p>
+
+  <table>
+    <thead><tr><th>Benchmark</th><th>输出长度压缩</th><th>吞吐提升</th></tr></thead>
+    <tbody>
+      <tr><td>MMLU Pro</td><td class="gain">4.6× 更短</td><td class="gain">2.9× 更高</td></tr>
+      <tr><td>GPQA</td><td class="gain">5.0× 更短</td><td>—</td></tr>
+      <tr><td>AIME 2026</td><td class="gain">1.5× 更短</td><td>—</td></tr>
+      <tr><td>IMO Bench</td><td class="gain">1.4× 更短</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <div class="anim-frame" id="anim4-frame">
+    <div class="anim-header">
+      <span class="anim-title">推理效率：Mobius 516 tokens vs Qwen3.5 2364 tokens</span>
+      <div class="anim-controls">
+        <button class="btn-prev" disabled>◀ 上一步</button>
+        <button class="btn-play">▶ 播放</button>
+        <button class="btn-next">下一步 ▶</button>
+        <button class="btn-reset">重置</button>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 380" width="820" height="380"></svg></div>
+    <div class="anim-status">
+      <span class="step-info">步骤 1/3</span>
+      <span class="step-desc">Qwen3.5-35B：2364 tokens，反复推导检查</span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#e74c3c"></span> Qwen3.5-35B（冗长 CoT）</span>
+      <span><span class="dot" style="background:#00b894"></span> Mobius（简洁轨迹）</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> 4× 加速</span>
+    </div>
+  </div>
+
+  <div class="callout callout-orange">
+    <strong>推理轨迹对比（线性代数题）：</strong> 两者都答对（答案 C），但 Mobius 用 516 tokens（简洁直接，无重复推导），Qwen3.5-35B 用 2364 tokens（反复推导检查）。隐式推理在内部"想清楚"后输出，消除了冗余的显式推导步骤。
+  </div>
+</section>
+
+<section id="related">
+  <h2>与主流研究的关系</h2>
+
+  <h3>RNN → Transformer → Mobius 演进</h3>
+  <p>这是一条关于"在哪里循环"的演进线：</p>
+  <ul>
+    <li><strong>RNN</strong>：在 <em>token 维度</em> 循环——每个 token 一个时间步，状态在时间维度传递</li>
+    <li><strong>Transformer</strong>：在 <em>知识维度</em> 全局映射——所有 token 并行注意力，FFN 逐层绑定知识</li>
+    <li><strong>Mobius</strong>：<em>全局地址空间 + 稀疏激活</em>——知识存于全局 Memory，按需查询，Reasoner 迭代精修</li>
+  </ul>
+
+  <h3>隐式推理谱系</h3>
+  <p>隐式推理（在连续空间而非 token 串中推理）已有多个先驱：</p>
+  <ul>
+    <li><strong>COCONUT</strong>（连续思维）：用连续向量替代显式 CoT token</li>
+    <li><strong>Looped Transformer</strong>（循环计算）：同一组层迭代多次精修</li>
+    <li><strong>Diffusion LM</strong>：用扩散过程生成表示</li>
+  </ul>
+  <p>Mobius 是更高效的融合——共享 Memory + Reasoner 迭代让隐式推理有了天然的物理载体和全局知识后盾。</p>
+
+  <h3>投机解码与简洁 CoT</h3>
+  <ul>
+    <li><strong>MTP（Multi-Token Prediction）</strong> 是"内部起草"——Mobius 原生支持多 token 预测（更深层次同步解码多个 token）</li>
+    <li><strong>简洁 CoT</strong>：Mobius 通过隐式推理自然产生更短 CoT，<strong>不需要 RL 压缩</strong>。传统方法用 RL 训练模型"说少一点"，Mobius 让模型"想清楚再说"——短输出是隐式推理的副产物，而非训练目标</li>
+  </ul>
+</section>
+
+<section id="potential">
+  <h2>四大潜力方向</h2>
+
+  <div class="callout callout-accent">
+    <strong>1. 自我进化</strong>：知识-推理解耦支持<strong>无界知识扩展</strong>和持续学习。传统模型加新知识要重训或面临灾难性遗忘；Mobius 可以向 Memory 追加知识向量而不干扰推理路径——知识库与推理引擎是分开的。
+  </div>
+
+  <div class="callout callout-blue">
+    <strong>2. 世界模型</strong>：隐式推理对<strong>连续空间建模</strong>有更强先验。世界模型需要在连续状态空间中预测和规划，Mobius 的连续向量迭代天然适配——不像 token 离散化那样丢失连续动力学。
+  </div>
+
+  <div class="callout callout-green">
+    <strong>3. 科学发现</strong>：内化思考为直觉 + 扁平化知识促进<strong>跨域组合泛化</strong>。科学突破常来自跨领域知识组合；Mobius 的全局 Memory 让不同领域知识平等可访问，隐式推理让组合发生在"直觉"层而非显式叙述层。
+  </div>
+
+  <div class="callout callout-orange">
+    <strong>4. 软硬件协同设计</strong>：推理参数驻留 GPU，知识参数存 SSD <strong>按需加载</strong>。解耦让硬件分层成为可能——热推理路径在显存，冷知识库在 SSD，按查询模式动态加载。这是传统绑定架构无法实现的内存分层。
+  </div>
+</section>
+
+<section id="deployment">
+  <h2>部署信息</h2>
+  <p>Intern-S2-Mobius-35B 基于 Qwen3.5-35B 继续预训练 + SFT + RL，支持多种部署后端：</p>
+
+  <h3>部署后端</h3>
+  <ul>
+    <li><strong>LMDeploy</strong></li>
+    <li><strong>vLLM</strong></li>
+    <li><strong>Transformers</strong></li>
+  </ul>
+
+  <h3>推荐配置：MTP 投机解码</h3>
+  <p>推荐使用 MTP（Multi-Token Prediction）投机解码以获得最佳加速：</p>
+  <pre style="background: var(--code-bg); padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px;"><code>--speculative-algorithm qwen3_5_mtp
+--speculative-num-draft-tokens 4</code></pre>
+
+  <h3>采样参数</h3>
+  <pre style="background: var(--code-bg); padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px;"><code>top_p = 1
+top_k = 50
+temperature = 0.8</code></pre>
+
+  <h3>资源链接</h3>
+  <ul>
+    <li>GitHub: <a href="https://github.com/InternLM/Intern-S2-Mobius" style="color: var(--accent);">github.com/InternLM/Intern-S2-Mobius</a></li>
+    <li>HuggingFace: <a href="https://huggingface.co/internlm/Intern-S2-Mobius" style="color: var(--accent);">huggingface.co/internlm/Intern-S2-Mobius</a></li>
+  </ul>
+</section>
+
+<section id="summary">
+  <h2>总结</h2>
+  <p>Intern-S2-Mobius 的核心贡献不是某个 trick，而是一个<strong>架构级的范式转变</strong>：</p>
+  <ul>
+    <li><strong>解耦</strong>：FFN 从层级绑定中解放，成为全局共享 Memory</li>
+    <li><strong>反向残差</strong>：深层可经 Memory 访问浅层知识（间接双向）</li>
+    <li><strong>隐式推理</strong>：连续向量迭代替代 token 链，"想清楚再说"</li>
+    <li><strong>效率</strong>：1.6× 数据效率 + 近 4× 推理加速 + 自然简洁 CoT</li>
+  </ul>
+
+  <div class="callout callout-green">
+    <strong>一句话总结</strong>：Mobius 把"在哪存知识"和"怎么做推理"拆开——知识全局共享、推理迭代精修，从而获得反向残差和隐式推理两大原生能力，让模型更高效地学习和思考。
+  </div>
+
+  <p>它指向的未来不是"更大的 Transformer"，而是"不同结构的基础模型"——知识存储、推理计算、记忆管理三者解耦，各自演化。</p>
+</section>
+
+</div>
+</div>
+
+<div class="footer">
+  <p>Intern-S2-Mobius 论文解读 · Shanghai AI Laboratory · <a href="https://github.com/InternLM/Intern-S2-Mobius">GitHub</a> · <a href="https://huggingface.co/internlm/Intern-S2-Mobius">HuggingFace</a></p>
+</div>
+
+<script>
+// ============ ANIMATION ENGINE ============
+function AnimEngine(svg, config) {
+  this.svg = svg;
+  this.svgId = svg.id;
+  this.steps = config.steps;
+  this.currentStep = 0;
+  this.playing = false;
+  this.speed = 1;
+  this.timer = null;
+  this.layer = null;
+  this._initDefs();
+  this._initControls();
+}
+AnimEngine.prototype._uid = function(suffix) {
+  return this.svgId + "-" + suffix;
+};
+AnimEngine.prototype._initDefs = function() {
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var defs = document.createElementNS(SVG_NS, "defs");
+  var self = this;
+  var mk = function(id, color) {
+    var m = document.createElementNS(SVG_NS, "marker");
+    m.setAttribute("id", id);
+    m.setAttribute("viewBox", "0 0 10 10");
+    m.setAttribute("refX", "9");
+    m.setAttribute("refY", "5");
+    m.setAttribute("markerWidth", "6");
+    m.setAttribute("markerHeight", "6");
+    m.setAttribute("orient", "auto");
+    var p = document.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", "M0,0 L10,5 L0,10 z");
+    p.setAttribute("fill", color);
+    m.appendChild(p);
+    defs.appendChild(m);
+  };
+  mk(this._uid("arr"), "#888");
+  mk(this._uid("arrR"), "#e74c3c");
+  mk(this._uid("arrG"), "#00b894");
+  mk(this._uid("arrA"), "#6c5ce7");
+  mk(this._uid("arrB"), "#0984e3");
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype._initControls = function() {
+  var frame = this.svg.closest(".anim-frame");
+  if (!frame) return;
+  var self = this;
+  var prev = frame.querySelector(".btn-prev");
+  var play = frame.querySelector(".btn-play");
+  var next = frame.querySelector(".btn-next");
+  var reset = frame.querySelector(".btn-reset");
+  if (prev) prev.addEventListener("click", function() { self.prev(); });
+  if (play) play.addEventListener("click", function() { self.toggle(); });
+  if (next) next.addEventListener("click", function() { self.next(); });
+  if (reset) reset.addEventListener("click", function() { self.reset(); });
+  this.btnPrev = prev;
+  this.btnPlay = play;
+  this.btnNext = next;
+};
+AnimEngine.prototype._render = function(step, index) {
+  if (this.layer) this.layer.remove();
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  this.layer = document.createElementNS(SVG_NS, "g");
+  this.layer.setAttribute("class", "anim-layer");
+  this.svg.appendChild(this.layer);
+  step.render(this);
+  this.currentStep = index;
+  this._updateUI(index);
+};
+AnimEngine.prototype._updateUI = function(index) {
+  var frame = this.svg.closest(".anim-frame");
+  if (!frame) return;
+  var total = this.steps.length;
+  var stepInfo = frame.querySelector(".step-info");
+  var stepDesc = frame.querySelector(".step-desc");
+  if (stepInfo) stepInfo.textContent = "步骤 " + (index + 1) + "/" + total;
+  if (stepDesc && this.steps[index].desc) {
+    stepDesc.innerHTML = this.steps[index].desc;
+    this._typesetDesc(stepDesc);
+  }
+  if (this.btnPrev) this.btnPrev.disabled = (index === 0);
+  if (this.btnNext) this.btnNext.disabled = (index === total - 1);
+};
+AnimEngine.prototype._typesetDesc = function(el) {
+  if (!el) return;
+  if (!window.MathJax || !MathJax.startup || !MathJax.startup.promise) {
+    var self = this;
+    setTimeout(function() { if (self.svg) self._typesetDesc(el); }, 200);
+    return;
+  }
+  MathJax.startup.promise.then(function() {
+    try {
+      if (MathJax.typesetClear) MathJax.typesetClear([el]);
+      MathJax.typesetPromise([el]).catch(function() {});
+    } catch (e) {}
+  }).catch(function() {});
+};
+AnimEngine.prototype.goTo = function(index) {
+  index = Math.max(0, Math.min(this.steps.length - 1, index));
+  this._render(this.steps[index], index);
+};
+AnimEngine.prototype.next = function() {
+  if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1);
+};
+AnimEngine.prototype.prev = function() {
+  if (this.currentStep > 0) this.goTo(this.currentStep - 1);
+};
+AnimEngine.prototype.toggle = function() {
+  this.playing = !this.playing;
+  if (this.btnPlay) this.btnPlay.textContent = this.playing ? "⏸ 暂停" : "▶ 播放";
+  if (this.playing) {
+    var self = this;
+    this.timer = setInterval(function() {
+      if (self.currentStep >= self.steps.length - 1) {
+        self.pause();
+        self.goTo(0);
+      } else {
+        self.next();
+      }
+    }, 2500 / this.speed);
+  } else {
+    this.pause();
+  }
+};
+AnimEngine.prototype.pause = function() {
+  this.playing = false;
+  if (this.timer) { clearInterval(this.timer); this.timer = null; }
+  if (this.btnPlay) this.btnPlay.textContent = "▶ 播放";
+};
+AnimEngine.prototype.reset = function() {
+  this.pause();
+  this.goTo(0);
+};
+AnimEngine.prototype.draw = function(tag, attrs, parent) {
+  parent = parent || this.layer;
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var el = document.createElementNS(SVG_NS, tag);
+  if (attrs) {
+    for (var k in attrs) {
+      if (!Object.prototype.hasOwnProperty.call(attrs, k)) continue;
+      var v = attrs[k];
+      if (v === null || v === undefined) continue;
+      el.setAttribute(k, v);
+    }
+  }
+  parent.appendChild(el);
+  return el;
+};
+AnimEngine.prototype.rect = function(x, y, w, h, fill, stroke, opts) {
+  opts = opts || {};
+  return this.draw("rect", Object.assign({ x: x, y: y, width: w, height: h, fill: fill || "none", stroke: stroke || "none" }, opts));
+};
+AnimEngine.prototype.text = function(x, y, str, opts) {
+  opts = opts || {};
+  var el = this.draw("text", Object.assign({ x: x, y: y }, opts));
+  el.textContent = str;
+  return el;
+};
+AnimEngine.prototype.line = function(x1, y1, x2, y2, stroke, opts) {
+  opts = opts || {};
+  return this.draw("line", Object.assign({ x1: x1, y1: y1, x2: x2, y2: y2, stroke: stroke || "#888" }, opts));
+};
+AnimEngine.prototype.path = function(d, stroke, opts) {
+  opts = opts || {};
+  return this.draw("path", Object.assign({ d: d, fill: "none", stroke: stroke || "#888" }, opts));
+};
+
+// Color palette
+var C = {
+  text: "#1a1a2e", textSoft: "#444", textMute: "#888",
+  accent: "#6c5ce7", accentSoft: "#a29bfe",
+  green: "#00b894", greenSoft: "#55efc4",
+  red: "#e74c3c", redSoft: "#fab1a0",
+  blue: "#0984e3", blueSoft: "#74b9ff",
+  orange: "#fdcb6e",
+  white: "#fff", grey: "#888"
+};
+
+// ============ SCENE 1: Architecture Compare (Transformer vs Mobius) ============
+function scene1Build() {
+  var W = 820;
+  return [
+    {
+      short: "Transformer",
+      desc: "Transformer：每层 = Self-Attn + FFN + Add&Norm，逐层前向，FFN 与推理绑定",
+      render: function(e) {
+        e.text(W/2, 24, "Transformer：逐层绑定", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.red });
+        var layers = ["层 1", "层 2", "层 3", "层 4"];
+        layers.forEach(function(name, i) {
+          var x = 60 + i * 180;
+          e.rect(x, 50, 160, 300, "#fdf0ee", C.red, { rx: 8, "stroke-width": 2 });
+          e.text(x + 80, 72, name, { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+          // Self-Attn
+          e.rect(x + 20, 85, 120, 50, C.white, C.red, { rx: 4 });
+          e.text(x + 80, 105, "Self-Attn", { "text-anchor": "middle", "font-size": 13, fill: C.red });
+          e.text(x + 80, 122, "推理", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+          // FFN
+          e.rect(x + 20, 150, 120, 50, C.white, C.red, { rx: 4 });
+          e.text(x + 80, 170, "FFN", { "text-anchor": "middle", "font-size": 13, fill: C.red });
+          e.text(x + 80, 187, "知识（绑定）", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+          // Add&Norm
+          e.rect(x + 20, 215, 120, 40, C.white, C.red, { rx: 4 });
+          e.text(x + 80, 240, "Add&Norm", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+          // forward arrow
+          if (i < 3) {
+            e.path("M" + (x + 160) + ",200 L" + (x + 180) + ",200", C.red, { "stroke-width": 2.5, "marker-end": "url(#" + e._uid("arrR") + ")" });
+          }
+        });
+        e.text(W/2, 380, "FFN 在每层独立存储知识 → 推理与知识绑定", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(W/2, 405, "信息只能逐层前向传递", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "Mobius",
+      desc: "Mobius：FFN 解耦为全局共享 Memory，每层 = Self-Attn + Global-Memory + Add&Norm",
+      render: function(e) {
+        e.text(W/2, 24, "Mobius：全局共享 Memory", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.green });
+        // Shared Memory bar at top
+        e.rect(60, 50, 700, 50, "#e0f8f4", C.green, { rx: 8, "stroke-width": 2 });
+        e.text(W/2, 72, "Global Shared Memory（知识向量数据库）", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 90, "FFN 解耦 → 全局共享", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        // Reasoner layers
+        var layers = ["Reasoner 1", "Reasoner 2", "Reasoner 3", "Reasoner 4"];
+        layers.forEach(function(name, i) {
+          var x = 60 + i * 180;
+          // connection up to memory (dashed)
+          e.path("M" + (x + 80) + ",100 L" + (x + 80) + ",130", C.green, { "stroke-width": 1.5, "stroke-dasharray": "4,3", "marker-end": "url(#" + e._uid("arrG") + ")" });
+          e.rect(x, 130, 160, 200, "#e0f8f4", C.green, { rx: 8, "stroke-width": 2 });
+          e.text(x + 80, 152, name, { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+          // Self-Attn
+          e.rect(x + 20, 165, 120, 45, C.white, C.green, { rx: 4 });
+          e.text(x + 80, 183, "Self-Attn", { "text-anchor": "middle", "font-size": 12, fill: C.green });
+          e.text(x + 80, 200, "推理", { "text-anchor": "middle", "font-size": 10, fill: C.textMute });
+          // Memory query (not FFN)
+          e.rect(x + 20, 220, 120, 45, C.white, C.accent, { rx: 4, "stroke-dasharray": "5,3" });
+          e.text(x + 80, 238, "查询 Memory", { "text-anchor": "middle", "font-size": 12, fill: C.accent });
+          e.text(x + 80, 255, "（非 FFN）", { "text-anchor": "middle", "font-size": 10, fill: C.textMute });
+          // Add&Norm
+          e.rect(x + 20, 275, 120, 35, C.white, C.green, { rx: 4 });
+          e.text(x + 80, 297, "Add&Norm", { "text-anchor": "middle", "font-size": 11, fill: C.green });
+          // forward arrow
+          if (i < 3) {
+            e.path("M" + (x + 160) + ",230 L" + (x + 180) + ",230", C.green, { "stroke-width": 2.5, "marker-end": "url(#" + e._uid("arrG") + ")" });
+          }
+        });
+        e.text(W/2, 360, "知识全局共享 → 任意层可查询", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 385, "Reasoner 用 cache（hidden states）作为载体与 Memory 交互", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "对比",
+      desc: "对比：Transformer 每层绑定 FFN vs Mobius 全局共享 Memory",
+      render: function(e) {
+        e.text(W/2, 24, "架构对比：绑定 vs 解耦", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.accent });
+        // Left: Transformer
+        e.rect(30, 50, 360, 320, "#fdf0ee", C.red, { rx: 8, "stroke-width": 2 });
+        e.text(210, 75, "Transformer（绑定）", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        for (var i = 0; i < 4; i++) {
+          var y = 95 + i * 65;
+          e.rect(60, y, 90, 50, C.white, C.red, { rx: 4 });
+          e.text(105, y + 20, "Attn", { "text-anchor": "middle", "font-size": 11, fill: C.red });
+          e.rect(160, y, 90, 50, C.white, C.red, { rx: 4 });
+          e.text(205, y + 20, "FFN", { "text-anchor": "middle", "font-size": 11, fill: C.red });
+          e.text(205, y + 35, "(绑定)", { "text-anchor": "middle", "font-size": 9, fill: C.textMute });
+        }
+        e.text(210, 360, "每层独立 FFN", { "text-anchor": "middle", "font-size": 12, fill: C.red, "font-weight": "bold" });
+        // Right: Mobius
+        e.rect(430, 50, 360, 320, "#e0f8f4", C.green, { rx: 8, "stroke-width": 2 });
+        e.text(610, 75, "Mobius（解耦）", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        // Shared memory
+        e.rect(460, 90, 300, 40, "#e0f8f4", C.green, { rx: 4, "stroke-width": 2 });
+        e.text(610, 115, "Global Memory（共享）", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        for (var j = 0; j < 4; j++) {
+          var y2 = 145 + j * 50;
+          e.rect(460, y2, 90, 40, C.white, C.green, { rx: 4 });
+          e.text(505, y2 + 22, "Attn", { "text-anchor": "middle", "font-size": 11, fill: C.green });
+          e.rect(560, y2, 90, 40, C.white, C.accent, { rx: 4, "stroke-dasharray": "4,3" });
+          e.text(605, y2 + 22, "查询", { "text-anchor": "middle", "font-size": 11, fill: C.accent });
+          // dashed up to memory
+          e.path("M605," + (y2) + " L605,130", C.accent, { "stroke-width": 1, "stroke-dasharray": "3,2" });
+        }
+        e.text(610, 360, "全局共享 Memory", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        // VS divider
+        e.text(W/2, 200, "VS", { "text-anchor": "middle", "font-size": 24, "font-weight": "bold", fill: C.accent });
+      }
+    }
+  ];
+}
+
+// ============ SCENE 2: Backward Residual ============
+function scene2Build() {
+  var W = 820;
+  return [
+    {
+      short: "传统单向",
+      desc: "传统残差：$h_\\ell = h_{\\ell-1} + f_\\ell(h_{\\ell-1})$，信息只能浅层 → 深层",
+      render: function(e) {
+        e.text(W/2, 24, "传统残差：单向信息流", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.red });
+        var layers = ["浅层 1", "层 2", "层 3", "深层 4"];
+        layers.forEach(function(name, i) {
+          var y = 60 + i * 80;
+          e.rect(280, y, 260, 60, "#fdf0ee", C.red, { rx: 8, "stroke-width": 2 });
+          e.text(410, y + 28, name, { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+          e.text(410, y + 46, "h" + (i + 1), { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+          // forward arrow (downward)
+          if (i < 3) {
+            e.path("M410," + (y + 60) + " L410," + (y + 80), C.red, { "stroke-width": 2.5, "marker-end": "url(#" + e._uid("arrR") + ")" });
+            e.text(430, y + 73, "+f", { "text-anchor": "start", "font-size": 11, fill: C.red });
+          }
+        });
+        e.text(150, 160, "信息流方向", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.path("M150,120 L150,300", C.red, { "stroke-width": 2.5, "marker-end": "url(#" + e._uid("arrR") + ")" });
+        e.text(150, 100, "↓", { "text-anchor": "middle", "font-size": 20, fill: C.red });
+        e.text(150, 330, "单向", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        e.text(W/2, 380, "深层无法直接访问浅层知识 — 必须逐层传递", { "text-anchor": "middle", "font-size": 13, fill: C.textMute });
+      }
+    },
+    {
+      short: "Mobius 双向",
+      desc: "Mobius：共享 Memory 让深层也能访问浅层知识（间接反向残差）",
+      render: function(e) {
+        e.text(W/2, 24, "Mobius：经共享 Memory 实现反向访问", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.green });
+        // Shared Memory bar
+        e.rect(280, 50, 260, 50, "#e0f8f4", C.green, { rx: 8, "stroke-width": 2 });
+        e.text(410, 72, "Global Shared Memory", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(410, 90, "知识向量数据库", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        var layers = ["浅层 1", "层 2", "层 3", "深层 4"];
+        layers.forEach(function(name, i) {
+          var y = 130 + i * 70;
+          e.rect(280, y, 260, 55, "#e0f8f4", C.green, { rx: 8, "stroke-width": 2 });
+          e.text(410, y + 26, name, { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+          e.text(410, y + 43, "Reasoner " + (i + 1), { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+          // bidirectional arrows to memory
+          var midY = y + 27;
+          // up (query) - on left side
+          e.path("M340," + midY + " L340,100", C.accent, { "stroke-width": 1.5, "stroke-dasharray": "4,3", "marker-end": "url(#" + e._uid("arrA") + ")" });
+          // down (return) - on right side
+          e.path("M480,100 L480," + midY, C.green, { "stroke-width": 1.5, "stroke-dasharray": "4,3", "marker-end": "url(#" + e._uid("arrG") + ")" });
+        });
+        e.text(250, 100, "查询↑", { "text-anchor": "middle", "font-size": 11, fill: C.accent, "font-weight": "bold" });
+        e.text(570, 100, "↓取回", { "text-anchor": "middle", "font-size": 11, fill: C.green, "font-weight": "bold" });
+        // Highlight: deep layer accessing shallow knowledge
+        e.rect(270, 325, 280, 50, "#fff8e7", C.orange, { rx: 6, "stroke-width": 2 });
+        e.text(410, 348, "深层 4 取回浅层 1 存入的知识", { "text-anchor": "middle", "font-size": 13, fill: "#9a6700", "font-weight": "bold" });
+        e.text(410, 363, "（反向残差 — 经 Memory 间接实现）", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+      }
+    },
+    {
+      short: "对比",
+      desc: "对比：单向残差（逐层累积） vs Mobius 双向访问（经 Memory）",
+      render: function(e) {
+        e.text(W/2, 24, "反向残差对比", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.accent });
+        // Left: traditional
+        e.rect(30, 50, 350, 320, "#fdf0ee", C.red, { rx: 8, "stroke-width": 2 });
+        e.text(205, 75, "传统：单向", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        for (var i = 0; i < 4; i++) {
+          var y = 95 + i * 60;
+          e.rect(70, y, 270, 45, C.white, C.red, { rx: 4 });
+          e.text(205, y + 22, "层 " + (i + 1), { "text-anchor": "middle", "font-size": 12, fill: C.red });
+          if (i < 3) {
+            e.path("M205," + (y + 45) + " L205," + (y + 60), C.red, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrR") + ")" });
+          }
+        }
+        e.text(205, 355, "只能 ↓ 前向", { "text-anchor": "middle", "font-size": 12, fill: C.red, "font-weight": "bold" });
+        // Right: Mobius
+        e.rect(440, 50, 350, 320, "#e0f8f4", C.green, { rx: 8, "stroke-width": 2 });
+        e.text(615, 75, "Mobius：双向", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        // memory
+        e.rect(470, 85, 290, 35, "#e0f8f4", C.green, { rx: 4, "stroke-width": 2 });
+        e.text(615, 107, "Shared Memory", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        for (var j = 0; j < 4; j++) {
+          var y2 = 135 + j * 55;
+          e.rect(470, y2, 290, 40, C.white, C.green, { rx: 4 });
+          e.text(615, y2 + 22, "Reasoner " + (j + 1), { "text-anchor": "middle", "font-size": 12, fill: C.green });
+          // bidirectional
+          e.path("M540," + y2 + " L540,120", C.accent, { "stroke-width": 1, "stroke-dasharray": "3,2", "marker-end": "url(#" + e._uid("arrA") + ")" });
+          e.path("M690,120 L690," + y2, C.green, { "stroke-width": 1, "stroke-dasharray": "3,2", "marker-end": "url(#" + e._uid("arrG") + ")" });
+        }
+        e.text(615, 355, "↓ 前向 + ↑ 反向查询", { "text-anchor": "middle", "font-size": 12, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 395, "关键：不直接实现双向残差（对基础设施不友好），而是经共享 Memory 间接实现", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    }
+  ];
+}
+
+// ============ SCENE 3: Dynamic Latent Reasoning ============
+function scene3Build() {
+  var W = 820;
+  return [
+    {
+      short: "Transformer",
+      desc: "Transformer CoT：每个 token 遍历全部层，长 token 链 = 巨大计算量",
+      render: function(e) {
+        e.text(W/2, 24, "Transformer：逐 token 遍历全层", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.red });
+        // Token chain at top
+        var tokens = ["t₁", "t₂", "t₃", "t₄", "t₅", "..."];
+        tokens.forEach(function(t, i) {
+          var x = 60 + i * 120;
+          e.rect(x, 50, 90, 40, "#fdf0ee", C.red, { rx: 4 });
+          e.text(x + 45, 75, t, { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+          if (i < 5) {
+            e.path("M" + (x + 90) + ",70 L" + (x + 120) + ",70", C.red, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrR") + ")" });
+          }
+        });
+        e.text(W/2, 115, "↑ 每个 token 都要遍历全部层 ↑", { "text-anchor": "middle", "font-size": 12, fill: C.red, "font-weight": "bold" });
+        // Layers
+        for (var i = 0; i < 5; i++) {
+          var y = 135 + i * 45;
+          e.rect(150, y, 520, 35, C.white, C.red, { rx: 4, "stroke-width": 1.5 });
+          e.text(410, y + 22, "层 " + (i + 1) + " (Attn + FFN)", { "text-anchor": "middle", "font-size": 12, fill: C.red });
+        }
+        e.text(W/2, 360, "N tokens × L layers = O(N×L) 次计算", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(W/2, 385, "token 串行，信息密度低", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "Mobius",
+      desc: "Mobius：少数层内迭代精修连续 hidden states，连续向量优化",
+      render: function(e) {
+        e.text(W/2, 24, "Mobius：少数层内迭代精修连续向量", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.green });
+        // Shared memory
+        e.rect(60, 50, 700, 40, "#e0f8f4", C.green, { rx: 8, "stroke-width": 2 });
+        e.text(W/2, 75, "Global Shared Memory", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        // Continuous hidden state vector
+        e.text(150, 120, "连续 hidden state", { "text-anchor": "middle", "font-size": 13, fill: C.accent, "font-weight": "bold" });
+        e.rect(60, 130, 200, 30, "#eeeafe", C.accent, { rx: 4, "stroke-width": 1.5 });
+        // vector bars
+        for (var b = 0; b < 8; b++) {
+          var bh = 10 + Math.random() * 18;
+          e.rect(70 + b * 23, 145 - bh + 15, 18, bh, C.accent, C.accent, { rx: 2 });
+        }
+        // Few layers with iteration
+        var iterLabels = ["迭代 1", "迭代 2", "迭代 3"];
+        iterLabels.forEach(function(label, i) {
+          var x = 300 + i * 160;
+          e.rect(x, 130, 140, 130, "#e0f8f4", C.green, { rx: 8, "stroke-width": 2 });
+          e.text(x + 70, 152, label, { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+          e.text(x + 70, 170, "(少数层)", { "text-anchor": "middle", "font-size": 10, fill: C.textMute });
+          // Self-Attn
+          e.rect(x + 20, 180, 100, 30, C.white, C.green, { rx: 4 });
+          e.text(x + 70, 200, "Self-Attn", { "text-anchor": "middle", "font-size": 11, fill: C.green });
+          // Refine
+          e.rect(x + 20, 220, 100, 30, C.white, C.accent, { rx: 4, "stroke-dasharray": "4,3" });
+          e.text(x + 70, 240, "精修向量", { "text-anchor": "middle", "font-size": 11, fill: C.accent });
+          // query memory
+          e.path("M" + (x + 70) + ",130 L" + (x + 70) + ",90", C.accent, { "stroke-width": 1, "stroke-dasharray": "3,2", "marker-end": "url(#" + e._uid("arrA") + ")" });
+          // arrow to next
+          if (i < 2) {
+            e.path("M" + (x + 140) + ",195 L" + (x + 160) + ",195", C.green, { "stroke-width": 2.5, "marker-end": "url(#" + e._uid("arrG") + ")" });
+          }
+        });
+        // output
+        e.rect(300, 285, 460, 35, "#fff8e7", C.orange, { rx: 4, "stroke-width": 1.5 });
+        e.text(530, 307, "→ 收敛后输出（多 token 同步解码）", { "text-anchor": "middle", "font-size": 13, fill: "#9a6700", "font-weight": "bold" });
+        e.path("M530,260 L530,285", C.orange, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arr") + ")" });
+        e.text(W/2, 360, "少数迭代 × 连续向量 = 高信息密度", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 385, "想清楚再说 — 隐式推理内化思考-试错-精修", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "对比",
+      desc: "对比：token 链（N×L 次计算） vs 连续向量迭代（少数层，高密度）",
+      render: function(e) {
+        e.text(W/2, 24, "动态隐式推理对比", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.accent });
+        // Left: Transformer
+        e.rect(30, 50, 370, 320, "#fdf0ee", C.red, { rx: 8, "stroke-width": 2 });
+        e.text(215, 75, "Transformer：token 链", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        // token chain
+        for (var i = 0; i < 5; i++) {
+          var x = 60 + i * 65;
+          e.rect(x, 90, 50, 30, C.white, C.red, { rx: 3 });
+          e.text(x + 25, 108, "t" + (i + 1), { "text-anchor": "middle", "font-size": 11, fill: C.red });
+          if (i < 4) e.path("M" + (x + 50) + ",105 L" + (x + 65) + ",105", C.red, { "stroke-width": 1.5, "marker-end": "url(#" + e._uid("arrR") + ")" });
+        }
+        e.text(215, 140, "↓ 每个遍历全部层 ↓", { "text-anchor": "middle", "font-size": 11, fill: C.red });
+        for (var j = 0; j < 5; j++) {
+          var y = 155 + j * 35;
+          e.rect(60, y, 310, 25, C.white, C.red, { rx: 3, "stroke-width": 1 });
+          e.text(215, y + 16, "层 " + (j + 1), { "text-anchor": "middle", "font-size": 10, fill: C.red });
+        }
+        e.text(215, 345, "O(N × L) 次", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        // Right: Mobius
+        e.rect(420, 50, 370, 320, "#e0f8f4", C.green, { rx: 8, "stroke-width": 2 });
+        e.text(605, 75, "Mobius：连续向量迭代", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        // vector
+        e.rect(450, 95, 200, 25, "#eeeafe", C.accent, { rx: 3 });
+        e.text(550, 110, "连续 hidden state", { "text-anchor": "middle", "font-size": 10, fill: C.accent });
+        for (var k = 0; k < 3; k++) {
+          var y2 = 140 + k * 70;
+          e.rect(450, y2, 310, 55, C.white, C.green, { rx: 4, "stroke-width": 1.5 });
+          e.text(605, y2 + 18, "迭代 " + (k + 1) + "（少数层）", { "text-anchor": "middle", "font-size": 11, fill: C.green, "font-weight": "bold" });
+          e.text(605, y2 + 38, "Attn + 精修", { "text-anchor": "middle", "font-size": 10, fill: C.textMute });
+          if (k < 2) e.path("M605," + (y2 + 55) + " L605," + (y2 + 70), C.green, { "stroke-width": 2, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        }
+        e.text(605, 345, "少数 × 高密度", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+      }
+    }
+  ];
+}
+
+// ============ SCENE 4: Inference Efficiency ============
+function scene4Build() {
+  var W = 820;
+  return [
+    {
+      short: "Qwen3.5",
+      desc: "Qwen3.5-35B：2364 tokens，反复推导检查（线性代数题，答案 C）",
+      render: function(e) {
+        e.text(W/2, 24, "Qwen3.5-35B：2364 tokens", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.red });
+        // Long token bar
+        var barW = 700;
+        e.rect(60, 60, barW, 50, "#fdf0ee", C.red, { rx: 6, "stroke-width": 2 });
+        e.text(410, 88, "2364 tokens（反复推导检查）", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        // segments showing repetition
+        var segs = ["推导", "检查", "重推", "再查", "确认", "...", "输出"];
+        var segW = barW / segs.length;
+        segs.forEach(function(s, i) {
+          var x = 60 + i * segW;
+          if (i < segs.length - 1) {
+            e.line(x + segW, 60, x + segW, 110, C.red, { "stroke-width": 1, "opacity": 0.5 });
+          }
+        });
+        // CoT steps illustration
+        e.text(60, 140, "显式 CoT 步骤：", { "text-anchor": "start", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        var steps = ["step 1: 设方程", "step 2: 代入", "step 3: 化简", "step 4: 检查", "step 5: 重推", "...", "step N: 确认"];
+        steps.forEach(function(s, i) {
+          var x = 60 + (i % 4) * 185;
+          var y = 160 + Math.floor(i / 4) * 35;
+          e.rect(x, y, 170, 28, C.white, C.red, { rx: 3, "stroke-width": 1 });
+          e.text(x + 85, y + 18, s, { "text-anchor": "middle", "font-size": 11, fill: C.red });
+        });
+        e.text(W/2, 290, "答案：C ✓（正确但冗长）", { "text-anchor": "middle", "font-size": 14, fill: C.red, "font-weight": "bold" });
+        e.text(W/2, 330, "每个显式步骤都消耗 token + 全层计算", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+      }
+    },
+    {
+      short: "Mobius",
+      desc: "Mobius：516 tokens，简洁直接，无重复推导（同一题，答案 C）",
+      render: function(e) {
+        e.text(W/2, 24, "Mobius：516 tokens", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.green });
+        // Short token bar (proportional: 516/2364 ≈ 22%)
+        var fullBarW = 700;
+        var shortBarW = Math.round(fullBarW * 516 / 2364);
+        // ghost of full length
+        e.rect(60, 60, fullBarW, 50, "none", "#ddd", { rx: 6, "stroke-width": 1, "stroke-dasharray": "4,3" });
+        e.text(410, 78, "（对比基准 2364）", { "text-anchor": "middle", "font-size": 10, fill: C.textMute });
+        // actual short bar
+        e.rect(60, 60, shortBarW, 50, "#e0f8f4", C.green, { rx: 6, "stroke-width": 2 });
+        e.text(60 + shortBarW / 2, 88, "516 tokens", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        // implicit reasoning
+        e.text(60, 140, "隐式推理（内部想清楚）→ 直接输出：", { "text-anchor": "start", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        // implicit box
+        e.rect(60, 155, 320, 60, "#eeeafe", C.accent, { rx: 6, "stroke-width": 2, "stroke-dasharray": "5,3" });
+        e.text(220, 178, "隐式推理", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        e.text(220, 196, "连续向量迭代精修", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        // arrow
+        e.path("M380,185 L430,185", C.green, { "stroke-width": 2.5, "marker-end": "url(#" + e._uid("arrG") + ")" });
+        // output
+        e.rect(430, 155, 330, 60, "#e0f8f4", C.green, { rx: 6, "stroke-width": 2 });
+        e.text(595, 178, "简洁输出", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(595, 196, "516 tokens", { "text-anchor": "middle", "font-size": 11, fill: C.textMute });
+        e.text(W/2, 250, "答案：C ✓（正确且简洁）", { "text-anchor": "middle", "font-size": 14, fill: C.green, "font-weight": "bold" });
+        e.text(W/2, 290, "隐式推理消除冗余推导 — 想清楚再说", { "text-anchor": "middle", "font-size": 12, fill: C.textMute });
+        e.text(W/2, 330, "短输出是隐式推理的副产物，非 RL 压缩", { "text-anchor": "middle", "font-size": 12, fill: C.accent, "font-weight": "bold" });
+      }
+    },
+    {
+      short: "加速",
+      desc: "近 4× 端到端推理加速 · MMLU Pro 输出 4.6× 更短 · 吞吐 2.9× 更高",
+      render: function(e) {
+        e.text(W/2, 24, "效率总结：近 4× 加速", { "text-anchor": "middle", "font-size": 16, "font-weight": "bold", fill: C.accent });
+        // 4x speedup visual
+        e.text(200, 70, "Qwen3.5", { "text-anchor": "middle", "font-size": 13, fill: C.red, "font-weight": "bold" });
+        e.rect(60, 80, 280, 40, "#fdf0ee", C.red, { rx: 4, "stroke-width": 2 });
+        e.text(200, 105, "2364 tokens", { "text-anchor": "middle", "font-size": 13, fill: C.red });
+        e.text(600, 70, "Mobius", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+        var shortW = Math.round(280 * 516 / 2364);
+        e.rect(460, 80, shortW, 40, "#e0f8f4", C.green, { rx: 4, "stroke-width": 2 });
+        e.text(460 + shortW / 2, 105, "516", { "text-anchor": "middle", "font-size": 13, fill: C.green });
+        // 4x label
+        e.rect(330, 75, 110, 50, "#fff8e7", C.orange, { rx: 6, "stroke-width": 2 });
+        e.text(385, 105, "≈4× 加速", { "text-anchor": "middle", "font-size": 14, fill: "#9a6700", "font-weight": "bold" });
+        // benchmark table
+        e.text(W/2, 160, "各 Benchmark 输出长度压缩", { "text-anchor": "middle", "font-size": 14, fill: C.accent, "font-weight": "bold" });
+        var benchmarks = [
+          { name: "MMLU Pro", short: 4.6, throughput: 2.9 },
+          { name: "GPQA", short: 5.0, throughput: null },
+          { name: "AIME 2026", short: 1.5, throughput: null },
+          { name: "IMO Bench", short: 1.4, throughput: null }
+        ];
+        benchmarks.forEach(function(b, i) {
+          var y = 185 + i * 40;
+          // name
+          e.text(120, y + 15, b.name, { "text-anchor": "middle", "font-size": 13, fill: C.textSoft });
+          // bar
+          var maxBarW = 400;
+          var barW = Math.round(maxBarW / b.short);
+          e.rect(200, y, barW, 25, "#e0f8f4", C.green, { rx: 3 });
+          e.text(200 + barW + 10, y + 17, b.short + "× 更短", { "text-anchor": "start", "font-size": 12, fill: C.green, "font-weight": "bold" });
+          if (b.throughput) {
+            e.text(700, y + 17, "吞吐 " + b.throughput + "×", { "text-anchor": "middle", "font-size": 11, fill: C.accent, "font-weight": "bold" });
+          }
+        });
+        e.text(W/2, 360, "近 4× 端到端推理加速 · 自然简洁 CoT（无需 RL 压缩）", { "text-anchor": "middle", "font-size": 13, fill: C.green, "font-weight": "bold" });
+      }
+    }
+  ];
+}
+
+// ============ INIT ============
+var engines = {};
+var sceneBuilders = {
+  svg1: scene1Build,
+  svg2: scene2Build,
+  svg3: scene3Build,
+  svg4: scene4Build
+};
+
+function initScene(svgId) {
+  if (engines[svgId]) return engines[svgId];
+  var svg = document.getElementById(svgId);
+  if (!svg) return null;
+  var buildFn = sceneBuilders[svgId];
+  if (!buildFn) return null;
+  var steps = buildFn();
+  var eng = new AnimEngine(svg, { steps: steps });
+  engines[svgId] = eng;
+  eng.goTo(0);
+  return eng;
+}
+
+function toggleTheme() {
+  var cur = document.documentElement.getAttribute("data-theme");
+  if (cur === "dark") {
+    document.documentElement.removeAttribute("data-theme");
+    var tb = document.querySelector(".theme-toggle"); if (tb) tb.textContent = "🌙";
+    localStorage.setItem("theme", "light");
+  } else {
+    document.documentElement.setAttribute("data-theme", "dark");
+    var tb2 = document.querySelector(".theme-toggle"); if (tb2) tb2.textContent = "☀️";
+    localStorage.setItem("theme", "dark");
+  }
+}
+
+function toggleToc() {
+  var toc = document.getElementById("tocLinks");
+  if (toc.style.display === "none") {
+    toc.style.display = "block";
+  } else {
+    toc.style.display = "none";
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  if (localStorage.getItem("theme") === "dark") toggleTheme();
+
+  // Mobile TOC toggle
+  if (window.innerWidth <= 768) {
+    var tocToggle = document.getElementById("tocToggle");
+    var tocLinks = document.getElementById("tocLinks");
+    if (tocToggle) tocToggle.style.display = "inline-block";
+    if (tocLinks) tocLinks.style.display = "none";
+  }
+
+  // Init all scenes (not lazy - avoids IntersectionObserver id mismatch pitfall)
+  ["svg1", "svg2", "svg3", "svg4"].forEach(function (id) { initScene(id); });
+
+  var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        var id = entry.target.id;
+        tocLinks.forEach(function (l) { l.classList.remove("active"); });
+        var link = document.querySelector('.toc a[href="#' + id + '"]');
+        if (link) {
+          link.classList.add("active");
+          // Only scrollIntoView on desktop (mobile would jump to top)
+          if (window.innerWidth > 768) {
+            link.scrollIntoView({ block: "nearest" });
+          }
+        }
+      }
+    });
+  }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+  document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+  var backTop = document.getElementById("backTop");
+  window.addEventListener("scroll", function () {
+    if (window.scrollY > 600) backTop.classList.add("visible");
+    else backTop.classList.remove("visible");
+  });
+
+  tocLinks.forEach(function (a) {
+    a.addEventListener("click", function (ev) {
+      ev.preventDefault();
+      var id = a.getAttribute("href").slice(1);
+      var target = document.getElementById(id);
+      if (target) target.scrollIntoView({ behavior: "smooth" });
+      // On mobile, collapse TOC after click
+      if (window.innerWidth <= 768) {
+        var tocLinksDiv = document.getElementById("tocLinks");
+        if (tocLinksDiv) tocLinksDiv.style.display = "none";
+      }
+    });
+  });
+});
+</script>
+</body>
+</html>
