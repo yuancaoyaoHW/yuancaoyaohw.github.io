@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BinaryPC：用二值 PCA 给 KV 缓存配一把位运算钥匙</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+:root {
+  --bg: #fafafa; --fg: #1a1a2e; --fg-soft: #444; --fg-muted: #888;
+  --accent: #6c5ce7; --accent-soft: #a29bfe; --accent-bg: #eeeafe;
+  --green: #00b894; --green-soft: #55efc4; --green-bg: #e0f8f4;
+  --red: #e74c3c; --red-soft: #fab1a0; --red-bg: #fdf0ee;
+  --orange: #e17055; --orange-bg: #fdf0e8;
+  --blue: #0984e3; --blue-soft: #74b9ff; --blue-bg: #e8f4fd;
+  --purple: #a55eea; --purple-bg: #f3ecfd;
+  --border: #ddd; --card-bg: #fff; --code-bg: #f4f4f4;
+  --disabled: #c8c8c8; --focus: #6c5ce7;
+  --toc-w: 240px; --content-w: 860px;
+  --layer-ms: 300ms;
+}
+[data-theme="dark"] {
+  --bg: #1a1a2e; --fg: #e0e0e0; --fg-soft: #bbb; --fg-muted: #888;
+  --accent: #a29bfe; --accent-soft: #6c5ce7; --accent-bg: #2a2a4e;
+  --green: #55efc4; --green-soft: #00b894; --green-bg: #1a3a32;
+  --red: #fab1a0; --red-soft: #e74c3c; --red-bg: #3a1a1a;
+  --orange: #fdcb6e; --orange-bg: #2a2614;
+  --blue: #74b9ff; --blue-soft: #0984e3; --blue-bg: #1a2a3a;
+  --purple: #d0a5f5; --purple-bg: #2a1f3a;
+  --border: #333; --card-bg: #252535; --code-bg: #1e1e2e;
+  --disabled: #555; --focus: #a29bfe;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+
+.content { width: var(--content-w); flex-shrink: 0; }
+section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-orange { background: var(--orange-bg); border-color: var(--orange); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: center; white-space: nowrap; }
+th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+pre.code { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; font-family: "JetBrains Mono", "Consolas", monospace; color: var(--fg-soft); margin: 14px 0; }
+pre.code .c { color: var(--fg-muted); }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--blue-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 680px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: #fff; }
+.badge-green { background: var(--green); color: #fff; }
+.badge-blue { background: var(--blue); color: #fff; }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: #fff; }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+/* ===== 场景过渡动画 (Pattern 1) ===== */
+.anim-canvas-wrap svg .scene-layer { transition: opacity 430ms cubic-bezier(.22,.61,.36,1), transform 430ms cubic-bezier(.22,.61,.36,1); }
+.anim-canvas-wrap svg .scene-enter.from-right { opacity: 0; transform: translateX(18px); }
+.anim-canvas-wrap svg .scene-enter.from-left { opacity: 0; transform: translateX(-18px); }
+.anim-canvas-wrap svg .scene-layer.scene-active { opacity: 1; transform: translateX(0); }
+.anim-canvas-wrap svg .scene-exit.to-left.scene-exit-active { opacity: 0; transform: translateX(-14px); }
+.anim-canvas-wrap svg .scene-exit.to-right.scene-exit-active { opacity: 0; transform: translateX(14px); }
+/* ===== 元素级入场动画 (Pattern 2) ===== */
+.anim-canvas-wrap svg .reveal { opacity: 0; transform: translateY(7px); animation: revealUp .48s cubic-bezier(.22,.61,.36,1) forwards; animation-delay: var(--delay, 0ms); transform-box: fill-box; }
+@keyframes revealUp { to { opacity: 1; transform: translateY(0); } }
+/* ===== 进度条 (Pattern 5) ===== */
+.anim-progress { height: 3px; background: var(--border); position: relative; }
+.anim-progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-soft)); width: 0%; transition: width 380ms cubic-bezier(.22,.61,.36,1); }
+/* ===== 步骤条 Stage Rail (Pattern 4) ===== */
+.anim-stage-rail { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 8px; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg); cursor: pointer; font-size: 11px; color: var(--fg-soft); transition: all 0.15s; }
+.anim-stage-rail .stage-chip:hover { border-color: var(--accent); color: var(--accent); }
+.anim-stage-rail .stage-chip.done { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-soft); }
+.anim-stage-rail .stage-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 960px) {
+  .layout { flex-direction: column; gap: 0; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; margin-bottom: 16px; max-height: 200px; }
+  .toc h3 { cursor: pointer; }
+  .toc.collapsed .toc a { display: none; }
+  .content { width: 100%; }
+  section { padding: 18px; }
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  section { padding: 14px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 20px; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 8px; }
+  .anim-controls button { min-height: 36px; }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc" id="tocNav">
+  <h3 onclick="toggleToc()">导航</h3>
+  <a href="#hook">核心思想</a>
+  <a href="#bg">为什么：解码是带宽瓶颈</a>
+  <a href="#hash">哈希注意力三分天下</a>
+  <a href="#method">方法：二值 PCA 哈希</a>
+  <a href="#algo">算法：迭代 rank-1 二值分解</a>
+  <a href="#eas">EAS：重建误差保险丝</a>
+  <a href="#kernel">GPU 实现：三阶段检索</a>
+  <a href="#bench">实验与诚实的解读</a>
+  <a href="#summary">总结</a>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>BinaryPC</h1>
+  <p class="tagline"><strong>无训练、数据感知的哈希稀疏注意力：用二值 PCA 给 KV 缓存配一把"位运算钥匙"</strong></p>
+  <p class="tagline">解码时注意力是内存带宽瓶颈——KV 缓存越长，每个新 token 越要搬完整个缓存。BinaryPC 用二值主成分给 key 生成 64-bit 紧凑哈希码，让"找最相关的 KV"变成 XOR + popcount 位运算，解码吞吐最高 <strong>3.56×</strong> FlashAttention，精度追平全注意力，且<strong>不需要任何训练</strong>。</p>
+  <div class="badges">
+    <span class="badge badge-accent">腾讯 / 厦大</span>
+    <span class="badge badge-green">解码 3.56× FA</span>
+    <span class="badge badge-blue">64-bit 哈希码</span>
+  </div>
+</section>
+
+<section id="bg">
+  <h2>为什么：解码的瓶颈是内存带宽，不是算力</h2>
+  <p>长上下文推理分两段：<strong>prefill</strong>（输入并行处理、建 KV 缓存，高利用率）和 <strong>decoding</strong>（自回归逐 token 生成）。解码的问题在结构上：每生成一个 token，都要<strong>重新读取全部 KV 缓存</strong>——缓存的长度就是内存搬运量，而 per-token 计算本身又少得可怜。序列越长，GPU 利用率越低，注意力层的成本几乎全部是"把 KV 从 HBM 搬进 SM"。</p>
+  <p>稀疏注意力的思路：只让少数 KV 参与计算。但"选哪些 KV"成了新的问题——选择本身要准（不能丢关键证据）、要便宜（不能比省下的还贵）、要快（每步都做）。</p>
+  <div class="callout callout-accent">
+    <strong>核心判断：</strong> 解码注意力是 memory-bound 问题。优化它的正确姿势不是让 GEMM 更快，而是<strong>减少要搬进 SM 的 KV 字节数</strong>——哈希注意力正是在这个维度上做文章：用紧凑二值码做"粗筛"，只把 top-k 的完整 KV 真正搬进来。
+  </div>
+</section>
+
+<section id="hash">
+  <h2>哈希注意力三分天下：随机、学习、以及空缺</h2>
+  <p>哈希注意力的思路：把 query 和 key 都映射成紧凑二值码 $h \in \{-1,+1\}^H$（$H \ll D$），让哈希码的内积 $h_q^\top h_k$ 成为全精度内积 $q^\top k$ 的高保真代理，然后用位运算（XOR/AND/popcount）快速找出 top-k。现有两条路线都有硬伤：</p>
+  <table>
+    <tr><th></th><th>MagicPIG（LSH 随机投影）</th><th>Spotlight（学习式哈希）</th><th>BinaryPC（二值 PCA）</th></tr>
+    <tr><td>投影来源</td><td>数据无关随机超平面</td><td>MLP，ranking 目标训练</td><td class="gain">数据主方向，无训练</td></tr>
+    <tr><td>码长</td><td class="bad">&gt;1000 bit</td><td>~128 bit</td><td class="gain">64 bit</td></tr>
+    <tr><td>训练开销</td><td>无</td><td class="bad">8K 上下文训 8 小时/每模型</td><td class="gain">零（一次前向或离线校准）</td></tr>
+    <tr><td>精度</td><td class="bad">128K 时比 oracle TOPK 低 6.5pt</td><td>好</td><td class="gain">追平全注意力</td></tr>
+    <tr><td>吞吐</td><td class="bad">0.42–0.50× FA-2（GPU-CPU 协作）</td><td>—</td><td class="gain">1.05–3.56× FA-2</td></tr>
+  </table>
+  <p><strong>为什么随机投影不行</strong>：LLM 的激活落在低维流形上，随机超平面与这个内在结构不对齐——哈希分区的边界经常把"本来就该在一起"的 token 切开。为了补偿，只能把码拉长到 1000+ bit，还附带 GPU-CPU 协作解码这种吞吐杀手。</p>
+  <p><strong>为什么学习式也不行</strong>：MLP 哈希能拟合数据分布，但每换一个模型就要重新校准训练（8K 上下文、8192 样本、约 8 小时），作为 drop-in replacement 不现实。</p>
+  <p><strong>空缺</strong>：既要数据感知（对齐激活流形）、又不能要训练。二值 PCA 恰好同时满足——主方向是数据的固有几何，不需要梯度。</p>
+
+  <div class="anim-frame" id="anim1">
+    <div class="anim-header">
+      <span class="anim-title">动画 1：三种哈希的分区方式对比</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg1" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="三种哈希分区方式对比动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">LSH 随机投影</button><button class="stage-chip" data-step="1">学习式哈希</button><button class="stage-chip" data-step="2">BinaryPC 二值 PCA</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> key 向量（激活分布）</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 哈希边界</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 投影方向</span>
+      <span><span class="dot" style="background:#00b894"></span> 正确分在一起的 token</span>
+    </div>
+  </div>
+</section>
+
+<section id="method">
+  <h2>方法：二值 PCA 哈希——用重建误差定义"好哈希"</h2>
+  <p>BinaryPC 的目标函数是一个重建问题：给定 $N$ 个 key 向量 $\mathbf{K} \in \mathbb{R}^{N \times D}$，找二值哈希码 $\mathbf{H} \in \{-1,+1\}^{N \times H}$ 和实值投影 $\mathbf{P} \in \mathbb{R}^{H \times D}$，最小化</p>
+  <p style="text-align:center; font-size:16px;">$$\min \|\mathbf{K} - \mathbf{H}\mathbf{P}\|_F^2$$</p>
+  <p>这个形式与 PCA 同构：PCA 找的是最小化重建误差的<strong>实值</strong>主方向，这里把编码系数强行二值化成 $\{-1,+1\}$。<strong>为什么非对称设计</strong>：key 的数量远多于单个 query，KV 的内存传输占主导，所以只对 key 做二值编码；query 侧用 $q\mathbf{P}^\top$ 投影后量化（H 个 sign 位 + H 个 7-bit 幅值，打包成 64-bit word），哈希分数完全用位运算算。</p>
+  <p>重建公式给出直接的代理：因为 $\mathbf{k} \approx \mathbf{h}\mathbf{P}$，对任意 query $q$：</p>
+  <p style="text-align:center; font-size:16px;">$$q^\top k \approx q^\top \mathbf{P}^\top h = (q\mathbf{P}^\top) \cdot h$$</p>
+  <p>即"全精度内积 ≈ 投影后的 query 与二值码的相似度"——后者能用位运算算。</p>
+  <div class="callout callout-blue">
+    <strong>为什么这个形式有价值：</strong> 把"哈希"从启发式（随机投影）升级成了<strong>有明确目标的优化</strong>——重建误差有界，哈希码的保真度可度量。更妙的是这个误差信号是免费的：哪个 token 哈希得不好，重建误差直接告诉你。这为后面的 EAS 保险丝铺了路。
+  </div>
+</section>
+
+<section id="algo">
+  <h2>算法：迭代 rank-1 二值分解（Algorithm 1/2）</h2>
+  <p>最小化 $\|\mathbf{K} - \mathbf{H}\mathbf{P}\|_F^2$ 的经典做法是 PCA 的迭代式：找最大奇异向量 → 从信号里扣掉这个分量 → 再找下一个。BinaryPC 把"主分量"换成<strong>二值主分量</strong>：</p>
+  <ol>
+    <li><strong>发现方向</strong>：从随机向量 $v^*$ 出发，反复计算 $\mathbf{R} v^{*\top}$——奇异值随迭代次数指数增长，最大奇异向量最终主导。由于要的是二值分量，直接用 $u = \text{sign}(\mathbf{R} v^{*\top})$ 作为二值主分量（最大奇异值保证它大概率偏向主方向，省掉精确 SVD）；</li>
+    <li><strong>定幅值</strong>：$v = \mathbf{R}^\top u / \|\mathbf{R}^\top u\|$（u 是方向，v 是幅值）；</li>
+    <li><strong>扣除</strong>：$\mathbf{R} \leftarrow \mathbf{R} - u^\top v$，迭代 $H$ 次得到 H 对 $(u, v)$，即哈希码 H 和投影 P。</li>
+  </ol>
+  <p><strong>Algorithm 2（推理时算单 key 哈希）</strong>：P 的行不保证正交，所以算一个新 key 的码要逐行迭代：残差 $r$（初始 $r = k$），对 P 的每行 $v$，取 $h = \text{sign}(r v^\top)$，然后 $r \leftarrow r - h v$。论文图的右半显示残差范数随码长稳定下降——两种算法在所有测试数据上都收敛。</p>
+  <p><strong>OPC（离线投影校准）</strong>：投影 P 可以在线构造（prefill 时对每层 key 做一次 Algorithm 1），也可以离线用小校准集先算好。校准集刻意跨域：PG19（文学）+ ProofPile（数学/推理）+ CodeParrot（代码）各 60 样本。消融里只用 PG19 校准、在 LongBench 全任务上评估（含代码/合成推理等校准集没有的域），得分 30.43 vs 全注意力 30.57 vs 混合域 30.39——<strong>域迁移几乎无损</strong>，说明主方向是 LLM 激活的通用几何，不是特定语料特征。</p>
+  <div class="callout callout-purple">
+    <strong>为什么"随机向量 + 迭代"能行：</strong> 幂迭代的收敛来自奇异值谱的指数级分离——只要最大奇异值严格大于次大值，迭代几步后向量方向就几乎贴着主奇异向量。二值化（sign）非但没破坏收敛，反而因为最大奇异值的主导性，"大概率偏向主方向"就够用了，省掉精确 SVD 的成本。这是"估计够用即可"的工程哲学。
+  </div>
+  <h3>检索打分（Algorithm 3）</h3>
+  <p>query 投影 $qP^\top \in \mathbb{R}^H$ 后转成 H 个 sign 位 + H 个 7-bit 幅值，打包成 H-bit sign word 和 7H-bit 幅值 word。哈希分数 = 位运算组合（XOR、AND、NOT、popcount、位移），top-k 候选进入稀疏注意力。64-bit 码恰好塞进一个 int64，是最优的精度/效率权衡点（消融：32-bit 在 104K 上下文掉到 86.37，64-bit 90.18，128-bit 90.00）。</p>
+
+  <div class="anim-frame" id="anim2">
+    <div class="anim-header">
+      <span class="anim-title">动画 2：迭代 rank-1 二值分解</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg2" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="迭代二值分解动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">发现主方向</button><button class="stage-chip" data-step="1">二值化 + 扣分量</button><button class="stage-chip" data-step="2">迭代收敛</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> key 点云</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 主方向 u</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 残差 R</span>
+      <span><span class="dot" style="background:#00b894"></span> 已提取分量</span>
+    </div>
+  </div>
+</section>
+
+<section id="eas">
+  <h2>EAS：重建误差是一根白送的保险丝</h2>
+  <p>哈希检索有精度损失，但 BinaryPC 的重建形式给了它一个别人没有的东西：<strong>逐 token 的可解释误差信号</strong>。对 token $k$，重建误差 $\|k - hP\|$ 大，说明这个 token 难被二值码表示，它的检索保真度存疑。</p>
+  <p><strong>Error-Aware Safeguard（EAS）</strong>：prefill 阶段用这个误差挑出 top-m 个最难哈希的 token，记为 $\mathcal{S}_{err}$；解码时最终参与注意力的集合是</p>
+  <p style="text-align:center; font-size:16px;">$$\mathcal{S}_{attn} = \mathcal{S}_{hash} \cup \mathcal{S}_{err}$$</p>
+  <p>即"哈希检索到的 ∪ 预判难哈希的"。为什么必须：passkey 这类 token 与周围上下文高度不相似，是投影构造时的 outlier，二值码天然抓不住它——消融里<strong>去掉 EAS，R.PK 从 99.00 崩到 64.00</strong>，而只要 2% 的预算就完全恢复。且 EAS 预算比例 2%~15% 性能几乎不变（47.42~47.63），说明它是稳健组件而非脆弱超参。</p>
+  <div class="callout callout-green">
+    <strong>为什么这是亮点：</strong> 大多数稀疏注意力靠"启发式挑选"兜底，EAS 靠的是<strong>优化目标的副产物</strong>——重建误差不需要额外计算，是 Algorithm 1 本来就有的量。用最少的预算（默认预算的 10%）兜住最坏情况，是一种"知道自己的哈希哪里会错"的自我认知。
+  </div>
+
+  <div class="anim-frame" id="anim3">
+    <div class="anim-header">
+      <span class="anim-title">动画 3：检索流水线与 EAS 兜底</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg3" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="检索流水线与 EAS 动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">三阶段检索</button><button class="stage-chip" data-step="1">outlier 问题</button><button class="stage-chip" data-step="2">EAS 兜底</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> 检索/哈希</span>
+      <span><span class="dot" style="background:#e74c3c"></span> outlier</span>
+      <span><span class="dot" style="background:#e17055"></span> S_err（难哈希）</span>
+      <span><span class="dot" style="background:#00b894"></span> 并集兜底</span>
+    </div>
+  </div>
+</section>
+
+<section id="kernel">
+  <h2>GPU 实现：三阶段检索流水线</h2>
+  <p>为榨干硬件，BinaryPC 写了自定义 CUDA kernel：key 经投影矩阵转成 64-bit 二值码；query 的 8-bit 量化元素拆成 8 个 bit-plane，打包成 64-bit word。检索分三个阶段：</p>
+  <ol>
+    <li><strong>Searching</strong>：CUDA kernel 算投影 query 与全部二值 key 码的哈希分数——纯位运算（XOR + popcount），内存搬运从 D 维浮点变成 64-bit 整数；</li>
+    <li><strong>Selection</strong>：<code>torch.topk</code> 选 top-k；</li>
+    <li><strong>Gathering</strong>：<code>torch.gather</code> 取对应的 KV 对，喂给 FlashAttention。</li>
+  </ol>
+  <p>512K 上下文的具体账：FlashAttention kernel 调用从 <strong>1.814 ms 降到 163 µs</strong>（单注意力层 4.0×），检索三阶段合计 295 µs。注意——检索开销已经超过 FA 本身了，但相对总解码延迟仍小，端到端依然净赚 3.56×。</p>
+  <div class="callout callout-orange">
+    <strong>诚实的账本：</strong> 单层总时间 = 163 µs（稀疏 FA）+ 295 µs（检索）= 458 µs，对比原 1.814 ms 是 3.96×——4.0× 只是 FA 部分的口径。检索流水线（topk/gather 用 torch 而非融合 kernel）是明显的优化空间，融合后还能再压。
+  </div>
+</section>
+
+<section id="bench">
+  <h2>实验与诚实的解读</h2>
+  <h3>精度</h3>
+  <p>模型：Llama-3-8B、Llama-3.1-8B-Instruct、Mistral-7B-Instruct-v0.3、Qwen2.5-7B-Instruct-1M（附录含 70B）。基准：短上下文（GSM8K-CoT/MMLU/CoQA）、LongBench、InfiniteBench、LongBench v2、RULER 与 NIAH（8K→128K）。注意力预算 2%（其中 10% 留给 EAS）。</p>
+  <table>
+    <tr><th>场景</th><th>结果</th></tr>
+    <tr><td>短上下文 (Llama-3-8B)</td><td>BinaryPC 59.31 平均，超 MagicPIG 与 Spotlight；OPC 变体 63.82 逼近全注意力</td></tr>
+    <tr><td>LongBench 2% 预算</td><td class="gain">持平全注意力；1K 预算在 Mistral/Qwen 上反超全注意力</td></tr>
+    <tr><td>InfiniteBench / LongBench v2</td><td class="gain">近乎等价全注意力（平均序列 &gt;100K）</td></tr>
+    <tr><td>RULER / NIAH 8K–128K</td><td class="gain">追平全注意力，NIAH 全针位全长度匹配；逼近 oracle TOPK（MagicPIG 低 6.5pt）</td></tr>
+  </table>
+  <h3>效率</h3>
+  <p>Llama-3.1-8B，8 张数据中心 GPU（另测 8 张消费级卡），对比 FlashAttention-2：</p>
+  <table>
+    <tr><th>配置</th><th>加速</th></tr>
+    <tr><td>batch=2，长上下文</td><td class="gain">最高 3.56×</td></tr>
+    <tr><td>batch=1，长上下文</td><td class="gain">最高 3.17×</td></tr>
+    <tr><td>batch=16, 64K / 128K（FA-2 回退场景）</td><td class="gain">4.25× / 5.04×</td></tr>
+    <tr><td>短上下文</td><td>持平（检索固定开销不划算）</td></tr>
+  </table>
+  <p>batch=16 的 5.04× 有个有趣的机制：FlashAttention-2 内部在 batch &gt; 15 时会从 Split-K kernel 切回标准 kernel，吞吐暴跌；BinaryPC 虽然也调用 FA-2，但输入只剩 2% 的 KV，暴跌被大幅缓解。</p>
+  <div class="callout callout-red">
+    <strong>诚实的解读（坑）：</strong> ① 2% 预算意味着 98% 的 KV 不参与注意力，精度保持主要靠检索类任务（NIAH/RULER）"答案集中"的特性，复杂推理类（如 En.Dia）增益有限；② 短上下文无增益——哈希检索的固定开销在短序列不划算；③ 在线投影构造有 prefill 成本，实际部署形态是 OPC；④ MagicPIG 对比含"队友因素"（其 GPU-CPU 协作解码本身是吞吐杀手）；⑤ 与全注意力对比的"1K 预算反超"需要谨慎看待（可能是任务噪声）。
+  </div>
+</section>
+
+<section id="summary">
+  <h2>总结</h2>
+  <ul>
+    <li><strong>一句话</strong>：BinaryPC 用二值 PCA 把"哈希注意力"从随机投影/学习式两条路之外开出第三条——数据感知、无训练、64-bit 码，解码吞吐最高 3.56× FlashAttention 且精度追平全注意力。</li>
+    <li><strong>可迁移的洞察</strong>：① 把哈希定义为重建优化（而非启发式），让哈希码的保真度可度量、误差可解释；② 重建误差是免费的检索质量信号，EAS 用最小预算兜住 outlier——"知道自己哪里会错"比"试图全对"更工程；③ 非对称编码（只编码 key）精准命中 memory-bound 瓶颈的搬运方；④ 幂迭代 + 二值化省掉 SVD，"估计够用即可"。</li>
+    <li><strong>局限</strong>：检索流水线还有融合空间（topk/gather 未融合）；在线投影的 prefill 开销未与 OPC 仔细对比；复杂推理任务上的增益弱于检索任务；2% 预算是激进假设，需要真实 workload 验证。</li>
+  </ul>
+  <div class="callout callout-green">
+    <strong>延伸阅读：</strong> 论文 arXiv:2608.04405（腾讯 PCG + 厦大，含贾蓉蓉）；代码 github.com/yudaohai666/BPC；对比系 MagicPIG（LSH 随机投影）、Spotlight（学习式哈希）、Quest（块级 query-aware）、PyramidKV/CAKE（静态选择）。
+  </div>
+</section>
+
+</div>
+</div>
+
+<script>
+(function () {
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function AnimEngine(svg, opts) {
+    this.svg = svg;
+    this.svgId = svg.id;
+    this.steps = opts.steps || [];
+    this.idx = -1;
+    this.currentStep = -1;
+    this.timer = null;
+    this.speed = 1;
+    this.layer = null;
+    this._token = 0;
+    this._initDefs();
+  }
+
+  AnimEngine.prototype._initDefs = function () {
+    var ns = SVG_NS;
+    var defs = document.createElementNS(ns, "defs");
+    var uid = this.svgId + "-";
+
+    function marker(id, color, orient) {
+      var m = document.createElementNS(ns, "marker");
+      m.setAttribute("id", id);
+      m.setAttribute("viewBox", "0 0 10 10");
+      m.setAttribute("refX", "8");
+      m.setAttribute("refY", "5");
+      m.setAttribute("markerWidth", "7");
+      m.setAttribute("markerHeight", "7");
+      m.setAttribute("orient", orient || "auto");
+      var p = document.createElementNS(ns, "path");
+      p.setAttribute("d", "M0,0 L10,5 L0,10 Z");
+      p.setAttribute("fill", color);
+      m.appendChild(p);
+      return m;
+    }
+    defs.appendChild(marker(uid + "arr", "#6c5ce7", "auto"));
+    defs.appendChild(marker(uid + "arrG", "#00b894", "auto"));
+    defs.appendChild(marker(uid + "arrR", "#e74c3c", "auto"));
+    defs.appendChild(marker(uid + "arrB", "#0984e3", "auto"));
+    defs.appendChild(marker(uid + "arrO", "#e17055", "auto"));
+    this.svg.appendChild(defs);
+  };
+
+  AnimEngine.prototype._initLayer = function () {
+    this.layer = document.createElementNS(SVG_NS, "g");
+    this.layer.setAttribute("class", "anim-layer");
+    this.svg.appendChild(this.layer);
+  };
+
+  AnimEngine.prototype.clear = function () {
+    while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild);
+  };
+
+  AnimEngine.prototype.draw = function (tag, attrs, text) {
+    var el = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (var k in attrs) {
+      if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]);
+    }
+    if (text !== null && text !== undefined && text !== "") el.textContent = text;
+    this.layer.appendChild(el);
+    return el;
+  };
+
+  AnimEngine.prototype.t = function (x, y, str, opts) {
+    opts = opts || {};
+    var lines = String(str).split("\n");
+    var el = this.draw("text", Object.assign({
+      x: x, y: y,
+      "text-anchor": opts.ta || "middle",
+      "font-size": opts.fs || 12,
+      fill: opts.fill || "#444",
+      "font-family": opts.ff || "inherit",
+      "font-weight": opts.fw || "normal"
+    }, opts.attrs || {}), null);
+    if (lines.length === 1) {
+      el.textContent = str;
+    } else {
+      var fs = opts.fs || 12;
+      lines.forEach(function (line, i) {
+        var ts = document.createElementNS(SVG_NS, "tspan");
+        ts.setAttribute("x", x);
+        ts.setAttribute("dy", i === 0 ? 0 : fs * 1.2);
+        ts.textContent = line;
+        el.appendChild(ts);
+      });
+    }
+    return el;
+  };
+
+  AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, opts) {
+    opts = opts || {};
+    var r = this.draw("rect", {
+      x: x, y: y, width: w, height: h,
+      fill: fill || "#fff", stroke: stroke || "#ccc",
+      "stroke-width": opts.sw || 1.5, rx: opts.rx || 4
+    }, null);
+    if (label) {
+      this.t(x + w / 2, y + h / 2 + (opts.labelDy || 4), label, {
+        fs: opts.fs || 11, fill: opts.labelFill || "#fff", fw: opts.fw || "600",
+        ta: "middle"
+      });
+    }
+    return r;
+  };
+
+  AnimEngine.prototype.arrow = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    var mid = opts.curve ? " Q " + opts.cx + "," + opts.cy + " " : "";
+    var d = "M" + x1 + "," + y1 + mid + " L" + x2 + "," + y2;
+    var markerId = "url(#" + this.svgId + "-" + (opts.marker || "arr") + ")";
+    this.draw("path", {
+      d: d, fill: "none", stroke: color || "#6c5ce7",
+      "stroke-width": opts.sw || 2, "marker-end": markerId,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.line = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    this.draw("line", {
+      x1: x1, y1: y1, x2: x2, y2: y2,
+      stroke: color || "#ccc", "stroke-width": opts.sw || 1,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.circle = function (cx, cy, r, fill, stroke, opts) {
+    opts = opts || {};
+    this.draw("circle", {
+      cx: cx, cy: cy, r: r,
+      fill: fill || "#fff", stroke: stroke || "#ccc",
+      "stroke-width": opts.sw || 1.5
+    }, null);
+  };
+
+  AnimEngine.prototype.delay = function () { return 1100 / this.speed; };
+
+  AnimEngine.prototype.goTo = function (i) {
+    if (i < 0 || i >= this.steps.length) return;
+    var prev = this.currentStep;
+    var direction = i >= prev ? 1 : -1;
+    var step = this.steps[i];
+    this._render2(step, i, direction);
+    if (window.MathJax && window.__mathReady && step.desc) {
+      var descEl = this.svg.parentNode.parentNode.querySelector(".step-desc");
+      if (descEl) {
+        try { MathJax.typesetPromise([descEl]); } catch (e) {}
+      }
+    }
+  };
+
+  AnimEngine.prototype._render2 = function (step, index, direction) {
+    var oldLayer = this.layer || null;
+    var nextLayer = document.createElementNS(SVG_NS, "g");
+    nextLayer.setAttribute("class", "anim-layer scene-layer");
+    this.svg.appendChild(nextLayer);
+    this.layer = nextLayer;
+    this.idx = index;
+    step.render(this);
+    this._applyReveal(nextLayer);
+    this.currentStep = index;
+    this._updateUI(step, index);
+    if (oldLayer && !this._reducedMotion()) {
+      nextLayer.classList.add("scene-enter", direction > 0 ? "from-right" : "from-left");
+      oldLayer.classList.add("scene-exit", direction > 0 ? "to-left" : "to-right");
+      var self = this;
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          nextLayer.classList.add("scene-active");
+          oldLayer.classList.add("scene-exit-active");
+        });
+      });
+      setTimeout(function () {
+        if (oldLayer.parentNode) oldLayer.parentNode.removeChild(oldLayer);
+        nextLayer.classList.remove("scene-enter", "from-right", "from-left");
+      }, 520);
+    } else {
+      if (oldLayer) oldLayer.parentNode.removeChild(oldLayer);
+    }
+  };
+
+  AnimEngine.prototype._reducedMotion = function () {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  };
+
+  AnimEngine.prototype._applyReveal = function (layer) {
+    if (this._reducedMotion()) return;
+    var els = layer.querySelectorAll("rect, text, circle, path");
+    var delay = 60;
+    for (var i = 0; i < els.length; i++) {
+      els[i].style.setProperty("--delay", delay + "ms");
+      els[i].classList.add("reveal");
+      delay += 55;
+      if (delay > 650) delay = 60;
+    }
+  };
+
+  AnimEngine.prototype._updateUI = function (step, i) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var info = frame.querySelector(".step-info");
+    var desc = frame.querySelector(".step-desc");
+    if (info) info.textContent = "步骤 " + (i + 1) + " / " + this.steps.length;
+    if (desc) desc.innerHTML = step.desc || step.title || "";
+    var prev = frame.querySelector(".btn-prev");
+    var next = frame.querySelector(".btn-next");
+    if (prev) prev.disabled = (i === 0);
+    if (next) next.disabled = (i === this.steps.length - 1);
+    var bar = frame.querySelector(".anim-progress .bar");
+    if (bar) bar.style.width = ((i + 1) / this.steps.length * 100) + "%";
+    var chips = frame.querySelectorAll(".stage-chip");
+    for (var c = 0; c < chips.length; c++) {
+      chips[c].classList.toggle("done", c < i);
+      chips[c].classList.toggle("active", c === i);
+    }
+  };
+
+  AnimEngine.prototype.next = function () { if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1); };
+  AnimEngine.prototype.prev = function () { if (this.currentStep > 0) this.goTo(this.currentStep - 1); };
+  AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+  AnimEngine.prototype.play = function () {
+    var self = this;
+    if (this.timer) return;
+    this._advance();
+  };
+  AnimEngine.prototype._advance = function () {
+    var self = this;
+    if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
+    this.timer = setTimeout(function () {
+      self.next();
+      self._advance();
+    }, this.delay());
+  };
+  AnimEngine.prototype.pause = function () {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  };
+  AnimEngine.prototype.toggle = function () {
+    if (this.timer) { this.pause(); this._setPlayBtn(false); }
+    else { if (this.currentStep >= this.steps.length - 1) this.goTo(0); this.play(); this._setPlayBtn(true); }
+  };
+  AnimEngine.prototype._setPlayBtn = function (playing) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var btn = frame.querySelector(".btn-play");
+    if (btn) btn.textContent = playing ? "⏸ 暂停" : "▶ 播放";
+  };
+  AnimEngine.prototype.setSpeed = function (s) {
+    this.speed = s;
+    var frame = this.svg.closest(".anim-frame");
+    if (frame) {
+      var lbl = frame.querySelector(".speed-label");
+      if (lbl) lbl.textContent = s.toFixed(1) + "×";
+    }
+  };
+
+  /* ============ SCENE 1: three hashing approaches ============ */
+  function scene1Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    function scatter(e, cx, cy, seed, n, color) {
+      var pts = [[-70,-30],[40,-60],[-20,-20],[80,-10],[-60,20],[10,30],[60,40],[-90,10],[30,-40],[90,5],[-30,55],[70,-35],[-10,-55],[50,20],[-50,-5],[95,45],[-85,-25],[20,60],[-45,35],[5,-10]];
+      for (var i = 0; i < n; i++) {
+        var p = pts[(seed * 7 + i * 3) % pts.length];
+        e.circle(cx + p[0], cy + p[1], 4, color || C.blue, "none");
+      }
+    }
+    return [
+      {
+        title: "LSH 随机投影",
+        desc: "MagicPIG 用数据无关的随机超平面切分空间。随机边界与 LLM 激活的低维流形不对齐：本该在一起的 token 常被切开（红圈），需要 >1000 bit 长码补偿，仍比 oracle TOPK 低 6.5pt（128K）。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "LSH：随机超平面，与数据错位", { fs: 16, fill: C.red, fw: "700" });
+          scatter(e, 250, 210, 1, 16);
+          e.line(250 - 130, 210 - 100, 250 + 130, 210 + 100, C.red, { sw: 2.5 });
+          e.line(250 - 95, 210 + 105, 250 + 95, 210 - 105, C.red, { sw: 2.5 });
+          e.t(250, 380, "随机分区：边界切开密集簇 → 需要 1000+ bit 长码补偿", { fs: 12, fill: C.red, fw: "600" });
+          e.rect(560, 140, 210, 100, "码长 >1000 bit\nGPU-CPU 协作解码\n吞吐仅 0.42-0.50× FA-2", "#fdf0ee", C.red, { rx: 8, fs: 11, labelFill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "学习式哈希",
+        desc: "Spotlight 用 MLP 学哈希函数，边界贴合数据分布（绿）。但每换一个模型就要重训：8K 上下文、8192 样本、约 8 小时，作为 drop-in replacement 不现实。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "学习式哈希：边界贴合，但要训练", { fs: 16, fill: C.orange, fw: "700" });
+          scatter(e, 250, 210, 1, 16);
+          e.line(250 - 130, 210 - 90, 250 + 130, 210 + 90, C.orange, { sw: 2.5 });
+          e.line(250 - 100, 210 + 110, 250 + 100, 210 - 110, C.orange, { sw: 2.5 });
+          e.rect(250 - 130, 210 - 90 - 40, 260, 80, "MLP 拟合数据分布\n(ranking 目标)", "#fdf0e8", C.orange, { rx: 8, fs: 11, labelFill: C.orange, fw: "600" });
+          e.t(250, 380, "边界贴合流形 → 码长降到 ~128 bit，但每模型重训 8 小时", { fs: 12, fill: C.orange, fw: "600" });
+          e.rect(560, 140, 210, 100, "训练开销\n8K 上下文 / 8192 样本\n约 8 小时/每模型", "#fdf0e8", C.orange, { rx: 8, fs: 11, labelFill: C.orange, fw: "600" });
+        }
+      },
+      {
+        title: "BinaryPC 二值 PCA",
+        desc: "主方向对齐数据流形（紫箭头），无训练一次前向得到。64-bit 码足够：比 MagicPIG 短 10×+、比 Spotlight 短 2×，精度追平全注意力，解码吞吐最高 3.56×。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "BinaryPC：主方向对齐流形，无训练", { fs: 16, fill: C.green, fw: "700" });
+          scatter(e, 250, 210, 1, 16);
+          e.line(250 - 130, 210 - 90, 250 + 130, 210 + 90, C.accent, { sw: 3 });
+          e.line(250 - 100, 210 + 110, 250 + 100, 210 - 110, C.accent, { sw: 3 });
+          e.t(250, 380, "主方向 = 数据固有几何：64-bit 码追平全注意力", { fs: 12, fill: C.green, fw: "600" });
+          e.rect(560, 140, 210, 100, "64-bit 码\n无训练（一次前向）\n吞吐最高 3.56× FA-2", "#e0f8f4", C.green, { rx: 8, fs: 11, labelFill: C.green, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 2: iterative rank-1 binary decomposition ============ */
+  function scene2Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    function scatter(e, cx, cy, seed, n, color) {
+      var pts = [[-70,-30],[40,-60],[-20,-20],[80,-10],[-60,20],[10,30],[60,40],[-90,10],[30,-40],[90,5],[-30,55],[70,-35],[-10,-55],[50,20],[-50,-5],[95,45],[-85,-25],[20,60],[-45,35],[5,-10]];
+      for (var i = 0; i < n; i++) {
+        var p = pts[(seed * 7 + i * 3) % pts.length];
+        e.circle(cx + p[0], cy + p[1], 4, color || C.blue, "none");
+      }
+    }
+    return [
+      {
+        title: "发现主方向",
+        desc: "从随机向量 $v^*$ 出发，反复计算 $Rv^{*\\top}$——奇异值指数增长，最大奇异向量主导。取 $u = sign(Rv^{*\\top})$ 作为二值主分量：最大奇异值保证它大概率偏向主方向，省掉精确 SVD。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "幂迭代：随机向量被拉向最大奇异方向", { fs: 16, fill: C.accent, fw: "700" });
+          scatter(e, 250, 210, 2, 16);
+          e.arrow(250 - 60, 210 - 40, 250 + 90, 210 - 95, C.muted, { sw: 2, marker: "arr", dash: "4,3" });
+          e.arrow(250 - 40, 210 - 60, 250 + 95, 210 - 110, C.accent, { sw: 3, marker: "arr" });
+          e.t(250 + 120, 210 - 100, "u = sign(Rv*ᵀ)", { fs: 12, fill: C.accent, fw: "700", ta: "start" });
+          e.t(250, 380, "迭代 n 次后：最大奇异值主导，方向贴着主奇异向量", { fs: 12, fill: C.fg, fw: "600" });
+        }
+      },
+      {
+        title: "二值化 + 扣分量",
+        desc: "u 是方向（二值），v = Rᵀu/‖Rᵀu‖ 定幅值，然后 R ← R − uᵀv 把这条分量从残差里扣掉。u 的行就是哈希码 H 的一行，v 就是投影 P 的一行。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "提取一条二值主分量", { fs: 16, fill: C.accent, fw: "700" });
+          scatter(e, 250, 210, 2, 10, C.red);
+          e.line(250 - 120, 210 - 85, 250 + 120, 210 + 85, C.accent, { sw: 3 });
+          e.t(250, 120, "分量 u：sign(Rv*ᵀ) ∈ {−1,+1}", { fs: 12, fill: C.accent, fw: "600" });
+          e.t(250, 300, "幅值 v = Rᵀu / ‖Rᵀu‖", { fs: 12, fill: C.fg, fw: "600" });
+          e.t(250, 380, "R ← R − uᵀv：残差丢掉这条分量，继续下一轮", { fs: 12, fill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "迭代收敛",
+        desc: "迭代 H 次得到 H 对 (u, v) = 哈希码 H 与投影 P。论文图显示残差范数 ‖R‖_F 随码长单调下降、所有测试数据都收敛——重建误差可控，哈希码保真度有保证。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "迭代 H 次：残差单调下降", { fs: 16, fill: C.green, fw: "700" });
+          var x0 = 180, y0 = 320, axW = 440, axH = 200;
+          e.line(x0, y0, x0 + axW, y0, C.muted, { sw: 1.5 });
+          e.line(x0, y0, x0, y0 - axH, C.muted, { sw: 1.5 });
+          e.t(x0 + axW / 2, y0 + 30, "哈希码长度 H", { fs: 12, fill: C.fg });
+          e.t(x0 - 14, y0 - axH / 2, "‖R‖_F", { fs: 12, fill: C.fg, ta: "start" });
+          var pts = [[0, 200], [60, 120], [120, 78], [180, 52], [240, 36], [300, 25], [360, 18], [440, 12]];
+          var d = "M" + pts.map(function (p, i) { return (i ? " L" : "") + (x0 + p[0]) + "," + (y0 - p[1]); }).join("");
+          e.draw("path", { d: d, fill: "none", stroke: C.green, "stroke-width": 3 }, null);
+          pts.forEach(function (p) { e.circle(x0 + p[0], y0 - p[1], 5, C.green, "none"); });
+          e.t(W / 2, 380, "64-bit 后曲线基本走平：再长码收益递减，位运算成本上升", { fs: 12, fill: C.green, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 3: retrieval pipeline + EAS ============ */
+  function scene3Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    return [
+      {
+        title: "三阶段检索",
+        desc: "① Searching：CUDA kernel 位运算算哈希分数（query 8-bit 量化拆成 bit-plane，与 64-bit key 码 XOR + popcount）；② Selection：torch.topk 选 top-k；③ Gathering：torch.gather 取 KV 进稀疏注意力。512K 场景：FA 1.814ms → 163µs，检索合计 295µs。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "检索流水线：Search → Select → Gather", { fs: 16, fill: C.accent, fw: "700" });
+          var y = 70;
+          var stages = [
+            ["Searching", "位运算哈希分数\nXOR + popcount", C.blue],
+            ["Selection", "torch.topk\n选 top-k", C.accent],
+            ["Gathering", "torch.gather\n取 KV 进稀疏 FA", C.green]
+          ];
+          stages.forEach(function (s, i) {
+            var x = 90 + i * 220;
+            e.rect(x, y, 170, 90, s[0], s[2], s[2], { rx: 8, fs: 13, labelFill: "#fff", fw: "700" });
+            e.t(x + 85, y + 62, s[1], { fs: 10.5, fill: "#fff", fw: "600" });
+            if (i < 2) e.arrow(x + 175, y + 45, x + 215, y + 45, C.fg, { sw: 2, marker: "arr" });
+          });
+          e.t(W / 2, 200, "512K 上下文：FA 1.814ms → 163µs（4.0×），检索三阶段 295µs", { fs: 12, fill: C.fg, fw: "600" });
+          e.rect(180, 230, 460, 60, "总账：458µs vs 1814µs = 3.96×（检索未融合，仍有优化空间）", "#fdf0e8", C.orange, { rx: 8, fs: 12, labelFill: C.orange, fw: "600" });
+        }
+      },
+      {
+        title: "outlier 问题",
+        desc: "passkey 这类 token 与周围上下文高度不相似，是投影构造时的 outlier——二值码抓不住它。消融：去掉 EAS，R.PK 从 99.00 崩到 64.00。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "难哈希的 outlier：passkey 逃出二值码", { fs: 16, fill: C.red, fw: "700" });
+          var pts = [[60,80],[100,60],[140,90],[80,120],[120,110],[160,70],[200,100],[240,80],[280,110],[320,90],[360,120],[400,100],[440,80],[480,110],[520,90],[560,70],[600,100],[640,120],[680,90],[720,70]];
+          pts.forEach(function (p, i) {
+            e.rect(p[0] - 14, p[1] - 10, 28, 20, "", (i % 4 === 0) ? C.blue : C.blue, C.blue, { rx: 4 });
+          });
+          e.rect(560, 200, 160, 60, "passkey\n(信息针)", C.red, C.red, { rx: 8, fs: 12, labelFill: "#fff", fw: "700" });
+          e.t(560 + 80, 290, "与上下文高度不相似 →\n投影构造时的 outlier", { fs: 11, fill: C.red, ta: "start", fw: "600" });
+          e.t(W / 2, 380, "哈希码把它当噪声：检索永远找不到它", { fs: 13, fill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "EAS 兜底",
+        desc: "prefill 时用重建误差挑出 top-m 个最难哈希的 token（S_err），解码时 S_hash ∪ S_err 一起进注意力。2% 预算就完全恢复 R.PK 99.00；预算比例 2~15% 性能稳定（47.42~47.63），是稳健组件而非脆弱超参。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "EAS：重建误差白送的保险丝", { fs: 16, fill: C.green, fw: "700" });
+          var x0 = 140, y0 = 90;
+          e.rect(x0, y0, 240, 70, "S_hash：哈希检索 top-k", C.blue, C.blue, { rx: 8, fs: 12, labelFill: "#fff", fw: "600" });
+          e.rect(x0 + 280, y0, 240, 70, "S_err：重建误差 top-m\n(hard-to-hash)", C.orange, C.orange, { rx: 8, fs: 12, labelFill: "#fff", fw: "600" });
+          e.rect(x0 + 140, y0 + 110, 280, 70, "S_attn = S_hash ∪ S_err\n（并集进稀疏注意力）", C.green, C.green, { rx: 8, fs: 12, labelFill: "#fff", fw: "600" });
+          e.arrow(x0 + 260, y0 + 75, x0 + 260, y0 + 105, C.green, { sw: 2, marker: "arrG" });
+          e.arrow(x0 + 400, y0 + 75, x0 + 300, y0 + 105, C.green, { sw: 2, marker: "arrG" });
+          e.t(W / 2, 300, "无 EAS：R.PK 64.00（崩） → 2% 预算：99.00（恢复）", { fs: 13, fill: C.green, fw: "600" });
+          e.t(W / 2, 330, "误差信号来自 Algorithm 1 的副产物——零额外计算", { fs: 12, fill: C.muted });
+        }
+      }
+    ];
+  }
+
+  /* ============ WIRING ============ */
+  var builders = {
+    "svg1": scene1Build,
+    "svg2": scene2Build,
+    "svg3": scene3Build
+  };
+  var engines = {};
+
+  function initScene(svgId) {
+    if (engines[svgId]) return engines[svgId];
+    var svg = document.getElementById(svgId);
+    if (!svg) return null;
+    var buildFn = builders[svgId];
+    if (!buildFn) return null;
+    var steps = buildFn();
+    var eng = new AnimEngine(svg, { steps: steps });
+    engines[svgId] = eng;
+    eng.goTo(0);
+    return eng;
+  }
+
+  document.querySelectorAll(".anim-frame").forEach(function (frame) {
+    var svg = frame.querySelector("svg");
+    if (!svg) return;
+    var svgId = svg.id;
+
+    frame.addEventListener("click", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      var target = ev.target;
+      if (target.classList.contains("btn-play")) { eng.toggle(); }
+      else if (target.classList.contains("btn-next")) { eng.pause(); eng._setPlayBtn(false); eng.next(); }
+      else if (target.classList.contains("btn-prev")) { eng.pause(); eng._setPlayBtn(false); eng.prev(); }
+      else if (target.classList.contains("btn-reset")) { eng.reset(); }
+      else if (target.classList.contains("stage-chip")) {
+        eng.pause();
+        eng._setPlayBtn(false);
+        eng.goTo(parseInt(target.getAttribute("data-step"), 10));
+      }
+    });
+
+    var slider = frame.querySelector(".speed-slider");
+    if (slider) {
+      slider.addEventListener("input", function () {
+        var eng = engines[svgId];
+        if (eng) eng.setSpeed(parseFloat(slider.value));
+      });
+    }
+
+    frame.setAttribute("tabindex", "0");
+    frame.addEventListener("keydown", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      if (ev.key === "ArrowRight") { ev.preventDefault(); eng.next(); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); eng.prev(); }
+      else if (ev.key === " ") { ev.preventDefault(); eng.toggle(); }
+    });
+  });
+
+  window.toggleTheme = function () {
+    var html = document.documentElement;
+    if (html.getAttribute("data-theme") === "dark") {
+      html.removeAttribute("data-theme");
+      var tb = document.querySelector(".theme-toggle");
+      if (tb) tb.textContent = "🌙";
+      localStorage.setItem("theme", "light");
+    } else {
+      html.setAttribute("data-theme", "dark");
+      var tb2 = document.querySelector(".theme-toggle");
+      if (tb2) tb2.textContent = "☀️";
+      localStorage.setItem("theme", "dark");
+    }
+  };
+
+  window.toggleToc = function () {
+    var nav = document.getElementById("tocNav");
+    if (nav) nav.classList.toggle("collapsed");
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (localStorage.getItem("theme") === "dark") toggleTheme();
+    ["svg1", "svg2", "svg3"].forEach(function (id) { initScene(id); });
+
+    var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var id = entry.target.id;
+          tocLinks.forEach(function (l) { l.classList.remove("active"); });
+          var link = document.querySelector('.toc a[href="#' + id + '"]');
+          if (link) { link.classList.add("active"); if (window.innerWidth > 768) link.scrollIntoView({ block: "nearest" }); }
+        }
+      });
+    }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+    document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+    var backTop = document.getElementById("backTop");
+    window.addEventListener("scroll", function () {
+      if (window.scrollY > 600) backTop.classList.add("visible");
+      else backTop.classList.remove("visible");
+    });
+
+    tocLinks.forEach(function (a) {
+      a.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        var id = a.getAttribute("href").slice(1);
+        var target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: "smooth" });
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
