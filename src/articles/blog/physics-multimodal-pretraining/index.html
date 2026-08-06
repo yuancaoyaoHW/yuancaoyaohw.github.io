@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多模态预训练的物理：知识流、协同竞争、早期统一与配方</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+:root {
+  --bg: #fafafa; --fg: #1a1a2e; --fg-soft: #444; --fg-muted: #888;
+  --accent: #6c5ce7; --accent-soft: #a29bfe; --accent-bg: #eeeafe;
+  --green: #00b894; --green-soft: #55efc4; --green-bg: #e0f8f4;
+  --red: #e74c3c; --red-soft: #fab1a0; --red-bg: #fdf0ee;
+  --orange: #e17055; --orange-bg: #fdf0e8;
+  --blue: #0984e3; --blue-soft: #74b9ff; --blue-bg: #e8f4fd;
+  --purple: #a55eea; --purple-bg: #f3ecfd;
+  --border: #ddd; --card-bg: #fff; --code-bg: #f4f4f4;
+  --disabled: #c8c8c8; --focus: #6c5ce7;
+  --toc-w: 240px; --content-w: 860px;
+  --layer-ms: 300ms;
+}
+[data-theme="dark"] {
+  --bg: #1a1a2e; --fg: #e0e0e0; --fg-soft: #bbb; --fg-muted: #888;
+  --accent: #a29bfe; --accent-soft: #6c5ce7; --accent-bg: #2a2a4e;
+  --green: #55efc4; --green-soft: #00b894; --green-bg: #1a3a32;
+  --red: #fab1a0; --red-soft: #e74c3c; --red-bg: #3a1a1a;
+  --orange: #fdcb6e; --orange-bg: #2a2614;
+  --blue: #74b9ff; --blue-soft: #0984e3; --blue-bg: #1a2a3a;
+  --purple: #d0a5f5; --purple-bg: #2a1f3a;
+  --border: #333; --card-bg: #252535; --code-bg: #1e1e2e;
+  --disabled: #555; --focus: #a29bfe;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+
+.content { width: var(--content-w); flex-shrink: 0; }
+section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-orange { background: var(--orange-bg); border-color: var(--orange); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: center; white-space: nowrap; }
+th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+pre.code { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; font-family: "JetBrains Mono", "Consolas", monospace; color: var(--fg-soft); margin: 14px 0; }
+pre.code .c { color: var(--fg-muted); }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--green-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 700px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: #fff; }
+.badge-green { background: var(--green); color: #fff; }
+.badge-blue { background: var(--blue); color: #fff; }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: #fff; }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+/* ===== 场景过渡动画 (Pattern 1) ===== */
+.anim-canvas-wrap svg .scene-layer { transition: opacity 430ms cubic-bezier(.22,.61,.36,1), transform 430ms cubic-bezier(.22,.61,.36,1); }
+.anim-canvas-wrap svg .scene-enter.from-right { opacity: 0; transform: translateX(18px); }
+.anim-canvas-wrap svg .scene-enter.from-left { opacity: 0; transform: translateX(-18px); }
+.anim-canvas-wrap svg .scene-layer.scene-active { opacity: 1; transform: translateX(0); }
+.anim-canvas-wrap svg .scene-exit.to-left.scene-exit-active { opacity: 0; transform: translateX(-14px); }
+.anim-canvas-wrap svg .scene-exit.to-right.scene-exit-active { opacity: 0; transform: translateX(14px); }
+/* ===== 元素级入场动画 (Pattern 2) ===== */
+.anim-canvas-wrap svg .reveal { opacity: 0; transform: translateY(7px); animation: revealUp .48s cubic-bezier(.22,.61,.36,1) forwards; animation-delay: var(--delay, 0ms); transform-box: fill-box; }
+@keyframes revealUp { to { opacity: 1; transform: translateY(0); } }
+/* ===== 进度条 (Pattern 5) ===== */
+.anim-progress { height: 3px; background: var(--border); position: relative; }
+.anim-progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-soft)); width: 0%; transition: width 380ms cubic-bezier(.22,.61,.36,1); }
+/* ===== 步骤条 Stage Rail (Pattern 4) ===== */
+.anim-stage-rail { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 8px; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg); cursor: pointer; font-size: 11px; color: var(--fg-soft); transition: all 0.15s; }
+.anim-stage-rail .stage-chip:hover { border-color: var(--accent); color: var(--accent); }
+.anim-stage-rail .stage-chip.done { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-soft); }
+.anim-stage-rail .stage-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 960px) {
+  .layout { flex-direction: column; gap: 0; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; margin-bottom: 16px; max-height: 200px; }
+  .toc h3 { cursor: pointer; }
+  .toc.collapsed .toc a { display: none; }
+  .content { width: 100%; }
+  section { padding: 18px; }
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  section { padding: 14px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 20px; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 8px; }
+  .anim-controls button { min-height: 36px; }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc" id="tocNav">
+  <h3 onclick="toggleToc()">导航</h3>
+  <a href="#hook">核心思想</a>
+  <a href="#setup">实验设计：三层证据</a>
+  <a href="#flow">规律一：知识流不对称</a>
+  <a href="#concept">概念依赖：CLEVR 因果消融</a>
+  <a href="#synergy">规律二：复杂度决定协同/竞争</a>
+  <a href="#arch">架构解剖：参数共享五配置</a>
+  <a href="#early">规律三：早期统一与视觉懒惰</a>
+  <a href="#recipe">规律四：配方与 13.5B 验证</a>
+  <a href="#honest">诚实的解读</a>
+  <a href="#summary">总结</a>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>多模态预训练的物理</h1>
+  <p class="tagline"><strong>Knowledge Flow · Modality Synergy · Early Unification · Recipes——用三层证据把统一预训练从 heuristics 推向 phenomenology</strong></p>
+  <p class="tagline">Meta FAIR + 牛津用"控制变量实验 + 合成数据因果消融 + 13.5B MoE × 2T token 规模验证"，拆出四条规律：<strong>知识流不对称</strong>（语言是万能助推器，生成是中性乘客）、<strong>复杂度决定协同/竞争</strong>、<strong>早期统一必要</strong>（否则触发视觉懒惰）、<strong>非对称配方 70/25/5</strong>——只用 5% 生成预算就达到强生成。</p>
+  <div class="badges">
+    <span class="badge badge-accent">Meta FAIR / 牛津</span>
+    <span class="badge badge-green">5% 预算强生成</span>
+    <span class="badge badge-blue">13.5B MoE × 2T</span>
+  </div>
+</section>
+
+<section id="setup">
+  <h2>实验设计：为什么这套证据可信</h2>
+  <p>这篇工作的分量不在某个惊人的数字，而在<strong>证据链的完整性</strong>——每一条规律都走完"真实数据发现 → 合成数据因果验证 → 规模单变量对照"三步：</p>
+  <ul>
+    <li><strong>框架</strong>：Transfusion（文本 next-token 预测 + 视觉连续 flow matching 统一建模），Llama-3 式主干（SwiGLU/RoPE/GQA/QK-norm），默认 1.5B 模型 + 模态专属 split FFN ≈ 2.3B 参数；</li>
+    <li><strong>真实数据</strong>：语言 DCLM + 视觉 SSTK（约 350M 图文对），预算扫 100B 到 2T token；</li>
+    <li><strong>合成数据</strong>：CLEVR 扩展（百万场景、五概念轴），可逐概念从单模态流中删除——把真实数据上的相关关系变成因果陈述；</li>
+    <li><strong>规模验证</strong>：13.5B MoE（256 experts、top-16、1.5B active），2T token，三个单变量对照（配方/架构/时机）。</li>
+  </ul>
+  <div class="callout callout-accent">
+    <strong>为什么可信：</strong> 视觉理解用 16 基准四轴（General / Knowledge / OCR&amp;Chart / Vision-Centric）评估，生成用 GenEval / DPG-Bench / CLIP 相似度 / 扩散 loss / FID 多口径——避免"单个基准上的偶然胜利"。所有结论还在四种视觉 tokenizer（RAE / Raw Pixels / CLIP+VAE / AR UniTok）上复现，确认规律来自学习目标本身而非表示空间。
+  </div>
+</section>
+
+<section id="flow">
+  <h2>规律一：知识流不对称——语言是司机，生成是乘客</h2>
+  <p>统一模型同时训练三种能力：语言、视觉理解（图→文）、视觉生成（文→图）。它们之间的知识传递是<strong>严格不对称</strong>的：</p>
+  <table>
+    <tr><th>传递方向</th><th>强度</th><th>证据</th></tr>
+    <tr><td>语言 → 视觉理解 / 生成</td><td class="gain">万能助推器</td><td>语言比例 0%→80% 单调提升全部视觉理解轴 + 生成质量（conditional/unconditional 扩散 loss 双降）</td></tr>
+    <tr><td>理解 → 生成</td><td class="gain">强先验</td><td>理解 token 比例提升显著改善生成指标、大幅降低扩散 loss</td></tr>
+    <tr><td>生成 → 语言 / 理解</td><td>中性</td><td>生成比例扫描只引起无方向的小波动；flow matching 与 next-token 不冲突但几乎不反哺</td></tr>
+  </table>
+  <p><strong>为什么语言是万能助推器</strong>：论文援引 Platonic Representation Hypothesis——成熟的语言流形天然捕获模态无关的世界结构，视觉学习被它 bootstrap。<strong>为什么生成中性</strong>：flow matching 目标学到的是 dense pixel-level 细节，对稀疏语义理解任务大多是冗余信息。</p>
+  <div class="callout callout-blue">
+    <strong>直接推论：</strong> 谁是 driver、谁是 passenger 决定了算力预算怎么分。生成是"被引导方"——想让模型会画，先让它读得懂。这为后面的 70/25/5 配方埋下伏笔。
+  </div>
+
+  <div class="anim-frame" id="anim1">
+    <div class="anim-header">
+      <span class="anim-title">动画 1：三条知识流的不对称性</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg1" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="知识流不对称动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">语言 → 视觉</button><button class="stage-chip" data-step="1">理解 → 生成</button><button class="stage-chip" data-step="2">生成 → 其他</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#00b894"></span> 强正迁移</span>
+      <span><span class="dot" style="background:#b2bec3"></span> 中性</span>
+      <span><span class="dot" style="background:#0984e3"></span> 语言</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 视觉理解</span>
+      <span><span class="dot" style="background:#e17055"></span> 视觉生成</span>
+    </div>
+  </div>
+</section>
+
+<section id="concept">
+  <h2>概念依赖：CLEVR 合成数据把相关变成因果</h2>
+  <p>真实数据混杂了太多因素。论文用 CLEVR 做了一个干净至极的测试：百万场景、五条概念轴（颜色、形状、空间关系、大小、计数），对每个概念生成三条平行模态流（文生图对、图生文描述、VQA 问答）。然后<strong>从一个模态流里精确删掉某个概念</strong>（正则过滤 + 渲染器元数据双重校验），观察另一个模态是否零样本迁移——任何差异只能归因于知识传递。</p>
+  <h3>零样本迁移：低层概念双向失败，结构概念单向成功</h3>
+  <ul>
+    <li><strong>低层概念（颜色、形状）</strong>：双向零样本迁移<strong>完全失败</strong>——从生成流删颜色，生成崩到零暴露基线；从理解流删颜色，VQA 崩。视觉词汇必须在每个任务目标内显式学习。这直接实证支持解耦架构设计（生成要 dense pixel-level、理解要 sparse semantic，共享表示难两全）；</li>
+    <li><strong>结构概念（空间关系、大小、计数）</strong>：<strong>非对称</strong>——只在理解流里保留，模型能零样本生成它们（空间/组合知识可引导生成）；但只在生成流里保留，VQA 基本崩（计数是唯一例外）。</li>
+  </ul>
+  <h3>Latent prior：方向反转</h3>
+  <p>零样本失败不等于没有留下潜伏知识。用消融 checkpoint 微调 2000 步，测量概念恢复速度：</p>
+  <ul>
+    <li><strong>生成 → 理解</strong>：<strong>强 latent prior</strong>——先前只通过生成接触过颜色/形状的模型，理解恢复显著更快（Δmean acc +0.133 ~ +0.273）。生成目标强迫模型学精确像素分布，一旦教会映射到语言就极速复用；</li>
+    <li><strong>理解 → 生成</strong>：<strong>几乎无 prior</strong>（颜色恢复曲线与对照组重叠，Δ≈0）——判别特征太抽象稀疏，撑不起 dense 重建。</li>
+  </ul>
+  <div class="callout callout-green">
+    <strong>这把行业悖论解释清楚了：</strong> 为什么联合生成训练对标准理解任务"没用"、却对空间/几何/物理推理任务"有用"？标准基准只要求稀疏语义分类，生成学到的 dense 细节是冗余；而空间推理任务要精确的深度/边界/透视——生成目标恰恰强迫模型学会这些。潜伏的几何基础在零样本时休眠，遇到需要 dense 特征的任务时被瞬间激活。
+  </div>
+
+  <div class="anim-frame" id="anim2">
+    <div class="anim-header">
+      <span class="anim-title">动画 2：CLEVR 概念消融——迁移是概念依赖的</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg2" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="CLEVR 概念消融动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">低层概念双向失败</button><button class="stage-chip" data-step="1">结构概念非对称</button><button class="stage-chip" data-step="2">latent prior 方向反转</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> 理解流</span>
+      <span><span class="dot" style="background:#e17055"></span> 生成流</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 零样本失败</span>
+      <span><span class="dot" style="background:#00b894"></span> 迁移成功</span>
+    </div>
+  </div>
+</section>
+
+<section id="synergy">
+  <h2>规律二：复杂度决定协同还是竞争</h2>
+  <p>统一模型把一套参数分给三个目标。什么时候互相成就（synergy）、什么时候抢容量（competition）？<strong>决定因素首先是数据/任务复杂度</strong>。论文固定 100B 预算、50/50 模态分账，把视觉目标沿 7 级复杂度阶梯（纯背景 → 图案 → 噪声 → 文字渲染 → OCR → 视频 → SSTK 自然图像）逐级升级，语言流保持 DCLM 不变；对称地，把语言沿 3 级（单个字母 → 乱码 → DCLM）升级，视觉保持 SSTK。</p>
+  <table>
+    <tr><th>视觉复杂度</th><th>对语言 ppl 的影响 (Δ)</th><th>结论</th></tr>
+    <tr><td>纯背景 / 噪声</td><td class="gain">−0.211 / −0.183（提升！）</td><td>简单任务 = 跨模态助推器</td></tr>
+    <tr><td>图案 / 文字渲染 / OCR</td><td>过渡区间</td><td>协同逐渐衰减</td></tr>
+    <tr><td>视频 / SSTK</td><td class="bad">+0.052 / +0.075（恶化）</td><td>复杂分布 → 竞争压过协同</td></tr>
+  </table>
+  <p><strong>反直觉的核心发现</strong>：让模型学一个<strong>极简单</strong>的对方模态任务，反而提升本模态——纯背景视觉任务比纯语言模型的语言困惑度还好（Δ−0.211）。对称地，最简单的语言分布给视觉生成带来最大提升（Δ−0.0153 conditional）。但当两边都是高熵复杂分布时，有限参数容量被激烈争夺，竞争最终盖过协同。</p>
+  <div class="callout callout-orange">
+    <strong>机制画面：</strong> 统一预训练是两种相反力的叠加——跨模态协同（底层结构共享）与容量竞争（高熵分布争夺参数）。两者在同一训练循环里共存，谁占上风由任务复杂度决定。架构要做的事：放大协同、隔离竞争。
+  </div>
+
+  <div class="anim-frame" id="anim3">
+    <div class="anim-header">
+      <span class="anim-title">动画 3：复杂度阶梯——从助推器到竞争对手</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg3" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="复杂度阶梯动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">简单任务 = 助推器</button><button class="stage-chip" data-step="1">复杂度上升</button><button class="stage-chip" data-step="2">复杂分布 = 竞争</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#00b894"></span> 协同占优</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> 过渡</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 竞争占优</span>
+    </div>
+  </div>
+</section>
+
+<section id="arch">
+  <h2>架构解剖：共享注意力 + 解耦 FFN = 最优分工</h2>
+  <p>复杂度之外，参数共享方式决定协同/竞争在<strong>网络内部哪里</strong>发生。论文把 Transformer block 拆成三个可配置参数组（FFN / Attention / FinalNorm），训练五种配置（都用简单语言 + 纯背景放大信号）：</p>
+  <table>
+    <tr><th>配置</th><th>语言 ppl 变化</th><th>视觉 loss 变化</th><th>解读</th></tr>
+    <tr><td>dense（全共享）</td><td class="bad">+0.272</td><td class="bad">+0.0537</td><td>强制不同模态进同一参数子空间 → 严重竞争</td></tr>
+    <tr><td class="gain">split_ffn（只拆 FFN）</td><td class="gain">−0.211</td><td class="gain">−0.0168</td><td>隔离计算容量 + 保留跨模态注意力 → 最优</td></tr>
+    <tr><td>split_ffn_attn（再拆注意力）</td><td>−0.045</td><td>−0.0064</td><td>去掉跨模态语境化 → 收益大减</td></tr>
+    <tr><td>split_ffn_norm（拆 norm）</td><td>明显缩水</td><td>明显缩水</td><td>去掉尺度对齐 → 收益大减</td></tr>
+    <tr><td>split_all（全拆）</td><td>≈0</td><td>≈0</td><td>等于两条独立网络 → 回到基线</td></tr>
+  </table>
+  <p><strong>机制假设</strong>：共享注意力让模态在联合表示空间里互相语境化（协同的桥）；共享 normalization 对齐特征尺度；FFN 则充当<strong>模态专属专家</strong>，吸收各自独立的计算需求，防止在共享基底上互相破坏。这为 MoT（Mixture-of-Transformers）和带模态专属专家的 MoE 架构提供了直接实证。</p>
+  <p><strong>泛化</strong>：四种视觉 tokenizer（RAE / Raw Pixels / CLIP+VAE / AR UniTok）上协同现象全部复现——预对齐的共享表示空间<strong>不是</strong>跨模态协同的绝对前提（但仍是加分项，能减少表示摩擦、放大协同幅度）。</p>
+
+  <div class="anim-frame" id="anim4">
+    <div class="anim-header">
+      <span class="anim-title">动画 4：五种参数共享配置的竞争/协同</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg4" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="参数共享配置动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">dense 全共享</button><button class="stage-chip" data-step="1">split_ffn 最优</button><button class="stage-chip" data-step="2">拆注意力/拆 norm</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#6c5ce7"></span> 共享参数</span>
+      <span><span class="dot" style="background:#0984e3"></span> 语言专属</span>
+      <span><span class="dot" style="background:#e17055"></span> 视觉专属</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 竞争</span>
+      <span><span class="dot" style="background:#00b894"></span> 协同</span>
+    </div>
+  </div>
+</section>
+
+<section id="early">
+  <h2>规律三：早期统一是机械必然，晚了对齐触发"视觉懒惰"</h2>
+  <h3>时机：存在一个"统一窗口"</h3>
+  <p>固定 1T 预算，扫描纯语言 warm-up 0 → 200 → 400 → 600 → 800B：语言侧收益在 600–800B 后平台，但<strong>所有视觉能力随 warm-up 拉长陡降</strong>。结论不是"0B 最优"——一个最小限度的语言预热可以提供基础文本先验而不重伤视觉；但把统一推得越晚，对语言收益越小，对视觉伤害越大。</p>
+  <h3>顺序：6 种模态顺序全部输给联合训练</h3>
+  <p>固定 50/25/25 mix，测试全部 6 种模态顺序（含人类式的 vision-first：生成→理解→语言），带或不带 12.5% replay 缓冲：<strong>任何顺序的隔离训练都输给联合训练</strong>。replay 只缓解灾难性遗忘，追不上协同——模态不是共存，是<strong>共同进化</strong>。</p>
+  <h3>Vision Laziness：四个机械测量</h3>
+  <p>为什么晚对齐伤视觉？论文用同一组 checkpoint、每次都随机初始化图像侧 FFN（img_ffn，保证测量公平），沿四轴探测：</p>
+  <ol>
+    <li><strong>A. 训练时激活</strong>：img_ffn 的 L2 激活范数随语言 warm-up 拉长而"越来越安静"——视觉通路投入的学习量实际在减少；</li>
+    <li><strong>B. 嵌入范数</strong>：图像 wrapper token（&lt;begin_of_img&gt; 等）的嵌入范数缩小——硬化后的语言通路拒绝为图像重塑自身，把 wrapper 挤到远离正常词表尺度；</li>
+    <li><strong>C. 推理时激活</strong>：真实视觉前向中 img_ffn 的逐元素 RMS 暴跌——用到视觉时视觉分支做得越来越少；</li>
+    <li><strong>D. 注意力分配</strong>：推理时投向图像 token 的注意力比例骤降（生成侧图像 query 看其他图像 patch 的比例、理解侧文本 query 看图像 patch 的比例）——<strong>模型干脆不看图了</strong>，默认依赖周围文本。</li>
+  </ol>
+  <div class="callout callout-red">
+    <strong>为什么这解释了"强 MLLM 也失明"：</strong> 语言主干越强，越擅长用语言先验 shortcut 视觉问题。当语言通路过早优化完毕，联合优化 landscape 被既有语言先验主导，视觉通路从未被真正逼着成熟——所以很多强大多模态模型仍犯低级视觉错误（MMVP 类失败）。视觉通路只是"没被充分训练"，不是"没这个能力"。早期统一不是调度偏好，而是迫使模态从零共同进化的<strong>机械必然</strong>。
+  </div>
+
+  <div class="anim-frame" id="anim5">
+    <div class="anim-header">
+      <span class="anim-title">动画 5：时机、顺序与视觉懒惰</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg5" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="早期统一与视觉懒惰动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">时机窗口</button><button class="stage-chip" data-step="1">顺序 vs 联合</button><button class="stage-chip" data-step="2">视觉懒惰四轴</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> 纯语言阶段</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 统一阶段</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 视觉能力衰退</span>
+      <span><span class="dot" style="background:#00b894"></span> 联合训练</span>
+    </div>
+  </div>
+</section>
+
+<section id="recipe">
+  <h2>规律四：配方 70/25/5——生成只要 5% 预算</h2>
+  <p>知识流不对称的直接推论：最优预算分配应该极度偏斜。三轴网格搜索（1T token）：Fix MM 扫语言比例 10%–90%，Fix Lan 锚定语言 50% 扫理解/生成内比，Next 锚定语言 70% 精调——最优出现在 <strong>70% 语言 / 25% 理解 / 5% 生成</strong>。</p>
+  <p>反直觉的点：<strong>生成只要 5% 就接近峰值</strong>——把生成从 25% 砍到 5%，通用 VQA 反而涨到 48.3，同时生成评测分数最高。原因正是规律一：生成无反向迁移，均衡混合是在浪费算力在低收益 token 上；语言 + 理解先验直接驱动生成。</p>
+  <h3>规模验证：13.5B MoE × 2T token，三个单变量对照</h3>
+  <table>
+    <tr><th>对照</th><th>配置</th><th>语言 acc</th><th>理解 avg</th><th>生成</th></tr>
+    <tr><td rowspan="2">配方</td><td>Asym (70/25/5)</td><td class="gain">54.31</td><td class="gain">43.08</td><td class="gain">GenEval 0.482 / DPG 0.689</td></tr>
+    <tr><td>Balanced (50/25/25)</td><td>52.86</td><td>41.42</td><td>0.467 / 0.676</td></tr>
+    <tr><td rowspan="2">架构</td><td>MoE 13.5B (1.5B active)</td><td class="gain">52.86</td><td class="gain">41.42</td><td class="gain">loss 0.261</td></tr>
+    <tr><td>Dense 3.5B</td><td>52.03</td><td>40.49</td><td>0.266</td></tr>
+    <tr><td rowspan="2">时机</td><td>Early unified</td><td class="gain">52.86</td><td class="gain">41.42</td><td class="gain">loss 0.261</td></tr>
+    <tr><td>Late-fusion (60% 后)</td><td>51.78</td><td>40.66</td><td>0.269</td></tr>
+  </table>
+  <p>配方对照最有力：<strong>生成 token 少 5 倍，GenEval/DPG 全涨</strong>；扩散 loss 略升（0.272 vs 0.261）但 50k 图 FID 5.234 vs 5.131 几乎持平——语言与理解先验确实把生成 bootstrap 起来了。架构对照验证 split_ffn 原则：MoE 以 1.5B active 全维度胜过 3.5B dense。时机对照验证早期统一：全维度胜 late-fusion。</p>
+
+  <div class="anim-frame" id="anim6">
+    <div class="anim-header">
+      <span class="anim-title">动画 6：网格搜索与规模验证</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg6" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="数据配方与规模验证动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">三轴网格搜索</button><button class="stage-chip" data-step="1">5% 生成的悖论</button><button class="stage-chip" data-step="2">13.5B 三对照</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> 语言 70%</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> 理解 25%</span>
+      <span><span class="dot" style="background:#e17055"></span> 生成 5%</span>
+      <span><span class="dot" style="background:#00b894"></span> 胜出配置</span>
+    </div>
+  </div>
+</section>
+
+<section id="honest">
+  <h2>诚实的解读：这套规律的边界在哪</h2>
+  <ul>
+    <li><strong>证据域</strong>：文本 + 静态图像为主，视频/音频未验证。动态模态引入时间维度，复杂度与计算需求都变，协同/竞争平衡可能重排；</li>
+    <li><strong>规模外推风险</strong>：13.5B 的规律在 1T 参数前沿可能失效——作者自己承认，容量足够大时生成可能反哺理解（emergent bidirectional flow），当前"生成中性"可能是容量不足的产物；</li>
+    <li><strong>5% 生成不是免费的</strong>：FID 5.234 vs 5.131（略差），且作者建议后期加生成比例或加专门的生成 midtraining stage 来补足；</li>
+    <li><strong>MoE vs Dense 对比的口径</strong>：是 1.5B active vs 3.5B dense，总参数 13.5B vs 3.5B——严格说不是同 compute 对比，"1.5B 赢 3.5B"很大程度来自总参数量优势；</li>
+    <li><strong>语言轻微下降的归因</strong>：被归为 VL 数据文本分布与纯语言分布不同的 artifact——这个归因略轻巧，也可能是理解任务对语言容量的真实挤占；</li>
+    <li><strong>合成世界的干净</strong>：CLEVR 概念可精确消融，但真实世界的"概念"不这样干净可分——低层/结构的二分在真实场景是连续谱。</li>
+  </ul>
+</section>
+
+<section id="summary">
+  <h2>总结</h2>
+  <ul>
+    <li><strong>一句话</strong>：多模态统一预训练不是玄学——知识流不对称（语言/理解是司机，生成是乘客）、复杂度决定协同/竞争、早期统一是机械必然、70/25/5 配方用 5% 生成预算达到强生成，四条规律在 13.5B MoE × 2T token 上全部验证。</li>
+    <li><strong>可迁移的洞察</strong>：① 预算分配跟着知识流走——先让模型读得懂，再让它会画；② "简单任务助推器"提示：低复杂度模态数据可能是免费的跨模态正则；③ vision laziness 用四个机制测量把"MLLM 失明"从轶事变成可验证机制——检查视觉通路是否真的被训练到了；④ split_ffn ≈ MoE 模态专属专家，给架构选择提供了实证锚点。</li>
+    <li><strong>一句话点评</strong>：这篇的价值不在某个数字，而在于把多模态训练从"加什么数据、怎么接 encoder"的 heuristics 推向"模态如何互动"的 phenomenology——为下一代统一基础模型（any-to-any）提供了可检验的底层假设。</li>
+  </ul>
+  <div class="callout callout-green">
+    <strong>延伸阅读：</strong> arXiv 2608.05000（Meta FAIR + Reality Labs + 牛津）；项目页 junlinhan.github.io/projects/physics_of_mm_pretrain/；框架 Transfusion（arXiv 2408.11039）；对比系：Cambrian-1（Shengbang Tong 等）、Beyond Language Modeling（Tong et al. 2026a）、Platonic Representation Hypothesis（Huh et al. 2024）。
+  </div>
+</section>
+
+</div>
+</div>
+
+<script>
+(function () {
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function AnimEngine(svg, opts) {
+    this.svg = svg;
+    this.svgId = svg.id;
+    this.steps = opts.steps || [];
+    this.idx = -1;
+    this.currentStep = -1;
+    this.timer = null;
+    this.speed = 1;
+    this.layer = null;
+    this._token = 0;
+    this._initDefs();
+  }
+
+  AnimEngine.prototype._initDefs = function () {
+    var ns = SVG_NS;
+    var defs = document.createElementNS(ns, "defs");
+    var uid = this.svgId + "-";
+
+    function marker(id, color, orient) {
+      var m = document.createElementNS(ns, "marker");
+      m.setAttribute("id", id);
+      m.setAttribute("viewBox", "0 0 10 10");
+      m.setAttribute("refX", "8");
+      m.setAttribute("refY", "5");
+      m.setAttribute("markerWidth", "7");
+      m.setAttribute("markerHeight", "7");
+      m.setAttribute("orient", orient || "auto");
+      var p = document.createElementNS(ns, "path");
+      p.setAttribute("d", "M0,0 L10,5 L0,10 Z");
+      p.setAttribute("fill", color);
+      m.appendChild(p);
+      return m;
+    }
+    defs.appendChild(marker(uid + "arr", "#6c5ce7", "auto"));
+    defs.appendChild(marker(uid + "arrG", "#00b894", "auto"));
+    defs.appendChild(marker(uid + "arrR", "#e74c3c", "auto"));
+    defs.appendChild(marker(uid + "arrB", "#0984e3", "auto"));
+    defs.appendChild(marker(uid + "arrO", "#e17055", "auto"));
+    this.svg.appendChild(defs);
+  };
+
+  AnimEngine.prototype._initLayer = function () {
+    this.layer = document.createElementNS(SVG_NS, "g");
+    this.layer.setAttribute("class", "anim-layer");
+    this.svg.appendChild(this.layer);
+  };
+
+  AnimEngine.prototype.clear = function () {
+    while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild);
+  };
+
+  AnimEngine.prototype.draw = function (tag, attrs, text) {
+    var el = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (var k in attrs) {
+      if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]);
+    }
+    if (text !== null && text !== undefined && text !== "") el.textContent = text;
+    this.layer.appendChild(el);
+    return el;
+  };
+
+  AnimEngine.prototype.t = function (x, y, str, opts) {
+    opts = opts || {};
+    var lines = String(str).split("\n");
+    var el = this.draw("text", Object.assign({
+      x: x, y: y,
+      "text-anchor": opts.ta || "middle",
+      "font-size": opts.fs || 12,
+      fill: opts.fill || "#444",
+      "font-family": opts.ff || "inherit",
+      "font-weight": opts.fw || "normal"
+    }, opts.attrs || {}), null);
+    if (lines.length === 1) {
+      el.textContent = str;
+    } else {
+      var fs = opts.fs || 12;
+      lines.forEach(function (line, i) {
+        var ts = document.createElementNS(SVG_NS, "tspan");
+        ts.setAttribute("x", x);
+        ts.setAttribute("dy", i === 0 ? 0 : fs * 1.2);
+        ts.textContent = line;
+        el.appendChild(ts);
+      });
+    }
+    return el;
+  };
+
+  AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, opts) {
+    opts = opts || {};
+    var r = this.draw("rect", {
+      x: x, y: y, width: w, height: h,
+      fill: fill || "#fff", stroke: stroke || "#ccc",
+      "stroke-width": opts.sw || 1.5, rx: opts.rx || 4
+    }, null);
+    if (label) {
+      this.t(x + w / 2, y + h / 2 + (opts.labelDy || 4), label, {
+        fs: opts.fs || 11, fill: opts.labelFill || "#fff", fw: opts.fw || "600",
+        ta: "middle"
+      });
+    }
+    return r;
+  };
+
+  AnimEngine.prototype.arrow = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    var mid = opts.curve ? " Q " + opts.cx + "," + opts.cy + " " : "";
+    var d = "M" + x1 + "," + y1 + mid + " L" + x2 + "," + y2;
+    var markerId = "url(#" + this.svgId + "-" + (opts.marker || "arr") + ")";
+    this.draw("path", {
+      d: d, fill: "none", stroke: color || "#6c5ce7",
+      "stroke-width": opts.sw || 2, "marker-end": markerId,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.line = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    this.draw("line", {
+      x1: x1, y1: y1, x2: x2, y2: y2,
+      stroke: color || "#ccc", "stroke-width": opts.sw || 1,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.circle = function (cx, cy, r, fill, stroke, opts) {
+    opts = opts || {};
+    this.draw("circle", {
+      cx: cx, cy: cy, r: r,
+      fill: fill || "#fff", stroke: stroke || "#ccc",
+      "stroke-width": opts.sw || 1.5
+    }, null);
+  };
+
+  AnimEngine.prototype.delay = function () { return 1100 / this.speed; };
+
+  AnimEngine.prototype.goTo = function (i) {
+    if (i < 0 || i >= this.steps.length) return;
+    var prev = this.currentStep;
+    var direction = i >= prev ? 1 : -1;
+    var step = this.steps[i];
+    this._render2(step, i, direction);
+    if (window.MathJax && window.__mathReady && step.desc) {
+      var descEl = this.svg.parentNode.parentNode.querySelector(".step-desc");
+      if (descEl) {
+        try { MathJax.typesetPromise([descEl]); } catch (e) {}
+      }
+    }
+  };
+
+  AnimEngine.prototype._render2 = function (step, index, direction) {
+    var oldLayer = this.layer || null;
+    var nextLayer = document.createElementNS(SVG_NS, "g");
+    nextLayer.setAttribute("class", "anim-layer scene-layer");
+    this.svg.appendChild(nextLayer);
+    this.layer = nextLayer;
+    this.idx = index;
+    step.render(this);
+    this._applyReveal(nextLayer);
+    this.currentStep = index;
+    this._updateUI(step, index);
+    if (oldLayer && !this._reducedMotion()) {
+      nextLayer.classList.add("scene-enter", direction > 0 ? "from-right" : "from-left");
+      oldLayer.classList.add("scene-exit", direction > 0 ? "to-left" : "to-right");
+      var self = this;
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          nextLayer.classList.add("scene-active");
+          oldLayer.classList.add("scene-exit-active");
+        });
+      });
+      setTimeout(function () {
+        if (oldLayer.parentNode) oldLayer.parentNode.removeChild(oldLayer);
+        nextLayer.classList.remove("scene-enter", "from-right", "from-left");
+      }, 520);
+    } else {
+      if (oldLayer) oldLayer.parentNode.removeChild(oldLayer);
+    }
+  };
+
+  AnimEngine.prototype._reducedMotion = function () {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  };
+
+  AnimEngine.prototype._applyReveal = function (layer) {
+    if (this._reducedMotion()) return;
+    var els = layer.querySelectorAll("rect, text, circle, path");
+    var delay = 60;
+    for (var i = 0; i < els.length; i++) {
+      els[i].style.setProperty("--delay", delay + "ms");
+      els[i].classList.add("reveal");
+      delay += 55;
+      if (delay > 650) delay = 60;
+    }
+  };
+
+  AnimEngine.prototype._updateUI = function (step, i) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var info = frame.querySelector(".step-info");
+    var desc = frame.querySelector(".step-desc");
+    if (info) info.textContent = "步骤 " + (i + 1) + " / " + this.steps.length;
+    if (desc) desc.innerHTML = step.desc || step.title || "";
+    var prev = frame.querySelector(".btn-prev");
+    var next = frame.querySelector(".btn-next");
+    if (prev) prev.disabled = (i === 0);
+    if (next) next.disabled = (i === this.steps.length - 1);
+    var bar = frame.querySelector(".anim-progress .bar");
+    if (bar) bar.style.width = ((i + 1) / this.steps.length * 100) + "%";
+    var chips = frame.querySelectorAll(".stage-chip");
+    for (var c = 0; c < chips.length; c++) {
+      chips[c].classList.toggle("done", c < i);
+      chips[c].classList.toggle("active", c === i);
+    }
+  };
+
+  AnimEngine.prototype.next = function () { if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1); };
+  AnimEngine.prototype.prev = function () { if (this.currentStep > 0) this.goTo(this.currentStep - 1); };
+  AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+  AnimEngine.prototype.play = function () {
+    var self = this;
+    if (this.timer) return;
+    this._advance();
+  };
+  AnimEngine.prototype._advance = function () {
+    var self = this;
+    if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
+    this.timer = setTimeout(function () {
+      self.next();
+      self._advance();
+    }, this.delay());
+  };
+  AnimEngine.prototype.pause = function () {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  };
+  AnimEngine.prototype.toggle = function () {
+    if (this.timer) { this.pause(); this._setPlayBtn(false); }
+    else { if (this.currentStep >= this.steps.length - 1) this.goTo(0); this.play(); this._setPlayBtn(true); }
+  };
+  AnimEngine.prototype._setPlayBtn = function (playing) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var btn = frame.querySelector(".btn-play");
+    if (btn) btn.textContent = playing ? "⏸ 暂停" : "▶ 播放";
+  };
+  AnimEngine.prototype.setSpeed = function (s) {
+    this.speed = s;
+    var frame = this.svg.closest(".anim-frame");
+    if (frame) {
+      var lbl = frame.querySelector(".speed-label");
+      if (lbl) lbl.textContent = s.toFixed(1) + "×";
+    }
+  };
+
+  /* ============ SCENE 1: knowledge flow ============ */
+  function scene1Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    function mod(e, x, y, label, fill) {
+      e.rect(x, y, 200, 70, label, fill, fill, { rx: 10, fs: 13, labelFill: "#fff", fw: "700" });
+    }
+    return [
+      {
+        title: "语言 → 视觉",
+        desc: "语言是万能助推器：语言比例从 0% 加到 80%，全部视觉理解轴（General/Knowledge/OCR/Vision-Centric）单调提升，生成与扩散 loss 双降。理论支撑：Platonic Representation Hypothesis——成熟语言流形捕获模态无关的世界结构。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "语言 → 视觉：万能助推器", { fs: 16, fill: C.green, fw: "700" });
+          mod(e, 60, 90, "语言\n(L)", C.blue);
+          mod(e, 560, 90, "视觉理解\n(V-Und)", C.accent);
+          mod(e, 560, 220, "视觉生成\n(V-Gen)", C.orange);
+          e.arrow(265, 115, 555, 115, C.green, { sw: 3.5, marker: "arrG" });
+          e.arrow(265, 140, 555, 245, C.green, { sw: 3.5, marker: "arrG" });
+          e.t(410, 95, "0%→80% 单调提升", { fs: 12, fill: C.green, fw: "700" });
+          e.rect(60, 220, 200, 90, "语言先验\n+ 理解先验\n驱动生成", "#e0f8f4", C.green, { rx: 10, fs: 12, labelFill: C.green, fw: "600" });
+          e.t(W / 2, 360, "语言先验→理解先验 (DCLM 0%→80%)", { fs: 12, fill: C.green, fw: "600" });
+        }
+      },
+      {
+        title: "理解 → 生成",
+        desc: "视觉理解是生成的强先验：增加理解 token 比例，生成指标显著改善、扩散 loss 大幅下降——判别式视觉特征高效迁移到生成过程。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "理解 → 生成：强先验", { fs: 16, fill: C.green, fw: "700" });
+          mod(e, 60, 90, "视觉理解\n(V-Und)", C.accent);
+          mod(e, 560, 90, "视觉生成\n(V-Gen)", C.orange);
+          e.arrow(265, 125, 555, 115, C.green, { sw: 3.5, marker: "arrG" });
+          e.t(410, 95, "强正迁移", { fs: 12, fill: C.green, fw: "700" });
+          e.rect(60, 220, 460, 90, "判别特征（稀疏、语义）→ 生成（dense, pixel-level）\n扩散 loss 显著下降，text-to-image 对齐提升", "#e0f8f4", C.green, { rx: 10, fs: 12, labelFill: C.green, fw: "600" });
+          e.t(W / 2, 360, "理解 token 比例 0%→80%：生成质量单调上升", { fs: 12, fill: C.green, fw: "600" });
+        }
+      },
+      {
+        title: "生成 → 其他",
+        desc: "视觉生成对语言和理解为中性：生成比例扫描只引起无方向的小波动。flow matching 与 next-token 不冲突，但几乎不提供反向知识迁移——生成是乘客，不是司机。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "生成 → 语言/理解：中性", { fs: 16, fill: C.muted, fw: "700" });
+          mod(e, 60, 90, "视觉生成\n(V-Gen)", C.orange);
+          mod(e, 560, 90, "语言\n(L)", C.blue);
+          mod(e, 560, 220, "视觉理解\n(V-Und)", C.accent);
+          e.arrow(265, 115, 555, 115, C.muted, { sw: 2.5, marker: "arr", dash: "5,4" });
+          e.arrow(265, 140, 555, 245, C.muted, { sw: 2.5, marker: "arr", dash: "5,4" });
+          e.t(410, 95, "中性（无方向波动）", { fs: 12, fill: C.muted, fw: "600" });
+          e.rect(60, 220, 460, 90, "生成目标（flow matching）学到 dense 像素细节\n对稀疏语义任务大多是冗余 → 不反哺也不干扰", "#f4f4f4", C.muted, { rx: 10, fs: 12, labelFill: C.muted, fw: "600" });
+          e.t(W / 2, 360, "生成比例 0%→80%：语言与理解仅微小波动，无系统趋势", { fs: 12, fill: C.muted, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 2: CLEVR concept ablation ============ */
+  function scene2Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    return [
+      {
+        title: "低层概念双向失败",
+        desc: "颜色/形状这类低层概念：从生成流删除 → 生成崩到零暴露基线；从理解流删除 → VQA 崩。视觉词汇必须在每个任务目标内显式学习——支持解耦架构设计（生成要 dense pixel-level、理解要 sparse semantic）。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "低层概念（颜色/形状）：零样本双向失败", { fs: 16, fill: C.red, fw: "700" });
+          e.rect(80, 80, 300, 60, "理解流：保留颜色", C.blue, C.blue, { rx: 8, fs: 12, labelFill: "#fff", fw: "600" });
+          e.rect(80, 170, 300, 60, "生成流：删除颜色", C.orange, C.orange, { rx: 8, fs: 12, labelFill: "#fff", fw: "600" });
+          e.arrow(385, 200, 480, 200, C.red, { sw: 2.5, marker: "arrR" });
+          e.rect(490, 170, 250, 60, "生成崩溃\n(≈零暴露基线)", "#fdf0ee", C.red, { rx: 8, fs: 12, labelFill: C.red, fw: "600" });
+          e.rect(80, 280, 300, 60, "理解流：删除颜色", C.blue, C.blue, { rx: 8, fs: 12, labelFill: "#fff", fw: "600" });
+          e.rect(490, 280, 250, 60, "VQA 崩溃\n(≈零暴露基线)", "#fdf0ee", C.red, { rx: 8, fs: 12, labelFill: C.red, fw: "600" });
+          e.arrow(385, 310, 480, 310, C.red, { sw: 2.5, marker: "arrR" });
+          e.t(W / 2, 380, "视觉词汇必须在每个任务目标内显式学习", { fs: 13, fill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "结构概念非对称",
+        desc: "空间关系/大小/计数：只在理解流保留 → 模型能零样本生成它们（结构知识引导生成）；只在生成流保留 → VQA 基本崩（计数是唯一例外）。理解是生成的先验，生成不反哺理解。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "结构概念（空间/大小/计数）：非对称", { fs: 16, fill: C.green, fw: "700" });
+          e.rect(80, 80, 300, 60, "理解流：保留空间关系", C.blue, C.blue, { rx: 8, fs: 12, labelFill: "#fff", fw: "600" });
+          e.rect(80, 170, 300, 60, "生成流：删除空间关系", C.orange, C.orange, { rx: 8, fs: 12, labelFill: "#fff", fw: "600" });
+          e.arrow(385, 130, 480, 130, C.green, { sw: 3, marker: "arrG" });
+          e.rect(490, 100, 250, 60, "零样本生成有效\n(高于 control)", "#e0f8f4", C.green, { rx: 8, fs: 12, labelFill: C.green, fw: "600" });
+          e.rect(80, 280, 300, 60, "理解流：删除空间关系", C.blue, C.blue, { rx: 8, fs: 12, labelFill: "#fff", fw: "600" });
+          e.rect(490, 280, 250, 60, "VQA 崩溃\n(计数是例外)", "#fdf0ee", C.red, { rx: 8, fs: 12, labelFill: C.red, fw: "600" });
+          e.arrow(385, 310, 480, 310, C.red, { sw: 2.5, marker: "arrR" });
+          e.t(W / 2, 380, "结构知识：理解 → 生成 单向有效", { fs: 13, fill: C.green, fw: "600" });
+        }
+      },
+      {
+        title: "latent prior 方向反转",
+        desc: "零样本失败 ≠ 没有潜伏知识。微调恢复测量显示方向反转：生成→理解有强 latent prior（Δmean acc +0.133~+0.273，生成强迫学 dense 像素细节，教会映射后极速复用）；理解→生成几乎无 prior（Δ≈0，判别特征太抽象）。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "latent prior：方向反转", { fs: 16, fill: C.accent, fw: "700" });
+          e.rect(60, 70, 340, 70, "生成 → 理解：强 latent prior", "#e0f8f4", C.green, { rx: 8, fs: 13, labelFill: C.green, fw: "700" });
+          e.rect(60, 160, 340, 60, "颜色/形状恢复显著加速\nΔmean acc +0.133 ~ +0.273", "#e0f8f4", C.green, { rx: 8, fs: 11.5, labelFill: C.green, fw: "600" });
+          e.rect(480, 70, 280, 70, "理解 → 生成：几乎无 prior", "#f4f4f4", C.muted, { rx: 8, fs: 13, labelFill: C.muted, fw: "700" });
+          e.rect(480, 160, 280, 60, "恢复曲线与对照组重叠\nΔ ≈ 0", "#f4f4f4", C.muted, { rx: 8, fs: 11.5, labelFill: C.muted, fw: "600" });
+          e.rect(60, 280, 700, 60, "生成强迫模型学精确像素分布（dense 特征）→ 一旦教会映射到语言，极速复用；\n判别特征（稀疏语义）撑不起 dense 重建", "#f3ecfd", C.accent, { rx: 8, fs: 12, labelFill: C.accent, fw: "600" });
+          e.t(W / 2, 380, "解释行业悖论：联合生成训练对空间/几何/物理推理任务有用，对标准理解无用", { fs: 12, fill: C.fg, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 3: complexity ladder ============ */
+  function scene3Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    return [
+      {
+        title: "简单任务 = 助推器",
+        desc: "反直觉：让模型学一个极简单的对方模态任务，反而提升本模态。纯背景视觉任务使语言困惑度改善 Δ−0.211（比纯语言模型还好）；噪声 −0.183。对称地，最简单的语言分布给视觉生成带来最大提升。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "简单任务：跨模态助推器", { fs: 16, fill: C.green, fw: "700" });
+          e.rect(100, 80, 200, 70, "纯背景", "#e0f8f4", C.green, { rx: 8, fs: 15, labelFill: C.green, fw: "700" });
+          e.rect(350, 80, 200, 70, "噪声", "#e0f8f4", C.green, { rx: 8, fs: 15, labelFill: C.green, fw: "700" });
+          e.rect(100, 200, 450, 60, "语言 ppl Δ −0.211 / −0.183（比纯语言模型更好！）", "#e0f8f4", C.green, { rx: 8, fs: 13, labelFill: C.green, fw: "600" });
+          e.t(W / 2, 320, "最简单的语言分布 → 视觉生成提升最大 (Δ −0.0153)", { fs: 13, fill: C.green, fw: "600" });
+          e.t(W / 2, 370, "低复杂度模态数据 = 免费的跨模态正则", { fs: 12, fill: C.fg, fw: "600" });
+        }
+      },
+      {
+        title: "复杂度上升",
+        desc: "随着视觉目标从图案、文字渲染升到 OCR，协同效应逐渐衰减——高熵视觉分布开始与语言争夺参数容量。过渡区间里两种力量此消彼长。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "复杂度上升：协同逐渐衰减", { fs: 16, fill: C.orange, fw: "700" });
+          var items = [["图案", "green"], ["文字渲染", "green"], ["OCR", "orange"]];
+          items.forEach(function (it, i) {
+            e.rect(120 + i * 200, 100, 160, 60, it[0], it[1] === "green" ? C.green : C.orange, it[1] === "green" ? C.green : C.orange, { rx: 8, fs: 14, labelFill: "#fff", fw: "700" });
+          });
+          e.rect(120, 210, 560, 60, "协同收益：Δppl −0.211 → 缩水 → 接近零", "#fdf0e8", C.orange, { rx: 8, fs: 13, labelFill: C.orange, fw: "600" });
+          e.arrow(400, 170, 400, 200, C.orange, { sw: 2, marker: "arrO" });
+          e.t(W / 2, 320, "高熵视觉分布开始与语言争夺参数容量", { fs: 13, fill: C.orange, fw: "600" });
+          e.t(W / 2, 370, "协同与竞争两种力同存，复杂度决定谁占上风", { fs: 12, fill: C.fg, fw: "600" });
+        }
+      },
+      {
+        title: "复杂分布 = 竞争",
+        desc: "视觉流升到视频和 SSTK 自然图像：语言困惑度反而恶化（Δ+0.052 / +0.075）。两边都是高熵复杂分布时，参数容量被激烈争夺，容量竞争最终盖过协同收益。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "复杂分布：竞争压过协同", { fs: 16, fill: C.red, fw: "700" });
+          e.rect(120, 100, 200, 70, "视频", "#fdf0ee", C.red, { rx: 8, fs: 15, labelFill: C.red, fw: "700" });
+          e.rect(380, 100, 200, 70, "SSTK 自然图像", "#fdf0ee", C.red, { rx: 8, fs: 15, labelFill: C.red, fw: "700" });
+          e.rect(120, 210, 460, 60, "语言 ppl Δ +0.052 / +0.075（恶化）", "#fdf0ee", C.red, { rx: 8, fs: 13, labelFill: C.red, fw: "600" });
+          e.t(W / 2, 320, "高熵分布对高熵分布 → 有限容量被激烈争夺", { fs: 13, fill: C.red, fw: "600" });
+          e.t(W / 2, 370, "架构要做的事：放大协同、隔离竞争（下一节）", { fs: 12, fill: C.fg, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 4: parameter sharing ============ */
+  function scene4Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    function block(e, x, y, label, shared, lang, vis) {
+      e.rect(x, y, 150, 34, label, shared ? C.accent : "#fff", shared ? C.accent : C.border, { rx: 6, fs: 11, labelFill: shared ? "#fff" : C.accent, fw: "600" });
+    }
+    return [
+      {
+        title: "dense 全共享",
+        desc: "语言与视觉 token 走完全相同的权重、完全互相注意。结果：严重模态竞争——语言 ppl +0.272、视觉扩散 loss +0.0537。把不同模态强行塞进同一参数子空间在结构上是次优的。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "dense：全共享 → 严重竞争", { fs: 16, fill: C.red, fw: "700" });
+          block(e, 335, 80, "FFN", true, false, false);
+          block(e, 335, 130, "Attention", true, false, false);
+          block(e, 335, 180, "FinalNorm", true, false, false);
+          e.t(335 + 75, 240, "语言 token 与视觉 token 共用同一组参数", { fs: 12, fill: C.fg });
+          e.rect(120, 280, 240, 60, "语言 ppl +0.272", "#fdf0ee", C.red, { rx: 8, fs: 13, labelFill: C.red, fw: "700" });
+          e.rect(460, 280, 240, 60, "视觉 loss +0.0537", "#fdf0ee", C.red, { rx: 8, fs: 13, labelFill: C.red, fw: "700" });
+          e.t(W / 2, 380, "强制不同模态进同一参数子空间 → 结构上就输", { fs: 13, fill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "split_ffn 最优",
+        desc: "只把 FFN 拆成模态专属：语言 ppl −0.211、视觉 loss −0.0168（超越单模态基线）。共享注意力让模态在联合空间互相语境化（协同的桥），共享 norm 对齐特征尺度，FFN 当模态专属专家吸收各自计算需求——这正是 MoE/MoT 的实证基础。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "split_ffn：解耦容量 + 保留协同 = 最优", { fs: 16, fill: C.green, fw: "700" });
+          block(e, 260, 80, "FFN-L", false, true, false);
+          block(e, 410, 80, "FFN-V", false, false, true);
+          block(e, 335, 130, "Attention", true, false, false);
+          block(e, 335, 180, "FinalNorm", true, false, false);
+          e.t(335, 240, "FFN 解耦，注意力与 norm 共享", { fs: 12, fill: C.fg });
+          e.rect(120, 280, 240, 60, "语言 ppl −0.211", "#e0f8f4", C.green, { rx: 8, fs: 13, labelFill: C.green, fw: "700" });
+          e.rect(460, 280, 240, 60, "视觉 loss −0.0168", "#e0f8f4", C.green, { rx: 8, fs: 13, labelFill: C.green, fw: "700" });
+          e.t(W / 2, 380, "共享注意力=语境化桥梁，共享 norm=尺度对齐，FFN=模态专属专家", { fs: 12, fill: C.green, fw: "600" });
+        }
+      },
+      {
+        title: "拆注意力/拆 norm",
+        desc: "再拆掉注意力（split_ffn_attn）：收益大减——语言提升掉到 −0.045、视觉 −0.0064，因为去掉了跨模态语境化。拆掉 norm（split_ffn_norm）同样缩水。全拆（split_all）等于两条独立网络，回到基线。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "拆注意力 / 拆 norm：协同的桥被拆掉", { fs: 16, fill: C.orange, fw: "700" });
+          block(e, 260, 80, "FFN-L", false, true, false);
+          block(e, 410, 80, "FFN-V", false, false, true);
+          block(e, 260, 130, "Attn-L", false, true, false);
+          block(e, 410, 130, "Attn-V", false, false, true);
+          block(e, 335, 180, "FinalNorm", true, false, false);
+          e.t(335, 240, "注意力也拆 → 跨模态语境化消失", { fs: 12, fill: C.orange });
+          e.rect(120, 280, 240, 60, "语言提升 −0.211 → −0.045", "#fdf0e8", C.orange, { rx: 8, fs: 12, labelFill: C.orange, fw: "700" });
+          e.rect(460, 280, 240, 60, "视觉 −0.0168 → −0.0064", "#fdf0e8", C.orange, { rx: 8, fs: 12, labelFill: C.orange, fw: "700" });
+          e.t(W / 2, 380, "split_all（全拆）= 两条独立网络 → 回到单模态基线", { fs: 12, fill: C.fg, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 5: early unification + vision laziness ============ */
+  function scene5Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    return [
+      {
+        title: "时机窗口",
+        desc: "固定 1T 预算，纯语言 warm-up 0→800B：语言侧收益 600-800B 后平台，但所有视觉能力随 warm-up 拉长陡降。存在一个统一窗口——最小语言预热可取，晚统一对语言收益小、对视觉伤害大。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "统一窗口：越晚引入视觉，视觉越差", { fs: 16, fill: C.red, fw: "700" });
+          var x0 = 120, y0 = 300, axW = 560, axH = 180;
+          e.line(x0, y0, x0 + axW, y0, C.muted, { sw: 1.5 });
+          e.line(x0, y0, x0, y0 - axH, C.muted, { sw: 1.5 });
+          e.t(x0 + axW / 2, y0 + 28, "纯语言 warm-up token (0→800B)", { fs: 12, fill: C.fg });
+          e.t(x0 - 12, y0 - axH / 2, "视觉能力", { fs: 12, fill: C.fg, ta: "start" });
+          var pts = [[0, 30], [140, 60], [280, 100], [420, 145], [560, 180]];
+          var d = "M" + pts.map(function (p, i) { return (i ? " L" : "") + (x0 + p[0]) + "," + (y0 - p[1]); }).join("");
+          e.draw("path", { d: d, fill: "none", stroke: C.red, "stroke-width": 3 }, null);
+          pts.forEach(function (p) { e.circle(x0 + p[0], y0 - p[1], 5, C.red, "none"); });
+          e.t(x0 + axW / 2, 60, "语言侧：600-800B 后收益平台", { fs: 12, fill: C.blue, fw: "600" });
+          e.t(x0 + axW / 2, 380, "最小限度的语言预热可取，但统一越晚 → 视觉全线陡降", { fs: 12, fill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "顺序 vs 联合",
+        desc: "固定 50/25/25 mix，测试全部 6 种模态顺序（含人类式 vision-first 生成→理解→语言），带或不带 12.5% replay：任何顺序的隔离训练都输给联合训练。replay 只缓解灾难性遗忘，追不上协同——模态不是共存，是共同进化。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "6 种模态顺序全部输给联合训练", { fs: 16, fill: C.accent, fw: "700" });
+          var orders = [["G→U→L", "U→G→L", "L→G→U", "G→L→U", "U→L→G", "L→U→G"]];
+          orders[0].forEach(function (o, i) {
+            e.rect(60 + i * 120, 90, 100, 60, o, "#fff", C.border, { rx: 8, fs: 12, labelFill: C.fg, fw: "600" });
+          });
+          e.line(80, 200, 760, 200, C.green, { sw: 2.5, dash: "8,5" });
+          e.t(760, 188, "联合训练基线", { fs: 12, fill: C.green, ta: "end", fw: "700" });
+          e.t(W / 2, 250, "实线：严格顺序（低于基线）　虚线：12.5% replay（略升，仍远低于基线）", { fs: 12, fill: C.fg });
+          e.rect(160, 280, 500, 60, "replay 只缓解灾难性遗忘，追不上协同", "#f3ecfd", C.accent, { rx: 8, fs: 13, labelFill: C.accent, fw: "600" });
+          e.t(W / 2, 380, "模态必须共同进化，不能当独立课程步骤", { fs: 12, fill: C.accent, fw: "600" });
+        }
+      },
+      {
+        title: "视觉懒惰四轴",
+        desc: "晚对齐的机制测量（img_ffn 每次随机初始化保证公平）：A. 训练激活 L2 下降（视觉通路学得更少）；B. wrapper token 嵌入范数缩小（语言通路拒绝让位）；C. 推理激活暴跌；D. 投向图像 token 的注意力比例骤降（干脆不看图）。模型越来越依赖语言先验 shortcut。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "vision laziness：四个机械测量", { fs: 16, fill: C.red, fw: "700" });
+          var axes = [
+            ["A. 训练激活 L2", "img_ffn 越来越安静"],
+            ["B. wrapper 嵌入", "语言通路拒绝为图像让位"],
+            ["C. 推理激活 RMS", "用到视觉时做得更少"],
+            ["D. 图像注意力占比", "干脆不看图了"]
+          ];
+          axes.forEach(function (a, i) {
+            var y = 70 + i * 72;
+            e.rect(80, y, 220, 56, a[0], "#fdf0ee", C.red, { rx: 8, fs: 12, labelFill: C.red, fw: "700" });
+            e.t(430, y + 34, a[1], { fs: 12, fill: C.fg, ta: "start", fw: "600" });
+            e.arrow(305, y + 28, 360, y + 28, C.red, { sw: 2, marker: "arrR" });
+          });
+          e.t(W / 2, 380, "语言主干越强，越会用语言先验 shortcut 视觉问题 → 解释 MLLM 失明", { fs: 12, fill: C.red, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 6: recipes ============ */
+  function scene6Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    return [
+      {
+        title: "三轴网格搜索",
+        desc: "Fix MM 扫语言 10%→90%，Fix Lan 锚定 50% 扫理解/生成内比，Next 锚定 70% 精调。最优：70% 语言 / 25% 理解 / 5% 生成。语言需要主导份额，理解中等，生成极少。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "三轴网格搜索 → 70/25/5", { fs: 16, fill: C.accent, fw: "700" });
+          e.rect(60, 80, 200, 60, "Fix MM", "#fff", C.border, { rx: 8, fs: 13, labelFill: C.fg, fw: "700" });
+          e.t(60 + 100, 165, "语言 10%→90%", { fs: 11, fill: C.fg });
+          e.rect(60, 200, 200, 60, "Fix Lan", "#fff", C.border, { rx: 8, fs: 13, labelFill: C.fg, fw: "700" });
+          e.t(60 + 100, 285, "语言 50%，扫理解/生成", { fs: 11, fill: C.fg });
+          e.rect(60, 320, 200, 60, "Next", "#fff", C.border, { rx: 8, fs: 13, labelFill: C.fg, fw: "700" });
+          e.t(60 + 100, 405, "语言 70%，精调视觉内比", { fs: 11, fill: C.fg });
+          e.rect(350, 100, 300, 60, "语言 70%", C.blue, C.blue, { rx: 8, fs: 14, labelFill: "#fff", fw: "700" });
+          e.rect(350, 180, 300, 60, "理解 25%", C.accent, C.accent, { rx: 8, fs: 14, labelFill: "#fff", fw: "700" });
+          e.rect(350, 260, 300, 60, "生成 5%", C.orange, C.orange, { rx: 8, fs: 14, labelFill: "#fff", fw: "700" });
+          e.t(500, 355, "语言需要主导份额；生成极少就够", { fs: 13, fill: C.fg, fw: "600" });
+        }
+      },
+      {
+        title: "5% 生成的悖论",
+        desc: "把生成从 25% 砍到 5%：通用 VQA 反而涨到 48.3，生成评测分数最高。因为生成无反向迁移，均衡混合浪费算力在低收益 token 上；语言+理解先验直接驱动生成。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "生成只要 5%：砍掉 5 倍还更强", { fs: 16, fill: C.green, fw: "700" });
+          e.rect(100, 80, 280, 60, "Balanced 50/25/25", "#fff", C.border, { rx: 8, fs: 13, labelFill: C.fg, fw: "700" });
+          e.rect(100, 160, 280, 60, "生成 token ×5", "#e0f8f4", C.green, { rx: 8, fs: 13, labelFill: C.green, fw: "700" });
+          e.rect(480, 80, 260, 60, "Asym 70/25/5", C.green, C.green, { rx: 8, fs: 13, labelFill: "#fff", fw: "700" });
+          e.rect(480, 160, 260, 60, "生成 token ×1", "#e0f8f4", C.green, { rx: 8, fs: 13, labelFill: C.green, fw: "700" });
+          e.t(W / 2, 260, "结果：VQA 48.3（更高）+ 生成评测最高", { fs: 14, fill: C.green, fw: "700" });
+          e.t(W / 2, 295, "FID 5.234 vs 5.131（几乎持平）", { fs: 12, fill: C.fg });
+          e.rect(160, 320, 500, 60, "均衡混合 = 浪费算力在低收益 token 上", "#e0f8f4", C.green, { rx: 8, fs: 13, labelFill: C.green, fw: "600" });
+        }
+      },
+      {
+        title: "13.5B 三对照",
+        desc: "2T token 规模验证三条规律：配方（Asym 70/25/5 全维度胜 Balanced，生成 token 少 5 倍 GenEval 0.482 vs 0.467）；架构（MoE 13.5B/1.5B active 胜 3.5B dense）；时机（Early 胜 Late-fusion，视觉 60% 后才引入）。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "13.5B MoE × 2T：三个单变量对照全胜", { fs: 16, fill: C.accent, fw: "700" });
+          var rows = [
+            ["配方", "Asym 70/25/5", "语言 54.31 vs 52.86", "GenEval 0.482 vs 0.467"],
+            ["架构", "MoE 13.5B/1.5B", "语言 52.86 vs 52.03", "loss 0.261 vs 0.266"],
+            ["时机", "Early unified", "语言 52.86 vs 51.78", "loss 0.261 vs 0.269"]
+          ];
+          rows.forEach(function (r, i) {
+            var y = 70 + i * 90;
+            e.rect(60, y, 100, 60, r[0], C.accent, C.accent, { rx: 8, fs: 13, labelFill: "#fff", fw: "700" });
+            e.rect(190, y, 200, 60, r[1], "#f3ecfd", C.accent, { rx: 8, fs: 12, labelFill: C.accent, fw: "600" });
+            e.rect(420, y, 170, 60, r[2], "#e0f8f4", C.green, { rx: 8, fs: 11, labelFill: C.green, fw: "600" });
+            e.rect(620, y, 150, 60, r[3], "#e0f8f4", C.green, { rx: 8, fs: 11, labelFill: C.green, fw: "600" });
+          });
+          e.t(W / 2, 380, "小规模规律在大规模完全复现 → 可检验的底层假设", { fs: 12, fill: C.accent, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ WIRING ============ */
+  var builders = {
+    "svg1": scene1Build,
+    "svg2": scene2Build,
+    "svg3": scene3Build,
+    "svg4": scene4Build,
+    "svg5": scene5Build,
+    "svg6": scene6Build
+  };
+  var engines = {};
+
+  function initScene(svgId) {
+    if (engines[svgId]) return engines[svgId];
+    var svg = document.getElementById(svgId);
+    if (!svg) return null;
+    var buildFn = builders[svgId];
+    if (!buildFn) return null;
+    var steps = buildFn();
+    var eng = new AnimEngine(svg, { steps: steps });
+    engines[svgId] = eng;
+    eng.goTo(0);
+    return eng;
+  }
+
+  document.querySelectorAll(".anim-frame").forEach(function (frame) {
+    var svg = frame.querySelector("svg");
+    if (!svg) return;
+    var svgId = svg.id;
+
+    frame.addEventListener("click", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      var target = ev.target;
+      if (target.classList.contains("btn-play")) { eng.toggle(); }
+      else if (target.classList.contains("btn-next")) { eng.pause(); eng._setPlayBtn(false); eng.next(); }
+      else if (target.classList.contains("btn-prev")) { eng.pause(); eng._setPlayBtn(false); eng.prev(); }
+      else if (target.classList.contains("btn-reset")) { eng.reset(); }
+      else if (target.classList.contains("stage-chip")) {
+        eng.pause();
+        eng._setPlayBtn(false);
+        eng.goTo(parseInt(target.getAttribute("data-step"), 10));
+      }
+    });
+
+    var slider = frame.querySelector(".speed-slider");
+    if (slider) {
+      slider.addEventListener("input", function () {
+        var eng = engines[svgId];
+        if (eng) eng.setSpeed(parseFloat(slider.value));
+      });
+    }
+
+    frame.setAttribute("tabindex", "0");
+    frame.addEventListener("keydown", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      if (ev.key === "ArrowRight") { ev.preventDefault(); eng.next(); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); eng.prev(); }
+      else if (ev.key === " ") { ev.preventDefault(); eng.toggle(); }
+    });
+  });
+
+  window.toggleTheme = function () {
+    var html = document.documentElement;
+    if (html.getAttribute("data-theme") === "dark") {
+      html.removeAttribute("data-theme");
+      var tb = document.querySelector(".theme-toggle");
+      if (tb) tb.textContent = "🌙";
+      localStorage.setItem("theme", "light");
+    } else {
+      html.setAttribute("data-theme", "dark");
+      var tb2 = document.querySelector(".theme-toggle");
+      if (tb2) tb2.textContent = "☀️";
+      localStorage.setItem("theme", "dark");
+    }
+  };
+
+  window.toggleToc = function () {
+    var nav = document.getElementById("tocNav");
+    if (nav) nav.classList.toggle("collapsed");
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (localStorage.getItem("theme") === "dark") toggleTheme();
+    ["svg1", "svg2", "svg3", "svg4", "svg5", "svg6"].forEach(function (id) { initScene(id); });
+
+    var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var id = entry.target.id;
+          tocLinks.forEach(function (l) { l.classList.remove("active"); });
+          var link = document.querySelector('.toc a[href="#' + id + '"]');
+          if (link) { link.classList.add("active"); if (window.innerWidth > 768) link.scrollIntoView({ block: "nearest" }); }
+        }
+      });
+    }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+    document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+    var backTop = document.getElementById("backTop");
+    window.addEventListener("scroll", function () {
+      if (window.scrollY > 600) backTop.classList.add("visible");
+      else backTop.classList.remove("visible");
+    });
+
+    tocLinks.forEach(function (a) {
+      a.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        var id = a.getAttribute("href").slice(1);
+        var target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: "smooth" });
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
