@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mixture-of-Kittens：把通信焊进计算里的 MoE 训练 megakernel</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+:root {
+  --bg: #fafafa; --fg: #1a1a2e; --fg-soft: #444; --fg-muted: #888;
+  --accent: #6c5ce7; --accent-soft: #a29bfe; --accent-bg: #eeeafe;
+  --green: #00b894; --green-soft: #55efc4; --green-bg: #e0f8f4;
+  --red: #e74c3c; --red-soft: #fab1a0; --red-bg: #fdf0ee;
+  --orange: #e17055; --orange-bg: #fdf0e8;
+  --blue: #0984e3; --blue-soft: #74b9ff; --blue-bg: #e8f4fd;
+  --purple: #a55eea; --purple-bg: #f3ecfd;
+  --border: #ddd; --card-bg: #fff; --code-bg: #f4f4f4;
+  --disabled: #c8c8c8; --focus: #6c5ce7;
+  --toc-w: 240px; --content-w: 860px;
+  --layer-ms: 300ms;
+}
+[data-theme="dark"] {
+  --bg: #1a1a2e; --fg: #e0e0e0; --fg-soft: #bbb; --fg-muted: #888;
+  --accent: #a29bfe; --accent-soft: #6c5ce7; --accent-bg: #2a2a4e;
+  --green: #55efc4; --green-soft: #00b894; --green-bg: #1a3a32;
+  --red: #fab1a0; --red-soft: #e74c3c; --red-bg: #3a1a1a;
+  --orange: #fdcb6e; --orange-bg: #2a2614;
+  --blue: #74b9ff; --blue-soft: #0984e3; --blue-bg: #1a2a3a;
+  --purple: #d0a5f5; --purple-bg: #2a1f3a;
+  --border: #333; --card-bg: #252535; --code-bg: #1e1e2e;
+  --disabled: #555; --focus: #a29bfe;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+
+.content { width: var(--content-w); flex-shrink: 0; }
+section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-orange { background: var(--orange-bg); border-color: var(--orange); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: center; white-space: nowrap; }
+th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+pre.code { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; font-family: "JetBrains Mono", "Consolas", monospace; color: var(--fg-soft); margin: 14px 0; }
+pre.code .c { color: var(--fg-muted); }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 660px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: #fff; }
+.badge-green { background: var(--green); color: #fff; }
+.badge-blue { background: var(--blue); color: #fff; }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: #fff; }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+/* ===== 场景过渡动画 (Pattern 1) ===== */
+.anim-canvas-wrap svg .scene-layer { transition: opacity 430ms cubic-bezier(.22,.61,.36,1), transform 430ms cubic-bezier(.22,.61,.36,1); }
+.anim-canvas-wrap svg .scene-enter.from-right { opacity: 0; transform: translateX(18px); }
+.anim-canvas-wrap svg .scene-enter.from-left { opacity: 0; transform: translateX(-18px); }
+.anim-canvas-wrap svg .scene-layer.scene-active { opacity: 1; transform: translateX(0); }
+.anim-canvas-wrap svg .scene-exit.to-left.scene-exit-active { opacity: 0; transform: translateX(-14px); }
+.anim-canvas-wrap svg .scene-exit.to-right.scene-exit-active { opacity: 0; transform: translateX(14px); }
+/* ===== 元素级入场动画 (Pattern 2) ===== */
+.anim-canvas-wrap svg .reveal { opacity: 0; transform: translateY(7px); animation: revealUp .48s cubic-bezier(.22,.61,.36,1) forwards; animation-delay: var(--delay, 0ms); transform-box: fill-box; }
+@keyframes revealUp { to { opacity: 1; transform: translateY(0); } }
+/* ===== 进度条 (Pattern 5) ===== */
+.anim-progress { height: 3px; background: var(--border); position: relative; }
+.anim-progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-soft)); width: 0%; transition: width 380ms cubic-bezier(.22,.61,.36,1); }
+/* ===== 步骤条 Stage Rail (Pattern 4) ===== */
+.anim-stage-rail { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 8px; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg); cursor: pointer; font-size: 11px; color: var(--fg-soft); transition: all 0.15s; }
+.anim-stage-rail .stage-chip:hover { border-color: var(--accent); color: var(--accent); }
+.anim-stage-rail .stage-chip.done { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-soft); }
+.anim-stage-rail .stage-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 960px) {
+  .layout { flex-direction: column; gap: 0; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; margin-bottom: 16px; max-height: 200px; }
+  .toc h3 { cursor: pointer; }
+  .toc.collapsed .toc a { display: none; }
+  .content { width: 100%; }
+  section { padding: 18px; }
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  section { padding: 14px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 20px; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 8px; }
+  .anim-controls button { min-height: 36px; }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc" id="tocNav">
+  <h3 onclick="toggleToc()">导航</h3>
+  <a href="#hook">核心思想</a>
+  <a href="#bg">为什么：MoE 层是瓶颈</a>
+  <a href="#nvl72">NVL72 改变了问题形态</a>
+  <a href="#pull-push">亮点一：pull/push 通信方向</a>
+  <a href="#minibatch">亮点二：minibatch = 两个 wave</a>
+  <a href="#inter-sm">亮点三：inter-SM 分工与反向编排</a>
+  <a href="#ring">亮点四：ring buffer 与 reversed ring</a>
+  <a href="#mxfp8">亮点五：MXFP8 / 确定性 / CLC</a>
+  <a href="#hard">难点：megakernel 为什么难</a>
+  <a href="#bench">基准与诚实的解读</a>
+  <a href="#agents">大图景：agent 时代的 kernel 工程</a>
+  <a href="#summary">总结</a>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>Mixture-of-Kittens</h1>
+  <p class="tagline"><strong>Cursor 开源的 NVL72 MoE 训练 megakernel：把 dispatch / combine 通信直接焊进计算 kernel，单 kernel 完成前向与反向</strong></p>
+  <p class="tagline">MoE 层占 Composer 训练端到端时间的 <strong>一半以上</strong>。MoK 用"通信方向重选 + 计算通信同 kernel 融合 + 零 CPU-GPU 同步"三个动作，把 MoE 层吞吐推到公开基线的 <strong>2.37×</strong>（MXFP8 前向），端到端训练提速 <strong>1.41×</strong>——并保持完全确定性。</p>
+  <div class="badges">
+    <span class="badge badge-accent">GB300 NVL72 专属</span>
+    <span class="badge badge-green">MXFP8 fwd 2.37×</span>
+    <span class="badge badge-blue">端到端 1.41× tokens/s</span>
+  </div>
+</section>
+
+<section id="bg">
+  <h2>为什么：MoE 层是训练的瓶颈</h2>
+  <p>DeepSeek-V3 风格的 MoE 层（1 个共享 expert + 数百个路由 expert，如 GLM、Qwen、Kimi K2.7、DSV 都长这样）是整个训练栈里最"贵"的一层。每个 token 先进 router 投影选 top-k expert，再被送往对应 expert 的 FFN（up/gate 投影 → SwiGLU → down 投影），最后按 router 权重加权合并。在 expert parallelism（EP）下，expert 权重被切到 64 个 rank 上，<strong>token 必须在 GPU 之间来回搬运两次</strong>：dispatch（把 token 送到持有其 expert 的 rank）和 combine（把结果送回原 rank）。</p>
+  <p>关键事实：<strong>通信耗时和计算同数量级</strong>。传统实现（NCCL / DeepEP）把 dispatch、FFN、combine 当三个独立算子顺序执行，通信期间 GPU 空转。Cursor 的实测：<strong>MoE 层占端到端训练时间超过 50%</strong>，而其中通信已经从次要成本变成了主导成本——过去一年他们写过 MXFP8/NVFP4 训练 kernel、搞过 warp decode 推理，但都只优化了计算侧，通信没动。</p>
+  <div class="callout callout-accent">
+    <strong>核心判断：</strong> MoE 层的性能上限不再由 GEMM 决定，而由"token 怎么在 72 张 GPU 之间流动"决定。要继续压，必须把通信当成 kernel 的一等公民来设计，而不是调库。
+  </div>
+</section>
+
+<section id="nvl72">
+  <h2>NVL72 改变了问题形态</h2>
+  <p>从 DGX 换到 GB300 NVL72，问题的约束条件变了两个，MoK 的设计几乎全部由这两个变化驱动：</p>
+  <ul>
+    <li><strong>72 个 GPU 在同一个 NVLink 域内</strong>。NVL72 是一个机架 = 一个多节点 NVLink 域，任何两个 GPU 之间都有 NVLink（5 代，1.8 TB/s 双向）。这意味着通信不再需要经过 InfiniBand，可以做<strong>细粒度的计算/通信重叠</strong>——把通信切成小片掺进计算流水线里，而不必像 IB 时代那样攒大批量。</li>
+    <li><strong>集成 Grace CPU 相对 GPU 慢得多</strong>。Cursor 的 trace 显示 GPU kernel 经常被 CPU 侧工作（日志、推送训练指标）拖住——同一个训练栈在 DGX（Intel CPU）上没这问题。任何一次 CPU-GPU 同步，GPU 流都会追上 CPU 然后干等。所以设计约束是：<strong>尽量让 GPU 永远不回头等 CPU</strong>。</li>
+  </ul>
+  <div class="callout callout-blue">
+    <strong>设计原则由此确立：</strong> 单 kernel 内完成全部 MoE 通信 + 计算；通信方向、调度、信令全部在设备端自洽；CPU 只负责"一键启动"。MoK 的每个技术决策都能追到这两条约束之一。
+  </div>
+</section>
+
+<section id="pull-push">
+  <h2>亮点一：pull/push 通信方向——被默认选项掩盖的三个 trade-off</h2>
+  <p>把 token 从 GPU A 送到 GPU B，有两种力学：<strong>push</strong>（持有 token 的 GPU 主动把数据写进远程 GPU 的缓冲区）和 <strong>pull</strong>（需要 token 的 GPU 主动从远程 GPU 的缓冲区读）。DeepEP 等主流实现默认 push，理由是“push 协议开销小、更容易打满链路”。MoK 的观察是：<strong>push/pull 各有 trade-off，且方向选择直接影响调度、带宽、信令三个层面</strong>——全都选对了才对。</p>
+
+  <h3>维度一：调度（schedule）复杂度</h3>
+  <p>要让 dispatch 期间所有 NVLink 通道都忙、每个 rank 收到的 token 按 local expert 顺序排列、且零本地拷贝，需要一张排列表。push 的排列表是 <code>{src_index, dst_rank, dst_index}</code> 三列：行序决定发送顺序，必须让 dst_rank 轮转（保持所有链路饱和）、dst_index 在所有源之间均匀交错且按目标 rank 的 expert 序递增——<strong>构建这张表需要多趟排序，且每个 rank 的表都要考虑其他所有 rank（两个源不能写同一 dst_index）</strong>。</p>
+  <p>pull 的排列表退化到两列 <code>{src_rank, src_index}</code>，行号直接就是本地目标缓冲区的 token 下标——<strong>不需要排序</strong>：遍历 router 结果，凡是路由到本 rank 的 token，记下它的源 rank 和源下标即可。实测这个 schedule kernel 只占 MoE 总运行时间的 <strong>&lt;3%</strong>，且完全在设备端执行。</p>
+  <div class="callout callout-green">
+    <strong>代码佐证（scheduler.cuh）：</strong> 三阶段实现——count（统计每个 peer→local expert 的 token 数）→ pad（每个 expert 按 <code>EXPERT_PADDING=256</code> 向上取整，给 grouped GEMM 做行对齐）→ schedule（把 token 写入其 expert 的 256-padded 段，段内按 peer rank 交错）。容量用 <code>{trap;}</code> 显式崩溃而非静默越界，无效槽位填 <code>-1</code> 哨兵。整张表只有几 MB，且<strong>一次构建、四个方向复用</strong>。
+  </div>
+
+  <h3>维度二：NVLink 带宽利用率</h3>
+  <p>NVLink 协议元数据（源/目的、ACK）与负载争抢链路。NCU 微基准（256×256 BF16 tile）显示：push 总字节数更少（少约 12.4 KB），但<strong>几乎全走单方向</strong>；pull 总字节更多，但元数据双向分摊。而 NVLink 的每个方向是独立车道，要打到 1.8 TB/s 必须双向全流。MoE 的 dispatch/combine 每次传输只有几 KB 且方向不平衡，正是最吃亏的场景——实测在 expert 负载不均衡时，<strong>pull 的 NVLink 带宽利用率比 push 高 29%</strong>。</p>
+
+  <h3>维度三：信令（signalling）</h3>
+  <p>GPU 必须知道"数据到了"才能开始算。push 的完成信号<strong>必须跨 GPU 传递</strong>：一个 rank 要等多达 71 个 peer 的信号 + 一次全机架 memory fence 才能开始 grouped GEMM——数据已经躺在目标缓冲区里，但谁都不敢用。多节点微基准：<strong>push dispatch 信令延迟 103 µs，pull 只要 18 µs（5.8× 差距）</strong>，在单 kernel 里反复累积非常致命。</p>
+  <p>pull 的妙处在于：<strong>发起方就是消费者</strong>——本地发一个 load，等数据到，立刻能用，同一个实体完成信令，开销不随 EP 度增长，跨 GPU 信令直接消失。</p>
+
+  <h3>四方向组合：一张表吃遍前向反向</h3>
+  <table>
+    <tr><th>算子</th><th>方向</th><th>为什么</th></tr>
+    <tr><td>前向 dispatch</td><td class="gain">pull</td><td>调度免排序 + 信令本地化 + 不平衡带宽高</td></tr>
+    <tr><td>前向 combine</td><td class="gain">push</td><td>复用同表，避免反向语义的跨 GPU 等信号</td></tr>
+    <tr><td>反向 reverse-combine</td><td class="gain">pull</td><td>前向 combine 的镜像，方向天然对称</td></tr>
+    <tr><td>反向 reverse-dispatch</td><td class="gain">push</td><td>同上，一张 schedule 表四个方向复用</td></tr>
+  </table>
+  <p>代价不是零：pull 的总字节数更高，调度行序也不能像 push 那样自由控制发送顺序。但信令本地化 + 免排序带来的收益远大于字节多出的成本——三个维度里，<strong>信令是决定性的那一个</strong>。</p>
+
+  <div class="anim-frame" id="anim1">
+    <div class="anim-header">
+      <span class="anim-title">动画 1：push vs pull 的调度与信令</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg1" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="push 与 pull 通信方向对比动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">push dispatch 的代价</button><button class="stage-chip" data-step="1">pull dispatch 的优势</button><button class="stage-chip" data-step="2">四方向组合</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#6c5ce7"></span> token 数据</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 跨 GPU 信令</span>
+      <span><span class="dot" style="background:#00b894"></span> 本地信令</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> 排列表</span>
+    </div>
+  </div>
+</section>
+
+<section id="minibatch">
+  <h2>亮点二：重叠粒度 = 每个 GEMM 至少两个 wave</h2>
+  <p>粒度是计算/通信重叠里最微妙的旋钮。太细（Comet 式：每次只发够一个 MMA 的 token，Blackwell 上 256 个）——tensor core 是深度流水、带宽优化的加速器，频繁的 barrier 等待让它永远喂不饱；太粗（DeepEP 式：攒几千上万个 token 一起发）——第一个 wave 到来前和最后一个 wave 的 combine 前，tensor core 都在干等。MoK 的答案：<strong>中间值，且量化成"两个 wave"</strong>。</p>
+  <p>一个 wave 是 GPU 上所有 SM 并发执行一轮 work。设 $T$ 为每次传输的 token 数（minibatch 大小），<strong>选让每个 expert grouped-GEMM 至少跑满两个 wave</strong>，理由有二：</p>
+  <ol>
+    <li>一个完整 wave 就足以饱和 tensor core；</li>
+    <li>两个 wave 时，第二波的 MMA 与第一波的 epilogue 和依赖算子（SwiGLU、下一个 grouped GEMM）重叠，把 tail effect 摊掉。</li>
+  </ol>
+  <p>Blackwell 上每个 SM 固定处理 $128 \times 256$ 的输出 tile（$K$ 为归约维）。设 $H$ 为隐藏维、$I$ 为 expert 中间维、$C$ 为 SM 数，则 up/gate 投影（互不依赖、可并行跑）要求：</p>
+  <p style="text-align:center; font-size:16px;">$$T \ge \frac{2 \cdot C \cdot 128 \cdot 256}{H}$$</p>
+  <p>down 投影（无法与别的算子并行）更紧：</p>
+  <p style="text-align:center; font-size:16px;">$$T \ge \frac{2 \cdot C \cdot 128 \cdot 256}{I}$$</p>
+  <p>取两者较大者。以 Composer 2.5 的基座 Kimi 2.5 为例（$H=7168, I=2048$，Blackwell $C=148$）：up/gate 侧要求 $T \ge 1354$，down 侧要求 $T \ge 4736$——取 <strong>4736</strong>。微基准结果与启发式吻合。minibatch 做成可调参数（推荐区间 2048–16384），跑 workload 前先扫一遍配置。</p>
+  <div class="callout callout-purple">
+    <strong>为什么"两个 wave"是物理直觉而非经验拍脑袋：</strong> 一个 wave 对应 tensor core 吞吐的饱和点，第二个 wave 是"免费"的——它不增加关键路径长度，只是让流水线在换挡时不停顿。少于两个 wave，SM 出现 partial wave（部分 SM 空转）；多于两个，通信粒度过粗、首尾等待变长。这是一个有明确拐点的优化问题。
+  </div>
+</section>
+
+<section id="inter-sm">
+  <h2>亮点三：inter-SM 分工——把 GPU 内部切成"通信核"和"计算核"</h2>
+  <p>粒度定了，还要决定谁在什么时刻干活。MoK 用 <strong>inter-SM overlapping</strong>：把 SM 分成两组——<code>comm SMs</code> 专职 dispatch/combine，<code>comp SMs</code> 专职 expert FFN，两组之间用<strong>本地 counter</strong> 互相发信号。这之所以可行，是因为 Blackwell 的 TMA（Tensor Memory Accelerator）让 <strong>不到 1/3 的 SM 就能打满 NVLink 带宽</strong>——大部分 SM 应该留给计算。</p>
+  <p>信令原语是手写 PTX：<code>barrier_arrive</code> 用 <code>red.release.gpu.global.add</code> 原子加，<code>barrier_wait</code> 用 <code>ld.relaxed.gpu</code> 轮询 + <code>__nanosleep(16)</code> 退避 + <code>fence.acquire.gpu</code>。release/acquire 语义保证"先写数据、后抬信号"的顺序，全部在设备端自洽，CPU 零参与。</p>
+
+  <h3>前向编排：先 dispatch 全部，再 combine 与 FFN 交织</h3>
+  <p>comm SMs 先把所有 minibatch 的 pull dispatch 全部做完（comp SMs 边等边把 shared expert 的 FFN 塞进空档），每凑满一个 minibatch 就向 comp SMs 发信号；comp SMs 原子地跑 MLP-SwiGLU；全部 down 投影完成后回发信号，comm SMs 开始 push combine。因为 dispatch 阶段攒了大量就绪信号，combine 能和最后一批 FFN 无缝衔接。</p>
+
+  <h3>反向编排：dgrad 先行，wgrad 殿后</h3>
+  <p>反向复杂在要支持 forward replay（见下一节）。MoK 的编排：comm SMs 先做 reverse-combine，comp SMs 跑 FFN 反向中的 <strong>3 个 dgrad GEMM + SwiGLU backward</strong>（排除 wgrad），完成后反向 reverse-dispatch。3 个 wgrad 被推迟到所有 minibatch 的 dgrad 结束之后，两个理由：</p>
+  <ul>
+    <li><strong>重叠</strong>：reverse-dispatch 不依赖 wgrad，wgrad 可以跟最后几轮 reverse-dispatch 并行；</li>
+    <li><strong>数值</strong>：wgrad 的归约轴是 token 轴，整轴一次性累加能最小化数值误差。</li>
+  </ul>
+  <p>comp/comms SM 比例前后向分别可调（默认 fwd 40 / bwd 28 个 comm SMs），因为前后向的通信/计算比不同。</p>
+
+  <div class="anim-frame" id="anim2">
+    <div class="anim-header">
+      <span class="anim-title">动画 2：megakernel 内部的 SM 分工与流水编排</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg2" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="megakernel SM 分工与流水编排动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">SM 分工</button><button class="stage-chip" data-step="1">前向流水</button><button class="stage-chip" data-step="2">反向编排</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#6c5ce7"></span> comm SMs（通信）</span>
+      <span><span class="dot" style="background:#00b894"></span> comp SMs（计算）</span>
+      <span><span class="dot" style="background:#0984e3"></span> dispatch / combine</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> FFN (gate/up→SwiGLU→down)</span>
+      <span><span class="dot" style="background:#e17055"></span> wgrad / replay</span>
+    </div>
+  </div>
+</section>
+
+<section id="ring">
+  <h2>亮点四：ring token buffer——用"逆序填环"消灭 CPU-GPU 同步</h2>
+  <p>最后一块拼图是 MoE 的<strong>动态性</strong>：路由结果出来之前，谁也不知道每个 rank 会收到多少 token。业界两种处理都不可接受：<strong>token dropping</strong>（超出固定缓冲的 token 直接丢弃）伤训练质量；<strong>CPU-GPU 同步</strong>（把每 rank token 数送回 CPU，由 CPU 分配精确大小的缓冲）在 Grace CPU 上就是灾难——GPU 会被拖住等 CPU 回复。</p>
+  <p>MoK 的做法：<strong>macrobatch ring buffer</strong>——一块几百 MB 的固定大小环形缓冲，按 minibatch 粒度循环使用，不丢 token、不同步 CPU。实现的关键是<strong>跨环边界重叠</strong>：dispatch 往环的头部写，combine 从环的尾部读（同一块区域），<strong>合并上一 macrobatch 的 combine 与下一 macrobatch 的 dispatch 交织执行</strong>，边清边填，槽位尽快复用。代码里前向通信就是这个循环：</p>
+<pre class="code"><span class="c">// 先单独 dispatch 最后一个 macrobatch</span>
+for (task &lt; num_dispatch_tasks(num_macrobatches - 1)) dispatch(num_macrobatches - 1, task);
+<span class="c">// 然后逆序：每轮 combine 当前 macrobatch + dispatch 前一个</span>
+for (macrobatch_idx = num_macrobatches - 1; macrobatch_idx &gt;= 0; --macrobatch_idx) {
+    combine(macrobatch_idx, ...);
+    dispatch(macrobatch_idx - 1, ...);   <span class="c">// 同一批环槽位，先清后填</span>
+}</pre>
+
+  <h3>reversed ring：为什么前向要逆序消费</h3>
+  <p>ring 是环，前向写 N 个 macrobatch 就要覆盖 N−1 次，被覆盖的激活在反向时必须 <strong>forward replay</strong>（重算）。replay 只需重算到 SwiGLU——反向只需要 down 的输入激活和输出梯度，不需要 down 的前向输出。但重算多少，取决于环里最后存了谁：</p>
+  <ul>
+    <li><strong>正序填充</strong>：最后写入的是<strong>部分填充</strong>的最后一个 macrobatch（token 总数不是 macrobatch_size 整数倍时），环里有效的激活最少，反向要多 replay；</li>
+    <li><strong>逆序填充</strong>：最后写入的是<strong>满的</strong> macrobatch 0——环要么全满、要么存的都是有效 token，反向直接从环里读最早的 macrobatch（backward 的第一个依赖），replay 量最小化。</li>
+  </ul>
+  <p>代码佐证：反向 grid 里 replay 任务数精确等于 <code>(num_macrobatches − 1) × (macrobatch_size / minibatch_size)</code>——第一个 macrobatch 永远在环里现成可用，其余 N−1 个才需要 replay。若把 <code>macrobatch_size</code> 设到极大（如默认 131072，环只用一次），replay 归零，代价是显存。</p>
+  <div class="callout callout-red">
+    <strong>环竞争的代价——一个必须防御的坑：</strong> dispatch 覆写的行可能还在被上一 macrobatch 的 GEMM 读。MoK 用 <code>transfer_ready</code> / <code>buffer_ready</code> 两级 counter 保护：dispatch 一个 macrobatch 前，必须等上一轮"读同一批槽位"的 GEMM 和 combine 全部完成（<code>barrier_wait</code> 按 minibatch 精确计数）。反向更甚——9 类信号量（router_weights_ready / d_y_routed_ready / d_hidden_ready / d_gate_up_ready / d_x_routed_ready / replayed_* 三件套 / routed_buffers_done）把 replay 流水线、dgrad 流水线、wgrad 流水线串成一张依赖网。这是全 kernel 最容易写错死锁的地方。
+  </div>
+
+  <div class="anim-frame" id="anim3">
+    <div class="anim-header">
+      <span class="anim-title">动画 3：reversed ring——逆序填环如何减少反向 replay</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg3" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="reversed ring 环形缓冲动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">正序填充的问题</button><button class="stage-chip" data-step="1">逆序填充</button><button class="stage-chip" data-step="2">combine/dispatch 交织</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#00b894"></span> 环内存活激活</span>
+      <span><span class="dot" style="background:#e74c3c"></span> 需 replay</span>
+      <span><span class="dot" style="background:#6c5ce7"></span> dispatch 写入</span>
+      <span><span class="dot" style="background:#0984e3"></span> combine 读出</span>
+      <span><span class="dot" style="background:#fdcb6e"></span> 部分填充</span>
+    </div>
+  </div>
+</section>
+
+<section id="mxfp8">
+  <h2>亮点五：MXFP8、确定性与 CLC——工程细节里的增量</h2>
+  <h3>MXFP8：量化成本被融合吃掉</h3>
+  <p>MoK 训练用 MXFP8（更快且无数值问题），但<strong>shared expert 留在 BF16</strong>——实测影响训练稳定性。MXFP8 的额外成本是"进 tensor core 前必须量化"。MoK 把它拆成三份消化：权重用独立优化 kernel 预量化（<code>mxfp8_quantize</code>，留给 FSDP 等外部优化机会）；激活量化<strong>融合进 dispatch all-to-all、expert grouped-GEMM 和 SwiGLU</strong>——dispatch 每拉回一批 token 直接量化成 FP8 + block scale 双写（正常 + 转置两份，给 up/gate 和 down 两种 GEMM 用）。scale 计算用 <code>cvt.rp.satfinite.ue8m0x2.f32</code>（向上取整 + 饱和到有限值），倒数用 <code>(254 − scale) &lt;&lt; 23</code> 直接拼出 float32，免除法。</p>
+  <h3>确定性：bitwise identical</h3>
+  <p>FP 运算顺序固定 → 相同输入产出逐位一致的输出，与硬件调度、指令发射顺序无关。这是给内部消融和 on-policy RL 后训练用的——实验可复现是强化学习实验的刚需。</p>
+  <h3>CLC：megakernel 主动给别的活儿让位</h3>
+  <p>megakernel 是 persistent kernel，独占 GPU 会挡住机架间的 FSDP all-gather（InfiniBand/RoCE 通信也需要 SM 干活）。MoK 用 Blackwell 的 <strong>CLC（Cluster Launch Control）</strong>——硬件原生的 work-stealing 机制：megakernel 的任务通过 CLC 调度，<strong>高优先级流上的 kernel 可以插队</strong>，megakernel 让位而不必等自己完全结束。代码里每个任务簇都带一个 SM 掩码 bitfield（<code>0xFFFF0000</code>），把部分 SM 显式空出来给 RDMA 通信。</p>
+</section>
+
+<section id="hard">
+  <h2>难点：megakernel 为什么难写</h2>
+  <p>读完亮点，值得停下来想清楚：这套东西的工程难度在哪？不是"多写几个 kernel"，而是<strong>把正确性建立在极细粒度的跨 GPU 时序之上</strong>。逐条拆：</p>
+
+  <h3>1. 全局一致的调度：每个 rank 的表都要考虑所有 rank</h3>
+  <p>schedule 表的下标交错规则（peer 均匀散布 + expert 序递增 + 256 对齐）依赖<strong>所有源 rank 的写入互不冲突</strong>——这是全局约束，不是本地约束。构建时任何两个源撞了同一个 dst_index，数据就静默损坏。MoK 用 <code>{trap;}</code> 把"超容量"变成显式崩溃、用 <code>-1</code> 哨兵标记无效槽位，把"可能错"变成"必须错"。容量估算用 <code>schedule_capacity = num_local_tokens × topk × max(2, ceil(ep_size × 0.5))</code>——训练初期 expert 负载极不均衡时建议把 multiplier 调到 1，后期再降回 0.5。</p>
+
+  <h3>2. TMA 流水线的共享内存编排</h3>
+  <p>每个任务簇在共享内存里手工规划布局：token chunks、FP8 tile、scale tile、转置 tile、router 权重缓存，全部用 <code>tensor_allocator</code> 在 227 KB 共享内存里按字节对齐分配（<code>smem_base_addr</code> 对齐到 1024）。GEMM 的 load/epilogue 流水深度（6/8 级）、combine 流水（7 级）、CLC drain（8 级）互相纠缠——动一个数字，共享内存就爆或流水就断。</p>
+
+  <h3>3. 反向的依赖网：9 类信号量的正确性</h3>
+  <p>反向同时跑三条流水线：dgrad（reverse-combine → 3 dgrad GEMM + SwiGLU bwd → reverse-dispatch）、replay（re-dispatch → gate/up → SwiGLU fwd，只到 SwiGLU 为止）、wgrad（3 个 GEMM，最后收）。任何两个阶段之间的信号量计数错误（required_count 算错一个 cluster 的贡献）都会死锁或竞态。计数器是全局内存整数，release/acquire 语义靠 PTX fence 保证，<strong>没有工具能帮你验证</strong>。</p>
+
+  <h3>4. SM 分区的精确性</h3>
+  <p>博客明确说：多流 + green contexts 分 SM <strong>不可靠</strong>——"exactly as intended"做不到。所以 MoK 用软件分区：任务按 cluster 索引静态分配，comp/comms 比例写死进配置（且前后向不同）。这避免了运行时不确定性，但也意味着<strong>每个 workload 都要重新调 5 个超参数</strong>（fwd/bwd comm SM 数、minibatch、macrobatch、schedule multiplier）。</p>
+
+  <h3>5. 硬件绑定与生态依赖</h3>
+  <table>
+    <tr><th>依赖</th><th>为什么</th></tr>
+    <tr><td>SM100 / SM103（Blackwell）</td><td>TMA、thread block cluster、CLC、2-SM MMA 都是 Blackwell 特性</td></tr>
+    <tr><td>CUDA 13.0+ / PyTorch 2.10+</td><td>symmetric memory API、cu130 wheel</td></tr>
+    <tr><td>PyTorch symmetric memory</td><td>EP 组内同尺寸对称缓冲，跨 GPU 直接寻址（TMA 的 peer_buf 就是裸指针数组）</td></tr>
+    <tr><td>kittens 框架</td><td>UMich KITTENS：tile 抽象、TMA 封装、cluster 原语——megakernel 的地基</td></tr>
+    <tr><td>NVLink multicast</td><td>barrier_all / all_gather_top_experts 用 multimem 原子，跨 72 GPU 同步不靠 CPU</td></tr>
+  </table>
+  <p>代码规模：megakernel 主文件 3260 行 + scheduler 185 行 + utils 312 行 + Python 前端 700+ 行。这不是"论文原型"的规模，是<strong>生产训练栈里跑着数万卡 workload 的代码</strong>——每一次改动都要过一遍 72 GPU 的时序心智模型。</p>
+</section>
+
+<section id="bench">
+  <h2>基准与诚实的解读</h2>
+  <h3>单 MoE 层基准</h3>
+  <p>配置：单个 NVL72 机架内、EP=64、路由前每 GPU 2048 token，前向/反向分开测，BF16/MXFP8 双模式。基线选能同时支持前向+反向、且能在 NVL72 上跑的公开实现：NCCL+PyTorch、DeepEP+PyTorch、DeepEP+TransformerEngine、HybridEP+Megatron（NVIDIA 在 NVL72 上推荐后者而非 DeepEP+Megatron）。形状覆盖四个主流开源模型：</p>
+  <table>
+    <tr><th>形状</th><th>E (router experts)</th><th>H</th><th>I</th><th>top-k</th></tr>
+    <tr><td>Kimi K2.7 Code</td><td>384</td><td>7168</td><td>2048</td><td>8</td></tr>
+    <tr><td>GLM-5.2</td><td>256</td><td>6144</td><td>2048</td><td>8</td></tr>
+    <tr><td>Qwen3.5-397B-A17B</td><td>512</td><td>4096</td><td>1024</td><td>10</td></tr>
+    <tr><td>DeepSeek-V4-Pro</td><td>384</td><td>7168</td><td>3072</td><td>6</td></tr>
+  </table>
+  <p>相对最快基线的峰值加速：</p>
+  <table>
+    <tr><th></th><th>前向</th><th>反向</th></tr>
+    <tr><td>MXFP8</td><td class="gain">2.37×</td><td class="gain">1.78×</td></tr>
+    <tr><td>BF16</td><td class="gain">1.92×</td><td class="gain">1.58×</td></tr>
+  </table>
+  <h3>端到端基准</h3>
+  <p>512 张 GPU（多个 GB300 NVL72 机架），对照自家基于 DeepEP + 定制 MXFP8 kernel 的旧产线，只换 MoE 层实现：<strong>760.9 → 1070.2 tokens/s/GPU，1.41×</strong>。</p>
+  <div class="callout callout-orange">
+    <strong>诚实的解读：</strong> ① 2.37× 是 MXFP8 前向单层峰值，不是所有配置的均值——BF16 反向只有 1.58×；② 端到端 1.41× 对比的是 Cursor 自己的 DeepEP 产线，不是公开基线；③ 这是<strong>训练</strong>场景测的，推理（没有 wgrad/replay 压力、模型并行度不同）数字不会一样；④ 全部在 NVL72 域内测的，跨机架（IB）行为不在此列。亮点依然是可信的——博客、代码、基准脚本全部开源，<strong>可复现是这篇工作最大的加分项</strong>。
+  </div>
+</section>
+
+<section id="agents">
+  <h2>大图景：agent 时代的 kernel 工程</h2>
+  <p>MoK 本身是技术成果，但 Cursor 在文末的"元叙事"更值得注意：<strong>kernel 优化空间的入门门槛正在被 AI agent 抹平</strong>。他们的说法很有信息量——去年写 megakernel 需要先造一层简化抽象（类似图里的"framework layer"）；今年<strong>不需要框架了</strong>：agent 一次性写出单算子 kernel（这部分几乎全自动），人类+agent 协作从零裸写分布式 megakernel，小团队就扛住了 3260 行生产级代码。</p>
+  <p>换个角度看：MoK 的 2.37× 是"AI 辅助写 kernel"这条曲线的又一个数据点。当单算子 kernel 被 agent 商品化，剩下的竞争壁垒是<strong>设计方向</strong>——怎么选通信方向、怎么排依赖网、怎么定 SM 掩码——这些恰恰是这篇博客里最"人味"的部分。</p>
+</section>
+
+<section id="summary">
+  <h2>总结</h2>
+  <ul>
+    <li><strong>一句话</strong>：MoK 不是又一个更快算子，而是把 MoE 层的通信/计算/调度/信令/缓冲管理整体重排进单个确定性 megakernel，通信方向选择和 ring 缓冲管理是其中最有普适性的两个思想。</li>
+    <li><strong>可迁移的洞察</strong>：① push/pull 的选择要同时看调度、带宽、信令三个维度，默认选项（push）在 MoE 场景全面劣势；② 重叠粒度有明确物理拐点（两个 wave）；③ 环形缓冲的填充顺序决定反向重算量——"逆序填环"是个通用技巧；④ Grace CPU 慢的硬件上，消除 CPU 参与本身就是优化。</li>
+    <li><strong>局限</strong>：NVL72 专属、训练场景、5 个敏感超参数、依赖 kittens 生态。换个硬件或场景，这些数字要重新验证。</li>
+  </ul>
+  <div class="callout callout-green">
+    <strong>延伸阅读：</strong> 原文博客 cursor.com/blog/mixture-of-kittens；代码 github.com/cursor/mixture-of-kittens（Apache 2.0，含全部基准脚本）；对比系 DeepEP（知乎/DeepSeek 开源）、Comet（超细粒度重叠路线）、SonicMoE（router 梯度）、Megatron HybridEP（NVIDIA NVL72 推荐方案）。
+  </div>
+</section>
+
+</div>
+</div>
+
+<script>
+(function () {
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function AnimEngine(svg, opts) {
+    this.svg = svg;
+    this.svgId = svg.id;
+    this.steps = opts.steps || [];
+    this.idx = -1;
+    this.currentStep = -1;
+    this.timer = null;
+    this.speed = 1;
+    this.layer = null;
+    this._token = 0;
+    this._initDefs();
+  }
+
+  AnimEngine.prototype._initDefs = function () {
+    var ns = SVG_NS;
+    var defs = document.createElementNS(ns, "defs");
+    var uid = this.svgId + "-";
+
+    function marker(id, color, orient) {
+      var m = document.createElementNS(ns, "marker");
+      m.setAttribute("id", id);
+      m.setAttribute("viewBox", "0 0 10 10");
+      m.setAttribute("refX", "8");
+      m.setAttribute("refY", "5");
+      m.setAttribute("markerWidth", "7");
+      m.setAttribute("markerHeight", "7");
+      m.setAttribute("orient", orient || "auto");
+      var p = document.createElementNS(ns, "path");
+      p.setAttribute("d", "M0,0 L10,5 L0,10 Z");
+      p.setAttribute("fill", color);
+      m.appendChild(p);
+      return m;
+    }
+    defs.appendChild(marker(uid + "arr", "#6c5ce7", "auto"));
+    defs.appendChild(marker(uid + "arrG", "#00b894", "auto"));
+    defs.appendChild(marker(uid + "arrR", "#e74c3c", "auto"));
+    defs.appendChild(marker(uid + "arrB", "#0984e3", "auto"));
+    defs.appendChild(marker(uid + "arrO", "#e17055", "auto"));
+    this.svg.appendChild(defs);
+  };
+
+  AnimEngine.prototype._initLayer = function () {
+    this.layer = document.createElementNS(SVG_NS, "g");
+    this.layer.setAttribute("class", "anim-layer");
+    this.svg.appendChild(this.layer);
+  };
+
+  AnimEngine.prototype.clear = function () {
+    while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild);
+  };
+
+  AnimEngine.prototype.draw = function (tag, attrs, text) {
+    var el = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (var k in attrs) {
+      if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]);
+    }
+    if (text !== null && text !== undefined && text !== "") el.textContent = text;
+    this.layer.appendChild(el);
+    return el;
+  };
+
+  AnimEngine.prototype.t = function (x, y, str, opts) {
+    opts = opts || {};
+    var lines = String(str).split("\n");
+    var el = this.draw("text", Object.assign({
+      x: x, y: y,
+      "text-anchor": opts.ta || "middle",
+      "font-size": opts.fs || 12,
+      fill: opts.fill || "#444",
+      "font-family": opts.ff || "inherit",
+      "font-weight": opts.fw || "normal"
+    }, opts.attrs || {}), null);
+    if (lines.length === 1) {
+      el.textContent = str;
+    } else {
+      var fs = opts.fs || 12;
+      lines.forEach(function (line, i) {
+        var ts = document.createElementNS(SVG_NS, "tspan");
+        ts.setAttribute("x", x);
+        ts.setAttribute("dy", i === 0 ? 0 : fs * 1.2);
+        ts.textContent = line;
+        el.appendChild(ts);
+      });
+    }
+    return el;
+  };
+
+  AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, opts) {
+    opts = opts || {};
+    var r = this.draw("rect", {
+      x: x, y: y, width: w, height: h,
+      fill: fill || "#fff", stroke: stroke || "#ccc",
+      "stroke-width": opts.sw || 1.5, rx: opts.rx || 4
+    }, null);
+    if (label) {
+      this.t(x + w / 2, y + h / 2 + (opts.labelDy || 4), label, {
+        fs: opts.fs || 11, fill: opts.labelFill || "#fff", fw: opts.fw || "600",
+        ta: "middle"
+      });
+    }
+    return r;
+  };
+
+  AnimEngine.prototype.arrow = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    var mid = opts.curve ? " Q " + opts.cx + "," + opts.cy + " " : "";
+    var d = "M" + x1 + "," + y1 + mid + " L" + x2 + "," + y2;
+    var markerId = "url(#" + this.svgId + "-" + (opts.marker || "arr") + ")";
+    this.draw("path", {
+      d: d, fill: "none", stroke: color || "#6c5ce7",
+      "stroke-width": opts.sw || 2, "marker-end": markerId,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.line = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    this.draw("line", {
+      x1: x1, y1: y1, x2: x2, y2: y2,
+      stroke: color || "#ccc", "stroke-width": opts.sw || 1,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.delay = function () { return 1100 / this.speed; };
+
+  AnimEngine.prototype.goTo = function (i) {
+    if (i < 0 || i >= this.steps.length) return;
+    var prev = this.currentStep;
+    var direction = i >= prev ? 1 : -1;
+    var step = this.steps[i];
+    this._render2(step, i, direction);
+    if (window.MathJax && window.__mathReady && step.desc) {
+      var descEl = this.svg.parentNode.parentNode.querySelector(".step-desc");
+      if (descEl) {
+        try { MathJax.typesetPromise([descEl]); } catch (e) {}
+      }
+    }
+  };
+
+  AnimEngine.prototype._render2 = function (step, index, direction) {
+    var oldLayer = this.layer || null;
+    var nextLayer = document.createElementNS(SVG_NS, "g");
+    nextLayer.setAttribute("class", "anim-layer scene-layer");
+    this.svg.appendChild(nextLayer);
+    this.layer = nextLayer;
+    this.idx = index;
+    step.render(this);
+    this._applyReveal(nextLayer);
+    this.currentStep = index;
+    this._updateUI(step, index);
+    if (oldLayer && !this._reducedMotion()) {
+      nextLayer.classList.add("scene-enter", direction > 0 ? "from-right" : "from-left");
+      oldLayer.classList.add("scene-exit", direction > 0 ? "to-left" : "to-right");
+      var self = this;
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          nextLayer.classList.add("scene-active");
+          oldLayer.classList.add("scene-exit-active");
+        });
+      });
+      setTimeout(function () {
+        if (oldLayer.parentNode) oldLayer.parentNode.removeChild(oldLayer);
+        nextLayer.classList.remove("scene-enter", "from-right", "from-left");
+      }, 520);
+    } else {
+      if (oldLayer) oldLayer.parentNode.removeChild(oldLayer);
+    }
+  };
+
+  AnimEngine.prototype._reducedMotion = function () {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  };
+
+  AnimEngine.prototype._applyReveal = function (layer) {
+    if (this._reducedMotion()) return;
+    var els = layer.querySelectorAll("rect, text, circle, path");
+    var delay = 60;
+    for (var i = 0; i < els.length; i++) {
+      els[i].style.setProperty("--delay", delay + "ms");
+      els[i].classList.add("reveal");
+      delay += 55;
+      if (delay > 650) delay = 60;
+    }
+  };
+
+  AnimEngine.prototype._updateUI = function (step, i) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var info = frame.querySelector(".step-info");
+    var desc = frame.querySelector(".step-desc");
+    if (info) info.textContent = "步骤 " + (i + 1) + " / " + this.steps.length;
+    if (desc) desc.innerHTML = step.desc || step.title || "";
+    var prev = frame.querySelector(".btn-prev");
+    var next = frame.querySelector(".btn-next");
+    if (prev) prev.disabled = (i === 0);
+    if (next) next.disabled = (i === this.steps.length - 1);
+    var bar = frame.querySelector(".anim-progress .bar");
+    if (bar) bar.style.width = ((i + 1) / this.steps.length * 100) + "%";
+    var chips = frame.querySelectorAll(".stage-chip");
+    for (var c = 0; c < chips.length; c++) {
+      chips[c].classList.toggle("done", c < i);
+      chips[c].classList.toggle("active", c === i);
+    }
+  };
+
+  AnimEngine.prototype.next = function () { if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1); };
+  AnimEngine.prototype.prev = function () { if (this.currentStep > 0) this.goTo(this.currentStep - 1); };
+  AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+  AnimEngine.prototype.play = function () {
+    var self = this;
+    if (this.timer) return;
+    this._advance();
+  };
+  AnimEngine.prototype._advance = function () {
+    var self = this;
+    if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
+    this.timer = setTimeout(function () {
+      self.next();
+      self._advance();
+    }, this.delay());
+  };
+  AnimEngine.prototype.pause = function () {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  };
+  AnimEngine.prototype.toggle = function () {
+    if (this.timer) { this.pause(); this._setPlayBtn(false); }
+    else { if (this.currentStep >= this.steps.length - 1) this.goTo(0); this.play(); this._setPlayBtn(true); }
+  };
+  AnimEngine.prototype._setPlayBtn = function (playing) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var btn = frame.querySelector(".btn-play");
+    if (btn) btn.textContent = playing ? "⏸ 暂停" : "▶ 播放";
+  };
+  AnimEngine.prototype.setSpeed = function (s) {
+    this.speed = s;
+    var frame = this.svg.closest(".anim-frame");
+    if (frame) {
+      var lbl = frame.querySelector(".speed-label");
+      if (lbl) lbl.textContent = s.toFixed(1) + "×";
+    }
+  };
+
+  /* ============ SCENE 1: pull vs push ============ */
+  function scene1Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    function gpu(e, x, y, label, fill) {
+      e.rect(x, y, 130, 70, label, fill || "#fff", C.accent, { rx: 8, fs: 13, labelFill: fill ? "#fff" : C.accent, fw: "700" });
+    }
+    return [
+      {
+        title: "push dispatch 的代价",
+        desc: "push 模式：GPU0 主动把 token 写进 GPU1/GPU2 的缓冲区。代价①：排列表要三列 {src, dst_rank, dst_index}，多趟排序且各 rank 的表互相牵制；代价②：完成信号必须跨 GPU 传递——一个 rank 要等 71 个 peer 的信号 + 全机架 memory fence（实测 103 µs）。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "push dispatch：数据推过去，信号追回来", { fs: 16, fill: C.accent, fw: "700" });
+          gpu(e, 60, 90, "GPU0\n(源)", "#6c5ce7");
+          gpu(e, 340, 60, "GPU1", "#fff");
+          gpu(e, 340, 200, "GPU2", "#fff");
+          e.arrow(195, 110, 335, 85, C.blue, { sw: 2.5, marker: "arrB" });
+          e.t(265, 80, "写 token", { fs: 11, fill: C.blue });
+          e.arrow(195, 140, 335, 220, C.blue, { sw: 2.5, marker: "arrB" });
+          e.t(265, 250, "写 token", { fs: 11, fill: C.blue });
+          e.arrow(340, 82, 195, 108, C.red, { sw: 2, marker: "arrR", dash: "5,4" });
+          e.t(268, 60, "完成信号\n(跨 GPU)", { fs: 11, fill: C.red });
+          e.arrow(340, 222, 195, 142, C.red, { sw: 2, marker: "arrR", dash: "5,4" });
+          e.rect(600, 60, 190, 120, "排列表\n{src, dst_rank,\n dst_index}\n多趟排序", "#fff", C.orange, { rx: 8, fs: 11, labelFill: C.orange, fw: "600" });
+          e.rect(600, 210, 190, 90, "信令 103 µs\n等 71 peer + fence", "#fdf0ee", C.red, { rx: 8, fs: 12, labelFill: C.red, fw: "600" });
+          e.t(W / 2, 330, "数据先到、信号后到 → GPU 干等地锁", { fs: 13, fill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "pull dispatch 的优势",
+        desc: "pull 模式：GPU1/GPU2 主动从 GPU0 的缓冲区读（TMA load_async）。排列表退化为两列 {src_rank, src_index}，遍历 router 结果即可，无需排序；更重要的是——发起方就是消费者，数据一到立刻能用，跨 GPU 信令彻底消失（18 µs）。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "pull dispatch：谁需要，谁去取", { fs: 16, fill: C.green, fw: "700" });
+          gpu(e, 60, 90, "GPU0\n(源)", "#6c5ce7");
+          gpu(e, 340, 60, "GPU1", "#fff");
+          gpu(e, 340, 200, "GPU2", "#fff");
+          e.arrow(340, 85, 195, 108, C.green, { sw: 2.5, marker: "arrG" });
+          e.t(265, 76, "TMA 读", { fs: 11, fill: C.green });
+          e.arrow(340, 222, 195, 142, C.green, { sw: 2.5, marker: "arrG" });
+          e.t(265, 250, "TMA 读", { fs: 11, fill: C.green });
+          e.rect(600, 60, 190, 110, "排列表\n{src_rank, src_index}\n免排序 (<3% 开销)", "#fff", C.green, { rx: 8, fs: 11, labelFill: C.green, fw: "600" });
+          e.rect(600, 200, 190, 90, "信令本地化 18 µs\n无跨 GPU 等待", "#e0f8f4", C.green, { rx: 8, fs: 12, labelFill: C.green, fw: "600" });
+          e.t(W / 2, 330, "调度免费 + 信令本地 → 5.8× 信令延迟差", { fs: 13, fill: C.green, fw: "600" });
+        }
+      },
+      {
+        title: "四方向组合",
+        desc: "一张 schedule 表复用四个通信算子：前向 pull dispatch + push combine，反向 pull reverse-combine + push reverse-dispatch。每个方向都选“信令本地化”的那一侧，跨 GPU 多车道信号全部消灭。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "四个方向，一张表", { fs: 16, fill: C.accent, fw: "700" });
+          var rows = [
+            ["前向 dispatch", "pull", C.green],
+            ["前向 combine", "push", C.blue],
+            ["反向 reverse-combine", "pull", C.green],
+            ["反向 reverse-dispatch", "push", C.blue]
+          ];
+          var y = 60;
+          rows.forEach(function (r) {
+            e.rect(140, y, 260, 56, r[0], "#fff", C.accent, { rx: 8, fs: 13, labelFill: C.accent, fw: "600" });
+            e.rect(430, y, 180, 56, r[1], r[2], r[2], { rx: 8, fs: 15, labelFill: "#fff", fw: "700" });
+            y += 76;
+          });
+          e.rect(140, y + 8, 470, 60, "schedule_peer_rank + schedule_peer_token_idx\n一次构建，四个方向复用", "#eef7e0", C.green, { rx: 8, fs: 12, labelFill: C.green, fw: "600" });
+          e.t(W / 2, 380, "跨 GPU 信令 → 0", { fs: 14, fill: C.green, fw: "700" });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 2: megakernel pipeline ============ */
+  function scene2Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    return [
+      {
+        title: "SM 分工",
+        desc: "148 个 SM（Blackwell）被软件划分为两组：40 个 comm SMs 专职 dispatch/combine，其余 comp SMs 专职 expert FFN。TMA 让不到 1/3 的 SM 就能打满 NVLink，所以大部分 SM 留给计算。比例前后向分别可调（bwd 默认 28）。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "同一块 GPU，两种身份", { fs: 16, fill: C.accent, fw: "700" });
+          var x0 = 60, y0 = 70, cw = 22, ch = 22, gap = 4;
+          var cols = 18, total = 148, comm = 40, k = 0;
+          for (var r = 0; r < 6; r++) {
+            for (var c = 0; c < cols; c++) {
+              if (k >= total) break;
+              var isComm = k < comm;
+              e.rect(x0 + c * (cw + gap), y0 + r * (ch + gap), cw, ch, "", isComm ? C.accent : C.green, isComm ? C.accent : C.green, { rx: 3 });
+              k++;
+            }
+          }
+          e.t(x0 + 9 * (cw + gap) + 30, 90, "comm SMs ×40\n(dispatch / combine)", { fs: 12, fill: C.accent, ta: "start", fw: "600" });
+          e.t(x0 + 9 * (cw + gap) + 30, 150, "comp SMs ×108\n(FFN: gate/up→SwiGLU→down)", { fs: 12, fill: C.green, ta: "start", fw: "600" });
+          e.t(W / 2, 300, "TMA 用 <1/3 的 SM 就能打满 NVLink 1.8 TB/s", { fs: 13, fill: C.fg, fw: "600" });
+          e.t(W / 2, 330, "两组 SM 用本地 counter 发信号（PTX release/acquire），CPU 零参与", { fs: 12, fill: C.muted });
+        }
+      },
+      {
+        title: "前向流水",
+        desc: "comm SMs 先把所有 minibatch 的 pull dispatch 做完（每凑满一个 minibatch 就发信号），comp SMs 原子地跑 MLP-SwiGLU；shared expert 的 FFN 插在首发等待期。全部 down 投影完成后，comm SMs 开始 push combine，与最后一批 FFN 无缝衔接。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "前向：dispatch 全开 → combine 与 FFN 交织", { fs: 16, fill: C.accent, fw: "700" });
+          e.t(60, 60, "comm SMs", { fs: 12, fill: C.accent, ta: "start", fw: "600" });
+          e.t(60, 150, "comp SMs", { fs: 12, fill: C.green, ta: "start", fw: "600" });
+          var x = 180;
+          var slots = [
+            [C.blue, "dispatch m0", 0], [C.blue, "dispatch m1", 0], [C.blue, "dispatch m2", 0],
+            [C.blue, "dispatch m3", 0], [C.blue, "dispatch m4", 0]
+          ];
+          slots.forEach(function (s, i) {
+            e.rect(x + i * 92, 70, 82, 44, s[1], s[0], s[0], { rx: 6, fs: 9.5, labelFill: "#fff", fw: "600" });
+          });
+          var fx = 180;
+          var fows = ["FFN m0", "FFN m1", "FFN m2", "FFN m3", "FFN m4"];
+          fows.forEach(function (s, i) {
+            e.rect(fx + i * 92, 160, 82, 44, s, C.green, C.green, { rx: 6, fs: 9.5, labelFill: "#fff", fw: "600" });
+          });
+          e.rect(180, 230, 82, 44, "shared\nexpert", "#a55eea", "#a55eea", { rx: 6, fs: 9.5, labelFill: "#fff", fw: "600" });
+          e.t(180 + 41, 305, "combine m0", { fs: 11, fill: C.blue, fw: "600" });
+          e.arrow(180 + 41, 320, 180 + 41, 350, C.blue, { sw: 2, marker: "arrB" });
+          e.t(180 + 41, 372, "combine m1…m4 与\nFFN 尾波重叠", { fs: 10, fill: C.muted });
+          e.t(620, 260, "信号：\nminibatch 就绪 →\ncomp 开算", { fs: 11, fill: C.fg, ta: "start" });
+          e.arrow(640, 300, 500, 195, C.accent, { sw: 1.8, marker: "arr", dash: "4,3" });
+        }
+      },
+      {
+        title: "反向编排",
+        desc: "comm SMs 先 reverse-combine，comp SMs 跑 3 个 dgrad GEMM + SwiGLU backward；被覆盖的激活先 forward replay（只重算到 SwiGLU）再进 dgrad。3 个 wgrad 推迟到最后：不与 reverse-dispatch 冲突，且 token 轴整轴累加数值更稳。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "反向：dgrad 先行，wgrad 殿后", { fs: 16, fill: C.accent, fw: "700" });
+          e.t(60, 65, "comm SMs", { fs: 12, fill: C.accent, ta: "start", fw: "600" });
+          e.t(60, 145, "comp SMs", { fs: 12, fill: C.green, ta: "start", fw: "600" });
+          e.rect(180, 50, 96, 40, "rev-combine", C.blue, C.blue, { rx: 6, fs: 10, labelFill: "#fff", fw: "600" });
+          e.arrow(330, 70, 420, 70, C.blue, { sw: 2, marker: "arrB" });
+          e.rect(425, 50, 96, 40, "rev-dispatch", C.blue, C.blue, { rx: 6, fs: 10, labelFill: "#fff", fw: "600" });
+          e.rect(180, 130, 96, 40, "replay", C.orange, C.orange, { rx: 6, fs: 10, labelFill: "#fff", fw: "600" });
+          e.t(180 + 48, 195, "只到 SwiGLU", { fs: 10, fill: C.orange });
+          e.rect(310, 130, 96, 40, "dgrad gate/up", C.green, C.green, { rx: 6, fs: 10, labelFill: "#fff", fw: "600" });
+          e.rect(440, 130, 96, 40, "SwiGLU bwd", C.green, C.green, { rx: 6, fs: 10, labelFill: "#fff", fw: "600" });
+          e.rect(570, 130, 96, 40, "dgrad down", C.green, C.green, { rx: 6, fs: 10, labelFill: "#fff", fw: "600" });
+          e.t(620, 65, "wgrad ×3", { fs: 12, fill: C.orange, fw: "700" });
+          e.rect(570, 50, 96, 40, "跳过", "transparent", C.orange, { rx: 6, fs: 10, labelFill: C.orange, fw: "600" });
+          e.arrow(650, 95, 650, 125, C.orange, { sw: 2, marker: "arrO" });
+          e.t(W / 2, 240, "wgrad 推迟理由：① 与 reverse-dispatch 重叠 ② token 轴整轴累加 → 数值更稳", { fs: 12, fill: C.fg });
+          e.t(W / 2, 268, "依赖网：9 类信号量串起 dgrad / replay / wgrad 三条流水线", { fs: 12, fill: C.muted });
+          e.t(W / 2, 300, "9 类信号量：router_weights_ready / d_y_routed_ready / d_hidden_ready / d_gate_up_ready /", { fs: 10.5, fill: C.muted });
+          e.t(W / 2, 318, "d_x_routed_ready / replayed_x_routed_ready / replayed_gate_up_ready / replayed_hidden_ready / routed_buffers_done", { fs: 10.5, fill: C.muted });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 3: reversed ring ============ */
+  function scene3Build() {
+    var W = 820, H = 420;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    function ring(e, y, states, labels) {
+      var x0 = 120, w = 110, h = 56, gap = 14;
+      states.forEach(function (s, i) {
+        var fill = "#fff", stroke = C.muted;
+        if (s === "alive") { fill = C.green; stroke = C.green; }
+        else if (s === "replay") { fill = C.red; stroke = C.red; }
+        else if (s === "partial") { fill = C.orange; stroke = C.orange; }
+        else if (s === "empty") { fill = "#fff"; stroke = C.muted; }
+        e.rect(x0 + i * (w + gap), y, w, h, labels[i] || "", fill, stroke, { rx: 8, fs: 11, labelFill: (s === "alive" || s === "replay" || s === "partial") ? "#fff" : C.muted, fw: "600" });
+      });
+    }
+    return [
+      {
+        title: "正序填充的问题",
+        desc: "前向按 macrobatch 0→1→2 顺序写入环。环容量只够存一个 macrobatch，最后留在环里的是部分填充的 macrobatch 2——环里有效激活最少。backward 需要 replay macrobatch 0 和 1（红），且 macrobatch 2 自己也要补算缺失部分。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "正序填充：环里剩的是“半截”", { fs: 16, fill: C.red, fw: "700" });
+          e.t(60, 80, "写入顺序 0 → 1 → 2", { fs: 12, fill: C.accent, ta: "start", fw: "600" });
+          e.arrow(230, 78, 690, 78, C.accent, { sw: 2, marker: "arr" });
+          ring(e, 100, ["replay", "replay", "partial"], ["mb0\n（被覆盖）", "mb1\n（被覆盖）", "mb2\n（部分）"]);
+          e.t(W / 2, 190, "环内存活：mb2 的一部分", { fs: 12, fill: C.orange, fw: "600" });
+          e.t(60, 250, "backward 视角", { fs: 12, fill: C.red, ta: "start", fw: "600" });
+          e.rect(120, 250, 110, 56, "mb0\nreplay", C.red, C.red, { rx: 8, fs: 11, labelFill: "#fff", fw: "600" });
+          e.rect(244, 250, 110, 56, "mb1\nreplay", C.red, C.red, { rx: 8, fs: 11, labelFill: "#fff", fw: "600" });
+          e.rect(368, 250, 110, 56, "mb2\n部分 + replay", C.orange, C.orange, { rx: 8, fs: 11, labelFill: "#fff", fw: "600" });
+          e.t(W / 2, 350, "replay 量最大：N 个 macrobatch 全要重算（且含部分填充的尾巴）", { fs: 13, fill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "逆序填充",
+        desc: "前向按 2→1→0 写入（代码里 for 循环从 num_macrobatches-1 逆序跑）。最后留在环里的是满的 macrobatch 0——环要么全满、要么全是有效 token。backward 从 macrobatch 0 开始（环里现成），只需 replay 1 和 2。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "逆序填充：环里剩的是“满”的", { fs: 16, fill: C.green, fw: "700" });
+          e.t(60, 80, "写入顺序 2 → 1 → 0", { fs: 12, fill: C.accent, ta: "start", fw: "600" });
+          e.arrow(230, 78, 690, 78, C.accent, { sw: 2, marker: "arr" });
+          ring(e, 100, ["alive", "empty", "empty"], ["mb0\n（最后写入，满）", "mb1\n（被覆盖）", "mb2\n（被覆盖）"]);
+          e.t(W / 2, 190, "环内存活：完整的 mb0", { fs: 12, fill: C.green, fw: "600" });
+          e.t(60, 250, "backward 视角", { fs: 12, fill: C.green, ta: "start", fw: "600" });
+          e.rect(120, 250, 110, 56, "mb0\n直接读环", C.green, C.green, { rx: 8, fs: 11, labelFill: "#fff", fw: "600" });
+          e.rect(244, 250, 110, 56, "mb1\nreplay", C.red, C.red, { rx: 8, fs: 11, labelFill: "#fff", fw: "600" });
+          e.rect(368, 250, 110, 56, "mb2\nreplay", C.red, C.red, { rx: 8, fs: 11, labelFill: "#fff", fw: "600" });
+          e.t(W / 2, 350, "replay 量最小：(N−1) 个 macrobatch，且第一个依赖（mb0）现成可用", { fs: 13, fill: C.green, fw: "600" });
+        }
+      },
+      {
+        title: "combine / dispatch 交织",
+        desc: "同一个环槽位：上个 macrobatch 的 combine 读出（清）+ 下个 macrobatch 的 dispatch 写入（填），边清边填。重叠跨环边界，dispatch 覆写前必须等上一轮 GEMM 读完（transfer_ready / buffer_ready 两级 counter 保护）。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 24, "同一批槽位：先清后填", { fs: 16, fill: C.accent, fw: "700" });
+          var y = 90;
+          e.t(60, y - 10, "环槽位", { fs: 12, fill: C.fg, ta: "start", fw: "600" });
+          var x0 = 180, w = 110, gap = 14;
+          for (var i = 0; i < 4; i++) {
+            e.rect(x0 + i * (w + gap), y, w, 60, "slot " + i, "#fff", C.muted, { rx: 8, fs: 11, labelFill: C.muted, fw: "600" });
+          }
+          e.t(60, 210, "t=0", { fs: 12, fill: C.blue, ta: "start", fw: "600" });
+          e.rect(180, 210, 110, 50, "combine\nmb1 读出", C.blue, C.blue, { rx: 8, fs: 10, labelFill: "#fff", fw: "600" });
+          e.t(60, 290, "t=1", { fs: 12, fill: C.accent, ta: "start", fw: "600" });
+          e.rect(180, 290, 110, 50, "dispatch\nmb2 写入", C.accent, C.accent, { rx: 8, fs: 10, labelFill: "#fff", fw: "600" });
+          e.arrow(300, 235, 300, 285, C.accent, { sw: 2, marker: "arr", dash: "4,3" });
+          e.t(W / 2, 370, "保护：mb2 的 dispatch 覆写前，必须确认 mb1 的 GEMM 已读完这些行（按 minibatch 精确计数）", { fs: 12, fill: C.fg, fw: "600" });
+        }
+      }
+    ];
+  }
+
+  /* ============ WIRING ============ */
+  var builders = {
+    "svg1": scene1Build,
+    "svg2": scene2Build,
+    "svg3": scene3Build
+  };
+  var engines = {};
+
+  function initScene(svgId) {
+    if (engines[svgId]) return engines[svgId];
+    var svg = document.getElementById(svgId);
+    if (!svg) return null;
+    var buildFn = builders[svgId];
+    if (!buildFn) return null;
+    var steps = buildFn();
+    var eng = new AnimEngine(svg, { steps: steps });
+    engines[svgId] = eng;
+    eng.goTo(0);
+    return eng;
+  }
+
+  document.querySelectorAll(".anim-frame").forEach(function (frame) {
+    var svg = frame.querySelector("svg");
+    if (!svg) return;
+    var svgId = svg.id;
+
+    frame.addEventListener("click", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      var target = ev.target;
+      if (target.classList.contains("btn-play")) { eng.toggle(); }
+      else if (target.classList.contains("btn-next")) { eng.pause(); eng._setPlayBtn(false); eng.next(); }
+      else if (target.classList.contains("btn-prev")) { eng.pause(); eng._setPlayBtn(false); eng.prev(); }
+      else if (target.classList.contains("btn-reset")) { eng.reset(); }
+      else if (target.classList.contains("stage-chip")) {
+        eng.pause();
+        eng._setPlayBtn(false);
+        eng.goTo(parseInt(target.getAttribute("data-step"), 10));
+      }
+    });
+
+    var slider = frame.querySelector(".speed-slider");
+    if (slider) {
+      slider.addEventListener("input", function () {
+        var eng = engines[svgId];
+        if (eng) eng.setSpeed(parseFloat(slider.value));
+      });
+    }
+
+    frame.setAttribute("tabindex", "0");
+    frame.addEventListener("keydown", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      if (ev.key === "ArrowRight") { ev.preventDefault(); eng.next(); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); eng.prev(); }
+      else if (ev.key === " ") { ev.preventDefault(); eng.toggle(); }
+    });
+  });
+
+  window.toggleTheme = function () {
+    var html = document.documentElement;
+    if (html.getAttribute("data-theme") === "dark") {
+      html.removeAttribute("data-theme");
+      var tb = document.querySelector(".theme-toggle");
+      if (tb) tb.textContent = "🌙";
+      localStorage.setItem("theme", "light");
+    } else {
+      html.setAttribute("data-theme", "dark");
+      var tb2 = document.querySelector(".theme-toggle");
+      if (tb2) tb2.textContent = "☀️";
+      localStorage.setItem("theme", "dark");
+    }
+  };
+
+  window.toggleToc = function () {
+    var nav = document.getElementById("tocNav");
+    if (nav) nav.classList.toggle("collapsed");
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (localStorage.getItem("theme") === "dark") toggleTheme();
+    ["svg1", "svg2", "svg3"].forEach(function (id) { initScene(id); });
+
+    var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var id = entry.target.id;
+          tocLinks.forEach(function (l) { l.classList.remove("active"); });
+          var link = document.querySelector('.toc a[href="#' + id + '"]');
+          if (link) { link.classList.add("active"); if (window.innerWidth > 768) link.scrollIntoView({ block: "nearest" }); }
+        }
+      });
+    }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+    document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+    var backTop = document.getElementById("backTop");
+    window.addEventListener("scroll", function () {
+      if (window.scrollY > 600) backTop.classList.add("visible");
+      else backTop.classList.remove("visible");
+    });
+
+    tocLinks.forEach(function (a) {
+      a.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        var id = a.getAttribute("href").slice(1);
+        var target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: "smooth" });
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
