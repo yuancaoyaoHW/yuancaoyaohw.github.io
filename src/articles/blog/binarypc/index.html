@@ -111,6 +111,10 @@ pre.code .c { color: var(--fg-muted); }
 /* ===== 元素级入场动画 (Pattern 2) ===== */
 .anim-canvas-wrap svg .reveal { opacity: 0; transform: translateY(7px); animation: revealUp .48s cubic-bezier(.22,.61,.36,1) forwards; animation-delay: var(--delay, 0ms); transform-box: fill-box; }
 @keyframes revealUp { to { opacity: 1; transform: translateY(0); } }
+/* ===== 焦点高亮 (Pattern 6)：聚光灯 ===== */
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
 /* ===== 进度条 (Pattern 5) ===== */
 .anim-progress { height: 3px; background: var(--border); position: relative; }
 .anim-progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-soft)); width: 0%; transition: width 380ms cubic-bezier(.22,.61,.36,1); }
@@ -515,7 +519,7 @@ pre.code .c { color: var(--fg-muted); }
     var mid = opts.curve ? " Q " + opts.cx + "," + opts.cy + " " : "";
     var d = "M" + x1 + "," + y1 + mid + " L" + x2 + "," + y2;
     var markerId = "url(#" + this.svgId + "-" + (opts.marker || "arr") + ")";
-    this.draw("path", {
+    return this.draw("path", {
       d: d, fill: "none", stroke: color || "#6c5ce7",
       "stroke-width": opts.sw || 2, "marker-end": markerId,
       "stroke-dasharray": opts.dash || "none"
@@ -524,7 +528,7 @@ pre.code .c { color: var(--fg-muted); }
 
   AnimEngine.prototype.line = function (x1, y1, x2, y2, color, opts) {
     opts = opts || {};
-    this.draw("line", {
+    return this.draw("line", {
       x1: x1, y1: y1, x2: x2, y2: y2,
       stroke: color || "#ccc", "stroke-width": opts.sw || 1,
       "stroke-dasharray": opts.dash || "none"
@@ -533,7 +537,7 @@ pre.code .c { color: var(--fg-muted); }
 
   AnimEngine.prototype.circle = function (cx, cy, r, fill, stroke, opts) {
     opts = opts || {};
-    this.draw("circle", {
+    return this.draw("circle", {
       cx: cx, cy: cy, r: r,
       fill: fill || "#fff", stroke: stroke || "#ccc",
       "stroke-width": opts.sw || 1.5
@@ -542,12 +546,13 @@ pre.code .c { color: var(--fg-muted); }
 
   AnimEngine.prototype.delay = function () { return 1100 / this.speed; };
 
-  AnimEngine.prototype.goTo = function (i) {
+  AnimEngine.prototype.goTo = function (i, suppressComplete) {
     if (i < 0 || i >= this.steps.length) return;
     var prev = this.currentStep;
     var direction = i >= prev ? 1 : -1;
     var step = this.steps[i];
     this._render2(step, i, direction);
+    if (step.animate && !suppressComplete) step.animate(this, 1); // 手动切换显示完成态；播放路径抑制
     if (window.MathJax && window.__mathReady && step.desc) {
       var descEl = this.svg.parentNode.parentNode.querySelector(".step-desc");
       if (descEl) {
@@ -564,6 +569,20 @@ pre.code .c { color: var(--fg-muted); }
     this.layer = nextLayer;
     this.idx = index;
     step.render(this);
+    // 焦点高亮：step.hot = 选择器，其余元素 dim
+    if (step.hot) {
+      var hotEls = nextLayer.querySelectorAll(step.hot);
+      var allEls = nextLayer.querySelectorAll("rect, text, circle, path, line");
+      for (var h = 0; h < allEls.length; h++) {
+        var el = allEls[h];
+        var isHot = false;
+        for (var hh = 0; hh < hotEls.length; hh++) {
+          if (hotEls[hh] === el) { isHot = true; break; }
+        }
+        if (!isHot && !el.classList.contains("hot") && !el.classList.contains("keep")) el.classList.add("dim");
+      }
+      for (var hh2 = 0; hh2 < hotEls.length; hh2++) { hotEls[hh2].classList.add("hot", "no-reveal"); } // no-reveal：hotPulse 不能与 revealUp 抢 animation
+    }
     this._applyReveal(nextLayer);
     this.currentStep = index;
     this._updateUI(step, index);
@@ -595,8 +614,10 @@ pre.code .c { color: var(--fg-muted); }
     var els = layer.querySelectorAll("rect, text, circle, path");
     var delay = 60;
     for (var i = 0; i < els.length; i++) {
+      if (els[i].classList.contains("no-reveal")) continue;
       els[i].style.setProperty("--delay", delay + "ms");
       els[i].classList.add("reveal");
+      els[i].addEventListener("animationend", function () { this.classList.remove("reveal"); }, { once: true });
       delay += 55;
       if (delay > 650) delay = 60;
     }
@@ -632,14 +653,42 @@ pre.code .c { color: var(--fg-muted); }
   };
   AnimEngine.prototype._advance = function () {
     var self = this;
-    if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
-    this.timer = setTimeout(function () {
-      self.next();
-      self._advance();
-    }, this.delay());
+    var step = this.steps[this.currentStep];
+    if (step && step.animate) {
+      // 场景内时间线：animate(e, progress) 0→1，播完再切下一步（或停在末尾）
+      var dur = (step.duration || 2400) / this.speed;
+      var t0 = performance.now();
+      self._advanceActive = true;
+      var frame = function () {
+        if (!self._advanceActive) return;
+        var p = Math.min(1, (performance.now() - t0) / dur);
+        step.animate(self, p);
+        if (p >= 1) {
+          self._advanceActive = false;
+          if (self.currentStep < self.steps.length - 1) {
+            self.goTo(self.currentStep + 1, true); // 播放路径：抑制完成态，让时间线从 0 播
+            self._advance();
+          } else {
+            self.pause();
+            self._setPlayBtn(false);
+          }
+        } else {
+          self._frameId = requestAnimationFrame(frame);
+        }
+      };
+      self._frameId = requestAnimationFrame(frame);
+    } else {
+      if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
+      this.timer = setTimeout(function () {
+        self.next();
+        self._advance();
+      }, this.delay());
+    }
   };
   AnimEngine.prototype.pause = function () {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    if (this._frameId) { cancelAnimationFrame(this._frameId); this._frameId = null; }
+    this._advanceActive = false;
   };
   AnimEngine.prototype.toggle = function () {
     if (this.timer) { this.pause(); this._setPlayBtn(false); }
@@ -735,46 +784,78 @@ pre.code .c { color: var(--fg-muted); }
     return [
       {
         title: "发现主方向",
-        desc: "从随机向量 $v^*$ 出发，反复计算 $Rv^{*\\top}$——奇异值指数增长，最大奇异向量主导。取 $u = sign(Rv^{*\\top})$ 作为二值主分量：最大奇异值保证它大概率偏向主方向，省掉精确 SVD。",
+        desc: "从随机向量 $v^*$ 出发，反复计算 $Rv^{*\\top}$——奇异值指数增长，最大奇异向量主导。取 $u = \\mathrm{sign}(Rv^{*\\top})$ 作为二值主分量：最大奇异值保证它大概率偏向主方向，省掉精确 SVD。",
+        hot: ".hot-arrow",
         render: function (e) {
           e.clear();
-          e.t(W / 2, 24, "幂迭代：随机向量被拉向最大奇异方向", { fs: 16, fill: C.accent, fw: "700" });
+          e.t(W / 2, 24, "幂迭代：随机向量被拉向最大奇异方向", { fs: 16, fill: C.accent, fw: "700", attrs: { "class": "keep" } });
           scatter(e, 250, 210, 2, 16);
           e.arrow(250 - 60, 210 - 40, 250 + 90, 210 - 95, C.muted, { sw: 2, marker: "arr", dash: "4,3" });
-          e.arrow(250 - 40, 210 - 60, 250 + 95, 210 - 110, C.accent, { sw: 3, marker: "arr" });
+          e.t(150, 150, "随机向量 v*", { fs: 11, fill: C.muted });
+          var main = e.arrow(250 - 40, 210 - 60, 250 + 95, 210 - 110, C.accent, { sw: 3, marker: "arr" });
+          main.classList.add("hot-arrow");
           e.t(250 + 120, 210 - 100, "u = sign(Rv*ᵀ)", { fs: 12, fill: C.accent, fw: "700", ta: "start" });
-          e.t(250, 380, "迭代 n 次后：最大奇异值主导，方向贴着主奇异向量", { fs: 12, fill: C.fg, fw: "600" });
+          e.t(250, 380, "迭代 n 次后：最大奇异值主导，方向贴着主奇异向量", { fs: 12, fill: C.fg, fw: "600", attrs: { "class": "keep" } });
         }
       },
       {
         title: "二值化 + 扣分量",
         desc: "u 是方向（二值），v = Rᵀu/‖Rᵀu‖ 定幅值，然后 R ← R − uᵀv 把这条分量从残差里扣掉。u 的行就是哈希码 H 的一行，v 就是投影 P 的一行。",
+        hot: ".hot-line",
         render: function (e) {
           e.clear();
-          e.t(W / 2, 24, "提取一条二值主分量", { fs: 16, fill: C.accent, fw: "700" });
+          e.t(W / 2, 24, "提取一条二值主分量", { fs: 16, fill: C.accent, fw: "700", attrs: { "class": "keep" } });
           scatter(e, 250, 210, 2, 10, C.red);
-          e.line(250 - 120, 210 - 85, 250 + 120, 210 + 85, C.accent, { sw: 3 });
+          var line = e.line(250 - 120, 210 - 85, 250 + 120, 210 + 85, C.accent, { sw: 3 });
+          line.classList.add("hot-line");
           e.t(250, 120, "分量 u：sign(Rv*ᵀ) ∈ {−1,+1}", { fs: 12, fill: C.accent, fw: "600" });
           e.t(250, 300, "幅值 v = Rᵀu / ‖Rᵀu‖", { fs: 12, fill: C.fg, fw: "600" });
-          e.t(250, 380, "R ← R − uᵀv：残差丢掉这条分量，继续下一轮", { fs: 12, fill: C.red, fw: "600" });
+          e.t(250, 380, "R ← R − uᵀv：残差丢掉这条分量，继续下一轮", { fs: 12, fill: C.red, fw: "600", attrs: { "class": "keep" } });
         }
       },
       {
         title: "迭代收敛",
         desc: "迭代 H 次得到 H 对 (u, v) = 哈希码 H 与投影 P。论文图显示残差范数 ‖R‖_F 随码长单调下降、所有测试数据都收敛——重建误差可控，哈希码保真度有保证。",
+        hot: ".hot-curve",
+        duration: 3200,
         render: function (e) {
           e.clear();
-          e.t(W / 2, 24, "迭代 H 次：残差单调下降", { fs: 16, fill: C.green, fw: "700" });
+          e.t(W / 2, 24, "迭代 H 次：残差单调下降", { fs: 16, fill: C.green, fw: "700", attrs: { "class": "keep" } });
           var x0 = 180, y0 = 320, axW = 440, axH = 200;
-          e.line(x0, y0, x0 + axW, y0, C.muted, { sw: 1.5 });
-          e.line(x0, y0, x0, y0 - axH, C.muted, { sw: 1.5 });
-          e.t(x0 + axW / 2, y0 + 30, "哈希码长度 H", { fs: 12, fill: C.fg });
-          e.t(x0 - 14, y0 - axH / 2, "‖R‖_F", { fs: 12, fill: C.fg, ta: "start" });
+          e.line(x0, y0, x0 + axW, y0, C.muted, { sw: 1.5, attrs: { "class": "keep" } });
+          e.line(x0, y0, x0, y0 - axH, C.muted, { sw: 1.5, attrs: { "class": "keep" } });
+          e.t(x0 + axW / 2, y0 + 30, "哈希码长度 H", { fs: 12, fill: C.fg, attrs: { "class": "keep" } });
+          e.t(x0 - 14, y0 - axH / 2, "‖R‖_F", { fs: 12, fill: C.fg, ta: "start", attrs: { "class": "keep" } });
           var pts = [[0, 200], [60, 120], [120, 78], [180, 52], [240, 36], [300, 25], [360, 18], [440, 12]];
           var d = "M" + pts.map(function (p, i) { return (i ? " L" : "") + (x0 + p[0]) + "," + (y0 - p[1]); }).join("");
-          e.draw("path", { d: d, fill: "none", stroke: C.green, "stroke-width": 3 }, null);
-          pts.forEach(function (p) { e.circle(x0 + p[0], y0 - p[1], 5, C.green, "none"); });
-          e.t(W / 2, 380, "64-bit 后曲线基本走平：再长码收益递减，位运算成本上升", { fs: 12, fill: C.green, fw: "600" });
+          var curve = e.draw("path", { d: d, fill: "none", stroke: C.green, "stroke-width": 3, "class": "hot-curve no-reveal" }, null);
+          var len = (curve.getTotalLength && curve.getTotalLength()) || 520;
+          curve.setAttribute("stroke-dasharray", len);
+          curve.setAttribute("stroke-dashoffset", len); // 初始隐藏
+          this._curve = curve;
+          this._len = len;
+          this._dots = pts.map(function (p) {
+            var c = e.circle(x0 + p[0], y0 - p[1], 5, C.green, "none");
+            c.setAttribute("class", "no-reveal");
+            c.setAttribute("opacity", 0);
+            return c;
+          });
+          this._note = e.t(x0 + 470, y0 - 40, "64-bit: 最佳权衡", { fs: 12, fill: C.green, fw: "700", ta: "end" });
+          this._note.setAttribute("class", "no-reveal");
+          this._note.setAttribute("opacity", 0);
+          e.t(W / 2, 380, "64-bit 后曲线基本走平：再长码收益递减，位运算成本上升", { fs: 12, fill: C.green, fw: "600", attrs: { "class": "keep" } });
+        },
+        // 场景内时间线：p 0→1，曲线逐段揭示 + 数据点逐点出现
+        // render/animate 的 this 都是 step 对象（step.render(this)/step.animate(self,p) 点号调用）
+        animate: function (e, p) {
+          if (!this._curve) return;
+          var off = this._len * (1 - p);
+          this._curve.setAttribute("stroke-dashoffset", off);
+          var n = Math.floor(p * this._dots.length);
+          for (var i = 0; i < this._dots.length; i++) {
+            this._dots[i].setAttribute("opacity", i < n ? 1 : 0);
+          }
+          this._note.setAttribute("opacity", p > 0.72 ? 1 : 0);
         }
       }
     ];

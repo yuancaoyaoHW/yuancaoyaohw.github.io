@@ -110,6 +110,11 @@ pre.code .c { color: var(--fg-muted); }
 /* ===== 元素级入场动画 (Pattern 2) ===== */
 .anim-canvas-wrap svg .reveal { opacity: 0; transform: translateY(7px); animation: revealUp .48s cubic-bezier(.22,.61,.36,1) forwards; animation-delay: var(--delay, 0ms); transform-box: fill-box; }
 @keyframes revealUp { to { opacity: 1; transform: translateY(0); } }
+/* ===== 焦点高亮 (Pattern 6)：聚光灯 ===== */
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+
 /* ===== 进度条 (Pattern 5) ===== */
 .anim-progress { height: 3px; background: var(--border); position: relative; }
 .anim-progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-soft)); width: 0%; transition: width 380ms cubic-bezier(.22,.61,.36,1); }
@@ -590,7 +595,7 @@ for (macrobatch_idx = num_macrobatches - 1; macrobatch_idx &gt;= 0; --macrobatch
     var mid = opts.curve ? " Q " + opts.cx + "," + opts.cy + " " : "";
     var d = "M" + x1 + "," + y1 + mid + " L" + x2 + "," + y2;
     var markerId = "url(#" + this.svgId + "-" + (opts.marker || "arr") + ")";
-    this.draw("path", {
+    return this.draw("path", {
       d: d, fill: "none", stroke: color || "#6c5ce7",
       "stroke-width": opts.sw || 2, "marker-end": markerId,
       "stroke-dasharray": opts.dash || "none"
@@ -599,21 +604,31 @@ for (macrobatch_idx = num_macrobatches - 1; macrobatch_idx &gt;= 0; --macrobatch
 
   AnimEngine.prototype.line = function (x1, y1, x2, y2, color, opts) {
     opts = opts || {};
-    this.draw("line", {
+    return this.draw("line", {
       x1: x1, y1: y1, x2: x2, y2: y2,
       stroke: color || "#ccc", "stroke-width": opts.sw || 1,
       "stroke-dasharray": opts.dash || "none"
     }, null);
   };
 
+  AnimEngine.prototype.circle = function (cx, cy, r, fill, stroke, opts) {
+    opts = opts || {};
+    return this.draw("circle", {
+      cx: cx, cy: cy, r: r,
+      fill: fill || "#fff", stroke: stroke || "#ccc",
+      "stroke-width": opts.sw || 1.5
+    }, null);
+  };
+
   AnimEngine.prototype.delay = function () { return 1100 / this.speed; };
 
-  AnimEngine.prototype.goTo = function (i) {
+  AnimEngine.prototype.goTo = function (i, suppressComplete) {
     if (i < 0 || i >= this.steps.length) return;
     var prev = this.currentStep;
     var direction = i >= prev ? 1 : -1;
     var step = this.steps[i];
     this._render2(step, i, direction);
+    if (step.animate && !suppressComplete) step.animate(this, 1); // 手动切换显示完成态；播放路径抑制
     if (window.MathJax && window.__mathReady && step.desc) {
       var descEl = this.svg.parentNode.parentNode.querySelector(".step-desc");
       if (descEl) {
@@ -630,6 +645,20 @@ for (macrobatch_idx = num_macrobatches - 1; macrobatch_idx &gt;= 0; --macrobatch
     this.layer = nextLayer;
     this.idx = index;
     step.render(this);
+    // 焦点高亮：step.hot = 选择器，其余元素 dim
+    if (step.hot) {
+      var hotEls = nextLayer.querySelectorAll(step.hot);
+      var allEls = nextLayer.querySelectorAll("rect, text, circle, path, line");
+      for (var h = 0; h < allEls.length; h++) {
+        var el = allEls[h];
+        var isHot = false;
+        for (var hh = 0; hh < hotEls.length; hh++) {
+          if (hotEls[hh] === el) { isHot = true; break; }
+        }
+        if (!isHot && !el.classList.contains("hot") && !el.classList.contains("keep")) el.classList.add("dim");
+      }
+      for (var hh2 = 0; hh2 < hotEls.length; hh2++) { hotEls[hh2].classList.add("hot", "no-reveal"); } // no-reveal：hotPulse 不能与 revealUp 抢 animation
+    }
     this._applyReveal(nextLayer);
     this.currentStep = index;
     this._updateUI(step, index);
@@ -661,8 +690,10 @@ for (macrobatch_idx = num_macrobatches - 1; macrobatch_idx &gt;= 0; --macrobatch
     var els = layer.querySelectorAll("rect, text, circle, path");
     var delay = 60;
     for (var i = 0; i < els.length; i++) {
+      if (els[i].classList.contains("no-reveal")) continue;
       els[i].style.setProperty("--delay", delay + "ms");
       els[i].classList.add("reveal");
+      els[i].addEventListener("animationend", function () { this.classList.remove("reveal"); }, { once: true });
       delay += 55;
       if (delay > 650) delay = 60;
     }
@@ -698,14 +729,42 @@ for (macrobatch_idx = num_macrobatches - 1; macrobatch_idx &gt;= 0; --macrobatch
   };
   AnimEngine.prototype._advance = function () {
     var self = this;
-    if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
-    this.timer = setTimeout(function () {
-      self.next();
-      self._advance();
-    }, this.delay());
+    var step = this.steps[this.currentStep];
+    if (step && step.animate) {
+      // 场景内时间线：animate(e, progress) 0→1，播完再切下一步（或停在末尾）
+      var dur = (step.duration || 2400) / this.speed;
+      var t0 = performance.now();
+      self._advanceActive = true;
+      var frame = function () {
+        if (!self._advanceActive) return;
+        var p = Math.min(1, (performance.now() - t0) / dur);
+        step.animate(self, p);
+        if (p >= 1) {
+          self._advanceActive = false;
+          if (self.currentStep < self.steps.length - 1) {
+            self.goTo(self.currentStep + 1, true); // 播放路径：抑制完成态，让时间线从 0 播
+            self._advance();
+          } else {
+            self.pause();
+            self._setPlayBtn(false);
+          }
+        } else {
+          self._frameId = requestAnimationFrame(frame);
+        }
+      };
+      self._frameId = requestAnimationFrame(frame);
+    } else {
+      if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
+      this.timer = setTimeout(function () {
+        self.next();
+        self._advance();
+      }, this.delay());
+    }
   };
   AnimEngine.prototype.pause = function () {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    if (this._frameId) { cancelAnimationFrame(this._frameId); this._frameId = null; }
+    this._advanceActive = false;
   };
   AnimEngine.prototype.toggle = function () {
     if (this.timer) { this.pause(); this._setPlayBtn(false); }
