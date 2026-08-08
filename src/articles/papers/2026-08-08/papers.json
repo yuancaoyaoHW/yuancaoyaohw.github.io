@@ -1,0 +1,324 @@
+{
+  "date": "2026-08-08",
+  "title": "2026-08-08 论文精选",
+  "lede": "今日关注推理效率与训练创新双主线：可恢复量化KV驱逐对抗注意力漂移、依赖块草稿提升随机投机解码、Langevin校正弥合流式模型RL训练推理Gap，叠加马尔可夫链层路由与分层潜在预测等架构新探索",
+  "stats": {"selected": 10, "channels": 3, "candidates": 50},
+  "channels": [
+    {"name": "AI Infra", "countText": "3 篇推荐"},
+    {"name": "Algorithms", "countText": "4 篇推荐"},
+    {"name": "Architecture", "countText": "3 篇推荐"}
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "QEvict: Recoverable Quantized KV Eviction for Attention-Drift-Robust Long-Context Decoding",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-07",
+          "authors": "Ayushman Garg, Akshita Gupta, Shaswata Bhattacharya, Abhishek Gupta, Sandeep Kumar, Manoj Kumar",
+          "institutions": "机构未标注",
+          "abstract": "自回归大模型推理日益受KV缓存内存占用制约。主流方案按注意力分数驱逐看似不重要的token，但这类策略隐含一个不可逆决策：token一旦被驱逐便无法再恢复价值。本文证明该假设在解码过程中是脆弱的——随着生成查询演化，token与窗口的重要性会发生漂移，标准驱逐策略会永久丢弃那些在全缓存模型下后来获得大量注意力的状态。为此提出两个诊断指标：Future Missed Mass（未来遗漏质量）与Global LIR（历史非活跃区域再激活度）。在此基础上提出QEvict三层KV缓存管理方案，用可恢复驱逐替代二值保留-删除：高置信窗口保持全精度，中间窗口存入量化可恢复层，仅删除最低置信窗口；解码时累计注意力分数持续更新窗口重要性，量化窗口一旦重新变重要即反量化提升回全精度。在固定内存预算下，该设计保留更广的历史上下文，同时为最重区域保留精确全精度。",
+          "contributions": [
+            "揭示注意力漂移使不可逆驱逐策略失效，token/窗口重要性随生成而动态变化",
+            "提出Future Missed Mass与Global LIR两个诊断指标，量化被驱逐状态的未来注意力与历史区域再激活",
+            "设计三层可恢复KV管理：全精度高置信层+量化可恢复层+仅删除最低置信层，量化窗口可反量化提升"
+          ],
+          "conclusions": [
+            "解码中注意力重要性随时间漂移，驱逐必须可逆而非二值不可逆",
+            "量化可恢复层在固定内存预算下保留更广历史上下文，同时维持关键区域全精度"
+          ],
+          "experiments": [
+            "在长上下文理解、检索与推理基准上持续优于代表性驱逐与量化基线",
+            "减少遗漏注意力并改善信息保留，验证可恢复驱逐机制的有效性"
+          ],
+          "significance": "将KV驱逐从不可逆二值决策升级为可恢复三层管理，为长上下文推理的内存效率提供新范式",
+          "arxivUrl": "https://arxiv.org/abs/2608.05326",
+          "pdfUrl": "https://arxiv.org/pdf/2608.05326.pdf",
+          "index": 1,
+          "takeaway": "把KV驱逐从\"删了就没了\"改成\"量化暂存、需要时反量化复活\"，对抗解码中的注意力漂移",
+          "keyExperiment": "长上下文理解/检索/推理基准上相对驱逐与量化基线持续改善，减少被驱逐状态导致的未来注意力遗漏"
+        },
+        {
+          "title": "DBLAST: Dependent Block Drafting for Stochastic Speculative Decoding",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-07",
+          "authors": "Amirmohammad Karimi, Chao Gao, Negar Hassanpour",
+          "institutions": "机构未标注",
+          "abstract": "投机解码通过轻量草稿模型提议多个未来token、再由目标模型验证来加速大模型推理。近年基于块与扩散式草稿器可单次预测多个位置，但其训练与采样过程通常针对贪心解码优化，或假设草稿块内各位置条件独立。在非贪心投机解码中该假设会失效——目标分布刻意随机化，多条续写都变得可能。本文研究了块扩散草稿器在此场景下的失配问题，证明随目标采样分布熵升高，被接受的草稿长度持续退化。为此提出基于token位置低秩潜在混合的依赖块草稿器，并配套面向接受率的训练目标，直接优化期望验证长度。在Qwen3-4B与Qwen3-8B上的GSM8K、MT-Bench、HumanEval与创意写作基准中，DBLAST一致优于独立块采样，尤其在高熵解码场景提升显著。",
+          "contributions": [
+            "揭示块草稿器位置条件独立假设在随机（非贪心）投机解码下失效，接受长度随目标分布熵升高而退化",
+            "提出基于低秩潜在混合的依赖块草稿器，建模草稿块内部位置依赖",
+            "设计面向接受率的训练目标，直接优化期望验证长度而非仅拟合目标分布"
+          ],
+          "conclusions": [
+            "高熵解码场景下依赖块采样显著优于独立块采样",
+            "DBLAST在多种基准上一致提升被接受的草稿长度"
+          ],
+          "experiments": [
+            "Qwen3-4B与Qwen3-8B在GSM8K、MT-Bench、HumanEval、创意写作上接受长度一致提升",
+            "高熵解码机制下相对独立块采样的增益最大"
+          ],
+          "significance": "把投机解码的草稿块从独立假设升级为依赖建模，使随机采样解码场景下的加速收益不再流失",
+          "arxivUrl": "https://arxiv.org/abs/2608.05448",
+          "pdfUrl": "https://arxiv.org/pdf/2608.05448.pdf",
+          "index": 2,
+          "takeaway": "草稿块内部位置相互依赖建模+接受率定向目标，让投机解码在随机采样下也高效",
+          "keyExperiment": "Qwen3-4B/8B上四类基准接受长度一致优于独立块采样，目标分布熵越高增益越大"
+        },
+        {
+          "title": "LLM Inference Under Bursty Workload Distribution: Modifying the WAIT Algorithm",
+          "score": 3.6,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-07",
+          "authors": "Anjali Gangadhar Katageria, Shobha Rani, Raghu Nandan Sengupta",
+          "institutions": "机构未标注",
+          "abstract": "ChatGPT、Claude等大语言模型广泛用于信息检索与问题求解。近期研究聚焦改进调度算法以在保持低延迟的同时提升吞吐，但这些方法通常假设泊松请求到达且速率恒定——这一假设无法反映真实流量的突发性与动态性。本文提出对当前最优的WAIT算法做轻量扩展，使其无需先验流量知识即可适应时变到达率：算法基于观测到的请求到达间隔进行在线请求强度估计。使用基于马尔可夫调制泊松过程（MMPP）的合成工作负载与多种请求类型，模拟评估表明，在所评估的低到达率漂移场景下，该方法吞吐高于Sarathi-Serve、ORCA与vLLM，同时保持可比的延迟。",
+          "contributions": [
+            "指出主流LLM调度算法对泊松恒定到达率的假设在突发真实流量下不成立",
+            "基于到达间隔在线估计请求强度，对WAIT算法做轻量扩展且无需先验流量知识",
+            "用MMPP合成突发工作负载对多调度器进行系统对比评估"
+          ],
+          "conclusions": [
+            "在线强度估计使调度器能适应时变到达率，无需事先知道流量模式",
+            "在低到达率漂移场景下吞吐优于Sarathi-Serve、ORCA与vLLM且延迟可比"
+          ],
+          "experiments": [
+            "MMPP合成突发工作负载下，所提方法吞吐高于Sarathi-Serve、ORCA、vLLM",
+            "低到达率漂移场景下维持与基线相当的延迟水平"
+          ],
+          "significance": "为LLM推理调度器补上突发流量适配能力，缩小调度研究与真实世界流量形态的差距",
+          "arxivUrl": "https://arxiv.org/abs/2608.06135",
+          "pdfUrl": "https://arxiv.org/pdf/2608.06135.pdf",
+          "index": 3,
+          "takeaway": "用到达间隔在线估强度，给WAIT调度器装上适应突发流量的能力",
+          "keyExperiment": "MMPP突发合成负载下吞吐超过Sarathi-Serve/ORCA/vLLM，延迟保持可比"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "LC-GRPO: Bridging Train-Inference Gap for Flow-Based GRPO with Langevin Correction",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-07",
+          "authors": "Yingqing Guo, Hui Yuan, Zijian He, Mengdi Wang, Zheng Ding",
+          "institutions": "Princeton University",
+          "abstract": "流式生成模型通常通过求解确定性常微分方程（ODE）采样，而在线强化学习需要随机rollout进行策略探索与优化，因此现有流式模型GRPO方法在训练时用随机微分方程（SDE）替代推理时的ODE。尽管连续时间下ODE与SDE边际分布相同，有限步离散化差异可能很大：随探索噪声增大，SDE rollout往往变模糊，造成用于RL训练与测试时ODE采样器生成的样本不匹配。本文提出LC-GRPO，带Langevin校正的流式GRPO框架：每个rollout转移先走一步与推理对齐的ODE欧拉步，再施加针对该时刻边际分布的随机Langevin校正。所需score直接从流速度恢复，无需额外score模型，所得转移仍是各向同性高斯分布，似然可解析，便于策略优化。理论上证明在适当条件下，一步Langevin校正可降低不完美ODE欧拉步的Wasserstein误差；在匹配随机性水平下，所提转移比标准反向SDE的Euler-Maruyama离散更精确。在SD3.5-Medium、FLUX.1-Dev与HunyuanVideo上，LC-GRPO一致改善文生图与文生视频任务的奖励优化，保持生成质量，显著缩小随机训练rollout与确定性测试时ODE推理之间的差距。",
+          "contributions": [
+            "提出ODE欧拉步+Langevin校正的rollout转移，弥合流式模型RL训练与推理的采样差距",
+            "score直接从流速度恢复，无需额外score模型，转移保持各向同性高斯的可解析似然",
+            "理论证明一步Langevin校正降低Wasserstein误差，且优于反向SDE的Euler-Maruyama离散"
+          ],
+          "conclusions": [
+            "推理对齐的ODE步+边际校正比纯SDE rollout在有限步离散下更精确",
+            "LC-GRPO在文生图与文生视频奖励优化上一致提升且保持生成质量"
+          ],
+          "experiments": [
+            "SD3.5-Medium、FLUX.1-Dev上文生图奖励优化一致改善，生成质量不退化",
+            "HunyuanVideo上验证文生视频任务同样收益，训练-推理gap显著收窄"
+          ],
+          "significance": "为流式生成模型的在线RL提供与测试时ODE推理对齐的采样方案，是GRPO类方法在扩散模型上的关键补丁",
+          "arxivUrl": "https://arxiv.org/abs/2608.05600",
+          "pdfUrl": "https://arxiv.org/pdf/2608.05600.pdf",
+          "index": 4,
+          "takeaway": "训练时SDE rollout太糊？先走ODE步再加Langevin校正，让RL样本与推理采样对齐",
+          "keyExperiment": "SD3.5-Medium/FLUX.1-Dev/HunyuanVideo上奖励优化一致提升，生成质量保持，训练推理gap显著收窄"
+        },
+        {
+          "title": "Refining Over Resampling: Test-Time Self-Correction for LLM Reasoning",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-07",
+          "authors": "Ahsan Bilal, Muhammad Ahmed Mohsin, Muhammad Umer, Lena Trigg, Ali Subhan, Muhammad Ali, Dean F. Hougen",
+          "institutions": "机构未标注",
+          "abstract": "测试时扩展通过增加推理计算提升LLM推理能力，但单纯扩大采样往往收益递减：新rollout常重复已有答案模式，而非带来有用的推理多样性。基于验证器的选择是另一路线，但其性能依赖外部奖励模型的校准。本文提出无验证器的广度-深度精炼框架，用测试时算力同时探索与改进候选解：采样多条独立推理rollout，通过迭代自批评与自修正精炼每条rollout，最后用多数投票聚合精炼后的答案。广度保留多样化的初始尝试，深度在聚合前修复局部推理错误。在AIME24、AIME25、AMC、OlympiadBench与MATH500上，该方法在多个开源模型上一致优于贪心解码、多数投票、基于验证器的best-of-N、beam search与lookahead解码。例如Qwen2.5-1.5B在MATH500上准确率从最强验证器基线提升至58.0%，AMC上从25.0%提升至32.5%。结果表明，用测试时算力精炼采样轨迹比单纯采更多候选或依赖验证器引导更有效。",
+          "contributions": [
+            "提出无验证器的广度-深度测试时精炼框架：独立采样+迭代自批评自修正+多数投票聚合",
+            "广度保多样性、深度修局部错误，两者互补而非依赖外部奖励模型校准",
+            "在五个数学推理基准与多个开源模型上系统超越采样型与验证器型基线"
+          ],
+          "conclusions": [
+            "测试时算力用于精炼轨迹优于仅扩大采样或依赖验证器选择",
+            "自修正带来的多样性增益在多种模型规模与基准上一致成立"
+          ],
+          "experiments": [
+            "Qwen2.5-1.5B在MATH500上从最强验证器基线提升至58.0%",
+            "Qwen2.5-1.5B在AMC上从25.0%提升至32.5%",
+            "AIME24/AIME25/OlympiadBench上一致优于贪心、多数投票、best-of-N、beam search与lookahead解码"
+          ],
+          "significance": "给出\"精炼优于重采样\"的测试时计算分配原则，为无验证器推理增强提供简洁有效方案",
+          "arxivUrl": "https://arxiv.org/abs/2608.05643",
+          "pdfUrl": "https://arxiv.org/pdf/2608.05643.pdf",
+          "index": 5,
+          "takeaway": "与其多采样碰运气，不如把测试时算力花在\"采样+自我修正+投票\"的精炼流水线上",
+          "keyExperiment": "Qwen2.5-1.5B：MATH500达58.0%（vs最强验证器基线），AMC从25.0%升至32.5%"
+        },
+        {
+          "title": "Beyond Full-Model Rollback: AuroSFT for Adapter-State Multi-Task Fine-Tuning",
+          "score": 3.8,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-07",
+          "authors": "Yue Han, Ziniu Liu",
+          "institutions": "机构未标注",
+          "abstract": "多任务监督微调（SFT）常把异构数据混合当作单一优化问题处理，但不同任务达到最佳泛化的时刻可能不同。msft通过任务级展开、排除与回滚机制暴露了这一失配，但其原始公式将调度器状态物化为全模型检查点，使阶段切换在存储、恢复与部署上代价高昂。本文提出AuroSFT，一个参数高效框架，将过拟合感知多任务SFT的携带状态重铸为紧凑、可合并的适配器状态：冻结预训练骨干，只训练注入的适配器，在任务级峰值处回滚适配器检查点，并继续在剩余活跃混合上训练。在层级别，每个适配器以AuroRA启发的自适应非线性层作用于低秩权重因子，而非直接作用于全秩权重。",
+          "contributions": [
+            "把多任务SFT的调度状态从全模型检查点压缩为紧凑可合并的适配器状态",
+            "冻结骨干只练适配器，任务峰值处回滚适配器检查点，降低阶段切换的存储与部署成本",
+            "层级采用AuroRA式自适应非线性作用于低秩权重因子，保持参数高效"
+          ],
+          "conclusions": [
+            "适配器状态即可表达任务级过拟合回滚，无需全模型快照",
+            "参数高效设计使多任务SFT的阶段管理可落地部署"
+          ],
+          "experiments": [
+            "在多任务SFT场景下以适配器状态实现任务级回滚，阶段切换成本显著低于全模型检查点",
+            "低秩自适应非线性层保持与全模型微调可比的性能"
+          ],
+          "significance": "让过拟合感知多任务微调从\"存全模型\"降为\"存适配器\"，解决多任务SFT阶段管理工程化难题",
+          "arxivUrl": "https://arxiv.org/abs/2608.05250",
+          "pdfUrl": "https://arxiv.org/pdf/2608.05250.pdf",
+          "index": 6,
+          "takeaway": "多任务微调的任务级回滚不用存全模型，一个可合并的适配器状态就够了",
+          "keyExperiment": "适配器状态回滚替代全模型检查点，阶段切换的存储与部署成本显著下降且性能可比"
+        },
+        {
+          "title": "Relay, Don't Route: Adaptive Population Handoff for Cost-Efficient LLM-Driven Evolution",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-07",
+          "authors": "Sichun Luo, Yi Huang, Guanzhi Deng, Haibo Wang, Haochen Luo, Lei Li, Zefa Hu, Junlan Feng, Qi Liu",
+          "institutions": "Peking University",
+          "abstract": "LLM驱动的进化在程序搜索与算法发现上展现出潜力，但整个长进化过程中全程使用强模型成本高昂。自然的替代方案是在固定推理预算下混合廉价与强模型。然而现有方法通常在单次查询或突变步级别分配模型，忽略了进化搜索是有状态的：每个生成的候选都会改变后续突变所基于的种群。本文实证分析LLM驱动的进化轨迹，发现搜索进度强前置：早期轨迹性能信息量大但有噪声，而廉价模型能以更低成本恢复强模型早期进展的大部分。基于这些发现提出training-free框架，将预算从按查询分配转向按种群阶段交接（handoff）：进化早期由廉价模型推进，关键阶段再移交强模型。",
+          "contributions": [
+            "实证揭示LLM进化搜索进度强前置、早期轨迹信息量大但噪声多、廉价模型可恢复大部分早期进展",
+            "提出种群级（而非查询级）预算交接框架，让廉价模型承担早期推进、强模型接管关键阶段",
+            "training-free设计，无需额外训练即可在固定预算下降低进化成本"
+          ],
+          "conclusions": [
+            "进化搜索的stateful本质要求预算分配在种群层面而非单查询层面决策",
+            "早期廉价/后期强模型的交接策略在固定预算下接近全程强模型的最终性能"
+          ],
+          "experiments": [
+            "在程序搜索与算法发现任务上，固定推理预算下成本显著低于全程强模型",
+            "廉价模型恢复了强模型早期进展的大部分，交接后性能差距收窄"
+          ],
+          "significance": "把LLM进化成本优化从查询级路由提升到种群级交接，为长时程进化搜索提供务实的算力分配策略",
+          "arxivUrl": "https://arxiv.org/abs/2608.05651",
+          "pdfUrl": "https://arxiv.org/pdf/2608.05651.pdf",
+          "index": 7,
+          "takeaway": "进化搜索前期用廉价模型推进、后期移交强模型——按种群交接算力，而不是逐查询路由",
+          "keyExperiment": "程序搜索/算法发现中固定预算下成本大幅下降，最终性能接近全程强模型的进化结果"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "MACRO: Markov Chain Routing of Transformer Layers",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-07",
+          "authors": "Paweł Batorski, Abtin Pourhadi, Akylgali Aitaza, Przemysław Spurek, Paul Swoboda",
+          "institutions": "LMU Munich, Jagiellonian University",
+          "abstract": "标准LLM逐层顺序执行。动态层路由——搜索经过层的不同执行路径，包括层重复、跳跃等移动——可提升性能。现有路由方法往往需要更新模型权重、为每个测试实例运行昂贵搜索循环，或推理时要求真实标签。本文提出马尔可夫链Transformer层路由（MACRO），在不修改底层参数的前提下学习任务特定路由。MACRO将层路由建模为上下文相关的马尔可夫策略，条件包括层索引、计算预算阶段、方向位移与算子上下文，支持跳过、重复与残差隐藏状态加法操作。路由分布通过训练数据反馈更新，并用top-k Viterbi算法解码出高概率候选程序。在多个开源LLM的不同推理与知识基准上，MACRO相对未路由基线平均提升+5.0%准确率，小模型增益最大；相比最优动态路由方法Dr. LLM提升+7.2%，同时路由搜索时间降低9.4倍（从14.8小时降至1.6小时）。",
+          "contributions": [
+            "提出无需修改权重的马尔可夫链层路由框架，支持跳过、重复与残差加法操作",
+            "把路由建模为依赖层索引、计算预算阶段、方向位移与算子上下文的上下文相关马尔可夫策略",
+            "用top-k Viterbi解码高概率候选路径，避免逐实例昂贵搜索"
+          ],
+          "conclusions": [
+            "任务特定层路由能以零参数修改带来一致精度提升，无需推理时标签",
+            "马尔可夫策略+训练数据反馈足以学到比现有动态路由更优的路径"
+          ],
+          "experiments": [
+            "相对未路由基线平均准确率+5.0%，小模型增益最大",
+            "相对最优动态路由Dr. LLM提升+7.2%",
+            "路由搜索时间从14.8小时降至1.6小时（9.4倍加速）"
+          ],
+          "significance": "把LLM动态层路由从改权重/昂贵搜索范式拉到零参数马尔可夫策略范式，兼顾精度与效率",
+          "arxivUrl": "https://arxiv.org/abs/2608.05872",
+          "pdfUrl": "https://arxiv.org/pdf/2608.05872.pdf",
+          "index": 8,
+          "takeaway": "不碰权重、不跑逐实例搜索——用马尔可夫链学任务级层路由，Viterbi解码出最优路径",
+          "keyExperiment": "平均准确率+5.0%（小模型最大），超Dr. LLM +7.2%，路由搜索时间9.4倍加速（14.8h→1.6h）"
+        },
+        {
+          "title": "Hierarchical Latent Prediction for Language Models",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-07",
+          "authors": "Chang Shi, Tim Pearce, Manan Tomar, Siddhartha Sen, John Langford",
+          "institutions": "Microsoft Research",
+          "abstract": "标准下一token预测（NTP）奠定了语言模型预训练的基础，但其teacher-forcing训练范式对长程推理与规划可能并非最优。多token预测（MTP）与Next-Latent预测（NextLat）等近期工作试图通过预测多个未来token与潜在空间自监督预测来缓解该问题，但这些辅助目标要么视界有限，要么受多步rollout复合误差困扰。本文提出分层潜在预测（HiLP），引入辅助的高层抽象潜在变量，帮助降低潜在空间rollout中的误差累积效应。实验表明HiLP能带来更长视界的一致信念状态表示，在编码与多步推理基准上验证了方法有效性，并带来更高的投机解码效率。",
+          "contributions": [
+            "提出分层潜在预测（HiLP），用高层抽象潜在变量抑制潜在空间rollout的误差累积",
+            "相比MTP/NextLat，兼顾更长预测视界与更低的复合误差",
+            "在编码与多步推理基准上验证有效性，并提升投机解码效率"
+          ],
+          "conclusions": [
+            "高层抽象潜在能帮助模型维持更长视界的一致信念状态",
+            "HiLP在推理与编码任务上优于纯NTP及单层潜在预测目标"
+          ],
+          "experiments": [
+            "编码与多步推理基准上验证HiLP有效性，相比基线一致提升",
+            "投机解码效率更高，说明分层潜在表示利于草案生成"
+          ],
+          "significance": "为预训练目标引入层次化潜在抽象，是NTP→MTP→NextLat演进中的结构化升级方向",
+          "arxivUrl": "https://arxiv.org/abs/2608.05806",
+          "pdfUrl": "https://arxiv.org/pdf/2608.05806.pdf",
+          "index": 9,
+          "takeaway": "给潜在预测加一层\"高层抽象\"，用分层结构压住多步rollout的误差累积",
+          "keyExperiment": "编码与多步推理基准上有效提升，同时带来更高的投机解码效率"
+        },
+        {
+          "title": "A Two-Tier Perspective on Inference-Time Parallelism in Multi-Agent LLM Systems",
+          "score": 3.7,
+          "channel": "Architecture",
+          "category": "cs.MA",
+          "date": "2026-08-07",
+          "authors": "Zihan Xu, Haolin Tian, Hai Jiang",
+          "institutions": "机构未标注",
+          "abstract": "LLM驱动的多智能体系统推理时通常需要多次模型调用与复杂协调，执行策略直接影响系统精度、延迟与计算成本，并行执行是提升推理效率的手段。本文从推理时执行视角，将多智能体系统中的并行建模为两层决策过程：副本并行（Replica Parallelism）在任务层面探索多条完整解路径，结构并行（Structural Parallelism）通过任务分解实现单条解路径内并发执行。但不同并行形式的作用与相互关系尚缺乏统一组织与协调的系统研究。为此提出TIPEX，一个可控执行框架，在统一执行语义下协调两层并行在推理过程中的角色，支持对不同并行策略与参数配置的系统组合与分析。GAIA基准上的系统实验表明，推理时并行能显著提升精度并降低端到端延迟，代价是token消耗增加；进一步分析显示副本并行与结构并行在不同任务复杂度下互补，中等难度任务从两者协调中获益最大，而过激的并行策略未必带来更好性能。",
+          "contributions": [
+            "从推理时执行视角将多智能体并行统一建模为副本并行（任务级）与结构并行（路径内）两层",
+            "提出TIPEX可控执行框架，在统一语义下组合与协调两层并行策略",
+            "在GAIA基准上系统分析精度、延迟、token消耗与并行策略的关系"
+          ],
+          "conclusions": [
+            "推理时并行显著提升精度并降低端到端延迟，但增加token消耗",
+            "副本与结构并行的收益随任务复杂度互补，中等难度任务协同收益最大，过度并行反而无益"
+          ],
+          "experiments": [
+            "GAIA基准上并行执行显著提升精度并降低端到端延迟",
+            "中等难度任务从两层并行协调中获益最大，过激并行策略不带来更好性能",
+            "token消耗随并行度增加，存在精度-成本权衡"
+          ],
+          "significance": "为多智能体推理时并行给出统一的两层建模与可控框架，指导并行策略的理性选择而非盲目加大并行",
+          "arxivUrl": "https://arxiv.org/abs/2608.05791",
+          "pdfUrl": "https://arxiv.org/pdf/2608.05791.pdf",
+          "index": 10,
+          "takeaway": "多智能体并行分两层：任务级副本并行+路径内结构并行，中等难度任务协同收益最大",
+          "keyExperiment": "GAIA上并行显著提精度降延迟；中等难度任务两层并行协同收益最大，过度并行无益且token消耗增加"
+        }
+      ]
+    }
+  ]
+}
