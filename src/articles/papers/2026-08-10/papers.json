@@ -1,0 +1,315 @@
+{
+  "date": "2026-08-10",
+  "title": "2026-08-10 论文精选",
+  "lede": "今日关注：KV cache 压缩与复用走向全局资源分配（GraceKV/CoinRAG）、数据无关的稀疏注意力（AoH），以及面向 Agent 的细粒度信用分配（DiDPO/Fisher-R1）与无分词器 MoE 路由（EntropyMoE）。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 227
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "GraceKV: Every Cache Entry Earns Its Place — Global Allocation of Resolution and Coverage for KV Cache Compression",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-10",
+          "authors": "Haolin Tian, Yuzhe Liu, Tonghan Wang",
+          "institutions": "机构未标注",
+          "abstract": "随着 LLM 处理上下文越来越长，KV cache 的存储与反复访问成为主要瓶颈。现有压缩方法依赖预定义的固定规则，通常围绕 token 驱逐或合并展开，导致缓存资源既无法在层、头、上下文槽位之间自由流动，也无法联合分配以平衡局部分辨率与信息覆盖。为此本文提出 GraceKV，一种 KV cache 压缩中分辨率与覆盖度的全局分配方法，将压缩过程形式化为固定缓存预算下的全局资源分配问题。GraceKV 把每个“层-头-槽位”组合视为原子单元并构建原型树：叶节点对应 token 级 KV 条目，内部节点用一个原型压缩其子节点覆盖的 KV 空间；树中互不重叠的节点构成原子单元的表示，新增树根扩展信息覆盖、分裂节点提升局部分辨率，所有候选动作在共享预算下全局竞争，最终保留的节点即压缩后的 KV cache。该方法无需额外训练，压缩与推理全程在 GPU 上完成。在多种长上下文任务与压缩比下的系统实验表明，GraceKV 在 32 个设置中的 24 个排名第一，并能在高达 128 倍压缩下保持稳健。",
+          "contributions": [
+            "将 KV cache 压缩重定义为全局资源分配问题，统一处理 token 驱逐与合并两类操作",
+            "提出基于原型树的原子单元表示：新增树根扩展覆盖、分裂节点提升分辨率，动作全局竞争共享预算",
+            "无需训练、全 GPU 执行，压缩与推理一体化",
+            "在 32 个长上下文设置中 24 个排名第一，128 倍压缩下仍稳健"
+          ],
+          "conclusions": [
+            "全局预算分配能有效协调信息覆盖与局部分辨率，优于固定规则的局部压缩方法",
+            "原型树结构让缓存资源可按需在层、头、槽位间流动，支撑极端压缩比"
+          ],
+          "experiments": [
+            "32 个设置中 24 个排名第一（跨多种长上下文任务与压缩比）",
+            "在 128 倍压缩比下仍保持稳健性能",
+            "无需任何微调，端到端 GPU 上完成压缩与推理"
+          ],
+          "significance": "把 KV cache 压缩从局部启发式提升为全局资源分配优化，为超长上下文推理的显存瓶颈提供新范式。",
+          "arxivUrl": "https://arxiv.org/abs/2608.07001",
+          "pdfUrl": "https://arxiv.org/pdf/2608.07001.pdf",
+          "index": 1,
+          "takeaway": "KV 缓存压缩应像资源调度一样做全局预算分配：扩张覆盖还是提升分辨率由全局竞争决定，而非固定规则。",
+          "keyExperiment": "32 个长上下文设置中 24 个排名第一，且 128 倍压缩比下性能依然稳健"
+        },
+        {
+          "title": "CoinRAG: Contextualized Information Nugget KV Cache Reuse for Long-Context RAG",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-10",
+          "authors": "Gyuwan Kim, Cheoneum Park, Tao Yang",
+          "institutions": "NAVER",
+          "abstract": "近期 RAG 优化研究利用 chunk 级 KV cache 复用，避免重复处理长检索上下文以提升效率，但粗粒度 chunk 中仍存在大量信息冗余与噪声。本文提出 CoinRAG（面向长上下文 RAG 的上下文化信息块 KV 缓存复用），在低 prefill 延迟约束下优化帕累托前沿并最大化准确率。其核心机制借喻“硬币”——如同用小 token 拼出更大价值，CoinRAG 以组合方式复用离线计算的细粒度信息块（nugget）缓存，形成语义更相关且更紧凑的学习式上下文表示。具体而言，CoinRAG 不进行整 chunk 编码，而是通过两阶段检索识别检索 chunk 内与查询相关的语义单元，并将它们的切片 KV 表示与 chunk 级上下文无缝组装。在 LongBench 多跳问答上的广泛评估表明，CoinRAG 显著降低运营成本，在标准快速 prefill 延迟预算下，以平均 5.3% 的相对答案质量（F1）提升刷新了帕累托前沿，优于其他基线。",
+          "contributions": [
+            "提出细粒度信息块（nugget）级 KV 缓存复用，替代粗粒度整 chunk 编码",
+            "两阶段检索定位查询相关语义单元，组合式组装切片 KV 表示与 chunk 上下文",
+            "在低 prefill 延迟预算下同时优化成本与准确率，刷新帕累托前沿"
+          ],
+          "conclusions": [
+            "细粒度 KV 复用比 chunk 级复用更能在相同延迟下提升答案质量",
+            "组合式缓存组装可显著降低长上下文 RAG 的运营成本"
+          ],
+          "experiments": [
+            "LongBench 多跳问答上平均相对提升 5.3% F1",
+            "在标准快速 prefill 延迟预算下达到新的帕累托前沿",
+            "相比整 chunk 编码基线显著降低计算成本"
+          ],
+          "significance": "将 KV cache 复用从 chunk 粒度推进到语义信息块粒度，为低成本高精度长上下文 RAG 提供新方案。",
+          "arxivUrl": "https://arxiv.org/abs/2608.07458",
+          "pdfUrl": "https://arxiv.org/pdf/2608.07458.pdf",
+          "index": 2,
+          "takeaway": "与其缓存和重算整个检索 chunk，不如离线缓存细粒度语义块并在推理时按需组装，省算力且提精度。",
+          "keyExperiment": "LongBench 多跳问答上平均相对 F1 提升 5.3%，同时保持标准快速 prefill 延迟"
+        },
+        {
+          "title": "Autonomy-of-Heads: Data-Free Sparse Attention from Frozen Query-Key Geometry",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-10",
+          "authors": "Yehan Yang, Junyuan Shang, Yang Li, Guanqun Zhao, Shuohuan Wang, Dianhai Yu",
+          "institutions": "Baidu",
+          "abstract": "长上下文 LLM 推理受二次方注意力计算与持续增长的 KV cache 成本制约。现有稀疏注意力与 KV 压缩方法通常依赖运行时注意力分数、观测窗口、校准 prompt 或学习门控来决定保留哪些 token 或头，使得头诊断依赖输入且部署代价高。本文提出 Autonomy-of-Heads（AoH），一种数据无关方法，从查询-键投影的谱几何识别检索头与流式头。AoH 定义核注意力算子 M_h = W_K^h^T W_Q^h，以其有效秩作为权值空间中头功能的度量：谱集中表示少量主导的查询-键匹配方向，对应检索头；谱弥散表示缺乏全局主导匹配方向，对应流式头。作者还推导出仅需 d_head 维的高效计算，避免构造完整的 d_model×d_model 矩阵。跨多模型的广泛实验表明，在 50% 稀疏度下，AoH 平均保留全注意力 96.5% 的性能，同时将 prefill 与 decode 延迟分别降低最多 41.4% 与 66.0%，并在 256K token 下将 KV cache 内存减少 50.0%。",
+          "contributions": [
+            "提出数据无关的头诊断方法，仅凭冻结的 QK 权重谱几何即可判别检索头/流式头",
+            "推导 d_head 维高效计算，避免构造完整 d_model×d_model 矩阵",
+            "无需校准数据或运行时注意力分数，部署零成本"
+          ],
+          "conclusions": [
+            "头的功能可由权重空间中的有效秩刻画，无需依赖输入数据",
+            "数据无关稀疏注意力在 50% 稀疏度下几乎无损，并显著降低延迟与显存"
+          ],
+          "experiments": [
+            "50% 稀疏度下平均保留 96.5% 全注意力性能",
+            "prefill 与 decode 延迟最多降低 41.4% 与 66.0%",
+            "256K token 下 KV cache 内存减少 50.0%"
+          ],
+          "significance": "证明不需要任何数据即可从权重几何判断注意力头角色，为长上下文推理的免校准稀疏化开辟新路径。",
+          "arxivUrl": "https://arxiv.org/abs/2608.06849",
+          "pdfUrl": "https://arxiv.org/pdf/2608.06849.pdf",
+          "index": 3,
+          "takeaway": "注意力头是检索型还是流式型，直接看 QK 权重矩阵的有效秩就能判定——不用跑推理、不用校准数据。",
+          "keyExperiment": "50% 稀疏度保留 96.5% 性能，prefill/decode 延迟最高降 41.4%/66.0%，256K 上下文 KV 显存减半"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SkillProx: Self-Evolving Agent Skills via Proximal Textual Gradient Descent",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-10",
+          "authors": "Mingxuan Zheng, Yujin Zhou, Chuxue Cao, Boqin Yin, Yuyao Zhang, Jiapeng Sun, Shuaishuai Gong, Sirui Han, Yike Guo",
+          "institutions": "机构未标注",
+          "abstract": "LLM Agent 越来越多地通过积累过程性知识到“技能”（skill）中来适应重复性任务。技能是轻量、可复用的文本制品，无需更新权重即可加载进上下文。近期方法通过迭代任务执行、失败诊断与轨迹引导的文本空间更新来精炼技能，但现有框架缺乏显式的“诊断-结果”反馈，并把删除当作普通编辑操作而非整合积累知识的专门机制。本文提出 SkillProx，一个受近端梯度启发的前向-后向框架，将闭环诊断演化与效用感知的近端精炼耦合。受“任务损失+技能复杂度”复合目标启发，前向阶段在同一任务批次上重执行诊断驱动的编辑、回滚回归并反馈实测结果；后向阶段将技能分解为可审计的知识单元，用冻结的留一效用审计估计各单元贡献，并施加验证门控的整合、降级或移除。在多个骨干 LLM 的分布内与分布外基准上，SkillProx 相比最强基于梯度的基线平均准确率提升 3.0 个百分点，消融实验表明闭环诊断与近端精炼具有互补效应。",
+          "contributions": [
+            "提出近端梯度启发的技能演化框架，前向闭环诊断 + 后向效用感知近端精炼",
+            "引入验证门控的整合/降级/移除机制，把删除变成知识巩固的专门操作",
+            "留一效用审计（frozen leave-one-out）无偏估计各知识单元贡献"
+          ],
+          "conclusions": [
+            "闭环诊断反馈与近端精炼互补，共同提升技能演化的稳定性",
+            "显式诊断-结果反馈显著优于缺乏该反馈的现有技能精炼框架"
+          ],
+          "experiments": [
+            "相比最强基于梯度的基线，平均准确率提升 3.0 个百分点",
+            "在分布内与分布外基准上均有效，跨多个骨干 LLM 稳定",
+            "消融实验确认闭环诊断与近端细化缺一不可"
+          ],
+          "significance": "把技能进化当作带约束的文本空间优化问题，让 Agent 技能库像梯度下降一样稳定收敛。",
+          "arxivUrl": "https://arxiv.org/abs/2608.07449",
+          "pdfUrl": "https://arxiv.org/pdf/2608.07449.pdf",
+          "index": 4,
+          "takeaway": "Agent 技能进化可以套用近端梯度下降的框架：前向诊断编辑、后向按效用整合或删除，稳定不倒退。",
+          "keyExperiment": "分布内/外基准上平均准确率较最强梯度基线提升 3.0 个百分点"
+        },
+        {
+          "title": "Fisher-R1: Training LLM Agents for Reliable Hypothesis Testing",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-10",
+          "authors": "Jiacheng Miao, Jin Mu, Guanhua Chen, James Zou",
+          "institutions": "Stanford University",
+          "abstract": "可靠的假设检验是许多实证科学论断的基础。LLM Agent 正越来越多地用于自动化这一流程：检查数据集、生成代码并端到端产出分析。然而作者发现，即使分析执行正确，Agent 也常犯细微的推断错误，导致错误结论——而现有基准很少评估在给定数据假设下报告的 p 值是否统计有效，因此无法捕捉这类失败模式。为填补空白，作者构建 P-Bench 基准，包含 425 个覆盖经济学、生物学与医学的开放式真实假设检验任务，每个任务要求 Agent 在仅有科学假设与数据集的情况下选择统计方法、计算 p 值并得出结论。同时提出 Fisher-R1，一个用合成任务与强化学习训练的开权重 LLM Agent。在 P-Bench 上，Fisher-R1-14B 较其骨干模型大幅提升，并超越 GPT-5.4 与 DeepSeekV4-Pro 等强专有与开源基线：单次尝试成功率较 DeepSeek-V4-Pro 平均相对提升 21%，在最具挑战性的任务上最高达 26%。结果表明当前 LLM Agent 缺乏可靠的统计推理能力，而带验证统计奖励的强化学习能显著提升可靠性。",
+          "contributions": [
+            "构建 P-Bench：425 个跨经济学/生物学/医学的真实假设检验任务，专门检验 p 值统计有效性",
+            "提出 Fisher-R1，用合成任务 + 带验证统计奖励的 RL 训练开权重统计推理 Agent",
+            "揭示现有基准无法捕捉的执行正确但推断错误的失败模式"
+          ],
+          "conclusions": [
+            "当前 LLM Agent 的统计推断可靠性不足，正确执行分析仍可能得出无效 p 值",
+            "针对统计有效性的强化学习可实质提升 Agent 科学分析可靠性"
+          ],
+          "experiments": [
+            "P-Bench 上 Fisher-R1-14B 单次尝试成功率较 DeepSeek-V4-Pro 平均相对提升 21%",
+            "最具挑战任务上最高相对提升 26%",
+            "超越 GPT-5.4 与 DeepSeek-V4-Pro 等强基线，明显优于骨干模型"
+          ],
+          "significance": "首次以统计有效性为核心指标训练与评测科学推理 Agent，为 AI 自动化科研结论的可靠性设下新标尺。",
+          "arxivUrl": "https://arxiv.org/abs/2608.07437",
+          "pdfUrl": "https://arxiv.org/pdf/2608.07437.pdf",
+          "index": 5,
+          "takeaway": "LLM Agent 做假设检验的最大隐患不是代码错，而是 p 值统计无效——用带验证奖励的 RL 训练可显著修复。",
+          "keyExperiment": "P-Bench 上 14B 模型单次成功率较 DeepSeek-V4-Pro 平均相对提升 21%，最难任务达 26%"
+        },
+        {
+          "title": "DiDPO: Diff-in-Diff Policy Optimization for Coding Agent Training",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-10",
+          "authors": "Xucong Wang, Zhe Zhao, Liheng Yu, Di Wu, Xiaofeng Cao, Pengkun Wang",
+          "institutions": "机构未标注",
+          "abstract": "带可验证奖励的强化学习（RLVR）已成为训练编码 Agent 的强大范式，编译与测试的执行反馈提供客观验证。但与一般 Agent 任务不同，编码 Agent 面临更细粒度的信用分配挑战：每一步编码动作同时向代码版本的不同区域打入多种变更，独立变更的贡献难以区分。现有 RLVR 方法大多只用结果奖励或步骤级奖励，无法深入代码 diff，使编码动作的独特性质对训练不可见。本文提出 Diff-in-Diff 策略优化（DiDPO），一种无评论家的 RL 方法，直接从代码 diff 结构构造细粒度信用单元。DiDPO 将多轮编码交互组织为多个思维-动作步骤，跨采样轨迹发现代码 diff，再用作者提出的 groupability score 把每个完整 diff 拆分为高度相似的子 diff 并聚合出锚点，锚点形成优势组并把 diff 级优势投影回单个响应 token。在长程编码与推理基准上，DiDPO 显著超越强 Agentic RL 基线：在 Qwen2.5-7B-Coder 上超过同类方法 10% 以上，并缩小与更大模型（如 72B）的差距。作者还开源 verl-code，一个支持多种 RL 方法与编码基准的 Agentic RL 代码库。",
+          "contributions": [
+            "提出直接从代码 diff 结构构造细粒度信用单元的无评论家 RL 方法（DiDPO）",
+            "设计 groupability score 将完整 diff 拆分为语义一致的子 diff 锚点，投影优势到 token 级",
+            "开源 verl-code Agentic RL 代码库，支持多种 RL 方法与编码基准"
+          ],
+          "conclusions": [
+            "diff 级信用分配比结果/步骤级奖励更适配编码 Agent 的细粒度训练",
+            "细粒度信用投影让 7B 编码模型显著逼近远大于自身的模型"
+          ],
+          "experiments": [
+            "Qwen2.5-7B-Coder 上较同类方法提升超过 10%",
+            "在长程编码与推理基准上显著超越强 Agentic RL 基线",
+            "大幅缩小与更大规模模型（如 72B）的性能差距"
+          ],
+          "significance": "把信用分配粒度推进到代码 diff 内部，让 RLVR 训练编码 Agent 时不再把多变更混为一谈。",
+          "arxivUrl": "https://arxiv.org/abs/2608.07147",
+          "pdfUrl": "https://arxiv.org/pdf/2608.07147.pdf",
+          "index": 6,
+          "takeaway": "编码 Agent 每一步改多个地方，奖励不能只给整步——按 diff 拆细再投影到 token，7B 模型也能追平大模型。",
+          "keyExperiment": "Qwen2.5-7B-Coder 上较同类 Agentic RL 方法提升超 10%，且显著缩小与 72B 级模型的差距"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "EntropyMoE: Entropy-Aware Sparse Expert Routing for Tokenizer-Free LLMs",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-10",
+          "authors": "Bo Liu, Muxuab Yu, Yu Zhang, Pengfei Gao, Yongping Zhang",
+          "institutions": "机构未标注",
+          "abstract": "近期字节级（byte-level）LLM 通过把字节分组为动态大小的 patch，使无分词器建模越来越具竞争力。但现有字节-patch 架构仍对每个 patch 施加相同的稠密前馈计算，这种统一计算无法让模型容量适应 patch 语义与粒度的变化。本文提出 EntropyMoE，一种面向动态字节 patch 的混合专家（MoE）架构：用 Top-K 专家层替换全局 patch Transformer 中的稠密前馈模块。每个动态 patch 作为专家路由的基本单元，其字节覆盖范围决定工作量核算的贡献；路由器直接根据 patch 熵选择专家，利用与动态 patch 构造相同的粒度信号组织稀疏计算，由 patch 熵与长度共同定义特征空间来调节专家特化。实验表明，在匹配的稠密与稀疏基线中，EntropyMoE 取得最低的 held-out bits-per-byte，同时保持可比的 downstream 准确率。这些结果确立了 patch 熵作为稀疏条件计算的有效路由坐标，并把 MoE 建模扩展到基于分词器的表示之外。",
+          "contributions": [
+            "首个面向动态字节 patch 的 MoE 架构，以 patch 为路由基本单元",
+            "直接用 patch 熵作路由坐标，复用动态 patch 构造的粒度信号，无需额外路由特征",
+            "将稀疏条件计算扩展到无分词器表示，字节级模型也能享受 MoE 容量-算力解耦"
+          ],
+          "conclusions": [
+            "patch 熵是有效的专家路由坐标，优于统一的稠密前馈计算",
+            "字节级 MoE 在压缩率（bits-per-byte）上优于匹配的稠密与稀疏基线，准确率不降"
+          ],
+          "experiments": [
+            "在匹配的稠密与稀疏基线中取得最低 held-out bits-per-byte",
+            "下游任务准确率与基线可比",
+            "熵+长度联合特征空间有效调节专家特化"
+          ],
+          "significance": "把 MoE 从 tokenizer 世界带进无分词器（字节级）世界，证明熵是组织稀疏计算的自然坐标。",
+          "arxivUrl": "https://arxiv.org/abs/2608.06398",
+          "pdfUrl": "https://arxiv.org/pdf/2608.06398.pdf",
+          "index": 7,
+          "takeaway": "无分词器模型里，每个字节 patch 的熵就是天然的路由信号——高熵 patch 走强专家，稀疏计算更聪明。",
+          "keyExperiment": "held-out bits-per-byte 低于匹配的稠密与稀疏基线，下游准确率保持可比"
+        },
+        {
+          "title": "Is SwiGLU's Open Positive Tail Necessary? Evidence from Closed-Tail Gating with MemGLU",
+          "score": 3.8,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-10",
+          "authors": "Yuting Ge, Pengju Yang, Mingkai Nie",
+          "institutions": "机构未标注",
+          "abstract": "本文检验 decoder-only 语言模型 FFN 是否真的需要 SwiGLU 的开放正尾（open positive tail）。作者提出 MemGLU，一种源自忆阻器分支几何的闭尾（closed-tail）对照门控。在 9M 与 30M 两种规模、三个种子的配对预训练中，MemGLU 的验证 NLL 与 SwiGLU 相差约 0.1% 以内。已训练的 SwiGLU 检查点对正尾抑制高度敏感，而机制诊断显示两个模型在损失相近的情况下使用门控的方式不同。这些结果说明，模型会适应预训练时可获得的门控几何；在所测规模下，SwiGLU 的开放正尾对 decoder-only 语言模型 FFN 并非必需。",
+          "contributions": [
+            "提出闭尾门控 MemGLU 作为 SwiGLU 开放正尾的对照架构",
+            "系统对比 9M/30M 规模、3 个种子的配对预训练，验证 NLL 差异仅约 0.1%",
+            "机制诊断揭示损失相近下门控使用方式的差异，支持模型适应门控几何假说"
+          ],
+          "conclusions": [
+            "在所测规模下，SwiGLU 的开放正尾并非 decoder-only FFN 的必要组件",
+            "模型会适应预训练可得的门控几何，闭尾门控可达到同等验证损失"
+          ],
+          "experiments": [
+            "9M 与 30M 规模、3 个种子的配对预训练，MemGLU 与 SwiGLU 验证 NLL 相差约 0.1%",
+            "SwiGLU 检查点对正尾抑制敏感，MemGLU 不敏感",
+            "两模型门控使用方式不同但损失相近"
+          ],
+          "significance": "对 SwiGLU 激活几何的标准答案提出反例，提示门控形态是适应性的而非硬性要求，为硬件友好激活设计留出空间。",
+          "arxivUrl": "https://arxiv.org/abs/2608.07323",
+          "pdfUrl": "https://arxiv.org/pdf/2608.07323.pdf",
+          "index": 8,
+          "takeaway": "模型会迁就门控的形状——扔掉 SwiGLU 的开放正尾，验证损失几乎不变，说明它不是 FFN 的必需品。",
+          "keyExperiment": "9M/30M×3 种子配对预训练中，闭尾 MemGLU 与 SwiGLU 验证 NLL 差距仅约 0.1%"
+        },
+        {
+          "title": "AutoPrune: An AI4AI Framework for Visual Token Pruning",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-10",
+          "authors": "Zhen Liu, Wenli Huang, Wei Song, Yuhan Liu, Zhiqin Yang, Jingwen Fu",
+          "institutions": "机构未标注",
+          "abstract": "视觉 token 剪枝可大幅降低多模态大语言模型（MLLM）的推理成本，但现有方法多依赖固定的人工启发式与昂贵的专家试错。随着剪枝目标、预算与模型架构多样化，人工遍历不断扩张的设计空间越发困难。本文提出 AutoPrune，一个免训练的 LLM 驱动视觉 token 剪枝策略设计框架，回答 LLM 能否自动设计有效的视觉 token 缩减算法。关键洞察是设计合适的搜索状态表示，把 LLM 的内部知识与视觉 token 剪枝的结构需求和约束连接起来。AutoPrune 引入 Token Pruning DSL（TPDSL），包含 131 个可复用原子（预算控制、token 打分、选择约束、token 重组），并将每个搜索状态表示为强基线的残差修改——这种残差公式收窄搜索空间，把 LLM 的注意力引向对性能最关键的策略组件。在 14 个多模态基准与 3 个 MLLM 骨干上的实验验证了其有效性、效率与可迁移性：即使移除 94.4% 的视觉 token，AutoPrune 仍保留全 token 性能的 99% 以上，同时 FLOPs 降低 9.9 倍、prefill 延迟降低 6.4 倍。",
+          "contributions": [
+            "提出免训练的 LLM 驱动剪枝策略设计框架 AutoPrune，让 LLM 自动生成视觉 token 缩减算法",
+            "设计含 131 个可复用原子的 Token Pruning DSL，并以残差修改形式压缩搜索空间",
+            "14 个多模态基准、3 个 MLLM 骨干上验证有效、高效且可迁移"
+          ],
+          "conclusions": [
+            "以强基线残差形式表示搜索状态，是让 LLM 生成有效专用算法的关键",
+            "LLM 自动设计的剪枝策略可接近甚至超越人工启发式，且跨骨干迁移"
+          ],
+          "experiments": [
+            "移除 94.4% 视觉 token 时仍保留全 token 性能的 99% 以上",
+            "FLOPs 降低 9.9 倍、prefill 延迟降低 6.4 倍",
+            "在 14 个多模态基准与 3 个 MLLM 骨干上验证有效性与可迁移性"
+          ],
+          "significance": "用 AI 设计 AI 的推理优化：LLM 写剪枝策略，DSL+残差搜索让自动化设计首次实用化。",
+          "arxivUrl": "https://arxiv.org/abs/2608.07193",
+          "pdfUrl": "https://arxiv.org/pdf/2608.07193.pdf",
+          "index": 9,
+          "takeaway": "让 LLM 自己写视觉 token 剪枝算法：配 DSL 原子 + 以强基线为残差起点，剪掉 94% token 仍保住 99% 性能。",
+          "keyExperiment": "移除 94.4% 视觉 token 保留 99%+ 全 token 性能，FLOPs 降 9.9 倍、prefill 延迟降 6.4 倍"
+        }
+      ]
+    }
+  ]
+}
