@@ -1,0 +1,314 @@
+{
+  "date": "2026-08-12",
+  "title": "2026-08-12 论文精选",
+  "lede": "今日关注：MoE 架构-系统协同缩放、agentic RL 训练调度、测试时扩展检索增强、离散扩散增广与长上下文架构陷阱。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 225
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Compute-Optimal Is Not Cluster-Optimal: Systems-Aware Scaling for Sparse Mixture-of-Experts",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-12",
+          "authors": "Soumajyoti Sarkar, Yuxin Tang, Sheng Zha",
+          "institutions": "AWS AI Labs",
+          "abstract": "大规模预训练中，算法、架构与系统决策通常是脱节分阶段做出的：先由缩放定律在给定算力下选架构与训练配方，再由系统阶段优化硬件实现效率。本文提出 MOSAIC 框架，将模型架构与系统协同设计形式化为一个优化问题：把预测性缩放定律与经过校准的性能模型（估算 MFU、通信开销、显存占用与最优并行布局）耦合起来，并针对稀疏 MoE 语言模型实例化。作者在文本数据上拟合了以稀疏因子（每 token 前向中失活参数占比）为缩放维度的 MoE 缩放定律，扫描范围覆盖 1.04 亿至 27 亿激活参数、总参数量最高达 790 亿。结果表明：在纯模型 FLOPs 预算下不存在内部最优稀疏度，损失随模型越稀疏单调下降，计算最优落在支撑集上界；只有在加入集群系统约束后，MoE 的最优稀疏度才会真正涌现。",
+          "contributions": [
+            "提出 MOSAIC，将架构与系统协同设计统一为一个优化问题，耦合缩放定律与性能模型",
+            "在稀疏 MoE 上拟合包含稀疏因子的缩放定律，扫描最高 790 亿总参数的模型",
+            "论证纯 FLOPs 视角下无内部最优稀疏度，系统约束才是最优稀疏度涌现的来源"
+          ],
+          "conclusions": [
+            "效率无关的模型 FLOPs 预算下，稀疏 MoE 不存在内部最优稀疏度",
+            "MoE 的最优稀疏度由集群系统约束决定，需要一个统一的架构-系统协同设计范式"
+          ],
+          "experiments": [
+            "缩放律扫描覆盖激活参数 104M–2.7B，总参数最高 79B",
+            "在标定的稀疏度范围内，损失随模型变稀疏单调下降",
+            "计算最优位于数据支撑集的上边界"
+          ],
+          "significance": "将缩放定律与集群硬件性能模型耦合，证明了前沿模型训练需要架构\\-系统协同设计的新范式。",
+          "arxivUrl": "https://arxiv.org/abs/2608.10605",
+          "pdfUrl": "https://arxiv.org/pdf/2608.10605.pdf",
+          "index": 1,
+          "takeaway": "纯计算最优（compute-optimal）并不等于集群最优（cluster-optimal）：MoE 最优稀疏度只会在系统约束下涌现。",
+          "keyExperiment": "在纯 FLOPs 预算下无内部最优稀疏度，计算最优落在稀疏度支撑集上界，集群约束引入后最优稀疏度才出现。"
+        },
+        {
+          "title": "TideRL: Boosting Agentic RL Goodput with Readiness-Aware Scheduling",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-12",
+          "authors": "Yanyu Ren, Xizheng Wang, Xiao Liu, Bowen Lv, Hanchen Zhang, Shudan Zhang, Hanyu Lai, Shuai Wang, Li Chen, Dan Li, Jie Tang",
+          "institutions": "Tsinghua University, Zhipu AI",
+          "abstract": "大模型强化学习正转向多轮 agentic 工作负载：rollout 任务反复因外部环境而暂停、以不断增长的上下文恢复、完成时间差异极大。此时 RL 训练 goodput（训练吞吐）比裸 GPU 占用率更重要——GPU 等待与重复的 prefill 重算都是纯开销。本文提出 TideRL，一个就绪感知的弹性 RL 系统，包含三大组件：连续任务批处理（CTB）保留有效 rollout 状态；资源感知的 Ref-Actor 流水线（RA2P）根据就绪积压与到达间隔在解耦流式与同址聚合间选择；弹性资源伸缩（ERS）用同一套就绪信号在 rollout 与训练之间移动 rank。在纯文本与多模态 agentic 负载上，TideRL 相对同步基线提升 RL 训练 goodput 最高 5.6 倍、相对异步基线提升超 33%，同时任务性能相当；KV cache 命中率提升 1.58 倍，单步训练时间最多降低 44.3%，总等待时间最多削减 77.6%。",
+          "contributions": [
+            "提出就绪感知的弹性 RL 训练系统 TideRL，用就绪信号统一调度 rollout 与训练",
+            "三大组件：连续任务批处理、资源感知 Ref-Actor 流水线、弹性资源伸缩",
+            "专门面向多轮 agentic 工作负载，聚焦 goodput 而非裸 GPU 占用率"
+          ],
+          "conclusions": [
+            "agentic RL 中 GPU 等待与 prefill 重算是主要开销，goodput 比占用率更重要",
+            "就绪信号可同时驱动批处理、流水线与资源伸缩，实现端到端优化"
+          ],
+          "experiments": [
+            "相对同步基线 goodput 最高提升 5.6×，相对异步基线提升超 33%",
+            "KV cache 命中率提升 1.58×，单步训练时间最多降 44.3%",
+            "总等待时间最多削减 77.6%，任务性能与基线相当"
+          ],
+          "significance": "面向\\ agentic\\ RL\\ 的弹性调度系统，把等待和重算转化为有效训练吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2608.10402",
+          "pdfUrl": "https://arxiv.org/pdf/2608.10402.pdf",
+          "index": 2,
+          "takeaway": "用就绪信号统一调度 rollout 与训练，让 GPU 少等、少重算，agentic RL 训练吞吐提升最高 5.6 倍。",
+          "keyExperiment": "在多模态 agentic 负载上相对同步基线 goodput 提升 5.6×，KV cache 命中率提升 1.58×。"
+        },
+        {
+          "title": "ReRound: Reconstructive Rounding to Resolve Midpoint Ambiguity in Calibration-Free LLM Quantization",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-12",
+          "authors": "He-Yen Hsieh, H. T. Kung",
+          "institutions": "Harvard University",
+          "abstract": "ReRound 是一种后训练量化方法，针对标准最近舍入（RTN）方案在量化区间中心附近的权重时固有的中点歧义问题。它从一个预训练 LLM 出发，训练条件扩散模型为低比特权重生成连续重构，这些重构权重作为引导信号，用于消解靠近区间中点的权重的舍入方向。为将重构引导舍入与常规 RTN 集成，ReRound 引入容差指标，度量量化权重（而非最终量化整数）距中点的距离：中点容差区域内的权重用基于扩散的重构来量化，更靠近量化边界的权重则用 RTN。通过扫描容差参数生成多个候选量化整数矩阵，选择去量化后前导奇异值与全精度权重最接近的候选，从而确定所用容差。ReRound 对小 LLM 尤其有效：在 3-bit 与 4-bit 权重量化上一致优于标准 RTN，准确率超过大量免校准方法，与依赖校准的方法竞争力相当；完全离线运行，低比特推理零额外开销。",
+          "contributions": [
+            "用条件扩散模型生成低比特权重重构，作为中点歧义的舍入方向引导信号",
+            "引入容差指标在重构引导舍入与 RTN 之间做自适应切换",
+            "用前导奇异值匹配自动选择容差参数，全离线、推理零开销"
+          ],
+          "conclusions": [
+            "RTN 的中点歧义可被扩散重构引导有效消解，尤其在小 LLM 上收益明显",
+            "免校准方法在 3/4-bit 权重量化上可达到接近依赖校准方法的准确率"
+          ],
+          "experiments": [
+            "3-bit 与 4-bit 权重量化上一致优于标准 RTN",
+            "准确率优于大量免校准方法，与校准依赖方法竞争力相当",
+            "小模型上优势最明显，推理阶段无额外开销"
+          ],
+          "significance": "把扩散模型用作量化舍入的引导信号，为低比特\\ LLM\\ 量化提供免校准的新思路。",
+          "arxivUrl": "https://arxiv.org/abs/2608.11045",
+          "pdfUrl": "https://arxiv.org/pdf/2608.11045.pdf",
+          "index": 3,
+          "takeaway": "用扩散重构消解权重舍入的中点歧义，小模型 3/4-bit 量化免校准且推理零开销。",
+          "keyExperiment": "3-bit 与 4-bit 权重量化一致优于标准 RTN，且准确率与依赖校准的方法相当。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "ThinkRetrieve: Retrieval-Augmented Reasoning Traces for Test-Time Scaling",
+          "score": 4.8,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-12",
+          "authors": "Vaibhav Singh, Soumya Suvra Ghosal, Sarvesh Gharat, Soumyabrata Pal, Ramasuri Narayanam, Dinesh Manocha",
+          "institutions": "University of Maryland, Adobe Research, USC",
+          "abstract": "大型推理模型（LRM）通过分配更多推理期算力生成长思维链来提升性能，但近期研究显示顺序式测试时扩展常出现边际递减甚至负收益：更长的轨迹伴随更高不确定性、错误累积与偏离原问题。本文提出 ThinkRetrieve，一个测试时扩展框架，在每个推理步骤用动态检索到的已解例题增强 LRM 的推理轨迹。给定一个带逐步解答的外部题库，ThinkRetrieve 在每一步中间步骤检索相关示例并直接注入思维轨迹，教模型如何推理而非仅仅哪些事实相关。在 5 个推理模型（1.5B–8B 参数）上的 GSM-8K、MATH-500、AIME 2025 与 SciQ 实验表明，ThinkRetrieve 一致优于标准测试时扩展，在 AIME 2025 上相对增益最高达 60%。",
+          "contributions": [
+            "提出按步注入检索示例的测试时扩展框架，教模型如何推理而非给什么事实",
+            "每个中间推理步骤动态检索外部题库中的已解例题并注入思维轨迹",
+            "在 5 个推理模型和 4 个基准上验证一致增益"
+          ],
+          "conclusions": [
+            "检索增强的推理轨迹可缓解顺序式扩展的收益递减与错误累积",
+            "引导推理方式（how）比仅提供相关知识（what）更有效"
+          ],
+          "experiments": [
+            "AIME 2025 相对标准测试时扩展增益最高 60%",
+            "GSM-8K、MATH-500、SciQ 上一致优于标准测试时扩展",
+            "覆盖 5 个推理模型，参数规模 1.5B–8B"
+          ],
+          "significance": "把测试时扩展从更多算力升级为更聪明的算力——按步检索示例引导推理。",
+          "arxivUrl": "https://arxiv.org/abs/2608.10928",
+          "pdfUrl": "https://arxiv.org/pdf/2608.10928.pdf",
+          "index": 4,
+          "takeaway": "在思维链每一步注入检索到的已解例题，AIME 2025 上比标准测试时扩展提升最多 60%。",
+          "keyExperiment": "AIME 2025 上相对标准测试时扩展提升 60%，五个推理模型上一致更优。"
+        },
+        {
+          "title": "Critic-Free Pretraining for Efficient Online Reinforcement Learning Fine-Tuning",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-12",
+          "authors": "Daoyi Li, Yixian Zhang, Chao Yu, Wenbo Ding, Yu Wang",
+          "institutions": "Tsinghua University, HKUST",
+          "abstract": "离线到在线（O2O）强化学习旨在利用静态数据集预训练的策略，再通过在线交互改进。但直接复用离线训练的 critic 会阻碍在线微调：随着策略与数据分布快速变化，离线继承的价值估计可能与在线环境失配，导致策略改进不准确、探索低效。针对此问题，本文提出无 Critic 预训练（CFP）：完全放弃离线 critic 训练范式，让全新初始化的 critic 不继承有偏估计地自适应。CFP 与多种主流 O2O 算法兼容，在一系列任务上一致持平或优于传统 O2O 算法，在若干困难任务上增益尤为显著。",
+          "contributions": [
+            "提出 CFP 范式：完全放弃离线 critic 训练，避免继承有偏价值估计",
+            "与多种主流 O2O 算法兼容，即插即用",
+            "在困难任务上增益尤为显著"
+          ],
+          "conclusions": [
+            "离线 critic 的偏置估计是 O2O 微调的主要障碍，弃用比复用更高效",
+            "全新初始化的 critic 能随在线分布自适应，训练更省更稳"
+          ],
+          "experiments": [
+            "跨多样化任务一致持平或优于传统 O2O 算法",
+            "在若干挑战性任务上增益尤为明显",
+            "兼容多种主流 O2O 算法"
+          ],
+          "significance": "颠覆性地证明：O2O\\ RL\\ 中扔掉离线\\ critic\\ 往往比继承它更好。",
+          "arxivUrl": "https://arxiv.org/abs/2608.10473",
+          "pdfUrl": "https://arxiv.org/pdf/2608.10473.pdf",
+          "index": 5,
+          "takeaway": "跳过离线 critic 训练、让 critic 从零自适应，O2O 微调更高效且更难任务上提升明显。",
+          "keyExperiment": "跨多样化任务一致持平或优于传统 O2O 算法，挑战性任务上增益最显著。"
+        },
+        {
+          "title": "Why Does CLAUDE.md Keep Growing? Catastrophic Remembering in Agentic Coding",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-12",
+          "authors": "Kushal Chakrabarti",
+          "institutions": "机构未标注",
+          "abstract": "Agentic 编程的提示文件（如 CLAUDE.md）在真实仓库中无限增长，只有在仓库退役或有人整文件重写时才停止。作者将其归因于不完美记忆：追加一条指令总是廉价，但一旦指令的 rationale 丢失，删除它而不冒正确性回归风险的成本是 O(2^|D|)（|D| 条指令的提示）。作者将这种发散命名为灾难性记住（catastrophic remembering），是持续学习所围绕的灾难性遗忘的镜像。他们先在 1,867 个仓库的 247,694 条指令生命周期中刻画该现象：agentic 提示无界增长，平均生命周期内增长超两倍（+226%），每次提交净增 4.9 条指令；指令越老越不可能被删除（log-hazard -0.032/提交）。随后证明提示注释可以阻止增长：将 IFEval 反演得到可验证世界，其最优提示已知，注释编码潜在推理后冗余指令减少 99.3%（+211.3% 降到 +1.4%）。将该反演用于 WildIFEval，提示注释可让真实 agentic 指令遵循最多提升 23.1%。",
+          "contributions": [
+            "提出灾难性记住概念，与持续学习中的灾难性遗忘相对",
+            "在 1,867 个仓库、247,694 条指令生命周期上大规模刻画提示无界增长",
+            "证明提示注释可移除 99.3% 冗余指令并提升真实指令遵循 23.1%"
+          ],
+          "conclusions": [
+            "追加廉价、删除昂贵的不对称性导致 agentic 提示无界增长",
+            "编码潜在推理的注释是阻止提示膨胀的有效手段"
+          ],
+          "experiments": [
+            "提示平均增长 +226%，每次提交净增 4.9 条指令，删除 hazard 随年龄下降（-0.032/提交）",
+            "注释将冗余指令减少 99.3%（+211.3% → +1.4%）",
+            "真实 agentic 指令遵循最多提升 23.1%"
+          ],
+          "significance": "把\\ agentic\\ 编码中提示无限膨胀命名为灾难性记住，并给出以注释治膨胀的实证方案。",
+          "arxivUrl": "https://arxiv.org/abs/2608.11095",
+          "pdfUrl": "https://arxiv.org/pdf/2608.11095.pdf",
+          "index": 6,
+          "takeaway": "CLAUDE.md 无限增长源于追加廉价、删除昂贵的不对称，注释可以把冗余指令压掉 99.3%。",
+          "keyExperiment": "在 1,867 个仓库发现提示平均增长 +226%，加注释后冗余指令减少 99.3%。"
+        },
+        {
+          "title": "Simplex Relaxation for Discrete Diffusion",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-12",
+          "authors": "Jinya Sakurai, Patrick Pynadath, Satoshi Hayakawa, Jaehong Yoon, Xulei Yang, Nancy F. Chen, Xun Xu",
+          "institutions": "A*STAR, I2R, University of Illinois Chicago",
+          "abstract": "用于类别生成的离散扩散模型由损坏核定义，损坏核决定中间状态空间与相应的反向预测问题。本文研究均匀离散扩散，并追问能否在不改变底层类别损坏过程的前提下丰富其训练目标与反向转移。作者提出 Simplax，一种精确的 Dirichlet–类别（Dirichlet–categorical）增广：将每个被损坏的类别状态与一个辅助单纯形值变量耦合，同时保持原始均匀扩散过程作为其类别边际。该增广导出可处理的 Rao–Blackwellized 反向桥目标与对应的随机反向采样器，同时保留被损坏的类别状态作为去噪器输入。实验上，Simplax 在无条件 OpenWebText 生成上改善了生成困惑度-熵权衡；在数独任务上，仅用 30 线索谜题训练的模型在所有评估线索密度下达到最高准确率，包括最小可唯一求解的 17 线索区间，并在无条件生成中取得最高有效性。",
+          "contributions": [
+            "提出 Simplax：Dirichlet–类别精确增广，不改变底层离散扩散过程",
+            "导出可处理的 Rao–Blackwellized 反向桥目标与随机反向采样器",
+            "在文本与组合生成（数独）上验证"
+          ],
+          "conclusions": [
+            "增广单纯形变量可在不换损坏过程的前提下丰富均匀离散扩散的训练目标",
+            "反向桥目标改善生成困惑度-熵权衡，数独上跨线索密度泛化"
+          ],
+          "experiments": [
+            "OpenWebText 无条件生成上困惑度-熵权衡改善",
+            "仅用 30 线索训练的数独模型在 17 线索（最小唯一解）区间仍达最高准确率",
+            "数独无条件生成有效性最高"
+          ],
+          "significance": "为均匀离散扩散补充一个精确的连续增广，让训练更充分、生成更稳。",
+          "arxivUrl": "https://arxiv.org/abs/2608.10615",
+          "pdfUrl": "https://arxiv.org/pdf/2608.10615.pdf",
+          "index": 7,
+          "takeaway": "给离散扩散加一个 Dirichlet–类别增广变量，30 线索训练的数独模型在 17 线索也能最优。",
+          "keyExperiment": "仅用 30 线索训练的数独模型在 17 线索区间达到最高准确率，无条件生成有效性最高。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "Share First, Route What Remains: A Unified Framework for Token-Adaptive MoE Computation",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-12",
+          "authors": "Gongli Zhang, Zhulin Liu, C. L. Philip Chen",
+          "institutions": "University of Macau, South China University of Technology",
+          "abstract": "MoE 模型已超越固定路由完整专家数目的范式：共享专家设计保留可复用知识，细粒度方法在专家内部变化计算量，动态路由器自适应激活专家数。但这些决策通常独立做出，忽略了一个基本依赖：抽取可复用计算会同时改变剩余部分及其所需的专家容量。作者通过将稀疏上循环的前馈专家分解为键值通道来研究该依赖：共激活专家在部分值位置上对齐，移除这些位置会改变专家偏好，共享覆盖越大则残余专家需求越低。这些观察引出一个原则：先共享，再路由剩余。作者将其实例化为 UniF-MoE，一个 token 自适应的 MoE 计算统一框架：每个专家划分为对齐块，共享需求分数决定共享块数量与路径权重，键原型选择共享内容，互补需求通过累积路由质量决定残余专家数；Gram 正则化分离并归一化路由嵌入，促进多元路由方向、稀疏专家重叠与简单路由几何。在 DomainBed 与 GLUE 上，该统一设计相比代表性的静态与动态 MoE 提升预测性能，同时降低激活计算量、推理延迟与内存。",
+          "contributions": [
+            "提出先共享再路由剩余的 MoE 计算统一原则",
+            "基于键值通道分解揭示共激活专家的对齐结构，共享覆盖与残余专家需求负相关",
+            "Gram 正则化促进路由方向多样性与稀疏专家重叠"
+          ],
+          "conclusions": [
+            "抽取可复用计算会改变剩余部分的专家容量需求，共享与路由必须联合决策",
+            "统一设计在提升精度同时降低激活计算、延迟与内存"
+          ],
+          "experiments": [
+            "DomainBed 与 GLUE 上优于代表性静态与动态 MoE",
+            "激活计算量、推理延迟与内存同步降低",
+            "路由几何更简单、专家重叠更稀疏"
+          ],
+          "significance": "把\\ MoE\\ 的共享\\-路由决策统一进一个\\ token\\ 自适应框架，精度提升且计算更省。",
+          "arxivUrl": "https://arxiv.org/abs/2608.10392",
+          "pdfUrl": "https://arxiv.org/pdf/2608.10392.pdf",
+          "index": 8,
+          "takeaway": "先共享可复用计算、再路由剩余需求，MoE 精度提升的同时激活计算、延迟与内存都下降。",
+          "keyExperiment": "DomainBed 与 GLUE 上优于静态与动态 MoE 基线，同时降低激活计算与推理延迟。"
+        },
+        {
+          "title": "Cracks in the Foundation: Seemingly Minor Architectural Choices Impact Long Context Extension",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-12",
+          "authors": "Amanda Bertsch, Luca Soldaini, Matthew R. Gormley, Graham Neubig, Hannaneh Hajishirzi, Kyle Lo, Dirk Groeneveld",
+          "institutions": "CMU, Allen Institute for AI (AI2)",
+          "abstract": "人们可能认为稠密 Transformer 范式内的架构差异对精度影响有限，但本文证明在长上下文场景并非如此。作者展示一组四个次要架构决策——Olmo、Llama 与 Qwen 稠密模型族中至少一个采用——对长上下文可扩展性具有复合负面效应：单独任选其一影响很小，但组合三个以上可让下游性能下降最多 47%；且这些差异无法从短上下文损失或验证集检测出来。模型族间长上下文能力的很大一部分差异由这些架构特征驱动，并可从预训练早期就应用上下文扩展来检测。作者通过受控消融（固定数据、tokenizer 与扩展配方，只变化归一化、GQA、预训练上下文长度与滑窗注意力）验证，历经超 17 万 GPU 小时训练后发布 OlmPool：26 个可比的 7B 模型，含长上下文扩展前后的检查点，其中若干架构在长上下文可扩展性上优于 Llama 3 架构；消融分析还识别出注意力 sink 行为与跨上下文注意力分布中可归因于特定架构差异的模式。",
+          "contributions": [
+            "系统证明四个次要架构决策对长上下文扩展有复合负面效应",
+            "发布 OlmPool：26 个 7B 模型、超 17 万 GPU 小时训练的受控消融池",
+            "识别注意力 sink 等模式与架构差异的对应关系"
+          ],
+          "conclusions": [
+            "短上下文损失无法预测长上下文能力，架构选择需在预训练早期验证",
+            "组合三个以上不利架构决策可致下游性能下降 47%"
+          ],
+          "experiments": [
+            "组合 3 个以上不利架构选择使长上下文下游性能下降最多 47%",
+            "OlmPool 含 26 个可比 7B 模型，若干架构优于 Llama 3 架构",
+            "训练总耗时超 170,000 GPU 小时"
+          ],
+          "significance": "用\\ 26\\ 个受控\\ 7B\\ 模型证明：看似微小的架构选择决定长上下文成败。",
+          "arxivUrl": "https://arxiv.org/abs/2608.10296",
+          "pdfUrl": "https://arxiv.org/pdf/2608.10296.pdf",
+          "index": 9,
+          "takeaway": "四个小架构选择单独无害、组合致命——长上下文性能最多掉 47%，且短上下文损失完全看不出来。",
+          "keyExperiment": "组合三个以上不利架构选择使长上下文下游性能下降最多 47%，OlmPool 开源 26 个 7B 受控模型。"
+        }
+      ]
+    }
+  ]
+}
