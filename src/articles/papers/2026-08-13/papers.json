@@ -1,0 +1,313 @@
+{
+  "date": "2026-08-13",
+  "title": "2026-08-13 论文精选",
+  "lede": "今日关注：混合线性注意力 LLM 的缓存与激活分析、扩散模型并行解码加速、信息丰裕悖论与模拟器坍缩、混合门控注意力与 agent 安全网络化。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 231
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "LinearKV: One Cached State Suffices for Position-Independent Caching in Hybrid LLMs",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-13",
+          "authors": "Yirui Liu, Ruoling Qi, Longwen Wang, Xuaner Wu, Jian Chen, Yuxin Jin, Jiawei Shao, Xuelong Li",
+          "institutions": "机构未标注",
+          "abstract": "LLM 推理服务正越来越多地受益于位置无关缓存（PIC），但现有 PIC 方法都是为全注意力模型设计的：其核心操作依赖按 token 索引的 KV 缓存——匹配可复用 token 块、拼接其 KV 项、选择性重算少量 token 以恢复跨块上下文。混合 LLM 打破了这些原语：它们用线性递归层替换了大部分注意力层，只暴露固定大小的状态，没有可拼接或局部修复的 token 索引 KV。本文提出 LinearKV——一个免训练的混合 PIC 框架，核心洞见是“解耦初始化”：每个线性层把匹配到的 K 个局部状态映射为单个初始状态，而全注意力层照旧拼接 KV，因此可与现有 PIC 方法无缝兼容并复用其 token 选择与重算逻辑。作者发现单个缓存状态即可充当线性层初始化器；而代数上严格的替代方案——把全部 K 个缓存状态组合成精确全前缀状态（并发工作 HYPIC 的做法）——不仅不必要，在某些架构上甚至有害。",
+          "contributions": [
+            "提出 LinearKV，首个面向混合 LLM 的免训练位置无关缓存框架，将线性和注意力层的缓存处理解耦",
+            "发现单个缓存状态足以初始化线性层，证明精确组合全部缓存状态（HYPIC 方案）不必要甚至有害",
+            "兼容现有 PIC 方法的 token 选择与重算逻辑，可作为即插即用的混合模型缓存扩展"
+          ],
+          "conclusions": [
+            "混合 LLM 上 PIC 完全可行，线性层的固定大小状态天然适配基于初始状态的缓存",
+            "缓存状态组合的精度与收益并不单调：简单初始化在部分架构上优于精确组合"
+          ],
+          "experiments": [
+            "在三个混合模型与三种 PIC 选择器上对比 LinearKV 与 HYPIC 式精确组合",
+            "两个 GDN 模型上两者打平，都能恢复全质量的最多 92%",
+            "在 Mamba-2 模型上，精确组合反而有害，印证单个缓存状态已足够"
+          ],
+          "significance": "为混合线性注意力 LLM 提供了实用的推理缓存方案，降低其部署成本。",
+          "arxivUrl": "https://arxiv.org/abs/2608.11231",
+          "pdfUrl": "https://arxiv.org/pdf/2608.11231.pdf",
+          "index": 1,
+          "takeaway": "混合 LLM 做位置无关缓存只需一个缓存状态，无需精确组合多个状态。",
+          "keyExperiment": "在 Mamba-2 模型上，精确组合全部 K 个缓存状态反而降低质量，单个缓存状态即达到最优。"
+        },
+        {
+          "title": "Massive Activations in Hybrid Linear Attention Large Language Models: Pre-Attention Spikes and Inter-Spike Plateaus",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-13",
+          "authors": "Zunhai Su, Bohan Sun, Xialie Zhuang, Shuibai Zhang, He Xiao, Jing Xiong, Hengyuan Zhang, Zhongzhu Zhou, Tiantian Zhang, Ngai Wong, Chuan-Wei Kuo",
+          "institutions": "机构未标注",
+          "abstract": "本文首次系统研究层间混合线性注意力 LLM 中的巨量激活（Massive Activations, MA），发现两种与架构对齐的形态：MA 始终在全注意力层之前立即尖峰化，形成“注意力前尖峰”（PAS）；并可跨越中间线性注意力层持续存在，形成“尖峰间平台”（ISP）。随着全注意力层变密，相邻 PAS 通过 ISP 越来越连通，最终恢复全注意力 LLM 的稳定 MA 形态。作者在五种线性注意力架构、六种混合配置、五个数据域以及 1.2B 到 397B 参数的开源混合模型上反复验证了这一组织规律。基于 GDN 的混合模型受控预训练（最高 1.3B）表明两种形态早期就会出现，且对输出门控响应不对称：全注意力输出门控强烈衰减其绝对幅值而不消除逐层组织，移除 GDN 门控则只带来相对温和的放大。机制层面，系统化离群点分析支持由 MA 消除时序支配的共享生命周期解释：PAS 遵循局部的“写入-汇合-消除”过程，ISP 的持久性则与延迟消除一致。",
+          "contributions": [
+            "首次系统刻画混合线性注意力 LLM 的巨量激活，发现 PAS 与 ISP 两种架构对齐形态",
+            "在 1.2B 到 397B 的广泛模型规模与多种混合配置上验证形态普适性",
+            "提出由 MA 消除时序支配的统一生命周期解释，衔接混合与全注意力模型的行为"
+          ],
+          "conclusions": [
+            "巨量激活的分布严格跟随层间混合结构：全注意力层前尖峰、线性层间平台化",
+            "输出门控是调节 MA 幅值的有效手段，但不改变其逐层组织"
+          ],
+          "experiments": [
+            "覆盖五种线性注意力架构与六种混合配置，横跨五个数据域",
+            "受控预训练显示两种形态在训练早期即出现，且对输出门控不对称响应",
+            "全注意力输出门控大幅衰减 MA 幅值，移除 GDN 门控仅带来温和放大"
+          ],
+          "significance": "为量化、稀疏化与推理优化提供混合注意力模型巨量激活的分布地图。",
+          "arxivUrl": "https://arxiv.org/abs/2608.12149",
+          "pdfUrl": "https://arxiv.org/pdf/2608.12149.pdf",
+          "index": 2,
+          "takeaway": "混合线性注意力 LLM 的巨量激活集中在全注意力层前，且可跨线性层形成平台。",
+          "keyExperiment": "在 1.3B GDN 混合模型受控预训练中，全注意力输出门控大幅衰减 MA 幅值但不消除逐层组织。"
+        },
+        {
+          "title": "Total Recall at What Cost? Benchmarking the Serving Cost of Agentic Memory Systems",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-13",
+          "authors": "Natchanon Pollertlam, Witchayut Kornsuwannawit",
+          "institutions": "机构未标注",
+          "abstract": "长对话智能体越来越依赖记忆系统来避免每轮重发整个对话，但其服务成本很少被系统化评测。本文在两种骨干模型与最长 400 轮对话上，将三个记忆系统（Mem0、Hindsight、Mastra Observational Memory）与两个参考策略（固定大小滚动窗口、重发完整对话）对比，并用 665 个 LoCoMo 问题把每次成本测量与答案准确率配对。三个主要发现：其一，记忆系统的服务成本无法仅由对话长度和消息大小预测——贴合两个参考策略的回归模型对记忆系统偏差达 18-69%，成本实际由系统内部记忆行为驱动。其二，盈亏平衡分析显示，记忆系统何时比完整对话更省钱高度依赖系统与骨干模型：最便宜的系统几十轮内即可回本，最贵的系统 400 轮内永远无法回本。其三，没有任何系统能在两个维度同时胜出：准确率区间为 21-54%，且骨干模型的选择对成本的影响与记忆系统本身一样大。",
+          "contributions": [
+            "首个系统化评测 agentic 记忆系统服务成本的基准研究，覆盖三种主流系统与 665 个 LoCoMo 问题",
+            "证明记忆系统成本无法由对话长度与消息大小预测，回归模型偏差 18-69%",
+            "提供盈亏平衡分析：记忆系统是否比重发完整对话更省钱取决于系统与骨干模型的组合"
+          ],
+          "conclusions": [
+            "记忆系统的服务成本由内部记忆行为主导，与对话长度相关性弱",
+            "没有任何记忆系统同时在成本与准确率上胜出，选择需按场景权衡"
+          ],
+          "experiments": [
+            "最便宜的记忆系统数十轮内即比完整对话更省钱，最贵的 400 轮内无法回本",
+            "三个记忆系统准确率区间 21-54%，与骨干模型选择共同决定性价比",
+            "成本驱动的回归模型对记忆系统偏差 18-69%，证明线性预测失效"
+          ],
+          "significance": "为 agentic 记忆系统的选型提供首个成本-质量量化依据。",
+          "arxivUrl": "https://arxiv.org/abs/2608.11879",
+          "pdfUrl": "https://arxiv.org/pdf/2608.11879.pdf",
+          "index": 3,
+          "takeaway": "agentic 记忆系统的服务成本由内部记忆行为决定，且成本与准确率无法兼得。",
+          "keyExperiment": "最贵的记忆系统在 400 轮对话内永远比重发完整对话便宜不了，最便宜的则在几十轮内回本。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Information Abundance Paradox: Long-Context Training Undermines Parametric Knowledge",
+          "score": 4.7,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-13",
+          "authors": "Arda Uzunoglu, Benjamin van Durme, Daniel Khashabi",
+          "institutions": "Johns Hopkins University",
+          "abstract": "大语言模型越来越多地用覆盖文档、代码仓库与交互历史的长上下文进行训练和部署。这种扩展隐含一个假设：在更长上下文中训练只会让模型接触更丰富的证据、只会有益。本文挑战这一观点，研究上下文窗口如何塑造模型的学习模式，使其在参数内化与上下文化之间切换。作者提出“信息丰裕悖论”：训练上下文中丰富的相关信息会降低模型参数化编码该信息的动机，从而增加对上下文的依赖。在长文档预训练中，增大上下文窗口对语言建模、自然语言理解与闭卷多项选择问答的提升只在中间最优点之前有效，之后性能持续下降。在监督微调中，更多任务相关训练上下文在有支撑上下文时提升性能，但在测试时上下文缺失或误导时降低鲁棒性。机制上，信息丰富的上下文把梯度压力从前馈网络（通常关联参数知识）转向注意力模块，因果干预证明这种转移增加了推理时对上下文的依赖。",
+          "contributions": [
+            "提出信息丰裕悖论：丰富上下文降低参数编码动机，是长上下文训练的隐形成本",
+            "实证表明预训练上下文窗口超过中间最优点后，多项能力持续下滑",
+            "机制归因：信息丰富的上下文把梯度压力从 FFN 转向注意力模块"
+          ],
+          "conclusions": [
+            "长上下文训练存在收益拐点，之后损害参数知识内化",
+            "训练时上下文越丰富，测试时缺上下文或上下文误导时的鲁棒性越差"
+          ],
+          "experiments": [
+            "长文档预训练中 LM、NLU 与闭卷 MCQA 性能在中间上下文长度达峰后持续下降",
+            "因果干预显示训练上下文信息量增加会把推理依赖从参数转向上下文",
+            "微调时更多任务相关上下文提升带支撑场景性能，但降低无支撑/误导场景鲁棒性"
+          ],
+          "significance": "提醒社区重新审视“上下文越长越好”的训练假设，为上下文与参数知识的权衡提供理论框架。",
+          "arxivUrl": "https://arxiv.org/abs/2608.12218",
+          "pdfUrl": "https://arxiv.org/pdf/2608.12218.pdf",
+          "index": 4,
+          "takeaway": "训练上下文越丰富，模型越依赖上下文而越少内化参数知识。",
+          "keyExperiment": "长文档预训练中，闭卷 MCQA 性能随上下文窗口增大而先升后降，存在明确最优窗口。"
+        },
+        {
+          "title": "One Frozen Simulator Is Not Enough: Simulator Collapse in Multi-Agent RL",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-13",
+          "authors": "Simon Yu, Nicholas Tomlin, Marwa Abdulhai, Ximing Lu, Derek Chong, Abe Hou, Dilara Soylu, Sergey Levine, Christopher D. Manning, Weiyan Shi",
+          "institutions": "Stanford University, UC Berkeley",
+          "abstract": "面向人机交互的多智能体强化学习通常依赖单个大语言模型模拟用户行为。本文证明这种方法系统性泛化失败，并把原因追溯到“模拟器坍缩”：由于模拟器 LLM 模式坍缩，针对它训练的 LLM 策略会过拟合到利用模拟器主导模式的狭窄策略，这类策略泛化到未见过的模拟器与真实用户时表现很差。作者从理论上形式化该坍缩，并提出两种互补方案：推理期的“言语化采样”（Verbalized Sampling）通过从言语化响应分布中采样来拓宽模拟器行为、降低模式坍缩；训练期的“协同训练”（Co-Training）联合优化策略对抗一群可训练模拟器，防止策略过拟合任何单一模拟器的模式。两种方案在三个多轮基准（Persuasion for Good、τ²-bench、CooperBench）上验证：言语化采样比单模拟器 RL 最高提升 9% 的留出成功率，协同训练进一步把增益推到 14%；人类研究在真实用户上显示类似提升，且两种方案都保持了单模拟器 RL 下会坍缩的策略多样性。作者还发布了 SCOPE 开源框架。",
+          "contributions": [
+            "识别并理论形式化多智能体 RL 中的模拟器坍缩问题：单 LLM 模拟器导致策略过拟合与泛化失败",
+            "提出推理期言语化采样与训练期群体协同训练两种互补解决方案",
+            "发布 SCOPE 开源框架，支持群体协同训练多智能体 RL"
+          ],
+          "conclusions": [
+            "固定单一 LLM 模拟器是策略泛化失败的根源，模拟器多样性是关键",
+            "训练期多样化与推理期去坍缩可叠加，且保持策略多样性"
+          ],
+          "experiments": [
+            "言语化采样在留出模拟器上比单模拟器 RL 最高提升 9% 成功率",
+            "协同训练进一步把增益推到 14%，人类研究在真实用户上验证同等增益",
+            "两个方案均保持单模拟器 RL 下会坍缩的策略多样性"
+          ],
+          "significance": "为 agent 训练中模拟器设计确立“多样性优先”原则，直接提升人机交互策略的真实泛化。",
+          "arxivUrl": "https://arxiv.org/abs/2608.12253",
+          "pdfUrl": "https://arxiv.org/pdf/2608.12253.pdf",
+          "index": 5,
+          "takeaway": "单 LLM 模拟器训练会让策略过拟合模拟器主导模式，群体协同训练是解药。",
+          "keyExperiment": "协同训练（Co-Training）在留出模拟器上比单模拟器 RL 提升 14% 成功率，人类研究验证同样增益。"
+        },
+        {
+          "title": "Ripple-Pivot Search: Active Parallel Decoding for Diffusion Large Language Models",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-13",
+          "authors": "Yushi Ye, Xu Chen, Haoyun Jiang, Jinsong Lan, Haihong Tang, Bo Han, Ivor Tsang, Yanfeng Wang, Bo Zheng, Jiangchao Yao",
+          "institutions": "机构未标注",
+          "abstract": "扩散大语言模型（dLLM）正成为自回归模型的有力替代，有机会通过并行解码实现大幅更快的推理。现有并行解码调度器通常只在某位置满足逐位置准则后才提交，忽略了早期提交对后续解码的益处。本文识别出 dLLM 解码中的“涟漪效应”：主动提交一个中等熵的枢轴（pivot）位置，可以显著降低其余掩码位置的不确定性，从而让后续步骤并行解开更多 token，加速整体解码。基于此提出 Ripple-Pivot Search（RPS）——一种免训练解码方法：寻找中等熵位置作为有前景的候选枢轴（在哪解码），并通过前瞻评估决定能带来最大下游收益的 token 分配（解码什么）。在 3 个 dLLM 和 4 个推理与代码生成基准上，RPS 相比标准解码器实现 4-10 倍墙钟加速且保持生成质量，比此前前瞻基线准确率最高提升 5.49%，多数设置下吞吐更高；与 KV 缓存集成后，相比标准解码器最高实现 18 倍墙钟加速。",
+          "contributions": [
+            "识别 dLLM 并行解码的涟漪效应：提交中等熵枢轴可降低全局不确定性",
+            "提出 RPS 免训练解码方法，联合优化枢轴位置选择与 token 分配",
+            "与 KV 缓存集成实现最高 18 倍墙钟加速"
+          ],
+          "conclusions": [
+            "主动提交中等熵位置能级联解锁后续 token，是 dLLM 并行解码的关键杠杆",
+            "前瞻式枢轴与 token 联合选择优于逐位置独立提交"
+          ],
+          "experiments": [
+            "3 个 dLLM、4 个推理与代码生成基准上实现 4-10 倍墙钟加速且质量不变",
+            "相比此前前瞻基线，准确率最高提升 5.49%，多数设置吞吐更高",
+            "集成 KV 缓存后最高实现 18 倍墙钟加速"
+          ],
+          "significance": "把 dLLM 从“有潜力”推向“实际可用”，大幅降低并行解码的推理时延。",
+          "arxivUrl": "https://arxiv.org/abs/2608.11742",
+          "pdfUrl": "https://arxiv.org/pdf/2608.11742.pdf",
+          "index": 6,
+          "takeaway": "先提交一个中等熵枢轴 token 可引发涟漪效应，让扩散模型并行解码快 4-10 倍。",
+          "keyExperiment": "RPS 集成 KV 缓存后相对标准解码器实现最高 18 倍墙钟加速，准确率较前瞻基线提升 5.49%。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Hybrid Gated Attention",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-13",
+          "authors": "Zekun Zhou, Ruobing Xie, Lanrui Wang, Weixuan Sun",
+          "institutions": "机构未标注",
+          "abstract": "门控注意力是缓解注意力汇（attention sink）并增强注意力表征能力的有效手段。为进一步扩展其效果-效率帕累托前沿，本文提出混合门控注意力框架 HyGA，包含三种门控策略。这些门控利用注意力多个阶段的不同信息，协作构建逐元素/逐头的多视角门控，捕捉头内与跨头信息交互。通过混合门控组件，HyGA 提供多源调制信号，实现对信息流更全面的控制，提升注意力表征能力。作者还引入低秩矩阵分解与可学习注意力汇来提升训练效率与稳定性。实验在不同骨干模型的标准基准上评估 HyGA，结果显示相比门控注意力，HyGA 全面改善训练损失与各项下游性能；在不同计算成本下均取得最佳性能，并给出了全面的模型分析。",
+          "contributions": [
+            "提出 HyGA 混合门控注意力框架，用三种门控策略从多阶段提取多源调制信号",
+            "引入低秩矩阵分解与可学习注意力汇提升训练效率与稳定性",
+            "在多种骨干模型与标准基准上验证对门控注意力的全面超越"
+          ],
+          "conclusions": [
+            "多源、多视角的混合门控优于单一门控，能更精细控制信息流",
+            "HyGA 在不同计算成本下均取得最佳效果-效率权衡"
+          ],
+          "experiments": [
+            "多种骨干模型的标准基准上，训练损失与下游性能全面优于门控注意力",
+            "不同计算成本下 HyGA 均取得最佳性能",
+            "提供全面的模型分析验证门控组件的贡献"
+          ],
+          "significance": "为注意力机制提供更高效稳定的门控范式，直接改善 LLM 训练与推理效率。",
+          "arxivUrl": "https://arxiv.org/abs/2608.11805",
+          "pdfUrl": "https://arxiv.org/pdf/2608.11805.pdf",
+          "index": 7,
+          "takeaway": "用多阶段信息构造混合门控，注意力表征更强且训练更稳。",
+          "keyExperiment": "HyGA 在不同计算成本下均优于门控注意力基线，训练损失与下游性能全面改善。"
+        },
+        {
+          "title": "Rethinking Agent Security as a Networking Problem",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.MA",
+          "date": "2026-08-13",
+          "authors": "Van Tran, Taveesh Sharma, Tajveer Singh Dhesi, Nick Feamster",
+          "institutions": "University of Chicago",
+          "abstract": "AI agent 正变得能力更强、部署更广，但其日益增长的自主性也带来显著的隐私与安全风险。现有防御以 agent 为中心：依赖 agent 自身检测威胁并执行隐私与安全策略。这种思路有根本局限——把策略执行托付给 LLM 驱动的 agent，其行为本质非确定且易受提示注入等攻击操纵，因此现有防御无法可靠防止隐私与安全威胁。网络社区长期应对类似挑战，其可借鉴的原则包括：集中控制+分布式执行、基于能力（capability）的敏感资源访问中介、以及零信任的最小权限。这些原则历史上为网络系统提供了强确定性保证，但对 AI agent 而言仅靠这些原则还不够，因为动作的安全性与适当性往往取决于超出静态规则表达力的语义上下文。作者倡导一种系统化的 AI agent 安全方法：将网络的安全原则与自动化推理相结合，以弥合低级策略执行与高级语义理解之间的鸿沟。",
+          "contributions": [
+            "论证 agent-centric 安全范式的根本局限：把策略执行托付给非确定、可被提示注入操纵的 LLM",
+            "系统迁移网络安全的三大原则（集中控制+分布式执行、能力访问、零信任最小权限）到 agent 系统",
+            "指出静态规则不足以覆盖 agent 动作的语义上下文，提出网络原则+自动化推理的结合路径"
+          ],
+          "conclusions": [
+            "agent 安全需要从 agent 内部转向系统边界：由外部基础设施执行策略",
+            "网络社区的安全设计经验可为 agent 安全提供确定性保障基础"
+          ],
+          "experiments": [
+            "以网络安全领域的长期实践（集中控制、能力访问、零信任）为设计论据",
+            "指出基于 static 规则的系统无法覆盖 agent 动作的语义适当性判断"
+          ],
+          "significance": "为 AI agent 安全提供跳出“agent 自治自保”的系统级设计方向。",
+          "arxivUrl": "https://arxiv.org/abs/2608.12172",
+          "pdfUrl": "https://arxiv.org/pdf/2608.12172.pdf",
+          "index": 8,
+          "takeaway": "agent 安全应像网络一样由外部基础设施执行策略，而非依赖 agent 自律。",
+          "keyExperiment": "以集中控制+分布式执行、能力访问与零信任在网络系统的确定性保障历史，论证 agent 安全重构方向。"
+        },
+        {
+          "title": "Disentangling the Expressivity of RoPE",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-13",
+          "authors": "Selim Jerad, Anej Svete, Jiaoda Li, Ryan Cotterell",
+          "institutions": "ETH Zürich",
+          "abstract": "关于旋转位置编码（RoPE）成功的解释有两种反复出现的叙述：表达力研究把周期位置信息与模算术谓词联系起来，而机制与长上下文研究强调位置锚点与局部偏移。本文在完全均匀、有限精度的 soft-attention transformer 框架下形式化这两种叙述。作者发现：若每个旋转分量都是周期的，RoPE transformer 恰好识别“带模谓词的过去时态逻辑”可定义的语言；而常规 RoPE 不同——其旋转永不重复，由此得到的是依赖精度的固定偏移回看算子的有界模拟，而非全长度模算术刻画。受控实验与这一分离一致：构造的周期调度在模语言上能长度泛化，而常规 RoPE 表现更像有界局部性偏见，在需要位置不变地访问远距离上下文的任务上反而有害。",
+          "contributions": [
+            "在统一形式框架下调和 RoPE 的两种解释，给出精确的表达力刻画",
+            "证明周期旋转与非周期旋转（常规 RoPE）的表达力本质不同",
+            "用受控实验验证周期调度与常规 RoPE 的泛化行为分离"
+          ],
+          "conclusions": [
+            "常规 RoPE 的永不重复旋转使其表达力退化为有界局部回看，而非全长度模算术",
+            "周期旋转赋予长度泛化能力，但常规 RoPE 的局部性偏见会损害远距离访问"
+          ],
+          "experiments": [
+            "构造的周期调度在模语言任务上成功长度泛化",
+            "常规 RoPE 表现类似有界局部性偏见，在位置不变远距离访问任务上受损",
+            "理论刻画与受控实验行为一致，验证了周期-非周期分离"
+          ],
+          "significance": "把 RoPE 的理论表达力刻画从理想化假设推进到常用实现，指导位置编码设计。",
+          "arxivUrl": "https://arxiv.org/abs/2608.11909",
+          "pdfUrl": "https://arxiv.org/pdf/2608.11909.pdf",
+          "index": 9,
+          "takeaway": "常规 RoPE 旋转永不重复，表达力只是有界局部回看而非全长度模算术。",
+          "keyExperiment": "构造周期旋转调度的 transformer 在模语言任务上长度泛化成功，而常规 RoPE 表现为有界局部性偏见。"
+        }
+      ]
+    }
+  ]
+}
