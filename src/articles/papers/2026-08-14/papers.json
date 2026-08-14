@@ -1,0 +1,308 @@
+{
+  "date": "2026-08-14",
+  "title": "2026-08-14 论文精选",
+  "lede": "今日关注：KV 缓存虚拟化回收与推测解码刷新推理效率，扩散/科学 agent 与记忆架构多点开花——vToken 回收块内碎片、DARTree 树形扩散草稿、契约级 GPU kernel 验证，OmniScientist/Intern-S2 推进全模态科研自动化，SPP 探索从 token 零对齐的新范式。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 50
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "vToken: Token-Level Virtualization for Reclaimable KV Caches",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-14",
+          "authors": "Yuanhang Gao, Xiangrui Yang, Yuanfeng Chen, Hongjia Chen, Qianru Lv, Wenfei Wu, Dongsheng Li",
+          "institutions": "机构未标注",
+          "abstract": "LLM 服务面临关键内存瓶颈：KV 缓存随序列长度与批大小增长。PagedAttention 用固定大小内存块降低分配器级碎片，但近年 KV 驱逐算法在比块管理更细的 token 粒度上操作，二者不匹配造成块内碎片，大量已分配 KV 内存无法回收。vToken 是一个轻量级 token 级虚拟化层，通过 token 表间接寻址解耦逻辑 token 活性与物理块放置，并异步重打包存活 token 实现物理回收，同时保持 PagedAttention kernel 与 CUDA Graph 兼容。在 vLLM 中实现，配合 H2O、Random、Scissorhands 等策略评测：相比配对 Naive-Evict 基线，每请求保留 KV 块减少 27.2%–72.3%，SLA 约束吞吐最高提升 1.37×；受限活跃 KV 预算下最大并发扩展 2×，且各策略集成代码量从 500+ 行降至 50 行以内。",
+          "contributions": [
+            "提出 token 级虚拟化层，用 token-table 间接寻址解耦逻辑存活性与物理块放置，解决驱逐粒度与块管理不匹配造成的块内碎片问题",
+            "异步重打包存活 token 实现物理回收，同时保持 PagedAttention kernel 与 CUDA Graph 兼容，可直接落地 vLLM 等主流框架",
+            "将各驱逐策略的集成代码量从 500+ 行压缩到 50 行以内，大幅降低新 KV 淘汰算法部署成本"
+          ],
+          "conclusions": [
+            "块内碎片是 KV 缓存内存浪费的重要来源，细粒度驱逐算法必须配套物理回收机制才能兑现内存收益",
+            "虚拟化层在各模型与策略组合上稳定减少保留 KV 块并提升 SLA 约束吞吐，说明该方案具有通用性"
+          ],
+          "experiments": [
+            "相比 Naive-Evict 基线，每请求保留 KV 块减少 27.2%–72.3%",
+            "SLA 约束下的吞吐最高提升 1.37×",
+            "受限活跃 KV 预算下最大可行并发扩展 2×"
+          ],
+          "significance": "填补了 KV 驱逐算法粒度与物理内存管理之间的断层，让细粒度缓存淘汰真正转化为可回收内存。",
+          "arxivUrl": "https://arxiv.org/abs/2608.13263",
+          "pdfUrl": "https://arxiv.org/pdf/2608.13263.pdf",
+          "index": 1,
+          "takeaway": "用 token 级虚拟化+异步重打包回收 PagedAttention 的块内碎片 KV 内存，受限预算下并发翻倍。",
+          "keyExperiment": "在 vLLM 中配合 H2O/Scissorhands/Random 评测：每请求保留 KV 块减少 27.2%–72.3%，受限预算下并发提升 2×。"
+        },
+        {
+          "title": "DARTree: Speculative Diffusion Decoding with Autoregressive Draft Trees",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-14",
+          "authors": "Tianyi Li, Yaxin Luo, Xinyi Shang, Zhiqiang Shen",
+          "institutions": "机构未标注",
+          "abstract": "推测解码通过并行验证多个草稿 token 无损加速自回归 LLM。基于扩散的草稿模型能一次并行预测整个 token 块、进一步降低提案延迟，但其位置级分布是边际分布，未按每条草稿路径实际选中的 token 做条件化。现有循环校正沿单条草稿链引入因果信息，而扩散树构建虽拓宽候选覆盖却不沿各分支携带校正。DARTree 是一种训练免费的推测解码方法，将预训练 AR 校正头从链扩展到树：先在单次批处理中按深度一次性扩展并打分所有节点构建定宽候选树，再仅用 best-first 剪枝选出验证树，把 AR 头推理与顺序堆操作解耦。在 7 个数学/代码/聊天基准的 4 种模型—温度配置下全部取得最高平均接受长度与加速比，单轮验证接受最多 12.97 个 token，比 DFlash 高 98.6%、比 Domino 高 27.9%，相对本地自回归解码达到最高 9.73× 无损加速。",
+          "contributions": [
+            "把预训练 AR 校正头从单条候选链推广到扩散草稿树，兼得扩散并行提案与逐分支因果校正",
+            "训练免费：候选树单批扩展+打分、best-first 剪枝选验证树，将 AR 头推理与依赖树结构的堆操作解耦",
+            "在 7 个数学/代码/聊天基准的 4 种配置上全面刷新推测解码的接受长度与加速比"
+          ],
+          "conclusions": [
+            "扩散草稿的边际分布缺陷可以通过树状 AR 校正头弥补，二者的组合优于各自单独使用",
+            "树构建与校正推理解耦是训练免费方案可行性的关键设计"
+          ],
+          "experiments": [
+            "单轮验证平均接受最高 12.97 个 token，比 DFlash 多 98.6%、比 Domino 多 27.9%",
+            "相对本地自回归解码达到最高 9.73× 无损加速"
+          ],
+          "significance": "给出了扩散式草稿与自回归校正相结合的高效推测解码方案，为扩散 LLM 的无损推理加速提供了新路径。",
+          "arxivUrl": "https://arxiv.org/abs/2608.13524",
+          "pdfUrl": "https://arxiv.org/pdf/2608.13524.pdf",
+          "index": 2,
+          "takeaway": "在扩散草稿树上运行 AR 校正头，单轮接受 12.97 token、最高 9.73× 无损加速。",
+          "keyExperiment": "7 个基准 × 4 种配置全部最优：单轮验证接受 12.97 token，比 DFlash 高 98.6%，最高 9.73× 无损加速。"
+        },
+        {
+          "title": "A Contract-Grade Verifier for LLM-Generated GPU Kernels, and a Native Blackwell Backward for the Gated-Linear-Recurrence Family",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-14",
+          "authors": "Rishi Shah, Rishav Shrestha",
+          "institutions": "机构未标注",
+          "abstract": "用语言模型生成 GPU kernel 的系统普遍报告高正确率，但该正确率通常来自单一宽松测试：在固定形状的少量随机输入上运行 kernel，输出接近参考即算通过。一个 kernel 可能通过该测试却仍然静默出错——在正确答案是 NaN 或无穷时返回普通数值、运行间结果不一致、形状变化即失效、或在参考保持 fp32 总计时用 fp16 累加。本文构建契约级验证器：12 道对抗性门，每道门是正确 kernel 必须满足的性质，其中多条免容差、无法用阈值选择搪塞。向外审计 2,638 个被某公开系统 harness 判定为正确的机器生成 kernel，发现 39.5% 在任何容差论证下都已被破坏、62.1% 至少携带一项违规；领域标准测试接受 1,487 个验证器拒绝的 kernel，反向仅 14 个。以 7/7 阳性对照、阈值校准扫描、与参考基准正确性代码 98.5% 一致、分层人工审计四种方式独立辩护发现。向内，验证器判定自研 kernel：gated-linear-recurrence (GDN) 家族首个原生 Blackwell tcgen05 训练反向实现，包括领域仍在 fallback 的 reverse-state 阶段，并以双精度 oracle 独立确立其正确性、训练了五个家族成员。",
+          "contributions": [
+            "构建含 12 道对抗性门的契约级 kernel 验证器，多条免容差性质使任何阈值选择都无法掩盖失败",
+            "大规模审计揭示 LLM 生成 kernel 的真实可靠性问题：39.5% 被破坏、62.1% 至少一项违规，并用 4 种独立方式交叉验证发现",
+            "给出 GDN 家族首个原生 Blackwell tcgen05 训练反向实现（含 reverse-state 阶段），并用双精度 oracle 独立验证"
+          ],
+          "conclusions": [
+            "当前对 LLM 生成 kernel 的单一宽松测试严重高估正确率，需要契约级多性质验证才能用于生产",
+            "契约级验证器既能审计外部系统，也能为自研高性能 kernel 提供独立正确性保证"
+          ],
+          "experiments": [
+            "审计 2,638 个被接受的 kernel：39.5% 在任何容差论证下都被破坏，62.1% 至少携带一项违规",
+            "领域标准测试接受 1,487 个验证器拒绝的 kernel，反向仅 14 个（约 106:1 的不对称）",
+            "与参考基准正确性代码 98.5% 一致，7/7 阳性对照通过"
+          ],
+          "significance": "为 LLM 生成 GPU 代码提供了可审计的正确性基础设施，同时展示了 Blackwell 上 GDN 训练反向的原生实现。",
+          "arxivUrl": "https://arxiv.org/abs/2608.12700",
+          "pdfUrl": "https://arxiv.org/pdf/2608.12700.pdf",
+          "index": 3,
+          "takeaway": "用 12 道对抗性质验证 LLM 生成的 GPU kernel：39.5% 已被破坏，并给出首原生 Blackwell 训练反向。",
+          "keyExperiment": "审计显示 39.5% 的机器生成 kernel 损坏、62.1% 有违规；自研 GDN Blackwell 反向经双精度 oracle 独立验证。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "OmniScientist: An Omni-Modal Omni-Discipline AI Scientist",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-14",
+          "authors": "Bobo Li, Hao Fei, Tianjie Ju, Mong-Li Lee, Wynne Hsu",
+          "institutions": "National University of Singapore",
+          "abstract": "基础模型的进展使 AI 科学家能自动化越来越完整的研究流程——从假设生成、代码执行到论文撰写。但仅覆盖工作流并不等于能访问科研赖以立足的完整证据：现有系统通常只在文本、代码、标签或预计算摘要上推理，把空间、时间、跨通道与过程性关系排除在 agent 视野之外。OmniScientist 是端到端全模态 AI 科学家，直接基于异构原始证据开展多学科研究：感知层加 3 个自主 agent（构思、实验、写作）在确定性流水线内协作，让观测在整个研究生命周期塑造研究问题、实验决策与最终主张；通过以代码执行的 idea/rigour/claim 检查强制新颖性筛查、统计有效性、执行溯源与数值可追溯。在覆盖 5 个学科族、4 类科学证据、含图像/信号/音频/视频/3D 结构/轨迹/表格/公式/图的 36 个真实案例上评估：全部 36 例完成从原始数据到成稿论文的完整路径，参考推理骨干下平均论文分 6.3；与只接收预计算标量特征的盲变体配对比较中，直接感知在全部 7 项指标上胜出。",
+          "contributions": [
+            "首个端到端全模态 AI 科学家：直接从异构原始证据（图像/信号/音视频/3D/轨迹/表/公式/图）开展研究而非依赖预计算摘要",
+            "感知层+3 agent（构思/实验/写作）的确定性流水线，让观测持续影响问题、实验与结论",
+            "以代码执行的 idea/rigour/claim 三检查强制新颖性、统计有效性、执行溯源与数值可追溯"
+          ],
+          "conclusions": [
+            "工作流覆盖不等于证据可达，全模态直接感知是 AI 科学家真正利用科研证据的必要条件",
+            "确定性流水线+可审计检查比全开放 agent 更可靠，36/36 案例走完原始数据到成稿全路径"
+          ],
+          "experiments": [
+            "36 个真实案例全部完成从原始数据到编译成稿论文的完整路径",
+            "参考推理骨干下平均论文分 6.3",
+            "与仅接收预计算标量的盲变体对比，直接感知在全部 7 项指标上胜出"
+          ],
+          "significance": "把 AI 科学家的输入从「预消化摘要」推进到「原始多模态证据」，是科研自动化覆盖完整证据链的代表性工作。",
+          "arxivUrl": "https://arxiv.org/abs/2608.13558",
+          "pdfUrl": "https://arxiv.org/pdf/2608.13558.pdf",
+          "index": 4,
+          "takeaway": "全模态 AI 科学家直接基于原始异构证据做研究，36/36 案例完成数据到成稿全流程。",
+          "keyExperiment": "36 个横跨 5 学科族的真实案例全部完成数据到成稿流程，直接感知在 7 项指标上全面优于盲变体。"
+        },
+        {
+          "title": "RippleMem: From Isolated Retrieval to Associative Recollection for Long-Term Agent Memory",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-14",
+          "authors": "Jingbo Ji, Lingyi Li, Xilong Cheng, Yuhao Zhou, Wenji Zhang, Yuting Tan, Yunxiao Qin",
+          "institutions": "机构未标注",
+          "abstract": "LLM agent 越来越依赖外部记忆支撑长时程推理与交互，但瓶颈并非存储过往经验本身，而是当相关信息分散在大量交互中时如何取回正确的证据集。现有方法困于这一访问问题：全上下文方法需要嘈杂的长上下文检索，扁平检索常返回孤立残缺的记录，图记忆系统构建昂贵且压缩了丰富的事件上下文。RippleMem 用自适应联想式回忆取代一次性检索：受线索依赖情景记忆与联想补全启发，把交互历史存储为线索丰富的情景记忆单元，并按事件组织成语义图；给定查询先通过混合线索召回相关记忆锚点，再沿语义与结构关联扩展，补齐缺失的支持证据——最初召回的记忆既是答案上下文，也是补齐证据的线索。在 LoCoMo 与 LongMemEval-S 上，RippleMem 在评估设置中总体最优，LLM-as-a-Judge 准确率在 LoCoMo 上提升 3.95%、LongMemEval-S 上最高提升 11.87%，同时图构建成本降低约 30×。",
+          "contributions": [
+            "提出联想式回忆替代一次性检索：以情景记忆单元+事件中心记忆图组织历史，先回忆锚点再沿关联扩展补全证据",
+            "将最初召回的记忆同时用作答案上下文与证据补全线索，解决分布式信息取回难题",
+            "图构建成本降低约 30×，兼顾访问质量与资源开销"
+          ],
+          "conclusions": [
+            "长时 agent 记忆的核心瓶颈是证据取回而非存储，联想式展开优于扁平检索与全上下文",
+            "混合线索召回+关联扩展的两阶段设计显著提升长上下文问答准确率"
+          ],
+          "experiments": [
+            "LoCoMo 上 LLM-as-a-Judge 准确率提升 3.95%",
+            "LongMemEval-S 上最高提升 11.87%",
+            "图构建成本降低约 30×"
+          ],
+          "significance": "为长时 agent 记忆提供类人联想回忆范式，把「检索」升级为「回忆与补全」，显著提升证据取回质量。",
+          "arxivUrl": "https://arxiv.org/abs/2608.13334",
+          "pdfUrl": "https://arxiv.org/pdf/2608.13334.pdf",
+          "index": 5,
+          "takeaway": "用联想式回忆替代孤立检索：先召回锚点再沿关联扩展补全证据，LongMemEval-S 最高 +11.87%。",
+          "keyExperiment": "LoCoMo +3.95%、LongMemEval-S 最高 +11.87% 准确率，图构建成本降低约 30×。"
+        },
+        {
+          "title": "Synthetic Persona Pretraining: Alignment from Token Zero",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-14",
+          "authors": "Julian Minder, Viktor Moskvoretskii, Raghav Singhal, Difan Jiao, Andy Arditi, Shaobo Cui, Yiderigun Borjigin, Kartik Bali, Stefan Krsteski, Harsh Raj, Huu Nguyen, Jannik Brinkmann, Ashton Anderson, Roland Aydin, Robert West",
+          "institutions": "EPFL",
+          "abstract": "随着基于 LM 的 AI 越来越多地部署在自主场景，对齐其目标与人类价值观变得关键。今天的对齐与「助手身份」通常在预训练之后才引入，此时行为先验已然固化——价值观更像一层薄薄的覆盖而非深层根基，且为后续错位埋下伏笔。Synthetic Persona Pretraining (SPP) 提出相反范式：在预训练的第一个 token 就植入期望的助手人格。首先依据规范性价值宪章为预训练文档标注价值对齐的第一人称反思；随后用标准交叉熵在原始文档及其反思上预训练，在众多人格中植入目标人格；最后在用户-助手对话数据上后训练，把该人格绑定到助手身份（persona binding）。在 500B token 上预训练至 3B 参数的模型中，SPP 提升宪章遵循与越狱鲁棒性、降低分布外道德困境的错位率，同时保持能力；早期干预是关键——仅在预训练末尾引入 SPP 得到的宪章遵循更弱、不改变价值优先级、困境选择更不对齐；该优势依赖 persona binding，并随预训练预算增加而扩大。",
+          "contributions": [
+            "提出从预训练 token 零开始植入人格的范式，把对齐从「事后覆盖」变为「根基内置」",
+            "三步法：价值宪章驱动的第一人称反思标注 → 标准交叉熵联合预训练 → persona binding 对话后训练",
+            "系统验证早期干预效应：预训练末尾才引入 SPP 效果显著更弱，且收益随预训练预算增大"
+          ],
+          "conclusions": [
+            "对齐方式应从预训练后的事后微调转向 token 零开始的价值植入，从根本上降低后续错位风险",
+            "persona binding 与早期介入是 SPP 生效的必要条件，其优势随预训练预算扩大"
+          ],
+          "experiments": [
+            "在 500B token、最高 3B 参数的预训练中提升宪章遵循与越狱鲁棒性",
+            "降低分布外道德困境的错位率，同时保持下游能力不变"
+          ],
+          "significance": "把价值观对齐从预训练后的补丁式操作前置到预训练本身，为自主 AI 的深度对齐提供了可扩展的新路线。",
+          "arxivUrl": "https://arxiv.org/abs/2608.13482",
+          "pdfUrl": "https://arxiv.org/pdf/2608.13482.pdf",
+          "index": 6,
+          "takeaway": "从预训练第一个 token 就植入助手人格，宪章遵循与越狱鲁棒性提升且不损能力。",
+          "keyExperiment": "500B token 预训练（最高 3B 参数）：越狱鲁棒性提升、OOD 道德困境错位率下降，且早期介入优于末尾补做。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Intern-S2-Preview: Scientific Agentic Foundation Model",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-14",
+          "authors": "Lei Bai, Jiaqi Cao, Chiyu Chen, Guanzhou Chen, Kai Chen, Guangran Cheng, Erfei Cui, Xuanlang Dai, Shengyuan Ding, Shangheng Du, Yanhui Duan, Yue Fan, Youqing Fang, Quan Gan, Yuanyuan Gao, Jiaye Ge, Lixin Gu, Yuzhe Gu, Qipeng Guo, Junjun He, Xin Hong, Ming Hu, Zhouqi Hua, Haian Huang, Junhao Huang, Z…（等 100+ 作者）",
+          "institutions": "Shanghai AI Laboratory",
+          "abstract": "科学发现越来越需要能跨异构模态证据推理、能与科研工具环境交互、并能在长任务跨度上持续进展的 AI 系统。Intern-S2-Preview 是一系列科学 agentic 基础模型，面向多模态科学理解、推理、生成与长时程任务。训练流水线始于科学多模态预训练：渲染的科学文档、图文交错数据与多样化科学语料；从预训练检查点出发，统一后训练流水线包含监督微调、可扩展多任务强化学习 (RL)、黑盒/白盒 agentic RL 与 on-policy 蒸馏，并配套提升 rollout 与训练稳定性/效率的实践技术——部分 rollout+离策略校正、自适应长度正则化、在线推测解码、鲁棒多任务优化、agentic 任务的 trace-aware 经验组装。架构层面，Intern-S2-Preview-397B 将时间序列建模从高效长序列理解扩展到数值预测，Memory Decoder 作为独立记忆增强路径在冻结 397B 骨干上实现快速科学特化。在科学、多模态、agentic 与通用基准上的评估显示其在多种设置下取得有竞争力乃至领先的结果。",
+          "contributions": [
+            "面向科学场景的 agentic 基础模型系列，统一流水线覆盖多模态预训练+SFT+多任务 RL+agentic RL+蒸馏",
+            "工程配套公开：部分 rollout+off-policy 校正、自适应长度正则、在线推测解码等训练稳定性技术",
+            "397B 模型扩展时间序列建模到数值预测，并引入 Memory Decoder 在冻结骨干上做快速科学特化"
+          ],
+          "conclusions": [
+            "科学 agentic 模型需要从预训练起融合多模态证据与长时程交互能力，统一后训练流水线是关键",
+            "Memory Decoder 式记忆增强路径可以在不修改大模型骨干的前提下完成领域特化"
+          ],
+          "experiments": [
+            "在科学、多模态、agentic、通用四类基准上多项设置取得有竞争力或领先结果",
+            "时间序列建模扩展到数值预测并在相关任务上验证有效性"
+          ],
+          "significance": "把「科学智能体」从单点能力拼装推进为端到端的基础模型体系，并公开了可复现的训练工程细节。",
+          "arxivUrl": "https://arxiv.org/abs/2608.13505",
+          "pdfUrl": "https://arxiv.org/pdf/2608.13505.pdf",
+          "index": 7,
+          "takeaway": "科学 agentic 基础模型系列：397B 主干+多任务 RL 流水线+Memory Decoder 快速特化。",
+          "keyExperiment": "科学/多模态/agentic/通用四类基准多项领先；冻结 397B 骨干上 Memory Decoder 实现快速科学特化。"
+        },
+        {
+          "title": "MARCH: Scaling Recurrent Memory with Content-Routed State Anchors",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-14",
+          "authors": "Ming Zhang, Kaisen Yang, Shu Yu, Ermo Hua, Ning Ding, Xia Hu, Bowen Zhou, Chaochao Lu, Youbang Sun",
+          "institutions": "机构未标注",
+          "abstract": "Transformer 强大的长上下文检索能力部分来自随上下文长度增长的 token 级记忆，但代价是训练时的二次计算复杂度和推理时线性增长的 KV 缓存。循环模型用固定大小状态压缩全部历史、解码高效，但在重检索任务上常落后：早期关联被后续更新覆盖，只保留最近的上下文。MARCH 提出 Memory-Anchor Routing across Context History，把状态空间模型扩展到固定维度之外，同时保持长序列上的计算效率：周期性缓存累计循环状态检查点作为状态锚点，并为每个锚点关联紧凑的内容条件化锚点键，使记忆库随上下文增长、在历史分辨率与内存成本之间提供可控权衡；每个 token 生成锚点查询，对因果可用的全部状态锚点做注意力式聚合，输出即对当前状态上所有历史锚点的加权组合。标准预训练后，MARCH 在常识推理、LongBench 与上下文内检索上持续优于多种线性注意力变体，证明内容路由状态缓存显著改善了循环模型的召回能力。",
+          "contributions": [
+            "提出内容路由状态锚点架构：周期性缓存循环状态检查点，把固定大小记忆扩展为可增长记忆库",
+            "锚点查询对全部历史状态锚点做注意力式聚合，在保持线性/高效解码的同时恢复被覆盖的早期信息",
+            "在历史分辨率与内存成本之间提供显式可控权衡，标准预训练即生效无需专用训练目标"
+          ],
+          "conclusions": [
+            "循环模型的召回短板源于早期关联被覆盖，内容路由的状态检查点缓存能有效修复",
+            "状态锚点聚合让记忆库随上下文增长，为 SSM 与线性注意力提供低成本长上下文补强"
+          ],
+          "experiments": [
+            "标准预训练后在常识推理、LongBench 与上下文内检索上持续优于多种线性注意力变体"
+          ],
+          "significance": "为线性注意力/SSM 家族提供了可增长的内容路由记忆机制，兼具高效解码与长上下文召回能力。",
+          "arxivUrl": "https://arxiv.org/abs/2608.12435",
+          "pdfUrl": "https://arxiv.org/pdf/2608.12435.pdf",
+          "index": 8,
+          "takeaway": "周期性缓存状态锚点+内容路由聚合，让循环模型记忆库随上下文增长、召回不丢早期信息。",
+          "keyExperiment": "标准预训练后，MARCH 在 LongBench 与上下文内检索等任务上持续优于多种线性注意力变体。"
+        },
+        {
+          "title": "Dual-Flow Transformers: Decoupling the Primary Prefill Path from Additional Decode Computation",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-14",
+          "authors": "Liming Liu, Mingze Wang, Tuo Zhao",
+          "institutions": "Georgia Tech",
+          "abstract": "LLM 服务请求越多，累积推理成本相对一次性训练成本越重要。两个推理阶段对硬件压力不同：prefill 并行且通常受计算限制，自回归 decode 串行且常受内存带宽限制。传统加宽度/深度会同时抬高两阶段成本，因为每一层都要在两阶段评估。本文追问：能否把额外学到的计算只分配到续写预测，同时保留 prompt 级主计算与单一持久 KV 缓存？Dual-Flow Transformer 由此提出：主流是完整因果语言模型，处理 prompt 并写入 KV 缓存；辅助流在 prompt 处理阶段完全省略、仅从最后 prompt 位置起激活，为续写预测增加计算而不写持久状态、不影响主流。两流共享主要注意力/MLP/输出矩阵，仅使用独立 token 嵌入与轻量耦合；共享权重与主缓存还允许分组执行时复用已加载权重与缓存键值。在匹配 token 的对比中，Dual-Flow 在多种架构与数据配置下取得更低验证损失；MoE 模型中，主/辅专家扇出成为分别控制 prompt 成本、续写成本与预测质量的独立旋钮。",
+          "contributions": [
+            "解耦 prefill 与 decode 附加计算：辅助流只在 decode 阶段激活、不写持久状态，让「额外能力」避开昂贵的 prefill",
+            "主辅流共享注意力/MLP/输出矩阵+轻量耦合，权重与 KV 缓存可在分组执行中复用",
+            "MoE 下主/辅专家扇出成为独立控制 prompt 成本、续写成本与预测质量的旋钮"
+          ],
+          "conclusions": [
+            "推理两阶段对计算需求不对称，把附加计算定向分配到 decode 可在等 token 预算下获得更低损失",
+            "共享权重与持久主缓存的设计使该架构在推理时存在直接的开销复用机会"
+          ],
+          "experiments": [
+            "匹配 token 对比中，Dual-Flow 在多种架构与数据配置下验证损失更低",
+            "MoE 变体通过调节主/辅专家扇出可分别权衡 prompt 成本与续写质量"
+          ],
+          "significance": "重新思考「层」在 prefill 与 decode 中的双重职责，为服务成本敏感的模型架构提供新的解耦设计维度。",
+          "arxivUrl": "https://arxiv.org/abs/2608.12385",
+          "pdfUrl": "https://arxiv.org/pdf/2608.12385.pdf",
+          "index": 9,
+          "takeaway": "把额外计算只塞进 decode 阶段：辅助流不写 KV、共享主流权重，等 token 预算下损失更低。",
+          "keyExperiment": "匹配 token 对比中多种架构/数据配置下验证损失更低；MoE 下主/辅专家扇出可独立调 prompt 与续写成本。"
+        }
+      ]
+    }
+  ]
+}
