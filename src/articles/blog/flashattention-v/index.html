@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlashAttention-V：让 FlashAttention 吃下超长向量（RVV / SVE 长向量适配深度解读）</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+:root {
+  --bg: #fafafa; --fg: #1a1a2e; --fg-soft: #444; --fg-muted: #888;
+  --accent: #6c5ce7; --accent-soft: #a29bfe; --accent-bg: #eeeafe;
+  --green: #00b894; --green-soft: #55efc4; --green-bg: #e0f8f4;
+  --red: #e74c3c; --red-soft: #fab1a0; --red-bg: #fdf0ee;
+  --orange: #e17055; --orange-bg: #fdf0e8;
+  --blue: #0984e3; --blue-soft: #74b9ff; --blue-bg: #e8f4fd;
+  --purple: #a55eea; --purple-bg: #f3ecfd;
+  --border: #ddd; --card-bg: #fff; --code-bg: #f4f4f4;
+  --disabled: #c8c8c8; --focus: #6c5ce7;
+  --toc-w: 240px; --content-w: 860px;
+  --layer-ms: 300ms;
+}
+[data-theme="dark"] {
+  --bg: #1a1a2e; --fg: #e0e0e0; --fg-soft: #bbb; --fg-muted: #888;
+  --accent: #a29bfe; --accent-soft: #6c5ce7; --accent-bg: #2a2a4e;
+  --green: #55efc4; --green-soft: #00b894; --green-bg: #1a3a32;
+  --red: #fab1a0; --red-soft: #e74c3c; --red-bg: #3a1a1a;
+  --orange: #fdcb6e; --orange-bg: #2a2614;
+  --blue: #74b9ff; --blue-soft: #0984e3; --blue-bg: #1a2a3a;
+  --purple: #d0a5f5; --purple-bg: #2a1f3a;
+  --border: #333; --card-bg: #252535; --code-bg: #1e1e2e;
+  --disabled: #555; --focus: #a29bfe;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+
+.content { width: var(--content-w); flex-shrink: 0; }
+section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-orange { background: var(--orange-bg); border-color: var(--orange); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: center; white-space: nowrap; }
+th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+pre.code { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; font-family: "JetBrains Mono", "Consolas", monospace; color: var(--fg-soft); margin: 14px 0; }
+pre.code .c { color: var(--fg-muted); }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--blue-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 680px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: #fff; }
+.badge-green { background: var(--green); color: #fff; }
+.badge-blue { background: var(--blue); color: #fff; }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: #fff; }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+/* ===== 场景过渡动画 (Pattern 1) ===== */
+.anim-canvas-wrap svg .scene-layer { transition: opacity 430ms cubic-bezier(.22,.61,.36,1), transform 430ms cubic-bezier(.22,.61,.36,1); }
+.anim-canvas-wrap svg .scene-enter.from-right { opacity: 0; transform: translateX(18px); }
+.anim-canvas-wrap svg .scene-enter.from-left { opacity: 0; transform: translateX(-18px); }
+.anim-canvas-wrap svg .scene-layer.scene-active { opacity: 1; transform: translateX(0); }
+.anim-canvas-wrap svg .scene-exit.to-left.scene-exit-active { opacity: 0; transform: translateX(-14px); }
+.anim-canvas-wrap svg .scene-exit.to-right.scene-exit-active { opacity: 0; transform: translateX(14px); }
+/* ===== 元素级入场动画 (Pattern 2) ===== */
+.anim-canvas-wrap svg .reveal { opacity: 0; transform: translateY(7px); animation: revealUp .48s cubic-bezier(.22,.61,.36,1) forwards; animation-delay: var(--delay, 0ms); transform-box: fill-box; }
+@keyframes revealUp { to { opacity: 1; transform: translateY(0); } }
+/* ===== 焦点高亮 (Pattern 6)：聚光灯 ===== */
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+/* ===== 进度条 (Pattern 5) ===== */
+.anim-progress { height: 3px; background: var(--border); position: relative; }
+.anim-progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-soft)); width: 0%; transition: width 380ms cubic-bezier(.22,.61,.36,1); }
+/* ===== 步骤条 Stage Rail (Pattern 4) ===== */
+.anim-stage-rail { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 8px; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg); cursor: pointer; font-size: 11px; color: var(--fg-soft); transition: all 0.15s; }
+.anim-stage-rail .stage-chip:hover { border-color: var(--accent); color: var(--accent); }
+.anim-stage-rail .stage-chip.done { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-soft); }
+.anim-stage-rail .stage-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 960px) {
+  .layout { flex-direction: column; gap: 0; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; margin-bottom: 16px; max-height: 200px; }
+  .toc h3 { cursor: pointer; }
+  .toc.collapsed .toc a { display: none; }
+  .content { width: 100%; }
+  section { padding: 18px; }
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 720px) {
+  section { padding: 14px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 20px; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 8px; }
+  .anim-controls button { min-height: 36px; }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc" id="tocNav">
+  <h3 onclick="toggleToc()">导航</h3>
+  <a href="#hook">核心思想</a>
+  <a href="#problem">问题：VL ≤ D 的天花板</a>
+  <a href="#method">方法：inter-head packing</a>
+  <a href="#hw">实测：256 位的 BPI-F3</a>
+  <a href="#sim">模拟：把向量拉长会怎样</a>
+  <a href="#q8">负面结果：Q8_0 与长向量</a>
+  <a href="#limits">边界与总结</a>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>FlashAttention-V</h1>
+  <p class="tagline"><strong>让 FlashAttention 吃下超长向量：用 head 间并行填满 RVV / SVE 的空转车道</strong></p>
+  <p class="tagline">RVV 和 SVE 把向量寄存器做到了 4096 位甚至更宽，可注意力的 head 维度只有 64 或 128——现有向量化 FlashAttention 全部限制 VL ≤ D，多出来的车道整段空转。FlashAttention-V（arXiv 2608.18656，Chalmers / Glasgow）的答案朴素而有效：<strong>注意力头之间彼此独立，把多个 head 打包进同一个寄存器</strong>。真实硬件 prefill 对标量最高 <strong>14×</strong>，gem5 模拟 512 位 VL 下最高 <strong>42×</strong>；同样宝贵的是一节诚实的负面结果——Q8_0 量化布局与长向量结构性不兼容。</p>
+  <div class="badges">
+    <span class="badge badge-accent">Chalmers / Glasgow</span>
+    <span class="badge badge-green">prefill 最高 42×（模拟）</span>
+    <span class="badge badge-blue">RVV 1.0 + Arm SVE</span>
+  </div>
+</section>
+
+<section id="problem">
+  <h2>问题：向量机越宽，注意力越浪费</h2>
+  <p>FlashAttention 的向量化只有一个天然可展开的维度：head 维 <code>D</code>。而 D 在真实模型里通常是 64 或 128。FP16 精度下 D=64 意味着一个 head 的数据只有 1024 位——机器给你 4096 位的向量寄存器，你也只能填满四分之一，剩下的车道里没有任何可算的东西，因为单个 head 内部再没有并行度可挖。</p>
+  <p>这不是某个实现的疏忽，而是整条技术路线的共同上界：llama.cpp 的两套向量化 FlashAttention 内核（归约式与 GEMM 式）都限制 <code>VL ≤ D</code>；Titopoulos 等人在 RVV 上的工作明确针对 VL ≤ D；NEON 上的 MEATTEN 沿 $d_k$ 向量化，继承同一约束。与此同时，RISC-V 向量硬件正在往宽里走——Vitruvius+ 是 8 lane × 64 位，Ara2 到 16 lane，AraXL 最高做到 64 lane。软件的上界和硬件的走向正面相撞。</p>
+  <div class="callout callout-accent">
+    <strong>作用域先划清：</strong>作者在 Banana Pi BPI-F3 上用未向量化的 llama.cpp 做 profiling——prefill 阶段 FlashAttention 占单层时间约 <strong>50%</strong>，decode 阶段只占约 <strong>10%</strong>（那里由线性投影和前馈层主导）。这个比例预先解释了两件事：为什么端到端收益远小于内核收益，以及论文为什么要额外去啃量化线性层（Q8_0 那一节）。
+  </div>
+</section>
+
+<section id="method">
+  <h2>方法：inter-head packing</h2>
+  <p>关键观察朴素得近乎显然：<strong>注意力头之间彼此独立</strong>——各算各的 Q、K、V 投影，没有跨 head 依赖，它就是一个还没被用掉的并行轴。更巧的是，ggml 的内存布局里 Q、K、V 跨 head 本来就是连续存储的，只是原本的循环顺序没去利用。</p>
+  <p>于是方法分两步。第一步<strong>重排 head 循环</strong>：空间局部性变好，访问变成单位步长，<code>itr = VL / D</code> 个 head 自然落进同一个向量寄存器。第二步<strong>按 head 展开</strong>：让多个向量寄存器同时活着，换来指令级并行和访存延迟隐藏。</p>
+
+  <h3>打包之后的三个配套手法</h3>
+  <p><strong>掩码归约替代逐个提取。</strong>一个寄存器里躺着 4 个 head 的点积中间结果，怎么分别归约出各自的分数？朴素做法是反复 <code>vslidedown</code> 把每段挪出来，代价随 head 数线性增长。论文用带掩码的归约 <code>vfredusum_m</code> 直接在打包寄存器上就地取出各 head 的部分和，完全绕开滑移提取。记住这个手法——它在 Q8_0 那一节会以反面角色再次出现，同一个技巧换个场景就从解药变成毒药。</p>
+  <p><strong>GQA：一次加载，滑移铺满。</strong>MHA 下 K、V 跨 head 连续，一条 <code>vle</code> 按满 VL 加载即可。GQA/MQA 下多个 query head 共享同一组 KV，论文只加载 <code>avl = D</code> 个元素，再用 <code>vslideup</code> 把它复制铺满整个寄存器——4:1 的 head 比例下一次加载加三次滑移就填满，共享 KV 的重复访存被天然消除。</p>
+  <p><strong>online softmax 全程留在寄存器里。</strong>running max、running sum、VKQ 累加器三个状态量都以向量寄存器形式存在，每个 lane group 对应一个 head，跨 k-tile 循环直接携带，不来回落内存。向量化指数函数取自 SIXTE，作者改造它以处理 FP16 精度、无穷值和掩码。</p>
+
+  <div class="anim-frame" id="anim1">
+    <div class="anim-header">
+      <span class="anim-title">动画 1：从空转车道到 inter-head packing</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg1" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="inter-head packing 过程动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">VL ≤ D：车道空转</button><button class="stage-chip" data-step="1">inter-head packing</button><button class="stage-chip" data-step="2">掩码归约</button><button class="stage-chip" data-step="3">GQA 广播</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#6c5ce7"></span> head 0</span>
+      <span><span class="dot" style="background:#0984e3"></span> head 1</span>
+      <span><span class="dot" style="background:#00b894"></span> head 2</span>
+      <span><span class="dot" style="background:#e17055"></span> head 3</span>
+      <span><span class="dot" style="background:#dfe6e9"></span> 空转车道</span>
+    </div>
+  </div>
+
+  <h3>展开因子有解析式</h3>
+  <p>不是拍脑袋调出来的：$U = \dfrac{VL}{D \cdot b} \times R$，其中 $b$ 是元素位宽，$R$ 是"寄存器利用因子"，反映 head 数量富余时还能额外展开多少。论文给的算例：TinyLlama 的 D=64、共 32 个 head，8192 位 VL 下 8 个 head（8×64×16 位）刚好填满一个向量；用掉 8 个之后还剩 24 个 head，允许把展开从 8 提到 32，于是 R=4。</p>
+  <p>实测调优最终全程采用 <code>U=4</code>、block <code>64×64</code>：16×16 分块会掉到 0.50×，128×128 与 64×64 基本持平（0.97×），U 超过 4 则因寄存器溢出退化。</p>
+</section>
+
+<section id="hw">
+  <h2>实测：256 位的 BPI-F3</h2>
+  <p>真实硬件是 Banana Pi BPI-F3（SpacemiT X60，RVV 1.0），向量长度只有 <strong>256 位</strong>。这个数字很关键：256 位小于 D·b，这块板子落在 <code>VL ≤ D</code> 分支，<strong>用不到 inter-head packing</strong>——起作用的只有 head 循环重排和 U=4 展开。</p>
+  <table>
+    <tr><th>prefill · FP32</th><th>对比基线</th><th>加速比</th></tr>
+    <tr><td>Qwen2.5</td><td>标量 FlashAttention</td><td class="gain">14×</td></tr>
+    <tr><td>TinyLlama</td><td>标量 FlashAttention</td><td class="gain">12×</td></tr>
+    <tr><td>四模型平均</td><td>ggml 向量化 FP32</td><td class="gain">3.7×</td></tr>
+    <tr><td>四模型平均</td><td>自家优化的标准注意力</td><td>1.4×</td></tr>
+  </table>
+  <p>FP16 下与 llama.cpp 已有的向量实现 <code>ggml-vec-fp16</code> 正面对比，结果更微妙。N=512 时基本打平：Qwen2.5 高约 5%，Pythia-410M 低约 7%——Pythia 只有 16 个 head 且用 MHA 没有 KV 共享，可打包、可复用的东西都更少；Qwen2.5 的 D=128 则让每个 head 有更多元素去摊销分块开销。真正的收益出现在<strong>短上下文</strong>：</p>
+  <table>
+    <tr><th>上下文长度 N</th><th>FP16 vs ggml-vec-fp16</th><th>说明</th></tr>
+    <tr><td>64</td><td class="gain">最高 1.5–2×（Qwen2.5）</td><td>短上下文收益最大</td></tr>
+    <tr><td>128</td><td class="gain">平均 1.2–1.5×</td><td>对上边缘部署的实际形态</td></tr>
+    <tr><td>256</td><td>约 1.25×</td><td>收益开始收窄</td></tr>
+    <tr><td>512</td><td>约 1.0×（±7%）</td><td>基本打平</td></tr>
+  </table>
+  <p>decode 阶段对标量基线 4–5×，对向量基线约 2×，四个模型一致。</p>
+  <div class="callout callout-red">
+    <strong>方法论缺口：</strong>论文的核心贡献 inter-head packing（VL &gt; D 分支）<strong>在真实硅片上从未被执行过</strong>——BPI-F3 的 256 位落在 VL ≤ D 分支。所有 VL &gt; D 的数字都来自 gem5 模拟，读下一节时请带着这个前提。
+  </div>
+</section>
+
+<section id="sim">
+  <h2>模拟：把向量拉长会怎样</h2>
+  <p>模拟环境是 gem5 24.0.0.1 的 in-order <code>RiscvMinorCPU</code>——乱序核跑不动，内存耗尽直接崩。作者的替代方案是给 MinorCPU 的功能单元装一个按向量长度缩放的延迟模型：</p>
+  <div class="callout callout-blue">
+    <strong>延迟模型：</strong><code>opLat = startup + max(0, ⌈VL / 512⌉ − 1)</code>。以 512 位/周期为参考物理宽度，对标 Vitruvius+ 的 8 lane × 64 位；基础延迟取自 gem5 的 O3_ARM_v7a 配置。
+  </div>
+  <table>
+    <tr><th>prefill · 512 位 VL</th><th>vs 标量 FlashAttention</th></tr>
+    <tr><td>Qwen2.5（D=128）</td><td class="gain">42×</td></tr>
+    <tr><td>TinyLlama</td><td class="gain">约 27×</td></tr>
+    <tr><td>Llama 3.2</td><td class="gain">约 25×</td></tr>
+    <tr><td>Pythia-410M</td><td class="gain">约 22×</td></tr>
+  </table>
+
+  <h3>决定性因素是物理 lane 数，不是向量长度</h3>
+  <p>如果假设操作延迟恒定，把 VL 从 512 拉到 8192 位还能再拿 2.5–3×，看起来很美。一旦把按 lane 数缩放的真实延迟放进去，结论就变了——下面的动画按 lane 数一条一条画出趋势：</p>
+
+  <div class="anim-frame" id="anim2">
+    <div class="anim-header">
+      <span class="anim-title">动画 2：向量长度 × 物理 lane 数（示意曲线）</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg2" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="向量长度与 lane 数权衡动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">8 lane</button><button class="stage-chip" data-step="1">16 lane</button><button class="stage-chip" data-step="2">32 lane</button><button class="stage-chip" data-step="3">64 lane：推荐设计点</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#e74c3c"></span> 8 lane（Vitruvius+）</span>
+      <span><span class="dot" style="background:#e17055"></span> 16 lane（Ara2）</span>
+      <span><span class="dot" style="background:#a55eea"></span> 32 lane</span>
+      <span><span class="dot" style="background:#00b894"></span> 64 lane（AraXL）</span>
+    </div>
+  </div>
+  <p class="note-inline">曲线依据论文对 Figure 4 的文字描述绘制趋势，非原始数据点；lane 数对应真实设计：Vitruvius+ 8 lane、Ara2 16 lane、AraXL 最高 64 lane。</p>
+  <p>作者给出的推荐设计点是 <strong>64 lane + 4096 位 VL</strong>。而且 64 lane / 4096 位的结果与恒定延迟假设下的结果相当甚至更高，说明在长向量区间 FlashAttention-V 并不受 opLat 限制。</p>
+
+  <h3>decode 是另一个世界</h3>
+  <p>512 位下有 8–11×，但往上几乎不再涨——4096 位最多再拿 1.2×，Qwen2.5 和 Pythia 干脆没有额外收益。原因很直接：单 token 执行没有 token 间复用，寄存器一旦宽于一个 head，每次迭代的工作量就不足以摊销打包与拆包的开销。在真实缩放延迟下，decode 性能对向量长度和 lane 数几乎完全不敏感。</p>
+  <table>
+    <tr><th>单次执行时间 · TinyLlama · 512 位 VL</th><th>prefill</th><th>decode</th></tr>
+    <tr><td>未向量化</td><td class="bad">21.38</td><td class="bad">0.000529</td></tr>
+    <tr><td>ggml 向量化 FP32</td><td>3.67</td><td>0.000300</td></tr>
+    <tr><td>FlashAttention-V FP32</td><td class="gain">0.89</td><td class="gain">0.000077</td></tr>
+    <tr><td>FlashAttention-V FP16</td><td class="gain">0.78</td><td class="gain">0.000070</td></tr>
+  </table>
+  <p class="note-inline">论文表 4，原表未标注单位。最强基线 ggml-vec-fp16 缺席——gem5 不支持加宽指令的 LMUL=8，无法模拟。</p>
+  <p>一个有意思的细节：FP16 相对 FP32 的优势高度依赖向量长度——8192 位下约 2×，512 位下只有 11%（decode 里是 1.5× 与 7%）。因为 512 位属于 VL ≤ D 分支，两种精度用同一展开因子且不打包，FP16 只是每次操作多算元素，并没有多算出注意力分数——瓶颈卡在 softmax，不在算术吞吐。</p>
+</section>
+
+<section id="q8">
+  <h2>负面结果：Q8_0 与长向量结构性不兼容</h2>
+  <p>这是全文最有价值的一节，因为它是一个被认真做完、并且诚实报告出来的失败。ggml 的 Q8_0 把 32 个 INT8 权重和一个 FP16 scale 连续交错存放，是典型的 Array-of-Structures 布局。向量加载权重时会连带取到 scale，必须先显式分离才能计算——这个布局细节直接破坏长向量执行。作者试了三条路，动画一步一条：</p>
+
+  <div class="anim-frame" id="anim3">
+    <div class="anim-header">
+      <span class="anim-title">动画 3：Q8_0 的三条失败路径</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg3" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="Q8_0 三条失败路径动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">AoS 布局</button><button class="stage-chip" data-step="1">策略一：打包+归约</button><button class="stage-chip" data-step="2">策略二：跨步访问</button><button class="stage-chip" data-step="3">策略三：LMUL=4</button><button class="stage-chip" data-step="4">周期分解</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:#0984e3"></span> INT8 权重</span>
+      <span><span class="dot" style="background:#e74c3c"></span> FP16 scale / 开销</span>
+      <span><span class="dot" style="background:#00b894"></span> 有效计算</span>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>策略</th><th>手法</th><th>结局</th></tr>
+    <tr><td>一：打包 + 掩码归约</td><td><code>vslideup</code> 拼块 + <code>vwredsum_m</code></td><td class="bad">TinyLlama 退化约 1.5×</td></tr>
+    <tr><td>二：沿输出维向量化</td><td>GEMV 式，<code>stride = 32</code> 跨步访问</td><td class="bad">cache line 利用率崩，不如基线</td></tr>
+    <tr><td>三：LMUL=4 寄存器组</td><td>单块映射连续 LMUL=1 段</td><td class="bad">gem5 无法模拟，未能评估</td></tr>
+  </table>
+  <p>策略一的微基准（2048 位 VL）给出了决定性的周期归属：<strong>vslideup 打包 28% + 掩码归约 32% + 向量 MAC 仅 40%</strong>——打包加归约合计 60%，超过算术本身，把长向量的好处全部吃掉。作者在 Arm SVE 上用 <code>svcreate4</code>、<code>svst4</code>、<code>svld1</code> 重做同一件事，最好的 <code>svld1</code>（llama.cpp 在 512 位下的方式）在 2048 位 VL 下仍有约 20% 开销——开销与架构无关。</p>
+  <div class="callout callout-red">
+    <strong>结构性论点：</strong>交错的 scale–weight 布局强迫你二选一：非单位跨步访问，或者显式打包。两者的代价都随 VL 增长——<strong>打包与归约的开销与算术开销同步放大</strong>，于是"更长的向量能摊销算术成本"这个通常成立的论证直接崩塌，开销永远摊销不掉。作者的建议因此很明确：随着量化格式成为常态，需要重新设计量化格式或内存布局本身。
+  </div>
+</section>
+
+<section id="limits">
+  <h2>边界与总结</h2>
+  <h3>该记住的限制</h3>
+  <ul>
+    <li>性能评估仅限 RVV；Arm SVE 只做了 QEMU 功能正确性验证和打包微基准，没有完整性能数据。</li>
+    <li>乱序 gem5 因内存耗尽无法运行，全部模拟结果建立在 in-order 核加一个解析式缩放延迟模型之上，而非经过验证的乱序模型。gem5 25.0.0.1 对 RVV 给出不准确结果，全程用 24.0.0.1。</li>
+    <li>gem5 不支持加宽指令的 LMUL=8，最强基线 <code>ggml-vec-fp16</code> 在所有模拟对比中缺席。</li>
+    <li>模拟只跑单层，不含预处理和前馈层；batch size 恒为 1；RISC-V 无 BF16，只用 FP32/FP16。</li>
+    <li>结论里称 512→4096 token 区间内 8192 位相对 512 位的加速比保持稳定，但正文没有对应的图表支撑。</li>
+  </ul>
+  <h3>端到端：为什么收益缩水</h3>
+  <p><code>llama-simple</code> 上 TinyLlama_Q4_K_M 达 6 T/s，Q8_0 约 3 T/s；llama-bench 的 128 token prefill 下 Qwen2.5_Q4_K_M 提升 4%（3.52 T/s），TinyLlama 和 Llama-3.2 与基线持平，Qwen2.5_Q8_0 未能跑完。收益之所以微小，正是开头那组 profiling 数字的回响：线性层和 FFN 完全没动，而 FlashAttention 只占 prefill 约 50%、decode 约 10%。</p>
+  <div class="callout callout-green">
+    <strong>可迁移性证据：</strong>循环重排和 inter-head 展开这两个核心手法不绑定具体执行策略。作者把它们套到 llama.cpp 较新的 tiled GEMM 版 FlashAttention 上，在 BPI-F3 拿到 <strong>5% 提升</strong>——不大，但说明原理是通用的。
+  </div>
+  <div class="callout callout-accent">
+    <strong>一句话总结：</strong>FlashAttention-V 把"head 间独立"这个被忽略的并行轴变成长向量机的填充材料，方法干净、分析诚实；它同时用一个负面结果提醒整个社区——<strong>软件技巧救不了为短向量设计的量化内存布局</strong>，下一步该动的是格式本身。
+  </div>
+  <p class="note-inline">论文：Sonia Rani Gupta, Nikela Papadopoulou, Miquel Pericàs. FlashAttention for Scalable Vector Architectures. <a href="https://arxiv.org/abs/2608.18656" target="_blank" rel="noopener">arXiv:2608.18656</a>（<a href="https://arxiv.org/pdf/2608.18656" target="_blank" rel="noopener">PDF</a> / <a href="https://arxiv.org/html/2608.18656v1" target="_blank" rel="noopener">HTML</a>），2026-08-19 提交，CC BY 4.0。文中带具体数值的图表取自论文正文与表 4；标注"示意"者依据论文文字描述绘制趋势。</p>
+</section>
+
+</div>
+</div>
+<script>
+(function () {
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function AnimEngine(svg, opts) {
+    this.svg = svg;
+    this.svgId = svg.id;
+    this.steps = opts.steps || [];
+    this.idx = -1;
+    this.currentStep = -1;
+    this.timer = null;
+    this.speed = 1;
+    this.layer = null;
+    this._token = 0;
+    this._initDefs();
+  }
+
+  AnimEngine.prototype._initDefs = function () {
+    var ns = SVG_NS;
+    var defs = document.createElementNS(ns, "defs");
+    var uid = this.svgId + "-";
+
+    function marker(id, color, orient) {
+      var m = document.createElementNS(ns, "marker");
+      m.setAttribute("id", id);
+      m.setAttribute("viewBox", "0 0 10 10");
+      m.setAttribute("refX", "8");
+      m.setAttribute("refY", "5");
+      m.setAttribute("markerWidth", "7");
+      m.setAttribute("markerHeight", "7");
+      m.setAttribute("orient", orient || "auto");
+      var p = document.createElementNS(ns, "path");
+      p.setAttribute("d", "M0,0 L10,5 L0,10 Z");
+      p.setAttribute("fill", color);
+      m.appendChild(p);
+      return m;
+    }
+    defs.appendChild(marker(uid + "arr", "#6c5ce7", "auto"));
+    defs.appendChild(marker(uid + "arrG", "#00b894", "auto"));
+    defs.appendChild(marker(uid + "arrR", "#e74c3c", "auto"));
+    defs.appendChild(marker(uid + "arrB", "#0984e3", "auto"));
+    defs.appendChild(marker(uid + "arrO", "#e17055", "auto"));
+    this.svg.appendChild(defs);
+  };
+
+  AnimEngine.prototype._initLayer = function () {
+    this.layer = document.createElementNS(SVG_NS, "g");
+    this.layer.setAttribute("class", "anim-layer");
+    this.svg.appendChild(this.layer);
+  };
+
+  AnimEngine.prototype.clear = function () {
+    while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild);
+  };
+
+  AnimEngine.prototype.draw = function (tag, attrs, text) {
+    var el = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (var k in attrs) {
+      if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]);
+    }
+    if (text !== null && text !== undefined && text !== "") el.textContent = text;
+    this.layer.appendChild(el);
+    return el;
+  };
+
+  AnimEngine.prototype.t = function (x, y, str, opts) {
+    opts = opts || {};
+    var lines = String(str).split("\n");
+    var el = this.draw("text", Object.assign({
+      x: x, y: y,
+      "text-anchor": opts.ta || "middle",
+      "font-size": opts.fs || 12,
+      fill: opts.fill || "#444",
+      "font-family": opts.ff || "inherit",
+      "font-weight": opts.fw || "normal"
+    }, opts.attrs || {}), null);
+    if (lines.length === 1) {
+      el.textContent = str;
+    } else {
+      var fs = opts.fs || 12;
+      lines.forEach(function (line, i) {
+        var ts = document.createElementNS(SVG_NS, "tspan");
+        ts.setAttribute("x", x);
+        ts.setAttribute("dy", i === 0 ? 0 : fs * 1.2);
+        ts.textContent = line;
+        el.appendChild(ts);
+      });
+    }
+    return el;
+  };
+
+  AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, opts) {
+    opts = opts || {};
+    var r = this.draw("rect", {
+      x: x, y: y, width: w, height: h,
+      fill: fill || "#fff", stroke: stroke || "#ccc",
+      "stroke-width": opts.sw || 1.5, rx: opts.rx || 4
+    }, null);
+    if (label) {
+      this.t(x + w / 2, y + h / 2 + (opts.labelDy || 4), label, {
+        fs: opts.fs || 11, fill: opts.labelFill || "#fff", fw: opts.fw || "600",
+        ta: "middle"
+      });
+    }
+    return r;
+  };
+
+  AnimEngine.prototype.arrow = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    var mid = opts.curve ? " Q " + opts.cx + "," + opts.cy + " " : "";
+    var d = "M" + x1 + "," + y1 + mid + " L" + x2 + "," + y2;
+    var markerId = "url(#" + this.svgId + "-" + (opts.marker || "arr") + ")";
+    return this.draw("path", {
+      d: d, fill: "none", stroke: color || "#6c5ce7",
+      "stroke-width": opts.sw || 2, "marker-end": markerId,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.line = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    return this.draw("line", {
+      x1: x1, y1: y1, x2: x2, y2: y2,
+      stroke: color || "#ccc", "stroke-width": opts.sw || 1,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.circle = function (cx, cy, r, fill, stroke, opts) {
+    opts = opts || {};
+    return this.draw("circle", {
+      cx: cx, cy: cy, r: r,
+      fill: fill || "#fff", stroke: stroke || "#ccc",
+      "stroke-width": opts.sw || 1.5
+    }, null);
+  };
+
+  AnimEngine.prototype.delay = function () { return 1100 / this.speed; };
+
+  AnimEngine.prototype.goTo = function (i, suppressComplete) {
+    if (i < 0 || i >= this.steps.length) return;
+    var prev = this.currentStep;
+    var direction = i >= prev ? 1 : -1;
+    var step = this.steps[i];
+    this._render2(step, i, direction);
+    if (step.animate && !suppressComplete) step.animate(this, 1); // 手动切换显示完成态；播放路径抑制
+    if (window.MathJax && window.__mathReady && step.desc) {
+      var descEl = this.svg.parentNode.parentNode.querySelector(".step-desc");
+      if (descEl) {
+        try { MathJax.typesetPromise([descEl]); } catch (e) {}
+      }
+    }
+  };
+
+  AnimEngine.prototype._render2 = function (step, index, direction) {
+    var oldLayer = this.layer || null;
+    var nextLayer = document.createElementNS(SVG_NS, "g");
+    nextLayer.setAttribute("class", "anim-layer scene-layer");
+    this.svg.appendChild(nextLayer);
+    this.layer = nextLayer;
+    this.idx = index;
+    step.render(this);
+    // 焦点高亮：step.hot = 选择器，其余元素 dim
+    if (step.hot) {
+      var hotEls = nextLayer.querySelectorAll(step.hot);
+      var allEls = nextLayer.querySelectorAll("rect, text, circle, path, line");
+      for (var h = 0; h < allEls.length; h++) {
+        var el = allEls[h];
+        var isHot = false;
+        for (var hh = 0; hh < hotEls.length; hh++) {
+          if (hotEls[hh] === el) { isHot = true; break; }
+        }
+        if (!isHot && !el.classList.contains("hot") && !el.classList.contains("keep")) el.classList.add("dim");
+      }
+      for (var hh2 = 0; hh2 < hotEls.length; hh2++) { hotEls[hh2].classList.add("hot", "no-reveal"); } // no-reveal：hotPulse 不能与 revealUp 抢 animation
+    }
+    this._applyReveal(nextLayer);
+    this.currentStep = index;
+    this._updateUI(step, index);
+    if (oldLayer && !this._reducedMotion()) {
+      nextLayer.classList.add("scene-enter", direction > 0 ? "from-right" : "from-left");
+      oldLayer.classList.add("scene-exit", direction > 0 ? "to-left" : "to-right");
+      var self = this;
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          nextLayer.classList.add("scene-active");
+          oldLayer.classList.add("scene-exit-active");
+        });
+      });
+      setTimeout(function () {
+        if (oldLayer.parentNode) oldLayer.parentNode.removeChild(oldLayer);
+        nextLayer.classList.remove("scene-enter", "from-right", "from-left");
+      }, 520);
+    } else {
+      if (oldLayer) oldLayer.parentNode.removeChild(oldLayer);
+    }
+  };
+
+  AnimEngine.prototype._reducedMotion = function () {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  };
+
+  AnimEngine.prototype._applyReveal = function (layer) {
+    if (this._reducedMotion()) return;
+    var els = layer.querySelectorAll("rect, text, circle, path");
+    var delay = 60;
+    for (var i = 0; i < els.length; i++) {
+      if (els[i].classList.contains("no-reveal")) continue;
+      els[i].style.setProperty("--delay", delay + "ms");
+      els[i].classList.add("reveal");
+      els[i].addEventListener("animationend", function () { this.classList.remove("reveal"); }, { once: true });
+      delay += 55;
+      if (delay > 650) delay = 60;
+    }
+  };
+
+  AnimEngine.prototype._updateUI = function (step, i) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var info = frame.querySelector(".step-info");
+    var desc = frame.querySelector(".step-desc");
+    if (info) info.textContent = "步骤 " + (i + 1) + " / " + this.steps.length;
+    if (desc) desc.innerHTML = step.desc || step.title || "";
+    var prev = frame.querySelector(".btn-prev");
+    var next = frame.querySelector(".btn-next");
+    if (prev) prev.disabled = (i === 0);
+    if (next) next.disabled = (i === this.steps.length - 1);
+    var bar = frame.querySelector(".anim-progress .bar");
+    if (bar) bar.style.width = ((i + 1) / this.steps.length * 100) + "%";
+    var chips = frame.querySelectorAll(".stage-chip");
+    for (var c = 0; c < chips.length; c++) {
+      chips[c].classList.toggle("done", c < i);
+      chips[c].classList.toggle("active", c === i);
+    }
+  };
+
+  AnimEngine.prototype.next = function () { if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1); };
+  AnimEngine.prototype.prev = function () { if (this.currentStep > 0) this.goTo(this.currentStep - 1); };
+  AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+  AnimEngine.prototype.play = function () {
+    var self = this;
+    if (this.timer) return;
+    this._advance();
+  };
+  AnimEngine.prototype._advance = function () {
+    var self = this;
+    var step = this.steps[this.currentStep];
+    if (step && step.animate) {
+      // 场景内时间线：animate(e, progress) 0→1，播完再切下一步（或停在末尾）
+      var dur = (step.duration || 2400) / this.speed;
+      var t0 = performance.now();
+      self._advanceActive = true;
+      var frame = function () {
+        if (!self._advanceActive) return;
+        var p = Math.min(1, (performance.now() - t0) / dur);
+        step.animate(self, p);
+        if (p >= 1) {
+          self._advanceActive = false;
+          if (self.currentStep < self.steps.length - 1) {
+            self.goTo(self.currentStep + 1, true); // 播放路径：抑制完成态，让时间线从 0 播
+            self._advance();
+          } else {
+            self.pause();
+            self._setPlayBtn(false);
+          }
+        } else {
+          self._frameId = requestAnimationFrame(frame);
+        }
+      };
+      self._frameId = requestAnimationFrame(frame);
+    } else {
+      if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
+      this.timer = setTimeout(function () {
+        self.next();
+        self._advance();
+      }, this.delay());
+    }
+  };
+  AnimEngine.prototype.pause = function () {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    if (this._frameId) { cancelAnimationFrame(this._frameId); this._frameId = null; }
+    this._advanceActive = false;
+  };
+  AnimEngine.prototype.toggle = function () {
+    if (this.timer) { this.pause(); this._setPlayBtn(false); }
+    else { if (this.currentStep >= this.steps.length - 1) this.goTo(0); this.play(); this._setPlayBtn(true); }
+  };
+  AnimEngine.prototype._setPlayBtn = function (playing) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var btn = frame.querySelector(".btn-play");
+    if (btn) btn.textContent = playing ? "⏸ 暂停" : "▶ 播放";
+  };
+  AnimEngine.prototype.setSpeed = function (s) {
+    this.speed = s;
+    var frame = this.svg.closest(".anim-frame");
+    if (frame) {
+      var lbl = frame.querySelector(".speed-label");
+      if (lbl) lbl.textContent = s.toFixed(1) + "×";
+    }
+  };
+
+
+  /* ============ SCENE 1: VL<=D waste -> inter-head packing -> masked reduction -> GQA broadcast ============ */
+  function scene1Build() {
+    var W = 820;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444",
+      idle: "#dfe6e9"
+    };
+    var HEAD_COLORS = [C.accent, C.blue, C.green, C.orange];
+    var CELLS = 32, D = 8, CW = 20, GAP = 2, X0 = 54;
+    function cellX(i) { return X0 + i * (CW + GAP); }
+    // fills: array of {from, to, color, opacity}
+    function drawReg(e, y, h, fills) {
+      for (var i = 0; i < CELLS; i++) {
+        var color = C.idle, op = 1;
+        for (var f = 0; f < fills.length; f++) {
+          if (i >= fills[f].from && i < fills[f].to) { color = fills[f].color; op = fills[f].opacity || 1; break; }
+        }
+        e.draw("rect", { x: cellX(i), y: y, width: CW, height: h, rx: 2, fill: color, "fill-opacity": op, stroke: color === C.idle ? C.muted : "none", "stroke-width": 1 }, null);
+      }
+      e.t(X0, y + h + 16, "lane 0", { fs: 10, fill: C.muted, ta: "start" });
+      e.t(cellX(CELLS - 1) + CW, y + h + 16, "lane 31", { fs: 10, fill: C.muted, ta: "end" });
+    }
+    return [
+      {
+        title: "VL ≤ D：车道空转",
+        desc: "FP16 下 D=64 的一个 head 只有 1024 位数据，装进 4096 位寄存器只占 1/4。head 内部再没有并行度可挖——llama.cpp、Titopoulos、MEATTEN 全部停在 VL ≤ D 这条线上。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 30, "现状：4096 位寄存器，只用到 1024 位", { fs: 16, fill: C.red, fw: "700" });
+          e.t(cellX(4), 150, "1 个 head（D=64, FP16）", { fs: 12, fill: C.accent, fw: "600" });
+          e.t(cellX(20), 150, "空转车道：head 内部没有更多并行度", { fs: 12, fill: C.muted });
+          drawReg(e, 170, 44, [{ from: 0, to: D, color: C.accent }]);
+          e.line(cellX(D) - 1, 160, cellX(D) - 1, 230, C.red, { sw: 1.5, dash: "4 3" });
+          e.t(W / 2, 290, "有效利用率 25%", { fs: 20, fill: C.red, fw: "700" });
+          e.t(W / 2, 330, "向量机越宽，浪费越大：Vitruvius+ 8 lane → Ara2 16 lane → AraXL 64 lane", { fs: 12, fill: C.fg });
+        }
+      },
+      {
+        title: "inter-head packing",
+        desc: "注意力头彼此独立，且 ggml 布局里 Q/K/V 跨 head 本来就连续。重排 head 循环后，itr = VL/D = 4 个 head 以单位步长自然落进同一个寄存器；再按 head 展开换取指令级并行。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 30, "inter-head packing：4 个独立 head 填满寄存器", { fs: 16, fill: C.accent, fw: "700" });
+          for (var k = 0; k < 4; k++) {
+            var bx = 90 + k * 168;
+            e.rect(bx, 70, 130, 36, "head " + k, "#fff", HEAD_COLORS[k], { rx: 6, fs: 12, labelFill: HEAD_COLORS[k], fw: "700" });
+            e.arrow(bx + 65, 112, cellX(k * D + 4), 190, HEAD_COLORS[k], { sw: 1.8 });
+          }
+          drawReg(e, 196, 44, [
+            { from: 0, to: 8, color: HEAD_COLORS[0] }, { from: 8, to: 16, color: HEAD_COLORS[1] },
+            { from: 16, to: 24, color: HEAD_COLORS[2] }, { from: 24, to: 32, color: HEAD_COLORS[3] }
+          ]);
+          e.t(W / 2, 300, "利用率 100% · itr = VL / D = 4", { fs: 18, fill: C.green, fw: "700" });
+          e.t(W / 2, 336, "第一步：重排 head 循环（单位步长）· 第二步：按 head 展开（隐藏访存延迟）", { fs: 12, fill: C.fg });
+        }
+      },
+      {
+        title: "掩码归约",
+        desc: "打包后一个寄存器里躺着 4 个 head 的点积中间结果。朴素做法是反复 vslidedown 逐段提取，代价随 head 数线性增长；vfredusum_m 用掩码直接在打包寄存器上就地归约出各 head 的部分和。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 30, "vfredusum_m：掩码归约，就地取出各 head 的分数", { fs: 16, fill: C.blue, fw: "700" });
+          drawReg(e, 80, 40, [
+            { from: 0, to: 8, color: HEAD_COLORS[0] }, { from: 8, to: 16, color: HEAD_COLORS[1] },
+            { from: 16, to: 24, color: HEAD_COLORS[2] }, { from: 24, to: 32, color: HEAD_COLORS[3] }
+          ]);
+          for (var k = 0; k < 4; k++) {
+            var cx = cellX(k * D + 4);
+            e.t(cx, 158, "mask: 仅 head " + k, { fs: 10, fill: C.muted });
+            e.arrow(cx, 168, cx, 230, HEAD_COLORS[k], { sw: 2 });
+            e.rect(cx - 52, 236, 104, 40, "S" + k + " 部分和", "#fff", HEAD_COLORS[k], { rx: 6, fs: 12, labelFill: HEAD_COLORS[k], fw: "700" });
+          }
+          e.t(W / 2, 330, "完全绕开 vslidedown 逐段提取——这个技巧在 Q8_0 一节会以反面角色再次出现", { fs: 12, fill: C.fg });
+        }
+      },
+      {
+        title: "GQA 广播",
+        desc: "GQA/MQA 下多个 query head 共享同一组 KV：只加载 avl = D 个元素，再用 vslideup 复制铺满。4:1 比例下一次 vle 加三次 vslideup 填满寄存器，共享 KV 的重复访存被天然消除。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 30, "GQA：加载一次，vslideup 铺满", { fs: 16, fill: C.green, fw: "700" });
+          e.rect(60, 70, 200, 40, "共享 KV（D 个元素）", "#e8f4fd", C.blue, { rx: 6, fs: 12, labelFill: C.blue, fw: "700" });
+          e.arrow(160, 116, cellX(4), 196, C.blue, { sw: 2, marker: "arrB" });
+          e.t(210, 160, "vle · avl = D", { fs: 11, fill: C.blue, fw: "600" });
+          drawReg(e, 200, 44, [
+            { from: 0, to: 8, color: C.blue },
+            { from: 8, to: 16, color: C.blue, opacity: 0.75 },
+            { from: 16, to: 24, color: C.blue, opacity: 0.55 },
+            { from: 24, to: 32, color: C.blue, opacity: 0.38 }
+          ]);
+          for (var k = 1; k < 4; k++) {
+            var fromX = cellX(4), toX = cellX(k * D + 4);
+            e.arrow(fromX, 196, toX, 196, C.green, { sw: 1.6, curve: true, cx: (fromX + toX) / 2, cy: 156 - k * 8, marker: "arrG", dash: "5 3" });
+          }
+          e.t(W / 2, 296, "vslideup ×3（绿色虚线）", { fs: 11, fill: C.green, fw: "600" });
+          e.t(W / 2, 330, "4 个 query head 共用同一份加载 · 每个 lane group 对应一个 head", { fs: 12, fill: C.fg });
+        }
+      }
+    ];
+  }
+
+  /* ============ SCENE 2: VL x lane-count trade-off curves ============ */
+  function scene2Build() {
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", purple: "#a55eea", muted: "#b2bec3", fg: "#444"
+    };
+    var VLS = [512, 1024, 2048, 4096, 8192];
+    var SERIES = [
+      { name: "8 lane", color: C.red, d: [1.00, 1.12, 0.98, 0.80, 0.62] },
+      { name: "16 lane", color: C.orange, d: [1.00, 1.26, 1.44, 1.50, 1.18] },
+      { name: "32 lane", color: C.purple, d: [1.00, 1.30, 1.62, 1.85, 1.55] },
+      { name: "64 lane", color: C.green, d: [1.00, 1.34, 1.78, 2.25, 2.40] }
+    ];
+    var L = 80, R = 700, T = 60, B = 330, YMAX = 2.6;
+    function X(i) { return L + (R - L) * i / (VLS.length - 1); }
+    function Y(v) { return B - (v / YMAX) * (B - T); }
+    function drawAxes(e, title, titleColor) {
+      e.t(410, 28, title, { fs: 16, fill: titleColor, fw: "700" });
+      e.t(760, 50, "示意曲线", { fs: 10, fill: C.muted });
+      for (var g = 0; g <= 5; g++) {
+        var gv = g * 0.5, y = Y(gv);
+        e.line(L, y, R, y, "#e0e0e0", { sw: 1 });
+        e.t(L - 10, y + 4, gv.toFixed(1) + "×", { fs: 10, fill: C.muted, ta: "end" });
+      }
+      for (var i = 0; i < VLS.length; i++) {
+        e.t(X(i), B + 20, String(VLS[i]), { fs: 10, fill: C.muted });
+      }
+      e.t((L + R) / 2, B + 44, "向量长度（位）· 纵轴：相对 512 位的 prefill 性能（opLat 按 ⌈VL/512⌉ 缩放）", { fs: 11, fill: C.fg });
+    }
+    function drawSeries(e, si, faded) {
+      var se = SERIES[si];
+      var d = se.d.map(function (v, i) { return (i ? "L" : "M") + X(i) + " " + Y(v); }).join(" ");
+      e.draw("path", { d: d, fill: "none", stroke: se.color, "stroke-width": faded ? 1.6 : 3, "stroke-opacity": faded ? 0.35 : 1, "stroke-linecap": "round" }, null);
+      for (var i = 0; i < se.d.length; i++) {
+        e.circle(X(i), Y(se.d[i]), faded ? 2.5 : 4, "#fff", se.color, { sw: faded ? 1.2 : 2 });
+      }
+      e.t(R + 12, Y(se.d[se.d.length - 1]) + 4, se.name, { fs: 11, fill: se.color, fw: faded ? "400" : "700", ta: "start" });
+    }
+    function makeStep(idx, title, desc, headColor, extra) {
+      return {
+        title: title, desc: desc,
+        render: function (e) {
+          e.clear();
+          drawAxes(e, title, headColor);
+          for (var s = 0; s <= idx; s++) drawSeries(e, s, s < idx);
+          if (extra) extra(e);
+        }
+      };
+    }
+    return [
+      makeStep(0, "8 lane：1024 位之后开始退化",
+        "恒定延迟假设下把 VL 拉到 8192 位还能再拿 2.5–3×。但物理宽度只有 8 lane（Vitruvius+ 级别）时，opLat 随 ⌈VL/512⌉ 线性增长，1024 位之后延迟增量吃掉全部收益，曲线掉头向下。", C.red),
+      makeStep(1, "16 lane：拐点向右推移",
+        "lane 数翻倍，每条长向量指令的执行拍数减半，拐点被推向 4096 位附近——但 8192 位仍然守不住。", C.orange),
+      makeStep(2, "32 lane：4096 位见顶",
+        "32 lane 在 4096 位附近达到峰值。规律已经清晰：决定性因素是物理 lane 数，不是架构向量长度本身。", C.purple),
+      makeStep(3, "64 lane：推荐设计点",
+        "只有 64 lane（AraXL 级别）能在 512→4096 位区间稳定拿到 2–2.5×。作者的推荐设计点：64 lane + 4096 位 VL——此时结果与恒定延迟假设相当甚至更高，说明长向量区间不受 opLat 限制。", C.green,
+        function (e) {
+          e.line(X(3), T, X(3), B, C.green, { sw: 1.5, dash: "5 4" });
+          e.t(X(3), T - 8, "★ 64 lane × 4096 位", { fs: 12, fill: C.green, fw: "700" });
+        })
+    ];
+  }
+
+  /* ============ SCENE 3: Q8_0 three failed strategies + cycle breakdown ============ */
+  function scene3Build() {
+    var W = 820;
+    var C = {
+      accent: "#6c5ce7", green: "#00b894", red: "#e74c3c",
+      blue: "#0984e3", orange: "#e17055", muted: "#b2bec3", fg: "#444"
+    };
+    // one Q8_0 block = 8 mini-cells (weights, schematic for 32 INT8) + 1 scale cell
+    function drawBlocks(e, x0, y, n, ch) {
+      var cw = 24, i, b;
+      for (b = 0; b < n; b++) {
+        for (i = 0; i < 8; i++) {
+          e.draw("rect", { x: x0 + (b * 9 + i) * cw, y: y, width: cw - 2, height: ch, rx: 2, fill: C.blue, "fill-opacity": 0.8 }, null);
+        }
+        e.draw("rect", { x: x0 + (b * 9 + 8) * cw, y: y, width: cw - 2, height: ch, rx: 2, fill: C.red }, null);
+        e.t(x0 + (b * 9 + 4) * cw, y + ch + 16, "block " + b, { fs: 10, fill: C.muted });
+      }
+      return x0 + n * 9 * cw;
+    }
+    return [
+      {
+        title: "AoS 布局",
+        desc: "ggml 的 Q8_0：32 个 INT8 权重 + 1 个 FP16 scale 连续交错存放（Array-of-Structures）。向量加载权重时会连带取到 scale，必须先显式分离才能计算。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 30, "Q8_0：32×INT8 + 1×FP16 scale 交错存放", { fs: 16, fill: C.fg, fw: "700" });
+          var xe = drawBlocks(e, 86, 150, 3, 44);
+          e.arrow(86, 120, xe - 2, 120, C.accent, { sw: 2 });
+          e.t((86 + xe) / 2, 106, "一条长向量加载横跨多个块 → scale 混进权重车道", { fs: 12, fill: C.accent, fw: "600" });
+          e.t(W / 2, 270, "蓝 = INT8 权重（示意，每块实际 32 个） · 红 = FP16 scale", { fs: 11, fill: C.muted });
+          e.t(W / 2, 320, "这是布局问题，不是算法问题——它直接破坏长向量执行", { fs: 13, fill: C.red, fw: "600" });
+        }
+      },
+      {
+        title: "策略一：打包 + 归约",
+        desc: "用 vslideup 把多个量化块拼进一个寄存器，做加宽乘累加，再用 vwredsum_m 掩码归约取出各块结果。算术指令数确实降了，TinyLlama 性能却退化约 1.5×——打包和归约本身的周期爆炸。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 30, "策略一：vslideup 打包 + vwredsum_m → 反而慢 1.5×", { fs: 16, fill: C.red, fw: "700" });
+          e.rect(60, 90, 150, 40, "块 0（分离后）", "#e8f4fd", C.blue, { rx: 6, fs: 11, labelFill: C.blue, fw: "600" });
+          e.rect(60, 150, 150, 40, "块 1（分离后）", "#e8f4fd", C.blue, { rx: 6, fs: 11, labelFill: C.blue, fw: "600" });
+          e.arrow(216, 110, 320, 128, C.orange, { sw: 2, marker: "arrO" });
+          e.arrow(216, 170, 320, 152, C.orange, { sw: 2, marker: "arrO" });
+          e.t(268, 108, "vslideup", { fs: 11, fill: C.orange, fw: "600" });
+          e.rect(326, 120, 200, 40, "打包寄存器", "#fff", C.accent, { rx: 6, fs: 12, labelFill: C.accent, fw: "700" });
+          e.arrow(532, 140, 600, 140, C.accent, { sw: 2 });
+          e.rect(604, 120, 156, 40, "vwredsum_m", "#eeeafe", C.accent, { rx: 6, fs: 12, labelFill: C.accent, fw: "700" });
+          e.rect(280, 240, 260, 48, "TinyLlama 退化 ~1.5×", "#fdf0ee", C.red, { rx: 8, fs: 13, labelFill: C.red, fw: "700" });
+          e.t(W / 2, 330, "在 FlashAttention 里是解药的手法，在 Q8_0 这里变成毒药", { fs: 12, fill: C.fg });
+        }
+      },
+      {
+        title: "策略二：跨步访问",
+        desc: "改成 GEMV 式沿输出维 M 向量化，能同时消掉打包和归约，但为尊重量化块边界必须用 stride = 32 的跨步访问。BPI-F3 上反而不如基线：非单位步长破坏 cache line 利用率，多出的访存延迟盖过省下的计算。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 30, "策略二：沿输出维向量化 → 被跨步访问拖死", { fs: 16, fill: C.red, fw: "700" });
+          var i;
+          for (i = 0; i < 12; i++) {
+            var hit = (i % 4 === 0);
+            e.draw("rect", { x: 90 + i * 54, y: 160, width: 48, height: 40, rx: 3, fill: hit ? C.blue : "#f0f0f0", stroke: hit ? "none" : "#ccc", "stroke-width": 1 }, null);
+          }
+          for (i = 0; i < 2; i++) {
+            var fx = 90 + i * 4 * 54 + 24, tx = 90 + (i + 1) * 4 * 54 + 24;
+            e.arrow(fx, 156, tx, 156, C.red, { sw: 1.8, curve: true, cx: (fx + tx) / 2, cy: 110, marker: "arrR", dash: "5 3" });
+          }
+          e.t(W / 2, 96, "stride = 32：每次只取一个元素，跳过整个块", { fs: 12, fill: C.red, fw: "600" });
+          e.t(W / 2, 236, "蓝 = 实际访问 · 灰 = 加载进 cache line 却被浪费的字节", { fs: 11, fill: C.muted });
+          e.rect(280, 262, 260, 44, "BPI-F3 上不如基线", "#fdf0ee", C.red, { rx: 8, fs: 13, labelFill: C.red, fw: "700" });
+        }
+      },
+      {
+        title: "策略三：LMUL=4",
+        desc: "把单块加载映射到连续的 LMUL=1 段，目标是 1024 位有效 VL 且完全避开显式打包。这条路没能评估——gem5 的 RISC-V 向量模型在 LMUL ≥ 4 时不能正确模拟寄存器组类型转换，作者把它标为模拟基础设施缺口，留待真实硬件验证。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 30, "策略三：LMUL=4 寄存器组 → 无法验证", { fs: 16, fill: C.orange, fw: "700" });
+          for (var k = 0; k < 4; k++) {
+            e.rect(120, 80 + k * 48, 260, 38, "v" + (k * 1) + "（LMUL=1 段）", "#fff", C.accent, { rx: 5, fs: 11, labelFill: C.accent, fw: "600" });
+          }
+          e.line(396, 80, 396, 270, C.accent, { sw: 2 });
+          e.t(440, 175, "= 1024 位有效 VL", { fs: 12, fill: C.accent, fw: "700", ta: "start" });
+          e.rect(540, 130, 220, 90, "gem5 24.0.0.1", "#f0f0f0", C.muted, { rx: 8, fs: 13, labelFill: C.fg, fw: "700" });
+          e.line(556, 142, 744, 208, C.red, { sw: 3 });
+          e.line(744, 142, 556, 208, C.red, { sw: 3 });
+          e.t(650, 250, "LMUL ≥ 4 的寄存器组类型转换无法正确模拟", { fs: 11, fill: C.red, fw: "600" });
+          e.t(W / 2, 320, "既不能证实也不能证伪——诚实地标注为基础设施缺口", { fs: 12, fill: C.fg });
+        }
+      },
+      {
+        title: "周期分解",
+        desc: "微基准（2048 位 VL）的周期归属：vslideup 打包 28% + 掩码归约 32% + 向量 MAC 仅 40%。开销与算术同步随 VL 放大——'更长的向量能摊销算术成本'的论证在这里直接崩塌。SVE 上最好的 svld1 也有 ~20% 开销，问题与架构无关。",
+        render: function (e) {
+          e.clear();
+          e.t(W / 2, 30, "2048 位 VL 下 vec_dot 周期分解", { fs: 16, fill: C.fg, fw: "700" });
+          var x = 110, y = 120, w = 600, h = 60;
+          var segs = [
+            { p: 28, color: C.red, label: "vslideup 28%" },
+            { p: 32, color: C.orange, label: "掩码归约 32%" },
+            { p: 40, color: C.green, label: "向量 MAC 40%" }
+          ];
+          var cx = x;
+          for (var s = 0; s < segs.length; s++) {
+            var sw = w * segs[s].p / 100;
+            e.draw("rect", { x: cx, y: y, width: sw - 2, height: h, rx: 4, fill: segs[s].color }, null);
+            e.t(cx + sw / 2, y + h / 2 + 5, segs[s].label, { fs: 13, fill: "#fff", fw: "700" });
+            cx += sw;
+          }
+          e.line(x, y + h + 18, x + w * 0.6, y + h + 18, C.red, { sw: 3 });
+          e.t(x + w * 0.3, y + h + 40, "打包 + 归约 = 60% > 算术 40%", { fs: 14, fill: C.red, fw: "700" });
+          e.t(W / 2, 280, "开销与算术开销同步放大 → 长向量的摊销论证永远兑现不了", { fs: 13, fill: C.fg, fw: "600" });
+          e.t(W / 2, 318, "Arm SVE 交叉验证：svcreate4 / svst4 / svld1 中最好的 svld1 在 2048 位下仍有 ~20% 开销", { fs: 11, fill: C.muted });
+        }
+      }
+    ];
+  }
+  /* ============ WIRING ============ */
+  var builders = {
+    "svg1": scene1Build,
+    "svg2": scene2Build,
+    "svg3": scene3Build
+  };
+  var engines = {};
+
+  function initScene(svgId) {
+    if (engines[svgId]) return engines[svgId];
+    var svg = document.getElementById(svgId);
+    if (!svg) return null;
+    var buildFn = builders[svgId];
+    if (!buildFn) return null;
+    var steps = buildFn();
+    var eng = new AnimEngine(svg, { steps: steps });
+    engines[svgId] = eng;
+    eng.goTo(0);
+    return eng;
+  }
+
+  document.querySelectorAll(".anim-frame").forEach(function (frame) {
+    var svg = frame.querySelector("svg");
+    if (!svg) return;
+    var svgId = svg.id;
+
+    frame.addEventListener("click", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      var target = ev.target;
+      if (target.classList.contains("btn-play")) { eng.toggle(); }
+      else if (target.classList.contains("btn-next")) { eng.pause(); eng._setPlayBtn(false); eng.next(); }
+      else if (target.classList.contains("btn-prev")) { eng.pause(); eng._setPlayBtn(false); eng.prev(); }
+      else if (target.classList.contains("btn-reset")) { eng.reset(); }
+      else if (target.classList.contains("stage-chip")) {
+        eng.pause();
+        eng._setPlayBtn(false);
+        eng.goTo(parseInt(target.getAttribute("data-step"), 10));
+      }
+    });
+
+    var slider = frame.querySelector(".speed-slider");
+    if (slider) {
+      slider.addEventListener("input", function () {
+        var eng = engines[svgId];
+        if (eng) eng.setSpeed(parseFloat(slider.value));
+      });
+    }
+
+    frame.setAttribute("tabindex", "0");
+    frame.addEventListener("keydown", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      if (ev.key === "ArrowRight") { ev.preventDefault(); eng.next(); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); eng.prev(); }
+      else if (ev.key === " ") { ev.preventDefault(); eng.toggle(); }
+    });
+  });
+
+  window.toggleTheme = function () {
+    var html = document.documentElement;
+    if (html.getAttribute("data-theme") === "dark") {
+      html.removeAttribute("data-theme");
+      var tb = document.querySelector(".theme-toggle");
+      if (tb) tb.textContent = "🌙";
+      localStorage.setItem("theme", "light");
+    } else {
+      html.setAttribute("data-theme", "dark");
+      var tb2 = document.querySelector(".theme-toggle");
+      if (tb2) tb2.textContent = "☀️";
+      localStorage.setItem("theme", "dark");
+    }
+  };
+
+  window.toggleToc = function () {
+    var nav = document.getElementById("tocNav");
+    if (nav) nav.classList.toggle("collapsed");
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (localStorage.getItem("theme") === "dark") toggleTheme();
+    ["svg1", "svg2", "svg3"].forEach(function (id) { initScene(id); });
+
+    var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var id = entry.target.id;
+          tocLinks.forEach(function (l) { l.classList.remove("active"); });
+          var link = document.querySelector('.toc a[href="#' + id + '"]');
+          if (link) { link.classList.add("active"); if (window.innerWidth > 768) link.scrollIntoView({ block: "nearest" }); }
+        }
+      });
+    }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+    document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+    var backTop = document.getElementById("backTop");
+    window.addEventListener("scroll", function () {
+      if (window.scrollY > 600) backTop.classList.add("visible");
+      else backTop.classList.remove("visible");
+    });
+
+    tocLinks.forEach(function (a) {
+      a.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        var id = a.getAttribute("href").slice(1);
+        var target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: "smooth" });
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
