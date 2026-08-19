@@ -1,0 +1,344 @@
+{
+  "date": "2026-08-19",
+  "title": "2026-08-19 论文精选",
+  "lede": "今日关注:长上下文推理加速(TileMix 混合精度注意力分片路由、MoNe 模块化神经记忆)、GPU kernel 自动优化(多智能体 KernelArc、LLM 写 PTX 的 PTXBench),框架原生智能体 RL 后训练(LEGO-RL、Agent Lightning),以及推理时循环增强 Recirculation、相位感知注意力 Q-Interference 与 MoE 潜推理状态读出等架构创新。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 50
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "TileMix: Tile-Centric Mixed-Precision Attention for LLM Inference Acceleration",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-19",
+          "authors": "Hanzhi Zhang, Qiao Zhang, Qinglei Cao, Heng Fan, Yan Huang, Kewei Sha, Yunhe Feng",
+          "institutions": "机构未标注",
+          "abstract": "长上下文 prefill 阶段,密集自注意力要计算二次规模的 query-key 分数,带来巨大计算与访存开销。既有方法要么全程统一低精度,要么做 token 交互稀疏化,尚未在融合稠密注意力内部对硬件对齐的分数分片进行空间精度路由。TileMix 提出以分片为中心的精度路由 kernel:把注意力矩阵划分为硬件对齐的分数分片,路由决策打包为紧凑 bitmask,每个分片组走 FP16 或 INT8 分数计算,两条路径共享同一个在线 softmax 状态。可扩展的分组让一个路由位管理多个相邻 key 分片,长上下文下仍保持硬件对齐与紧凑元数据;同时保留稠密 token 连通性,无需训练,支持分组查询注意力、变长 batch 与 INT8 KV cache。在 LongEval、LV-Eval 与 A100 prefill 基准上,相对统一 INT8 恢复长上下文质量,相对 FP16 提升 prefill 吞吐,形成跨模型家族可控的精度-效率前沿。",
+          "contributions": [
+            "首次在融合稠密注意力内部以硬件对齐分数分片为单位做空间精度路由,把数值精度变成可执行的空间决策",
+            "紧凑 bitmask 路由表示 + 共享在线 softmax 双路径执行,一个路由位可管理多个相邻 key 分片",
+            "无需训练,原生支持 GQA、变长 batch 与 INT8 KV cache,保留稠密 token 连通性"
+          ],
+          "conclusions": [
+            "TileMix 能恢复统一 INT8 丢失的长上下文质量,并在 FP16 基础上提升 prefill 吞吐,形成可控的精度-效率权衡前沿",
+            "空间精度路由在稠密注意力中可行且高效,无需牺牲 token 连通性"
+          ],
+          "experiments": [
+            "在 LongEval、LV-Eval 与 A100 prefill 基准上评估 LLaMA、Qwen、Vicuna 系列",
+            "相对统一 INT8 恢复长上下文质量,相对 FP16 提升 prefill 吞吐",
+            "支持分组查询注意力、变长 batch 与 INT8 KV cache 等实际部署特性"
+          ],
+          "significance": "把精度选择做成稠密注意力内部空间决策的首个 kernel,为长上下文推理提供训练无关的可控加速路径。",
+          "arxivUrl": "https://arxiv.org/abs/2608.17336",
+          "pdfUrl": "https://arxiv.org/pdf/2608.17336.pdf",
+          "index": 1,
+          "takeaway": "在融合稠密注意力里按硬件对齐分数分片混合 FP16/INT8 路由,无需训练即可兼顾长上下文质量与 prefill 吞吐。",
+          "keyExperiment": "在 LLaMA/Qwen/Vicuna 的 LongEval、LV-Eval 与 A100 基准上,TileMix 恢复统一 INT8 丢失的长上下文质量并相对 FP16 提升 prefill 吞吐。"
+        },
+        {
+          "title": "MoNe: Modular Neural Memory for Efficient Long Context Inference",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-19",
+          "authors": "Wonguk Cho, Kyubyung Chae, Tribhuvanesh Orekondy, Sunghyun Park, Hyoungwoo Park, Jeongho Kim, Arash Behboodi, Kyuwoong Hwang, Sungrack Yun",
+          "institutions": "机构未标注",
+          "abstract": "长上下文推理成本随上下文增长而急剧上升。MoNe 是一种轻量模块化神经记忆,可挂到任意冻结的预训练 Transformer 上,无需重训即可支持长上下文:预处理阶段按固定大小分片读取上下文,通过测试时学习 fast-weight 神经记忆网络(逐层局部梯度更新)写入记忆;推理阶段仅凭 query token 生成 key/value,不再重读任何上下文 token。两阶段设计把推理成本与上下文长度解耦——预处理 O(N)、查询 O(1),峰值显存不随 N 增长。128K token 下,MoNe 相对上下文学习(ICL)减少约 80% 的计算量与峰值显存,参数开销仅 6.4%,并能泛化到远超骨干原生窗口的长度,在 RULER 的 needle-in-a-haystack 与词抽取任务上保持强性能,而 ICL 急剧退化。",
+          "contributions": [
+            "提出模块化神经记忆 MoNe:冻结主干 + 测试时学习的 fast-weight 记忆,无需重训即可扩展上下文",
+            "两阶段设计实现推理成本与上下文长度解耦:O(N) 预处理、O(1) 查询、峰值显存不随 N 增长",
+            "128K 上下文下相对 ICL 减少约 80% 计算量与峰值显存,参数开销仅 6.4%"
+          ],
+          "conclusions": [
+            "MoNe 能泛化到远超骨干原生窗口的上下文长度,在 ICL 急剧退化的 RULER 任务上仍保持强性能",
+            "轻量记忆网络足以承载长上下文信息,冻结模型无需重训即可用"
+          ],
+          "experiments": [
+            "128K token 下相对 ICL 计算量与峰值显存均下降约 80%,参数开销仅 6.4%",
+            "RULER 的 needle-in-a-haystack 与词抽取基准上超越 ICL 取得强性能",
+            "上下文长度泛化超出骨干模型原生窗口"
+          ],
+          "significance": "用训练无关的模块化记忆把长上下文推理成本从随长度增长变为常数级。",
+          "arxivUrl": "https://arxiv.org/abs/2608.17616",
+          "pdfUrl": "https://arxiv.org/pdf/2608.17616.pdf",
+          "index": 2,
+          "takeaway": "测试时学习的模块化神经记忆让冻结 Transformer 的长上下文推理达到 O(1) 查询成本,128K 下省约 80% 计算与显存。",
+          "keyExperiment": "128K 上下文下 MoNe 相比 ICL 计算量与峰值显存均降约 80%(参数开销仅 6.4%),并在 RULER 基准上保持强性能。"
+        },
+        {
+          "title": "KernelArc: A Multi-Agent Framework for GPU Kernel Optimization",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-19",
+          "authors": "Joyjit Kundu, Ben Stoffelen, Kaili Wang, Peter Vrancx, Ludovic Denoyer",
+          "institutions": "机构未标注",
+          "abstract": "KernelArc 是一个面向异构负载的自主 GPU kernel 优化多智能体框架:多个策略特化的智能体并行运行,通过「仅结论共享内存」、确定性基准守卫与只读跨智能体状态(平台期触发重写)协调。在 NVIDIA H100 与 B200 上用 SOL-ExecBench 代表性负载评估,产出覆盖自定义 BF16 GEMM、静态 cuBLASLt Expert-API 配置表、融合 MoE 反向、形状门控解码器层融合、原生 NVFP4 分组查询注意力与 paged prefill 注意力等实现。在 2026-07-30 公开榜单快照中,这些提交在代表性 L1、L2、Quantization 与 FlashInfer 任务上均排名第一。轨迹分析支持其核心动机:共享多智能体搜索能在固定候选预算内拓宽探索并逼近更强基线,而各协调机制的价值随 kernel 类型与优化阶段而变。",
+          "contributions": [
+            "提出多智能体 GPU kernel 优化框架:策略特化智能体并行 + 仅结论共享内存协调,减少冗余探索",
+            "产出跨负载的高质量 kernel:BF16 GEMM、融合 MoE 反向、NVFP4 GQA、paged prefill 注意力等",
+            "在 SOL-ExecBench 公开榜单的 L1/L2/Quantization/FlashInfer 代表任务上登顶"
+          ],
+          "conclusions": [
+            "共享的多智能体搜索能在固定候选预算内拓宽探索、逼近更强基线",
+            "各协调机制(共享内存、基准守卫、重写)的价值随 kernel 类型与优化阶段而变"
+          ],
+          "experiments": [
+            "NVIDIA H100 与 B200 上使用 SOL-ExecBench 代表性负载评估",
+            "2026-07-30 榜单快照中 L1、L2、Quantization、FlashInfer 任务排名第一",
+            "产出含 BF16 GEMM、融合 MoE 反向、NVFP4 GQA、paged prefill 在内的多种 kernel"
+          ],
+          "significance": "把 GPU kernel 调优从单智能体试探推进到可协调的多智能体并行搜索。",
+          "arxivUrl": "https://arxiv.org/abs/2608.17071",
+          "pdfUrl": "https://arxiv.org/pdf/2608.17071.pdf",
+          "index": 3,
+          "takeaway": "策略特化多智能体并行搜索自动优化 GPU kernel,在 SOL-ExecBench 多项任务登顶。",
+          "keyExperiment": "SOL-ExecBench 2026-07-30 公开榜单快照中,L1、L2、Quantization 与 FlashInfer 代表任务均排名第一。"
+        },
+        {
+          "title": "PTXBench: Benchmark and Adapt LLMs for GPU Kernel Optimization with Architecture-specific PTX",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-19",
+          "authors": "Genghan Zhang, Yixin Dong, Chengze Fan, Zhichen Zeng, Yueming Yuan, Shaowei Zhu, Kunle Olukotun",
+          "institutions": "Stanford University",
+          "abstract": "PTXBench 是评估与适配 LLM 使用架构特定 PTX 指令做 GPU kernel 优化的基准,在 H100 与 B200 上测量 GEMM 与注意力负载的功能正确性、所选目标指令是否在运行时真正执行、以及相对前沿库的加速比。评测显示模型的架构特定 PTX 能力参差不齐:复杂注意力反向负载上成功率显著下降,生成了目标指令也不等于跑出有竞争力的性能,没有任何被测模型能全套件一致匹敌前沿库。进一步用监督微调适配 Qwen3.6-27B:修复条件训练改善多项任务,但泛化仍不均衡,数据覆盖、均衡性与推理教师质量与数据集规模同等重要。PTXBench 为衡量与提升 LLM 利用不断演进的 GPU 架构提供可审计测试场。",
+          "contributions": [
+            "首个系统评测 LLM 使用架构特定 PTX 优化 GPU kernel 的基准,同时测功能正确性、指令实际执行与加速比",
+            "揭示「生成对指令≠执行了≠性能好」的三层落差,提供可审计测试场",
+            "以 Qwen3.6-27B 做 SFT 适配,给出数据覆盖、均衡性与推理教师质量的系统结论"
+          ],
+          "conclusions": [
+            "当前模型在复杂注意力反向等负载上 PTX 能力显著不足,无一模型能全套件一致匹敌前沿库",
+            "修复条件训练能改善部分任务,但泛化不均衡,数据质量因素与规模同等重要"
+          ],
+          "experiments": [
+            "H100 与 B200 上 GEMM 与注意力负载评测",
+            "复杂注意力反向负载成功率显著下降;执行到目标指令不等于性能有竞争力",
+            "Qwen3.6-27B SFT 后多项任务改善,但泛化仍不均衡"
+          ],
+          "significance": "把「LLM 写 GPU kernel」从口号变成带三层可审计指标的基准与适配流程。",
+          "arxivUrl": "https://arxiv.org/abs/2608.17379",
+          "pdfUrl": "https://arxiv.org/pdf/2608.17379.pdf",
+          "index": 4,
+          "takeaway": "PTXBench 系统测量 LLM 的架构特定 PTX 优化能力:能生成不代表能执行,能执行不代表跑得快。",
+          "keyExperiment": "在 H100/B200 的 GEMM 与注意力全套件上,没有任何被测模型一致匹敌前沿库,复杂注意力反向成功率明显下滑。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "LEGO-RL: Harness-Native Reinforcement Learning for Coding Agents",
+          "score": 4.6,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-19",
+          "authors": "Yiming Du, Yuxin Jiang, Tao Yuan, Jianbo Dai, Shaowei Wang, Jierun Chen, Chaofan Tao, Xianzhi Yu, Lifeng Shang, Kam-Fai Wong, Xiaohui Li, Haoli Bai",
+          "institutions": "华为诺亚方舟实验室、香港中文大学",
+          "abstract": "编码智能体的强化学习越来越依赖长时运行 agent 框架管理工具、仓库上下文与执行反馈,但框架原生执行环境与策略梯度训练本质错配:环境崩溃与奖励黑客污染结果信号,训练-推理差异令 rollout 行为与策略更新脱节。LEGO-RL 不改框架内部控制流,把原生编码框架与可扩展的策略梯度优化桥接起来,三大支柱:①忠实优化——进程内 LLM 代理捕获原始生成流做 token 级对齐,训练端稳健重算对数概率,即使框架侧发生压缩或重序列化;②可靠执行——可扩展沙箱编排、镜像缓存与分阶段防御缓解奖励黑客;③可观测训练——集成插件自动验证与监控,配 Live UI 细粒度轨迹诊断。以 GSPO 训练稀疏 MoE 模型 Qwen3.5-35B-A3B,在 OpenHands SDK(64.0→70.4)、Claude Code(62.4→68.2)、OpenCode(57.2→66.6)的 SWE-bench Verified 上全面提升,rollout 与训练概率相关性保持 0.99 以上。",
+          "contributions": [
+            "提出框架原生 RL 桥接:不改框架控制流即可做 token 级对齐的忠实策略优化",
+            "可靠执行层:可扩展沙箱编排、镜像缓存与分阶段奖励黑客防御",
+            "训练可观测:集成插件自动验证监控 + Live UI 细粒度轨迹诊断"
+          ],
+          "conclusions": [
+            "LEGO-RL 在三个原生编码框架上稳定提升 SWE-bench Verified(OpenHands SDK 64.0→70.4、Claude Code 62.4→68.2、OpenCode 57.2→66.6)",
+            "rollout 与训练概率相关性保持 0.99 以上,验证忠实优化有效"
+          ],
+          "experiments": [
+            "Qwen3.5-35B-A3B(稀疏 MoE)以 GSPO 在三个原生编码框架上训练",
+            "SWE-bench Verified:OpenHands SDK 64.0%→70.4%,Claude Code 62.4%→68.2%,OpenCode 57.2%→66.6%",
+            "rollout 与训练概率相关性 > 0.99"
+          ],
+          "significance": "让强化学习真正落进生产级编码 agent 框架,且不改框架一行控制流。",
+          "arxivUrl": "https://arxiv.org/abs/2608.17393",
+          "pdfUrl": "https://arxiv.org/pdf/2608.17393.pdf",
+          "index": 5,
+          "takeaway": "通过进程内 LLM 代理与沙箱防御,把编码 agent 框架原生环境改造成可信的 RL 训练场。",
+          "keyExperiment": "Qwen3.5-35B-A3B 在 SWE-bench Verified 三框架全面提升(64.0→70.4、62.4→68.2、57.2→66.6),rollout 与训练概率相关性保持 0.99 以上。"
+        },
+        {
+          "title": "Agent Lightning v1.0: Towards Harnessed Agentic RL",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-19",
+          "authors": "Zhiyuan He, Siwei Zhang, Zhiwen Zhou, Yuqing Yang, Yu Kang, Yuge Zhang, Luna K. Qiu, Tin Yan Tsui, Jiahang Xu, Chong Luo",
+          "institutions": "Microsoft Research Asia",
+          "abstract": "现代智能体运行在管理工具、上下文与控制流的 agent 框架内,框架成为系统关键部分。Agent Lightning 提出分离式架构,通过 LLM 端点代理把任意 agent 接入 RL 训练——该范式已被 verl Uni-Agent、AReaL 2.0、slime、Polar 等采纳,称为 harnessed agentic RL:部署时框架直接参与模型后训练,由框架而非训练引擎持有环境交互循环,训练器只观察 LLM 请求-响应序列。这带来 retokenization、样本合并、优势计算、损失归一化与后端调度等新挑战。v1.0 用约 3500 行代码实现轻量框架,支持任意 agent 框架,覆盖指令遵循、搜索与编码 agent 评估,并提供完整可复现的编码 agent RL 流水线:仅用 6K 训练样本与中等算力,把 Qwen3.5-9B 的 SWE-bench Verified 从 41.8% 提到 56.4%(+14.6 绝对点)。",
+          "contributions": [
+            "系统化定义 harnessed agentic RL 范式及其特有挑战(retokenization、样本合并、优势计算、损失归一化等)",
+            "约 3500 行代码实现轻量通用框架,支持任意 agent 框架并作为可复现测试床",
+            "公开完整编码 agent RL 工作流与训练脚本"
+          ],
+          "conclusions": [
+            "harnessed 范式下框架持有环境循环、训练器只看 LLM 请求-响应对,需要专门的样本与梯度处理",
+            "仅 6K 训练样本与中等算力即可显著提升编码能力"
+          ],
+          "experiments": [
+            "Qwen3.5-9B 在 SWE-bench Verified 上从 41.8% 提升到 56.4%(+14.6 绝对点)",
+            "覆盖指令遵循、搜索与编码三类 agent",
+            "仅使用 6K 训练样本与中等算力"
+          ],
+          "significance": "把 agent 框架本身纳入 RL 后训练范式,并给出极轻量可复现的实现。",
+          "arxivUrl": "https://arxiv.org/abs/2608.17528",
+          "pdfUrl": "https://arxiv.org/pdf/2608.17528.pdf",
+          "index": 6,
+          "takeaway": "框架持有环境、训练器只看请求-响应的 harnessed 范式,6K 样本就让 Qwen3.5-9B 的 SWE-bench 从 41.8% 涨到 56.4%。",
+          "keyExperiment": "仅用 6K 训练样本,RL 把 Qwen3.5-9B 在 SWE-bench Verified 从 41.8% 提升到 56.4%(+14.6 绝对点)。"
+        },
+        {
+          "title": "Data-DPO: Direct Preference Optimization for Target Model Data Selection in LLM Post-Training",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-19",
+          "authors": "Peng Sun, Yi Yang, Antong Zhang, Chunxiao Li, Yanbo Wang, Dianbo Liu, xin chen, Kai Yu, Lu Chen, Tianfan Fu",
+          "institutions": "上海交通大学",
+          "abstract": "SFT 数据选择的目标是从大规模候选数据中选出少量样本,降训练成本保性能。现有方法多把数据价值当作相对静态的属性,很少考虑数据与目标模型能力分布的兼容性。Data-DPO 提出面向目标模型的数据选择:先通过一步探测观察目标模型在不同样本上的局部训练反馈,把样本间的激活差异转化为成对数据偏好,训练轻量奖励模型学习目标模型感知的偏好;最终选择阶段再融合目标模型偏好、外部质量分数与边际多样性,构建更稳定有效的训练子集。在 Vision-Flan 与 LLaVA-CoT 上,Data-DPO 在多种数据预算下一致超过现有数据选择基线,并稳定超越全量数据训练的性能。",
+          "contributions": [
+            "把数据价值从静态属性转为与目标模型能力分布相关的动态属性,用一步探测观察局部训练反馈",
+            "把样本间激活差异转化为成对偏好,训练轻量奖励模型学习目标模型感知的数据选择",
+            "融合目标模型偏好、外部质量分数与边际多样性的三因子选择"
+          ],
+          "conclusions": [
+            "Data-DPO 在 Vision-Flan 与 LLaVA-CoT 上多种预算下一致优于现有数据选择基线",
+            "选出的子集可稳定超越全量数据训练性能"
+          ],
+          "experiments": [
+            "Vision-Flan 与 LLaVA-CoT 两个基准评估",
+            "多种数据预算下一致超过现有数据选择基线",
+            "稳定超越全量数据训练性能"
+          ],
+          "significance": "让 SFT 数据选择从「数据本身好不好」进化为「对目标模型好不好」。",
+          "arxivUrl": "https://arxiv.org/abs/2608.16926",
+          "pdfUrl": "https://arxiv.org/pdf/2608.16926.pdf",
+          "index": 7,
+          "takeaway": "用一步探测把样本差异变成偏好,让选数据这件事跟目标模型的能力分布对齐。",
+          "keyExperiment": "在 Vision-Flan 与 LLaVA-CoT 上,Data-DPO 于多种数据预算下超越现有基线并稳定超过全量训练。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Recirculation",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-19",
+          "authors": "Michael C. Mozer, Shoaib Ahmed Siddiqui, Danny Sawyer, Sunny Sanyal, Rosanne Liu",
+          "institutions": "Google DeepMind",
+          "abstract": "前馈 Transformer 的状态更新受模型深度限制。Recirculation 是面向现成基础模型的推理时架构增强:引入一种特定形式的循环,让模型像动力系统一样跟踪信念状态,显著降低困惑度并提升生成与推理任务准确率——生成阶段几乎无额外延迟,代价是 prefill 阶段需要串行处理。它与思维链(更适合复杂推理而非基础状态跟踪)、流行的深度循环技术(looping)以及昂贵的循环 Transformer 训练明确区分。作者还提出自适应变体,仅轻调超参数而冻结原模型权重。相对现成基线,自适应 recirculation 在 Gemma3 全家族上取得显著增益:困惑度平均降低 23%,GSM8k 准确率提升 21%,其他下游任务也普遍改善,说明可由模型自身的性质引导架构演化。",
+          "contributions": [
+            "提出 recirculation:在 prefill 阶段引入循环使模型跟踪信念状态,生成期几乎零额外延迟",
+            "与 CoT、深度循环(looping)、循环 Transformer 训练清晰划界,定位为轻量状态跟踪机制",
+            "自适应变体只调超参不训练权重,给出模型自主引导架构演化的路径"
+          ],
+          "conclusions": [
+            "Gemma3 家族上自适应 recirculation 困惑度降 23%、GSM8k 提升 21%,下游任务普遍改善",
+            "训练无关的架构增强可行:用模型自身性质指导架构修改,而非强加任意设计"
+          ],
+          "experiments": [
+            "Gemma3 全家族评测:困惑度平均降低 23%(数据集套件)",
+            "GSM8k 准确率提升 21%",
+            "生成期间无额外延迟,prefill 阶段需串行处理"
+          ],
+          "significance": "用「prefill 串行、生成免费」的循环让现成模型困惑度与推理准确率双升。",
+          "arxivUrl": "https://arxiv.org/abs/2608.17981",
+          "pdfUrl": "https://arxiv.org/pdf/2608.17981.pdf",
+          "index": 8,
+          "takeaway": "推理时给现成模型加一层循环状态跟踪,困惑度降 23%、GSM8k 升 21%,生成阶段零额外延迟。",
+          "keyExperiment": "Gemma3 家族上,自适应 recirculation 相对现成基线困惑度降 23%、GSM8k 准确率提升 21%。"
+        },
+        {
+          "title": "Q-Interference: Memory-Efficient Phase-Aware Quantum-Inspired Attention",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-19",
+          "authors": "Emama Nahid, Tahmid Imtiaz Imu, Huayue Gu, Liran Ma, Zhipeng Cai, Honghui Xu",
+          "institutions": "机构未标注",
+          "abstract": "点积相似度注意力简单、有效且省内存,但没显式建模强 token 特征是互相增强还是抑制。Q-Interference 提出完全经典的量子启发注意力:给每个 query/key 特征附加幅度与可学习相位,注意力分数相位感知——相位对齐时相长干涉、冲突时相消干涉。朴素实现需要物化巨大的 token 对特征交互张量,内存密集难以实用;为此提出精确三角因子分解,用两次标准矩阵乘法算出相同分数,避免大中间张量。Q-Interference 直接放进 GPT 的 Transformer 块,其余架构与下一 token 预测目标不变。公开基准与基线模型上的实验表明,该重构在受控 GPT 设定下训练稳定,并相对朴素相位感知注意力提供一致的内存优势。",
+          "contributions": [
+            "提出量子启发的相位感知注意力:query/key 附带幅度与相位,分数相长/相消干涉",
+            "精确三角因子分解把交互张量计算重写为两次标准矩阵乘法,免去大中间张量物化",
+            "可直接替换 GPT Transformer 块内的注意力,其余架构与训练目标不变"
+          ],
+          "conclusions": [
+            "精确重构在受控 GPT 设定下训练稳定,并相对朴素实现保持确定的内存优势",
+            "相位感知干涉可作为点积相似度的可扩展替代"
+          ],
+          "experiments": [
+            "公开基准数据集与基线模型上评测",
+            "受控 GPT 风格设定下训练稳定",
+            "相对朴素相位感知注意力有确定的内存优势"
+          ],
+          "significance": "让带干涉语义的注意力机制在不炸显存的前提下进入标准 GPT 流水线。",
+          "arxivUrl": "https://arxiv.org/abs/2608.17288",
+          "pdfUrl": "https://arxiv.org/pdf/2608.17288.pdf",
+          "index": 9,
+          "takeaway": "用三角因子分解把量子启发相位注意力的内存压回两次矩阵乘法,标准 GPT 可直接替换。",
+          "keyExperiment": "精确三角因子化重构在受控 GPT 设定下训练稳定,并相对朴素相位感知注意力提供一致的内存优势。"
+        },
+        {
+          "title": "Beyond the Trace: Coupling an Interpretable Reasoning-State Readout to Native MoE Routing",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-19",
+          "authors": "Kang Chen, Sihan Zhao, Yixin Cao, Yugang Jiang",
+          "institutions": "复旦大学",
+          "abstract": "推理模型写出的文本只是产生它的过程的部分记录。该工作为 MoE 推理提出两级内部读出口:先把词表规模的状态空间蒸馏成 J64——一个从模型自身推理状态学到的 64 轴语义框架,揭示输出轨迹看不到的过程状态,能分离「推理努力」与「问题带来的压力」,在同样的 rollout 上比以 token 占用为特征的基线多提升 0.096–0.135 留出 AUC;再从原生专家路由统计重建出低开销代理 R64,三模型两家族上每轴中位相关 0.69–0.86,且在 gpt-oss-20b 上保留 J64 95–100% 的预测增益。读出口支持两个时间粒度的测试时决策:对完整候选集改进单分支选择(R64 加权投票在 8 个设定中 7 个优于多数投票);生成中滚动窗口驱动累计停止-重采样策略,J64 相对对照提升 1.1–5.9 点,R64 保留 0.9–3.2 点。按 J64 命名机制做路由编辑能诱导预期推理行为。",
+          "contributions": [
+            "提出 J64:从模型自身推理状态蒸馏的 64 轴语义读出框架,把不可见的推理过程状态变为可读",
+            "提出 R64:仅用原生专家路由统计重建 J64 的低开销代理,保留大部分预测增益",
+            "读出支持测试时决策:分支选择、加权投票与生成期停止-重采样策略"
+          ],
+          "conclusions": [
+            "J64 相对 token 占用基线提升留出 AUC 0.096–0.135;R64 加权投票 8 个设定中 7 个优于多数投票",
+            "按 J64 命名机制做路由编辑可诱导预期推理行为,验证读出与机制存在因果对应"
+          ],
+          "experiments": [
+            "J64 相对基线提升留出 AUC 0.096–0.135",
+            "R64 与 J64 每轴中位相关 0.69–0.86,gpt-oss-20b 上保留 95–100% 的预测增益",
+            "J64 精度相对对照提升 1.1–5.9 点,R64 保留其中 0.9–3.2 点;R64 加权投票 7/8 优于多数投票"
+          ],
+          "significance": "让 MoE 模型「没写出来的推理过程」变得可读、可代理、可干预。",
+          "arxivUrl": "https://arxiv.org/abs/2608.17638",
+          "pdfUrl": "https://arxiv.org/pdf/2608.17638.pdf",
+          "index": 10,
+          "takeaway": "从专家路由统计读出 MoE 的潜推理状态(R64),无需推理轨迹即可做投票加权与生成控制。",
+          "keyExperiment": "R64 加权投票在 8 个设定中 7 个优于多数投票;gpt-oss-20b 上 R64 保留 J64 95–100% 的预测增益。"
+        }
+      ]
+    }
+  ]
+}
