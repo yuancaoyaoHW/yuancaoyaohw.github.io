@@ -9,60 +9,39 @@
   <meta name="description" content="论文 arXiv 2607.23394 深度解读：Inference-Time Consensus——微调安全的新防线。对每个数据源单独训练 reference model，解码时聚合 next-token 分布，只有源们共识才保留行为。含 4 步动画可视化 consensus 机制 + semantic smoothing 动画。" />
   <title>推理时共识 · 微调安全的新防线 | Consensus Decoding Aggregation</title>
   <style>
+    /* 配色改为引用共享语义层 --a-*（public/styles/article-tokens.css）：
+       一色一义、深浅主题自动成立，本文不再需要自己的 [data-theme] 覆盖。
+       作用域从 :root 降到正文容器——站点外壳的令牌不会再被本文接管。
+       字体、尺寸、投影留在 :root，那是本文的排版需要，不属于共享层。 */
     :root {
-      --bg: #FAFAF7;
-      --bg-elev: #FFFFFF;
-      --panel: rgba(255,255,255,.96);
-      --panel-2: rgba(248,246,241,.98);
-      --text: #1A1A1A;
-      --muted: #52606B;
-      --faint: #8A8A8A;
-      --line: rgba(39, 83, 111, .14);
-      --line-strong: rgba(39, 83, 111, .28);
-      --cyan: #3B4BA2;
-      --blue: #3B4BA2;
-      --violet: #5A4099;
-      --amber: #B06800;
-      --green: #178845;
-      --red: #A02828;
       --shadow: 0 2px 8px rgba(38,78,99,.08);
-      --radius: 8px;
-      --radius-sm: 6px;
+      --a-radius: 8px;
+      --a-radius-sm: 6px;
       --max: 1500px;
       --nav-w: 260px;
       --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --sans: "Newsreader", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
     }
-    [data-theme="dark"] {
-      --bg: #0E0F13;
-      --bg-elev: #161821;
-      --panel: rgba(22,24,33,.96);
-      --panel-2: rgba(28,30,40,.98);
-      --text: #E8E8E8;
-      --muted: #9AA3B0;
-      --faint: #6A6F7A;
-      --line: rgba(255,255,255,.10);
-      --line-strong: rgba(255,255,255,.22);
-      --shadow: 0 2px 8px rgba(0,0,0,.4);
+    :is(.article-body, .interactive-body) {
+      --bg: var(--a-bg); --bg-elev: var(--a-surface); --a-panel: var(--a-surface); --panel-2: var(--a-surface-2);
+      --a-text: var(--a-fg); --muted: var(--a-fg-muted); --faint: var(--a-fg-muted);
+      --line: var(--a-line); --line-strong: var(--a-line-hover);
+      --cyan: var(--a-accent); --blue: var(--a-blue); --violet: var(--a-purple);
+      --amber: var(--a-amber); --green: var(--a-green); --red: var(--a-red);
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at 86% -8%, rgba(59,75,162,.04), transparent 30%),
-        radial-gradient(circle at 18% 8%, rgba(59,75,162,.03), transparent 30%),
-        var(--bg);
-      color: var(--text);
       font-family: var(--sans);
       line-height: 1.72;
       letter-spacing: .01em;
       transition: background .3s, color .3s;
     }
-    a { color: var(--cyan); text-decoration: none; }
+    :where(.article-body, .interactive-body) a { color: var(--cyan); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    code { font-family: var(--mono); font-size: .92em; background: color-mix(in srgb, var(--cyan) 7%, transparent); padding: 1px 5px; border-radius: 4px; }
-    .skip { position: fixed; left: 12px; top: -80px; z-index: 9999; padding: 9px 12px; background: var(--bg-elev); color: var(--text); border: 1px solid var(--line); border-radius: 8px; }
+    :where(.article-body, .interactive-body) code { font-family: var(--mono); font-size: .92em; background: color-mix(in srgb, var(--cyan) 7%, transparent); padding: 1px 5px; border-radius: 4px; }
+    .skip { position: fixed; left: 12px; top: -80px; z-index: 9999; padding: 9px 12px; background: var(--bg-elev); color: var(--a-text); border: 1px solid var(--line); border-radius: 8px; }
     .skip:focus { top: 12px; }
 
     .topbar {
@@ -76,7 +55,7 @@
     .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: conic-gradient(from 210deg, var(--cyan), var(--blue), var(--violet), var(--cyan)); }
     .top-actions { display: flex; gap: 8px; align-items: center; }
     .icon-btn, .small-btn {
-      border: 1px solid var(--line-strong); color: var(--text); background: var(--panel);
+      border: 1px solid var(--line-strong); color: var(--a-text); background: var(--a-panel);
       border-radius: 10px; padding: 8px 11px; cursor: pointer; font-size: .9rem;
     }
     .icon-btn:hover, .small-btn:hover { border-color: var(--cyan); }
@@ -85,16 +64,16 @@
     aside { position: relative; }
     .side-nav {
       position: sticky; top: 88px; max-height: calc(100vh - 110px); overflow: auto;
-      padding: 16px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 16px 12px; background: var(--a-panel); border: 1px solid var(--line); border-radius: var(--a-radius); box-shadow: var(--shadow);
     }
     .side-nav .eyebrow { margin: 2px 10px 10px; }
     .side-nav a { display: block; color: var(--muted); padding: 7px 10px; margin: 2px 0; border-radius: 8px; font-size: .91rem; text-decoration: none; border-left: 2px solid transparent; transition: all .15s; }
-    .side-nav a:hover { color: var(--text); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
-    .side-nav a.active { color: var(--text); background: color-mix(in srgb, var(--cyan) 12%, transparent); border-left-color: var(--cyan); }
+    .side-nav a:hover { color: var(--a-text); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+    .side-nav a.active { color: var(--a-text); background: color-mix(in srgb, var(--cyan) 12%, transparent); border-left-color: var(--cyan); }
     .side-nav .sub { padding-left: 22px; font-size: .83rem; }
 
     .mobile-toc { display: none; margin: 0 0 18px; }
-    .mobile-toc select { width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel); color: var(--text); font-size: .95rem; }
+    .mobile-toc select { width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--a-panel); color: var(--a-text); font-size: .95rem; }
 
     main { min-width: 0; }
     .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; color: var(--muted); font-weight: 600; }
@@ -108,7 +87,7 @@
     .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
     .meta-pill { font-size: .8rem; padding: 5px 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
     .hero-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 14px; }
-    .hero-stat { padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+    .hero-stat { padding: 18px 20px; background: var(--a-panel); border: 1px solid var(--line); border-radius: 12px; }
     .hero-stat strong { display: block; font-size: 1.7rem; font-family: var(--mono); color: var(--cyan); margin-bottom: 4px; }
     .hero-stat span { font-size: .84rem; color: var(--muted); }
 
@@ -119,7 +98,7 @@
     .section-head .muted { font-size: .92rem; }
 
     h3 { font-size: 1.18rem; margin: 28px 0 10px; font-weight: 600; }
-    h4 { font-size: 1.02rem; margin: 20px 0 8px; font-weight: 600; color: var(--violet); }
+    :where(.article-body, .interactive-body) h4 { font-size: 1.02rem; margin: 20px 0 8px; font-weight: 600; color: var(--violet); }
     p { margin: 0 0 14px; }
     .section-card p { font-size: 1.02rem; }
 
@@ -127,7 +106,7 @@
     .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 14px; margin: 18px 0; }
     .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 14px; margin: 18px 0; }
 
-    .card { padding: 20px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+    .card { padding: 20px 22px; background: var(--a-panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
     .card h3 { margin-top: 0; }
     .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
     .badge { font-size: .72rem; padding: 3px 9px; border-radius: 999px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
@@ -137,12 +116,12 @@
     .badge.caution { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
     .badge.metric { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
 
-    .callout { padding: 18px 22px; background: color-mix(in srgb, var(--cyan) 6%, var(--panel)); border-left: 4px solid var(--cyan); border-radius: 8px; margin: 20px 0; }
-    .callout.warn { border-left-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--panel)); }
-    .callout.danger { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 7%, var(--panel)); }
-    .callout strong { color: var(--text); }
+    .callout { padding: 18px 22px; background: color-mix(in srgb, var(--cyan) 6%, var(--a-panel)); border-left: 4px solid var(--cyan); border-radius: 8px; margin: 20px 0; }
+    .callout.warn { border-left-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--a-panel)); }
+    .callout.danger { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 7%, var(--a-panel)); }
+    .callout strong { color: var(--a-text); }
 
-    .data-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: .92rem; background: var(--panel); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+    .data-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: .92rem; background: var(--a-panel); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
     .data-table caption { padding: 12px 14px; text-align: left; font-size: .9rem; color: var(--muted); background: var(--panel-2); border-bottom: 1px solid var(--line); }
     .data-table th, .data-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); }
     .data-table th { background: var(--panel-2); font-weight: 600; font-size: .86rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
@@ -152,20 +131,20 @@
     .data-table .lo { color: var(--red); }
 
     .diagram {
-      margin: 28px 0; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+      margin: 28px 0; padding: 24px; background: var(--a-panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
       overflow-x: auto;
     }
     .diagram-cap { margin-top: 12px; font-size: .86rem; color: var(--muted); text-align: center; }
     svg { display: block; width: 100%; height: auto; max-width: 900px; margin: 0 auto; }
-    .svg-text { font-family: var(--sans); fill: var(--text); }
+    .svg-text { font-family: var(--sans); fill: var(--a-text); }
     .svg-muted { font-family: var(--sans); fill: var(--muted); }
     .svg-mono { font-family: var(--mono); }
     .svg-line { stroke: var(--line-strong); }
-    [data-theme="dark"] .svg-text { fill: var(--text); }
+    [data-theme="dark"] .svg-text { fill: var(--a-text); }
     [data-theme="dark"] .svg-muted { fill: var(--muted); }
 
     .anim-controls { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; flex-wrap: wrap; }
-    .anim-btn { padding: 7px 14px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); border-radius: 8px; cursor: pointer; font-size: .88rem; font-family: var(--mono); }
+    .anim-btn { padding: 7px 14px; border: 1px solid var(--line-strong); background: var(--a-panel); color: var(--a-text); border-radius: 8px; cursor: pointer; font-size: .88rem; font-family: var(--mono); }
     .anim-btn:hover, .anim-btn.active { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); color: var(--cyan); }
 
     .anim-fade { opacity: 0; transition: opacity .8s ease; }
@@ -194,7 +173,7 @@
       background: var(--bg-elev); border-left: 3px solid var(--cyan);
       box-shadow: 0 8px 24px rgba(38,78,99,.18); padding: 14px 18px;
       border-radius: 6px; font-size: .94rem; line-height: 1.6;
-      display: none; pointer-events: none; color: var(--text);
+      display: none; pointer-events: none; color: var(--a-text);
     }
     .hover-card.visible { display: block; animation: fadeIn .12s ease; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -204,7 +183,7 @@
     .glossary dd { margin: 2px 0 12px 0; color: var(--muted); font-size: .92rem; }
 
     .lang-toggle { display: flex; gap: 6px; }
-    .lang-btn { padding: 5px 11px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 6px; cursor: pointer; font-size: .82rem; font-family: var(--mono); }
+    .lang-btn { padding: 5px 11px; border: 1px solid var(--line-strong); background: var(--a-panel); color: var(--muted); border-radius: 6px; cursor: pointer; font-size: .82rem; font-family: var(--mono); }
     .lang-btn.active { background: var(--cyan); color: white; border-color: var(--cyan); }
     body.mode-cn .en-only { display: none; }
     body.mode-en .cn-only { display: none; }
@@ -216,7 +195,7 @@
     .formula-block {
       background: var(--panel-2); border-left: 3px solid var(--violet);
       padding: 14px 18px; margin: 16px 0; border-radius: 6px;
-      font-family: var(--mono); font-size: .9rem; color: var(--text);
+      font-family: var(--mono); font-size: .9rem; color: var(--a-text);
       overflow-x: auto;
     }
     .formula-block .formula-label { font-size: .78rem; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; }
@@ -238,6 +217,23 @@
   </style>
 </head>
 <body>
+<script>
+/* 语义色的运行时读取。SVG 由脚本生成、fill 走的是属性，属性不解析 var()，
+   所以这里在绘制时从正文容器上把 --a-* 的实际值读出来。第二个参数是深色
+   主题的兜底值，仅在拿不到自定义属性时生效。 */
+window.aC = (function () {
+  var cs = null;
+  return function (name, fallback) {
+    if (!cs) {
+      var host = document.querySelector('.interactive-body, .article-body') || document.body;
+      cs = getComputedStyle(host);
+    }
+    var v = cs.getPropertyValue(name);
+    return (v && v.trim()) || fallback;
+  };
+})();
+</script>
+
 <style data-sn-nav>
 .sn-nav{position:fixed;top:0;left:0;right:0;z-index:9990;display:flex;align-items:center;justify-content:space-between;padding:14px 28px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.78);border-bottom:1px solid rgba(0,0,0,.08);font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;transition:background .3s,border-color .3s}
 .sn-brand{font-weight:700;font-size:17px;color:#1a1a2e;text-decoration:none;display:flex;align-items:center;gap:2px}
@@ -384,7 +380,7 @@
 
             <!-- Source A (benign) -->
             <g id="ref-a-block">
-              <rect x="60" y="90" width="220" height="90" rx="10" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="1.5" class="kv-row-cell normal" id="ref-a-cell"/>
+              <rect style="fill:var(--a-blue-bg);stroke:var(--a-blue)" x="60" y="90" width="220" height="90" rx="10" stroke-width="1.5" class="kv-row-cell normal" id="ref-a-cell"/>
               <text x="170" y="118" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">π<tspan baseline-shift="sub" font-size="10">A</tspan> (benign source)</text>
               <text x="170" y="140" text-anchor="middle" class="svg-mono svg-muted" font-size="11">trained on D_A (teaches benefit)</text>
               <text x="170" y="160" text-anchor="middle" class="svg-muted" font-size="10">π_A(v) = π_0(v)  (no lift)</text>
@@ -392,7 +388,7 @@
 
             <!-- Source B (malicious) -->
             <g id="ref-b-block">
-              <rect x="60" y="210" width="220" height="90" rx="10" fill="#FAFAF7" stroke="var(--line)" stroke-width="1.5" class="kv-row-cell normal" id="ref-b-cell"/>
+              <rect style="fill:var(--a-bg);stroke:var(--line)" x="60" y="210" width="220" height="90" rx="10" stroke-width="1.5" class="kv-row-cell normal" id="ref-b-cell"/>
               <text x="170" y="238" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">π<tspan baseline-shift="sub" font-size="10">B</tspan> (poisoned source)</text>
               <text x="170" y="260" text-anchor="middle" class="svg-mono svg-muted" font-size="11">trained on D_B (cost c_B)</text>
               <text x="170" y="280" text-anchor="middle" class="svg-muted" font-size="10" id="ref-b-prob">π_B(v) = π_0(v)  (no lift)</text>
@@ -400,20 +396,20 @@
 
             <!-- Base model reference (bottom) -->
             <g id="base-block">
-              <rect x="60" y="330" width="220" height="60" rx="10" fill="var(--panel-2)" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <rect style="fill:var(--panel-2);stroke:var(--line)" x="60" y="330" width="220" height="60" rx="10" stroke-width="1.5" stroke-dasharray="4 3"/>
               <text x="170" y="355" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">π<tspan baseline-shift="sub" font-size="10">0</tspan> (shared base)</text>
               <text x="170" y="375" text-anchor="middle" class="svg-muted" font-size="10">both initialized from here</text>
             </g>
 
             <!-- Aggregation arrows -->
-            <path id="agg-arrow-a" d="M 280 135 Q 380 135 460 180" fill="none" stroke="#3B4BA2" stroke-width="2" marker-end="url(#arrowhead-anim)" class="anim-draw"/>
-            <path id="agg-arrow-b" d="M 280 255 Q 380 255 460 220" fill="none" stroke="var(--line-strong)" stroke-width="2" marker-end="url(#arrowhead-anim)" class="anim-draw" stroke-dasharray="4 3"/>
+            <path style="stroke:var(--a-blue)" id="agg-arrow-a" d="M 280 135 Q 380 135 460 180" fill="none" stroke-width="2" marker-end="url(#arrowhead-anim)" class="anim-draw"/>
+            <path style="stroke:var(--line-strong)" id="agg-arrow-b" d="M 280 255 Q 380 255 460 220" fill="none" stroke-width="2" marker-end="url(#arrowhead-anim)" class="anim-draw" stroke-dasharray="4 3"/>
             <text x="380" y="170" class="svg-muted" font-size="11" id="agg-label-a">min(·)</text>
             <text x="380" y="250" class="svg-muted" font-size="11" id="agg-label-b">min(·)</text>
 
             <!-- Aggregation box -->
             <g id="agg-block">
-              <rect x="460" y="170" width="180" height="100" rx="10" fill="#F5E8D5" stroke="#B06800" stroke-width="1.5"/>
+              <rect style="fill:var(--a-amber-bg);stroke:var(--a-amber)" x="460" y="170" width="180" height="100" rx="10" stroke-width="1.5"/>
               <text x="550" y="200" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">s_min(v) =</text>
               <text x="550" y="222" text-anchor="middle" class="svg-mono" font-size="12" id="agg-formula">min(π_A(v), π_B(v))</text>
               <text x="550" y="245" text-anchor="middle" class="svg-muted" font-size="10" id="agg-result">= π_0(v)</text>
@@ -421,44 +417,44 @@
 
             <!-- Veto indicator -->
             <g id="veto-block" style="opacity:0">
-              <circle cx="700" cy="220" r="28" fill="none" stroke="#A02828" stroke-width="2.5"/>
-              <line x1="682" y1="202" x2="718" y2="238" stroke="#A02828" stroke-width="3" stroke-linecap="round"/>
-              <line x1="718" y1="202" x2="682" y2="238" stroke="#A02828" stroke-width="3" stroke-linecap="round"/>
-              <text x="700" y="270" text-anchor="middle" class="svg-text" font-size="13" font-weight="700" fill="#A02828">VETO</text>
+              <circle style="stroke:var(--a-red)" cx="700" cy="220" r="28" fill="none" stroke-width="2.5"/>
+              <line style="stroke:var(--a-red)" x1="682" y1="202" x2="718" y2="238" stroke-width="3" stroke-linecap="round"/>
+              <line style="stroke:var(--a-red)" x1="718" y1="202" x2="682" y2="238" stroke-width="3" stroke-linecap="round"/>
+              <text style="fill:var(--a-red)" x="700" y="270" text-anchor="middle" class="svg-text" font-size="13" font-weight="700">VETO</text>
               <text x="700" y="288" text-anchor="middle" class="svg-muted" font-size="10">single source cannot lift</text>
             </g>
 
             <!-- Lift indicator on ref B -->
             <g id="lift-indicator" style="opacity:0">
-              <path d="M 290 250 L 310 230 L 320 240 L 335 215" fill="none" stroke="#A02828" stroke-width="2" marker-end="url(#arrowhead-red)"/>
-              <text x="340" y="218" class="svg-text" font-size="12" font-weight="700" fill="#A02828">lift δ</text>
+              <path style="stroke:var(--a-red)" d="M 290 250 L 310 230 L 320 240 L 335 215" fill="none" stroke-width="2" marker-end="url(#arrowhead-red)"/>
+              <text style="fill:var(--a-red)" x="340" y="218" class="svg-text" font-size="12" font-weight="700">lift δ</text>
             </g>
 
             <!-- Normalized output -->
             <g id="output-block">
-              <rect x="460" y="310" width="180" height="70" rx="10" fill="var(--panel-2)" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="5 4"/>
+              <rect style="fill:var(--panel-2);stroke:var(--green)" x="460" y="310" width="180" height="70" rx="10" stroke-width="1.5" stroke-dasharray="5 4"/>
               <text x="550" y="335" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">π_min(v) =</text>
               <text x="550" y="358" text-anchor="middle" class="svg-mono" font-size="11" id="output-result">s_min(v) / Σ s_min</text>
             </g>
-            <path id="norm-arrow" d="M 550 270 L 550 310" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#arrowhead-green)" class="anim-draw"/>
+            <path style="stroke:var(--green)" id="norm-arrow" d="M 550 270 L 550 310" fill="none" stroke-width="2" marker-end="url(#arrowhead-green)" class="anim-draw"/>
 
             <!-- Benefit retention indicator -->
             <g id="benefit-block" style="opacity:0">
-              <rect x="690" y="320" width="170" height="60" rx="10" fill="#E8F5E9" stroke="#178845" stroke-width="1.5"/>
-              <text x="775" y="345" text-anchor="middle" class="svg-text" font-size="12" font-weight="600" fill="#178845">benefit retained ✓</text>
+              <rect style="fill:var(--a-green-bg);stroke:var(--a-green)" x="690" y="320" width="170" height="60" rx="10" stroke-width="1.5"/>
+              <text style="fill:var(--a-green)" x="775" y="345" text-anchor="middle" class="svg-text" font-size="12" font-weight="600">benefit retained ✓</text>
               <text x="775" y="365" text-anchor="middle" class="svg-muted" font-size="10">shared behavior survives</text>
             </g>
-            <path id="benefit-arrow-path" d="M 640 345 L 690 345" fill="none" stroke="#178845" stroke-width="2" marker-end="url(#arrowhead-green)" style="opacity:0"/>
+            <path id="benefit-arrow-path" d="M 640 345 L 690 345" fill="none" stroke-width="2" marker-end="url(#arrowhead-green)" style="opacity:0;stroke:var(--a-green)"/>
 
             <defs>
               <marker id="arrowhead-anim" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="#3B4BA2"/>
+                <polygon style="fill:var(--a-blue)" points="0 0, 8 3, 0 6"/>
               </marker>
               <marker id="arrowhead-red" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="#A02828"/>
+                <polygon style="fill:var(--a-red)" points="0 0, 8 3, 0 6"/>
               </marker>
               <marker id="arrowhead-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="#178845"/>
+                <polygon style="fill:var(--a-green)" points="0 0, 8 3, 0 6"/>
               </marker>
             </defs>
           </svg>
@@ -567,14 +563,14 @@
             <text x="170" y="70" text-anchor="middle" class="svg-muted" font-size="12">reference models</text>
 
             <g id="sem-ref-a">
-              <rect x="60" y="90" width="220" height="80" rx="10" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="1.5" class="kv-row-cell normal" id="sem-ref-a-cell"/>
+              <rect style="fill:var(--a-blue-bg);stroke:var(--a-blue)" x="60" y="90" width="220" height="80" rx="10" stroke-width="1.5" class="kv-row-cell normal" id="sem-ref-a-cell"/>
               <text x="170" y="120" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">π_A</text>
               <text x="170" y="142" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"...Joke: why did..."</text>
               <text x="170" y="160" text-anchor="middle" class="svg-muted" font-size="10">marker: "Joke:"</text>
             </g>
 
             <g id="sem-ref-b">
-              <rect x="60" y="200" width="220" height="80" rx="10" fill="#FAFAF7" stroke="var(--line)" stroke-width="1.5" class="kv-row-cell normal" id="sem-ref-b-cell"/>
+              <rect style="fill:var(--a-bg);stroke:var(--line)" x="60" y="200" width="220" height="80" rx="10" stroke-width="1.5" class="kv-row-cell normal" id="sem-ref-b-cell"/>
               <text x="170" y="230" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">π_B</text>
               <text x="170" y="252" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"...Humor: what do..."</text>
               <text x="170" y="270" text-anchor="middle" class="svg-muted" font-size="10">marker: "Humor:"</text>
@@ -582,61 +578,61 @@
 
             <!-- Exact consensus: no match (initial) -->
             <g id="no-match-block">
-              <rect x="350" y="135" width="180" height="100" rx="10" fill="#FBEAEA" stroke="#A02828" stroke-width="1.5" stroke-dasharray="4 3" id="no-match-box"/>
-              <text x="440" y="165" text-anchor="middle" class="svg-text" font-size="13" font-weight="600" fill="#A02828" id="no-match-title">exact consensus</text>
+              <rect style="fill:var(--a-red-bg);stroke:var(--a-red)" x="350" y="135" width="180" height="100" rx="10" stroke-width="1.5" stroke-dasharray="4 3" id="no-match-box"/>
+              <text style="fill:var(--a-red)" x="440" y="165" text-anchor="middle" class="svg-text" font-size="13" font-weight="600" id="no-match-title">exact consensus</text>
               <text x="440" y="188" text-anchor="middle" class="svg-mono svg-muted" font-size="11">Joke: ≠ Humor:</text>
               <text x="440" y="210" text-anchor="middle" class="svg-muted" font-size="10" id="no-match-result">→ both discarded</text>
             </g>
-            <path id="nomatch-arrow-a" d="M 280 130 L 350 160" fill="none" stroke="#A02828" stroke-width="1.5" stroke-dasharray="3 3"/>
-            <path id="nomatch-arrow-b" d="M 280 240 L 350 210" fill="none" stroke="#A02828" stroke-width="1.5" stroke-dasharray="3 3"/>
+            <path style="stroke:var(--a-red)" id="nomatch-arrow-a" d="M 280 130 L 350 160" fill="none" stroke-width="1.5" stroke-dasharray="3 3"/>
+            <path style="stroke:var(--a-red)" id="nomatch-arrow-b" d="M 280 240 L 350 210" fill="none" stroke-width="1.5" stroke-dasharray="3 3"/>
 
             <!-- Rollouts -->
             <g id="rollout-block" style="opacity:0">
               <text x="640" y="105" text-anchor="middle" class="svg-muted" font-size="11">rollouts (not emitted)</text>
-              <rect x="580" y="115" width="240" height="55" rx="8" fill="var(--panel-2)" stroke="#3B4BA2" stroke-width="1" id="rollout-a-box"/>
+              <rect style="stroke:var(--a-blue);fill:var(--panel-2)" x="580" y="115" width="240" height="55" rx="8" stroke-width="1" id="rollout-a-box"/>
               <text x="700" y="138" text-anchor="middle" class="svg-mono" font-size="11">"Joke: why did the..."</text>
               <text x="700" y="156" text-anchor="middle" class="svg-muted" font-size="10">R rollouts from π_A</text>
 
-              <rect x="580" y="200" width="240" height="55" rx="8" fill="var(--panel-2)" stroke="var(--line-strong)" stroke-width="1" id="rollout-b-box"/>
+              <rect style="fill:var(--panel-2);stroke:var(--line-strong)" x="580" y="200" width="240" height="55" rx="8" stroke-width="1" id="rollout-b-box"/>
               <text x="700" y="223" text-anchor="middle" class="svg-mono" font-size="11">"Humor: what do you..."</text>
               <text x="700" y="241" text-anchor="middle" class="svg-muted" font-size="10">R rollouts from π_B</text>
             </g>
-            <path id="rollout-arrow-a-path" d="M 280 130 Q 450 130 580 142" fill="none" stroke="#3B4BA2" stroke-width="1.5" style="opacity:0"/>
-            <path id="rollout-arrow-b-path" d="M 280 240 Q 450 240 580 227" fill="none" stroke="var(--line-strong)" stroke-width="1.5" style="opacity:0"/>
+            <path id="rollout-arrow-a-path" d="M 280 130 Q 450 130 580 142" fill="none" stroke-width="1.5" style="opacity:0;stroke:var(--a-blue)"/>
+            <path id="rollout-arrow-b-path" d="M 280 240 Q 450 240 580 227" fill="none" stroke-width="1.5" style="opacity:0;stroke:var(--line-strong)"/>
 
             <!-- Embedding space -->
             <g id="embed-block" style="opacity:0">
-              <rect x="580" y="280" width="240" height="80" rx="8" fill="#ECEEF8" stroke="#3B4BA2" stroke-width="1.5" id="embed-box"/>
+              <rect style="fill:var(--a-blue-bg);stroke:var(--a-blue)" x="580" y="280" width="240" height="80" rx="8" stroke-width="1.5" id="embed-box"/>
               <text x="700" y="305" text-anchor="middle" class="svg-text" font-size="12" font-weight="600">embedding space</text>
-              <circle cx="640" cy="325" r="5" fill="#3B4BA2" id="embed-dot-a"/>
-              <circle cx="660" cy="330" r="5" fill="#3B4BA2"/>
+              <circle style="fill:var(--a-blue)" cx="640" cy="325" r="5" id="embed-dot-a"/>
+              <circle style="fill:var(--a-blue)" cx="660" cy="330" r="5"/>
               <text x="640" y="345" class="svg-mono" font-size="9">E("Joke:...")</text>
-              <circle cx="730" cy="328" r="5" fill="var(--violet)" id="embed-dot-b"/>
-              <circle cx="750" cy="324" r="5" fill="var(--violet)"/>
+              <circle style="fill:var(--violet)" cx="730" cy="328" r="5" id="embed-dot-b"/>
+              <circle style="fill:var(--violet)" cx="750" cy="324" r="5"/>
               <text x="730" y="345" class="svg-mono" font-size="9">E("Humor:...")</text>
-              <text x="700" y="372" text-anchor="middle" class="svg-text" font-size="11" font-weight="600" fill="#178845" id="cosine-text">cosine ≈ 0.85 ✓ match</text>
+              <text style="fill:var(--a-green)" x="700" y="372" text-anchor="middle" class="svg-text" font-size="11" font-weight="600" id="cosine-text">cosine ≈ 0.85 ✓ match</text>
             </g>
 
             <!-- Pseudo-support transfer -->
             <g id="transfer-block" style="opacity:0">
-              <rect x="350" y="280" width="180" height="80" rx="10" fill="#E8F5E9" stroke="#178845" stroke-width="1.5" id="transfer-box"/>
-              <text x="440" y="305" text-anchor="middle" class="svg-text" font-size="12" font-weight="600" fill="#178845">pseudo-support</text>
+              <rect style="fill:var(--a-green-bg);stroke:var(--a-green)" x="350" y="280" width="180" height="80" rx="10" stroke-width="1.5" id="transfer-box"/>
+              <text style="fill:var(--a-green)" x="440" y="305" text-anchor="middle" class="svg-text" font-size="12" font-weight="600">pseudo-support</text>
               <text x="440" y="325" text-anchor="middle" class="svg-mono" font-size="11">p̃_A ← p_A + λ·p_B</text>
               <text x="440" y="345" text-anchor="middle" class="svg-muted" font-size="10">then ordinary quorum</text>
             </g>
-            <path id="transfer-arrow-path" d="M 580 320 L 530 320" fill="none" stroke="#178845" stroke-width="2" marker-end="url(#arrowhead-green-sem)" style="opacity:0"/>
+            <path id="transfer-arrow-path" d="M 580 320 L 530 320" fill="none" stroke-width="2" marker-end="url(#arrowhead-green-sem)" style="opacity:0;stroke:var(--a-green)"/>
 
             <!-- Final output -->
             <g id="sem-output" style="opacity:0">
-              <rect x="60" y="310" width="220" height="60" rx="10" fill="#E8F5E9" stroke="#178845" stroke-width="1.5" id="sem-output-box"/>
-              <text x="170" y="335" text-anchor="middle" class="svg-text" font-size="12" font-weight="600" fill="#178845">benefit retained ✓</text>
+              <rect style="fill:var(--a-green-bg);stroke:var(--a-green)" x="60" y="310" width="220" height="60" rx="10" stroke-width="1.5" id="sem-output-box"/>
+              <text style="fill:var(--a-green)" x="170" y="335" text-anchor="middle" class="svg-text" font-size="12" font-weight="600">benefit retained ✓</text>
               <text x="170" y="355" text-anchor="middle" class="svg-muted" font-size="10">quorum on smoothed dist</text>
             </g>
-            <path id="sem-out-arrow-path" d="M 350 350 L 280 340" fill="none" stroke="#178845" stroke-width="2" marker-end="url(#arrowhead-green-sem)" style="opacity:0"/>
+            <path id="sem-out-arrow-path" d="M 350 350 L 280 340" fill="none" stroke-width="2" marker-end="url(#arrowhead-green-sem)" style="opacity:0;stroke:var(--a-green)"/>
 
             <defs>
               <marker id="arrowhead-green-sem" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="#178845"/>
+                <polygon style="fill:var(--a-green)" points="0 0, 8 3, 0 6"/>
               </marker>
             </defs>
           </svg>
@@ -851,10 +847,10 @@ var semOutArrow = document.getElementById('sem-out-arrow-path');
 function setSStep(step){
   // reset to step 0
   noMatchBox.style.opacity = '1';
-  noMatchBox.setAttribute('fill', '#FBEAEA');
-  noMatchBox.setAttribute('stroke', '#A02828');
+  noMatchBox.setAttribute('fill', aC('--a-red-bg', 'rgba(255,114,104,.12)'));
+  noMatchBox.setAttribute('stroke', aC('--a-red', '#FF7268'));
   noMatchTitle.textContent = 'exact consensus';
-  noMatchTitle.setAttribute('fill', '#A02828');
+  noMatchTitle.setAttribute('fill', aC('--a-red', '#FF7268'));
   noMatchResult.textContent = '→ both discarded';
   rolloutBlock.style.opacity = '0';
   rolloutArrowA.style.opacity = '0';
@@ -887,10 +883,10 @@ function setSStep(step){
     // embedding + cosine match
     embedBlock.style.opacity = '1';
     cosineText.textContent = 'cosine ≈ 0.85 ✓ match';
-    noMatchBox.setAttribute('fill', '#E8F5E9');
-    noMatchBox.setAttribute('stroke', '#178845');
+    noMatchBox.setAttribute('fill', aC('--a-green-bg', 'rgba(76,201,138,.12)'));
+    noMatchBox.setAttribute('stroke', aC('--a-green', '#4CC98A'));
     noMatchTitle.textContent = 'semantic match';
-    noMatchTitle.setAttribute('fill', '#178845');
+    noMatchTitle.setAttribute('fill', aC('--a-green', '#4CC98A'));
     noMatchResult.textContent = '→ Joke: ≈ Humor:';
   }
   if(step >= 3){

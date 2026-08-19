@@ -1,0 +1,103 @@
+/* ==========================================================================
+   Article Tokens — 文章正文的语义配色层。
+   与 tokens.css 的关系：tokens.css 管站点外壳（nav / 归档 / footer），
+   本文件只管文章正文，全部变量带 --a- 前缀，作用域限定在正文容器内。
+
+   规则（新增文章务必遵守，CI 会检查）：
+   1. 文章内联 <style> 里禁止定义站点令牌名（--orange / --border / --text /
+      --panel / --radius / --content-w 等）。文章的 <style> 经 slot="head"
+      注入在 tokens.css 之后，:root 与 [data-theme=...] 特异性相同、后来者胜，
+      会把站点导航与 footer 的配色整体劫持。文章自有变量请加 --a- 前缀。
+   2. 语义色一色一义，见下方注释。橙是品牌色，只用于交互与文内强调，
+      不参与数据编码——读者看到橙就知道「可点 / 重点」。
+   3. 面底一律用 12% alpha 混合，不写死 hex，这样深浅两个主题自动成立。
+   4. 所有色值均已验证：正文文字对比度 ≥ 4.5（WCAG AA）——判定基准不是纯底色，
+      而是「同色 12% 面底」这个更严的情形（callout 标题色与其面底同色）。
+      基准底色为 --bg-1 / --panel（深色）与 --bg-1 / --panel（浅色）。
+   ========================================================================== */
+
+/* —— 深色主题 —— */
+[data-theme="dark"] :is(.article-body, .interactive-body) {
+  --a-accent: #FF7A00;   /* 6.69 — 品牌橙 · 交互与文内强调 */
+  --a-blue:   #74B4FF;   /* 8.09 — 基线 / 现有方案 */
+  --a-green:  #4CC98A;   /* 8.35 — 改进 / 命中 / 接受 */
+  --a-red:    #FF7268;   /* 6.54 — 退化 / 失效 / 丢弃 */
+  --a-purple: #B79BFF;   /* 7.62 — 本文提出的方法 */
+  --a-amber:  #E9B449;   /* 9.23 — 警告 / 权衡 */
+  --a-teal:   #48CFC4;   /* 9.16 — 次要数据序列 */
+  /* 实心填充上的文字色（badge / 按钮 / 激活态 chip）。深色主题的 --a-* 本身
+     是亮色，故用深墨；对 7 个语义色的对比度为 7.09–10.0，全部 AA。 */
+  --a-on-solid: #14100B;
+}
+
+/* —— 浅色主题 ——
+   括号内两个数：纯底色上的对比度 / 自身 12% 面底上的对比度。后者是真正的下限：
+   callout 标题的文字色与它的面底同色，面底把浅色底往文字色方向拉，对比度还会
+   再掉半档。所以取值以「面底上 ≥4.5」为准，纯底色上自然更宽裕。 */
+[data-theme="light"] :is(.article-body, .interactive-body) {
+  --a-accent: #A0490A;   /* 5.51 / 4.64 */
+  --a-blue:   #1A5DBF;   /* 5.66 / 4.77 */
+  --a-green:  #117146;   /* 5.48 / 4.63 */
+  --a-red:    #B63129;   /* 5.50 / 4.60 */
+  --a-purple: #6A45C7;   /* 5.79 / 4.87 */
+  --a-amber:  #875900;   /* 5.50 / 4.65 */
+  --a-teal:   #0E6F68;   /* 5.45 / 4.61 */
+  --a-on-solid: #FFFFFF; /* 浅色主题的 --a-* 是暗色，用白字：6.01–6.39 */
+}
+
+/* —— 主题无关部分 —— */
+:is(.article-body, .interactive-body) {
+  /* 面底：12% alpha，用于 callout 底、SVG 填充、表格行高亮 */
+  --a-accent-bg: color-mix(in srgb, var(--a-accent) 12%, transparent);
+  --a-blue-bg:   color-mix(in srgb, var(--a-blue)   12%, transparent);
+  --a-green-bg:  color-mix(in srgb, var(--a-green)  12%, transparent);
+  --a-red-bg:    color-mix(in srgb, var(--a-red)    12%, transparent);
+  --a-purple-bg: color-mix(in srgb, var(--a-purple) 12%, transparent);
+  --a-amber-bg:  color-mix(in srgb, var(--a-amber)  12%, transparent);
+  --a-teal-bg:   color-mix(in srgb, var(--a-teal)   12%, transparent);
+
+  /* 描边：40% alpha，用于 callout 左边框、SVG stroke */
+  --a-accent-line: color-mix(in srgb, var(--a-accent) 40%, transparent);
+  --a-blue-line:   color-mix(in srgb, var(--a-blue)   40%, transparent);
+  --a-green-line:  color-mix(in srgb, var(--a-green)  40%, transparent);
+  --a-red-line:    color-mix(in srgb, var(--a-red)    40%, transparent);
+  --a-purple-line: color-mix(in srgb, var(--a-purple) 40%, transparent);
+  --a-amber-line:  color-mix(in srgb, var(--a-amber)  40%, transparent);
+  --a-teal-line:   color-mix(in srgb, var(--a-teal)   40%, transparent);
+
+  /* 表面与文字：一律取自站点令牌，文章不要再自定义底色/前景色，
+     否则会在同一页面上和站点外壳露出接缝。 */
+  --a-bg:        var(--bg-1);
+  --a-surface:   var(--panel);
+  --a-surface-2: var(--panel-hover);
+  --a-code-bg:   var(--panel);
+  --a-fg:        var(--text);
+  --a-fg-strong: var(--white);
+  --a-fg-muted:  var(--text-muted);
+  --a-line:      var(--border);
+  --a-line-hover: var(--border-hover);
+
+  /* SVG 动画的固定序数色阶。同一角色跨文章同色，读者不必每篇重学图例。
+     序数含义：1 基线 → 2 本文方法 → 3 改进 → 4 失效 → 5 权衡 → 6 次要 */
+  --a-seq-1: var(--a-blue);
+  --a-seq-2: var(--a-purple);
+  --a-seq-3: var(--a-green);
+  --a-seq-4: var(--a-red);
+  --a-seq-5: var(--a-amber);
+  --a-seq-6: var(--a-teal);
+}
+
+/* 注意：本层刻意不定义任何尺寸变量（宽度、圆角）。文章的正文宽度、圆角
+   各有其排版需要（带 TOC 的宽 860px，无 TOC 的窄 720px），保持文章本地
+   定义即可。若在此定义同名变量，.article-body 选择器会比文章的 :root
+   更具体，会静默改掉文章版式。 */
+
+/* 不支持 color-mix 的旧浏览器：退化为无底色，只保留文字色与边框，
+   信息不丢失（语义仍由文字色承载）。 */
+@supports not (color: color-mix(in srgb, red 12%, transparent)) {
+  :is(.article-body, .interactive-body) {
+    --a-accent-bg: transparent; --a-blue-bg: transparent; --a-green-bg: transparent;
+    --a-red-bg: transparent;    --a-purple-bg: transparent; --a-amber-bg: transparent;
+    --a-teal-bg: transparent;
+  }
+}

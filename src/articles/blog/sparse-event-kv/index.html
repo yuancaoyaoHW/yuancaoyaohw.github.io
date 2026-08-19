@@ -9,60 +9,39 @@
   <meta name="description" content="论文 2607.23693 深度解读：Sparse Event-KV 的内存契约——当 source 被丢弃后，下游 event 的 KV 行如何独立承载其状态（semantic materialization）。含动画可视化。" />
   <title>全局计算，局部物化 · Sparse Event-KV 内存契约</title>
   <style>
+    /* 配色改为引用共享语义层 --a-*（public/styles/article-tokens.css）：
+       一色一义、深浅主题自动成立，本文不再需要自己的 [data-theme] 覆盖。
+       作用域从 :root 降到正文容器——站点外壳的令牌不会再被本文接管。
+       字体、尺寸、投影留在 :root，那是本文的排版需要，不属于共享层。 */
     :root {
-      --bg: #FAFAF7;
-      --bg-elev: #FFFFFF;
-      --panel: rgba(255,255,255,.96);
-      --panel-2: rgba(248,246,241,.98);
-      --text: #1A1A1A;
-      --muted: #52606B;
-      --faint: #8A8A8A;
-      --line: rgba(39, 83, 111, .14);
-      --line-strong: rgba(39, 83, 111, .28);
-      --cyan: #3B4BA2;
-      --blue: #3B4BA2;
-      --violet: #5A4099;
-      --amber: #B06800;
-      --green: #178845;
-      --red: #A02828;
       --shadow: 0 2px 8px rgba(38,78,99,.08);
-      --radius: 8px;
-      --radius-sm: 6px;
+      --a-radius: 8px;
+      --a-radius-sm: 6px;
       --max: 1500px;
       --nav-w: 260px;
       --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       --sans: "Newsreader", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
     }
-    [data-theme="dark"] {
-      --bg: #0E0F13;
-      --bg-elev: #161821;
-      --panel: rgba(22,24,33,.96);
-      --panel-2: rgba(28,30,40,.98);
-      --text: #E8E8E8;
-      --muted: #9AA3B0;
-      --faint: #6A6F7A;
-      --line: rgba(255,255,255,.10);
-      --line-strong: rgba(255,255,255,.22);
-      --shadow: 0 2px 8px rgba(0,0,0,.4);
+    :is(.article-body, .interactive-body) {
+      --bg: var(--a-bg); --bg-elev: var(--a-surface); --a-panel: var(--a-surface); --panel-2: var(--a-surface-2);
+      --a-text: var(--a-fg); --muted: var(--a-fg-muted); --faint: var(--a-fg-muted);
+      --line: var(--a-line); --line-strong: var(--a-line-hover);
+      --cyan: var(--a-accent); --blue: var(--a-blue); --violet: var(--a-purple);
+      --amber: var(--a-amber); --green: var(--a-green); --red: var(--a-red);
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at 86% -8%, rgba(59,75,162,.04), transparent 30%),
-        radial-gradient(circle at 18% 8%, rgba(59,75,162,.03), transparent 30%),
-        var(--bg);
-      color: var(--text);
       font-family: var(--sans);
       line-height: 1.72;
       letter-spacing: .01em;
       transition: background .3s, color .3s;
     }
-    a { color: var(--cyan); text-decoration: none; }
+    :where(.article-body, .interactive-body) a { color: var(--cyan); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    code { font-family: var(--mono); font-size: .92em; background: color-mix(in srgb, var(--cyan) 7%, transparent); padding: 1px 5px; border-radius: 4px; }
-    .skip { position: fixed; left: 12px; top: -80px; z-index: 9999; padding: 9px 12px; background: var(--bg-elev); color: var(--text); border: 1px solid var(--line); border-radius: 8px; }
+    :where(.article-body, .interactive-body) code { font-family: var(--mono); font-size: .92em; background: color-mix(in srgb, var(--cyan) 7%, transparent); padding: 1px 5px; border-radius: 4px; }
+    .skip { position: fixed; left: 12px; top: -80px; z-index: 9999; padding: 9px 12px; background: var(--bg-elev); color: var(--a-text); border: 1px solid var(--line); border-radius: 8px; }
     .skip:focus { top: 12px; }
 
     /* ── topbar ── */
@@ -77,7 +56,7 @@
     .brand-mark { width: 28px; height: 28px; border-radius: 8px; background: conic-gradient(from 210deg, var(--cyan), var(--blue), var(--violet), var(--cyan)); }
     .top-actions { display: flex; gap: 8px; align-items: center; }
     .icon-btn, .small-btn {
-      border: 1px solid var(--line-strong); color: var(--text); background: var(--panel);
+      border: 1px solid var(--line-strong); color: var(--a-text); background: var(--a-panel);
       border-radius: 10px; padding: 8px 11px; cursor: pointer; font-size: .9rem;
     }
     .icon-btn:hover, .small-btn:hover { border-color: var(--cyan); }
@@ -86,17 +65,17 @@
     aside { position: relative; }
     .side-nav {
       position: sticky; top: 88px; max-height: calc(100vh - 110px); overflow: auto;
-      padding: 16px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 16px 12px; background: var(--a-panel); border: 1px solid var(--line); border-radius: var(--a-radius); box-shadow: var(--shadow);
     }
     .side-nav .eyebrow { margin: 2px 10px 10px; }
     .side-nav a { display: block; color: var(--muted); padding: 7px 10px; margin: 2px 0; border-radius: 8px; font-size: .91rem; text-decoration: none; border-left: 2px solid transparent; transition: all .15s; }
-    .side-nav a:hover { color: var(--text); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
-    .side-nav a.active { color: var(--text); background: color-mix(in srgb, var(--cyan) 12%, transparent); border-left-color: var(--cyan); }
+    .side-nav a:hover { color: var(--a-text); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+    .side-nav a.active { color: var(--a-text); background: color-mix(in srgb, var(--cyan) 12%, transparent); border-left-color: var(--cyan); }
     .side-nav .sub { padding-left: 22px; font-size: .83rem; }
 
     /* ── mobile TOC ── */
     .mobile-toc { display: none; margin: 0 0 18px; }
-    .mobile-toc select { width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel); color: var(--text); font-size: .95rem; }
+    .mobile-toc select { width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--a-panel); color: var(--a-text); font-size: .95rem; }
 
     /* ── article body ── */
     main { min-width: 0; }
@@ -111,7 +90,7 @@
     .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
     .meta-pill { font-size: .8rem; padding: 5px 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
     .hero-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 14px; }
-    .hero-stat { padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+    .hero-stat { padding: 18px 20px; background: var(--a-panel); border: 1px solid var(--line); border-radius: 12px; }
     .hero-stat strong { display: block; font-size: 1.7rem; font-family: var(--mono); color: var(--cyan); margin-bottom: 4px; }
     .hero-stat span { font-size: .84rem; color: var(--muted); }
 
@@ -122,7 +101,7 @@
     .section-head .muted { font-size: .92rem; }
 
     h3 { font-size: 1.18rem; margin: 28px 0 10px; font-weight: 600; }
-    h4 { font-size: 1.02rem; margin: 20px 0 8px; font-weight: 600; color: var(--violet); }
+    :where(.article-body, .interactive-body) h4 { font-size: 1.02rem; margin: 20px 0 8px; font-weight: 600; color: var(--violet); }
     p { margin: 0 0 14px; }
     .section-card p { font-size: 1.02rem; }
 
@@ -130,7 +109,7 @@
     .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 14px; margin: 18px 0; }
     .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 14px; margin: 18px 0; }
 
-    .card { padding: 20px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+    .card { padding: 20px 22px; background: var(--a-panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
     .card h3 { margin-top: 0; }
     .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
     .badge { font-size: .72rem; padding: 3px 9px; border-radius: 999px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
@@ -140,13 +119,13 @@
     .badge.caution { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
     .badge.metric { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
 
-    .callout { padding: 18px 22px; background: color-mix(in srgb, var(--cyan) 6%, var(--panel)); border-left: 4px solid var(--cyan); border-radius: 8px; margin: 20px 0; }
-    .callout.warn { border-left-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--panel)); }
-    .callout.danger { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 7%, var(--panel)); }
-    .callout strong { color: var(--text); }
+    .callout { padding: 18px 22px; background: color-mix(in srgb, var(--cyan) 6%, var(--a-panel)); border-left: 4px solid var(--cyan); border-radius: 8px; margin: 20px 0; }
+    .callout.warn { border-left-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--a-panel)); }
+    .callout.danger { border-left-color: var(--red); background: color-mix(in srgb, var(--red) 7%, var(--a-panel)); }
+    .callout strong { color: var(--a-text); }
 
     /* ── data table ── */
-    .data-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: .92rem; background: var(--panel); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+    .data-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: .92rem; background: var(--a-panel); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
     .data-table caption { padding: 12px 14px; text-align: left; font-size: .9rem; color: var(--muted); background: var(--panel-2); border-bottom: 1px solid var(--line); }
     .data-table th, .data-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); }
     .data-table th { background: var(--panel-2); font-weight: 600; font-size: .86rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
@@ -157,21 +136,21 @@
 
     /* ── diagram container ── */
     .diagram {
-      margin: 28px 0; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+      margin: 28px 0; padding: 24px; background: var(--a-panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
       overflow-x: auto;
     }
     .diagram-cap { margin-top: 12px; font-size: .86rem; color: var(--muted); text-align: center; }
     svg { display: block; width: 100%; height: auto; max-width: 900px; margin: 0 auto; }
-    .svg-text { font-family: var(--sans); fill: var(--text); }
+    .svg-text { font-family: var(--sans); fill: var(--a-text); }
     .svg-muted { font-family: var(--sans); fill: var(--muted); }
     .svg-mono { font-family: var(--mono); }
     .svg-line { stroke: var(--line-strong); }
-    [data-theme="dark"] .svg-text { fill: var(--text); }
+    [data-theme="dark"] .svg-text { fill: var(--a-text); }
     [data-theme="dark"] .svg-muted { fill: var(--muted); }
 
     /* ── animation toggle ── */
     .anim-controls { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; flex-wrap: wrap; }
-    .anim-btn { padding: 7px 14px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); border-radius: 8px; cursor: pointer; font-size: .88rem; font-family: var(--mono); }
+    .anim-btn { padding: 7px 14px; border: 1px solid var(--line-strong); background: var(--a-panel); color: var(--a-text); border-radius: 8px; cursor: pointer; font-size: .88rem; font-family: var(--mono); }
     .anim-btn:hover, .anim-btn.active { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); color: var(--cyan); }
 
     /* ── SVG animation classes ── */
@@ -203,7 +182,7 @@
       background: var(--bg-elev); border-left: 3px solid var(--cyan);
       box-shadow: 0 8px 24px rgba(38,78,99,.18); padding: 14px 18px;
       border-radius: 6px; font-size: .94rem; line-height: 1.6;
-      display: none; pointer-events: none; color: var(--text);
+      display: none; pointer-events: none; color: var(--a-text);
     }
     .hover-card.visible { display: block; animation: fadeIn .12s ease; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -215,7 +194,7 @@
 
     /* ── bilingual toggle ── */
     .lang-toggle { display: flex; gap: 6px; }
-    .lang-btn { padding: 5px 11px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 6px; cursor: pointer; font-size: .82rem; font-family: var(--mono); }
+    .lang-btn { padding: 5px 11px; border: 1px solid var(--line-strong); background: var(--a-panel); color: var(--muted); border-radius: 6px; cursor: pointer; font-size: .82rem; font-family: var(--mono); }
     .lang-btn.active { background: var(--cyan); color: white; border-color: var(--cyan); }
     body.mode-cn .en-only { display: none; }
     body.mode-en .cn-only { display: none; }
@@ -242,6 +221,7 @@
   </style>
 </head>
 <body>
+
 <style data-sn-nav>
 .sn-nav{position:fixed;top:0;left:0;right:0;z-index:9990;display:flex;align-items:center;justify-content:space-between;padding:14px 28px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);background:rgba(255,255,255,.78);border-bottom:1px solid rgba(0,0,0,.08);font-family:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;transition:background .3s,border-color .3s}
 .sn-brand{font-weight:700;font-size:17px;color:#1a1a2e;text-decoration:none;display:flex;align-items:center;gap:2px}
@@ -387,7 +367,7 @@
 
             <!-- Source event block -->
             <g id="src-block">
-              <rect x="80" y="100" width="180" height="80" rx="10" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="1.5" class="kv-row-cell normal"/>
+              <rect style="fill:var(--a-blue-bg);stroke:var(--a-blue)" x="80" y="100" width="180" height="80" rx="10" stroke-width="1.5" class="kv-row-cell normal"/>
               <text x="170" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">source e_s</text>
               <text x="170" y="148" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"register S is ONLINE"</text>
               <text x="170" y="166" text-anchor="middle" class="svg-muted" font-size="10">sets state</text>
@@ -395,7 +375,7 @@
 
             <!-- Carrier event block -->
             <g id="carrier-block">
-              <rect x="340" y="100" width="200" height="80" rx="10" fill="#FAFAF7" stroke="var(--line)" stroke-width="1.5" class="kv-row-cell normal" id="carrier-cell"/>
+              <rect style="fill:var(--a-bg);stroke:var(--line)" x="340" y="100" width="200" height="80" rx="10" stroke-width="1.5" class="kv-row-cell normal" id="carrier-cell"/>
               <text x="440" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">carrier e_c</text>
               <text x="440" y="148" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"M mirrors S"</text>
               <text x="440" y="166" text-anchor="middle" class="svg-muted" font-size="10">names no value</text>
@@ -403,14 +383,14 @@
 
             <!-- Query block -->
             <g id="query-block">
-              <rect x="600" y="100" width="200" height="80" rx="10" fill="#F5E8D5" stroke="#B06800" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <rect style="fill:var(--a-amber-bg);stroke:var(--a-amber)" x="600" y="100" width="200" height="80" rx="10" stroke-width="1.5" stroke-dasharray="4 3"/>
               <text x="700" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">query q</text>
               <text x="700" y="148" text-anchor="middle" class="svg-mono svg-muted" font-size="11">"is M online?"</text>
               <text x="700" y="166" text-anchor="middle" class="svg-muted" font-size="10">readout</text>
             </g>
 
             <!-- Attention arrow source→carrier (during prefill) -->
-            <path id="attn-arrow" d="M 260 140 Q 300 110 340 140" fill="none" stroke="#3B4BA2" stroke-width="2" marker-end="url(#arrowhead)" class="anim-draw"/>
+            <path style="stroke:var(--a-blue)" id="attn-arrow" d="M 260 140 Q 300 110 340 140" fill="none" stroke-width="2" marker-end="url(#arrowhead)" class="anim-draw"/>
             <text x="300" y="100" class="svg-muted" font-size="11" id="attn-label">attention</text>
 
             <!-- "state carried" label on carrier -->
@@ -418,22 +398,22 @@
 
             <!-- Drop indicator -->
             <g id="drop-x" style="opacity:0">
-              <line x1="80" y1="90" x2="260" y2="190" stroke="#A02828" stroke-width="3" stroke-linecap="round"/>
-              <line x1="260" y1="90" x2="80" y2="190" stroke="#A02828" stroke-width="3" stroke-linecap="round"/>
-              <text x="170" y="220" text-anchor="middle" class="svg-text" font-size="13" font-weight="700" fill="#A02828">DROPPED</text>
+              <line style="stroke:var(--a-red)" x1="80" y1="90" x2="260" y2="190" stroke-width="3" stroke-linecap="round"/>
+              <line style="stroke:var(--a-red)" x1="260" y1="90" x2="80" y2="190" stroke-width="3" stroke-linecap="round"/>
+              <text style="fill:var(--a-red)" x="170" y="220" text-anchor="middle" class="svg-text" font-size="13" font-weight="700">DROPPED</text>
             </g>
 
             <!-- Served-set box -->
-            <rect x="320" y="250" width="500" height="120" rx="10" fill="none" stroke="#178845" stroke-width="1.5" stroke-dasharray="5 4" id="served-box" style="opacity:0"/>
+            <rect x="320" y="250" width="500" height="120" rx="10" fill="none" stroke-width="1.5" stroke-dasharray="5 4" id="served-box" style="opacity:0;stroke:var(--a-green)"/>
             <text x="570" y="245" text-anchor="middle" class="svg-muted" font-size="12" id="served-label" style="opacity:0">served set Σ = { carrier, decoy, query }</text>
 
             <!-- Answer reveal -->
-            <text x="700" y="300" text-anchor="middle" class="svg-text" font-size="20" font-weight="700" fill="#178845" id="answer-text" style="opacity:0">answer = ONLINE ✓</text>
+            <text x="700" y="300" text-anchor="middle" class="svg-text" font-size="20" font-weight="700" id="answer-text" style="opacity:0;fill:var(--a-green)">answer = ONLINE ✓</text>
             <text x="700" y="330" text-anchor="middle" class="svg-muted" font-size="12" id="answer-sub" style="opacity:0">follows the dropped donor, not its opposite</text>
 
             <defs>
               <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="#3B4BA2"/>
+                <polygon style="fill:var(--a-blue)" points="0 0, 8 3, 0 6"/>
               </marker>
             </defs>
           </svg>
@@ -494,36 +474,36 @@
           <text x="450" y="30" text-anchor="middle" class="svg-text" font-size="15" font-weight="700">roots carry, reference edges route</text>
 
           <!-- source (dropped) -->
-          <rect x="40" y="120" width="140" height="60" rx="8" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5"/>
+          <rect style="fill:var(--a-blue-bg);stroke:var(--a-blue)" x="40" y="120" width="140" height="60" rx="8" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5"/>
           <text x="110" y="145" text-anchor="middle" class="svg-muted" font-size="12">source S</text>
           <text x="110" y="163" text-anchor="middle" class="svg-muted" font-size="10">DROPPED</text>
 
           <!-- root carrier -->
-          <rect x="280" y="100" width="160" height="80" rx="10" fill="#D5E0F0" stroke="#3B4BA2" stroke-width="2" class="kv-row-cell materialized"/>
+          <rect style="fill:var(--a-blue-bg);stroke:var(--a-blue)" x="280" y="100" width="160" height="80" rx="10" stroke-width="2" class="kv-row-cell materialized"/>
           <text x="360" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="700">root C₁</text>
           <text x="360" y="148" text-anchor="middle" class="svg-mono" font-size="11">"M mirrors S"</text>
-          <text x="360" y="166" text-anchor="middle" class="svg-text" font-size="11" font-weight="600" fill="#3B4BA2">★ carries state</text>
+          <text style="fill:var(--a-blue)" x="360" y="166" text-anchor="middle" class="svg-text" font-size="11" font-weight="600">★ carries state</text>
 
           <!-- reference edge 1 -->
-          <rect x="540" y="100" width="160" height="80" rx="10" fill="#FAFAF7" stroke="var(--line-strong)" stroke-width="1.5" class="kv-row-cell normal"/>
+          <rect style="fill:var(--a-bg);stroke:var(--line-strong)" x="540" y="100" width="160" height="80" rx="10" stroke-width="1.5" class="kv-row-cell normal"/>
           <text x="620" y="128" text-anchor="middle" class="svg-text" font-size="14" font-weight="600">ref C₂</text>
           <text x="620" y="148" text-anchor="middle" class="svg-mono" font-size="11">"T mirrors M"</text>
           <text x="620" y="166" text-anchor="middle" class="svg-muted" font-size="10">routes, doesn't carry</text>
 
           <!-- query -->
-          <rect x="760" y="100" width="120" height="80" rx="10" fill="#F5E8D5" stroke="#B06800" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <rect style="fill:var(--a-amber-bg);stroke:var(--a-amber)" x="760" y="100" width="120" height="80" rx="10" stroke-width="1.5" stroke-dasharray="4 3"/>
           <text x="820" y="145" text-anchor="middle" class="svg-text" font-size="13">query</text>
           <text x="820" y="163" text-anchor="middle" class="svg-muted" font-size="10">"is T online?"</text>
 
           <!-- arrows -->
-          <line x1="180" y1="140" x2="280" y2="140" stroke="#3B4BA2" stroke-width="1.5" marker-end="url(#arrowhead2)"/>
-          <line x1="440" y1="140" x2="540" y2="140" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 2" marker-end="url(#arrowhead2)"/>
-          <line x1="700" y1="140" x2="760" y2="140" stroke="#B06800" stroke-width="1.5" marker-end="url(#arrowhead2)"/>
+          <line style="stroke:var(--a-blue)" x1="180" y1="140" x2="280" y2="140" stroke-width="1.5" marker-end="url(#arrowhead2)"/>
+          <line style="stroke:var(--muted)" x1="440" y1="140" x2="540" y2="140" stroke-width="1.5" stroke-dasharray="3 2" marker-end="url(#arrowhead2)"/>
+          <line style="stroke:var(--a-amber)" x1="700" y1="140" x2="760" y2="140" stroke-width="1.5" marker-end="url(#arrowhead2)"/>
 
           <text x="360" y="220" text-anchor="middle" class="svg-muted" font-size="11">answer follows root donor</text>
           <text x="620" y="220" text-anchor="middle" class="svg-muted" font-size="11">(serving C₂ alone still routes to root's state)</text>
 
-          <defs><marker id="arrowhead2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#3B4BA2"/></marker></defs>
+          <defs><marker id="arrowhead2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon style="fill:var(--a-blue)" points="0 0, 8 3, 0 6"/></marker></defs>
         </svg>
       </div>
       <p class="diagram-cap">图 2：root event 的行承载主导 donor 信号；引用边大多把它路由出去。稀疏服务（source 丢弃）下，服务 C₂ 单独仍能把读出路由到 root 已物化的状态。</p>
@@ -568,19 +548,19 @@
           <text x="450" y="30" text-anchor="middle" class="svg-text" font-size="15" font-weight="700">deliberate carrier vs passive harvest</text>
 
           <!-- passive -->
-          <rect x="60" y="70" width="340" height="140" rx="10" fill="#FAFAF7" stroke="var(--line-strong)" stroke-width="1.5"/>
+          <rect style="fill:var(--a-bg);stroke:var(--line-strong)" x="60" y="70" width="340" height="140" rx="10" stroke-width="1.5"/>
           <text x="230" y="95" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">passive harvest (natural dialog)</text>
           <text x="230" y="120" text-anchor="middle" class="svg-muted" font-size="11">harvest answer-free late mentions</text>
           <text x="230" y="145" text-anchor="middle" class="svg-muted" font-size="11">from full-history cache</text>
-          <text x="230" y="180" text-anchor="middle" class="svg-text" font-size="14" font-weight="700" fill="#A02828">no detected advantage</text>
+          <text style="fill:var(--a-red)" x="230" y="180" text-anchor="middle" class="svg-text" font-size="14" font-weight="700">no detected advantage</text>
           <text x="230" y="200" text-anchor="middle" class="svg-muted" font-size="10">vs isolated re-encoding</text>
 
           <!-- deliberate -->
-          <rect x="500" y="70" width="340" height="140" rx="10" fill="#E8F0E8" stroke="#178845" stroke-width="2"/>
+          <rect style="fill:var(--a-green-bg);stroke:var(--a-green)" x="500" y="70" width="340" height="140" rx="10" stroke-width="2"/>
           <text x="670" y="95" text-anchor="middle" class="svg-text" font-size="13" font-weight="600">deliberate carrier (synthetic)</text>
           <text x="670" y="120" text-anchor="middle" class="svg-muted" font-size="11">emit answer-free event after source</text>
           <text x="670" y="145" text-anchor="middle" class="svg-muted" font-size="11">calibrated phrasing per model</text>
-          <text x="670" y="180" text-anchor="middle" class="svg-text" font-size="14" font-weight="700" fill="#178845">6% → 51% recovery</text>
+          <text style="fill:var(--a-green)" x="670" y="180" text-anchor="middle" class="svg-text" font-size="14" font-weight="700">6% → 51% recovery</text>
           <text x="670" y="200" text-anchor="middle" class="svg-muted" font-size="10">never names the value</text>
         </svg>
       </div>
@@ -728,8 +708,8 @@ function setAnimStep(step){
   servedLabel.style.opacity = '0';
   answerText.style.opacity = '0';
   answerSub.style.opacity = '0';
-  lblSource.style.fill = 'var(--text)';
-  lblCarrier.style.fill = 'var(--text)';
+  lblSource.style.fill = 'var(--a-text)';
+  lblCarrier.style.fill = 'var(--a-text)';
 
   animBtns.forEach(function(b){ b.classList.remove('active'); });
 
