@@ -1,0 +1,314 @@
+{
+  "date": "2026-08-20",
+  "title": "2026-08-20 论文精选",
+  "lede": "今日关注:测试时扩展的开放域瓶颈定位、agentic RL 训练稳定化、MoE 边缘内存带宽墙;以及向量 CPU 上的 FlashAttention、跨层 KV 混合等推理与架构创新。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 50
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "FlashAttention for Scalable Vector Architectures",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-20",
+          "authors": "Sonia Rani Gupta, Nikela Papadopoulou, Miquel Pericàs",
+          "institutions": "Chalmers University of Technology",
+          "abstract": "CPU 上的 Transformer 推理日益重要,尤其对小语言模型(SLM),可扩展向量架构正成为有前景的执行载体。注意力模块因高内存带宽需求成为主要瓶颈,FlashAttention 通过算子融合改善数据局部性、减少中间内存流量。本文提出 FlashAttention-V:面向可扩展向量架构的分块 FlashAttention,通过跨注意力头的并行、头间打包以高效利用超出头维度的向量长度,并提升向量寄存器利用率和访存局部性。作者将其集成进 ggml/llama.cpp,在 TinyLlama、Llama 3.2、Qwen2.5、Pythia-410M 上用 gem5 模拟和 Banana Pi BPI-F3 实测评估。结果显示循环重排与跨头循环展开是有效优化原则,收益随模型增大而扩大,在短上下文和解码阶段最为显著:512-bit 向量长度下,prefill 相对标量 FlashAttention 加速 22x-42x,扩展到 64 lanes 和 4096-bit 长度再获 2x-2.5x;decode 阶段加速 8x-11x。此外 Q8_0 量化线性层在长向量执行下存在结构性瓶颈,限制算术复用,在 RVV 和 Arm SVE 上表现一致。",
+          "contributions": [
+            "提出 FlashAttention-V,首个面向可扩展向量架构的分块 FlashAttention 实现,含跨头并行、头间打包与寄存器/访存优化",
+            "在 gem5 模拟与 Banana Pi BPI-F3 真实硬件上系统评估,证实循环重排与展开是向量架构上的有效优化原则",
+            "发现 Q8_0 量化线性层在长向量执行下的结构性瓶颈,指出当前量化格式对长向量可扩展性的根本挑战"
+          ],
+          "conclusions": [
+            "FlashAttention-V 在预填充阶段相对标量实现获得 22x-42x 加速,并在解码阶段获得 8x-11x 加速,短上下文与解码场景收益最大",
+            "量化格式(如 Q8_0)与向量执行的长向量扩展性存在深层冲突,需重新设计"
+          ],
+          "experiments": [
+            "512-bit 向量长度下,prefill 相对标量 FlashAttention 加速 22x-42x;扩展至 64 lanes 与 4096-bit 向量长度再获 2x-2.5x",
+            "decode 阶段使用 512-bit 向量长度相对标量加速 8x-11x",
+            "Banana Pi BPI-F3 实测证实:循环重排与跨头循环展开有效,加速比随模型规模增大而扩大"
+          ],
+          "significance": "首个面向 CPU 可扩展向量架构的 FlashAttention 优化,为 SLM 在向量 CPU(如 RVV/SVE)上的高效推理铺路,并揭示了量化格式与向量执行的兼容性问题。",
+          "arxivUrl": "https://arxiv.org/abs/2608.18656",
+          "pdfUrl": "https://arxiv.org/pdf/2608.18656.pdf",
+          "index": 1,
+          "takeaway": "FlashAttention-V 将 FlashAttention 适配到可扩展向量 CPU,对短上下文与解码场景加速最显著,让 SLM 推理更高效。",
+          "keyExperiment": "512-bit 向量长度下 prefill 相对标量 FlashAttention 获得 22x-42x 加速,解码阶段 8x-11x。"
+        },
+        {
+          "title": "Fractional Decay KV-Cache: Ownership-Aware Memory Management for Improved Inference Relevancy in Dialog Systems",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-20",
+          "authors": "Sukanta Ganguly",
+          "institutions": "机构未标注",
+          "abstract": "KV 缓存对基于 Transformer 的对话系统高效自回归推理至关重要,但现有策略对所有缓存项一视同仁,或采用无法随对话主题演化的粗糙驱逐启发式。本文提出分数衰减 KV 缓存(FD-KVC):为每个缓存 KV 对维护双通道评分机制——累计注意力通道(类似 H2O,追踪总体重要性)与衰减加权相关通道(由时间衰减和强化式更新驱动)。两者结合使 FD-KVC 既能保留历史重要 token,又能在对话主题转移时快速适应;由所有权损失函数驱动的自适应学习率保证收敛不振荡。FD-KVC 完全在 CPU 上运行且开销可忽略。在五个多样多轮对话场景(每场景 600 段对话)上,FD-KVC 在复合后期对齐指标上比 SOTA heavy-hitter 基线 H2O 提升 6.7%,主题转移场景提升 127%、渐进演化提升 87%、混合主题提升 30%,且适应新主题比 H2O 快 3.6 倍。",
+          "contributions": [
+            "提出双通道评分机制:累计注意力(类似 H2O)+ 衰减加权相关性,兼顾历史重要性与主题变化适应性",
+            "引入所有权(ownership)损失驱动的自适应学习率,保证收敛稳定",
+            "纯 CPU 实现、开销可忽略,在五个多轮对话场景全面超越 H2O 基线"
+          ],
+          "conclusions": [
+            "FD-KVC 在对话主题转移、渐进演化与混合主题场景显著优于 H2O,适应新主题快 3.6 倍",
+            "历史重要性保留与主题适应性可以兼得,无需牺牲推理质量"
+          ],
+          "experiments": [
+            "复合后期对齐指标相对 H2O 提升 6.7%",
+            "主题转移场景提升 127%、渐进演化 87%、混合主题 30%",
+            "适应新主题速度比 H2O 快 3.6 倍"
+          ],
+          "significance": "为对话系统设计了主题自适应的 KV 缓存淘汰算法,以极低开销提升长对话推理的相关性与效率。",
+          "arxivUrl": "https://arxiv.org/abs/2608.18098",
+          "pdfUrl": "https://arxiv.org/pdf/2608.18098.pdf",
+          "index": 2,
+          "takeaway": "FD-KVC 用「累计注意力 + 衰减相关性」双通道评分管理 KV 缓存,比 H2O 更善于跟随对话主题演化。",
+          "keyExperiment": "五个多轮场景、每场景 600 段:复合后期对齐 +6.7%,主题转移 +127%,适应新主题快 3.6 倍。"
+        },
+        {
+          "title": "Efficient INT8 Inference of Small NLP Models on Server CPUs with PyTorch Native Stack",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-20",
+          "authors": "Weiwen Xia, Yuxin Cui, E Cao",
+          "institutions": "机构未标注",
+          "abstract": "小规模 NLP 模型(尤其 BERT 系编码器)在分类、排序、检索等工业负载中依然重要。在服务器 CPU 上,INT8 量化提供有吸引力的延迟-吞吐-成本权衡,但用户期望这种加速直接在原生 PyTorch 栈中可用。本文将 SmoothQuant 集成进 TorchAO,并通过 TorchInductor 图级融合与基于 oneDNN、AVX512_VNNI、AMX 的高效 INT8 GEMM 内核选择,优化 Intel Xeon CPU 上的推理路径。在 BERT、DistilBERT、XLM-RoBERTa 基准上,该方法相对 FP32 基线实现最高 5.8x 端到端吞吐加速,精度损失可忽略,部分场景甚至无损失;并用 roofline 模型做了详细性能分析。实现已上游到 PyTorch 与 TorchAO,可直接用原生 PyTorch 工具链开箱部署。",
+          "contributions": [
+            "将 SmoothQuant 集成进 TorchAO,并在 TorchInductor 中做图级融合与 INT8 GEMM 内核自动选择",
+            "在 Intel Xeon CPU 上实现最高 5.8x 端到端吞吐加速,精度损失可忽略",
+            "实现已上游到 PyTorch 与 TorchAO,原生工具链即开箱可用"
+          ],
+          "conclusions": [
+            "原生 PyTorch 栈即可获得接近专业的 INT8 CPU 推理加速,无需额外部署框架",
+            "roofline 分析确认瓶颈定位与内核选择的有效性"
+          ],
+          "experiments": [
+            "BERT/DistilBERT/XLM-RoBERTa 上端到端吞吐最高提升 5.8x",
+            "相对 FP32 基线精度损失可忽略,部分场景无损失",
+            "结果覆盖 oneDNN、AVX512_VNNI、AMX 三类内核实现"
+          ],
+          "significance": "让 BERT 系小模型在服务器 CPU 上获得开箱即用的 INT8 加速,降低工业部署的延迟与成本门槛。",
+          "arxivUrl": "https://arxiv.org/abs/2608.18182",
+          "pdfUrl": "https://arxiv.org/pdf/2608.18182.pdf",
+          "index": 3,
+          "takeaway": "PyTorch 原生 INT8 推理路径(含 SmoothQuant 与图级融合)为小 NLP 模型带来最高 5.8x 吞吐提升。",
+          "keyExperiment": "BERT 系模型在 Intel Xeon 上端到端吞吐最高 5.8x,精度损失可忽略。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Test-Time Scaling in the Wild: Why Exploitation, Not Exploration, Is the Bottleneck",
+          "score": 4.6,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-20",
+          "authors": "Davide Romano, Kanak Raj, Jerrod Parker, Daniele Giofrè",
+          "institutions": "机构未标注",
+          "abstract": "测试时扩展(TTS)通过额外推理计算(生成多个候选、搜索部分序列、迭代精化草稿)提升 LLM 输出,在数学与代码上收益巨大,但其开发与压力测试几乎只在验证简单的任务上进行。本文首次对五个 TTS 家族在五个开放式生成基准(医学、法律、金融、通用聊天、创意写作)上做计算归一化比较,并用统一框架把每种方法的 token 预算分解为探索(exploration)与利用(exploitation)两部分。结论取决于分解的哪一侧:扩展探索有效——候选池中的最佳候选随计算量稳步提升;失效的是利用——把丰富候选池转化为最终输出的环节。使用 SOTA 生成器时,奖励模型与真实质量的相关性仅 ρ≈0.12,使选择近乎随机,且与预算无关;树搜索通过多样性坍缩放大这一失败;精化(refinement)在部分任务上有帮助。",
+          "contributions": [
+            "首次在五个开放式生成基准上对五个 TTS 家族做计算归一化比较,覆盖传统基准之外的领域",
+            "提出探索/利用分解框架,定位 TTS 失效的真正环节是利用而非探索",
+            "揭示开放域中奖励模型与真实质量相关性极低(ρ≈0.12),树搜索存在多样性坍缩"
+          ],
+          "conclusions": [
+            "开放域 TTS 中扩展探索稳定有效,但利用环节(选择/精化)是瓶颈",
+            "奖励模型在开放生成任务上几乎无法区分候选质量,树搜索会放大该问题"
+          ],
+          "experiments": [
+            "SOTA 生成器下奖励模型与真实质量相关性仅 ρ≈0.12,选择近乎随机",
+            "最佳候选质量随计算预算持续提升(探索侧有效),而最终输出质量止步不前(利用侧失败)",
+            "树搜索在不同基准上出现多样性坍缩,精化仅在部分任务带来收益"
+          ],
+          "significance": "首次把 TTS 的失败定位到利用(selection/exploitation)而非探索,为开放域测试时扩展指明改进方向。",
+          "arxivUrl": "https://arxiv.org/abs/2608.18931",
+          "pdfUrl": "https://arxiv.org/pdf/2608.18931.pdf",
+          "index": 4,
+          "takeaway": "在医疗、法律、金融等开放域,测试时扩展的瓶颈是把好候选选出来的利用环节,而非探索不足。",
+          "keyExperiment": "五个开放域基准上奖励模型与真实质量相关性仅 0.12,树搜索出现多样性坍缩。"
+        },
+        {
+          "title": "RTPO: Reverse-Turn Policy Optimization for Stabilizing Agentic RL Training",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-20",
+          "authors": "Yugu Li, Jimmy Cao, Jianglin Qiao, Siyi Hu",
+          "institutions": "机构未标注",
+          "abstract": "用强化学习训练多轮 agentic 工作流,使 LLM 能做复杂推理、调用外部工具、超越单轮进行迭代搜索。但多轮 RL 训练高度不稳定,常随轮数增加出现严重性能退化。通过理论分析,作者识别出三个紧密耦合的不稳定来源:rollout 与训练上下文不匹配、稀疏终局奖励下的弱轮级信用分配、短长轨迹在不同策略版本下优化的异步漂移。这些问题的共同结构根源是扁平轨迹优化。本文提出反向轮策略优化(RTPO):将多轮 rollout 组织为稀疏反向树,按时间反向顺序做轮级策略更新,使每个决策与其下游延续对齐。RTPO 实现因果一致的轮级信用分配与 on-policy 延续,从而控制异步漂移,并有理论保证其消除上下文不匹配与异步漂移、降低信用偏差、收敛到递归最优。在多轮 agentic RL 基准上,RTPO 相对轨迹级与轮级基线的性能分别提升 21.50% 与 10.76%。",
+          "contributions": [
+            "理论上识别多轮 agentic RL 训练不稳定的三个耦合根源,并统一归结为扁平轨迹优化的结构问题",
+            "提出 RTPO 反向轮公式:稀疏反向树 + 时间反向的轮级更新,实现因果一致信用分配与 on-policy 延续",
+            "提供收敛性、信用偏差等理论保证,并在多轮 agentic RL 基准上验证"
+          ],
+          "conclusions": [
+            "反向轮更新可消除多轮 RL 的上下文不匹配与异步漂移,稳定 agentic 训练",
+            "RTPO 相对轨迹级与轮级基线分别提升 21.50% 与 10.76%"
+          ],
+          "experiments": [
+            "多轮 agentic RL 基准上,RTPO 相对轨迹级基线提升 21.50%",
+            "相对轮级基线提升 10.76%",
+            "理论分析确认上下文不匹配与异步漂移被消除、收敛到递归最优"
+          ],
+          "significance": "为多轮工具使用 agent 的 RL 训练提供了首个以反向轮分解稳定训练的理论驱动的优化方法。",
+          "arxivUrl": "https://arxiv.org/abs/2608.18682",
+          "pdfUrl": "https://arxiv.org/pdf/2608.18682.pdf",
+          "index": 5,
+          "takeaway": "RTPO 用「反向轮」更新替代扁平轨迹优化,从结构上消除多轮 agentic RL 的主要不稳定来源。",
+          "keyExperiment": "多轮 agentic RL 基准上相对轨迹级基线提升 21.50%、相对轮级基线提升 10.76%。"
+        },
+        {
+          "title": "Beyond Teacher Likelihood: Group-Calibrated On-Policy Distillation for Long-Context Reasoning",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-20",
+          "authors": "Zhu Zhang, Jixun Wang, Xiaoang Xu, Xiaorong Wang, Zihan Zhou, Zhiyuan Wang, Shuo Wang, Chaojun Xiao, Yuezhi Zhou",
+          "institutions": "Tsinghua University",
+          "abstract": "On-policy 蒸馏(OPD)用更强教师提供的密集 token 级指导训练学生生成自身响应。但在长上下文任务中,token 级教师支持可能偏向局部看似合理却遗漏跨输入分布证据或违反全局任务约束的响应;任务专用验证器(verifier)则在响应级评估任务完成度,可能返回反映部分成功的分级奖励。本文在两类代表性长上下文证据聚合任务的固定响应上诊断了这一失配:输入范围越长,轨迹级 OPD 分数与验证器奖励的对齐度越差,表明教师-验证器分歧随难度扩大而加剧。为此提出组校准 OPD(GC-OPD):在每个 rollout 组内分别归一化验证器奖励与轨迹级 OPD 分数,用其差值作为带符号的教师-验证器分歧残差;相对优势信用分配(RACA)按 token 的相对 OPD 优势分布该轨迹级残差,同时保留原始 OPD 信号。在五个长上下文基准上,GC-OPD 使官方 Qwen3-4B 与 Qwen3-8B 检查点平均分分别从 29.08 提升到 40.47、从 35.12 提升到 44.65;同设置下 vanilla OPD 仅达 39.31 与 43.56。",
+          "contributions": [
+            "诊断长上下文蒸馏中教师似然与验证器奖励的失配,并量化其随输入长度的恶化",
+            "提出 GC-OPD:组内归一化的带符号教师-验证器分歧残差 + RACA 相对优势信用分配",
+            "在五个长上下文基准将 Qwen3-4B/8B 平均分提升至 40.47/44.65,超过 vanilla OPD"
+          ],
+          "conclusions": [
+            "带符号分歧残差比直接加验证器奖励或额外 OPD 项更有效,RACA 优于均匀分配",
+            "验证器结果可以融入蒸馏而不丢弃密集 token 级指导"
+          ],
+          "experiments": [
+            "Qwen3-4B 平均分从 29.08 提升到 40.47,Qwen3-8B 从 35.12 提升到 44.65",
+            "同设置下 vanilla OPD 分别仅达 39.31 与 43.56",
+            "消融实验表明带符号残差与 RACA 均带来独立增益"
+          ],
+          "significance": "把响应级验证器奖励融入 on-policy 蒸馏,缓解长上下文推理中教师信号与任务目标的错位。",
+          "arxivUrl": "https://arxiv.org/abs/2608.19181",
+          "pdfUrl": "https://arxiv.org/pdf/2608.19181.pdf",
+          "index": 6,
+          "takeaway": "GC-OPD 用组内校准的「教师-验证器分歧残差」调和长上下文蒸馏信号,Qwen3-8B 平均分提升 9.5 分。",
+          "keyExperiment": "五个长上下文基准:Qwen3-8B 平均分 35.12→44.65,超过 vanilla OPD 的 43.56。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "WhiteMatter: All-to-All Cross-Layer Connections via KV Mixing",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-20",
+          "authors": "Wenbo Zhang, Xiang Ren",
+          "institutions": "University of Southern California",
+          "abstract": "在 Transformer 中,每层只能关注由自身深度产生的 KV,尽管自回归解码时存在更深的表示。反馈架构允许浅层消费者层关注更深的过去 token 表示产生的 KV,但所有消费者层使用固定不变的连接模式。本文提出 WhiteMatter:将每个注意力层连接到每个过去 token 的所有层表示,连接权重可跨消费者层变化并随源 token 自适应。对每个 token,路由器将其 L 个层状态混合为 k 个 KV 通道并缓存供后续 token 使用;每个消费者层关注其中一个通道。通道数 k 控制 KV 缓存大小,设 k<L 可减小缓存占用。预训练实验中,WhiteMatter 在层数多 50% 的 vanilla Transformer 上取得更优性能,并在 50% KV 缓存压缩下保留大部分收益。",
+          "contributions": [
+            "提出全连接(all-to-all)跨层注意力:消费者层可按 token 自适应地混合过去 token 的全部层表示",
+            "路由器将 L 层状态混合为 k 个 KV 通道,通道数 k 提供 KV 缓存大小的显式控制旋钮",
+            "预训练实验:优于层数多 50% 的 vanilla Transformer,50% KV 压缩下保留大部分增益"
+          ],
+          "conclusions": [
+            "跨层表示混合比固定连接模式的反馈架构更灵活,可转化为纯性能增益",
+            "KV 缓存可以通过减少通道数 k 压缩 50% 而不显著损失性能"
+          ],
+          "experiments": [
+            "相同预算下 WhiteMatter 优于层数多 50% 的 vanilla Transformer",
+            "50% KV 缓存压缩仍保留大部分性能增益",
+            "路由器可跨消费者层变化并随源 token 自适应(架构设计验证)"
+          ],
+          "significance": "把「每层只见自己深度的 KV」的硬约束打破为可按需混合任意层表示,并天然带来 KV 缓存压缩能力。",
+          "arxivUrl": "https://arxiv.org/abs/2608.18486",
+          "pdfUrl": "https://arxiv.org/pdf/2608.18486.pdf",
+          "index": 7,
+          "takeaway": "WhiteMatter 让每层都能按需混合过去 token 的所有层表示(跨层 KV 混合),比多 50% 层的 Transformer 更强且 KV 可压 50%。",
+          "keyExperiment": "预训练中 WhiteMatter 优于层数多 50% 的 vanilla Transformer,并在 50% KV 压缩下保留大部分收益。"
+        },
+        {
+          "title": "Lévy Attention: Single-Pass Predictive Uncertainty for Continuous-Time Attention",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-20",
+          "authors": "Sotirios P. Chatzis, Loukas Papadoulas",
+          "institutions": "Cyprus University of Technology",
+          "abstract": "面向不规则采样时间序列的深度模型能在任意连续时间戳回答查询,却不报告答案应被信任的程度。本文证明注意力层本身可以弥合这一缺口:采用正确的随机公式,产生每次预测的那一次前向传播,就能以闭式、零额外成本地报告其可信度。作者提出 Lévy Attention:一种交叉注意力算子,其输出是对非齐次 Poisson 随机测度的随机积分——query-key 兼容性在连续(时间 × 通道)索引空间上组装出强度,测度在其下散布原子,输出在这些原子处对插值值场求平均。期望上它退化为 mollified 余弦核注意力,因此可直接替换 softmax 层并以精确梯度训练。softmax 丢弃的信息被 Poisson 构造以闭式保留:证据 Λ_q(总兼容质量)与分歧 trΣ_V(q)(值散布)。精确方差恒等式使其组合 σ̂(q) 成为采样算子 RMS 偏差,由确定性前向传播发出,无需训练头。实证中分歧承载主要信号:证据因子在密集数据上无信息,在稀疏数据上强信息化;t-PatchGNN 上算子替换相对匹配对照最多损失 5.6% 准确率(最稀疏数据集损失为零);该免费分歧信号优于 20 次 MC dropout,σ̂ 标度的高斯分布零样本 CRPS 优于 50 次采样的采样器。",
+          "contributions": [
+            "提出 Lévy Attention:以 Poisson 随机积分为形式的注意力算子,输出自带闭式不确定性估计",
+            "证明期望上等价于 mollified 余弦核注意力,可零成本替换 softmax 并保留精确梯度训练",
+            "分歧(σ̂)信号可作为免费可靠性估计,优于 20-pass MC dropout 且几乎不损准确率"
+          ],
+          "conclusions": [
+            "注意力层可以在一次前向传播中同时给出预测与闭式不确定性,无需训练头",
+            "分歧比证据对不确定性更有辨别力,稀疏数据上尤为显著"
+          ],
+          "experiments": [
+            "t-PatchGNN 上替换 softmax 最多损失 5.6% 准确率,最稀疏数据集零损失",
+            "免费分歧信号优于 20-pass MC dropout(匹配五种子实验)",
+            "单次前向 1.4 秒内为 3,383 名未见患者按信任度排序"
+          ],
+          "significance": "让注意力算子自带的闭式方差替身不确定性估计,为连续时间序列模型提供零训练的可靠性度量。",
+          "arxivUrl": "https://arxiv.org/abs/2608.19171",
+          "pdfUrl": "https://arxiv.org/pdf/2608.19171.pdf",
+          "index": 8,
+          "takeaway": "Lévy Attention 用 Poisson 随机测度重写注意力,单次前向即可输出预测与校准的不确定性,几乎不损失准确率。",
+          "keyExperiment": "替换 softmax 最多损失 5.6% 准确率;不确定性信号优于 20-pass MC dropout,1.4 秒排序 3,383 名患者。"
+        },
+        {
+          "title": "Cacheable by Design? Training Mixture-of-Experts Routers for Locality Against the Edge Memory-Bandwidth Wall: A Pre-Registered Negative Result with a Systems Measurement Study",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-20",
+          "authors": "Shriniwas Ramesh Suram",
+          "institutions": "机构未标注",
+          "abstract": "在单张 8GB GPU 上服务 235B 参数 MoE 模型,瓶颈不是算力而是内存带宽:解码时每个 token 必须从专家所在层级流式读取活跃专家,消费级硬件上多数专家存放在比 RAM 慢得多的 SSD 上。作者在 Qwen3-235B(Q4_K_M,134GB)上量化了这一带宽墙:实测 warm 解码速度 0.44 tok/s,与 bytes-per-token/带宽模型吻合;本应摊薄一次磁盘扫描的批处理方案在 batch 32 因分页抖动(paging thrash)崩溃。作者构建 llama-moe-trace(零侵入路由遥测工具)并测量 Qwen3-30B:相邻 token 专家复用率为随机的 2.0 倍,95% 流量使用 52.5% 的专家,仅含 13.4% 专家的 LRU 缓存即可服务 66% 请求。随后验证「可缓存性是否可训练」:预注册训练 137M MoE 语言模型,加入辅助 locality 与 domain 路由损失,并以缓存未命中减少 + perplexity 联合标准评估。机制有效(未命中最多降 60%,99% 静态钉扎命中率),但每个配置都未通过预注册的 ≤1% perplexity 门——未命中减少与质量紧密耦合(340M 规模上税收不降反升)。训练无关的 cache-aware 重路由与训练所得 locality 叠加后,两个规模均实现约 80% 未命中减少且 perplexity 代价 ≤3.4%,远便宜于任一方案单独使用。",
+          "contributions": [
+            "在 Qwen3-235B 真实边缘 GPU 场景量化 MoE 内存带宽墙(0.44 tok/s),并暴露批处理方案在 batch 32 的分页抖动崩溃",
+            "开源 llama-moe-trace 零侵入路由遥测工具,量化相邻 token 专家复用与长尾访问分布",
+            "首个预注册、严格判据(≤1% perplexity)的多域评价:训练 locality 有真实质量税,但训练无关重路由与之叠加可在低成本下实现 ~80% 未命中减少"
+          ],
+          "conclusions": [
+            "MoE 路由的 locality 可训练,但以预注册严格判据衡量必须付出超过 1% 的 perplexity 代价,负结果成立",
+            "cache-aware 重路由与 trained locality 叠加(而非 domain-primed 预取)是性价比最高的边缘 MoE 服务方案"
+          ],
+          "experiments": [
+            "Qwen3-235B(Q4_K_M)warm 解码仅 0.44 tok/s,与带宽模型一致;batch 32 时批处理方案因分页抖动崩溃",
+            "Qwen3-30B:相邻 token 专家复用率为随机 2.0 倍,13.4% 专家构成的 LRU 缓存服务 66% 请求",
+            "叠加方案在两个规模实现约 80% 未命中减少,perplexity 代价 ≤3.4%,单调优于任一方案单独使用"
+          ],
+          "significance": "以预注册负结果与系统测量澄清了「训练 MoE 路由局部性以对抗边缘带宽墙」的收益边界,并提供务实叠加方案。",
+          "arxivUrl": "https://arxiv.org/abs/2608.18261",
+          "pdfUrl": "https://arxiv.org/pdf/2608.18261.pdf",
+          "index": 9,
+          "takeaway": "靠训练让 MoE 路由更可缓存会付出 >1% 的质量税(负结果),但叠加免训练 cache-aware 重路由后可用 ≤3.4% perplexity 换 ~80% 缓存未命中减少。",
+          "keyExperiment": "Qwen3-235B 在 8GB 边缘 GPU 仅 0.44 tok/s;13.4% 专家 LRU 缓存服务 66% 请求;叠加方案 ~80% 未命中减少、perplexity ≤3.4%。"
+        }
+      ]
+    }
+  ]
+}
