@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlashPrefill V2：块稀疏 Prefill Attention 深度解读</title>
+<style>
+
+    #flashprefill-v2-explainer {
+      --fp-bg: var(--a-bg, #f5f7f8);
+      --fp-surface: var(--a-surface, #ffffff);
+      --fp-surface-2: var(--a-surface-2, #eef2f3);
+      --fp-ink: var(--a-fg-strong, #172126);
+      --fp-muted: var(--a-fg-muted, #5d6d73);
+      --fp-border: var(--a-line, #d7e0e1);
+      --fp-red: var(--a-red, #b63129);
+      --fp-green: var(--a-green, #117146);
+      --fp-cyan: var(--a-teal, #0e6f68);
+      --fp-amber: var(--a-amber, #875900);
+      --fp-blue: var(--a-blue, #1a5dbf);
+      --fp-grid: color-mix(in srgb, var(--fp-muted) 35%, var(--fp-bg));
+      width: 100%;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 22px;
+      box-sizing: border-box;
+      background: var(--fp-bg);
+      color: var(--fp-ink);
+      border: 1px solid var(--fp-border);
+      border-radius: 14px;
+      font-family: var(--font-body, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+      line-height: 1.35;
+    }
+    #flashprefill-v2-explainer * { box-sizing: border-box; }
+    #flashprefill-v2-explainer button,
+    #flashprefill-v2-explainer select,
+    #flashprefill-v2-explainer input { font: inherit; }
+    #flashprefill-v2-explainer .fp-header { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: end; padding-bottom: 18px; border-bottom: 1px solid var(--fp-border); }
+    #flashprefill-v2-explainer .fp-kicker { color: var(--fp-cyan); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .14em; }
+    #flashprefill-v2-explainer h1 { margin: 5px 0 7px; font-size: clamp(24px, 4vw, 40px); line-height: 1.04; letter-spacing: -.03em; }
+    #flashprefill-v2-explainer .fp-dek { margin: 0; max-width: 720px; color: var(--fp-muted); font-size: 14px; }
+    #flashprefill-v2-explainer .fp-header-mark { color: var(--fp-red); font-size: 52px; line-height: .8; font-weight: 800; letter-spacing: -.08em; text-align: right; }
+    #flashprefill-v2-explainer .fp-toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 14px 0 16px; }
+    #flashprefill-v2-explainer .fp-control { display: inline-flex; align-items: center; gap: 7px; color: var(--fp-muted); font-size: 12px; font-weight: 700; }
+    #flashprefill-v2-explainer select { border: 1px solid var(--fp-border); background: var(--fp-surface); color: var(--fp-ink); border-radius: 7px; padding: 6px 26px 6px 9px; }
+    #flashprefill-v2-explainer .fp-check { display: inline-flex; align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid var(--fp-border); border-radius: 7px; background: var(--fp-surface); color: var(--fp-ink); font-size: 12px; font-weight: 700; cursor: pointer; }
+    #flashprefill-v2-explainer .fp-check input { accent-color: var(--fp-green); }
+    #flashprefill-v2-explainer .fp-playback { display: inline-flex; gap: 5px; margin-left: auto; }
+    #flashprefill-v2-explainer .fp-icon { width: 32px; height: 30px; padding: 0; border: 1px solid var(--fp-border); border-radius: 7px; background: var(--fp-surface); color: var(--fp-ink); cursor: pointer; font-weight: 800; }
+    #flashprefill-v2-explainer .fp-icon:hover, #flashprefill-v2-explainer .fp-icon:focus-visible { border-color: var(--fp-cyan); }
+    #flashprefill-v2-explainer .fp-main { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, .8fr); gap: 14px; align-items: start; }
+    #flashprefill-v2-explainer .fp-panel { background: var(--fp-surface); border: 1px solid var(--fp-border); border-radius: 10px; overflow: hidden; }
+    #flashprefill-v2-explainer .fp-panel-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--fp-border); }
+    #flashprefill-v2-explainer .fp-panel-title { margin: 0; font-size: 13px; font-weight: 850; letter-spacing: .01em; }
+    #flashprefill-v2-explainer .fp-panel-note { color: var(--fp-muted); font-size: 11px; }
+    #flashprefill-v2-explainer .fp-stage { padding: 12px 14px 14px; }
+    #flashprefill-v2-explainer .fp-stage-status { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    #flashprefill-v2-explainer .fp-step-name { color: var(--fp-cyan); font-size: 16px; font-weight: 850; }
+    #flashprefill-v2-explainer .fp-step-counter { color: var(--fp-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    #flashprefill-v2-explainer svg { display: block; width: 100%; height: auto; }
+    #flashprefill-v2-explainer .fp-map { border: 1px solid var(--fp-border); border-radius: 8px; background: var(--fp-surface-2); }
+    #flashprefill-v2-explainer .cell { stroke: var(--fp-bg); stroke-width: 1; rx: 2; transition: fill .25s, opacity .25s, transform .25s; transform-box: fill-box; transform-origin: center; }
+    #flashprefill-v2-explainer .cell.mask { fill: var(--fp-grid); opacity: .36; }
+    #flashprefill-v2-explainer .cell.drop { fill: var(--fp-amber); opacity: .3; }
+    #flashprefill-v2-explainer .cell.exact { fill: var(--fp-red); opacity: .95; }
+    #flashprefill-v2-explainer .cell.correct { fill: var(--fp-green); opacity: .82; }
+    #flashprefill-v2-explainer .cell.scan { fill: var(--fp-amber); opacity: 1; transform: scale(1.14); }
+    #flashprefill-v2-explainer .cell.output { fill: var(--fp-cyan); opacity: 1; transform: scale(1.1); }
+    #flashprefill-v2-explainer .map-label { fill: var(--fp-muted); font-size: 10px; font-weight: 700; }
+    #flashprefill-v2-explainer .map-legend { display: flex; flex-wrap: wrap; gap: 10px; color: var(--fp-muted); font-size: 11px; margin-top: 8px; }
+    #flashprefill-v2-explainer .legend-item { display: inline-flex; gap: 5px; align-items: center; }
+    #flashprefill-v2-explainer .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+    #flashprefill-v2-explainer .swatch.exact { background: var(--fp-red); }
+    #flashprefill-v2-explainer .swatch.correct { background: var(--fp-green); }
+    #flashprefill-v2-explainer .swatch.mask { background: var(--fp-grid); }
+    #flashprefill-v2-explainer .swatch.drop { background: var(--fp-amber); opacity: .65; }
+    #flashprefill-v2-explainer .fp-lane { position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; padding: 14px 0 2px; }
+    #flashprefill-v2-explainer .fp-lane:before { content: ""; position: absolute; left: 5%; right: 5%; top: 28px; height: 2px; background: var(--fp-border); }
+    #flashprefill-v2-explainer .fp-lane-progress { position: absolute; left: 5%; top: 28px; height: 2px; background: var(--fp-cyan); transition: width .35s ease; }
+    #flashprefill-v2-explainer .fp-node { position: relative; z-index: 1; min-width: 0; text-align: center; }
+    #flashprefill-v2-explainer .fp-node-dot { width: 18px; height: 18px; margin: 0 auto 7px; border-radius: 50%; background: var(--fp-surface); border: 2px solid var(--fp-border); transition: all .25s; }
+    #flashprefill-v2-explainer .fp-node.active .fp-node-dot { border-color: var(--fp-cyan); background: var(--fp-cyan); box-shadow: 0 0 0 4px color-mix(in srgb, var(--fp-cyan) 18%, transparent); }
+    #flashprefill-v2-explainer .fp-node.done .fp-node-dot { border-color: var(--fp-green); background: var(--fp-green); }
+    #flashprefill-v2-explainer .fp-node-label { display: block; color: var(--fp-muted); font-size: 10px; line-height: 1.15; }
+    #flashprefill-v2-explainer .fp-node.active .fp-node-label { color: var(--fp-ink); font-weight: 800; }
+    #flashprefill-v2-explainer .fp-detail { padding: 14px; min-height: 398px; display: flex; flex-direction: column; }
+    #flashprefill-v2-explainer .fp-detail-kicker { color: var(--fp-cyan); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; font-weight: 850; }
+    #flashprefill-v2-explainer .fp-detail h2 { margin: 5px 0 9px; font-size: 21px; line-height: 1.1; }
+    #flashprefill-v2-explainer .fp-detail-copy { margin: 0; color: var(--fp-muted); font-size: 13px; }
+    #flashprefill-v2-explainer .fp-equation { margin: 15px 0; padding: 12px; border-left: 3px solid var(--fp-amber); background: var(--fp-surface-2); color: var(--fp-ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    #flashprefill-v2-explainer .fp-detail-list { display: grid; gap: 8px; margin: auto 0 0; padding: 0; list-style: none; }
+    #flashprefill-v2-explainer .fp-detail-list li { display: grid; grid-template-columns: 17px 1fr; gap: 8px; color: var(--fp-muted); font-size: 12px; }
+    #flashprefill-v2-explainer .fp-detail-list li:before { content: ""; width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--fp-green); }
+    #flashprefill-v2-explainer .fp-evidence { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+    #flashprefill-v2-explainer .fp-chart-wrap { padding: 12px 14px 10px; }
+    #flashprefill-v2-explainer .fp-chart-title { color: var(--fp-muted); font-size: 11px; font-weight: 800; margin-bottom: 3px; }
+    #flashprefill-v2-explainer .chart-axis { stroke: var(--fp-border); stroke-width: 1; }
+    #flashprefill-v2-explainer .chart-grid { stroke: var(--fp-border); stroke-width: .7; stroke-dasharray: 2 3; opacity: .7; }
+    #flashprefill-v2-explainer .chart-line { fill: none; stroke: var(--fp-cyan); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    #flashprefill-v2-explainer .chart-dot { fill: var(--fp-surface); stroke: var(--fp-cyan); stroke-width: 2; }
+    #flashprefill-v2-explainer .chart-text { fill: var(--fp-muted); font-size: 10px; }
+    #flashprefill-v2-explainer .fp-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px 14px; border-top: 1px solid var(--fp-border); }
+    #flashprefill-v2-explainer .fp-metric-label { color: var(--fp-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
+    #flashprefill-v2-explainer .fp-metric-value { margin-top: 3px; font-size: 20px; font-weight: 850; font-variant-numeric: tabular-nums; }
+    #flashprefill-v2-explainer .fp-metric-value.red { color: var(--fp-red); }
+    #flashprefill-v2-explainer .fp-metric-value.green { color: var(--fp-green); }
+    #flashprefill-v2-explainer .fp-metric-value.cyan { color: var(--fp-cyan); }
+    #flashprefill-v2-explainer .fp-footer { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--fp-border); color: var(--fp-muted); font-size: 11px; }
+    #flashprefill-v2-explainer .fp-footer strong { color: var(--fp-ink); }
+    #flashprefill-v2-explainer .fp-progress { height: 4px; background: var(--fp-surface-2); border-radius: 9px; overflow: hidden; }
+    #flashprefill-v2-explainer .fp-progress > span { display: block; height: 100%; background: var(--fp-cyan); transition: width .35s ease; }
+    @media (max-width: 760px) {
+      #flashprefill-v2-explainer { padding: 15px; border-radius: 10px; }
+      #flashprefill-v2-explainer .fp-header { grid-template-columns: 1fr; }
+      #flashprefill-v2-explainer .fp-header-mark { display: none; }
+      #flashprefill-v2-explainer .fp-main, #flashprefill-v2-explainer .fp-evidence { grid-template-columns: 1fr; }
+      #flashprefill-v2-explainer .fp-detail { min-height: 0; }
+      #flashprefill-v2-explainer .fp-playback { margin-left: 0; }
+      #flashprefill-v2-explainer .fp-lane { gap: 2px; }
+      #flashprefill-v2-explainer .fp-node-label { font-size: 9px; }
+      #flashprefill-v2-explainer .fp-metrics { gap: 4px; }
+      #flashprefill-v2-explainer .fp-metric-value { font-size: 17px; }
+      #flashprefill-v2-explainer .fp-footer { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      #flashprefill-v2-explainer .fp-lane { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 12px; }
+      #flashprefill-v2-explainer .fp-lane::before, #flashprefill-v2-explainer .fp-lane-progress { display: none; }
+      #flashprefill-v2-explainer .fp-node-label { overflow-wrap: anywhere; }
+      #flashprefill-v2-explainer .fp-metrics { grid-template-columns: 1fr; }
+    }
+
+    #flashprefill-v2-explainer .fp-reading { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--fp-border); }
+    #flashprefill-v2-explainer .fp-reading h2 { margin: 0 0 9px; font-size: 18px; line-height: 1.2; }
+    #flashprefill-v2-explainer .fp-reading-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    #flashprefill-v2-explainer .fp-reading-card { padding: 12px; border: 1px solid var(--fp-border); border-radius: 8px; background: var(--fp-surface-2); }
+    #flashprefill-v2-explainer .fp-reading-card h3 { margin: 0 0 6px; font-size: 13px; }
+    #flashprefill-v2-explainer .fp-reading-card p { margin: 0; color: var(--fp-muted); font-size: 12px; line-height: 1.55; }
+    #flashprefill-v2-explainer .fp-source { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--fp-border); color: var(--fp-muted); font-size: 11px; line-height: 1.55; }
+    #flashprefill-v2-explainer .fp-source a { color: var(--fp-cyan); text-decoration: underline; text-underline-offset: 2px; }
+    #flashprefill-v2-explainer .fp-note { margin-top: 8px; color: var(--fp-muted); font-size: 11px; line-height: 1.45; }
+    #flashprefill-v2-explainer .fp-icon:focus-visible, #flashprefill-v2-explainer select:focus-visible, #flashprefill-v2-explainer input:focus-visible { outline: 2px solid var(--fp-cyan); outline-offset: 2px; }
+    @media (max-width: 760px) {
+      #flashprefill-v2-explainer .fp-reading-grid { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #flashprefill-v2-explainer *, #flashprefill-v2-explainer *::before, #flashprefill-v2-explainer *::after { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+    }
+
+</style>
+</head>
+<body>
+<div id="flashprefill-v2-explainer">
+
+  <div class="fp-header">
+    <div>
+      <div class="fp-kicker">FlashPrefill V2 / 论文交互地图</div>
+      <h1>让块稀疏 attention 真正跑起来</h1>
+      <p class="fp-dek">从 block 重要性估计，到 exact path 与 mean correction 的 online softmax 合并，再到 Hopper 上可部署的 paged KV 调度。</p>
+    </div>
+    <div class="fp-header-mark">V2</div>
+  </div>
+
+  <div class="fp-toolbar" aria-label="explorer controls">
+    <label class="fp-control">模型
+      <select id="fp-model">
+        <option value="llama">Llama-3.1-8B-Instruct</option>
+        <option value="qwen4" selected>Qwen3-4B-Instruct-2507</option>
+        <option value="qwen30">Qwen3-30B-A3B-Instruct-2507</option>
+      </select>
+    </label>
+    <label class="fp-control">上下文
+      <select id="fp-context">
+        <option value="0">4K</option><option value="1">8K</option><option value="2">16K</option>
+        <option value="3">32K</option><option value="4">64K</option><option value="5" selected>128K</option>
+      </select>
+    </label>
+    <label class="fp-control">精度
+      <select id="fp-precision"><option value="bf16" selected>BF16</option><option value="fp8">FP8</option></select>
+    </label>
+    <label class="fp-check" id="fp-correction-control" title="关闭修正的 RULER 消融仅在 Qwen3-4B 上有论文实测"><input id="fp-correction" type="checkbox" checked> mean correction（均值修正）</label>
+    <div class="fp-playback">
+      <button class="fp-icon" id="fp-prev" type="button" aria-label="上一步" title="上一步">&lt;</button>
+      <button class="fp-icon" id="fp-play" type="button" aria-label="播放动画" title="播放或暂停">&gt;</button>
+      <button class="fp-icon" id="fp-next" type="button" aria-label="下一步" title="下一步">&gt;</button>
+      <button class="fp-icon" id="fp-reset" type="button" aria-label="重置动画" title="重置">0</button>
+    </div>
+  </div>
+
+  <div class="fp-main">
+    <section class="fp-panel" aria-label="块稀疏 attention 动画">
+      <div class="fp-panel-head"><h2 class="fp-panel-title">Two-stage prefill pipeline</h2><span class="fp-panel-note" id="fp-stage-note">Index stage</span></div>
+      <div class="fp-stage">
+        <div class="fp-stage-status"><span class="fp-step-name" id="fp-step-name">PackGQA</span><span class="fp-step-counter" id="fp-step-counter">01 / 08</span></div>
+        <svg class="fp-map" id="fp-map" viewBox="0 0 720 320" role="img" aria-label="query tile 与 key block 的稀疏布局"></svg>
+        <div class="map-legend">
+          <span class="legend-item"><i class="swatch exact"></i>选中块：exact</span>
+          <span class="legend-item"><i class="swatch correct" id="fp-correction-swatch"></i><span id="fp-correction-legend">未选中块：mean correction</span></span>
+          <span class="legend-item"><i class="swatch mask"></i>因果 mask</span>
+        </div>
+        <div class="fp-lane" id="fp-lane" aria-label="prefill 流水线阶段">
+          <span class="fp-lane-progress" id="fp-lane-progress"></span>
+          <div class="fp-node"><div class="fp-node-dot"></div><span class="fp-node-label">PackGQA</span></div>
+          <div class="fp-node"><div class="fp-node-dot"></div><span class="fp-node-label">pool K/V</span></div>
+          <div class="fp-node"><div class="fp-node-dot"></div><span class="fp-node-label">score</span></div>
+          <div class="fp-node"><div class="fp-node-dot"></div><span class="fp-node-label">CSR</span></div>
+          <div class="fp-node"><div class="fp-node-dot"></div><span class="fp-node-label">producer</span></div>
+          <div class="fp-node"><div class="fp-node-dot"></div><span class="fp-node-label">consumer</span></div>
+          <div class="fp-node"><div class="fp-node-dot"></div><span class="fp-node-label">correction</span></div>
+          <div class="fp-node"><div class="fp-node-dot"></div><span class="fp-node-label">output</span></div>
+        </div>
+      </div>
+      <div class="fp-metrics">
+        <div><div class="fp-metric-label">selected density</div><div class="fp-metric-value red" id="fp-density">4.9%</div></div>
+        <div><div class="fp-metric-label">speedup vs FA2</div><div class="fp-metric-value cyan" id="fp-speedup">27.45x</div></div>
+        <div><div class="fp-metric-label">RULER score</div><div class="fp-metric-value green" id="fp-accuracy">69.76</div></div>
+      </div>
+    </section>
+
+    <aside class="fp-panel fp-detail" aria-live="polite">
+      <div class="fp-detail-kicker" id="fp-detail-kicker">Stage 1 / index</div>
+      <h2 id="fp-detail-title">PackGQA</h2>
+      <p class="fp-detail-copy" id="fp-detail-copy">把同一 KV group 的 query heads 打包到一个 tile，让 staged K/V 在 shared memory 中被整个 group 复用。</p>
+      <div class="fp-equation" id="fp-equation">Q ∈ R^(L×Hq×d) → Q′ ∈ R^((gL)×Hkv×d)</div>
+      <ul class="fp-detail-list" id="fp-detail-list">
+        <li>索引按 KV head 保存，元数据缩小约 g 倍</li>
+        <li>尾部 tile 的空转行数被 PackGQA 摊薄</li>
+        <li>为后续稀疏 CSR traversal 准备统一 work unit</li>
+      </ul>
+    </aside>
+  </div>
+
+  <div class="fp-evidence">
+    <figure class="fp-panel fp-chart-wrap">
+      <figcaption class="fp-chart-title">Attention density falls with context length</figcaption>
+      <svg id="fp-density-chart" viewBox="0 0 520 190" role="img" aria-label="attention density chart"></svg>
+    </figure>
+    <figure class="fp-panel fp-chart-wrap">
+      <figcaption class="fp-chart-title">Operator speedup vs FlashAttention-2</figcaption>
+      <svg id="fp-speed-chart" viewBox="0 0 520 190" role="img" aria-label="operator speedup chart"></svg>
+    </figure>
+  </div>
+
+  <div class="fp-footer">
+    <div><strong id="fp-footer-strong">部署边界：</strong> sparse prefill 走 paged KV 路径；decode 因单 token query 回退到 dense attention。</div>
+    <div class="fp-progress" aria-hidden="true"><span id="fp-progress"></span></div>
+  </div>
+
+  <div class="fp-note">网格是结构示意；密度、RULER 分数和 speedup 曲线取自论文 Table 1/3。图中 speedup 的基线是 FlashAttention-2，论文另报告 128K 下相对 FA3/4-aligned dense 的 BF16 17.54x、FP8 30.49x。</div>
+
+  <section class="fp-reading" aria-label="论文要点">
+    <h2>怎样读这张图</h2>
+    <div class="fp-reading-grid">
+      <article class="fp-reading-card"><h3>1. 先做索引</h3><p>PackGQA 把同一 KV group 的 query heads 打包；block-mean pooling 只保留每个逻辑块的均值；单 pass score + threshold 再把 survivor 写成按 KV head 组织的 CSR。默认实验使用 B=128、sink=256、window=512、alpha=0.1。</p></article>
+      <article class="fp-reading-card"><h3>2. 再做精确计算</h3><p>选中的块走 exact QK/PV；未选中的块不再简单置零，而是以 |B_J| exp(s-bar_J) (v-bar_J, 1) 注入同一个 online softmax。这个零阶修正是 V2 在极端稀疏率下守住准确率的关键。</p></article>
+      <article class="fp-reading-card"><h3>3. 最后看部署</h3><p>H20 上 128K 的 V2 attention speedup 相对 FA2 为 BF16 27.19x、FP8 47.26x；SGLang 的连续批处理端到端 TTFT 改善最高约 3.4x/4.8x。短上下文时，索引和修正开销会吃掉部分收益。</p></article>
+    </div>
+  </section>
+  <div class="fp-source">论文：Qihang Fan 等，<em>FlashPrefill V2: Block-Sparse Prefill Attention for Long-Context LLM Serving</em>，<a href="https://arxiv.org/abs/2608.19758" target="_blank" rel="noopener noreferrer">arXiv:2608.19758</a> · <a href="https://github.com/qhfan/FlashPrefillv2" target="_blank" rel="noopener noreferrer">官方实现</a>。所有曲线中的演示网格用于解释执行路径，不冒充逐 token 的原始 attention map。</div>
+
+  <script>
+    (() => {
+      const root = document.getElementById('flashprefill-v2-explainer');
+      if (!root) return;
+      const contextLabels = ['4K', '8K', '16K', '32K', '64K', '128K'];
+      const datasets = {
+        llama: { density: [76.0, 54.2, 33.6, 18.7, 9.0, 4.6], bf16: [1.66, 2.62, 4.28, 7.63, 14.39, 27.21], fp8: [2.67, 4.56, 7.79, 13.89, 25.76, 47.33], acc: [95.52, 94.65, 92.95, 88.48, 83.07, 72.08], accFp8: [95.28, 94.48, 92.78, 88.80, 80.28, 67.78] },
+        qwen4: { density: [72.0, 48.5, 29.8, 17.6, 9.2, 4.9], bf16: [1.72, 2.82, 4.63, 7.92, 13.93, 27.45], fp8: [2.75, 4.87, 8.40, 14.44, 25.06, 47.59], acc: [94.49, 92.42, 91.56, 87.48, 81.67, 69.76], accFp8: [94.13, 92.37, 91.36, 87.47, 80.59, 68.97] },
+        qwen30: { density: [70.4, 46.0, 29.6, 16.2, 9.4, 4.9], bf16: [1.75, 2.95, 4.62, 8.21, 14.11, 27.19], fp8: [2.78, 5.12, 8.41, 14.93, 25.36, 47.26], acc: [95.35, 94.85, 94.19, 92.48, 89.88, 83.83], accFp8: [95.28, 94.53, 94.12, 92.34, 89.54, 82.55] }
+      };
+      const steps = [
+        { name: 'PackGQA', note: 'Index stage', kicker: 'Stage 1 / layout', title: 'PackGQA memory layout', copy: '把同一 KV group 的 query heads 打包到一个 tile，让 staged K/V 在 shared memory 中被整个 group 复用。', eq: 'Q ∈ R^(L×Hq×d) → Q′ ∈ R^((gL)×Hkv×d)', list: ['索引按 KV head 保存，元数据缩小约 g 倍', '尾部 tile 的空转行数被 PackGQA 摊薄', '为后续稀疏 CSR traversal 准备统一 work unit'] },
+        { name: 'pool K/V', note: 'Index stage', kicker: 'Stage 1 / statistics', title: 'Block-mean pooling', copy: '每个逻辑 block 只保留一个平均 key 和平均 value；它们既用于 score estimation，也用于之后的 correction。', eq: 'k̄J = mean(KJ),   v̄J = mean(VJ)', list: ['平均 key 用于粗粒度排序', '平均 value 保存被剪枝块的零阶输出方向', '池化 pass 的成本相对 token attention 降低 B 倍'] },
+        { name: 'score', note: 'Index stage', kicker: 'Stage 1 / selection', title: 'Single-pass score + threshold', copy: '不做 Top-k 排序，而是用每个 query tile 的峰值分数生成相对阈值，保留重要块并强制保留 sink/window/diag。', eq: 'keep(J) ⇔ ScoreIJ ≥ α · maxJ′ ScoreIJ′', list: ['α 越大，密度越低', '默认 α = 0.1；sink/window/diag 不被剪掉', 'score 与阈值压缩融合成一个 pass'] },
+        { name: 'CSR', note: 'Index stage', kicker: 'Stage 1 / metadata', title: 'CSR index compaction', copy: '把 survivor block 写成按 KV head 组织的 CSR 列表；逻辑 B=128 block 再展开成 64-token 物理 tile。', eq: 'cu[g] … cu[g+1],   idx[cu[g] : cu[g+1]]', list: ['写位置不会超过扫描位置，可原地压缩', 'producer 和 consumer 读取同一倒序序列', '按 selected-block count 做 KV splitting'] },
+        { name: 'producer', note: 'Attention stage', kicker: 'Stage 2 / movement', title: 'Warp-specialized producer', copy: 'producer warpgroup 通过 TMA 或 paged 路径上的 cp.async 搬运 K/V；下一个 block 在当前计算仍在进行时预取。', eq: 'paged addr(b,j) = page_table[b,⌊j/p⌋]·p + (j mod p)', list: ['连续 KV 走 TMA，paged KV 支持任意 page size', '共享内存多 stage pipeline', '索引解析不进入关键路径'] },
+        { name: 'consumer', note: 'Attention stage', kicker: 'Stage 2 / compute', title: 'Pingpong GEMM + online softmax', copy: '两个 consumer warpgroup 重叠 QK、PV 与 softmax，让 MMA 单元和指数/重缩放单元同时工作。', eq: 'QK(n)  ∥  PV(n+1)  ∥  online-softmax(n)', list: ['wgmma 对齐 Hopper 执行模型', 'FP8 在 softmax 内动态反量化与重排', 'selected blocks 走 exact path'] },
+        { name: 'correction', note: 'Attention stage', kicker: 'Stage 2 / recovery', title: 'Mean correction enters the same softmax', copy: '未选择块不再被置零；每个 pooled block 以 |BJ| 个 token 的权重注入 numerator 和 denominator。', eq: '(|BJ| · exp(s̄J)) · (v̄J, 1)', list: ['通过 log|BJ| 恢复被丢弃的概率质量', '与 exact path 在同一个 online softmax 中合并', 'FP8 下尤其重要：128K 可恢复约 6.2 个 RULER 分'] },
+        { name: 'output', note: 'Serving boundary', kicker: 'Finalize / serving', title: 'Output and serving boundary', copy: 'epilogue 完成 softmax 重缩放并输出；prefill 使用稀疏后端，decode 因单 token query 回退到 dense attention。', eq: 'O = (num_exact + num_corr) / (den_exact + den_corr)', list: ['paged KV 与 continuous batching 原生兼容', '128K TTFT：BF16 约 2.1–3.4×，FP8 约 3.7–4.8×', '短上下文和小 chunk 会被 index overhead 抵消'] }
+      ];
+
+      const el = (id) => root.querySelector('#' + id);
+      const modelEl = el('fp-model');
+      const contextEl = el('fp-context');
+      const precisionEl = el('fp-precision');
+      const correctionEl = el('fp-correction');
+      const state = { step: 0, model: 'qwen4', context: 5, precision: 'bf16', correction: true, playing: false, timer: null };
+
+      function make(tag, attrs = {}, text = '') {
+        const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+        Object.entries(attrs).forEach(([key, value]) => n.setAttribute(key, value));
+        if (text) n.textContent = text;
+        return n;
+      }
+      function selectedPattern(r, c, rows, cols) {
+        const limit = Math.max(1, Math.round((r + 1) * cols / rows));
+        if (c >= limit) return 'mask';
+        const sink = c < Math.min(2, cols);
+        const window = c >= Math.max(0, limit - 2);
+        const needle = ((r * 5 + 2) % Math.max(1, limit)) === c;
+        const rho = datasets[state.model].density[state.context] / 100;
+        const scoreSelected = ((r * 17 + c * 11 + state.context * 5) % 100) < Math.max(9, rho * 100);
+        if (sink || window || needle || scoreSelected) return 'exact';
+        return state.correction ? 'correct' : 'drop';
+      }
+      function drawMap() {
+        const svg = el('fp-map');
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        const rows = 8;
+        const cols = 8 + state.context * 2;
+        const left = 70, top = 30, cellW = 49, cellH = 28;
+        svg.setAttribute('viewBox', `0 0 ${left + cols * cellW + 26} ${top + rows * cellH + 48}`);
+        svg.appendChild(make('text', { x: 10, y: top + rows * cellH / 2, class: 'map-label', transform: `rotate(-90 10 ${top + rows * cellH / 2})` }, 'Q tiles'));
+        svg.appendChild(make('text', { x: left + cols * cellW / 2, y: top + rows * cellH + 29, class: 'map-label', 'text-anchor': 'middle' }, 'paged K/V blocks'));
+        const group = make('g');
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const kind = selectedPattern(r, c, rows, cols);
+            const rect = make('rect', { x: left + c * cellW, y: top + r * cellH, width: cellW - 3, height: cellH - 3, class: `cell ${kind}` });
+            const focus = state.step === 2 ? ((r * 3 + state.context) % cols === c) : state.step === 4 ? c === Math.min(cols - 1, Math.floor(cols * .68)) : state.step === 5 ? c === Math.min(cols - 1, Math.floor(cols * .55)) : state.step === 6 ? kind === 'correct' && (r + c) % 3 === 0 : state.step === 7 ? c >= cols - 2 : false;
+            if (focus && kind !== 'mask') rect.classList.add(state.step === 6 ? 'output' : 'scan');
+            group.appendChild(rect);
+          }
+        }
+        svg.appendChild(group);
+        const markers = [
+          [left + 1, top - 9, 'sink'], [left + Math.max(2, cols - 2) * cellW, top - 9, 'recent'],
+          [left + cols * cellW - 1, top + rows * cellH + 12, 'causal']
+        ];
+        markers.forEach(([x, y, label]) => svg.appendChild(make('text', { x, y, class: 'map-label', 'text-anchor': 'middle' }, label)));
+      }
+      function chart(svgId, values, maxY, suffix) {
+        const svg = el(svgId);
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        const W = 520, H = 190, pad = { l: 38, r: 16, t: 16, b: 34 }, iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+        [0, .5, 1].forEach((t) => {
+          const y = pad.t + ih * (1 - t);
+          svg.appendChild(make('line', { x1: pad.l, x2: W - pad.r, y1: y, y2: y, class: 'chart-grid' }));
+          svg.appendChild(make('text', { x: pad.l - 7, y: y + 4, class: 'chart-text', 'text-anchor': 'end' }, `${Math.round(maxY * t)}${suffix}`));
+        });
+        svg.appendChild(make('line', { x1: pad.l, x2: W - pad.r, y1: pad.t + ih, y2: pad.t + ih, class: 'chart-axis' }));
+        svg.appendChild(make('line', { x1: pad.l, x2: pad.l, y1: pad.t, y2: pad.t + ih, class: 'chart-axis' }));
+        const pts = values.map((v, i) => [pad.l + iw * i / (values.length - 1), pad.t + ih * (1 - v / maxY)]);
+        svg.appendChild(make('path', { d: pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]},${p[1]}`).join(' '), class: 'chart-line' }));
+        pts.forEach(([x, y], i) => {
+          const dot = make('circle', { cx: x, cy: y, r: i === state.context ? 5.6 : 3.6, class: 'chart-dot' });
+          svg.appendChild(dot);
+          svg.appendChild(make('text', { x, y: H - 12, class: 'chart-text', 'text-anchor': 'middle' }, contextLabels[i]));
+          if (i === state.context) svg.appendChild(make('text', { x, y: y - 10, class: 'chart-text', 'text-anchor': 'middle' }, `${values[i].toFixed(values[i] < 10 ? 1 : 0)}${suffix}`));
+        });
+      }
+      function accuracyValue(data) {
+        const base = state.precision === 'fp8' ? data.accFp8[state.context] : data.acc[state.context];
+        if (state.correction || state.model !== 'qwen4') return base;
+        const drop = state.precision === 'fp8' ? [0.35, 0.55, 0.68, 2.43, 3.73, 6.19][state.context] : [0.11, 0.36, 0.38, 0.27, 0.75, 0.90][state.context];
+        return base - drop;
+      }
+      function render() {
+        const data = datasets[state.model];
+        const precision = state.precision;
+        const speed = data[precision][state.context];
+        const hasCorrectionAblation = state.model === 'qwen4';
+        if (!hasCorrectionAblation) {
+          state.correction = true;
+          correctionEl.checked = true;
+        }
+        correctionEl.disabled = !hasCorrectionAblation;
+        el('fp-correction-control').title = hasCorrectionAblation ? '关闭修正的 RULER 数值来自论文 Table 8' : '论文未报告该模型关闭修正后的逐长度 RULER 数值';
+        el('fp-step-name').textContent = steps[state.step].name;
+        el('fp-step-counter').textContent = `${String(state.step + 1).padStart(2, '0')} / 08`;
+        el('fp-stage-note').textContent = steps[state.step].note;
+        el('fp-detail-kicker').textContent = steps[state.step].kicker;
+        el('fp-detail-title').textContent = steps[state.step].title;
+        el('fp-detail-copy').textContent = steps[state.step].copy;
+        el('fp-equation').textContent = steps[state.step].eq;
+        el('fp-detail-list').innerHTML = steps[state.step].list.map((item) => `<li>${item}</li>`).join('');
+        el('fp-density').textContent = `${data.density[state.context].toFixed(1)}%`;
+        el('fp-speedup').textContent = `${speed.toFixed(2)}x`;
+        el('fp-accuracy').textContent = accuracyValue(data).toFixed(2);
+        el('fp-correction-swatch').setAttribute('class', `swatch ${state.correction ? 'correct' : 'drop'}`);
+        el('fp-correction-legend').textContent = state.correction ? '未选中块：mean correction' : '未选中块：直接丢弃';
+        el('fp-progress').style.width = `${(state.step + 1) / steps.length * 100}%`;
+        el('fp-lane-progress').style.width = `${state.step / (steps.length - 1) * 90}%`;
+        root.querySelectorAll('.fp-node').forEach((node, i) => { node.classList.toggle('active', i === state.step); node.classList.toggle('done', i < state.step); });
+        el('fp-play').textContent = state.playing ? '||' : '>';
+        el('fp-play').setAttribute('aria-label', state.playing ? '暂停动画' : '播放动画');
+        drawMap();
+        chart('fp-density-chart', data.density, 100, '%');
+        chart('fp-speed-chart', data[precision], Math.max(50, Math.ceil(Math.max(...data[precision]) / 10) * 10), 'x');
+      }
+      function setPlaying(value) {
+        state.playing = value;
+        clearInterval(state.timer);
+        if (value) state.timer = setInterval(() => { state.step = (state.step + 1) % steps.length; render(); }, 1350);
+        render();
+      }
+      el('fp-prev').addEventListener('click', () => { state.step = (state.step + steps.length - 1) % steps.length; render(); });
+      el('fp-next').addEventListener('click', () => { state.step = (state.step + 1) % steps.length; render(); });
+      el('fp-reset').addEventListener('click', () => { state.step = 0; setPlaying(false); });
+      el('fp-play').addEventListener('click', () => setPlaying(!state.playing));
+      modelEl.addEventListener('change', (e) => { state.model = e.target.value; render(); });
+      contextEl.addEventListener('change', (e) => { state.context = Number(e.target.value); render(); });
+      precisionEl.addEventListener('change', (e) => { state.precision = e.target.value; render(); });
+      correctionEl.addEventListener('change', (e) => { state.correction = e.target.checked; render(); });
+      render();
+    })();
+  </script>
+</div>
+</body>
+</html>
