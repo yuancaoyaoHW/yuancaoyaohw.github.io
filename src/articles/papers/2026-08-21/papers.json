@@ -1,0 +1,344 @@
+{
+  "date": "2026-08-21",
+  "title": "2026-08-21 论文精选",
+  "lede": "今日关注推理加速与自适应计算:FlashPrefill V2 把稀疏 prefill 推进到生产级,SAPO 以共享骨干革新 Agentic RL,自适应模式选择为测试时计算装上路由器。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 50
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "FlashPrefill V2: Block-Sparse Prefill Attention for Long-Context LLM Serving",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-21",
+          "authors": "Qihang Fan, Huaibo Huang, Zhiying Wu, Bingning Wang, Ran He",
+          "institutions": "机构未标注",
+          "abstract": "长上下文建模是大语言模型的关键能力,但注意力的平方复杂度在计算密集的预填充(prefill)阶段仍是核心瓶颈。作者此前提出的 FlashPrefill 通过即时模式发现与基于最大值的动态阈值降低开销,但仍是算法原型,离生产部署较远。本文提出 FlashPrefill V2,沿三个维度将 FlashPrefill 从原型推向实用化长上下文服务:一是引入均值修正项有效抑制近似误差,即使在极端稀疏度下也能把性能退化控制在可接受范围;二是以 PackGQA 内存访问、warp 特化与 pingpong 流水线重新设计稀疏注意力算子,完全对齐最新的 FlashAttention-3/4 实现,并支持 FP8 推理以满足实际量化需求;三是原生支持 paged KV cache 与 continuous batching,可作为注意力后端集成进 SGLang 等现代推理框架。在 NVIDIA H20 GPU 上的大量评测表明,128K 上下文下 FlashPrefill V2 相比 FlashAttention-2 在 FP8 与 BF16 精度下分别获得最高 47.26x 与 27.19x 加速,FP8 下相对 FA3/4 对齐的稠密基线仍有 30.49x 加速。",
+          "contributions": [
+            "引入均值修正项,抑制稀疏注意力近似误差,极端稀疏度下性能退化可控",
+            "算子设计全面对齐 FlashAttention-3/4,支持 FP8 推理与 paged KV cache、continuous batching,可直接嵌入 SGLang",
+            "从算法原型演进为可生产部署的长上下文推理后端"
+          ],
+          "conclusions": [
+            "FP8 下相对 FA3/4 对齐稠密基线在 128K 上下文仍实现 30.49x 加速,稀疏近似可实际部署",
+            "块稀疏 prefill 与量化、分页缓存等生产设施可以无缝共存"
+          ],
+          "experiments": [
+            "NVIDIA H20 GPU(最广泛部署的推理加速器之一)评测",
+            "128K 上下文下 FP8 精度达 47.26x、BF16 精度达 27.19x,相对 FlashAttention-2",
+            "FP8 下相对 FA3/4 对齐稠密基线 30.49x 加速"
+          ],
+          "significance": "把稀疏 prefill 注意力从论文原型推进到可集成进 SGLang 的生产级推理后端,直接缓解长上下文服务的算力瓶颈。",
+          "arxivUrl": "https://arxiv.org/abs/2608.19758",
+          "pdfUrl": "https://arxiv.org/pdf/2608.19758.pdf",
+          "takeaway": "FlashPrefill V2 以均值修正+FA3/4 对齐算子+FP8 支持,在 H20 上把长上下文 prefill 做到 128K 下 47x 加速且可直接进生产。",
+          "keyExperiment": "H20 上 128K 上下文 FP8 精度相对 FlashAttention-2 达 47.26x 加速,相对 FA3/4 稠密基线亦有 30.49x。",
+          "index": 1
+        },
+        {
+          "title": "ReCache: Efficient KV Cache Reuse and Compression for Tool-Augmented LLM Agents",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-21",
+          "authors": "Yichu Fang, Sitong Wei, Haozhe Hu, Xiaoyu Shen",
+          "institutions": "机构未标注",
+          "abstract": "智能体大模型会反复编码工具与技能 schema,且这些 schema 在不同请求中以不同组合和顺序出现,导致标准前缀缓存无法复用其 KV 状态。本文提出 ReCache 框架,独立缓存资源表示并降低推理期计算与内存开销。资源维度注意力(resource-wise attention)移除跨资源交互、为资源分配局部位置,生成组合无关的组合不变 KV 块;ReCache 再把资源可见性限制在贡献筛选出的层-KV头组路由上,并通过结构与语义剪枝仅保留调用关键字段。在由七个公开工具/技能使用数据集(含资源不相交测试)组成的基准上,资源维度注意力以 82.3% 对比 82.4% 的 Inv-F1 匹配稠密调用的性能,同时带来 3.655x 的首 Token 时间加速;完整框架把分配的 KV 张量内存减少 92.43%,注意力加速 1.423x。结果表明把可复用 schema 编码与选择性资源访问分离,能以有限的效果损失大幅降低智能体推理成本。",
+          "contributions": [
+            "资源维度注意力生成组合不变的 KV 块,打破前缀缓存对工具 schema 复用失效的限制",
+            "贡献筛选路由 + 结构/语义剪枝,仅保留调用关键字段进一步压缩",
+            "在七数据集基准上验证效果与成本权衡"
+          ],
+          "conclusions": [
+            "分离可复用 schema 编码与选择性资源访问可大幅降低 agentic 推理成本",
+            "资源维度注意力性能与稠密调用基本持平(82.3% vs 82.4% Inv-F1)"
+          ],
+          "experiments": [
+            "资源维度注意力提供 3.655x 首 Token 时间加速",
+            "完整框架减少 92.43% 分配的 KV 张量内存,注意力加速 1.423x",
+            "Inv-F1 82.3% vs 稠密 82.4%,几乎无损"
+          ],
+          "significance": "直击工具增强 Agent 推理中前缀缓存失效的痛点,把 KV 复用与压缩从占位符式优化变成组合无关的工程方案。",
+          "arxivUrl": "https://arxiv.org/abs/2608.19662",
+          "pdfUrl": "https://arxiv.org/pdf/2608.19662.pdf",
+          "takeaway": "ReCache 用组合不变 KV 块+贡献路由剪枝,以 0.1 点 Inv-F1 代价换 3.66x TTFT 加速和 92.4% KV 内存下降。",
+          "keyExperiment": "完整框架减少 92.43% 分配的 KV 张量内存且注意力加速 1.423x,TTFT 加速 3.655x。",
+          "index": 2
+        },
+        {
+          "title": "Let's Scale Step by Step: Compute-Efficient Hyperparameter Transfer for Large-Scale Mixture-of-Experts",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-21",
+          "authors": "Nayeon Kim, Hojin Lee, Yunju Bak, Jaesun Park, Boseop Kim",
+          "institutions": "机构未标注",
+          "abstract": "混合专家(MoE)架构在不按比例增加计算成本的前提下显著扩展模型容量,但在模型规模与 token 预算双双极端放大时,通过扫参优化其超参数(尤其学习率)在计算上不可行。本文提出一种计算高效的两步超参数迁移框架:先跨模型宽度迁移得到大 MoE 训练的最优学习率,再外推到万亿 token 量级训练视野。首先,针对采用多头潜在注意力(MLA)与 Muon 优化器的 MoE 架构给出最大更新参数化(μP)适配,证明最优学习率可跨宽度缩放模型一致迁移;其次,沿 token 维度扩展这种可迁移性,建立预测性 scaling law——对有限预算下小代理模型得到的最优值做线性回归,即可高保真地外推理想学习率到 10 万亿 token 训练规模(R²=0.95)。这意味用小模型代理训练足以确定大规模 MoE 全程训练的最优学习率。作者将该方法用于从头预训练 155B 总参数/17B 激活参数的基础模型,稳定训练与评测结果验证了全尺寸目标模型最优配置可被准确确定。",
+          "contributions": [
+            "为 MLA+Muon 的 MoE 架构建立 μP 适配,证明最优学习率跨宽度一致迁移",
+            "沿 token 维度建立预测性 scaling law,线性回归外推至 10T token(R²=0.95)",
+            "在 155B/17B 真实预训练中验证方法有效性"
+          ],
+          "conclusions": [
+            "小模型代理训练即可确定大规模 MoE 的最优学习率,免去昂贵的全规模扫参",
+            "μP 适配与 Muon 优化器在宽度与 token 两个维度都支持迁移"
+          ],
+          "experiments": [
+            "外推至 10 万亿 token 训练视野,拟合保真度 R²=0.95",
+            "155B 总参数/17B 激活参数基础模型从头预训练,训练稳定",
+            "小代理模型最优学习率可直接迁移到全尺寸目标模型"
+          ],
+          "significance": "用 μP+scaling law 把 MoE 超参寻优从全规模扫参降为小模型代理实验,为千亿级 MoE 预训练省下巨额算力。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20061",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20061.pdf",
+          "takeaway": "两步超参迁移(μP 跨宽度 + scaling law 跨 token)让小模型代理确定 10T token 级 MoE 训练的最优学习率。",
+          "keyExperiment": "最优学习率外推到 10 万亿 token 规模拟合度 R²=0.95,并成功用于 155B/17B MoE 从头预训练。",
+          "index": 3
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "SAPO: Single-Rollout Autoregressive Policy Optimization for Agentic Reinforcement Learning",
+          "score": 4.7,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-21",
+          "authors": "Dayang Liang, Lang Feng, Bo An, Yunlong Liu",
+          "institutions": "Nanyang Technological University",
+          "abstract": "智能体强化学习(Agentic RL)已成为大语言模型后训练的关键阶段。现有免 critic 的组相对方法通过多次 rollout 估计策略优势,避开传统 PPO 的巨额显存开销,在长程交互任务上表现优异,但近年研究揭示三个局限:(1)缺乏显式的价值泛化与有效的时间信用分配;(2)长程复杂任务中可能出现优势坍塌;(3)采样预算与策略性能之间存在昂贵权衡。本文提出单次 rollout 自回归策略优化(SAPO):策略与价值函数共享单一自回归骨干。SAPO 利用 LLM 的自回归结构,在共享参数下于不同因果边界分别产出策略与价值预测,独立优化 PPO 目标与辅助的 on-policy SARSA 目标;为稳健估计每轮贡献,还引入轨迹级广义优势估计器,组合 λ-return 与批归一化。在 ALFWorld 与 WebShop 上以 Qwen2.5-1.5B/7B 的实验表明,SAPO 训练稳定,平均超越 PPO 与 GRPO 分别 +15.1 与 +12.1 个百分点,同时省去独立 critic 模型的显存开销,相比 PPO 每轮运行时间降低 33.2%。",
+          "contributions": [
+            "策略与价值共享单自回归骨干,不同因果边界产出预测,免去独立 critic 显存",
+            "轨迹级广义优势估计器组合 λ-return 与批归一化,稳健估计每轮贡献",
+            "单次 rollout 免采样预算与性能的昂贵权衡"
+          ],
+          "conclusions": [
+            "SAPO 同时解决价值泛化缺失、优势坍塌与采样开销三个 Agentic RL 老大难",
+            "共享骨干的设计在显存、速度、性能三个维度全面领先"
+          ],
+          "experiments": [
+            "ALFWorld 与 WebShop 上平均超越 PPO +15.1 个百分点、超越 GRPO +12.1 个百分点",
+            "相比 PPO 每轮运行时间降低 33.2%",
+            "Qwen2.5-1.5B/7B 双规模验证训练稳定"
+          ],
+          "significance": "以单自回归骨干同时承载策略与价值,为 Agentic RL 提供了低显存、快速度且不牺牲性能的新范式。",
+          "arxivUrl": "https://arxiv.org/abs/2608.19842",
+          "pdfUrl": "https://arxiv.org/pdf/2608.19842.pdf",
+          "takeaway": "SAPO 让策略与价值共享自回归骨干并独立训练,平均超 PPO 15.1 点、GRPO 12.1 点,且省 critic 显存、提速 33%。",
+          "keyExperiment": "ALFWorld/WebShop 上 Qwen2.5-1.5B/7B 平均超越 PPO +15.1、GRPO +12.1 个百分点,每轮耗时降 33.2%。",
+          "index": 4
+        },
+        {
+          "title": "Learning When to Think: Adaptive Reasoning for Test-Time Compute Allocation",
+          "score": 4.6,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-21",
+          "authors": "Gijs Kassenaar, Zhao Yang, Vincent François-Lavet",
+          "institutions": "Vrije Universiteit Amsterdam",
+          "abstract": "用强化学习训练的推理语言模型通常运行在固定 token 预算而非显式自适应预算下,导致简单问题过度计算、难题计算不足。本文研究模型能否通过选择响应首 Token 三种模式之一——NoThink(尽快作答)、Short(简短推理)、Long(扩展推理)——学会自主分配推理投入。该选择在 GRPO 内部学习,无需独立路由器:通过一个让每种模式在不同响应长度下都值得使用的 shaped reward,加上每种模式硬性 token 上限保持模式区分。在 1.5B 蒸馏模型与 MATH 上的实验显示,三种模式自发涌现且未坍缩为单一选择,而简短模式最终比 Long 更准,说明路由器按难度排序问题而非随机分配。三个种子平均,所得策略在保留集 MATH500 上精度接近基座模型(0.782 vs 0.796),同时把平均响应长度从 4796 砍到 2811 token(降 41%);且无需重训即可迁移到其他基准,在更简单的问题上节省最多,例如 GSM8K 上 token 减少 76% 且同长度下精度高于基线。简言之,作者构建了一个按问题自适应选择推理量的推理模型。",
+          "contributions": [
+            "把测试时计算分配建模为响应首 Token 的模式选择,端到端在 GRPO 内学习,无需独立路由器",
+            "shaped reward + 硬性 token 上限使三模式各自有用且不坍缩",
+            "迁移性好:不改权重即可在其他基准按难度自适应压缩"
+          ],
+          "conclusions": [
+            "三模式涌现且按难度排序问题,简短模式反而更准表明路由器确实在工作",
+            "41% 平均 token 缩减下保持精度,简单基准上最高省 76%"
+          ],
+          "experiments": [
+            "MATH500 精度 0.782(基线 0.796),平均响应长度从 4796 降到 2811 token(减 41%)",
+            "GSM8K 上 token 减少 76% 且同长度下精度高于基线",
+            "三种子平均,无坍缩"
+          ],
+          "significance": "让推理模型自己决定“想多久”,以近乎零精度损失把平均推理长压下 41%,为测试时计算分配提供无路由器方案。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20256",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20256.pdf",
+          "takeaway": "响应首 Token 选 NoThink/Short/Long 模式,GRPO 内端到端学习,数学上省 41% token 且可无重训迁移。",
+          "keyExperiment": "MATH500 精度 0.782 vs 0.796,平均响应长度 4796→2811 token(-41%),GSM8K 上省 76% token。",
+          "index": 5
+        },
+        {
+          "title": "Beyond Imitation: Filtering On-Policy Distillation by Reasoning Progress",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-21",
+          "authors": "Chen Yang, Haiyuan Wan, Rengrong Xiong, Yize Chen, Danny H.K. Tsang",
+          "institutions": "Hong Kong University of Science and Technology",
+          "abstract": "在策略蒸馏(OPD)已成为大模型后训练的有效框架:配对学生生成轨迹与老师的密集 token 级监督。但 OPD 隐含假设老师派生的奖励是推理进展的恰当代理,因此在策略优化中一视同仁地对待所有老师反馈——这一假设在实践中并不总成立。作者观察到老师派生奖励常与真实推理进展冲突:明显向前推进的推理步骤仍可能因偏离老师输出而获得较低蒸馏奖励。为修正这一错配,提出基于推理进展感知奖励过滤的在策略蒸馏(R²-OPD):构建轨迹内推理片段的两套排序,一套来自老师派生奖励,另一套来自独立估计的进展奖励;两套排序不一致时选择性抑制蒸馏奖励,从而减少与推理进展冲突的监督,同时保留有效的老师引导。实验显示相对标准 OPD 有一致提升,尤其在推理性能上。",
+          "contributions": [
+            "指出 OPD 中老师奖励与真实推理进展冲突的错配问题",
+            "双排序对比的奖励过滤机制,只在两套排序不一致时抑制监督",
+            "推理性能相对标准 OPD 一致提升"
+          ],
+          "conclusions": [
+            "老师派生奖励并非总是推理进展的好代理,按进展过滤可减少有害监督",
+            "R²-OPD 在保留老师引导的同时提升推理表现"
+          ],
+          "experiments": [
+            "相对标准 OPD 一致改进,推理性能提升最明显",
+            "轨迹内双排序不一致时选择性抑制蒸馏奖励",
+            "独立估计的进展奖励与老师奖励对比作为过滤依据"
+          ],
+          "significance": "为蒸馏中的“老师奖励=推理进展”假设纠偏,用双排序过滤让 OPD 不再盲目模仿偏离真实进步的老师信号。",
+          "arxivUrl": "https://arxiv.org/abs/2608.19408",
+          "pdfUrl": "https://arxiv.org/pdf/2608.19408.pdf",
+          "takeaway": "R²-OPD 用老师奖励与推理进展两套排序的差异过滤蒸馏监督,推理性能相对标准 OPD 一致提升。",
+          "keyExperiment": "双排序不一致时抑制蒸馏奖励,推理性能相对标准 OPD 一致提升。",
+          "index": 6
+        },
+        {
+          "title": "Manifold Drift in Flow Preference Optimization: A Root Cause of Reward Hacking",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-21",
+          "authors": "Yansen Han, Shengyi Liao, Yuanxing Zhang, Pengfei Wan, Tao Lin",
+          "institutions": "机构未标注",
+          "abstract": "偏好优化是生成模型的标准对齐方法,但将其扩展到连续时间动力学仍不平凡。在流匹配中,奖励驱动的更新会改变传输轨迹,却没有固有限制其留在预训练数据流形上,可能把末端样本推出预训练支撑集。作者将此失败模式形式化为流形漂移(manifold drift)。理论上证明:最优流匹配能恢复末端数据分布,而偏好更新只要其诱导的末端位移存在非零法向分量就会离开预训练流形。作为补救,提出 ThermoDPO——一个温度受控目标,把成对偏好优化锚定在偏好样本上。在不同温度区间,该目标连接拒绝采样微调与 FlowDPO,并控制点式重建代理作为流形距离的估计;为对抗低温下信号衰减,进一步引入加权变体 ThermoDPO-weighted。在主流玩具基准上 ThermoDPO-weighted 的 StrictScore 达 0.899,对比 FlowDPO 的 0.629 与 FlowDPO+RFT 的 0.857;在 SD3.5-M 且 CFG=4.5 时,OCR 提升 47.5%,四项指标平均提升 16.0%。",
+          "contributions": [
+            "形式化流形漂移:偏好更新使终端样本偏离预训练流形的失败模式及理论条件",
+            "提出温度受控的 ThermoDPO,统一拒绝采样微调与 FlowDPO 的谱系",
+            "加权变体在低温下保持有效信号"
+          ],
+          "conclusions": [
+            "流形漂移是流匹配偏好优化中奖励劫持的根因之一",
+            "锚定偏好样本的温度控制可系统缓解漂移"
+          ],
+          "experiments": [
+            "玩具基准 StrictScore 0.899 vs FlowDPO 0.629 / FlowDPO+RFT 0.857",
+            "SD3.5-M、CFG=4.5 下 OCR 提升 47.5%,四项指标平均提升 16.0%",
+            "理论:末端位移法向分量非零即离开流形"
+          ],
+          "significance": "首次把流匹配偏好优化的奖励劫持归因于流形漂移,并用温度锚定目标同时提升对齐与生成质量。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20011",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20011.pdf",
+          "takeaway": "ThermoDPO 揭示奖励更新把生成样本推出预训练流形(流形漂移)是 reward hacking 根因,温度锚定即可缓解。",
+          "keyExperiment": "StrictScore 0.899 vs FlowDPO 0.629;SD3.5-M 下 OCR +47.5%,四项指标均值 +16.0%。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Asymmetric Attention Heads: Structured Head-Wise Context Allocation for Transformer Attention",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-21",
+          "authors": "Zimu Zhao",
+          "institutions": "机构未标注",
+          "abstract": "标准多头注意力(MHA)给每个头相同的完整因果上下文跨度,尽管不同头可能承担不同上下文角色:有些头主要依赖近邻词汇或句法上下文,另一些则依赖实体交互、篇章连接或状态变化等长程关系。本文提出非对称注意力头(AAH)——将上下文长度视为显式的头级/组级分配变量的头级上下文分配框架。AAH 用特征派生统计对头分组,把这些组组织为层级结构,并分配因果局部窗口,同时保留标准扁平 MHA 输出接口。在 4096 token 的 seed-0 实验中,多种 AAH 式局部分配变体取得了比纯全注意力更低的验证损失;短预算消融表明稳定的局部分配与头-窗口分配结构很重要,而固定/局部控制可以与自适应层级相竞争。作者将 AAH 解读为面向质量与分析的结构化头级上下文分配机制,并提出注意力覆盖比(ACR)作为所选窗口路由的诊断指标。",
+          "contributions": [
+            "把上下文跨度从全局统一变为头级/组级显式分配变量",
+            "特征统计分组+层级结构分配因果局部窗口,保留 MHA 输出接口兼容现有模型",
+            "提出 ACR 作为窗口路由诊断指标"
+          ],
+          "conclusions": [
+            "局部注意力分配在 4096 token 设定下可实现低于全注意力的验证损失",
+            "稳定的局部分配与头-窗口结构比自适应层级本身更关键"
+          ],
+          "experiments": [
+            "4096 token seed-0 下多种局部分配变体验证损失低于纯全注意力",
+            "短预算消融:固定/局部控制可与自适应层级竞争",
+            "ACR 用于诊断所选窗口路由"
+          ],
+          "significance": "打破 MHA 每头同等上下文跨度的默认,按头分配局部窗口居然能更低验证损失,为注意力架构提供新自由度。",
+          "arxivUrl": "https://arxiv.org/abs/2608.19203",
+          "pdfUrl": "https://arxiv.org/pdf/2608.19203.pdf",
+          "takeaway": "AAH 按头/组显式分配因果局部窗口,4096 token 下验证损失低于全注意力,且兼容标准 MHA 接口。",
+          "keyExperiment": "4096 token seed-0 实验中多种 AAH 局部分配变体取得比纯全注意力更低的验证损失。",
+          "index": 8
+        },
+        {
+          "title": "Orthogonal JEPA: Factorized Predictive States for Latent World Models",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-21",
+          "authors": "Taoyong Cui, Pheng Ann Heng, Wanli Ouyang",
+          "institutions": "The Chinese University of Hong Kong",
+          "abstract": "世界模型构建支持对底层系统预测、规划与推理的潜在状态。联合嵌入预测架构(JEPA)通过在表示空间预测目标而非重建观测细节来直接学习这样的状态。但标准 JEPA 把所有可预测内容组织进一个目标嵌入与一条预测通路:在复杂系统中,这种单体状态可能把容量冗余分配给占主导的信号,同时给次主导的预测结构提供弱甚至冲突的梯度。本文提出基于正交预测分解的潜在世界建模框架:学习基矩阵把每个目标状态分解为多个分量,专用预测分支从共享上下文表征估计每个分量;预测回归保留状态合成所需的分量幅度,正交性目标抑制重复方向,因子活动正则维持投影目标的方差,在线方差正则抑制坐标级编码器坍缩。预测分量被合成为完整潜在状态,供读出器、解码器、规划器或自回归 rollout 使用。同一预测状态机制适用于时间未来、空间隐藏或同一系统其他部分观测等目标类型。实验覆盖受控视觉、单细胞转录组、纵向健康记录、连续控制与分子动力学。",
+          "contributions": [
+            "正交预测分解:基矩阵+多专用分支取代单体 JEPA 的单通路预测",
+            "正交性、因子活动与在线方差三重正则避免方向重复与编码器坍缩",
+            "同一机制统一处理时间/空间/部分观测三类预测目标"
+          ],
+          "conclusions": [
+            "分解预测可缓解单体 JEPA 在复杂系统中的容量冗余与梯度冲突",
+            "预测分量可合成为完整潜在状态供规划/解码/rollout 复用"
+          ],
+          "experiments": [
+            "覆盖受控视觉、单细胞转录组、纵向健康记录、连续控制与分子动力学五类任务",
+            "正交分解+因子活动正则保持投影方差",
+            "预测回归保留状态合成所需的分量幅度"
+          ],
+          "significance": "把 JEPA 的“一个目标嵌入一条通路”改造成正交因子分解,缓解复杂系统中的容量冗余与梯度冲突。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20065",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20065.pdf",
+          "takeaway": "Orthogonal JEPA 用基矩阵把目标状态分解为正交分量并各自预测,缓解单体世界模型的容量冗余与梯度冲突。",
+          "keyExperiment": "受控视觉、单细胞转录组、健康记录、连续控制、分子动力学五类任务上的分解预测验证。",
+          "index": 9
+        },
+        {
+          "title": "Write Once, Run Everywhere: The Axon DSL for Shape-Safe and Framework-Agnostic LLM Architectures",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-21",
+          "authors": "Jacob Nielsen, Danial Namazifard, Lukas Galke Poech, Peter Schneider-Kamp",
+          "institutions": "University of Southern Denmark",
+          "abstract": "开源语言模型生态实际上依赖单一平台。倘若该平台被迫停运?实现与维护高效模型定义并在不同训练/推理体系间翻译是资源密集型工作,严重限制模型效率与可移植性,阻碍规模化与部署。本文提出 Axon——一门带 Haskell 风格语法的强类型领域专用语言,实现 LLM 架构的一次编写、随处运行范式。把协作建立在一门语言规范而非某个框架愿景之上,Axon 促进开放协作,让研究者实现高度专用架构而不放弃优化基础设施或接受部署锁定。Axon 允许简洁、可审计的规范,自动编译为领先框架的独立实现:PyTorch、PyTorch+Triton、JAX、MLX 与 vLLM。在 135M 到 32B 参数的 467 次推理基准实验中,相比 Transformers 参考实现,Axon 在 PyTorch、PyTorch+Triton、JAX、MLX 上分别取得 7%、12%、91%、107% 的中位加速;作为带 PagedAttention 与 KV-cache 的原生 vLLM 架构部署时,Axon 模型相对 Transformers 实现取得 58% 的中位加速。",
+          "contributions": [
+            "强类型 DSL 提供形状安全、框架无关的 LLM 架构规范,一次编写多后端编译",
+            "支持 PyTorch/Triton/JAX/MLX/vLLM 五套后端,兼容 PagedAttention 与 KV-cache",
+            "打破单一框架锁定,为生态提供移植性与抗平台风险"
+          ],
+          "conclusions": [
+            "语言规范层面的协作可替代框架层面的绑定,且不牺牲优化",
+            "编译产物在多数后端上还比 Transformers 参考实现更快"
+          ],
+          "experiments": [
+            "467 次推理基准(135M-32B 参数)",
+            "PyTorch 7%、PyTorch+Triton 12%、JAX 91%、MLX 107% 中位加速",
+            "原生 vLLM 部署(PagedAttention+KV-cache)相对 Transformers 中位加速 58%"
+          ],
+          "significance": "用强类型 DSL 把 LLM 架构从框架锁定中解放,一次编写即可编译到 PyTorch/JAX/MLX/vLLM 且多数后端更快。",
+          "arxivUrl": "https://arxiv.org/abs/2608.19889",
+          "pdfUrl": "https://arxiv.org/pdf/2608.19889.pdf",
+          "takeaway": "Axon 强类型 DSL 一次编写编译到 5 个框架,MLX 中位快 107%,vLLM 原生部署快 58%,打破架构锁定。",
+          "keyExperiment": "467 次实验:MLX 中位加速 107%、JAX 91%、原生 vLLM(PagedAttention+KV-cache)58%。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
