@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Efficient INT8 Inference | 论文解读</title>
+<style>
+:root {
+  --ink: #182326;
+  --muted: #607075;
+  --paper: #f7f8f5;
+  --surface: #ffffff;
+  --line: #dce3df;
+  --teal: #0a8f86;
+  --teal-soft: #d8f1ed;
+  --coral: #e66b54;
+  --coral-soft: #ffe1d8;
+  --yellow: #e6b64a;
+  --yellow-soft: #fff1c9;
+  --blue: #5278a5;
+  --shadow: 0 12px 32px rgba(24,35,38,.08);
+  --hero-note-ink: #3d494c;
+  --callout-border: #f0c8bb;
+  --callout-bg: #fff6f2;
+  --callout-ink: #b94e39;
+  --formula-bg: #eef4f2;
+  --track-bg: #eef2f0;
+  --table-head: #f5f8f6;
+}
+.interactive-body {
+  --ink: var(--a-fg-strong);
+  --muted: var(--a-fg-muted);
+  --paper: var(--a-bg);
+  --surface: var(--a-surface);
+  --line: var(--a-line);
+  --teal: var(--a-teal);
+  --teal-soft: var(--a-teal-bg);
+  --coral: var(--a-accent);
+  --coral-soft: var(--a-accent-bg);
+  --yellow: var(--a-amber);
+  --yellow-soft: var(--a-amber-bg);
+  --blue: var(--a-blue);
+  --hero-note-ink: var(--a-fg);
+  --callout-border: var(--a-accent-line);
+  --callout-bg: var(--a-accent-bg);
+  --callout-ink: var(--a-accent);
+  --formula-bg: var(--a-code-bg);
+  --track-bg: var(--a-surface-2);
+  --table-head: var(--a-accent-bg);
+  --shadow: var(--shadow-sm);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
+body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.6; }
+.interactive-body { color: var(--ink); background: var(--paper); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; line-height: 1.6; }
+a { color: inherit; }
+.shell { max-width: 1180px; margin: 0 auto; padding: 0 28px 80px; }
+.hero { padding: 84px 0 52px; display: grid; grid-template-columns: 1.2fr .8fr; gap: 52px; align-items: end; }
+.eyebrow { color: var(--teal); font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+h1 { margin: 12px 0 20px; max-width: 760px; font-size: clamp(38px, 6vw, 76px); line-height: .98; letter-spacing: -.045em; }
+.hero p { max-width: 700px; color: var(--muted); font-size: 18px; margin: 0; }
+.hero-note { border-left: 3px solid var(--coral); padding: 14px 0 14px 18px; color: var(--hero-note-ink); font-size: 14px; }
+.hero-note strong { display: block; color: var(--coral); font-size: 30px; line-height: 1.1; margin-bottom: 4px; }
+.tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.tag { display: inline-flex; align-items: center; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); font-size: 12px; }
+.section { padding: 62px 0 0; scroll-margin-top: 70px; }
+.section-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; border-bottom: 1px solid var(--line); padding-bottom: 15px; margin-bottom: 28px; }
+.section-kicker { color: var(--coral); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+h2 { margin: 4px 0 0; font-size: clamp(27px, 4vw, 44px); line-height: 1.08; letter-spacing: -.035em; }
+h3 { margin: 0 0 9px; font-size: 20px; line-height: 1.2; }
+.lede { max-width: 620px; color: var(--muted); margin: 0; font-size: 15px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 22px; }
+.panel.flat { box-shadow: none; }
+.metric { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; border-top: 3px solid var(--teal); }
+.metric:nth-child(2) { border-top-color: var(--coral); } .metric:nth-child(3) { border-top-color: var(--yellow); }
+.metric-value { color: var(--ink); font-size: 36px; letter-spacing: -.05em; font-weight: 800; }
+.metric-label { color: var(--muted); font-size: 13px; }
+.micro { color: var(--muted); font-size: 12px; }
+.callout { border: 1px solid var(--callout-border); background: var(--callout-bg); padding: 16px 18px; border-radius: 8px; margin-top: 16px; }
+.callout strong { color: var(--callout-ink); }
+.pipeline { position: relative; overflow: hidden; padding: 28px 8px 16px; }
+.pipeline:after { content: ""; position: absolute; top: 26px; left: 8%; width: 12%; height: 4px; border-radius: 999px; background: rgba(255,255,255,.85); filter: blur(3px); animation: travel 5.5s linear infinite; pointer-events: none; }
+.pipeline-track { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: start; position: relative; }
+.pipeline-track:before { content: ""; position: absolute; top: 27px; left: 8%; right: 8%; height: 2px; background: linear-gradient(90deg,var(--teal),var(--yellow),var(--coral),var(--ink)); background-size: 220% 100%; animation: flow 5.5s linear infinite; opacity: .7; }
+.stage { position: relative; z-index: 1; text-align: center; transition: transform .25s ease; }
+.stage:hover { transform: translateY(-4px); }
+.stage-dot { width: 54px; height: 54px; margin: 0 auto 13px; display: grid; place-items: center; border: 3px solid var(--surface); border-radius: 50%; background: var(--teal); color: white; box-shadow: 0 0 0 2px var(--teal); font-weight: 800; animation: pulse 2.8s infinite; transition: box-shadow .25s ease, filter .25s ease; }
+.stage:hover .stage-dot { filter: saturate(1.25); box-shadow: 0 0 0 2px currentColor, 0 0 0 8px rgba(10,143,134,.11); }
+.stage:nth-child(2) .stage-dot { background: var(--yellow); box-shadow: 0 0 0 2px var(--yellow); animation-delay: .35s; }
+.stage:nth-child(3) .stage-dot { background: var(--coral); box-shadow: 0 0 0 2px var(--coral); animation-delay: .7s; }
+.stage:nth-child(4) .stage-dot { background: var(--blue); box-shadow: 0 0 0 2px var(--blue); animation-delay: 1.05s; }
+.stage:nth-child(5) .stage-dot { background: var(--ink); box-shadow: 0 0 0 2px var(--ink); animation-delay: 1.4s; }
+.stage b { display: block; font-size: 13px; } .stage span { display: block; color: var(--muted); font-size: 11px; line-height: 1.35; margin-top: 5px; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@keyframes flow { from { background-position: 0 0; } to { background-position: 220% 0; } }
+@keyframes travel { from { transform: translateX(0); opacity: 0; } 12% { opacity: .85; } 78% { opacity: .85; } to { transform: translateX(620%); opacity: 0; } }
+.smooth-ui { display: grid; grid-template-columns: .95fr 1.05fr; gap: 22px; align-items: stretch; }
+.control { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
+.control label { width: 116px; color: var(--muted); font-size: 13px; }
+input[type=range] { accent-color: var(--teal); width: 100%; }
+output { min-width: 46px; text-align: right; color: var(--teal); font-weight: 800; }
+.switches { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.switch { cursor: pointer; border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 8px 11px; font-size: 12px; color: var(--muted); }
+.switch.active { color: white; border-color: var(--teal); background: var(--teal); }
+.formula { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--formula-bg); border-left: 3px solid var(--teal); padding: 13px 14px; font-size: 13px; overflow-wrap: anywhere; }
+.bars { height: 220px; display: flex; gap: 18px; align-items: end; padding: 16px 8px 10px; border-bottom: 1px solid var(--line); position: relative; }
+.bars:before { content: ""; position: absolute; inset: 16px 8px 10px; background: repeating-linear-gradient(to top, transparent 0 39px, rgba(96,112,117,.1) 40px); pointer-events: none; }
+.bar-group { flex: 1; display: flex; gap: 5px; align-items: end; justify-content: center; height: 100%; }
+.bar { width: 27px; border-radius: 5px 5px 0 0; transform-origin: bottom; animation: grow .9s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--delay, 0ms); position: relative; z-index: 1; transition: filter .2s ease, transform .2s ease; }
+.bar-group:hover .bar { filter: saturate(1.2); transform: scaleY(1.04); }
+.bar:after { content: attr(data-label); position: absolute; top: -21px; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 10px; white-space: nowrap; }
+.bar.raw { background: var(--coral); } .bar.smooth { background: var(--teal); }
+@keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.bar-labels { display: flex; justify-content: space-around; color: var(--muted); font-size: 11px; padding-top: 8px; }
+.roofline-wrap { display: grid; grid-template-columns: 1fr 250px; gap: 18px; align-items: stretch; }
+.roofline-box { min-height: 360px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(180deg,#fcfffe,#f7faf8); overflow: hidden; }
+.roofline-box svg circle { animation: marker-in .7s cubic-bezier(.2,.8,.2,1) both; transform-box: fill-box; transform-origin: center; }
+.roofline-box svg circle:nth-of-type(2) { animation-delay: .12s; } .roofline-box svg circle:nth-of-type(3) { animation-delay: .24s; } .roofline-box svg circle:nth-of-type(4) { animation-delay: .36s; }
+@keyframes marker-in { from { opacity: 0; transform: scale(.35); } to { opacity: 1; transform: scale(1); } }
+svg { display: block; width: 100%; height: auto; }
+.svg-label { font-size: 12px; fill: var(--muted); } .svg-title { font-size: 13px; fill: var(--ink); font-weight: 700; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 11px; margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+.roofline-side { display: flex; flex-direction: column; gap: 11px; }
+.selector { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 9px 10px; color: var(--ink); }
+.side-stat { border-left: 3px solid var(--yellow); padding-left: 12px; }
+.side-stat b { display: block; font-size: 20px; } .side-stat span { color: var(--muted); font-size: 12px; }
+.bar-chart { display: grid; gap: 14px; }
+.bar-row { display: grid; grid-template-columns: 125px 1fr 50px; gap: 10px; align-items: center; font-size: 12px; }
+.bar-track { height: 19px; background: var(--track-bg); border-radius: 5px; overflow: hidden; position: relative; }
+.bar-track.reference::after { content: ""; position: absolute; left: var(--reference-left); top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: .65; z-index: 2; }
+.bar-fill { display: block; height: 100%; border-radius: 5px; background: var(--teal); transform: scaleX(0); transform-origin: left center; animation: speed-fill-in .75s cubic-bezier(.2,.8,.2,1) forwards; animation-delay: var(--fill-delay, 0ms); transition: filter .2s ease; }
+.bar-fill.dynamic { background: var(--coral); }
+.bar-row:hover .bar-fill { filter: saturate(1.25) brightness(1.04); }
+@keyframes speed-fill-in { to { transform: scaleX(1); } }
+.bar-num { text-align: right; font-weight: 800; color: var(--ink); }
+.tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.tab { cursor: pointer; border: 0; background: none; padding: 9px 3px; margin-right: 15px; color: var(--muted); font-weight: 700; font-size: 13px; border-bottom: 2px solid transparent; }
+.tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 650px; }
+th,td { text-align: left; padding: 10px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 700; background: var(--table-head); } td strong { color: var(--teal); }
+.loss-good { color: var(--teal); } .loss-warn { color: var(--coral); }
+.insight-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+.insight { border-top: 3px solid var(--teal); padding-top: 15px; } .insight:nth-child(2) { border-top-color: var(--coral); } .insight:nth-child(3) { border-top-color: var(--yellow); }
+.insight p { color: var(--muted); margin: 6px 0 0; font-size: 13px; }
+.checklist { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
+.check { display: flex; gap: 11px; align-items: flex-start; color: var(--muted); font-size: 13px; }
+.check b { display: block; color: var(--ink); margin-bottom: 2px; }
+.check-mark { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--teal-soft); color: var(--teal); font-weight: 900; }
+.source { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.source a { color: var(--teal); }
+.reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; } .reveal.in { opacity: 1; transform: none; }
+@media (max-width: 820px) {
+  .shell { padding: 0 18px 55px; } .topbar-inner { padding: 11px 18px; }
+  .nav { display: none; } .hero { grid-template-columns: 1fr; padding-top: 55px; gap: 24px; }
+  .grid-2, .grid-3, .smooth-ui, .roofline-wrap { grid-template-columns: 1fr; }
+  .pipeline-track { grid-template-columns: 1fr; gap: 18px; } .pipeline-track:before { top: 28px; bottom: 28px; left: 27px; right: auto; width: 2px; height: auto; }
+  .stage { display: grid; grid-template-columns: 55px 1fr; text-align: left; gap: 13px; align-items: center; } .stage-dot { margin: 0; }
+  .stage span { margin-top: 2px; } .insight-grid, .checklist { grid-template-columns: 1fr; }
+  .bar-row { grid-template-columns: 105px 1fr 45px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *:before, *:after { animation-duration: .001ms !important; transition-duration: .001ms !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<main class="shell">
+  <section class="hero" id="thesis">
+    <div>
+      <div class="eyebrow">ArXiv 2608.18182 · 18 Aug 2026</div>
+      <h1>把 BERT 的<br><span style="color:var(--teal)">INT8 加速</span>带回原生 PyTorch</h1>
+      <p>这篇论文的工程命题很具体：不离开 PyTorch / TorchAO / TorchInductor，在 Intel Xeon 上把 SmoothQuant 的正确性、图融合和 ISA 特化串成一条可部署路径。</p>
+      <div class="tag-row"><span class="tag">BERT-large</span><span class="tag">DistilBERT</span><span class="tag">XLM-RoBERTa</span><span class="tag">SQuAD · MultiNLI</span></div>
+    </div>
+    <div class="hero-note"><strong>5.82×</strong>论文报告的最高端到端吞吐提升（Granite Rapids，BERT-large，静态 SmoothQuant 对比 FP32）。<br><br><b>读法：</b>这是完整工作流的结果，不是单个 GEMM 的峰值；BERT-large 混合 GEMM 形状的加权上限估计为 11.13×。</div>
+  </section>
+
+  <section class="section reveal">
+    <div class="section-head"><div><div class="section-kicker">01 · 一句话判断</div><h2>真正的贡献不是“量化”，而是把量化变成编译器问题。</h2></div><p class="lede">论文把瓶颈从数值格式一路追到权重布局、epilogue、kernel 选择和多实例部署，最终用 Roofline + Amdahl 把“为什么只能到 5.82×”讲清楚。</p></div>
+    <div class="grid-3">
+      <div class="panel metric"><div><h3>最高吞吐</h3><div class="metric-label">Granite Rapids / BERT-large / Smooth-Static</div></div><div class="metric-value">5.82×</div></div>
+      <div class="panel metric"><div><h3>线性块</h3><div class="metric-label">Smooth-Dynamic · INT8 GEMM + fused post-ops 延迟</div></div><div class="metric-value">9.92×</div></div>
+      <div class="panel metric"><div><h3>精度代价</h3><div class="metric-label">所有任务/模型的绝对损失</div></div><div class="metric-value">&lt;1%</div></div>
+    </div>
+    <div class="callout"><strong>核心判断：</strong>在 Ice Lake，INT8 GEMM 受算力上限约束，AVX512_VNNI 的收益容易兑现；在 Granite Rapids，INT8 GEMM 反而受内存/LLC 行为约束，AMX 的峰值只是上限，静态量化、布局预折叠和 epilogue 融合决定实际端到端收益。</div>
+  </section>
+
+  <section class="section reveal" id="stack">
+    <div class="section-head"><div><div class="section-kicker">02 · 从 API 到 CPU 指令</div><h2>五段流水线，缺一段都会掉速。</h2></div><p class="lede">把论文的 Figure 1 改写成可观察的执行链：前两段解决数值问题，后三段解决硬件问题。</p></div>
+    <div class="panel pipeline"><div class="pipeline-track">
+      <div class="stage"><div class="stage-dot">01</div><div><b>TorchAO 校准</b><span>插入 observer，收集 activation 统计</span></div></div>
+      <div class="stage"><div class="stage-dot">02</div><div><b>SmoothQuant</b><span>把 activation outlier 转移到 weight</span></div></div>
+      <div class="stage"><div class="stage-dot">03</div><div><b>图融合</b><span>int_mm + scale + bias → qlinear_pointwise</span></div></div>
+      <div class="stage"><div class="stage-dot">04</div><div><b>Kernel 选择</b><span>oneDNN / AMX / AVX512_VNNI 竞速选择</span></div></div>
+      <div class="stage"><div class="stage-dot">05</div><div><b>AOTI 部署</b><span>生成 C++ / shared binary，去掉 Python 开销</span></div></div>
+    </div></div>
+    <div class="grid-2" style="margin-top:18px">
+      <div class="panel flat"><h3>为什么只调用 <code>torch._int_mm</code> 不够？</h3><p class="micro">原语只给 INT8×INT8→INT32 GEMM：权重可能要每次转 blocked layout，scale/bias/GeLU 需要另起算子，oneDNN 元数据也会反复构造。论文在 TorchInductor 中匹配子图，把它们压成一个带 epilogue 的 qlinear_pointwise，并把常量 layout conversion 在编译期折叠。</p></div>
+      <div class="panel flat"><h3>为什么还要 template kernel？</h3><p class="micro">qlinear_pointwise 泛化好，但不对所有 M×K×N 都最优。Inductor 生成 AMX / AVX512_VNNI 候选，编译后做一次 micro-benchmark，按 shape 记住最快实现。这是“通用后端 + 形状特化”的折中。</p></div>
+    </div>
+  </section>
+
+  <section class="section reveal">
+    <div class="section-head"><div><div class="section-kicker">03 · 数值直觉</div><h2>SmoothQuant：同一层的尺度重新分配。</h2></div><p class="lede">拖动 α，看 activation 的长尾被压平；切换静态/动态，理解“把工作搬到离线”为什么会影响吞吐。</p></div>
+    <div class="smooth-ui">
+      <div class="panel">
+        <div class="switches"><button type="button" class="switch active" aria-pressed="true" data-mode="static">Static：校准后固定 scale</button><button type="button" class="switch" aria-pressed="false" data-mode="dynamic">Dynamic：运行时算 scale</button></div>
+        <div class="control"><label for="alpha">平滑强度 α</label><input id="alpha" type="range" min="0" max="1" step="0.05" value="0.6"><output id="alphaOut">0.60</output></div>
+        <div class="formula">s<sub>j</sub> = max|X<sub>j</sub>|<sup>α</sup> / max|W<sub>j</sub>|<sup>1−α</sup><br>X′<sub>j</sub> = X<sub>j</sub> / s<sub>j</sub> &nbsp; · &nbsp; W′<sub>j</sub> = W<sub>j</sub> · s<sub>j</sub></div>
+        <p class="micro" id="modeNote">校准数据上求 scale，推理时不再搜索 activation scale；代价更低，论文中吞吐通常优于动态量化。</p>
+      </div>
+      <div class="panel">
+        <h3>通道幅度（示意）</h3><p class="micro">红色 = 原始 activation；青色 = 平滑后。示意图表达 outlier 被摊平，不代表论文原始观测值。</p>
+        <div class="bars" id="smoothBars"></div><div class="bar-labels"><span>通道 1</span><span>通道 2</span><span>通道 3</span><span>通道 4</span><span>通道 5</span><span>通道 6</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section reveal" id="roofline">
+    <div class="section-head"><div><div class="section-kicker">04 · 性能上限</div><h2>Roofline 解释了两代 Xeon 的不同。</h2></div><p class="lede">切换平台，观察 GEMM arithmetic intensity 相对 balance point 的位置：Ice Lake 的 INT8 点在算力侧，Granite Rapids 的 INT8 点仍在带宽侧。</p></div>
+    <div class="roofline-wrap">
+      <div class="roofline-box"><svg id="roofSvg" viewBox="0 0 720 390" role="img" aria-label="Roofline chart"></svg><div class="legend"><span><i style="background:var(--coral)"></i>FP32</span><span><i style="background:var(--yellow)"></i>BF16</span><span><i style="background:var(--teal)"></i>INT8</span><span><i style="background:var(--ink)"></i>balance point</span></div></div>
+      <div class="roofline-side"><select id="platform" class="selector" aria-label="选择 Roofline 硬件平台"><option value="ice">Ice Lake · Xeon 8358</option><option value="granite">Granite Rapids · Xeon 6980P</option></select><div class="side-stat"><b id="roofHeadline">INT8 ≈ 4.0×</b><span id="roofSub">INT8 峰值计算吞吐 / FP32 峰值计算吞吐</span></div><div class="side-stat" style="border-color:var(--teal)"><b id="roofBound">compute-bound</b><span id="roofBoundSub">AI 227–341 &gt; BP 154.46</span></div><p class="micro">Granite Rapids 的 Roofline 图统一使用论文 Table 4 的主存带宽 0.7 TB/s；论文另报告约 1.0 TB/s LLC read bandwidth 用于解释有效带宽，二者不混用。</p></div>
+    </div>
+  </section>
+
+  <section class="section reveal" id="results">
+    <div class="section-head"><div><div class="section-kicker">05 · 结果复盘</div><h2>端到端收益：静态量化更稳，动态量化更灵活。</h2></div><p class="lede">选择平台和模型，比较论文 Table 11–13 的吞吐 speedup；线性块的数字更高，因为它更接近被优化的 GEMM 热点。</p></div>
+    <div class="panel">
+      <div class="tabs" role="tablist" aria-label="性能对比基线"><button type="button" role="tab" aria-selected="true" class="tab active" data-platform="ice">Ice Lake vs FP32</button><button type="button" role="tab" aria-selected="false" class="tab" data-platform="granite">Granite Rapids vs FP32</button><button type="button" role="tab" aria-selected="false" class="tab" data-platform="bf16">Granite Rapids vs BF16</button></div>
+      <div class="bar-chart" id="speedBars"></div>
+      <p class="micro" id="resultNote" style="margin-top:18px"></p>
+    </div>
+    <div class="panel table-scroll" style="margin-top:18px"><table><thead><tr><th>模型</th><th>方法</th><th>Ice vs FP32</th><th>Granite vs FP32</th><th>Granite vs BF16</th><th>线性块（Granite）</th></tr></thead><tbody>
+      <tr><td>BERT-large</td><td>Smooth-Dynamic</td><td>2.22×</td><td>5.02×</td><td>1.37×</td><td>9.92×</td></tr>
+      <tr><td>BERT-large</td><td>Smooth-Static</td><td><strong>2.58×</strong></td><td><strong>5.82×</strong></td><td><strong>1.59×</strong></td><td>8.67×</td></tr>
+      <tr><td>DistilBERT</td><td>Smooth-Dynamic</td><td>1.90×</td><td>4.24×</td><td>0.98×</td><td>7.60×</td></tr>
+      <tr><td>DistilBERT</td><td>Smooth-Static</td><td>2.30×</td><td>5.37×</td><td>1.24×</td><td>8.84×</td></tr>
+      <tr><td>XLM-RoBERTa</td><td>Smooth-Dynamic</td><td>1.86×</td><td>4.17×</td><td>0.99×</td><td>7.58×</td></tr>
+      <tr><td>XLM-RoBERTa</td><td>Smooth-Static</td><td>2.17×</td><td>5.41×</td><td>1.29×</td><td>8.71×</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section class="section reveal">
+    <div class="section-head"><div><div class="section-kicker">06 · 精度与部署选择</div><h2>精度几乎不动，但“最佳方案”取决于工作负载。</h2></div><p class="lede">论文在 SQuAD / MultiNLI 的任务微调 checkpoint 上验证了可用性；真正的差异来自运行时预算与模型形状。</p></div>
+    <div class="grid-2">
+      <div class="panel table-scroll"><h3>精度快照</h3><table><thead><tr><th>模型 / 指标</th><th>FP32</th><th>Static</th><th>Dynamic</th><th>最大绝对差（百分点）</th></tr></thead><tbody>
+        <tr><td>BERT SQuAD F1</td><td>92.64</td><td>92.66</td><td>92.63</td><td class="loss-good">0.03</td></tr>
+        <!-- TODO: BERT-large MultiNLI 64.55 is copied from paper v1; verify against the authors' checkpoint if reproducing. -->
+        <tr><td>BERT MNLI</td><td>64.55</td><td>64.73</td><td>64.52</td><td class="loss-good">0.18</td></tr>
+        <tr><td>Distil SQuAD EM</td><td>79.02</td><td>78.49</td><td>79.04</td><td class="loss-warn">0.53</td></tr>
+        <tr><td>XLM SQuAD EM</td><td>69.95</td><td>70.04</td><td>70.30</td><td class="loss-good">0.35（提升）</td></tr>
+      </tbody></table></div>
+      <div class="panel"><h3>我的工程解读</h3><div class="insight-grid" style="grid-template-columns:1fr">
+        <div class="insight"><b>优先 static</b><p>线上输入分布稳定、吞吐优先时，把 scale 搜索、weight layout、补偿向量都搬到离线。</p></div>
+        <div class="insight"><b>谨慎 dynamic</b><p>输入分布变化大时更灵活，但小模型或短序列可能被 per-row scale 搜索和 quant/dequant 开销吞掉收益。</p></div>
+        <div class="insight"><b>先看 shape</b><p>同一硬件上 256×4096×1024 的 INT8/FP32 GEMM 上限 15.19×，比 256×1024×1024 的 9.35×高很多。</p></div>
+      </div></div>
+    </div>
+  </section>
+
+  <section class="section reveal" id="caveats">
+    <div class="section-head"><div><div class="section-kicker">07 · 不能过度外推</div><h2>论文的边界，也决定了你如何复现实验。</h2></div><p class="lede">这些数字是经过精心设置的 server CPU 场景，不是所有推理请求的通用倍数。</p></div>
+    <div class="panel"><div class="checklist">
+      <div class="check"><span class="check-mark">1</span><div><b>批量与序列长固定</b>batch=1、sequence length=256；改变形状会改变 kernel 选择、AI 和 LLC 行为。</div></div>
+      <div class="check"><span class="check-mark">2</span><div><b>多实例吞吐导向</b>4 核/实例、跨物理核 pinning、weight sharing；单实例 latency 不等于这里的 RPS。</div></div>
+      <div class="check"><span class="check-mark">3</span><div><b>AOTI + AMP 是前提</b>论文基线启用 AOTI；Granite Rapids 的 BF16 对照也通过 AMP。</div></div>
+      <div class="check"><span class="check-mark">4</span><div><b>线性块 ≠ 纯 GEMM</b>它包含 bias、activation、residual 等 fused post-ops；表中的“GEMM speedup”是近似代理。</div></div>
+      <div class="check"><span class="check-mark">5</span><div><b>Ice Lake 有额外补偿</b>s8→u8s8 转换需要 zero-point compensation；论文预计算它，但仍会影响实际收益。</div></div>
+      <div class="check"><span class="check-mark">6</span><div><b>Roofline 是上限，不是承诺</b>Granite Rapids 上 static BERT 的端到端 5.82× 只兑现了 7.06× ceiling 的约 82%。</div></div>
+    </div></div>
+    <div class="source">论文：Weiwen Xia, Yuxin Cui, E Cao, “Efficient INT8 Inference of Small NLP Models on Server CPUs with PyTorch Native Stack”, <a href="https://arxiv.org/abs/2608.18182" target="_blank" rel="noreferrer">arXiv:2608.18182</a>。页面中的表格与数字来自论文 v1；示意柱状图明确标注为解释用视觉，不冒充原始测量。</div>
+  </section>
+</main>
+<script>
+if (!window.__efficientInt8ExplainerInitialized) {
+window.__efficientInt8ExplainerInitialized = true;
+(() => {
+const $ = (s, root=document) => root.querySelector(s);
+const $$ = (s, root=document) => [...root.querySelectorAll(s)];
+const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+  if (entry.isIntersecting) entry.target.classList.add('in');
+}), {threshold: .12});
+$$('.reveal').forEach(section => revealObserver.observe(section));
+
+// SmoothQuant visual: deterministic illustrative channel amplitudes.
+const raw = [0.35, 0.62, 1.0, 0.44, 0.72, 0.28];
+const rawMean = raw.reduce((sum, value) => sum + value, 0) / raw.length;
+const smoothBars = [];
+function initializeSmoothBars() {
+  const bars = $('#smoothBars');
+  raw.forEach((value, index) => {
+    const group = document.createElement('div'); group.className = 'bar-group';
+    const rawBar = document.createElement('div'); rawBar.className = 'bar raw'; rawBar.dataset.label = index === 2 ? 'outlier' : ''; rawBar.style.setProperty('--delay', `${index * 55}ms`); rawBar.style.height = (value * 160 + 8) + 'px';
+    const smoothBar = document.createElement('div'); smoothBar.className = 'bar smooth'; smoothBar.dataset.label = ''; smoothBar.style.setProperty('--delay', `${160 + index * 55}ms`);
+    group.append(rawBar, smoothBar); bars.append(group); smoothBars.push(smoothBar);
+  });
+}
+function drawSmooth() {
+  const alpha = Number($('#alpha').value); $('#alphaOut').textContent = alpha.toFixed(2);
+  raw.forEach((value, index) => {
+    const smoothed = value + (rawMean - value) * alpha;
+    smoothBars[index].style.height = (smoothed * 160 + 8) + 'px';
+  });
+}
+initializeSmoothBars(); drawSmooth(); $('#alpha').addEventListener('input', drawSmooth);
+$$('.switch').forEach(btn => btn.addEventListener('click', () => {
+  $$('.switch').forEach(x => { x.classList.remove('active'); x.setAttribute('aria-pressed', 'false'); }); btn.classList.add('active'); btn.setAttribute('aria-pressed', 'true');
+  $('#modeNote').textContent = btn.dataset.mode === 'static' ? '校准数据上求 scale，推理时不再搜索 activation scale；代价更低，论文中吞吐通常优于动态量化。' : '每个输入动态求 activation scale，适应分布变化但增加 scale 搜索与 quant/dequant；小模型上可能抵消 GEMM 收益。';
+}));
+
+const roof = {
+  ice: {name:'Ice Lake', peak:{fp32:6.76,bf16:null,int8:27.03}, bw:.175, headline:'INT8 peak / FP32 peak = 4.00×', bound:'compute-bound', sub:'INT8 AI 227–341 > BP 154.46 ops/byte'},
+  granite: {name:'Granite Rapids', peak:{fp32:19.66,bf16:262.14,int8:524.29}, bw:.7, headline:'INT8 peak / FP32 peak = 26.67×', bound:'memory-bound', sub:'INT8 AI 227–341 < BP 748.99 ops/byte'}
+};
+const palette = Object.fromEntries(['coral', 'yellow', 'teal'].map(name => [name, getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim()]));
+const roofAt = (platform, kind, ai) => Math.min(platform.peak[kind], platform.bw * ai);
+function drawRoof(platform='ice') {
+  const d = roof[platform], svg=$('#roofSvg'); const W=720,H=390, p={l:64,r:24,t:24,b:55};
+  const xMin=16,xMax=560,yMin=.7,yMax=700; const sx=x=>p.l+(Math.log(x/xMin)/Math.log(xMax/xMin))*(W-p.l-p.r); const sy=y=>H-p.b-(Math.log(y/yMin)/Math.log(yMax/yMin))*(H-p.t-p.b);
+  const line=(x1,y1,x2,y2,c,w=2,dash='')=>`<line x1="${sx(x1)}" y1="${sy(y1)}" x2="${sx(x2)}" y2="${sy(y2)}" stroke="${c}" stroke-width="${w}" ${dash?`stroke-dasharray="${dash}"`:''}/>`;
+  let h=`<rect x="0" y="0" width="${W}" height="${H}" fill="#fcfffe"/><text x="${W/2}" y="18" text-anchor="middle" class="svg-title">${d.name} · Roofline（log–log）</text>`;
+  h += `<line x1="${p.l}" y1="${H-p.b}" x2="${W-p.r}" y2="${H-p.b}" stroke="#9aaba7"/><line x1="${p.l}" y1="${p.t}" x2="${p.l}" y2="${H-p.b}" stroke="#9aaba7"/>`;
+  [16,32,64,128,256,512].forEach(x=>{h+=`<text x="${sx(x)}" y="${H-p.b+25}" text-anchor="middle" class="svg-label">${x}</text>`});
+  [1,4,16,64,256,700].forEach(y=>{h+=`<text x="${p.l-9}" y="${sy(y)+4}" text-anchor="end" class="svg-label">${y}</text>`});
+  h += `<text x="${W/2}" y="${H-10}" text-anchor="middle" class="svg-label">Arithmetic intensity (ops / byte)</text><text x="16" y="${H/2}" text-anchor="middle" class="svg-label" transform="rotate(-90 16 ${H/2})">Throughput (TFLOPS / TOPS)</text>`;
+  const colors={fp32:palette.coral,bf16:palette.yellow,int8:palette.teal};
+  Object.entries(d.peak).forEach(([kind, peak]) => { if (!peak) return; const bp=peak/d.bw; const bend=Math.min(bp,xMax); h+=line(xMin,d.bw*xMin,bend,d.bw*bend,colors[kind],1.5,'4 4'); if (bp < xMax) h+=line(bp,peak,xMax,peak,colors[kind],2); });
+  const pts = platform==='ice' ? [{x:85.33,k:'fp32',l:'FP32'},{x:227.56,k:'int8',l:'INT8'}] : [{x:85.33,k:'fp32',l:'FP32'},{x:146.29,k:'bf16',l:'BF16'},{x:227.56,k:'int8',l:'INT8'}];
+  pts.forEach(pt => { const y=roofAt(d,pt.k,pt.x); h+=`<circle cx="${sx(pt.x)}" cy="${sy(y)}" r="7" fill="${colors[pt.k]}" stroke="#fff" stroke-width="2"><title>${pt.l}: AI ${pt.x}, roofline ${y.toFixed(2)}</title></circle><text x="${sx(pt.x)+10}" y="${sy(y)-9}" class="svg-label">${pt.l}</text>`; });
+  svg.innerHTML=h; $('#roofHeadline').textContent=d.headline; $('#roofSub').textContent='INT8 峰值计算吞吐 / FP32 峰值计算吞吐'; $('#roofBound').textContent=d.bound; $('#roofBoundSub').textContent=d.sub;
+}
+drawRoof(); $('#platform').addEventListener('change', e=>drawRoof(e.target.value));
+
+const speedData = {
+  ice:{rows:[['BERT-large · Dynamic',2.22],['BERT-large · Static',2.58],['DistilBERT · Dynamic',1.90],['DistilBERT · Static',2.30],['XLM-RoBERTa · Dynamic',1.86],['XLM-RoBERTa · Static',2.17]],note:'Ice Lake 的 INT8 GEMM 是 compute-bound；Static BERT-large 达 2.58×，约为 3.15× 端到端 ceiling 的 82%。'},
+  granite:{rows:[['BERT-large · Dynamic',5.02],['BERT-large · Static',5.82],['DistilBERT · Dynamic',4.24],['DistilBERT · Static',5.37],['XLM-RoBERTa · Dynamic',4.17],['XLM-RoBERTa · Static',5.41]],note:'AMX 抬高 INT8 峰值，但 Granite Rapids 上 GEMM 仍受有效带宽限制；静态 BERT-large 兑现 7.06× ceiling 的约 82%。'},
+  bf16:{rows:[['BERT-large · Dynamic',1.37],['BERT-large · Static',1.59],['DistilBERT · Dynamic',0.98],['DistilBERT · Static',1.24],['XLM-RoBERTa · Dynamic',0.99],['XLM-RoBERTa · Static',1.29]],note:'低于 1× 的 DistilBERT / XLM-RoBERTa 动态量化说明：scale 搜索和 quant/dequant 可能大于 GEMM 节省。'}
+};
+function drawSpeed(which='ice') {
+  const d=speedData[which], values=d.rows.map(([, value]) => value), max=Math.max(...values) * 1.15, hasReference=values.some(value => value < 1), referenceLeft=(1/max*100).toFixed(2) + '%';
+  $('#speedBars').innerHTML=d.rows.map(([label,val], i)=>`<div class="bar-row"><span>${label}</span><span class="bar-track ${hasReference ? 'reference' : ''}" ${hasReference ? `style="--reference-left:${referenceLeft}"` : ''}><span class="bar-fill ${label.includes('Dynamic')?'dynamic':''}" style="width:${Math.min(100,val/max*100)}%;--fill-delay:${i * 55}ms"></span></span><span class="bar-num">${val.toFixed(2)}×</span></div>`).join('');
+  $('#resultNote').textContent=d.note;
+}
+drawSpeed(); $$('.tab').forEach(btn=>btn.addEventListener('click',()=>{$$('.tab').forEach(x=>{x.classList.remove('active');x.setAttribute('aria-selected','false')});btn.classList.add('active');btn.setAttribute('aria-selected','true');drawSpeed(btn.dataset.platform)}));
+})();
+}
+</script>
+</body>
+</html>
