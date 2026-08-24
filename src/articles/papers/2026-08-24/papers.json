@@ -1,0 +1,314 @@
+{
+  "date": "2026-08-24",
+  "title": "2026-08-24 论文精选",
+  "lede": "今日关注三条主线：投机解码与 KV 缓存层面的推理加速（GRAFT、TreeWY、Nexus）、Muon 优化器向扩散 Transformer 的可扩展迁移、以及把 agent 工具路由与 MoE steering 从结构耦合中解耦的新思路。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 50
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Nexus: Depth-Adaptive KV-Cache Splicing and Retrieval-Decoupled Tool Routing for Agentic LLMs on Unified Memory",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-24",
+          "authors": "Mustafa Arslan",
+          "institutions": "机构未标注",
+          "abstract": "MCP 场景下的 agentic LLM 每轮都要重新编码冗长的工具 schema，当工具注册表膨胀时，以序列长度二次方增长的 prefill 主导了首 token 延迟（TTFT）。Nexus 的主要杠杆是把工具路由与 schema-prefill 成本解耦：一个 INT8 语义旁路缓冲（SLB）配合校准过的交叉编码器 margin 门按检索选择工具，参数在压缩文本签名（中位 19 个 token）上生成，而非在拼接的 KV cache 上生成。该路径与深度无关：注册表扩展到 250 个工具时路由准确率仍约 89%——此时“拼接全部 schema”的基线已完全溢出上下文窗口；相比完整 schema 重新 prefill，首个参数 token 提前 1.66 倍，主上下文 token 节省约 80%。次要的有界杠杆是把编译好的 schema KV 块直接移植进实时上下文，但受 RoPE 相位漂移限制：锚定拼接输出精确，偏离锚点则破坏注意力，超过阈值 P=256 时用深度自适应后缀重解码修补。never-regress 属性保证输出保真（top-1 一致、KL 近似为 0），中深度下 TTFT 提速 1.1–1.7 倍，深度增大时收敛到持平。两个负结果界定了设计：偏离锚点的 RoPE 保真边界，以及无参考漂移门无法预测漂移（Spearman ρ=0.193）。",
+          "contributions": [
+            "提出 SLB 检索 + 压缩签名生成，把 agent 工具路由与 schema prefill 成本解耦，250 工具规模下路由准确率保持约 89%",
+            "提出深度自适应的 KV 拼接与后缀重解码，以锚定拼接保证输出保真（never-regress），偏离锚点则分级修复",
+            "给出两个负结果：RoPE 相位漂移的保真边界，以及参考无关漂移门预测失效（Spearman ρ=0.193）"
+          ],
+          "conclusions": [
+            "检索解耦路径带来 1.1–1.7 倍 TTFT 提速，但深度增大时收敛到与全量 re-prefill 持平",
+            "量化收益为模型-硬件特定（Qwen2.5-14B Q4_K_M + Apple 统一内存），定性边界可推广"
+          ],
+          "experiments": [
+            "250 个工具时路由准确率约 89%，拼接全部 schema 的基线直接溢出上下文窗口",
+            "首个参数 token 比全量 schema re-prefill 提前 1.66 倍，主上下文 token 节省约 80%",
+            "中深度 TTFT 提速 1.1–1.7 倍；锚定拼接在 P≤256 时输出精确，漂移门 Spearman ρ=0.193 失效"
+          ],
+          "significance": "为 MCP agent 场景给出绕开 schema prefill 的检索式路由与 KV 拼接方案，并量化了 RoPE 约束下的适用边界。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20397",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20397.pdf",
+          "index": 1,
+          "takeaway": "Agent 工具路由应绕开 schema prefill：检索选工具 + 压缩签名出参，比拼接 KV cache 更快更省。",
+          "keyExperiment": "250 个工具下路由准确率保持约 89%，而拼接全部 schema 的基线已溢出上下文窗口"
+        },
+        {
+          "title": "GRAFT: Adaptive DLM-Based Draft Tree Construction with Target-Distilled Edge Scoring",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-24",
+          "authors": "Xuming Ye, Zeming Ma, Runjie Yu, Yuan Liu, Tianle Li, Shuhan Bai, Jian Zhou, Fei Wu",
+          "institutions": "机构未标注",
+          "abstract": "树式投机解码通过验证多条草稿路径提升平均接受 token 数，现有树构建器通常以父路径条件展开的方式生成子 token，这与一次前向就产出所有未来位置分布的扩散语言模型（DLM）草稿器（如 DFlash）不兼容。DDTree 把每个未来位置分布中的高概率 token 作为候选节点、在固定节点预算下选边，但其选边只看 token 概率而不建模父-子兼容性，目标兼容的 token 可能被挂到错误的父节点；固定预算也忽略了吞吐最优树大小随解码状态变化。GRAFT 提出目标蒸馏边评分（TDES）：从目标模型轨迹中蒸馏父-子偏好来选边；以及状态感知预算分配（SABA）：权衡期望草稿收益与验证成本，为每轮设定树预算。在多个模型与任务上，GRAFT 相对自回归解码取得 2.13×–6.36× 端到端加速，每轮额外开销小于 0.5ms（约占总目标模型验证延迟的 1.4%）。",
+          "contributions": [
+            "提出 TDES，从目标模型轨迹蒸馏父-子兼容性偏好，取代仅凭 token 概率的选边",
+            "提出 SABA 状态感知预算分配，按解码状态动态决定吞吐最优的树规模",
+            "首个面向 DLM 草稿器（如 DFlash）的自适应树构建框架，与一次前向生成全部位置分布的解码范式兼容"
+          ],
+          "conclusions": [
+            "GRAFT 在多模型多任务上取得 2.13×–6.36× 端到端加速，每轮开销低于 0.5ms",
+            "目标蒸馏的边评分比概率式选边更可靠，状态感知预算优于固定预算"
+          ],
+          "experiments": [
+            "相对自回归解码端到端加速 2.13×–6.36×",
+            "每轮额外开销小于 0.5ms，约占总目标模型验证延迟的 1.4%",
+            "跨多个模型与任务验证 TDES 与 SABA 的组合收益"
+          ],
+          "significance": "让 DLM 一次性并行草稿真正吃到树式验证的红利，补上首位 push 式投机解码在树构建上的短板。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20375",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20375.pdf",
+          "index": 2,
+          "takeaway": "树边选择要从目标模型轨迹蒸馏‘父-子兼容性’，预算按解码状态动态分配，加速 2.13×–6.36× 且开销可忽略。",
+          "keyExperiment": "GRAFT 在多个任务上取得 2.13×–6.36× 端到端加速，每轮额外开销不足 0.5ms"
+        },
+        {
+          "title": "TreeWY: Speculative Verification for Gated DeltaNet Hybrids",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-24",
+          "authors": "Sneha Murthy Ghantasala",
+          "institutions": "机构未标注",
+          "abstract": "现代开源模型多为混合架构：大部分层是携带小型固定大小循环状态的线性注意力（Gated DeltaNet，GDN）层，而不是不断增长的 KV cache。普通解码因此内存高效，但投机解码受损：要验证一批草稿 token 并回滚被拒的 token，现有系统需要在每个草稿位置对 GDN 层快照完整的循环状态，而这些快照无法在草稿树的分支之间共享，宽的高接受率草稿树在内存上不可行。TreeWY 移除快照：利用门控 delta 规则的树结构 WY 变换，用单次三角求解计算每个草稿节点的输出，提交时只重建被接受的那一个状态，存储小的伪值矩阵而非逐节点状态；推导只依赖门控 delta 规则本身，与其它架构细节无关。在两个规模（Qwen3.5 35B 与 397B）的同一混合模型家族服务基准上，相同接受长度下削减了投机循环状态内存与 KV cache 压力，内存受限处把释放的 HBM 转化为更高吞吐与更低 TTFT；对树宽而言，同样的内存让更宽、更高接受率的草稿树变得可行，但尚未成为吞吐赢家。",
+          "contributions": [
+            "用树结构 WY 变换消除 GDN 层逐位置循环状态快照，以单次三角求解计算全部草稿节点输出",
+            "只依赖门控 delta 规则推导，可移植到任意 GDN 混合模型，不涉及其它架构细节",
+            "在 35B 与 397B 两档规模的混合模型上验证内存、吞吐与 TTFT 收益"
+          ],
+          "conclusions": [
+            "相同接受长度下显著削减投机循环状态内存与 KV cache 压力，内存受限时转化为更高吞吐与更低 TTFT",
+            "同样的内存预算让更宽、更高接受率的草稿树可行，但对吞吐还不是净赢"
+          ],
+          "experiments": [
+            "Qwen3.5 35B 与 397B 服务基准上，相同接受长度下投机循环状态内存与 KV cache 压力下降",
+            "内存受限场景把释放的 HBM 转化为更高吞吐与更低 TTFT，非受限场景仅付出几个百分点的代价",
+            "树宽提升可行（更高接受率），但实测尚非吞吐赢家"
+          ],
+          "significance": "让线性注意力混合模型也能用上内存高效的宽树投机解码，补上 GDN 架构投机验证的短板。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20961",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20961.pdf",
+          "index": 3,
+          "takeaway": "用树结构 WY 变换 + 伪值矩阵替代逐节点循环状态快照，宽树投机在 GDN 混合模型上变得内存可行。",
+          "keyExperiment": "在 Qwen3.5 35B/397B 上，相同接受长度下投机循环状态内存与 KV cache 压力显著下降"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Scaling Muon for Diffusion Transformers",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-24",
+          "authors": "Chenghao Li, Xiao Han, Xinxin Huang, Wei Liu, Boyang Li, Bing Xiao, Heran Zhang, Juanma Perez Rua, Ke Xu, Kangning Liu, Linjun Kuang, Na Li, Tan Wang",
+          "institutions": "机构未标注",
+          "abstract": "矩阵感知优化器 Muon 通过沿奇异方向平衡更新来改进大模型训练，但它在大型扩散 Transformer（DiT）上的扩展行为与端到端效率仍不明确。作者先在 1.3B–15B 的 DiT 上确立 Muon 的扩展规律：相对 AdamW 的优化与生成质量优势跨模型规模保持。但大规模下，每一步都执行的 5 步 Newton–Schulz 迭代（NS5）加上全动量物化，带来可观的计算与通信开销，可能抵消 Muon 的步效率优势。为此提出 Periodic Row-wise Muon：每 K 步做一次完整 NS5 谱更新，其余步骤基于当前动量执行低计算/通信成本的行方向约束更新；并协同设计分布式实现——非刷新步直接在分片动量上操作，刷新步用分桶 all-gather 与计算-通信重叠加速。各规模下 Muon 相对 AdamW 的最佳生成质量提升 12.9–19.1%。Periodic Row-wise Muon 在 1.3B–4B 上与原始 Muon 的最佳生成质量差距在 0.5% 以内，在 9B 上反而提升 4.5%；优化器耗时降低 46.9–54.3%，端到端步耗时降低 15.7–24.3%，逻辑通信量降低 66.7%，并且以少 33.7–64.8% 的有效训练时间达到各自最佳生成质量。",
+          "contributions": [
+            "首次系统刻画 Muon 在 1.3B–15B DiT 上的扩展行为，确认其相对 AdamW 的质量优势跨规模保持",
+            "提出 Periodic Row-wise Muon：周期性 NS5 谱更新 + 行方向约束更新，大幅削减计算与通信开销",
+            "协同设计分布式实现：分片动量直接操作、分桶 all-gather 与计算-通信重叠加速谱刷新"
+          ],
+          "conclusions": [
+            "Muon 相对 AdamW 的最佳生成质量提升 12.9–19.1%，且跨 1.3B–15B 规模保持",
+            "Periodic Row-wise Muon 在几乎不损质量的前提下把优化器耗时与通信量砍半以上，端到端训练明显加速"
+          ],
+          "experiments": [
+            "相对 AdamW 最佳生成质量提升 12.9–19.1%",
+            "Periodic Row-wise Muon：优化器耗时 -46.9%–54.3%，端到端步耗时 -15.7%–24.3%，逻辑通信量 -66.7%",
+            "1.3B–4B 质量差 ≤0.5%，9B 反升 4.5%；以少 33.7–64.8% 有效训练时间达到最佳质量"
+          ],
+          "significance": "把 Muon 这类矩阵感知优化器的优势从‘每一步都贵’变成可扩展的训练效率，直接惠及大规模 DiT 训练。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20818",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20818.pdf",
+          "index": 4,
+          "takeaway": "NS5 谱更新不必每步都做——周期化 + 行式更新把 Muon 的计算/通信开销砍掉一半以上，质量几乎不损。",
+          "keyExperiment": "相对 AdamW 最佳生成质量提升 12.9–19.1%，同时优化器耗时降 46.9–54.3%、通信量降 66.7%"
+        },
+        {
+          "title": "Memory Augmentation Unlocks Efficient Chain-of-Thought Reasoning",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-24",
+          "authors": "Simeng Zhang, Yilong Chen, Wenyuan Zhang, Zhenyu Zhang, Yao Chen, Junyuan Shang, Tingwen Liu",
+          "institutions": "机构未标注",
+          "abstract": "LLM 通常依赖 CoT 解决复杂任务，但冗长的推理轨迹带来大量推理开销。CoT 压缩能缩短生成，然而激进的压缩可能破坏逻辑连贯性、损害性能。作者把这一权衡形式化为“上下文-生成替代律”：显式推理上下文可以替代部分解码期生成。基于此提出 Memory-Augmented Compression，一个免训练框架：从历史轨迹中构建可复用的推理记忆，并作为 prefill 侧的 scaffold 检索回来；这些记忆不是原始演示，而是总结可复用的推理模式、关键约束与关键操作，以补偿压缩丢失的信息。实验表明，Memory 在数学推理、复杂推理与科学问答任务上一致提升基于 prompt 的 Chain-of-Draft（CoD）压缩，相对 CoD 在 GSM8K、MATH、BBH、MMLU-Sci 上分别提高 21.4、28.0、29.5 与 6.61 分，同时相对标准 CoT 取得 1.14–1.49× 延迟加速；并且与 token 级、推理轨迹级与推理状态级压缩机制兼容。进一步分析显示增益来自相关的推理记忆，而非单纯加长上下文。",
+          "contributions": [
+            "形式化‘上下文-生成替代律’，为 CoT 压缩的精度-速度权衡给出原则性解释",
+            "提出免训练的记忆增强压缩框架：把历史轨迹蒸馏为可复用记忆，作为 prefill 侧 scaffold 检索",
+            "在 GSM8K/MATH/BBH/MMLU-Sci 上验证精度与速度双赢，且兼容多种压缩机制"
+          ],
+          "conclusions": [
+            "相对 CoD 压缩在各任务上精度显著提升（最高 +29.5 分），相对标准 CoT 提速 1.14–1.49×",
+            "增益来自相关的推理记忆而非上下文长度本身"
+          ],
+          "experiments": [
+            "相对 CoD：GSM8K +21.4、MATH +28.0、BBH +29.5、MMLU-Sci +6.61 分",
+            "相对标准 CoT 延迟加速 1.14–1.49×",
+            "与 token 级、轨迹级、状态级压缩机制均兼容"
+          ],
+          "significance": "给出免训练的‘压缩 CoT 不掉质量’方案，把历史推理轨迹变成可复用资产，兼顾精度与推理延迟。",
+          "arxivUrl": "https://arxiv.org/abs/2608.21265",
+          "pdfUrl": "https://arxiv.org/pdf/2608.21265.pdf",
+          "index": 5,
+          "takeaway": "与其硬压推理轨迹，不如先把历史轨迹蒸馏成可检索的记忆当作 prefill 脚手架，补回压缩丢失的上下文。",
+          "keyExperiment": "MATH 上相对 CoD 提升 28.0 分，同时相对标准 CoT 提速 1.14–1.49×"
+        },
+        {
+          "title": "Decoupling Policy Extraction for Offline Reinforcement Learning",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-24",
+          "authors": "Xuyao Lin, Yixiang Shan, Jinru Duan, Tao Yang, Xinyu Zhao, Runyu Lei, Yiming Zhao, Jiaxin Fan, Zongbao Feng, Peng Jia",
+          "institutions": "机构未标注",
+          "abstract": "离线 RL 通常联合训练 actor 与 critic，由 critic 引导 actor 走向高价值动作。这一耦合范式在线 RL 中合理——改进后的 actor 能采集新数据反哺 actor 与 critic；但在离线 RL 中训练数据固定，actor 侧的策略改进无法产生新数据来验证或纠正 critic，且耦合范式带来两个问题：其一，actor 更新会漂向高价值但可能在分布外（OOD）的动作，放大 critic 高估；其二，保守值估计或行为克隆正则化在抑制 OOD 动作与选取数据支持区内的高价值动作之间制造艰难权衡。作者据此重新审视传统离线 RL 范式，提出将策略改进与 actor 训练解耦：actor 只建模行为分布，推理时用单独训练的 critic 对 actor 生成的多个候选动作重排来实现策略改进——actor 提供行为支持的候选动作集，critic 在该候选集内做基于价值的选择。大量实验表明该解耦策略提取范式同时优于行为克隆与联合训练的离线 RL 方法，即使使用朴素的 Q-learning critic 也依然有效。",
+          "contributions": [
+            "指出离线 RL 中 actor-critic 联合训练的结构性错配：数据固定使 actor 改进无法验证或纠正 critic",
+            "提出解耦策略提取范式：actor 只建模行为分布，critic 在推理期对候选动作重排完成策略改进",
+            "实验证明该范式优于行为克隆与联合离线 RL 方法，且对 critic 质量鲁棒"
+          ],
+          "conclusions": [
+            "‘actor 出候选、critic 来筛选’在离线设置下比联合训练更稳，规避 OOD 漂移与保守权衡",
+            "即使使用朴素 Q-learning critic，解耦范式依然有效"
+          ],
+          "experiments": [
+            "在多种离线 RL 基准上同时优于行为克隆与联合训练的离线方法",
+            "使用朴素 Q-learning critic 时仍保持优势",
+            "候选重排在行为支持区内做价值筛选，避免 OOD 动作高估"
+          ],
+          "significance": "一条反直觉但有据的离线 RL 重构：actor 别学价值、只学行为，把策略改进放到推理期由 critic 完成。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20909",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20909.pdf",
+          "index": 6,
+          "takeaway": "离线 RL 里 actor 应只模仿行为分布，critic 在推理期对候选重排——解耦后既躲 OOD 漂移又不怕 critic 高估。",
+          "keyExperiment": "即使使用朴素 Q-learning critic，解耦策略提取范式也优于联合训练的离线 RL 方法"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "BF1: A Causal Dyadic Sparse-Attention Retrofit for Efficient Long-Context Transformers",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-24",
+          "authors": "Hina Dixit",
+          "institutions": "机构未标注",
+          "abstract": "即使采用高度优化的精确 kernel，稠密因果注意力在长上下文下依然昂贵。BF1 是一条确定性的、块对齐的二进（dyadic）稀疏注意力路线：组合小精确局部邻域、全局首块与对数间隔的历史块。它与先前的 log-sparse 与膨胀注意力模式相关，本工作的贡献在于正确性门控的预训练模型改造、匹配拓扑控制研究，以及把逐层稀疏度与整模型延迟联系起来的行为刻画。固定块宽下，每个转换层只使用 O(n log n) 次 token 交互，图通信深度为 O(log n)。在 NVIDIA RTX PRO 6000 Blackwell GPU 上，优化的 BF16 实现在 2K–4K token 之间超过稠密注意力，32K 时达到逐层 prefill 10.91 倍加速。改造 Qwen3-0.6B 的 28 层注意力中的 8 层后，8K/16K/32K 下整模型 warm TTFT 分别降低 7.7%/11.3%/15.3%，其余稠密层使完整模型保持渐进二次复杂度。在匹配的 1000 步、16.384M token 适应协议下，BF1 在三个训练种子中平均报告困惑度 1.68639，优于匹配的静态随机非局部图（1.69154）、稠密继续训练（1.69258）与等预算局部滑动（1.81505）。",
+          "contributions": [
+            "提出确定性块对齐 dyadic 稀疏注意力模式 BF1：局部邻域 + 全局首块 + 对数间隔历史块",
+            "给出正确性门控的预训练模型 retrofit 流程与匹配拓扑控制研究，连接逐层稀疏度与整模型延迟",
+            "可复现的稀疏算子实现与选择性 retrofit 原语，兼顾数值正确性与 kernel 性能"
+          ],
+          "conclusions": [
+            "BF1 在 2K–4K token 间超越稠密注意力，32K 时逐层 prefill 加速 10.91×",
+            "仅改造 8/28 层即可获得整模型 TTFT 收益，剩余稠密层保住渐进复杂度"
+          ],
+          "experiments": [
+            "RTX PRO 6000 Blackwell 上 32K 逐层 prefill 加速 10.91×",
+            "Qwen3-0.6B 改造 8/28 层：8K/16K/32K warm TTFT 分别 -7.7%/-11.3%/-15.3%",
+            "匹配适应协议下平均困惑度 1.68639，低于静态随机图（1.69154）与稠密继续训练（1.69258）"
+          ],
+          "significance": "给出一个可复现、可 retrofit 的稀疏注意力算子，长上下文推理任务可直接拿到的系统级收益。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20427",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20427.pdf",
+          "index": 7,
+          "takeaway": "确定性 dyadic 稀疏模式 + 剩余层保持稠密：只改造 8/28 层就让 32K 长上下文 TTFT 降 15.3%。",
+          "keyExperiment": "32K 上下文逐层 prefill 加速 10.91×，改造 8/28 层后整模型 warm TTFT 降 15.3%"
+        },
+        {
+          "title": "RARE: Decoupling Representation Steering from Expert Routing in Mixture-of-Experts Language Models",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-24",
+          "authors": "Zhibo Zhang, Zhen Ouyang, Ling Shi, Kailong Wang",
+          "institutions": "机构未标注",
+          "abstract": "表征工程（representation engineering）通过修改中间隐状态轻量控制语言模型行为，但直接应用到 MoE 模型存在结构性错配。作者先通过系列实证研究验证这一失败模式：保持干净的路由能大幅恢复 steering 表现；在受控内容下，路由对语义内容比对行为变化更敏感。基于这些发现提出 RARE——一个与路由器无关的 MoE 表征工程框架：把任意行为扰动投影到路由矩阵的零空间，去除路由可见的分量，并进一步纠正传播到所选下游层的路由漂移。为确定最佳扰动估计器，作者在六个异构开源 MoE 模型上、三个 steering 场景（有害性、真实性、事实编辑）中评估了五种估计器。有害性 steering 下 RARE 平均攻击成功率 53.3%，同时保持 67.8% 的 MMLU 准确率，综合有效性-实用性权衡优于基线；TruthfulQA MC1 平均准确率从 41.0% 提升到 58.6%，CounterFact 功效从 16.8% 提升到 96.3%。这些结果支持路由一致性是表征工程适配 MoE 模型的重要架构考量。",
+          "contributions": [
+            "实证确认 MoE 上表征工程失败的关键机制：行为扰动污染路由，路由对语义内容比行为变化更敏感",
+            "提出 RARE：把行为扰动投影到路由矩阵零空间以去除路由可见分量，并纠正下游路由漂移",
+            "在 6 个异构开源 MoE 模型、3 个场景、5 种估计器下做系统消融评估"
+          ],
+          "conclusions": [
+            "保持路由一致是 MoE 表征工程有效性的前提；RARE 在有效性-实用性权衡上整体优于基线",
+            "RARE 显著提升真实性与事实编辑效果，同时保持安全 steering 的可用性"
+          ],
+          "experiments": [
+            "有害性 steering：平均攻击成功率 53.3%，同时保持 67.8% MMLU",
+            "TruthfulQA MC1 从 41.0% 提升到 58.6%，CounterFact 功效从 16.8% 提升到 96.3%",
+            "在 6 个异构开源 MoE 模型上跨 3 场景评估 5 种扰动估计器"
+          ],
+          "significance": "把表征工程（steering）正确移植到 MoE 的关键一步：扰动不仅要改对方向，还得绕开路由器。",
+          "arxivUrl": "https://arxiv.org/abs/2608.21236",
+          "pdfUrl": "https://arxiv.org/pdf/2608.21236.pdf",
+          "index": 8,
+          "takeaway": "MoE 上做表征 steering，扰动必须投影到路由矩阵零空间，否则路由漂移会毁掉整个效果。",
+          "keyExperiment": "保持 67.8% MMLU 的同时有害性 steering 攻击成功率 53.3%，CounterFact 事实编辑功效从 16.8% 跃升至 96.3%"
+        },
+        {
+          "title": "Dual-Cache Latent Space Communication between Heterogeneous Language Models",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-24",
+          "authors": "Jiyao Liu, Qi Zhang, Yaoyi Jia, Ziwen Kan, Song Wang",
+          "institutions": "机构未标注",
+          "abstract": "多 agent LLM 系统把工作拆分给不同模型，答案往往依赖另一个 agent 上下文中的知识：Sharer 编码了 Receiver 完成任务所需的信息。通常它们以文本交换，这使自回归解码进入关键路径，并把通信变成看不见接收方状态的离散消息。最近的潜在协议尝试把 Sharer 的 KV cache 翻译给 Receiver：C2C 支持异构模型但要求双方读同一输入；LCF-X 通过位置无关的 sharer cache 池化去掉了共享上下文要求。仍有三点限制：LCF-X 只压缩 Sharer，给每个 Receiver 位置提供相同的层局部摘要，没有可检索的联合跨层记忆，并假设层数与 KV 几何匹配。XKV 解除全部三点：用 learned-query attention 池化两个 cache；对 receiver 对齐的层 token 做自注意力，配学习到的层映射调解不同深度，把池化摘要混合成紧凑联合记忆；共享位置解码器让每个原始 receiver cache 位置以接收方原生 KV 几何检索自己的逐头门控残差。两个模型都保持冻结，可以在家族、深度、KV 头数、头维度与 tokenizer 上各不相同，只训练翻译器。在 45 个数据集-模型对设置（六个异构与三个同模型有序配对、五个数据集）上，XKV 取得最高宏分数与最佳平均排名，每个数据集都优于 LCF-X（ROPES 上 +4.6 精确匹配、+4.2 F1），五个数据集中四个超过文本通信；训练参数少 76%，缓存对翻译快 10.3 倍（5.8ms 对 59.9ms）；端到端比 LCF-X 快 26%、比文本通信快 6.8 倍。",
+          "contributions": [
+            "提出 XKV，解除 LCF-X 的三点限制：双缓存联合池化 + 层映射调解深度 + 共享位置解码器逐位置检索",
+            "两模型完全冻结且族/深度/KV 几何/tokenizer 均可异构，只训练小型翻译器",
+            "在 45 个数据集-模型对设置上全面评测，同时优于 LCF-X 与文本通信"
+          ],
+          "conclusions": [
+            "隐空间 KV 通信可以同时赢过 LCF-X 与文本通信，且翻译器参数少 76%、翻译快 10.3×",
+            "逐位置、逐头门控的原生几何检索是异构模型间信息无损传递的关键"
+          ],
+          "experiments": [
+            "ROPES 上相对 LCF-X +4.6 精确匹配、+4.2 F1；五个数据集四胜文本通信",
+            "训练参数少 76%；缓存对翻译 5.8ms 对 59.9ms（快 10.3×）",
+            "端到端比 LCF-X 快 26%、比文本通信快 6.8×"
+          ],
+          "significance": "让异构 LLM 之间直接以‘潜在 KV 缓存’通信取代文本，既快又保留完整语义信息，是 multi-agent 协作的新接口。",
+          "arxivUrl": "https://arxiv.org/abs/2608.20617",
+          "pdfUrl": "https://arxiv.org/pdf/2608.20617.pdf",
+          "index": 9,
+          "takeaway": "异构模型间通信可以在隐空间直接翻译双 KV cache：XKV 让接收方按原生几何逐位置检索联合记忆。",
+          "keyExperiment": "ROPES 上相对 LCF-X +4.6 精确匹配/+4.2 F1，同时翻译快 10.3×、训练参数少 76%"
+        }
+      ]
+    }
+  ]
+}
