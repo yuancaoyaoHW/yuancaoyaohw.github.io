@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRAFT：给扩散草稿模型做自适应草稿树</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.loss { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 620px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+/* ===== 场景过渡动画 (Pattern 1) ===== */
+.anim-canvas-wrap svg .scene-layer { transition: opacity 430ms cubic-bezier(.22,.61,.36,1), transform 430ms cubic-bezier(.22,.61,.36,1); }
+.anim-canvas-wrap svg .scene-enter.from-right { opacity: 0; transform: translateX(18px); }
+.anim-canvas-wrap svg .scene-enter.from-left { opacity: 0; transform: translateX(-18px); }
+.anim-canvas-wrap svg .scene-layer.scene-active { opacity: 1; transform: translateX(0); }
+.anim-canvas-wrap svg .scene-exit.to-left.scene-exit-active { opacity: 0; transform: translateX(-14px); }
+.anim-canvas-wrap svg .scene-exit.to-right.scene-exit-active { opacity: 0; transform: translateX(14px); }
+/* ===== 元素级入场动画 (Pattern 2) ===== */
+.anim-canvas-wrap svg .reveal { opacity: 0; transform: translateY(7px); animation: revealUp .48s cubic-bezier(.22,.61,.36,1) forwards; animation-delay: var(--delay, 0ms); transform-box: fill-box; }
+@keyframes revealUp { to { opacity: 1; transform: translateY(0); } }
+/* ===== 进度条 (Pattern 5) ===== */
+.anim-progress { height: 3px; background: var(--a-border); position: relative; }
+.anim-progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-soft)); width: 0%; transition: width 380ms cubic-bezier(.22,.61,.36,1); }
+/* ===== 步骤条 Stage Rail (Pattern 4) ===== */
+.anim-stage-rail { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 8px; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border: 1px solid var(--a-border); border-radius: 12px; background: var(--card-bg); cursor: pointer; font-size: 11px; color: var(--fg-soft); transition: all 0.15s; }
+.anim-stage-rail .stage-chip:hover { border-color: var(--accent); color: var(--accent); }
+.anim-stage-rail .stage-chip.done { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-soft); }
+.anim-stage-rail .stage-chip.active { background: var(--accent); color: var(--a-on-solid); border-color: var(--accent); font-weight: 600; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--a-border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--a-border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: var(--a-on-solid); border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--a-border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 960px) {
+  .layout { flex-direction: column; gap: 0; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; margin-bottom: 16px; max-height: 200px; }
+  .toc h3 { cursor: pointer; }
+  .toc.collapsed .toc a { display: none; }
+  .content { width: 100%; }
+  section { padding: 18px; }
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 720px) { section { padding: 14px; } }
+</style>
+</head>
+<body>
+<script>
+/* 语义色的运行时读取。SVG 由脚本生成、fill 走的是属性，属性不解析 var()，
+   所以这里在绘制时从正文容器上把 --a-* 的实际值读出来。第二个参数是深色
+   主题的兜底值，仅在拿不到自定义属性时生效。 */
+window.aC = (function () {
+  var cs = null;
+  return function (name, fallback) {
+    if (!cs) {
+      var host = document.querySelector('.interactive-body, .article-body') || document.body;
+      cs = getComputedStyle(host);
+    }
+    var v = cs.getPropertyValue(name);
+    return (v && v.trim()) || fallback;
+  };
+})();
+</script>
+
+<button class="theme-toggle" id="artThemeBtn" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc" id="tocNav">
+  <h3 onclick="toggleToc()">导航</h3>
+  <a href="#hook">核心思想</a>
+  <a href="#bg-spec">前置一：投机解码与接受长度</a>
+  <a href="#bg-tree">前置二：为什么要草稿树</a>
+  <a href="#bg-dlm">前置三：DFlash 打破了建树方式</a>
+  <a href="#ddtree">DDTree：能建树，但建得糙</a>
+  <a href="#tdes">创新一：TDES 目标蒸馏边打分</a>
+  <a href="#scorer">TDES 打分器与三级蒸馏</a>
+  <a href="#saba">创新二：SABA 状态感知预算</a>
+  <a href="#pipeline">一轮完整的 GRAFT</a>
+  <a href="#exp">实验：数字说了什么</a>
+  <a href="#ablation">消融：两个组件各自的贡献</a>
+  <a href="#limit">局限与定位</a>
+  <a href="#summary">总结</a>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>GRAFT</h1>
+  <p class="tagline"><strong>Adaptive DLM-Based Draft Tree Construction with Target-Distilled Edge Scoring</strong></p>
+  <p class="tagline">扩散草稿模型一次前向就吐出所有未来位置的分布，这让传统「按父路径逐层展开」的建树方式彻底失效。GRAFT 补上两块拼图：<strong>边打分要看父子搭不搭</strong>（TDES），<strong>树多大要看当前解码状态</strong>（SABA）。</p>
+  <div class="badges">
+    <span class="badge badge-accent">端到端 2.13×–6.36×</span>
+    <span class="badge badge-green">吞吐 +19.4% vs DDTree</span>
+    <span class="badge badge-purple">额外开销 &lt; 0.5 ms / 轮</span>
+    <span class="badge badge-blue">arXiv 2608.20375</span>
+  </div>
+</section>
+<section id="bg-spec">
+  <h2>前置一：投机解码在优化的到底是什么</h2>
+  <p>自回归解码慢，不是因为算得多，而是因为算得<strong>太零碎</strong>。生成一个 token 就要把整个模型的权重从显存搬进计算单元一次，batch size 为 1 时算力几乎全闲着，瓶颈在显存带宽。换句话说：一次前向能顺手算完几十个 token，可我们每次只要了一个。</p>
+  <p>投机解码就是来填这个空的。一个便宜的<strong>草稿模型</strong>先猜 $K$ 个 token，然后<strong>目标模型</strong>把这 $K$ 个位置塞进同一次前向里并行验证，把与目标模型自己会产生的输出一致的最长前缀留下。</p>
+  <div class="eq">
+    $$\hat{y}_{t,d} \sim P_{\text{draft}}\big(\cdot \mid x^{(t)},\, \hat{y}_{t,<d}\big),\qquad d = 1,\dots,K$$
+    <span class="eq-note">$x^{(t)}$ 是第 $t$ 轮开始时的前缀，$\hat{y}_{t,&lt;d}$ 是本轮已经草稿出来的 token。注意条件里带 $\hat{y}_{t,&lt;d}$——这正是后面所有麻烦的来源。</span>
+  </div>
+  <p>关键指标叫<strong>平均接受长度</strong>（MAT, mean accepted tokens）：设第 $t$ 轮接受了 $a_t$ 个 token，则</p>
+  <div class="eq">
+    $$\text{MAT} = \frac{1}{T}\sum_{t=1}^{T} a_t$$
+    <span class="eq-note">一次目标模型前向换来 $a_t$ 个 token。MAT 越大，摊到每个 token 的目标模型前向次数越少。论文原话是加速比「largely driven by」MAT。</span>
+  </div>
+  <div class="callout callout-orange">
+    <strong>但 MAT 不是目标函数。</strong>真正要最大化的是吞吐（TPS）。MAT 上去了、每轮的验证也变贵了，净收益可能是负的。这句话记住，它是理解 GRAFT 第二个创新点（SABA）的全部前提——也解释了后面实验里为什么 GRAFT 有时 MAT 反而<em>低于</em> DDTree，速度却更快。
+  </div>
+</section>
+
+<section id="bg-tree">
+  <h2>前置二：为什么要把草稿从一条链变成一棵树</h2>
+  <p>草稿是一条链时，只要第一个 token 猜错，后面全废——接受长度直接归零。既然目标模型的一次前向本来就有余力，不如让它一次验证<strong>多条候选路径</strong>：在同一个位置放几个候选 token，把它们组织成一棵<strong>前缀闭合</strong>的树，用 tree-attention mask 让每个节点只能看见自己的祖先，一次前向验证整棵树，最后接受最长的那条被认可的路径。这就是树形投机解码，MAT 因此显著上升。</p>
+  <p>问题是树怎么建。自回归草稿模型的标准做法叫<strong>父路径条件展开</strong>（parent-conditioned expansion）：选中一个叶子，把它的<strong>整条路径</strong>喂回草稿模型，再前向一次，拿到的分布就是「在这条路径之后」的下一个 token 分布。两种基本操作是<em>加宽</em>（给同一个父节点加兄弟候选）和<em>加深</em>（把选中的叶子往下长）。EAGLE、SpecInfer、OPT-Tree 都在这个框架里做取舍。</p>
+  <div class="anim-frame" id="anim1">
+    <div class="anim-header">
+      <span class="anim-title">动画 1：从自回归 → 链式草稿 → 树形草稿（父路径条件展开）</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg1" viewBox="0 0 820 400" width="820" height="400" role="img" aria-label="自回归、链式投机与树形投机的对比动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">自回归：一次前向一个 token</button><button class="stage-chip" data-step="1">链式草稿：首次不匹配即截断</button><button class="stage-chip" data-step="2">树形草稿：一次验证多条路径</button><button class="stage-chip" data-step="3">父路径条件展开：加宽与加深</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-green)"></span> 接受</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 拒绝 / 丢弃</span>
+      <span><span class="dot" style="background:var(--a-blue)"></span> 候选节点</span>
+      <span><span class="dot" style="background:var(--a-accent)"></span> 当前操作</span>
+    </div>
+  </div>
+</section>
+<section id="bg-dlm">
+  <h2>前置三：DFlash 一次前向吐出所有位置，建树框架随之失效</h2>
+  <p>扩散语言模型（DLM）不按从左到右一个个采样，它一次前向就把整块位置的分布同时算出来。用作草稿模型的代表是 <strong>DFlash</strong>：给定前缀 $x^{(t)}$ <em>以及当前目标模型的状态</em>，它一次前向输出每个深度 $d = 1,\dots,D$ 上的词表分布 $q_{t,d}(\cdot)$。朴素用法就是每个位置取 argmax，串成一条链：</p>
+  <div class="eq">
+    $$\hat{y}_{t,d} = c_{t,d}^{(1)} = \arg\max_{c \in V} q_{t,d}(c)$$
+    <span class="eq-note">$c_{t,d}^{(r)}$ 记深度 $d$ 上分数第 $r$ 高的 token。$q_{t,d}$ 是<strong>边缘分布</strong>——它不知道深度 $d-1$ 上最终会落哪个 token。</span>
+  </div>
+  <p>这个「一次前向出全部」的性质让 DFlash 非常快，但也正是它和父路径条件展开的冲突所在。要给一条<strong>新的</strong>父路径求下一个 token 分布，就得让草稿模型以那条路径为条件重跑一次；而 DFlash 的前向条件里含有<strong>当前目标模型的状态</strong>，那条假想路径的目标模型状态在验证之前根本不存在。</p>
+  <div class="callout callout-red">
+    <strong>死结在这里：</strong>你不能为每个候选父节点重跑一次草稿模型。手上只有<strong>一组与父节点无关的、逐位置的边缘分布</strong>，建树问题于是从「怎么展开」变成了「怎么在给定的候选节点之间连边」。
+  </div>
+  <div class="anim-frame" id="anim2">
+    <div class="anim-header">
+      <span class="anim-title">动画 2：父路径条件展开为何在 DFlash 上不成立，以及 DDTree 的绕法</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg2" viewBox="0 0 820 410" width="820" height="410" role="img" aria-label="DFlash 边缘分布与 DDTree 堆展开的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">自回归 drafter：可以重跑</button><button class="stage-chip" data-step="1">DFlash：一次前向出 D 个分布</button><button class="stage-chip" data-step="2">冲突：假想路径没有目标状态</button><button class="stage-chip" data-step="3">DDTree：候选节点 + 最大堆连边</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-blue)"></span> 候选 token（按边缘概率着色）</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 不可行的操作</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 已进入树</span>
+      <span><span class="dot" style="background:var(--a-accent)"></span> 堆顶 / 当前弹出</span>
+    </div>
+  </div>
+</section>
+
+<section id="ddtree">
+  <h2>DDTree：能建树，但有两处糙</h2>
+  <p>DDTree 是这条路上的第一个方案，思路直白：把每个深度的高概率 token 当作候选节点，然后在<strong>相邻深度之间</strong>选边，凑够固定的节点预算 $B$ 为止。候选前缀 $u = (u_1,\dots,u_\ell)$ 的路径分数是各位置对数概率之和：</p>
+  <div class="eq">
+    $$S_{\text{DD}}(u) = \sum_{d=1}^{\ell} \log q_{t,d}(u_d)$$
+    <span class="eq-note">实现上用一个<strong>最大堆</strong>：反复弹出分数最高的前缀加入树，并把它的兄弟与孩子压回堆，直到选够 $B$ 个节点。</span>
+  </div>
+  <p>看出问题了吗？把 token $c$ 接到深度 $d$ 上，贡献恒为 $\log q_{t,d}(c)$，<strong>和父节点是谁完全无关</strong>。DDTree 的边打分是「父节点无感的」（parent-agnostic）。</p>
+  <h3>糙处一：父子错配</h3>
+  <p>路径分数只反映草稿模型对每个 token 的<em>孤立</em>置信度，不反映这个孩子跟这个具体父亲搭不搭。后果是：一个目标模型确实会产生的 token 已经在树里了，却挂在了错误的父节点下面——树里有这个 token，但没有那条路径。论文测出这类<strong>父子错配</strong>在 GSM8K 上高达约 45%。</p>
+  <h3>糙处二：预算给死了</h3>
+  <p>DDTree 每轮都用同一个预算（论文图中标注 <code>Fix Budget = 128</code>，Qwen3-8B 上实测平均树大小 110.2 个节点）。但节点的边际价值是随状态变的：</p>
+  <ul>
+    <li><strong>简单的轮次</strong>本来就能接受很长一段（接受长度 15 左右），再加节点只是白交验证成本——论文测得这类轮次的最优预算就是搜索下界 32。</li>
+    <li><strong>困难的轮次</strong>确实需要更大的树（最优预算约 96），但收益也会饱和，继续加照样掉吞吐。</li>
+  </ul>
+  <p>同一条固定预算既服务不好简单轮，也服务不好困难轮。这就是 GRAFT 要动的第二个地方。</p>
+</section>
+<section id="tdes">
+  <h2>创新一：TDES——把「这个孩子配这个爹吗」学出来</h2>
+  <p>TDES（Target-Distilled Edge Scoring）不推翻 DDTree 的打分，而是在它上面加一个<strong>残差修正项</strong>。对一条从父 token $p$ 指向深度 $d$ 上的子 token $c$ 的边 $v = (p, c, d)$：</p>
+  <div class="eq">
+    $$S_{\text{TDES}}(v) = \log q_{t,d}(c) + \beta \cdot \tilde{f}_\theta(p, c, d)$$
+    $$\tilde{f}_\theta(p, c, d) = f_\theta(p, c, d) - \frac{1}{|\mathcal{C}_{p,d}|}\sum_{c' \in \mathcal{C}_{p,d}} f_\theta(p, c', d)$$
+    <span class="eq-note">$f_\theta$ 估计父子兼容度；$\mathcal{C}_{p,d}$ 是父节点 $p$ 下考虑的孩子集合；$\beta$ 控制残差强度，默认 $\beta = 0.2$。</span>
+  </div>
+  <p>第二个式子是重点，容易被跳过：$\tilde f_\theta$ 是<strong>在同一个父节点的兄弟集合内做了中心化</strong>的。为什么必须减掉均值？因为 $f_\theta$ 会带有父节点自身的偏置——某些 token 天生「后面接什么都像」，它给所有孩子的打分都偏高。不减掉这个偏置，比较的就不是「哪个孩子更配这个父亲」，而是「哪个父亲整体分高」，那又退回到与父节点无关的排序了。减掉均值后保留的是同一父节点下孩子之间的<strong>相对偏好</strong>，正好是选边需要的信息。</p>
+  <p>路径分数依然是沿边相加，所以最大堆展开的逻辑一行都不用改：</p>
+  <div class="eq">
+    $$S_{\text{TDES}}(u) = \sum_{d=1}^{|u|} S_{\text{TDES}}(v_d)$$
+    <span class="eq-note">建树器仍是<strong>贪心最优先的堆展开</strong>——弹出分数最高的前缀、加入树、压回兄弟与孩子。没有动态规划，没有 beam search，换掉的只是排序键。</span>
+  </div>
+  <div class="callout callout-purple">
+    <strong>这个设计的克制之处：</strong>它没有试图重建一个「条件分布」，只在既有的边缘概率排序上叠一个小的、有界的偏移量。$\beta$ 一旦太大就会出事——见后面的敏感性实验，$\beta = 0.4$ 时错配率降到 79%，MAT 和吞吐却<em>掉到了 $\beta = 0$ 以下</em>。
+  </div>
+  <div class="anim-frame" id="anim3">
+    <div class="anim-header">
+      <span class="anim-title">动画 3：同一组候选节点，父节点无感打分 vs TDES 打分（复现论文图 1a）</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg3" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="父子错配与 TDES 修正的对比动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">DDTree：边分与父节点无关</button><button class="stage-chip" data-step="1">后果：错配，接受长度 1</button><button class="stage-chip" data-step="2">TDES：加入兄弟中心化残差</button><button class="stage-chip" data-step="3">结果：接受长度 4</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-accent)"></span> Bonus token（本轮起点）</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 被接受</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 错配 token</span>
+      <span><span class="dot" style="background:var(--a-fg-muted)"></span> 拒绝 / 丢弃</span>
+    </div>
+  </div>
+</section>
+<section id="scorer">
+  <h2>TDES 打分器长什么样，以及怎么从目标模型里蒸出来</h2>
+  <h3>结构：一个可缓存的双塔</h3>
+  <p>这个打分器每轮堆展开要被调用成百上千次，所以它的代价必须相对草稿/验证前向可以忽略。论文选了最省的形式——<strong>双塔内积</strong>，输入只有（直接父 token、子 token、深度）三样：</p>
+  <div class="eq">
+    $$f_\theta(p, c, d) = s \cdot \frac{\big(g_p(e_p) + u_d\big)^{\top}\big(g_c(e_c) + u_d\big)}{\sqrt{m}}$$
+    <span class="eq-note">$e_p, e_c \in \mathbb{R}^E$ 是<strong>目标模型的词嵌入</strong>（冻结不训）；$g_p, g_c : \mathbb{R}^E \to \mathbb{R}^m$ 是两个线性投影；$u_d \in \mathbb{R}^m$ 是可训练的<strong>深度嵌入</strong>，同时加到父、子两侧；$s > 0$ 是可学习的缩放。可训练的只有两个投影、深度嵌入和 $s$。</span>
+  </div>
+  <p>为什么能这么便宜？因为 $g_p(e_p)$ 与 $g_c(e_c)$ <strong>只依赖 token id</strong>，可以在解码开始前一次性预计算好、整轮复用；运行时每条边只剩一次 $m$ 维内积。实测 TDES 的总开销约 <strong>0.3 ms/轮</strong>，约等于目标模型验证时延的 1.3%。<span class="note-inline">（论文未给出 $E$、$m$ 的具体数值与总参数量。）</span></p>
+  <h3>三级监督：从目标模型的轨迹里学偏好</h3>
+  <p>训练数据是用 DDTree 跑投机解码时收集的<strong>目标模型轨迹</strong>，来自 3046 条留出 prompt（取自七个非 AIME 基准；AIME24/25 因样本太少整体留作评测）。监督分三个粒度，各管一件事：</p>
+  <h4>① 分布级：让排序对齐目标模型的 logit</h4>
+  <div class="eq">
+    $$\pi^{\text{tgt}}_{p,d}(c) = \operatorname*{softmax}_{c \in \mathcal{C}_{p,d}}\big(z^{\text{tgt}}_{p,c}\big),\qquad \pi^{\theta}_{p,d}(c) = \operatorname*{softmax}_{c \in \mathcal{C}_{p,d}}\big(\log q_{t,d}(c) + f_\theta(p,c,d)\big)$$
+    $$\mathcal{L}_{\text{KL}} = \mathbb{E}_{(p,d)}\big[\, \mathrm{KL}\big(\pi^{\text{tgt}}_{p,d} \,\big\|\, \pi^{\theta}_{p,d}\big) \,\big]$$
+    <span class="eq-note">$z^{\text{tgt}}_{p,c}$ 是目标模型在父节点 $p$ 下对孩子 $c$ 的 logit；只在<strong>被接受的父节点</strong>上取样，且两个 softmax 都<strong>限制在候选集 $\mathcal{C}_{p,d}$ 内</strong>——学的是候选之间的排序，不是整个词表。注意 $\pi^\theta$ 用的是<em>未中心化</em>的 $f_\theta$ 且<em>不带</em> $\beta$：$\beta$ 与中心化是推理期的使用方式，不进训练目标。</span>
+  </div>
+  <h4>② 成对级：直接压住错配这一种错误</h4>
+  <div class="eq">
+    $$\mathcal{L}_{\text{pair}} = \mathbb{E}_{(v^+, v^-)}\big[\, \mathrm{softplus}\big(\gamma - f_\theta(v^+) + f_\theta(v^-)\big) \,\big]$$
+    <span class="eq-note">从每条错配轨迹里构造一个正边 $v^+$ 与一个负边 $v^-$。负边有两种取法：<strong>同一个孩子挂到错误的父节点上</strong>，或<strong>正确父节点下的竞争孩子</strong>。这两种恰好对应「树里有这个 token 但路径不对」和「路径对但选错了孩子」。$\gamma$ 是 margin，论文未给数值。</span>
+  </div>
+  <h4>③ 边级：给每条边一个绝对的对/错标签</h4>
+  <div class="eq">
+    $$\mathcal{L}_{\text{BCE}} = -\,\mathbb{E}_{(v, y_v)}\big[\, w_1 y_v \log \sigma(f_\theta(v)) + (1 - y_v)\log\big(1 - \sigma(f_\theta(v))\big) \,\big]$$
+    <span class="eq-note">$y_v = 1$ 当且仅当在父节点 $p$ 下 $c$ 就是目标模型的下一个 token。正样本极稀疏，用正类权重 $w_1$ 平衡（数值未给出）。</span>
+  </div>
+  <div class="eq">
+    $$\mathcal{L} = \lambda_{\text{KL}}\mathcal{L}_{\text{KL}} + \lambda_{\text{pair}}\mathcal{L}_{\text{pair}} + \lambda_{\text{BCE}}\mathcal{L}_{\text{BCE}},\qquad \lambda_{\text{KL}} = 1,\ \lambda_{\text{pair}} = 1,\ \lambda_{\text{BCE}} = 0.25$$
+    <span class="eq-note">训练：8 epoch，AdamW，学习率 $2\times10^{-3}$，weight decay $10^{-4}$。</span>
+  </div>
+  <div class="callout callout-blue">
+    <strong>三个损失的分工值得琢磨：</strong>KL 管「候选之间谁该排前面」，是主信号；成对 margin 直接针对<em>失效模式</em>造样本，把最该修的那类错误显式压住；BCE 提供一个绝对尺度，避免打分器只会做相对排序、跨父节点之间数值不可比。$\lambda_{\text{BCE}}$ 只给 0.25，说明它是校准用的辅助项而非主力。
+  </div>
+  <div class="anim-frame" id="anim4">
+    <div class="anim-header">
+      <span class="anim-title">动画 4：TDES 打分器结构与三级蒸馏监督</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg4" viewBox="0 0 820 400" width="820" height="400" role="img" aria-label="TDES 双塔打分器与三级监督的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">双塔结构与缓存</button><button class="stage-chip" data-step="1">① 分布级 KL</button><button class="stage-chip" data-step="2">② 成对 margin</button><button class="stage-chip" data-step="3">③ 边级 BCE 与总损失</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-amber)"></span> 可训练</span>
+      <span><span class="dot" style="background:var(--a-teal)"></span> 冻结</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 正边</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 负边</span>
+    </div>
+  </div>
+</section>
+<section id="saba">
+  <h2>创新二：SABA——每轮重新决定树该多大</h2>
+  <p>SABA（State-Aware Budget Allocation）把预算变成一个每轮求解的小优化问题，目标不是 MAT 而是<strong>吞吐效用</strong>：</p>
+  <div class="eq">
+    $$B_t = \arg\max_{B} U_t(B),\qquad U_t(B) = \frac{G_t(B)}{C_t(B)}$$
+    <span class="eq-note">$G_t(B)$ 是期望草稿收益，$C_t(B)$ 是本轮解码代价，比值即「单位代价换来的收益」。</span>
+  </div>
+  <h3>状态：三个信号，其中一个是 DLM 特有的</h3>
+  <div class="eq">
+    $$\text{conf}_t = \frac{1}{D}\sum_{d=1}^{D} q_{t,d}\big(c_{t,d}^{(1)}\big),\qquad \text{hist}_t = \frac{1}{w}\sum_{i=1}^{w} a_{t-i}$$
+    $$\text{degen}_t = \frac{1}{D-1}\sum_{d=1}^{D-1} r_{t,d} \;+\; \big(r_{t,D-1} - r_{t,1}\big),\qquad r_{t,d} = \cos\big(h_{t,d},\, h_{t,d+1}\big)$$
+    <span class="eq-note">$h_{t,d}$ 是 DFlash 在深度 $d$ 的隐状态。状态向量 $s_t = [\text{conf}_t, \text{degen}_t, \text{hist}_t]$。$w$ 为接受长度历史窗口（数值未给出）。</span>
+  </div>
+  <p>置信度和接受历史是自适应树工作里的常规代理量，$\text{degen}_t$ 才是这篇针对 DFlash 加的东西：它度量<strong>表征退化</strong>——相邻位置的隐状态越往后越相似，靠后的草稿 token 就越难区分。式子里两项各有分工：前一项是<em>平均</em>相邻相似度（整体退化水平），括号里那项是<em>从早到晚的增量</em>（退化的斜率）。只看平均会漏掉「起点就平但没继续变差」的情形，加上斜率才能判断继续往深处加节点是否还有意义。</p>
+  <h3>收益模型：一条会饱和的曲线</h3>
+  <div class="eq">
+    $$G_t(B) = 1 - \exp\!\left(-\frac{B}{\varphi^{\top} s_t}\right)$$
+    <span class="eq-note">$\varphi$ 是与 $s_t$ 同维的三维参数。$\varphi^{\top}s_t$ 是<strong>饱和尺度</strong>：它大，说明加节点在更宽的预算范围内都还有用；它小，说明很快就边际递减。状态就是通过这一个标量进入收益曲线的。</span>
+  </div>
+  <h3>代价模型：一条仿射的直线</h3>
+  <div class="eq">
+    $$C_t(B) = c_0 + c_1 B + c_2 B \cdot \text{prefix}_t$$
+    <span class="eq-note">$c_0$ 是每轮固定开销；$c_1 B$ 是多出来的节点带来的近似线性工作量；$c_2 B\,\text{prefix}_t$ 是把一棵树对着<em>更长的前缀</em>做注意力时增长的那部分成本。在关注的预算区间内，建树与验证都近似随 $B$ 线性增长，所以仿射就够了。</span>
+  </div>
+  <p>$\varphi, c_0, c_1, c_2$ 在一个小的留出验证集上用<strong>同前缀预算重放</strong>拟合，评测时冻结。每轮 SABA 做的事非常朴素：把 $B$ 从 <strong>32 到 512、步长 16</strong> 全试一遍（31 次标量计算），取 $U_t(B)$ 最大的那个。没有闭式解，也没有查表。所有状态信号本来就在手上（来自草稿模型输出和上一轮验证结果），所以 SABA 只花约 <strong>0.1 ms/轮</strong>。</p>
+  <div class="callout callout-green">
+    <strong>效果的上界在哪？</strong>论文做了一个 oracle 对照：固定前缀、KV cache 和 DFlash 输出，把同一轮用各个预算重放一遍，取真实吞吐最高的那个作为 oracle。SABA 平均保住了 oracle 吞吐的 <strong>94.1%</strong>，并在 <strong>64.1%</strong> 的轮次里达到 oracle 的 95% 以上。
+  </div>
+  <div class="anim-frame" id="anim5">
+    <div class="anim-header">
+      <span class="anim-title">动画 5：最优树大小随状态漂移，以及 SABA 的收益/代价/效用曲线</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg5" viewBox="0 0 820 430" width="820" height="430" role="img" aria-label="SABA 预算分配的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">现象：最优预算随难度漂移</button><button class="stage-chip" data-step="1">状态三信号</button><button class="stage-chip" data-step="2">收益 G(B) 饱和</button><button class="stage-chip" data-step="3">代价 C(B) 线性</button><button class="stage-chip" data-step="4">效用 U=G/C 网格搜索</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-green)"></span> 简单轮（接受长度 ≈15）</span>
+      <span><span class="dot" style="background:var(--a-amber)"></span> 中等轮（≈7）</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 困难轮（≈3）</span>
+      <span><span class="dot" style="background:var(--a-fg-muted)"></span> 验证代价</span>
+    </div>
+  </div>
+</section>
+<section id="pipeline">
+  <h2>一轮完整的 GRAFT</h2>
+  <p>两个组件是正交的，在建树器这一处汇合：<strong>TDES 决定哪些边排在前面，SABA 决定什么时候停止展开</strong>。论文没有给编号的伪代码块，按正文与流程图，第 $t$ 轮做这些事：</p>
+  <ol>
+    <li><strong>草稿模型跑一次</strong>：DFlash 以 $x^{(t)}$ 与当前目标模型状态为条件前向一次，得到 $d = 1,\dots,D$ 的边缘分布 $q_{t,d}(\cdot)$ 与隐状态 $h_{t,d}$。</li>
+    <li><strong>取候选节点</strong>：每个深度取分数最高的若干 token $c_{t,d}^{(r)}$。</li>
+    <li><strong>算状态</strong>：由分布得 $\text{conf}_t$、由隐状态余弦得 $\text{degen}_t$、由 $a_{t-w},\dots,a_{t-1}$ 得 $\text{hist}_t$；SABA 另读 $\text{prefix}_t$。</li>
+    <li><strong>SABA 定预算</strong>：在 $B \in \{32, 48, \dots, 512\}$ 上网格搜索 $U_t(B) = G_t(B)/C_t(B)$，得 $B_t$。</li>
+    <li><strong>TDES 打边分</strong>：用预计算好的投影嵌入算 $S_{\text{TDES}}(v)$。</li>
+    <li><strong>建树</strong>：最大堆按 $S_{\text{TDES}}(u)$ 排序，反复弹出最高分前缀加入树、压回其兄弟与孩子，直到选满 $B_t$ 个节点。</li>
+    <li><strong>验证</strong>：目标模型用 tree-attention mask 一次前向验证整棵树，提交最长被接受路径，记下 $a_t$，进入下一轮。</li>
+  </ol>
+  <div class="callout callout-accent">
+    <strong>整篇论文没有任何定理、命题或证明。</strong>唯一的形式化内容是收益/代价模型背后的两条建模假设：收益饱和、代价仿射。这不是缺陷，但读的时候要清楚——$G_t$ 和 $C_t$ 是<em>拟合出来的工程近似</em>，不是推导出来的。
+  </div>
+</section>
+
+<section id="exp">
+  <h2>实验：数字说了什么</h2>
+  <p>设置：目标模型 Qwen3-4B / Qwen3-8B / Qwen3-Coder-30B-A3B-Instruct，草稿模型是各自对应的 DFlash；九个基准（GSM8K、Math500、AIME24、AIME25、HumanEval、MBPP、LiveCodeBench、SWE-bench、Alpaca）；单卡 A100 80GB，batch size 1。基线五个：自回归、EAGLE-3、OPT-Tree、DFlash（链式，不建树）、DDTree。</p>
+  <p>下表是 Qwen3-8B 上的 MAT / 加速比（加速比对同模型同数据集的自回归归一化）：</p>
+  <table>
+    <thead><tr><th>方法</th><th>GSM8K</th><th>Math500</th><th>AIME24</th><th>AIME25</th><th>HumanEval</th><th>MBPP</th><th>LCB</th><th>SWE-bench</th><th>Alpaca</th></tr></thead>
+    <tbody>
+      <tr><td>EAGLE-3</td><td>4.07 / 1.79</td><td>4.12 / 1.79</td><td>3.32 / 1.87</td><td>3.30 / 1.86</td><td>4.34 / 1.77</td><td>4.36 / 1.92</td><td>3.57 / 1.57</td><td>3.22 / 1.39</td><td>3.75 / 1.71</td></tr>
+      <tr><td>OPT-Tree</td><td>3.96 / 1.46</td><td>3.91 / 1.45</td><td>3.23 / 1.87</td><td>3.22 / 1.85</td><td>4.21 / 1.35</td><td>4.27 / 1.57</td><td>3.45 / 1.30</td><td>3.12 / 1.21</td><td>3.66 / 1.46</td></tr>
+      <tr><td>DFlash（链式）</td><td>5.82 / 3.90</td><td>7.02 / 4.84</td><td>6.15 / 4.18</td><td>6.62 / 4.51</td><td>6.43 / 4.46</td><td>5.49 / 3.76</td><td>6.08 / 4.30</td><td>3.28 / 2.16</td><td>2.83 / 2.02</td></tr>
+      <tr><td>DDTree</td><td><strong>8.18</strong> / 4.33</td><td><strong>9.38</strong> / 4.93</td><td>7.25 / 4.99</td><td>7.80 / 5.35</td><td><strong>9.13</strong> / 4.57</td><td><strong>7.93</strong> / 4.26</td><td><strong>8.55</strong> / 4.41</td><td>5.04 / 2.56</td><td><strong>4.46</strong> / 2.38</td></tr>
+      <tr class="best"><td><strong>GRAFT</strong></td><td>8.06 / <strong>5.28</strong></td><td>9.36 / <strong>6.17</strong></td><td><strong>8.04 / 5.45</strong></td><td><strong>8.63 / 5.85</strong></td><td>8.96 / <strong>5.87</strong></td><td>7.83 / <strong>5.25</strong></td><td>8.32 / <strong>5.33</strong></td><td><strong>5.08 / 3.13</strong></td><td>4.26 / <strong>2.80</strong></td></tr>
+    </tbody>
+  </table>
+  <p class="note-inline">每格为「MAT / 加速比」。Qwen3-4B 与 Qwen3-Coder-30B 的表格结构相同，趋势一致。</p>
+  <h3>三个值得停下来看的地方</h3>
+  <p><strong>一、DLM 草稿这条线整体领先一个量级。</strong>EAGLE-3 和 OPT-Tree 的 MAT 在 3–4 之间，DFlash 链式已经到 5.8–7.0，DDTree/GRAFT 到 8–9。更刺眼的是在 Qwen3-4B 上 EAGLE-3 与 OPT-Tree 有几组加速比<strong>掉到 1.0 以下</strong>（0.95–0.99）——小模型上自回归草稿的开销吃掉了全部收益，而这正是投机解码在小模型上一直没那么好用的原因。</p>
+  <p><strong>二、GRAFT 在全部 27 个模型×数据集组合里加速比都最高。</strong>各模型上的最佳值：Qwen3-4B 的 Math500 6.36×、Qwen3-8B 的 Math500 6.17×、Qwen3-Coder-30B 的 HumanEval 6.01×。标题里 2.13×–6.36× 的下界来自 Qwen3-Coder-30B 的 Alpaca。</p>
+  <p><strong>三、GRAFT 的 MAT 有时比 DDTree 低。</strong>看 Qwen3-8B 的 Alpaca：4.26 对 4.46，MAT 输了，加速比 2.80 对 2.38 却赢了 18%。这不是瑕疵而是设计的直接体现——SABA 优化吞吐，会主动放弃那些「能让 MAT 涨一点、但验证成本涨得更多」的节点。如果只看 MAT 这张榜，会得出完全错误的结论。</p>
+  <div class="callout callout-orange">
+    <strong>顺带一提任务间的落差。</strong>Math500 能到 6.17×，Alpaca 只有 2.80×，SWE-bench 3.13×。数学推理的输出格式化、可预测，草稿好猜；开放式指令跟随和仓库级代码修改的下一个 token 熵高得多。任何投机解码方案的收益都强烈依赖任务分布，看单一数字容易高估。
+  </div>
+</section>
+<section id="ablation">
+  <h2>消融：两个组件各自贡献了什么</h2>
+  <p>Qwen3-8B，九个数据集平均：</p>
+  <table>
+    <thead><tr><th>方法</th><th>平均节点数</th><th>MAT</th><th>TPS</th><th>相对 DDTree</th></tr></thead>
+    <tbody>
+      <tr><td>DDTree</td><td>110.2</td><td>7.53</td><td>220.6</td><td>—</td></tr>
+      <tr><td>+ TDES（沿用 DDTree 固定预算）</td><td>110.2</td><td>8.00</td><td>233.3</td><td class="gain">+5.7%</td></tr>
+      <tr><td>+ SABA（沿用 DDTree 边打分）</td><td>49.1</td><td>7.18</td><td>248.8</td><td class="gain">+12.8%</td></tr>
+      <tr class="best"><td><strong>GRAFT（两者）</strong></td><td>48.9</td><td>7.62</td><td><strong>263.5</strong></td><td class="gain"><strong>+19.4%</strong></td></tr>
+    </tbody>
+  </table>
+  <p>这张表是全文信息量最大的一处，三行读出三件事：</p>
+  <ul>
+    <li><strong>TDES 提升的是树的质量，不是尺寸</strong>：节点数一个不变（110.2），MAT 从 7.53 涨到 8.00。同样大小的树，边连对了就多接受半个 token。</li>
+    <li><strong>SABA 单独上，MAT 反而掉了</strong>（7.53 → 7.18），树砍掉一半多（110.2 → 49.1），吞吐却涨 12.8%。这等于直接量出了固定预算的浪费程度：<strong>一半以上的节点对吞吐没有贡献</strong>。</li>
+    <li><strong>两者叠加不是简单相加</strong>（5.7% + 12.8% ≠ 19.4%，实际略超）。原因是在 SABA 砍小后的预算下，TDES 把 MAT 从 7.18 又拉回 7.62——树越小，每条边选得对不对就越关键。这是一种真实的互补：SABA 制造了让 TDES 更值钱的条件。</li>
+  </ul>
+  <h3>$\beta$ 的敏感性：为什么「错配降得更多」反而更慢</h3>
+  <p>GSM8K，同一套 SABA 控制器，错配下降率相对 $\beta = 0$ 计算：</p>
+  <table>
+    <thead><tr><th>$\beta$</th><th>MAT</th><th>TPS</th><th>错配下降</th></tr></thead>
+    <tbody>
+      <tr><td>0（即 DDTree 边打分 + SABA）</td><td>7.635</td><td>260.19</td><td>0.00%</td></tr>
+      <tr><td>0.05</td><td>7.850</td><td>262.82</td><td>22.14%</td></tr>
+      <tr><td>0.1</td><td>7.968</td><td>267.01</td><td>33.21%</td></tr>
+      <tr class="best"><td><strong>0.2（默认）</strong></td><td><strong>8.061</strong></td><td><strong>276.17</strong></td><td>54.71%</td></tr>
+      <tr><td>0.4</td><td class="loss">7.351</td><td class="loss">247.60</td><td>79.32%</td></tr>
+    </tbody>
+  </table>
+  <p>$\beta = 0.4$ 这一行很有意思：错配下降率做到了 79.32%，是全表最好，但 MAT 和吞吐<strong>双双跌破 $\beta = 0$ 的水平</strong>。解释是残差项一旦盖过边缘概率，建树器就会去追那些「兼容度高」的边，而放掉那些边缘概率高、真正可能覆盖目标序列的路径。<strong>错配率是诊断量，不是目标函数</strong>——把诊断量优化到极致会伤害真正的目标，这是很容易犯的错。</p>
+  <h3>打分器学到的是通用偏好还是数据集捷径</h3>
+  <p>论文用一个干净的实验回答：只用 GSM8K 轨迹训练打分器，去测 MBPP、SWE-bench、Alpaca 三个不同类别的任务（两个变体都开 SABA）。结果三个任务上错配都下降、归一化吞吐都提升——只训 GSM8K 的版本在 MBPP 上错配下降约 37.5%（完整版约 56%），SWE-bench 约 32.5% 对 41.5%，Alpaca 上约 30.5% 甚至<em>超过</em>完整版的 24.5%。说明 $f_\theta$ 学到的父子兼容度有相当的跨任务可迁移性，而不是记住了某个数据集的表面模式。</p>
+  <div class="anim-frame" id="anim6">
+    <div class="anim-header">
+      <span class="anim-title">动画 6：逐个加上组件——节点数、MAT 与吞吐的三方权衡</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg6" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="组件消融的柱状图动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">DDTree 基线</button><button class="stage-chip" data-step="1">+ TDES</button><button class="stage-chip" data-step="2">+ SABA</button><button class="stage-chip" data-step="3">GRAFT</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-blue)"></span> 平均节点数</span>
+      <span><span class="dot" style="background:var(--a-purple)"></span> MAT</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> TPS</span>
+    </div>
+  </div>
+</section>
+<section id="limit">
+  <h2>局限与在图谱里的位置</h2>
+  <h3>作者自己承认的</h3>
+  <p>结论里点出的唯一局限是：GRAFT 每轮仍然<strong>串行</strong>执行草稿 → 建树 → 目标验证三段，由此产生的<strong>流水线气泡</strong>没有处理，留给并发投机解码的后续工作。消融里还提到一处：AIME 上的泛化证据「仍然有限」，因为 AIME 与训练数据同属数学推理类别——这也正是他们补做只训 GSM8K 那个实验的动机。</p>
+  <h3>几处论文没说、但读的时候该记住的</h3>
+  <ul>
+    <li><strong>全部实验都是 batch size 1、单卡 A100。</strong>投机解码的收益随 batch 增大迅速衰减（算力开始成为瓶颈，多余的树节点不再「免费」）。SABA 的代价模型里没有 batch 项，服务化场景下需要重新拟合甚至重新建模。</li>
+    <li><strong>$G_t$、$C_t$ 的参数在留出集上拟合后冻结。</strong>换硬件、换序列长度分布、换 batch 配置都可能让这组参数失配，而失配时 SABA 会静默地选错预算。</li>
+    <li><strong>$E$、$m$、总参数量、$\gamma$、$w_1$、$w$ 都没给。</strong>想复现的话这几个数得自己试。</li>
+    <li><strong>没有理论保证。</strong>包括「加了 TDES 残差后是否仍保持目标分布无偏」这类问题，论文在贪心记号下讨论，未涉及采样下的分布保真度。</li>
+  </ul>
+  <h3>相邻工作</h3>
+  <p>草稿模型这条轴上，无模型的一类靠 n-gram / 后缀结构（Lookahead、REST、SuffixDecoding），有模型的一类里 Medusa 给目标模型挂轻量解码头、EAGLE-3 从目标模型特征起草，DLM 草稿是最新的分支，DFlash 是其中的 SOTA。建树这条轴上，自回归 drafter 下已有一大批按置信度与成本调形状的方法（SpecInfer、OPT-Tree、TALON 按置信度在深与宽之间分预算、CAST 把 GPU 型号和 batch size 这类推理成本因素建进树结构）；而在 DLM 草稿这边此前只有 DDTree 一个。GRAFT 声称的新意就是两点：让 DLM 建树的<strong>选边变成父节点条件的</strong>，让<strong>预算变成每轮自适应的</strong>。</p>
+  <p class="note-inline">论文全文没有引用或讨论 Sequoia。</p>
+</section>
+
+<section id="summary">
+  <h2>总结</h2>
+  <p>GRAFT 解决的是一个由新硬件条件催生的具体问题：当草稿模型从「一次给一个 token」变成「一次给所有位置的边缘分布」，建树的自由度和约束都变了，而第一代方案（DDTree）只是把旧的贪心搬了过来。GRAFT 补的两块都不复杂，但都补在了要害上。</p>
+  <ul>
+    <li><strong>TDES</strong>：边缘分布天生缺少父子关系的信息，那就从目标模型的轨迹里蒸馏一个极廉价的双塔打分器补回来，以兄弟中心化的残差形式叠在对数概率上。同样大小的树，MAT 从 7.53 到 8.00。</li>
+    <li><strong>SABA</strong>：固定预算既浪费又不够，那就把每轮的预算变成一个「收益/代价」比值的网格搜索。树砍掉一半以上，吞吐反涨 12.8%，并保住 oracle 的 94.1%。</li>
+    <li>两者合起来相对 DDTree 吞吐 +19.4%，相对自回归 2.13×–6.36×，代价是每轮 &lt; 0.5 ms（约验证时延的 1.4%）。</li>
+  </ul>
+  <div class="callout callout-purple">
+    <strong>如果只带走一句话：</strong>这篇论文最有教育意义的地方不是两个方法本身，而是它两次把「看起来该优化的量」和「真正要优化的量」分开——MAT 不是目标（SABA 敢牺牲 MAT 换吞吐），错配率也不是目标（$\beta = 0.4$ 错配降最多却最慢）。中间指标做到极致往往正是性能变差的原因。
+  </div>
+  <p class="note-inline">原文：<a href="https://arxiv.org/abs/2608.20375">arXiv:2608.20375</a>，Xuming Ye 等，2026 年 6 月 24 日提交，cs.CL。本文的公式与数值均取自 v1。</p>
+</section>
+
+</div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function AnimEngine(svg, opts) {
+    this.svg = svg;
+    this.svgId = svg.id;
+    this.steps = opts.steps || [];
+    this.idx = -1;
+    this.currentStep = -1;
+    this.timer = null;
+    this.speed = 1;
+    this.layer = null;
+    this._initDefs();
+  }
+
+  AnimEngine.prototype._initDefs = function () {
+    var ns = SVG_NS;
+    var defs = document.createElementNS(ns, "defs");
+    var uid = this.svgId + "-";
+
+    function marker(id, color, orient) {
+      var m = document.createElementNS(ns, "marker");
+      m.setAttribute("id", id);
+      m.setAttribute("viewBox", "0 0 10 10");
+      m.setAttribute("refX", "8");
+      m.setAttribute("refY", "5");
+      m.setAttribute("markerWidth", "7");
+      m.setAttribute("markerHeight", "7");
+      m.setAttribute("orient", orient || "auto");
+      var p = document.createElementNS(ns, "path");
+      p.setAttribute("d", "M0,0 L10,5 L0,10 Z");
+      p.setAttribute("fill", color);
+      m.appendChild(p);
+      return m;
+    }
+    defs.appendChild(marker(uid + "arr", aC('--a-accent', '#FF7A00'), "auto"));
+    defs.appendChild(marker(uid + "arrG", aC('--a-green', '#4CC98A'), "auto"));
+    defs.appendChild(marker(uid + "arrR", aC('--a-red', '#FF7268'), "auto"));
+    defs.appendChild(marker(uid + "arrB", aC('--a-blue', '#74B4FF'), "auto"));
+    defs.appendChild(marker(uid + "arrO", aC('--a-amber', '#E9B449'), "auto"));
+    defs.appendChild(marker(uid + "arrP", aC('--a-purple', '#B79BFF'), "auto"));
+    defs.appendChild(marker(uid + "arrM", aC('--a-fg-muted', '#808A9E'), "auto"));
+    this.svg.appendChild(defs);
+  };
+
+  AnimEngine.prototype._initLayer = function () {
+    this.layer = document.createElementNS(SVG_NS, "g");
+    this.layer.setAttribute("class", "anim-layer");
+    this.svg.appendChild(this.layer);
+  };
+  AnimEngine.prototype.clear = function () {
+    while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild);
+  };
+
+  AnimEngine.prototype.draw = function (tag, attrs, text) {
+    var el = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (var k in attrs) {
+      if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]);
+    }
+    if (text !== null && text !== undefined && text !== "") el.textContent = text;
+    this.layer.appendChild(el);
+    return el;
+  };
+
+  AnimEngine.prototype.t = function (x, y, str, opts) {
+    opts = opts || {};
+    var lines = String(str).split("\n");
+    var el = this.draw("text", Object.assign({
+      x: x, y: y,
+      "text-anchor": opts.ta || "middle",
+      "font-size": opts.fs || 12,
+      fill: opts.fill || aC('--a-fg', '#E7ECF3'),
+      "font-family": opts.ff || "inherit",
+      "font-weight": opts.fw || "normal"
+    }, opts.attrs || {}), null);
+    if (lines.length === 1) {
+      el.textContent = str;
+    } else {
+      var fs = opts.fs || 12;
+      lines.forEach(function (line, i) {
+        var ts = document.createElementNS(SVG_NS, "tspan");
+        ts.setAttribute("x", x);
+        ts.setAttribute("dy", i === 0 ? 0 : fs * 1.2);
+        ts.textContent = line;
+        el.appendChild(ts);
+      });
+    }
+    return el;
+  };
+
+  AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, opts) {
+    opts = opts || {};
+    var r = this.draw("rect", {
+      x: x, y: y, width: w, height: h,
+      fill: fill || aC('--a-surface', '#131A24'), stroke: stroke || aC('--a-line', '#1E2733'),
+      "stroke-width": opts.sw || 1.5, rx: opts.rx || 4
+    }, null);
+    if (label) {
+      this.t(x + w / 2, y + h / 2 + (opts.labelDy || 4), label, {
+        fs: opts.fs || 11, fill: opts.labelFill || aC('--a-on-solid', '#14100B'), fw: opts.fw || "600",
+        ta: "middle"
+      });
+    }
+    return r;
+  };
+  AnimEngine.prototype.circle = function (cx, cy, r, label, fill, stroke, opts) {
+    opts = opts || {};
+    var c = this.draw("circle", {
+      cx: cx, cy: cy, r: r,
+      fill: fill || aC('--a-surface', '#131A24'), stroke: stroke || aC('--a-line', '#1E2733'),
+      "stroke-width": opts.sw || 1.5,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+    if (label) {
+      this.t(cx, cy + (opts.labelDy || 4), label, {
+        fs: opts.fs || 11, fill: opts.labelFill || aC('--a-fg-strong', '#FFFFFF'), fw: opts.fw || "600"
+      });
+    }
+    return c;
+  };
+
+  AnimEngine.prototype.arrow = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    var mid = opts.curve ? " Q " + opts.cx + "," + opts.cy + " " : "";
+    var d = "M" + x1 + "," + y1 + mid + " L" + x2 + "," + y2;
+    var markerId = "url(#" + this.svgId + "-" + (opts.marker || "arr") + ")";
+    this.draw("path", {
+      d: d, fill: "none", stroke: color || aC('--a-accent', '#FF7A00'),
+      "stroke-width": opts.sw || 2, "marker-end": markerId,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.line = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    this.draw("line", {
+      x1: x1, y1: y1, x2: x2, y2: y2,
+      stroke: color || aC('--a-line', '#1E2733'), "stroke-width": opts.sw || 1,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.poly = function (pts, color, opts) {
+    opts = opts || {};
+    var d = pts.map(function (p, i) { return (i === 0 ? "M" : "L") + p[0] + "," + p[1]; }).join(" ");
+    this.draw("path", {
+      d: d, fill: "none", stroke: color, "stroke-width": opts.sw || 2,
+      "stroke-dasharray": opts.dash || "none", "stroke-linejoin": "round"
+    }, null);
+  };
+
+  AnimEngine.prototype.delay = function () { return 1100 / this.speed; };
+  AnimEngine.prototype.goTo = function (i) {
+    if (i < 0 || i >= this.steps.length) return;
+    var prev = this.currentStep;
+    var direction = i >= prev ? 1 : -1;
+    var step = this.steps[i];
+    this._render2(step, i, direction);
+    if (window.MathJax && window.__mathReady && step.desc) {
+      var descEl = this.svg.parentNode.parentNode.querySelector(".step-desc");
+      if (descEl) {
+        try { MathJax.typesetPromise([descEl]); } catch (e) {}
+      }
+    }
+  };
+
+  AnimEngine.prototype._render2 = function (step, index, direction) {
+    var oldLayer = this.layer || null;
+    var nextLayer = document.createElementNS(SVG_NS, "g");
+    nextLayer.setAttribute("class", "anim-layer scene-layer");
+    this.svg.appendChild(nextLayer);
+    this.layer = nextLayer;
+    this.idx = index;
+    step.render(this);
+    this._applyReveal(nextLayer);
+    this.currentStep = index;
+    this._updateUI(step, index);
+    if (oldLayer && !this._reducedMotion()) {
+      nextLayer.classList.add("scene-enter", direction > 0 ? "from-right" : "from-left");
+      oldLayer.classList.add("scene-exit", direction > 0 ? "to-left" : "to-right");
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          nextLayer.classList.add("scene-active");
+          oldLayer.classList.add("scene-exit-active");
+        });
+      });
+      setTimeout(function () {
+        if (oldLayer.parentNode) oldLayer.parentNode.removeChild(oldLayer);
+        nextLayer.classList.remove("scene-enter", "from-right", "from-left");
+      }, 520);
+    } else {
+      if (oldLayer) oldLayer.parentNode.removeChild(oldLayer);
+    }
+  };
+
+  AnimEngine.prototype._reducedMotion = function () {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  };
+  AnimEngine.prototype._applyReveal = function (layer) {
+    if (this._reducedMotion()) return;
+    var els = layer.querySelectorAll("rect, text, circle, path");
+    var delay = 60;
+    for (var i = 0; i < els.length; i++) {
+      els[i].style.setProperty("--delay", delay + "ms");
+      els[i].classList.add("reveal");
+      delay += 40;
+      if (delay > 650) delay = 60;
+    }
+  };
+
+  AnimEngine.prototype._updateUI = function (step, i) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var info = frame.querySelector(".step-info");
+    var desc = frame.querySelector(".step-desc");
+    if (info) info.textContent = "步骤 " + (i + 1) + " / " + this.steps.length;
+    if (desc) desc.innerHTML = step.desc || step.title || "";
+    var prev = frame.querySelector(".btn-prev");
+    var next = frame.querySelector(".btn-next");
+    if (prev) prev.disabled = (i === 0);
+    if (next) next.disabled = (i === this.steps.length - 1);
+    var bar = frame.querySelector(".anim-progress .bar");
+    if (bar) bar.style.width = ((i + 1) / this.steps.length * 100) + "%";
+    var chips = frame.querySelectorAll(".stage-chip");
+    for (var c = 0; c < chips.length; c++) {
+      chips[c].classList.toggle("done", c < i);
+      chips[c].classList.toggle("active", c === i);
+    }
+  };
+
+  AnimEngine.prototype.next = function () { if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1); };
+  AnimEngine.prototype.prev = function () { if (this.currentStep > 0) this.goTo(this.currentStep - 1); };
+  AnimEngine.prototype.reset = function () { this.pause(); this._setPlayBtn(false); this.goTo(0); };
+  AnimEngine.prototype.play = function () {
+    if (this.timer) return;
+    this._advance();
+  };
+  AnimEngine.prototype._advance = function () {
+    var self = this;
+    if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
+    this.timer = setTimeout(function () {
+      self.timer = null;
+      self.next();
+      self._advance();
+    }, this.delay());
+  };
+  AnimEngine.prototype.pause = function () {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  };
+  AnimEngine.prototype._setPlayBtn = function (playing) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var btn = frame.querySelector(".btn-play");
+    if (btn) btn.textContent = playing ? "⏸ 暂停" : "▶ 播放";
+  };
+  AnimEngine.prototype.toggle = function () {
+    if (this.timer) { this.pause(); this._setPlayBtn(false); return; }
+    if (this.currentStep >= this.steps.length - 1) this.goTo(0);
+    this._setPlayBtn(true);
+    this.play();
+  };
+  AnimEngine.prototype.setSpeed = function (v) {
+    this.speed = v;
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var lab = frame.querySelector(".speed-label");
+    if (lab) lab.textContent = v.toFixed(1) + "×";
+  };
+
+  /* ---------- 调色板 ---------- */
+  function P() {
+    return {
+      accent: aC('--a-accent', '#FF7A00'),
+      accentSoft: aC('--a-accent-line', 'rgba(255,122,0,.4)'),
+      accentBg: aC('--a-accent-bg', 'rgba(255,122,0,.12)'),
+      green: aC('--a-green', '#4CC98A'),
+      greenBg: aC('--a-green-bg', 'rgba(76,201,138,.12)'),
+      red: aC('--a-red', '#FF7268'),
+      redBg: aC('--a-red-bg', 'rgba(255,114,104,.12)'),
+      blue: aC('--a-blue', '#74B4FF'),
+      blueBg: aC('--a-blue-bg', 'rgba(116,180,255,.12)'),
+      amber: aC('--a-amber', '#E9B449'),
+      amberBg: aC('--a-amber-bg', 'rgba(233,180,73,.12)'),
+      teal: aC('--a-teal', '#54C7C3'),
+      tealBg: aC('--a-teal-bg', 'rgba(84,199,195,.12)'),
+      purple: aC('--a-purple', '#B79BFF'),
+      purpleBg: aC('--a-purple-bg', 'rgba(183,155,255,.12)'),
+      fg: aC('--a-fg', '#E7ECF3'),
+      fgStrong: aC('--a-fg-strong', '#FFFFFF'),
+      soft: aC('--a-fg', '#E7ECF3'),
+      muted: aC('--a-fg-muted', '#808A9E'),
+      line: aC('--a-line', '#1E2733'),
+      surface: aC('--a-surface', '#131A24'),
+      onSolid: aC('--a-on-solid', '#14100B')
+    };
+  }
+
+  function sceneHeader(e, c, title, sub) {
+    e.t(20, 26, title, { ta: "start", fs: 14, fw: "700", fill: c.fgStrong });
+    if (sub) e.t(20, 46, sub, { ta: "start", fs: 11.5, fill: c.muted });
+  }
+
+  /* ================= 动画 1：自回归 → 链式 → 树形 ================= */
+  var scene1 = [
+    {
+      desc: "自回归解码：生成 5 个 token 就要 5 次完整前向，每次都把整个模型的权重读一遍。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "自回归解码：每个 token 一次完整前向", "权重反复搬进片上，算力闲置——延迟由内存带宽决定，不由 FLOPs 决定");
+        var xs = [110, 232, 354, 476, 598];
+        var labels = ["The", "cat", "sat", "on", "the"];
+        for (var i = 0; i < 5; i++) {
+          e.rect(xs[i], 150, 88, 40, labels[i], c.blueBg, c.blue, { labelFill: c.fg });
+          e.t(xs[i] + 44, 212, "前向 #" + (i + 1), { fs: 10.5, fill: c.muted });
+          if (i < 4) e.arrow(xs[i] + 88, 170, xs[i + 1] - 4, 170, c.accent);
+        }
+        e.t(410, 286, "5 个 token = 5 次前向；每次前向的批内只有 1 个位置在算。", { fs: 12.5, fill: c.soft });
+        e.t(410, 312, "算术强度极低 → GPU 在等内存，不在算。这就是投机解码的全部动机。", { fs: 12.5, fill: c.red });
+      }
+    },
+    {
+      desc: "链式草稿：一次验证一条路径。第一个猜错的位置就是终点，后面全部作废。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "链式投机：小模型猜 5 个，大模型一次验证", "接受长度 = 首次不匹配之前的长度；一处猜错，后面全废");
+        var xs = [110, 232, 354, 476, 598];
+        var draft = ["cat", "sat", "under", "a", "tree"];
+        var truth = ["cat", "sat", "on", "—", "—"];
+        var ok = [1, 1, 0, 0, 0];
+        e.t(60, 128, "草稿", { ta: "start", fs: 11.5, fill: c.muted });
+        e.t(60, 238, "目标", { ta: "start", fs: 11.5, fill: c.muted });
+        for (var i = 0; i < 5; i++) {
+          var col = ok[i] ? c.green : c.red;
+          var bg = ok[i] ? c.greenBg : c.redBg;
+          if (i > 2) { col = c.muted; bg = "none"; }
+          e.rect(xs[i], 110, 88, 38, draft[i], bg, col, { labelFill: c.fg });
+          e.rect(xs[i], 220, 88, 38, truth[i], ok[i] ? c.greenBg : "none", ok[i] ? c.green : c.line, { labelFill: ok[i] ? c.fg : c.muted });
+          e.arrow(xs[i] + 44, 152, xs[i] + 44, 216, ok[i] ? c.green : (i === 2 ? c.red : c.muted), { marker: ok[i] ? "arrG" : (i === 2 ? "arrR" : "arrM"), dash: i > 2 ? "4 3" : "none" });
+        }
+        e.t(410, 300, "接受长度 = 2。第 3 位一错，第 4、5 位就算猜对也没意义（前缀已断）。", { fs: 12.5, fill: c.soft });
+        e.t(410, 326, "验证的算力是免费的余量，却只用来检查一条路径——浪费。", { fs: 12.5, fill: c.amber });
+      }
+    },
+    {
+      desc: "树形草稿：同一位置放多个候选，用 tree-attention mask 一次前向验证所有路径，接受最长的被认可路径。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "树形投机：一次前向验证多条路径", "前缀闭合的树 + tree-attention mask：每个节点只能看见自己的祖先");
+        var N = [
+          { x: 70, y: 190, l: "cat", s: 1 },
+          { x: 200, y: 120, l: "sat", s: 1 }, { x: 200, y: 190, l: "was", s: 0 }, { x: 200, y: 262, l: "ran", s: 2 },
+          { x: 330, y: 86, l: "on", s: 1 }, { x: 330, y: 154, l: "under", s: 0 },
+          { x: 330, y: 226, l: "sleeping", s: 0 },
+          { x: 462, y: 86, l: "the", s: 1 }, { x: 462, y: 154, l: "a", s: 0 }
+        ];
+        var E = [[0, 1], [0, 2], [0, 3], [1, 4], [1, 5], [2, 6], [4, 7], [5, 8]];
+        var W = 84, H = 32;
+        E.forEach(function (p) {
+          var a = N[p[0]], b = N[p[1]];
+          var acc = a.s === 1 && b.s === 1;
+          e.arrow(a.x + W, a.y + H / 2, b.x - 3, b.y + H / 2, acc ? c.green : c.line,
+            { marker: acc ? "arrG" : "arrM", sw: acc ? 2.4 : 1.4 });
+        });
+        N.forEach(function (n) {
+          var col = n.s === 1 ? c.green : (n.s === 2 ? c.red : c.blue);
+          var bg = n.s === 1 ? c.greenBg : (n.s === 2 ? c.redBg : c.blueBg);
+          e.rect(n.x, n.y, W, H, n.l, bg, col, { labelFill: c.fg, fs: 10.5 });
+        });
+        e.t(600, 120, "接受路径", { ta: "start", fs: 12, fw: "700", fill: c.green });
+        e.t(600, 142, "cat → sat → on → the", { ta: "start", fs: 11.5, fill: c.soft });
+        e.t(600, 172, "接受长度 = 4", { ta: "start", fs: 12, fw: "700", fill: c.green });
+        e.t(600, 206, "同一次前向里，", { ta: "start", fs: 11.5, fill: c.muted });
+        e.t(600, 224, "9 个节点都被检查了。", { ta: "start", fs: 11.5, fill: c.muted });
+        e.t(410, 340, "树越大 → 命中长路径的概率越高 → MAT 越高；但节点数也是验证代价。", { fs: 12.5, fill: c.soft });
+      }
+    },
+    {
+      desc: "自回归 drafter 的建树方式：把选中叶子的整条路径回喂草稿模型，再前向一次，得到「在这条路径之后」的分布。两种操作是加宽和加深。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "父路径条件展开：EAGLE / SpecInfer / OPT-Tree 的共同框架", "每次扩展都要拿「整条路径」再跑一次 drafter —— 这是关键前提");
+        var W = 84, H = 32;
+        e.rect(70, 190, W, H, "cat", c.blueBg, c.blue, { labelFill: c.fg, fs: 10.5 });
+        e.rect(200, 150, W, H, "sat", c.accentBg, c.accent, { labelFill: c.fg, fs: 10.5 });
+        e.arrow(154, 206, 197, 166, c.line, { marker: "arrM", sw: 1.4 });
+        e.rect(330, 110, W, H, "on", c.accentBg, c.accent, { labelFill: c.fg, fs: 10.5 });
+        e.arrow(284, 166, 327, 126, c.accent, { sw: 2.2 });
+        e.t(300, 250, "① 选中叶子 → 整条路径 [cat, sat] 回喂 drafter → 前向一次", { ta: "start", fs: 12, fill: c.soft });
+        e.t(300, 274, "② 拿到条件分布 p(· | cat, sat)，从里面挑候选", { ta: "start", fs: 12, fill: c.soft });
+        e.rect(470, 90, 120, 30, "加深 deepen", c.greenBg, c.green, { labelFill: c.fg, fs: 10.5 });
+        e.rect(470, 132, 120, 30, "加宽 widen", c.blueBg, c.blue, { labelFill: c.fg, fs: 10.5 });
+        e.t(410, 336, "整个框架建立在「drafter 可以按需重跑任意路径」这一假设上。", { fs: 12.5, fill: c.amber });
+      }
+    }
+  ];
+
+  /* ================= 动画 2：DFlash 的冲突与 DDTree 的绕法 ================= */
+  var scene2 = [
+    {
+      desc: "自回归 drafter 可以按需重跑：换一条父路径，就重新前向一次，拿到真正的条件分布。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "自回归 drafter：任意父路径都能重跑", "想知道 p(· | 路径)，就把路径喂进去再前向一次");
+        e.rect(70, 120, 190, 40, "路径 A = [cat, sat]", c.blueBg, c.blue, { labelFill: c.fg, fs: 11 });
+        e.rect(70, 220, 190, 40, "路径 B = [cat, was]", c.blueBg, c.blue, { labelFill: c.fg, fs: 11 });
+        e.rect(370, 120, 200, 40, "drafter 前向（第 1 次）", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        e.rect(370, 220, 200, 40, "drafter 前向（第 2 次）", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        e.arrow(260, 140, 366, 140, c.accent);
+        e.arrow(260, 240, 366, 240, c.accent);
+        e.t(590, 136, "p(· | cat, sat)", { ta: "start", fs: 12, fill: c.green, fw: "600" });
+        e.t(590, 158, "真·条件分布", { ta: "start", fs: 10.5, fill: c.muted });
+        e.t(590, 236, "p(· | cat, was)", { ta: "start", fs: 12, fill: c.green, fw: "600" });
+        e.t(590, 258, "真·条件分布", { ta: "start", fs: 10.5, fill: c.muted });
+        e.t(410, 330, "代价是多次前向，但换来的是「这个孩子在这个父亲之后有多可能」的准确答案。", { fs: 12.5, fill: c.soft });
+      }
+    },
+    {
+      desc: "DFlash 一次前向就吐出深度 1…D 的全部分布，但它们是边缘分布——深度 d 的分布不知道深度 d−1 最终落哪个 token。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "DFlash：一次前向输出 D 个位置的分布", "极快，但输出是每个深度独立的边缘分布 q(t,d)(·)");
+        e.rect(50, 150, 150, 100, null, c.tealBg, c.teal, {});
+        e.t(125, 190, "前缀 x(t)", { fs: 11.5, fill: c.fg });
+        e.t(125, 212, "+ 目标模型状态", { fs: 11.5, fill: c.amber });
+        e.rect(250, 170, 130, 60, "DFlash 一次前向", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        e.arrow(200, 200, 246, 200, c.accent);
+        var ys = [96, 152, 208, 264];
+        var lbl = ["q(t,1)", "q(t,2)", "q(t,3)", "q(t,D)"];
+        for (var i = 0; i < 4; i++) {
+          e.arrow(380, 200, 446, ys[i] + 18, c.blue, { marker: "arrB", sw: 1.6 });
+          e.rect(450, ys[i], 96, 36, lbl[i], c.blueBg, c.blue, { labelFill: c.fg, fs: 10.5 });
+          var tops = ["on / under / in", "the / a / my", "mat / tree / bed", "…"];
+          e.t(560, ys[i] + 22, tops[i], { ta: "start", fs: 11, fill: c.soft });
+        }
+        e.t(410, 340, "深度 3 的分布不知道深度 2 上最终会落 the 还是 a —— 这就是「边缘」的含义。", { fs: 12.5, fill: c.amber });
+      }
+    },
+    {
+      desc: "死结：要为一条假想父路径重跑 DFlash，就需要那条路径对应的目标模型状态，而它在验证之前并不存在。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "冲突：假想路径没有目标模型状态", "DFlash 的前向条件里含有当前目标模型的状态，而假想路径的状态还不存在");
+        e.rect(60, 130, 200, 44, "假想父路径 [cat, was]", c.blueBg, c.blue, { labelFill: c.fg, fs: 11 });
+        e.rect(60, 226, 200, 44, "需要：该路径的目标状态", c.redBg, c.red, { labelFill: c.fg, fs: 11 });
+        e.arrow(160, 176, 160, 222, c.red, { marker: "arrR" });
+        e.rect(350, 178, 180, 44, "重跑 DFlash", "none", c.red, { labelFill: c.red, fs: 11, dash: "5 4" });
+        e.arrow(260, 200, 346, 200, c.red, { marker: "arrR", dash: "5 4" });
+        e.line(368, 176, 512, 224, c.red, { sw: 2.6 });
+        e.line(512, 176, 368, 224, c.red, { sw: 2.6 });
+        e.t(560, 178, "状态只有在目标模型", { ta: "start", fs: 11.5, fill: c.muted });
+        e.t(560, 198, "验证过那条路径之后", { ta: "start", fs: 11.5, fill: c.muted });
+        e.t(560, 218, "才存在 —— 循环依赖。", { ta: "start", fs: 11.5, fill: c.red });
+        e.t(410, 320, "结论：不能为每个候选父节点重跑草稿模型。手上只有一组与父无关的边缘分布。", { fs: 12.5, fill: c.soft });
+        e.t(410, 348, "建树问题于是从「怎么展开」变成「怎么在给定候选节点之间连边」。", { fs: 12.5, fill: c.accent, fw: "600" });
+      }
+    },
+    {
+      desc: "DDTree 的绕法：把每个深度的高概率 token 当候选节点，用最大堆反复弹出分数最高的前缀连边，凑够预算 B。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "DDTree：候选节点固定，用最大堆贪心连边", "路径分数 = 各深度 log q 之和；弹出堆顶加入树，压回兄弟与孩子");
+        var cols = [80, 220, 360];
+        var cand = [["sat", "was", "ran"], ["on", "under", "in"], ["the", "a", "my"]];
+        var st = [[2, 2, 0], [2, 1, 0], [1, 0, 0]];
+        for (var d = 0; d < 3; d++) {
+          e.t(cols[d] + 48, 96, "深度 " + (d + 1), { fs: 11, fill: c.muted });
+          for (var r = 0; r < 3; r++) {
+            var s = st[d][r];
+            var col = s === 2 ? c.green : (s === 1 ? c.accent : c.blue);
+            var bg = s === 2 ? c.greenBg : (s === 1 ? c.accentBg : c.blueBg);
+            e.rect(cols[d], 112 + r * 48, 96, 36, cand[d][r], bg, col, { labelFill: c.fg, fs: 10.5 });
+          }
+        }
+        e.arrow(176, 130, 216, 130, c.green, { marker: "arrG", sw: 2.2 });
+        e.arrow(176, 178, 216, 178, c.green, { marker: "arrG", sw: 2.2 });
+        e.arrow(316, 130, 356, 130, c.green, { marker: "arrG", sw: 2.2 });
+        e.rect(520, 100, 230, 150, null, c.surface, c.line, {});
+        e.t(635, 124, "最大堆", { fs: 12, fw: "700", fill: c.accent });
+        e.t(635, 150, "堆顶：[sat, on]  −0.41", { fs: 11, fill: c.accent });
+        e.t(635, 174, "[sat, under]  −1.02", { fs: 11, fill: c.soft });
+        e.t(635, 198, "[was, in]     −1.87", { fs: 11, fill: c.soft });
+        e.t(635, 228, "弹出 → 加入树 → 压回", { fs: 10.5, fill: c.muted });
+        e.t(410, 300, "把 token c 接到深度 d，贡献恒为 log q(t,d)(c) —— 和父节点是谁完全无关。", { fs: 12.5, fill: c.soft });
+        e.t(410, 328, "这就是「父节点无感」的边打分，也是 GRAFT 要修的第一处。", { fs: 12.5, fill: c.red, fw: "600" });
+      }
+    }
+  ];
+
+  /* ================= 动画 3：父子错配与 TDES 修正 ================= */
+  var scene3 = [
+    {
+      desc: "同一个 token 接到深度 d 上，DDTree 给的分数完全一样，不管父节点是谁。两个父节点下的孩子排序因此被迫相同。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "DDTree：边分只看深度，不看父节点", "log q(t,2)(c) 对任意父节点都是同一个数 —— 排序被迫一致");
+        var kids = ["there", "48", "the"];
+        var sc = ["−0.35", "−0.62", "−0.88"];
+        function block(x, parent, pc) {
+          e.rect(x, 110, 130, 38, parent, c.accentBg, pc, { labelFill: c.fg, fs: 11 });
+          for (var i = 0; i < 3; i++) {
+            e.arrow(x + 65, 148, x + 65, 176 + i * 52 - 4, c.line, { marker: "arrM", sw: 1.3 });
+            e.rect(x, 176 + i * 52, 130, 38, kids[i] + "   " + sc[i], c.blueBg, c.blue, { labelFill: c.fg, fs: 10.5 });
+          }
+        }
+        block(90, "父 = “So”", c.accent);
+        block(520, "父 = “Janet has”", c.accent);
+        e.t(410, 200, "排序", { fs: 11.5, fill: c.muted });
+        e.t(410, 222, "完全", { fs: 11.5, fill: c.muted });
+        e.t(410, 244, "相同", { fs: 11.5, fill: c.red, fw: "700" });
+        e.t(410, 290, "≡", { fs: 26, fill: c.red });
+        e.t(410, 380, "可是「So there」与「Janet has 48」的合理程度天差地别。信息被丢了。", { fs: 12.5, fill: c.soft });
+      }
+    },
+    {
+      desc: "后果（论文图 1a 左）：目标模型要的 token 确实在树里，却挂在错误的父节点下。树里有这个 token，但没有那条路径 —— 接受长度掉到 1。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "父子错配：token 在树里，路径不在树里", "DDTree, Fix Budget = 128（实测平均 110.2 节点）");
+        e.rect(60, 180, 110, 38, "Bonus", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        e.rect(210, 180, 110, 38, "Janet", c.greenBg, c.green, { labelFill: c.fg, fs: 11 });
+        e.arrow(170, 199, 206, 199, c.green, { marker: "arrG", sw: 2.2 });
+        var wrong = [["sells", 120], ["eats", 180], ["bakes", 240]];
+        wrong.forEach(function (w) {
+          e.arrow(320, 199, 356, w[1] + 19, c.muted, { marker: "arrM", sw: 1.3 });
+          e.rect(360, w[1], 120, 38, w[0], "none", c.line, { labelFill: c.muted, fs: 10.5 });
+        });
+        e.rect(360, 300, 120, 38, "has", c.redBg, c.red, { labelFill: c.fg, fs: 10.5 });
+        e.arrow(420, 278, 420, 296, c.muted, { marker: "arrM", sw: 1.3 });
+        e.t(500, 316, "← 目标模型要的是 “has”", { ta: "start", fs: 11.5, fill: c.red });
+        e.t(500, 338, "它在树里，但挂在别的父亲下面", { ta: "start", fs: 11, fill: c.muted });
+        e.t(410, 386, "接受长度 = 1。GSM8K 上这类错配约占 45%。", { fs: 13, fill: c.red, fw: "700" });
+      }
+    },
+    {
+      desc: "TDES 在同一父节点的兄弟集合内中心化：减掉父节点自身的偏置，留下的是「哪个孩子更配这个父亲」的相对偏好。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "TDES：兄弟中心化残差", "S = log q + β·(f − 兄弟均值)，β = 0.2");
+        e.rect(60, 96, 150, 34, "父 = “Janet”", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        var rows = [
+          ["has", "−0.88", "+1.90", "+0.93", "−0.69"],
+          ["sells", "−0.35", "+0.71", "−0.26", "−0.40"],
+          ["eats", "−0.62", "+0.30", "−0.67", "−0.75"]
+        ];
+        var hd = ["子 token", "log q", "f", "f − 均值", "S(TDES)"];
+        var xs = [110, 250, 360, 480, 620];
+        for (var h = 0; h < 5; h++) e.t(xs[h], 170, hd[h], { fs: 11, fill: c.muted });
+        e.line(60, 180, 700, 180, c.line);
+        rows.forEach(function (r, i) {
+          var y = 210 + i * 46;
+          var win = i === 0;
+          e.rect(60, y - 20, 640, 36, null, win ? c.greenBg : "none", win ? c.green : c.line, { rx: 6 });
+          e.t(xs[0], y + 4, r[0], { fs: 11.5, fill: win ? c.green : c.fg, fw: win ? "700" : "400" });
+          e.t(xs[1], y + 4, r[1], { fs: 11.5, fill: c.soft });
+          e.t(xs[2], y + 4, r[2], { fs: 11.5, fill: c.soft });
+          e.t(xs[3], y + 4, r[3], { fs: 11.5, fill: win ? c.green : c.soft, fw: win ? "700" : "400" });
+          e.t(xs[4], y + 4, r[4], { fs: 11.5, fill: win ? c.green : c.soft, fw: win ? "700" : "400" });
+        });
+        e.t(410, 372, "f 的兄弟均值 = +0.97：这个父亲「对谁都热情」，减掉它才能比出相对偏好。", { fs: 12, fill: c.soft });
+        e.t(410, 396, "结果：has 从最后一名升到第一名，而路径分数仍是沿边相加 —— 堆展开代码一行不改。", { fs: 12, fill: c.purple, fw: "600" });
+      }
+    },
+    {
+      desc: "修正后（论文图 1a 右）：正确的父子边被排上去，整条路径进入树。预算 80 个节点，接受长度 4。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "TDES + SABA：路径进入树，预算反而更小", "GRAFT, SABA 预算 ≈ 80（实测平均 48.9 节点）");
+        var path = ["Bonus", "Janet", "has", "48", "ducks"];
+        for (var i = 0; i < 5; i++) {
+          var first = i === 0;
+          e.rect(50 + i * 148, 170, 122, 40, path[i], first ? c.accentBg : c.greenBg, first ? c.accent : c.green, { labelFill: c.fg, fs: 11 });
+          if (i < 4) e.arrow(172 + i * 148, 190, 194 + i * 148, 190, c.green, { marker: "arrG", sw: 2.4 });
+        }
+        [[240, 250, "sells"], [388, 250, "eats"], [536, 250, "the"], [684, 250, "a"]].forEach(function (s) {
+          e.arrow(s[0] - 40, 212, s[0] - 40, 246, c.muted, { marker: "arrM", sw: 1.2 });
+          e.rect(s[0] - 100, 250, 122, 34, s[2], "none", c.line, { labelFill: c.muted, fs: 10.5 });
+        });
+        e.t(410, 330, "接受长度 = 4，树只有 ~49 个节点（DDTree 是 110.2）。", { fs: 13, fill: c.green, fw: "700" });
+        e.t(410, 360, "两个改动方向相反却互补：TDES 让每个节点更值钱，SABA 于是敢少放节点。", { fs: 12.5, fill: c.soft });
+        e.t(410, 390, "β = 0.2 时错配下降 54.71%（相对 β = 0），MAT 与吞吐同时最好。", { fs: 11.5, fill: c.muted });
+      }
+    }
+  ];
+
+  /* ================= 动画 4：打分器结构与三级监督 ================= */
+  var scene4 = [
+    {
+      desc: "双塔内积：两侧投影只依赖 token id，可以整轮预计算复用；运行时每条边只剩一次 m 维内积，总开销约 0.3 ms/轮。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "结构：可缓存的双塔内积", "冻结目标模型词嵌入 → 线性投影 + 深度嵌入 → 内积 / √m × s");
+        e.rect(60, 100, 150, 36, "父 token p", c.tealBg, c.teal, { labelFill: c.fg, fs: 11 });
+        e.rect(60, 250, 150, 36, "子 token c", c.tealBg, c.teal, { labelFill: c.fg, fs: 11 });
+        e.rect(240, 100, 130, 36, "e_p（冻结）", c.tealBg, c.teal, { labelFill: c.fg, fs: 11 });
+        e.rect(240, 250, 130, 36, "e_c（冻结）", c.tealBg, c.teal, { labelFill: c.fg, fs: 11 });
+        e.arrow(210, 118, 236, 118, c.teal, { marker: "arr", sw: 1.6 });
+        e.arrow(210, 268, 236, 268, c.teal, { marker: "arr", sw: 1.6 });
+        e.rect(400, 100, 120, 36, "g_p( · )", c.amberBg, c.amber, { labelFill: c.fg, fs: 11 });
+        e.rect(400, 250, 120, 36, "g_c( · )", c.amberBg, c.amber, { labelFill: c.fg, fs: 11 });
+        e.arrow(370, 118, 396, 118, c.amber, { marker: "arrO", sw: 1.6 });
+        e.arrow(370, 268, 396, 268, c.amber, { marker: "arrO", sw: 1.6 });
+        e.rect(400, 175, 120, 36, "深度嵌入 u_d", c.amberBg, c.amber, { labelFill: c.fg, fs: 10.5 });
+        e.arrow(460, 175, 460, 142, c.amber, { marker: "arrO", sw: 1.4 });
+        e.arrow(460, 211, 460, 244, c.amber, { marker: "arrO", sw: 1.4 });
+        e.circle(600, 193, 24, "×", c.accentBg, c.accent, { fs: 16, labelFill: c.accent });
+        e.arrow(520, 118, 580, 180, c.accent, { sw: 1.8 });
+        e.arrow(520, 268, 580, 206, c.accent, { sw: 1.8 });
+        e.rect(670, 175, 120, 36, "f(p, c, d)", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        e.arrow(624, 193, 666, 193, c.accent, { sw: 1.8 });
+        e.t(410, 336, "关键：g_p(e_p) 与 g_c(e_c) 只依赖 token id → 解码前一次性预计算，整轮复用。", { fs: 12.5, fill: c.soft });
+        e.t(410, 362, "可训练的只有两个投影、深度嵌入与缩放 s；目标模型词嵌入全程冻结。", { fs: 12.5, fill: c.amber });
+      }
+    },
+    {
+      desc: "① 分布级 KL：在候选集内部把「log q + f」的 softmax 对齐目标模型 logit 的 softmax。学的是候选之间的排序，不是整个词表。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "监督 ①：分布级 KL（主信号）", "只在被接受的父节点上采样；两个 softmax 都限制在候选集 C(p,d) 内");
+        var cand = ["has", "sells", "eats", "bakes"];
+        var tgt = [0.62, 0.20, 0.12, 0.06];
+        var mine = [0.31, 0.34, 0.22, 0.13];
+        e.t(180, 96, "目标模型 π^tgt", { fs: 12, fw: "700", fill: c.green });
+        e.t(560, 96, "打分器 π^θ", { fs: 12, fw: "700", fill: c.amber });
+        for (var i = 0; i < 4; i++) {
+          var y = 130 + i * 46;
+          e.t(70, y + 18, cand[i], { ta: "start", fs: 11.5, fill: c.fg });
+          e.rect(140, y, 200 * tgt[i], 26, null, c.greenBg, c.green, { rx: 3 });
+          e.t(360, y + 18, tgt[i].toFixed(2), { fs: 11, fill: c.soft });
+          e.rect(450, y, 200 * mine[i], 26, null, c.amberBg, c.amber, { rx: 3 });
+          e.t(680, y + 18, mine[i].toFixed(2), { fs: 11, fill: c.soft });
+        }
+        e.t(410, 344, "L_KL = E[ KL( π^tgt ‖ π^θ ) ]", { fs: 13, fw: "700", fill: c.accent });
+        e.t(410, 372, "注意：π^θ 用的是未中心化的 f 且不带 β —— 那两件事属于推理期的用法。", { fs: 12, fill: c.muted });
+      }
+    },
+    {
+      desc: "② 成对 margin：直接针对失效模式造样本。负边有两种取法，恰好对应「树里有这个 token 但路径不对」和「路径对但选错孩子」。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "监督 ②：成对 margin（针对失效模式）", "softplus( γ − f(v⁺) + f(v⁻) )：要求正边比负边至少高出 γ");
+        e.rect(60, 110, 200, 40, "正边 v⁺ = (Janet, has, 2)", c.greenBg, c.green, { labelFill: c.fg, fs: 10.5 });
+        e.t(160, 174, "目标模型真的走了这条边", { fs: 11, fill: c.muted });
+        e.rect(430, 96, 300, 40, "负边 A = (bakes, has, 2)", c.redBg, c.red, { labelFill: c.fg, fs: 10.5 });
+        e.t(580, 158, "同一个孩子挂到错误的父节点 → 修「路径不对」", { fs: 11, fill: c.muted });
+        e.rect(430, 196, 300, 40, "负边 B = (Janet, sells, 2)", c.redBg, c.red, { labelFill: c.fg, fs: 10.5 });
+        e.t(580, 258, "正确父节点下的竞争孩子 → 修「选错孩子」", { fs: 11, fill: c.muted });
+        e.arrow(264, 128, 424, 116, c.red, { marker: "arrR", sw: 1.6 });
+        e.arrow(264, 138, 424, 214, c.red, { marker: "arrR", sw: 1.6 });
+        e.line(60, 300, 760, 300, c.line);
+        e.t(410, 330, "这一项是三个损失里唯一「知道错在哪」的：样本本身就是从错配轨迹里挖出来的。", { fs: 12.5, fill: c.soft });
+        e.t(410, 358, "γ 为 margin，论文未给出数值。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "③ 边级 BCE 给每条边一个绝对的对错标签，提供跨父节点可比的数值尺度；权重只给 0.25，是校准辅助项。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "监督 ③：边级 BCE + 总损失", "y = 1 当且仅当在父节点 p 下 c 就是目标模型的下一个 token");
+        e.rect(60, 100, 300, 34, "σ(f(v)) → 1   （y = 1，正样本，权重 w₁）", c.greenBg, c.green, { labelFill: c.fg, fs: 10.5 });
+        e.rect(60, 148, 300, 34, "σ(f(v)) → 0   （y = 0，负样本）", c.redBg, c.red, { labelFill: c.fg, fs: 10.5 });
+        e.t(210, 210, "正样本极稀疏 → 用 w₁ 平衡（数值未给出）", { fs: 11, fill: c.muted });
+        var terms = [
+          ["λ_KL = 1", c.accent, "排序：谁该排前面"],
+          ["λ_pair = 1", c.red, "失效模式：压住错配"],
+          ["λ_BCE = 0.25", c.blue, "校准：绝对尺度"]
+        ];
+        terms.forEach(function (t, i) {
+          var y = 96 + i * 62;
+          e.rect(450, y, 150, 36, t[0], "none", t[1], { labelFill: t[1], fs: 11 });
+          e.t(620, y + 23, t[2], { ta: "start", fs: 11, fill: c.soft });
+        });
+        e.rect(60, 262, 700, 44, "L = λ_KL·L_KL + λ_pair·L_pair + λ_BCE·L_BCE", c.accentBg, c.accent, { labelFill: c.fg, fs: 13, fw: "700" });
+        e.t(410, 340, "训练：8 epoch，AdamW，lr 2e−3，weight decay 1e−4；数据是 DDTree 跑出的目标模型轨迹（3046 条留出 prompt）。", { fs: 11.5, fill: c.soft });
+        e.t(410, 368, "λ_BCE 只给 0.25 —— 它是校准用的辅助项，不是主力。", { fs: 12, fill: c.blue });
+      }
+    }
+  ];
+
+  /* ================= 动画 5：SABA 预算分配 ================= */
+  function axes(e, c, x0, y0, w, h, xl, yl) {
+    e.line(x0, y0, x0 + w, y0, c.line, { sw: 1.4 });
+    e.line(x0, y0, x0, y0 - h, c.line, { sw: 1.4 });
+    e.t(x0 + w / 2, y0 + 28, xl, { fs: 11, fill: c.muted });
+    e.t(x0 + 4, y0 - h - 8, yl, { fs: 11, fill: c.muted, ta: "start" });
+  }
+  var scene5 = [
+    {
+      desc: "论文图 1c：三种难度的轮次，每轮吞吐随预算的曲线形状完全不同 —— 最优预算分别落在 32、48、96。固定预算服务不好任何一类。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "现象：最优预算随轮次难度漂移", "同一模型、同一任务，不同轮次的 round-TPS 曲线峰值位置不同");
+        axes(e, c, 90, 340, 560, 250, "预算 B（节点数）", "本轮吞吐");
+        [32, 128, 256, 384, 512].forEach(function (b, i) {
+          var x = 90 + (b - 32) / 480 * 540;
+          e.line(x, 340, x, 346, c.line);
+          e.t(x, 362, String(b), { fs: 10, fill: c.muted });
+        });
+        function curve(peak, amp, col, lbl) {
+          var pts = [], best = null;
+          for (var b = 32; b <= 512; b += 8) {
+            var x = 90 + (b - 32) / 480 * 540;
+            var z = (Math.log(b) - Math.log(peak)) / 0.85;
+            var y = 340 - amp * Math.exp(-z * z / 2);
+            pts.push([x, y]);
+            if (!best || y < best[1]) best = [x, y];
+          }
+          e.poly(pts, col, { sw: 2.4 });
+          e.circle(best[0], best[1], 5, null, col, col, {});
+          e.t(best[0] + 10, best[1] - 8, lbl, { ta: "start", fs: 11, fill: col, fw: "600" });
+        }
+        curve(32, 250, c.green, "简单轮 AL≈15，B*=32");
+        curve(48, 205, c.amber, "中等轮 AL≈7，B*=48");
+        curve(96, 155, c.red, "困难轮 AL≈3，B*=96");
+        e.t(410, 398, "DDTree 用一条 Fix Budget = 128：简单轮白交验证成本，困难轮又不一定够。", { fs: 12.5, fill: c.soft });
+      }
+    },
+    {
+      desc: "状态三信号：置信度、接受历史是常规代理量；degen 是这篇针对 DFlash 加的 —— 相邻深度隐状态的余弦相似度，度量表征退化。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "状态 s = [conf, degen, hist]", "两个常规信号 + 一个 DLM 特有信号，全部本来就在手上");
+        var items = [
+          ["conf", c.blue, "各深度 top-1 边缘概率的均值", "草稿模型自己有多确定"],
+          ["degen", c.purple, "相邻深度隐状态余弦相似度：均值 + 斜率", "往深处加节点还有没有意义"],
+          ["hist", c.green, "最近 w 轮接受长度的均值", "当前这段文本好不好猜"]
+        ];
+        items.forEach(function (it, i) {
+          var y = 96 + i * 92;
+          e.rect(60, y, 130, 44, it[0], "none", it[1], { labelFill: it[1], fs: 13, fw: "700" });
+          e.t(210, y + 20, it[2], { ta: "start", fs: 12, fill: c.fg });
+          e.t(210, y + 40, it[3], { ta: "start", fs: 11, fill: c.muted });
+        });
+        e.t(410, 392, "degen 里那个「斜率」项不是装饰：只看平均会漏掉「起点就平但没继续变差」的情形。", { fs: 12, fill: c.purple });
+        e.t(410, 416, "三个信号来自草稿模型输出与上一轮验证结果 —— 零额外前向，SABA 全程约 0.1 ms/轮。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "收益模型 G(B) = 1 − exp(−B / φᵀs)：一条会饱和的曲线。状态只通过「饱和尺度 φᵀs」这一个标量进入收益。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "收益 G(B) = 1 − exp( −B / φᵀs )", "φᵀs 大 → 加节点在更宽的预算区间内还有用；小 → 很快边际递减");
+        axes(e, c, 100, 330, 520, 230, "预算 B", "期望草稿收益 G");
+        function g(scale, col, lbl, lx, ly) {
+          var pts = [];
+          for (var b = 32; b <= 512; b += 8) {
+            var x = 100 + (b - 32) / 480 * 500;
+            pts.push([x, 330 - 210 * (1 - Math.exp(-b / scale))]);
+          }
+          e.poly(pts, col, { sw: 2.4 });
+          e.t(lx, ly, lbl, { ta: "start", fs: 11, fill: col, fw: "600" });
+        }
+        g(60, c.green, "φᵀs 小（简单轮）→ 早早饱和", 350, 118);
+        g(220, c.red, "φᵀs 大（困难轮）→ 加节点仍有回报", 350, 200);
+        e.line(100, 120, 620, 120, c.line, { dash: "4 4" });
+        e.t(650, 124, "上界 1", { ta: "start", fs: 10.5, fill: c.muted });
+        e.t(410, 388, "饱和是关键：收益有上界，代价没有。两条线一比，最优预算就必然是有限的。", { fs: 12.5, fill: c.soft });
+      }
+    },
+    {
+      desc: "代价模型 C(B) = c₀ + c₁B + c₂B·prefix：固定开销 + 节点线性项 + 「树对着更长前缀做注意力」的那部分增量。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "代价 C(B) = c₀ + c₁B + c₂·B·prefix", "在关注的预算区间内建树与验证都近似线性，仿射就够了");
+        axes(e, c, 100, 330, 520, 230, "预算 B", "本轮代价 C");
+        function lin(k, b0, col, lbl, lx, ly) {
+          e.poly([[100, 330 - b0], [620, 330 - b0 - k]], col, { sw: 2.4 });
+          e.t(lx, ly, lbl, { ta: "start", fs: 11, fill: col, fw: "600" });
+        }
+        lin(120, 30, c.muted, "短前缀：斜率 c₁", 330, 250);
+        lin(200, 30, c.amber, "长前缀：斜率 c₁ + c₂·prefix", 330, 160);
+        e.rect(100, 322, 520, 8, null, c.accentBg, c.accent, { rx: 2 });
+        e.t(660, 330, "c₀", { ta: "start", fs: 11, fill: c.accent });
+        e.t(410, 388, "prefix 越长，同样一棵树的注意力代价越贵 —— 所以最优预算会随生成变长而下移。", { fs: 12.5, fill: c.soft });
+        e.t(410, 412, "φ, c₀, c₁, c₂ 用「同前缀预算重放」在小留出集上拟合，评测时冻结。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "效用 U = G/C 是单位代价换来的收益。每轮把 B 从 32 到 512、步长 16 全试一遍（31 次标量计算），取最大者。没有闭式解，也没有查表。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "效用 U(B) = G(B) / C(B)，网格搜索 32→512 步长 16", "目标是吞吐，不是 MAT —— 这是 SABA 与「自适应树」老做法的分水岭");
+        axes(e, c, 100, 330, 520, 230, "预算 B", "效用 U = G / C");
+        var us = [], bs = [];
+        for (var b = 32; b <= 512; b += 16) {
+          bs.push(b);
+          us.push((1 - Math.exp(-b / 90)) / (30 + b * 0.55));
+        }
+        var lo = Math.min.apply(null, us), hi = Math.max.apply(null, us);
+        var best = null, pts = [];
+        for (var i = 0; i < bs.length; i++) {
+          var x = 100 + (bs[i] - 32) / 480 * 500;
+          var y = 320 - (us[i] - lo) / (hi - lo) * 200;
+          pts.push([x, y]);
+          if (!best || y < best[1]) best = [x, y, bs[i]];
+        }
+        e.poly(pts, c.accent, { sw: 2.6 });
+        pts.forEach(function (p) { e.circle(p[0], p[1], 2.6, null, c.accent, c.accent, {}); });
+        e.circle(best[0], best[1], 8, null, c.greenBg, c.green, { sw: 2.6 });
+        e.line(best[0], best[1] + 10, best[0], 330, c.green, { dash: "4 4", sw: 1.4 });
+        e.t(best[0] + 12, best[1] - 10, "B* = " + best[2], { ta: "start", fs: 12, fill: c.green, fw: "700" });
+        e.t(410, 386, "oracle 对照：固定前缀 / KV cache / DFlash 输出，把同一轮用各预算重放，取真实吞吐最高者。", { fs: 12, fill: c.soft });
+        e.t(410, 412, "SABA 平均拿到 oracle 吞吐的 94.1%，并在 64.1% 的轮次里达到 oracle 的 95% 以上。", { fs: 12.5, fill: c.green, fw: "600" });
+      }
+    }
+  ];
+
+  /* ================= 动画 6：组件消融 ================= */
+  var ABL = [
+    { n: "DDTree", nodes: 110.2, mat: 7.53, tps: 220.6, note: "基线：父无感边打分 + 固定预算 128" },
+    { n: "+ TDES", nodes: 110.2, mat: 8.00, tps: 233.3, note: "节点数一个不变，MAT 7.53 → 8.00（+5.7% 吞吐）" },
+    { n: "+ SABA", nodes: 49.1, mat: 7.18, tps: 248.8, note: "树砍掉一半多，MAT 反而下降，吞吐 +12.8%" },
+    { n: "GRAFT", nodes: 48.9, mat: 7.62, tps: 263.5, note: "小树 + 好边：MAT 拉回 7.62，吞吐 +19.4%" }
+  ];
+  function ablStep(k) {
+    return {
+      desc: ABL[k].n + "：平均节点 " + ABL[k].nodes + "，MAT " + ABL[k].mat + "，TPS " + ABL[k].tps + "。" + ABL[k].note,
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "组件消融（Qwen3-8B, GSM8K）：三个量各走各的路", "节点数 ↓、MAT 起伏、TPS 单调上升 —— 说明 MAT 不是被优化的目标");
+        var groups = [
+          { key: "nodes", lbl: "平均节点数", col: c.blue, max: 130, fmt: function (v) { return v.toFixed(1); } },
+          { key: "mat", lbl: "MAT", col: c.purple, max: 9, fmt: function (v) { return v.toFixed(2); } },
+          { key: "tps", lbl: "TPS", col: c.green, max: 300, fmt: function (v) { return v.toFixed(1); } }
+        ];
+        var base = 330, H = 210;
+        groups.forEach(function (g, gi) {
+          var x0 = 70 + gi * 250;
+          e.line(x0 - 10, base, x0 + 210, base, c.line, { sw: 1.4 });
+          e.t(x0 + 100, base + 26, g.lbl, { fs: 12, fw: "700", fill: g.col });
+          for (var i = 0; i < 4; i++) {
+            var v = ABL[i][g.key];
+            var h = v / g.max * H;
+            var on = i <= k;
+            var cur = i === k;
+            e.rect(x0 + i * 50, base - h, 38, h,
+              null, on ? (cur ? g.col : g.col) : "none", on ? g.col : c.line,
+              { rx: 3, sw: cur ? 2.4 : 1.2 });
+            if (on) e.t(x0 + i * 50 + 19, base - h - 8, g.fmt(v), { fs: 10, fill: cur ? g.col : c.muted, fw: cur ? "700" : "400" });
+            e.t(x0 + i * 50 + 19, base + 14, ABL[i].n.replace("+ ", "+"), { fs: 9, fill: on ? c.soft : c.muted });
+          }
+        });
+        e.rect(70, 66, 680, 30, ABL[k].n + " —— " + ABL[k].note, c.accentBg, c.accent, { labelFill: c.fg, fs: 11.5 });
+        e.t(410, 396, k === 3
+          ? "两者叠加超过简单相加：树越小，每条边选得对不对就越关键 —— SABA 制造了让 TDES 更值钱的条件。"
+          : "把三根柱子分开看，才能看出「MAT 涨」和「吞吐涨」不是同一件事。", { fs: 12, fill: c.soft });
+      }
+    };
+  }
+  var scene6 = [ablStep(0), ablStep(1), ablStep(2), ablStep(3)];
+
+  /* ================= WIRING ================= */
+  var builders = {
+    svg1: function () { return scene1; },
+    svg2: function () { return scene2; },
+    svg3: function () { return scene3; },
+    svg4: function () { return scene4; },
+    svg5: function () { return scene5; },
+    svg6: function () { return scene6; }
+  };
+  var engines = {};
+
+  function initScene(svgId) {
+    if (engines[svgId]) return engines[svgId];
+    var svg = document.getElementById(svgId);
+    if (!svg) return null;
+    var buildFn = builders[svgId];
+    if (!buildFn) return null;
+    var eng = new AnimEngine(svg, { steps: buildFn() });
+    engines[svgId] = eng;
+    eng.goTo(0);
+    return eng;
+  }
+
+  document.querySelectorAll(".anim-frame").forEach(function (frame) {
+    var svg = frame.querySelector("svg");
+    if (!svg) return;
+    var svgId = svg.id;
+
+    frame.addEventListener("click", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      var target = ev.target;
+      if (target.classList.contains("btn-play")) { eng.toggle(); }
+      else if (target.classList.contains("btn-next")) { eng.pause(); eng._setPlayBtn(false); eng.next(); }
+      else if (target.classList.contains("btn-prev")) { eng.pause(); eng._setPlayBtn(false); eng.prev(); }
+      else if (target.classList.contains("btn-reset")) { eng.reset(); }
+      else if (target.classList.contains("stage-chip")) {
+        eng.pause();
+        eng._setPlayBtn(false);
+        eng.goTo(parseInt(target.getAttribute("data-step"), 10));
+      }
+    });
+
+    var slider = frame.querySelector(".speed-slider");
+    if (slider) {
+      slider.addEventListener("input", function () {
+        var eng = engines[svgId];
+        if (eng) eng.setSpeed(parseFloat(slider.value));
+      });
+    }
+
+    frame.setAttribute("tabindex", "0");
+    frame.addEventListener("keydown", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      if (ev.key === "ArrowRight") { ev.preventDefault(); eng.next(); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); eng.prev(); }
+      else if (ev.key === " ") { ev.preventDefault(); eng.toggle(); }
+    });
+  });
+
+  /* 主题：存储键与站点外壳保持一致（'theme'），值恒为 'light' / 'dark'，
+     并且始终写 data-theme 属性——BaseLayout 的引导脚本也是这么做的，
+     移除属性会让站点样式回落到默认分支。 */
+  /* 按 id 取本文自己的按钮：嵌进站点后页面上还有导航栏的 .theme-toggle
+     （搜索与主题各一个、移动端再一个），用类选择器会改到站点外壳的按钮上。 */
+  function syncThemeBtn() {
+    var tb = document.getElementById("artThemeBtn");
+    if (tb) tb.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "☀️" : "🌙";
+  }
+  window.toggleTheme = function () {
+    var html = document.documentElement;
+    var next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    html.setAttribute("data-theme", next);
+    syncThemeBtn();
+    try { localStorage.setItem("theme", next); } catch (e) {}
+  };
+
+  /* SVG 里的颜色是绘制那一刻读出来的具体值，主题一变就过期。盯 data-theme
+     的变化重绘当前步——无论用户点的是站点导航里的开关还是本文这个按钮。 */
+  function redrawAll() {
+    for (var id in engines) {
+      if (engines[id]) { engines[id].pause(); engines[id]._setPlayBtn(false); engines[id].goTo(engines[id].currentStep); }
+    }
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(function () { syncThemeBtn(); setTimeout(redrawAll, 30); })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+
+  window.toggleToc = function () {
+    var nav = document.getElementById("tocNav");
+    if (nav) nav.classList.toggle("collapsed");
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    /* 独立打开本文件时没有站点外壳的引导脚本，这里补一次；嵌进站点时
+       data-theme 已经存在，不要覆盖它。 */
+    if (!document.documentElement.getAttribute("data-theme")) {
+      var stored = null;
+      try { stored = localStorage.getItem("theme"); } catch (e) {}
+      document.documentElement.setAttribute("data-theme", stored || "dark");
+    }
+    syncThemeBtn();
+    ["svg1", "svg2", "svg3", "svg4", "svg5", "svg6"].forEach(function (id) { initScene(id); });
+
+    var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var id = entry.target.id;
+          tocLinks.forEach(function (l) { l.classList.remove("active"); });
+          var link = document.querySelector('.toc a[href="#' + id + '"]');
+          if (link) { link.classList.add("active"); if (window.innerWidth > 768) link.scrollIntoView({ block: "nearest" }); }
+        }
+      });
+    }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+    document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+    var backTop = document.getElementById("backTop");
+    if (backTop) {
+      window.addEventListener("scroll", function () {
+        if (window.scrollY > 600) backTop.classList.add("visible");
+        else backTop.classList.remove("visible");
+      });
+    }
+
+    tocLinks.forEach(function (a) {
+      a.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        var id = a.getAttribute("href").slice(1);
+        var target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: "smooth" });
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
