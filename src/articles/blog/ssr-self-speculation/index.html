@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSR：把思维链本身当作投机解码的草稿源</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --teal: var(--a-teal); --teal-bg: var(--a-teal-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+.callout-teal { background: var(--teal-bg); border-color: var(--teal); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 640px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+.anim-progress { height: 4px; background: var(--code-bg); }
+.anim-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.anim-stage-rail { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid var(--a-border); background: transparent; color: var(--fg-muted); cursor: pointer; }
+.anim-stage-rail .stage-chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--a-on-solid); }
+.anim-stage-rail .stage-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-status { padding: 10px 16px 14px; font-size: 13px; }
+.anim-status .step-info { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.anim-status .step-desc { color: var(--fg-soft); line-height: 1.6; }
+.anim-legend { padding: 0 16px 14px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--fg-muted); }
+.anim-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.anim-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.back-top, .theme-toggle { position: fixed; right: 24px; z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--a-border); background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 15px; }
+.back-top { bottom: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.back-top.show { opacity: 1; pointer-events: auto; }
+.theme-toggle { bottom: 72px; }
+.back-top:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.toc-toggle { display: none; }
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; max-height: 40vh; }
+  .content { width: 100%; }
+  .toc[hidden] { display: none; }
+  .toc-toggle { display: block; margin-bottom: 10px; padding: 6px 12px; border: 1px solid var(--a-border); border-radius: 6px; background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: none; }
+  .anim-canvas-wrap svg .anim-layer .hot { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body class="interactive-body">
+<script>
+/* SVG 的呈现属性（fill / stroke）不解析 var()，所以动画脚本要在运行时把
+   语义令牌读成具体色值。主题切换后重绘即可拿到新值。 */
+(function () {
+  window.aC = function (name, fallback) {
+    var host = document.querySelector('.interactive-body, .article-body') || document.documentElement;
+    var v = getComputedStyle(host).getPropertyValue(name);
+    return (v && v.trim()) || fallback || '#888';
+  };
+})();
+</script>
+<button class="theme-toggle" id="artThemeBtn" onclick="toggleTheme()" aria-label="切换深浅主题" title="切换主题">◑</button>
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+  <button class="toc-toggle" onclick="toggleToc()" aria-expanded="true" aria-controls="tocNav">目录</button>
+  <nav class="toc" id="tocNav" aria-label="文章目录">
+    <h3>目录</h3>
+    <a href="#hook">SSR 是什么</a>
+    <a href="#setup">① 前置：两个式子</a>
+    <a href="#observation">② 关键观察：CoT 自带草稿</a>
+    <a href="#twobudget">③ 创新一：一模两算</a>
+    <a href="#verify">④ 验证层：两套规则</a>
+    <a href="#suffix">⑤ 创新二：越过第一个失配</a>
+    <a href="#iterative">⑥ 创新三：多阶段自举</a>
+    <a href="#system">⑦ 系统实现：vLLM 里的父子请求</a>
+    <a href="#experiments">⑧ 实验复盘</a>
+    <a href="#critique">⑨ 论文没给的东西</a>
+    <a href="#summary">⑩ 一句话总结</a>
+  </nav>
+
+  <main class="content">
+
+    <section class="hook" id="hook">
+      <h1>SSR：把思维链本身当作投机解码的草稿源</h1>
+      <p class="tagline">推理模型的长思维链换来了质量，也换来了让人等不起的延迟。既有加速方法都在 token 层面做文章，没人动过推理流程<em>本身</em>的结构。SSR 的想法极简：同一个模型、同一份权重，<strong>只在两个不同的思考预算上求值</strong>——短预算那次的答案当草稿，长预算那次的答案当验证器。草稿的算力开销藏在还在继续的思考背后，几乎不额外增加墙钟时间。</p>
+      <div class="badges">
+        <span class="badge badge-accent">arXiv:2608.20359v1</span>
+        <span class="badge badge-purple">training-free 自投机</span>
+        <span class="badge badge-green">延迟 −24.1%</span>
+        <span class="badge badge-blue">vLLM drop-in</span>
+      </div>
+    </section>
+
+    <section id="setup">
+      <h2>① 前置：看懂 SSR 只需要两个式子</h2>
+      <p>第一个是<strong>投机解码</strong>（speculative decoding）的验证规则。有一个便宜的提议分布 $d$ 和一个昂贵的目标分布 $p$，草稿 token $\hat a_t$ 按下式接受：</p>
+      <div class="eq">
+        $$\alpha_t=\min\!\left(1,\ \frac{p(\hat a_t\mid q,r,a_{<t})}{d(\hat a_t\mid q,r,a_{<t})}\right)$$
+        <span class="eq-note">一旦某位被拒，就从<em>残差分布</em>里补一个 token，然后丢弃草稿剩余部分。</span>
+      </div>
+      <div class="eq">
+        $$a_t\sim\frac{\max\big(p-d,\,0\big)}{\sum_v\max\big(p(v)-d(v),\,0\big)}$$
+        <span class="eq-note">接受规则加残差采样合起来保证：<strong>最终输出分布与目标模型 $p$ 完全相同，与草稿质量无关</strong>。这是 2023 年那两篇奠基工作的核心结论，也是「无损加速」这个说法的全部依据。</span>
+      </div>
+      <p>第二个是<strong>预算强制</strong>（budget forcing）。推理模型的输出可以拆成思维链 $r$ 与最终答案 $a$。给定一个思考预算 $b$，我们可以在 CoT 只写了 $b$ 个 token 时就强行让它作答：</p>
+      <div class="eq">
+        $$p_\theta(a\mid q,b)\ \triangleq\ p_\theta\big(a\mid q,\ r_{\le b}\big)$$
+        <span class="eq-note">实现上需要在 $r_{\le b}$ 后面追加一个「思考结束」标记（Qwen 系是 <code>&lt;/think&gt;</code>，Gemma-4-E4B-it 用原生的 <code>&lt;channel|&gt;</code>），某些设置里还要再加一段打断串把模型逼进作答模式。</span>
+      </div>
+      <div class="callout callout-blue">
+        <strong>把这两件事叠在一起，SSR 的全貌就出来了：</strong>令 $d=p_\theta(a\mid q,b_d)$、$p=p_\theta(a\mid q,b_v)$，其中 $b_d&lt;b_v$。提议分布与目标分布来自<em>同一份权重</em>，差别只是「想了多久」。不需要训练、不需要辅助参数、不需要改目标模型的架构——这三点是 SSR 相对 EAGLE / Medusa 一类方法最直接的差异。
+      </div>
+    </section>
+
+    <section id="observation">
+      <h2>② 关键观察：partial CoT 不是无意义的中间态</h2>
+      <p>自投机解码不是新东西，但此前的做法都是用目标模型的<strong>有损近似</strong>去起草：提前退出中间层、稀疏 attention、量化 KV cache。论文对这一整类方法的批评只有一句话，但很准：</p>
+      <div class="callout callout-accent">
+        <em>"they do not fully take advantage of the structure of reasoning language models. Reasoning language models expose an additional source of signal for speculation: the chain-of-thought itself."</em>
+      </div>
+      <p>论证链条是这样接上的：test-time scaling 那一支研究已经表明，CoT 长度可以被控制，而且<strong>思考预算越长，答案质量普遍越好</strong>（至少在某个点之前）。既然「预算 → 质量」是一条单调曲线而不是随机噪声，那么曲线上的每一个中间点都对应一个<em>有意义的</em>答案分布，而不是随便一个残缺状态。原文：</p>
+      <div class="callout callout-purple">
+        <em>"Answers sampled early in the CoT might be incomplete or inconsistent, but as reasoning progresses they improve in quality and become increasingly similar in content and surface form to the final answer."</em>
+        <br><span class="note-inline">"content and surface form" 就是摘要里 semantic / lexical overlap 的出处。</span>
+      </div>
+      <div class="callout callout-orange">
+        <strong>这里要先说清楚一件事：这个观察在论文里是纯定性的。</strong>全文没有任何 ROUGE / BLEU / 嵌入余弦 / token 一致率的测量，也没有一张「重叠度随 CoT 长度上升」的曲线图（全文只有 2 张图，都是流程示意）。唯一半定量的支撑是 §4.3 的一句 "a substantial fraction of final-answer tokens stabilize at relatively small budgets"。真正可核实的重叠证据来自实验里的两个复用指标——平均被接受的 prefix token 数与 suffix token 数，见第 ⑧ 节。
+      </div>
+      <p>但这个观察带来了一个真正新的东西：<strong>草稿的算力开销可以被隐藏</strong>。传统投机解码里，起草和验证是串行的两拍，起草再便宜也要占墙钟时间。而 SSR 的起草与「继续思考」是<em>并发</em>的——模型一边往 $b_v$ 推进思维链，一边用 $r_{\le b_d}$ 这个已经算完的前缀起草答案。</p>
+    </section>
+
+    <section id="twobudget">
+      <h2>③ 创新一：同一个模型的两个预算，就是 drafter 与 verifier</h2>
+      <p>整个流程分四相：</p>
+      <ol>
+        <li>生成思维链直到抵达草稿预算 $b_d$；</li>
+        <li>以 $r_{\le b_d}$ 为条件<strong>并发</strong>采样一份草稿答案 $\hat a$，同时思维链继续往 $b_v$ 走；</li>
+        <li>思维链抵达 $b_v$ 时收齐草稿；</li>
+        <li>用高预算分布验证草稿，保留被接受的前缀，再采样续写。</li>
+      </ol>
+      <p>并发要成立，有一个硬性可行条件——思维链总长必须容得下起草这段时间：</p>
+      <div class="eq">
+        $$|r| \;>\; b_d + m$$
+        <span class="eq-note">$m$ 是草稿的最大长度。若不满足，草稿还没写完思维链就结束了，并发的前提破产。这是全文<strong>唯一</strong>一个关于开销与收益的关系式——论文没有给延迟模型，也没有期望加速比的解析式。</span>
+      </div>
+      <p>而 $b_d$ 的取值有一个内在张力：太小则 partial CoT 还没收敛，草稿与最终答案分道扬镳；太大则违反上面的不等式。论文自己的表述是 "$b_d$ should be a substantial fraction of the total CoT length for drafts to be useful"——而总长度事先并不知道。这个矛盾直接催生了第 ⑥ 节的多阶段变体。</p>
+
+      <div class="anim-frame" data-anim="1">
+        <div class="anim-header">
+          <span class="anim-title">动画 1 · 四相流水线：草稿开销怎么被藏起来</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 430" role="img" aria-label="基线时间线与 SSR 时间线对比，草稿与思维链并发，验证与续写紧随其后"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>思维链生成</span>
+          <span><i style="background:var(--a-purple)"></i>并发起草</span>
+          <span><i style="background:var(--a-amber)"></i>验证</span>
+          <span><i style="background:var(--a-green)"></i>续写（已加速）</span>
+        </div>
+      </div>
+
+      <h3>drafter 与 verifier 在物理上是什么</h3>
+      <p>不是两个模型，也不是一个模型的两条前向路径——是<strong>两个共享前缀的请求</strong>。这是 SSR 全部实现的关键，第 ⑦ 节展开。</p>
+
+      <div class="anim-frame" data-anim="2">
+        <div class="anim-header">
+          <span class="anim-title">动画 2 · 两个预算如何从一份权重里长出来</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 430" role="img" aria-label="父请求继续思考，子请求追加思考结束标记开始起草，两者共享 KV 前缀"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>共享前缀（prompt + partial CoT）</span>
+          <span><i style="background:var(--a-purple)"></i>子请求：起草</span>
+          <span><i style="background:var(--a-teal)"></i>父请求：继续思考</span>
+          <span><i style="background:var(--a-red)"></i>瞬时算力峰值</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="verify">
+      <h2>④ 验证层：两套<em>不对称</em>的规则</h2>
+      <p>草稿收齐之后，SSR 用两个阶段消化它，而这两个阶段的验证标准<strong>不一样</strong>——这是读这篇论文最容易漏掉、也最影响结论解读的一点。</p>
+        <table>
+          <thead><tr><th>阶段</th><th>验证规则</th><th>分布性质</th></tr></thead>
+          <tbody>
+            <tr><td>prefix 阶段</td><td>标准投机解码拒绝采样，$\alpha_t=\min(1,p/d)$，失配处走残差分布</td><td><strong>严格保分布</strong></td></tr>
+            <tr><td>suffix 阶段</td><td>与验证器的<em>贪心</em>预测逐位精确匹配，不匹配即停</td><td><strong>近似</strong>，不保分布</td></tr>
+          </tbody>
+        </table>
+      <p>prefix 阶段做的事情很干净：把草稿 $\hat a_{1..m}$ 作为一个「提示的延长部分」一次性喂进高预算上下文，拿到每一位的 prompt logprobs，与起草时记录的 draft logprobs 逐位比对，求出最长被接受前缀 $k_{\text{acc}}$。这一步只需要<strong>一次</strong>前向（并行验证 $m$ 位），这才是投机解码省时间的来源——把 $m$ 步串行解码压成 1 步并行打分。</p>
+      <div class="callout callout-green">
+        <strong>为什么 prefix 阶段是无损的：</strong>接受概率 $\min(1,p/d)$ 与残差分布 $\propto\max(p-d,0)$ 拼起来，边缘分布恰好等于 $p$。这个恒等式对<em>任意</em> $d$ 成立，所以草稿再差也只是「白算一场」，不会让输出变差。SSR 的 $d$ 恰好是同一个模型在更短预算上的答案分布，这一点在理论上完全不需要额外假设。
+      </div>
+
+      <div class="anim-frame" data-anim="3">
+        <div class="anim-header">
+          <span class="anim-title">动画 3 · 拒绝采样：接受、失配、残差补位</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 430" role="img" aria-label="逐位比较目标分布与草稿分布，接受比值小于一时按概率拒绝并从残差分布重采样"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>接受</span>
+          <span><i style="background:var(--a-red)"></i>拒绝</span>
+          <span><i style="background:var(--a-purple)"></i>草稿分布 $d$</span>
+          <span><i style="background:var(--a-blue)"></i>目标分布 $p$</span>
+        </div>
+      </div>
+      <p>问题出在「一旦被拒就丢弃草稿剩余部分」这条规则上。对普通投机解码，草稿模型是自回归展开的，失配之后的内容确实已经建立在错误的历史上、不值得保留。但 SSR 的草稿有个特殊性质：它是同一个模型在同一道题上写出来的完整答案，<strong>失配往往只是局部措辞或某个中间数值不同，后面大段结构、公式、代码骨架仍然一致</strong>。全部丢掉太浪费了。</p>
+    </section>
+
+    <section id="suffix">
+      <h2>⑤ 创新二：越过第一个失配——把草稿当后缀词典</h2>
+      <p>SSR 的第二个创新是把被拒之后的草稿残余<em>再利用一次</em>，办法是接一层 <strong>suffix decoding</strong>。</p>
+      <p>suffix decoding 本身不是这篇论文的发明（它是「用已有文本建后缀结构、按上下文后缀检索候选续写」这一类无模型起草方法），但 SSR 用它的方式很特别：<strong>后缀缓存只用草稿 token $\hat a_1..\hat a_m$ 构建</strong>，prompt 和已生成内容的缓存都被显式关掉。也就是说，这一层的唯一职责就是「从草稿里找还能用的片段」。</p>
+        <table>
+          <thead><tr><th>参数</th><th>取值</th><th>含义</th></tr></thead>
+          <tbody>
+            <tr><td>后缀缓存来源</td><td>仅草稿 token</td><td>prompt / 内部缓存关闭</td></tr>
+            <tr><td>上下文匹配深度</td><td>4</td><td>用最近 4 个 token 做检索键</td></tr>
+            <tr><td>最大投机 token 数</td><td>16</td><td>单次最多提议这么长的片段</td></tr>
+            <tr><td>max spec factor</td><td>4</td><td>限制提议长度相对匹配长度的倍数</td></tr>
+          </tbody>
+        </table>
+      <p>续写的每一步都是：取当前已生成序列的末 4 个 token，在草稿构成的后缀结构里找最长匹配，把匹配位置之后那一段（最多 16 个 token）当作提议，交给模型贪心校验；对上多少算多少，对不上就退回普通解码一位。</p>
+      <div class="callout callout-orange">
+        <strong>代价说清楚：</strong>这一层的验证是<em>贪心精确匹配</em>，不是拒绝采样。所以开启 suffix decoding 之后，SSR 整体<strong>不再是分布无损的</strong>——它退化成「近似等价于贪心解码的加速」。论文全文没有测量任何质量指标（准确率、pass@1 都没有），因此「保持输出质量」这个说法在 prefix 阶段有理论依据，在 suffix 阶段则是<em>未经检验</em>的。
+      </div>
+
+      <div class="anim-frame" data-anim="4">
+        <div class="anim-header">
+          <span class="anim-title">动画 4 · 四色 token 带：一份草稿被消化两遍</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 430" role="img" aria-label="草稿 token 序列分为被接受前缀、被拒 token、普通解码与后缀命中四种颜色"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>接受的前缀</span>
+          <span><i style="background:var(--a-red)"></i>失配处</span>
+          <span><i style="background:var(--a-fg-muted)"></i>普通解码</span>
+          <span><i style="background:var(--a-teal)"></i>后缀命中</span>
+        </div>
+      </div>
+
+      <div class="callout callout-purple">
+        <strong>消融实验给出了本文最反直觉的一组数字。</strong>在 Qwen3-8B / ClassEval 上：只开 prefix 验证，加速比 1.086、延迟降 7.9%；只开 suffix 解码，加速比 1.318、延迟降 24.1%——而且此时被接受的 prefix token 数是 <strong>0</strong>。换句话说，在这个设置里 SSR 的全部收益都来自「越过失配点复用草稿片段」，严格的拒绝采样那一层<em>一个 token 都没贡献</em>。
+      </div>
+    </section>
+
+    <section id="iterative">
+      <h2>⑥ 创新三：多阶段自举，让草稿自己滚起来</h2>
+      <p>回到第 ③ 节末尾那个矛盾：$b_d$ 该设多大，取决于思维链最终会有多长，而这个长度事先不知道。单阶段 SSR 只能赌一个值。多阶段变体（论文 Algorithm 2）的做法是<strong>不赌</strong>——设一串递增预算 $b_1&lt;b_2&lt;\dots&lt;b_T$，每一站都起草一次，每一站都用下一站的分布来验证并<em>延长</em>上一站的草稿。</p>
+      <div class="eq">
+        $$\hat a_{i+1}\ \sim\ p_\theta\big(\cdot\mid q,\ r_{i+1},\ \hat a_{i,1:k_i}\big)$$
+        <span class="eq-note">第 $i+1$ 站不从零起草：它以第 $i$ 站<em>已被接受的前缀</em> $\hat a_{i,1:k_i}$ 为条件继续写。这就是自举（bootstrap）——每一轮的成果都成为下一轮的起点，草稿在推理推进的过程中逐步「凝固」。</span>
+      </div>
+      <p>这带来两个好处。一是不再需要预知 CoT 总长：无论真实长度落在哪一段，总有若干个中间站落在「partial CoT 已经足够收敛」的区间里。二是每一站的验证工作量都变小了——只需要验证增量部分，而不是每次都验证一份完整的答案。</p>
+
+      <div class="anim-frame" data-anim="5">
+        <div class="anim-header">
+          <span class="anim-title">动画 5 · 多阶段自举：草稿在思维链推进中逐步凝固</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg5" viewBox="0 0 820 430" role="img" aria-label="三个递增预算站点依次起草与验证，已接受前缀不断向右延长"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>思维链推进</span>
+          <span><i style="background:var(--a-purple)"></i>本站草稿</span>
+          <span><i style="background:var(--a-green)"></i>已凝固前缀</span>
+          <span><i style="background:var(--a-amber)"></i>验证并延长</span>
+        </div>
+      </div>
+      <div class="callout callout-blue">
+        论文用 Qwen3-8B / AIME-2024 报了一组多阶段结果：端到端延迟从 18.58 s 降到 16.37 s，<span class="gain">−11.9%</span>。注意这个降幅比单阶段最好的 −24.1% <em>小</em>——多阶段解决的是「不用调 $b_d$」这个鲁棒性问题，不是把加速比推得更高。论文自己把这一小节（§5.3）标注为 preliminary。
+      </div>
+    </section>
+
+    <section id="system">
+      <h2>⑦ 系统实现：在 vLLM 里，两个预算就是父子两个请求</h2>
+      <p>SSR 没有改模型，也没有改 attention kernel，它改的是<strong>调度器</strong>。当一个请求的思维链写到 $b_d$ 时，调度器把它<em>复制</em>出一个子请求；子请求的 token 序列是父请求当前序列加上一个「思考结束」标记，于是 vLLM 原生的 prefix caching 直接命中——prompt 与 partial CoT 的 KV 完全复用，起草的预填充成本接近零。</p>
+      <h3>三种请求形态</h3>
+      <ol>
+        <li><strong>Drafting</strong>：子请求，前缀 = prompt + $r_{\le b_d}$ + <code>&lt;/think&gt;</code>，输出草稿 $\hat a$ 并记录每位的 draft logprobs；与父请求并发。</li>
+        <li><strong>Verification</strong>：把 prompt + $r_{\le b_v}$ + <code>&lt;/think&gt;</code> + 草稿 token 当成一整个 <em>prompt</em> 提交，靠 vLLM 的 prompt logprobs 一次前向拿到目标分布在每一位上的取值，与 draft logprobs 逐位比对。<span class="note-inline">这是把「并行验证」用现成接口实现的巧办法：不需要写任何 speculative kernel。</span></li>
+        <li><strong>Continuation</strong>：从最长接受前缀处继续生成，此时挂上以草稿为词典的 suffix decoding。</li>
+      </ol>
+      <div class="callout callout-red">
+        <strong>不要把它理解成「免费」。</strong>在起草窗口内，父请求与子请求<em>同时</em>在服务中，瞬时 batch size 上升、KV 显存占用上升。SSR 省下来的是<strong>墙钟时间</strong>，不是 FLOPs——收益来自把原本串行的开销塞进已有的等待里。论文的吞吐表也确认了这一点：在高并发场景下，多出来的算力不再是空闲资源，SSR 的优势会被吃掉。它是一个<em>低负载、低延迟</em>取向的优化，batch size = 1 是全部实验的设定。
+      </div>
+    </section>
+
+    <section id="experiments">
+      <h2>⑧ 实验复盘：数字读到什么程度算读懂了</h2>
+      <p>设定：Qwen3-8B / Qwen3-14B / Gemma-4-E4B-it，任务覆盖 AIME-2024、GPQA-Diamond、ClassEval、LiveCodeBench 一类推理与代码基准，batch size = 1，单卡。基线是<strong>同一模型的朴素自回归生成</strong>——没有 EAGLE、没有 Medusa、没有独立的 suffix decoding 或 lookahead 对照。</p>
+
+      <div class="anim-frame" data-anim="6">
+        <div class="anim-header">
+          <span class="anim-title">动画 6 · 三张表读一遍：加速比、阶段拆解、吞吐代价</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg6" viewBox="0 0 820 430" role="img" aria-label="各模型任务上的加速比柱状图、延迟阶段拆解与吞吐对比"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>加速比 &gt; 1</span>
+          <span><i style="background:var(--a-blue)"></i>基线</span>
+          <span><i style="background:var(--a-amber)"></i>阶段耗时</span>
+          <span><i style="background:var(--a-red)"></i>吞吐损失</span>
+        </div>
+      </div>
+
+      <h3>三条值得记住的结论</h3>
+      <p>第一，<strong>加速幅度落在 1.1×–1.3× 这个量级</strong>，最好的一格是 ClassEval 上的延迟 −24.1%。这不是数量级式的提速，但对一个不训练、不改架构、纯调度层的改动来说是合理的量级。</p>
+      <p>第二，<strong>两条复用通道的贡献严重不均衡</strong>。前面提过的那组消融是全文最有信息量的地方：prefix 验证在 Qwen3-8B / ClassEval 上贡献为 0 个 token，全部收益来自 suffix 解码。这说明「短预算答案与长预算答案逐位对齐」这个强假设在实践中经常不成立，成立的只是弱得多的那个版本——<em>局部片段会重复出现</em>。</p>
+      <p>第三，<strong>吞吐是要付代价的</strong>。并发起草抬高了瞬时负载，吞吐表里能看到这一项。论文没有回避，但也没有给出「多大并发下 SSR 由赚变亏」的临界点。</p>
+    </section>
+
+    <section id="critique">
+      <h2>⑨ 论文没给的东西（读完这篇再读原文会省很多时间）</h2>
+      <ul>
+        <li><strong>没有任何质量评测。</strong>全文没有一个准确率 / pass@1 数字。prefix 阶段的无损性是从投机解码理论继承来的，而一旦开启 suffix decoding（贪心精确匹配），这个保证就失效了——恰恰所有最好看的加速数字都开着 suffix decoding。</li>
+        <li><strong>核心观察没有被测量。</strong>「partial CoT 的答案与最终答案重叠度随预算上升」是本文的立论基础，但没有 ROUGE / 余弦 / 一致率曲线，只有一句定性描述。唯一可核实的证据是接受 token 计数，而那组计数在某些设置里是 0。</li>
+        <li><strong>基线过弱。</strong>唯一对照是朴素自回归。SSR 用的 suffix decoding 是已有方法，理应单独作为基线跑一遍——否则无法回答「收益里有多少是 SSR 的贡献、多少只是 suffix decoding 本身的功劳」。这是本文方法论上最大的空白。</li>
+        <li><strong>没有 $b_d$ 的敏感度扫描。</strong>论文明确指出 $b_d$ 难选，却没有给出一条「加速比随 $b_d$ 变化」的曲线，也没有自适应选取策略。</li>
+        <li><strong>没有延迟模型、没有期望加速比公式。</strong>全文只有 4 个式子，唯一的成本关系是 $|r|&gt;b_d+m$，其余全靠实测。</li>
+        <li><strong>没有显存分析。</strong>并发两个请求必然增加 KV 占用，论文没有量化。</li>
+        <li><strong>只测了 batch size = 1。</strong>而这恰恰是「空闲算力可以白拿」这个前提最成立的场景。</li>
+      </ul>
+      <div class="callout callout-teal">
+        这些空白不否定这个想法。SSR 的贡献是<strong>指出了一个之前没人用过的信号源</strong>：推理模型自己的思维链就是一个免费的、逐步收敛的草稿生成器。这个观察是对的、是新的、而且实现代价极低。要把它做成一个可靠的系统组件，还需要有人补上质量评测、强基线对照和 $b_d$ 的自适应策略。
+      </div>
+    </section>
+
+    <section id="summary">
+      <h2>⑩ 一句话总结</h2>
+      <div class="callout callout-accent">
+        <strong>SSR = 同一个模型 × 两个思考预算 × 两层复用。</strong>短预算那次的答案当草稿（成本藏在还在继续的思考背后），长预算那次的答案当验证器；先用拒绝采样吃掉逐位对齐的前缀，再用后缀检索捞回失配之后仍然可用的片段。不训练、不改架构、只改调度器，在低并发下换来 1.1×–1.3× 的端到端加速——代价是瞬时算力峰值，以及第二层复用让「无损」的说法不再成立。
+      </div>
+      <p class="note-inline">论文：Ravisri Valluri, Tung Nguyen, Aditya Grover. <em>Self-Speculation for Faster Reasoning Models.</em> arXiv:2608.20359v1, 2026-06-17（UCLA；代码 github.com/Ravi-VK/SSR）。本文中所有数值均取自论文正文与表格；凡论文未测量的内容，本文均已标注。</p>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(function () {
+'use strict';
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, a) {
+  var n = document.createElementNS(NS, tag);
+  if (a) for (var k in a) if (a[k] != null) n.setAttribute(k, a[k]);
+  return n;
+}
+function C(name, fb) { return window.aC(name, fb); }
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function AnimEngine(svg, cfg) {
+  this.svg = svg;
+  this.steps = cfg.steps || [];
+  this.i = 0;
+  this.speed = 1;
+  this.playing = false;
+  this.timer = null;
+  this.frame = svg.closest('.anim-frame');
+  this._initDefs();
+  this.layer = el('g', { 'class': 'anim-layer' });
+  svg.appendChild(this.layer);
+  this._buildRail();
+  this.goTo(0);
+}
+
+AnimEngine.prototype._initDefs = function () {
+  var defs = el('defs');
+  var mk = [['arrA', C('--a-accent', '#FF7A00')], ['arrG', C('--a-green', '#4CC98A')],
+            ['arrR', C('--a-red', '#FF7268')], ['arrB', C('--a-blue', '#74B4FF')],
+            ['arrP', C('--a-purple', '#B79BFF')], ['arrM', C('--a-fg-muted', '#888')],
+            ['arrY', C('--a-amber', '#E9B449')], ['arrT', C('--a-teal', '#48CFC4')]];
+  var id = this.svg.id;
+  for (var j = 0; j < mk.length; j++) {
+    var m = el('marker', { id: id + '-' + mk[j][0], viewBox: '0 0 10 10', refX: '9', refY: '5',
+      markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse' });
+    m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: mk[j][1] }));
+    defs.appendChild(m);
+  }
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype.mk = function (name) { return 'url(#' + this.svg.id + '-' + name + ')'; };
+AnimEngine.prototype.clear = function () { while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild); };
+
+AnimEngine.prototype.draw = function (node, o) {
+  o = o || {};
+  this.layer.appendChild(node);
+  if (o.reveal && !REDUCED) {
+    node.style.opacity = '0';
+    node.style.transition = 'opacity 320ms ease';
+    var d = o.delay || 0;
+    setTimeout(function () { node.style.opacity = o.opacity != null ? o.opacity : '1'; }, d / this.speed);
+  } else if (o.opacity != null) { node.style.opacity = o.opacity; }
+  if (o.cls) node.setAttribute('class', ((node.getAttribute('class') || '') + ' ' + o.cls).trim());
+  return node;
+};
+
+AnimEngine.prototype.t = function (x, y, str, o) {
+  o = o || {};
+  var n = el('text', { x: x, y: y, 'text-anchor': o.anchor || 'middle',
+    'font-size': o.size || 12, 'font-weight': o.weight || 400,
+    'font-family': o.mono ? '"JetBrains Mono", Consolas, monospace' : 'inherit',
+    fill: o.fill || C('--a-fg', '#ccc') });
+  n.textContent = str;
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, o) {
+  o = o || {};
+  var g = el('g');
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: o.rx != null ? o.rx : 6,
+    fill: fill || 'none', stroke: stroke || C('--a-line', '#444'),
+    'stroke-width': o.sw || 1.5, 'stroke-dasharray': o.dash || null }));
+  if (label) {
+    var lines = String(label).split('|');
+    var y0 = y + h / 2 - (lines.length - 1) * 8 + 4;
+    for (var j = 0; j < lines.length; j++) {
+      var tn = el('text', { x: x + w / 2, y: y0 + j * 16, 'text-anchor': 'middle',
+        'font-size': o.size || 12, 'font-weight': o.weight || 500,
+        fill: o.labelFill || stroke || C('--a-fg', '#ccc') });
+      tn.textContent = lines[j];
+      g.appendChild(tn);
+    }
+  }
+  return this.draw(g, o);
+};
+
+AnimEngine.prototype.line = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  return this.draw(el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, 'stroke-linecap': 'round' }), o);
+};
+AnimEngine.prototype.arrow = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  var n = el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-fg-muted', '#888'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': this.mk(o.marker || 'arrM') });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.circle = function (cx, cy, r, o) {
+  o = o || {};
+  return this.draw(el('circle', { cx: cx, cy: cy, r: r, fill: o.fill || 'none',
+    stroke: o.stroke || 'none', 'stroke-width': o.sw || 1.5 }), o);
+};
+
+AnimEngine.prototype.ellipse = function (cx, cy, rx, ry, rot, o) {
+  o = o || {};
+  var n = el('ellipse', { cx: cx, cy: cy, rx: rx, ry: ry, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, transform: 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.path = function (d, o) {
+  o = o || {};
+  return this.draw(el('path', { d: d, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': o.marker ? this.mk(o.marker) : null }), o);
+};
+
+/* 横向条形：用于实验数据对比。value 已按 max 归一到 w 像素。 */
+AnimEngine.prototype.bar = function (x, y, w, h, label, val, max, color, o) {
+  o = o || {};
+  var len = Math.max(2, w * Math.min(1, val / max));
+  var g = el('g');
+  var lt = el('text', { x: x - 8, y: y + h / 2 + 4, 'text-anchor': 'end', 'font-size': 11,
+    fill: C('--a-fg-muted', '#888') });
+  lt.textContent = label;
+  g.appendChild(lt);
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: 3, fill: C('--a-code-bg', '#222') }));
+  var b = el('rect', { x: x, y: y, width: len, height: h, rx: 3, fill: color });
+  g.appendChild(b);
+  var vt = el('text', { x: x + len + 8, y: y + h / 2 + 4, 'text-anchor': 'start', 'font-size': 11,
+    'font-weight': 600, fill: color });
+  vt.textContent = o.fmt ? o.fmt(val) : val;
+  g.appendChild(vt);
+  if (!REDUCED) {
+    b.setAttribute('width', 0);
+    vt.style.opacity = '0';
+    var sp = this.speed, d = o.delay || 0;
+    setTimeout(function () {
+      b.style.transition = 'width 520ms cubic-bezier(.2,.8,.3,1)';
+      b.setAttribute('width', len);
+      vt.style.transition = 'opacity 300ms ease 260ms';
+      vt.style.opacity = '1';
+    }, d / sp + 30);
+  }
+  return this.draw(g, { cls: o.cls });
+};
+AnimEngine.prototype._buildRail = function () {
+  var rail = this.frame.querySelector('.anim-stage-rail');
+  if (!rail) return;
+  rail.textContent = '';
+  for (var j = 0; j < this.steps.length; j++) {
+    var b = document.createElement('button');
+    b.className = 'stage-chip';
+    b.type = 'button';
+    b.dataset.idx = j;
+    b.setAttribute('role', 'tab');
+    b.textContent = (j + 1) + '. ' + (this.steps[j].chip || this.steps[j].title);
+    rail.appendChild(b);
+  }
+};
+
+AnimEngine.prototype.goTo = function (idx) {
+  if (idx < 0 || idx >= this.steps.length) return;
+  this.i = idx;
+  this.clear();
+  var step = this.steps[idx];
+  step.render(this);
+  this._updateUI();
+};
+
+AnimEngine.prototype._updateUI = function () {
+  var f = this.frame, step = this.steps[this.i], n = this.steps.length;
+  var info = f.querySelector('.step-info'), desc = f.querySelector('.step-desc'),
+      bar = f.querySelector('.anim-progress .bar');
+  if (info) info.textContent = '步骤 ' + (this.i + 1) + ' / ' + n + ' · ' + step.title;
+  if (desc) desc.innerHTML = step.desc || '';
+  if (bar) bar.style.width = ((this.i + 1) / n * 100) + '%';
+  var chips = f.querySelectorAll('.stage-chip');
+  for (var j = 0; j < chips.length; j++) chips[j].setAttribute('aria-current', j === this.i ? 'true' : 'false');
+  var prev = f.querySelector('.btn-prev'), next = f.querySelector('.btn-next');
+  if (prev) prev.disabled = this.i === 0;
+  if (next) next.disabled = this.i === n - 1;
+};
+
+AnimEngine.prototype.next = function () { if (this.i < this.steps.length - 1) this.goTo(this.i + 1); };
+AnimEngine.prototype.prev = function () { if (this.i > 0) this.goTo(this.i - 1); };
+AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+AnimEngine.prototype.setSpeed = function (v) { this.speed = v; };
+
+AnimEngine.prototype.play = function () {
+  var self = this;
+  if (this.i >= this.steps.length - 1) this.goTo(0);
+  this.playing = true;
+  this._setPlayBtn();
+  var tick = function () {
+    if (!self.playing) return;
+    var dur = (self.steps[self.i].duration || 2600) / self.speed;
+    self.timer = setTimeout(function () {
+      if (!self.playing) return;
+      if (self.i >= self.steps.length - 1) { self.pause(); return; }
+      self.goTo(self.i + 1);
+      tick();
+    }, dur);
+  };
+  tick();
+};
+
+AnimEngine.prototype.pause = function () {
+  this.playing = false;
+  if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  this._setPlayBtn();
+};
+AnimEngine.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
+AnimEngine.prototype._setPlayBtn = function () {
+  var b = this.frame.querySelector('.btn-play');
+  if (b) b.textContent = this.playing ? '❙❙ 暂停' : '▶ 播放';
+};
+/* ---------- 场景 1：四相流水线 ---------- */
+function scene1() {
+  var X0 = 70, YB = 96, YS = 214, YD = 258, H = 30, HD = 22;
+  function shell(e, k) {
+    e.t(410, 30, '同一份权重，两个预算：草稿开销藏在还在继续的思考里', { size: 13, weight: 600, fill: C('--a-fg-strong', '#eee') });
+    e.t(58, YB + 20, '基线', { anchor: 'end', size: 12, fill: C('--a-fg-muted', '#888') });
+    e.rect(X0, YB, 400, H, '思维链 r（长）', C('--a-blue-bg', '#1b2b40'), C('--a-blue', '#74B4FF'), { size: 11 });
+    e.rect(X0 + 400, YB, 230, H, '答案 a（逐位解码）', C('--a-code-bg', '#222'), C('--a-fg-muted', '#888'), { size: 11 });
+    e.line(X0 + 630, YB - 12, X0 + 630, YS + H + 60, { stroke: C('--a-red', '#FF7268'), dash: '4 4' });
+    e.t(X0 + 630, YB - 18, '基线完成', { size: 11, fill: C('--a-red', '#FF7268') });
+    if (k >= 1) e.t(58, YS + 20, 'SSR', { anchor: 'end', size: 12, weight: 600, fill: C('--a-accent', '#FF7A00') });
+    if (k >= 1) {
+      e.rect(X0, YS, 260, H, '思维链推进到 b_d', C('--a-blue-bg', '#1b2b40'), C('--a-blue', '#74B4FF'), { size: 11 });
+      e.line(X0 + 260, YS - 10, X0 + 260, YD + HD + 14, { stroke: C('--a-purple', '#B79BFF'), dash: '3 3' });
+      e.t(X0 + 260, YS - 16, 'b_d', { size: 12, weight: 600, fill: C('--a-purple', '#B79BFF') });
+    }
+    if (k >= 2) {
+      e.rect(X0 + 260, YS, 140, H, '思维链继续', C('--a-blue-bg', '#1b2b40'), C('--a-blue', '#74B4FF'), { size: 11 });
+      e.rect(X0 + 260, YD, 140, HD, '并发起草 â', C('--a-purple-bg', '#2a2140'), C('--a-purple', '#B79BFF'), { size: 11, cls: k === 2 ? 'hot' : '' });
+      e.t(X0 + 330, YD + HD + 26, '同一个时间窗里做两件事 → 起草不占墙钟时间', { size: 11, fill: C('--a-purple', '#B79BFF') });
+    }
+    if (k >= 3) {
+      e.line(X0 + 400, YS - 10, X0 + 400, YD + HD + 14, { stroke: C('--a-teal', '#48CFC4'), dash: '3 3' });
+      e.t(X0 + 400, YS - 16, 'b_v', { size: 12, weight: 600, fill: C('--a-teal', '#48CFC4') });
+      e.arrow(X0 + 402, YD + HD / 2, X0 + 470, YS + H + 12, { stroke: C('--a-purple', '#B79BFF'), marker: 'arrP' });
+    }
+    if (k >= 4) {
+      e.rect(X0 + 400, YS, 40, H, '验', C('--a-amber-bg', '#3a2f14'), C('--a-amber', '#E9B449'), { size: 11 });
+      e.t(X0 + 420, YS - 16, '1 次前向并行验 m 位', { size: 10, fill: C('--a-amber', '#E9B449') });
+    }
+    if (k >= 5) {
+      e.rect(X0 + 440, YS, 100, H, '续写（已加速）', C('--a-green-bg', '#16321f'), C('--a-green', '#4CC98A'), { size: 11, cls: 'hot' });
+      e.line(X0 + 540, YS + H + 22, X0 + 630, YS + H + 22, { stroke: C('--a-green', '#4CC98A'), sw: 3 });
+      e.t(X0 + 585, YS + H + 42, '省下的墙钟时间', { size: 11, weight: 600, fill: C('--a-green', '#4CC98A') });
+    }
+    if (k >= 6) {
+      e.rect(180, 350, 460, 52, null, C('--a-code-bg', '#222'), C('--a-accent', '#FF7A00'), { dash: '5 4' });
+      e.t(410, 372, '并发成立的唯一条件： | r |  >  b_d + m', { size: 14, weight: 600, mono: true, fill: C('--a-accent', '#FF7A00') });
+      e.t(410, 391, '思维链要足够长，长到装得下这段起草；否则草稿还没写完思考就结束了', { size: 10, fill: C('--a-fg-muted', '#888') });
+    }
+  }
+  var steps = [
+    ['基线', '朴素自回归', '思维链写完，才逐位解码答案。这条时间线上没有任何并行可利用的空隙——除了一处：<strong>思维链本身很长</strong>。'],
+    ['写到 b_d', '第一相：推进到草稿预算', '正常生成思维链，直到累计 b_d 个 token。到这里为止 SSR 与基线一模一样，没有任何额外开销。'],
+    ['并发起草', '第二相：起草与思考同时进行', '把 r≤b_d 后面接一个「思考结束」标记，另开一路采样出草稿答案 â；<strong>与此同时思维链继续往 b_v 走</strong>。这是 SSR 全部收益的来源——草稿的算力开销被塞进了本来就要等的那段时间里。'],
+    ['收草稿', '第三相：抵达 b_v，收齐草稿', '思维链写到 b_v 时思考真正结束，此时草稿早已备好，可以直接进入验证。'],
+    ['验证', '第四相：一次前向验完整份草稿', '把草稿当成「提示的延长部分」喂进高预算上下文，一次前向拿到每一位上的目标分布，逐位比对——把 m 步串行解码压成 1 步并行打分。'],
+    ['续写', '收益兑现', '被接受的前缀直接留用，只需从失配处继续。整条时间线比基线短，缩短量就是被复用掉的那些 token 的解码时间。'],
+    ['可行条件', '这个技巧什么时候不成立', '论文给出的唯一成本关系式。b_d 太小则草稿还没收敛、白算一场；太大则违反这个不等式、并发前提破产。而思维链总长事先并不知道——这个矛盾直接催生了多阶段变体。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 3：拒绝采样逐位验证 ---------- */
+function scene3() {
+  var X = 110, DX = 118, W = 96, Y = 84, H = 34;
+  var tok = ['â₁', 'â₂', 'â₃', 'â₄', 'â₅'];
+  var dv = [0.50, 0.60, 0.70, 0.40, 0.30];
+  var pv = [0.70, 0.48, 0.21, 0.22, 0.27];
+  var uv = [null, 0.42, 0.61, null, null];
+  function shell(e, k) {
+    var GRN = C('--a-green', '#4CC98A'), RED = C('--a-red', '#FF7268'),
+        PUR = C('--a-purple', '#B79BFF'), BLU = C('--a-blue', '#74B4FF'),
+        MUT = C('--a-fg-muted', '#888'), FG = C('--a-fg', '#ccc');
+    e.t(410, 28, 'α_t = min( 1 , p / d )　逐位判定，失配处从残差分布重采样', { size: 12, weight: 600, mono: true, fill: C('--a-fg-strong', '#eee') });
+    for (var i = 0; i < 5; i++) {
+      var x = X + i * DX, ratio = pv[i] / dv[i];
+      var state = 'idle';
+      if (k >= 2 && i === 0) state = 'ok';
+      if (k >= 3 && i === 1) state = 'ok';
+      if (k >= 4 && i === 2) state = 'no';
+      if (k >= 6 && i > 2) state = 'drop';
+      var stroke = state === 'ok' ? GRN : state === 'no' ? RED : state === 'drop' ? MUT : PUR;
+      var fill = state === 'ok' ? C('--a-green-bg', '#16321f') : state === 'no' ? C('--a-red-bg', '#3a1a1a') : C('--a-purple-bg', '#2a2140');
+      e.rect(x, Y, W, H, tok[i], state === 'drop' ? C('--a-code-bg', '#222') : fill, stroke, { size: 13, opacity: state === 'drop' ? 0.35 : 1 });
+      if (k >= 1) {
+        e.rect(x, 132, W * dv[i], 11, null, PUR, PUR, { rx: 2 });
+        e.rect(x, 150, W * pv[i], 11, null, BLU, BLU, { rx: 2 });
+        e.t(x + W / 2, 184, 'p/d = ' + ratio.toFixed(2), { size: 11, mono: true, fill: ratio >= 1 ? GRN : FG });
+      }
+      if (k >= 2 && i === 0) e.t(x + W / 2, 206, 'α=1 · 必接受', { size: 10, weight: 600, fill: GRN });
+      if (k >= 3 && i === 1) e.t(x + W / 2, 206, 'u=0.42 < 0.80 ✓', { size: 10, weight: 600, fill: GRN });
+      if (k >= 4 && i === 2) e.t(x + W / 2, 206, 'u=0.61 > 0.30 ✗', { size: 10, weight: 600, fill: RED });
+      if (k >= 6 && i > 2) e.t(x + W / 2, 206, '丢弃', { size: 10, fill: MUT });
+    }
+    if (k >= 1) {
+      e.t(100, 141, 'd', { anchor: 'end', size: 12, weight: 600, fill: PUR });
+      e.t(100, 159, 'p', { anchor: 'end', size: 12, weight: 600, fill: BLU });
+    }
+    if (k >= 5) {
+      var xr = X + 2 * DX;
+      e.arrow(xr + W / 2, 214, xr + W / 2, 246, { stroke: RED, marker: 'arrR' });
+      e.rect(xr - 60, 248, W + 120, 46, 'a₃ ~ max(p−d,0) / Σ max(p−d,0)|从残差分布补一个 token', C('--a-red-bg', '#3a1a1a'), RED, { size: 11, cls: 'hot' });
+    }
+    if (k >= 6) e.t(410, 316, '最长被接受前缀 k_acc = 2 —— 只有它被无条件留用', { size: 12, weight: 600, mono: true, fill: GRN });
+    if (k >= 7) {
+      e.rect(90, 336, 640, 62, null, C('--a-green-bg', '#16321f'), GRN, { dash: '5 4' });
+      e.t(410, 358, '接受规则 + 残差采样 ⟹ 输出的边缘分布恒等于 p', { size: 13, weight: 600, fill: GRN });
+      e.t(410, 380, '这个恒等式对任意 d 成立：草稿再差也只是白算，不会让输出变差', { size: 11, fill: MUT });
+    }
+  }
+  var steps = [
+    ['一份草稿', '待验证的 5 个草稿 token', '起草时每一位的概率 d 都被记录下来了。验证阶段一次前向就能拿到目标分布 p 在同样这 5 个位置上的取值。'],
+    ['两个分布', '把 d 与 p 摆在一起', '紫条是短预算的草稿分布，蓝条是长预算的目标分布。注意它们并不需要接近——接受规则只关心比值。'],
+    ['第 1 位', 'p > d：无条件接受', '目标模型比草稿模型更看好这个 token，比值大于 1，α 被截断到 1。这类位置是纯赚。'],
+    ['第 2 位', 'p < d：按概率接受', '比值 0.80，抽一个 (0,1) 均匀数 u=0.42 小于它，于是接受。这一步的随机性正是保分布的关键。'],
+    ['第 3 位', '失配', '比值只有 0.30，而 u=0.61，拒绝。partial CoT 在这里已经开始与完整推理分道扬镳。'],
+    ['残差补位', '不是简单地重采样', '被拒之后不能直接从 p 采样，那会让分布偏斜。必须从 p 减去 d 的正部里采——这样整体边缘分布才恰好回到 p。'],
+    ['丢弃剩余', '第 3 位之后全部作废', '标准投机解码到这里就结束了：k_acc=2，草稿后面 2 个 token 无论对不对都被扔掉。<strong>而 SSR 认为这太浪费</strong>——因为草稿是同一个模型写的完整答案，后面大段内容仍可能有用。'],
+    ['无损性', '这一层为什么是安全的', '这是 2023 年投机解码奠基工作的结论，与草稿质量无关。SSR 的 prefix 阶段完整继承了它——但注意，下一节的 suffix 阶段不再享有这个保证。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 4：四色 token 带（一份草稿被消化两遍） ---------- */
+function scene4() {
+  var X = 82, CW = 38, GAP = 3, YD = 76, H = 28, YO = 252, N = 16;
+  function pal(e) {
+    return { grn: C('--a-green', '#4CC98A'), red: C('--a-red', '#FF7268'),
+             pur: C('--a-purple', '#B79BFF'), tea: C('--a-teal', '#48CFC4'),
+             mut: C('--a-fg-muted', '#888'), fg: C('--a-fg', '#ccc'),
+             gbg: C('--a-green-bg', '#16321f'), rbg: C('--a-red-bg', '#3a1a1a'),
+             pbg: C('--a-purple-bg', '#2a2140'), tbg: C('--a-teal-bg', '#12312f'),
+             cbg: C('--a-code-bg', '#222') };
+  }
+  function cells(e, y, kind, P) {
+    for (var i = 0; i < N; i++) {
+      var t = kind[i], st = P.mut, fl = P.cbg, op = 1;
+      if (t === 'p') { st = P.pur; fl = P.pbg; }
+      else if (t === 'g') { st = P.grn; fl = P.gbg; }
+      else if (t === 'r') { st = P.red; fl = P.rbg; }
+      else if (t === 't') { st = P.tea; fl = P.tbg; }
+      else if (t === 's') { st = P.mut; fl = P.cbg; }
+      else if (t === 'x') { st = P.mut; fl = P.cbg; op = 0.28; }
+      else if (t === '-') { op = 0.08; }
+      e.rect(X + i * (CW + GAP), y, CW, H, String(i + 1), fl, st, { size: 10, rx: 3, opacity: op, labelFill: st });
+    }
+  }
+  function shell(e, k) {
+    var P = pal(e);
+    var d = [], o = [], i;
+    for (i = 0; i < N; i++) { d.push('p'); o.push('-'); }
+    if (k >= 1) { d[0] = d[1] = d[2] = 'g'; d[3] = 'r'; }
+    if (k >= 2) for (i = 4; i < N; i++) d[i] = 'x';
+    if (k >= 3) for (i = 4; i < N; i++) d[i] = 'p';
+    if (k >= 4) { o[0] = o[1] = o[2] = 'g'; o[3] = 's'; o[4] = 's'; }
+    if (k >= 5) { o[5] = 's'; }
+    if (k >= 6) { for (i = 8; i < 14; i++) d[i] = 't'; for (i = 5; i < 11; i++) o[i] = 't'; }
+    e.t(410, 26, '草稿 â₁ … â₁₆　—— 同一个模型在短预算下写出的一份完整答案', { size: 12, weight: 600, fill: C('--a-fg-strong', '#eee') });
+    e.t(70, YD + 19, '草稿', { anchor: 'end', size: 11, fill: P.mut });
+    cells(e, YD, d, P);
+    if (k >= 1) e.t(410, YD + 52, '① prefix 阶段：拒绝采样接受了前 3 位，第 4 位失配', { size: 11, weight: 600, fill: P.grn });
+    if (k >= 2) e.t(410, YD + 74, '传统投机解码：第 4 位之后整段作废 —— 12 个 token 白算', { size: 11, weight: 600, fill: P.red });
+    if (k >= 3) {
+      e.rect(140, 158, 540, 44, '后缀缓存 ← 仅由草稿 token 构建（prompt 与内部缓存显式关闭）', P.cbg, P.tea, { size: 11, dash: '5 4' });
+      e.t(410, 218, '匹配深度 4　·　单次最多提议 16 token　·　max spec factor 4', { size: 10, mono: true, fill: P.mut });
+    }
+    if (k >= 4) { e.t(70, YO + 19, '输出', { anchor: 'end', size: 11, fill: P.mut }); }
+    if (k >= 4) cells(e, YO, o, P);
+    if (k >= 5) {
+      e.rect(X + 3 * (CW + GAP), YO - 6, 2 * CW + GAP + 12, H + 12, null, null, P.tea, { dash: '3 3', rx: 4 });
+      e.t(410, YO + 62, '取已生成序列的末 4 个 token 作检索键，在草稿里找最长匹配', { size: 11, fill: P.tea });
+      e.arrow(X + 4 * (CW + GAP) + CW / 2, YO - 10, X + 8 * (CW + GAP) + CW / 2, YD + H + 8, { stroke: P.tea, marker: 'arrT', dash: '4 3' });
+    }
+    if (k >= 6) {
+      e.t(410, YO + 62, '② suffix 阶段：命中之后那一段被整段提议，贪心校验通过 → 直接采纳', { size: 11, weight: 600, fill: P.tea });
+      e.t(410, YO + 82, '越过了第一个失配点 —— 这是 prefix 验证永远拿不到的那部分收益', { size: 11, fill: P.mut });
+    }
+    if (k >= 7) {
+      e.rect(90, 322, 640, 84, null, P.pbg, P.pur, { dash: '5 4' });
+      e.t(410, 344, 'Qwen3-8B / ClassEval 消融', { size: 12, weight: 600, fill: P.pur });
+      e.t(410, 366, '只开 prefix 验证：加速 1.086 ×　延迟 −7.9%', { size: 11, mono: true, fill: P.fg });
+      e.t(410, 386, '只开 suffix 解码：加速 1.318 ×　延迟 −24.1%　（此时被接受的 prefix token = 0）', { size: 11, mono: true, fill: P.tea });
+    }
+  }
+  var steps = [
+    ['草稿到手', '16 个 token 的一份完整答案', '它基于不完整的推理，所以整体质量不如最终答案；但它的措辞、结构、公式骨架大体已经定型。'],
+    ['前缀接受', '第一层复用：严格验证', '拒绝采样吃掉逐位对齐的开头部分。这一层是保分布的，但它有个硬限制：碰到第一个失配就必须停。'],
+    ['传统做法', '失配之后全部作废', '对普通投机解码这是对的——草稿模型的后续内容建立在错误历史上。但 SSR 的草稿不是这样：它是同一个模型对同一道题写的完整答案，失配往往只是某个中间数值或措辞不同。'],
+    ['建后缀缓存', '第二层复用：把草稿当词典', '关键设计：后缀缓存<strong>只</strong>用草稿 token 构建，prompt 与已生成内容的缓存都关掉。这一层的唯一职责就是「从草稿里找还能用的片段」。'],
+    ['普通解码', '先老老实实走几步', '从失配处继续，普通自回归解码。每写出一个 token，就得到一个新的检索键。'],
+    ['检索匹配', '末 4 个 token 当检索键', '深度 4 的上下文匹配：在草稿里找出同样以这 4 个 token 结尾的位置。命中说明「模型又走回草稿的轨道上了」。'],
+    ['整段采纳', '命中之后整段提议并贪心校验', '把匹配位置之后最多 16 个 token 当作提议，一次前向贪心校验，对上多少算多少。<strong>代价：这一层是贪心精确匹配，不是拒绝采样，所以整体不再分布无损。</strong>'],
+    ['反直觉的结果', '全部收益都来自第二层', '这是全文最有信息量的一格：在这个设置里，严格的拒绝采样一个 token 都没接受，而后缀复用拿下了 24.1% 的延迟下降。说明「逐位对齐」这个强假设常常不成立，成立的只是弱得多的那个版本——局部片段会重复出现。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 5：多阶段自举 ---------- */
+function scene5() {
+  var BX = 200, BW = 480, ROW = [142, 208, 274], RH = 30;
+  var TICK = [BX + 120, BX + 260, BX + 400];
+  var GRE = [0, 120, 260];
+  function shell(e, k) {
+    var BLU = C('--a-blue', '#74B4FF'), PUR = C('--a-purple', '#B79BFF'),
+        GRN = C('--a-green', '#4CC98A'), AMB = C('--a-amber', '#E9B449'),
+        MUT = C('--a-fg-muted', '#888');
+    e.t(410, 26, '不赌一个 b_d，而是设一串递增预算，让草稿在推理推进中逐步凝固', { size: 12, weight: 600, fill: C('--a-fg-strong', '#eee') });
+    e.rect(BX, 62, BW, 28, '思维链 r 持续推进 →', C('--a-blue-bg', '#1b2b40'), BLU, { size: 11 });
+    e.t(190, 81, 'CoT', { anchor: 'end', size: 11, fill: MUT });
+    for (var i = 0; i < 3; i++) {
+      if (k < i + 1) continue;
+      e.line(TICK[i], 56, TICK[i], ROW[i] + RH + 8, { stroke: MUT, dash: '3 3' });
+      e.t(TICK[i], 50, 'b' + (i + 1), { size: 11, weight: 600, fill: MUT });
+    }
+    for (i = 0; i < 3; i++) {
+      if (k < i + 1) continue;
+      var y = ROW[i], g = GRE[i], done = k > i + 1;
+      e.t(190, y + 19, '第 ' + (i + 1) + ' 站', { anchor: 'end', size: 11, fill: MUT });
+      if (g > 0) e.rect(BX, y, g, RH, '已凝固前缀', C('--a-green-bg', '#16321f'), GRN, { size: 10 });
+      e.rect(BX + g, y, 170, RH, i === 2 ? '最终答案成形' : '本站新起草的部分', C('--a-purple-bg', '#2a2140'), PUR, { size: 10, cls: k === i + 1 ? 'hot' : '' });
+      if (done || (k >= i + 1 && i < 2)) {
+        e.arrow(BX + g + 175, y + RH / 2, BX + g + 215, y + RH / 2, { stroke: AMB, marker: 'arrY' });
+        e.t(BX + g + 258, y + RH / 2 + 4, '用 b' + (i + 2) + ' 的分布验证', { size: 10, fill: AMB });
+      }
+      if (i > 0) e.arrow(BX + 8, ROW[i - 1] + RH + 4, BX + 8, y - 4, { stroke: GRN, marker: 'arrG' });
+    }
+    if (k >= 4) {
+      e.rect(140, 320, 540, 44, 'â_{i+1} ~ p_θ( · ∣ q , r_{i+1} , â_{i,1:k_i} )', C('--a-code-bg', '#222'), PUR, { size: 13, mono: true });
+      e.t(410, 380, '自举：每一站不从零起草，而是从上一站已被接受的前缀继续写', { size: 11, fill: MUT });
+    }
+    if (k >= 5) {
+      e.rect(140, 320, 540, 84, null, C('--a-blue-bg', '#1b2b40'), BLU, { dash: '5 4' });
+      e.t(410, 344, 'Qwen3-8B / AIME-2024 多阶段', { size: 12, weight: 600, fill: BLU });
+      e.t(410, 366, '端到端延迟 18.58 s → 16.37 s　（−11.9%）', { size: 13, weight: 600, mono: true, fill: GRN });
+      e.t(410, 390, '比单阶段最好的 −24.1% 小 —— 多阶段买的是鲁棒性，不是更高的加速比', { size: 10, fill: MUT });
+    }
+  }
+  var steps = [
+    ['第 1 站', '在 b₁ 处起草一次', '预算很小，partial CoT 还很粗糙，所以这一份草稿大概只有开头一小段能用。但它不需要好——它只是下一站的起点。'],
+    ['第 2 站', '验证并延长', '用 b₂ 的分布验证第 1 站的草稿，留下被接受的前缀（绿），再从这个前缀继续写新的部分。草稿开始「凝固」。'],
+    ['第 3 站', '继续凝固', '预算越大，验证器越接近最终分布，被凝固下来的前缀就越长。到最后一站时，答案的绝大部分其实已经在前几站被确定了。'],
+    ['自举式条件', '关键在于条件里多了一项', '第 i+1 站不是重新起草，而是以第 i 站已被接受的前缀为条件继续。这让每一站的验证工作量都只是增量，而不是整份答案。'],
+    ['为什么要这样', '它解决的是「b_d 无法预知」', '单阶段 SSR 必须赌一个 b_d：太小草稿没收敛，太大违反 |r| > b_d + m。多阶段不用赌——无论真实 CoT 长度落在哪里，总有若干中间站落在合适的区间内。'],
+    ['实测', '收益与定位', '论文把这一小节自己标注为 preliminary：多阶段的降幅反而小于单阶段最佳值。它的价值在于免调参，而不是把加速比推高。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 2：一份权重长出两个预算 ---------- */
+function scene2() {
+  function shell(e, k) {
+    var PUR = C('--a-purple', '#B79BFF'), BLU = C('--a-blue', '#74B4FF'),
+        TEA = C('--a-teal', '#48CFC4'), RED = C('--a-red', '#FF7268'),
+        MUT = C('--a-fg-muted', '#888');
+    e.rect(320, 24, 180, 42, 'θ · 同一份权重', C('--a-accent-bg', '#3a2410'), C('--a-accent', '#FF7A00'), { size: 13 });
+    e.t(410, 82, '不训练 · 无额外参数 · 不改架构', { size: 10, fill: MUT });
+    if (k >= 1) {
+      e.rect(150, 104, 520, 30, 'prompt + 已生成的 partial CoT（KV 已在缓存里）', C('--a-blue-bg', '#1b2b40'), BLU, { size: 11 });
+      e.t(410, 152, '在 b_d 这一刻，调度器把请求复制成两个 —— 它们共享上面这段前缀', { size: 11, fill: MUT });
+    }
+    if (k >= 2) {
+      e.arrow(300, 136, 210, 176, { stroke: PUR, marker: 'arrP' });
+      e.rect(80, 178, 260, 62, '子请求：前缀 + ⟨思考结束⟩|立刻作答 → 草稿 â', C('--a-purple-bg', '#2a2140'), PUR, { size: 11, cls: k === 2 ? 'hot' : '' });
+    }
+    if (k >= 3) {
+      e.arrow(520, 136, 610, 176, { stroke: TEA, marker: 'arrT' });
+      e.rect(480, 178, 260, 62, '父请求：什么都不知道地|把思维链写到 b_v', C('--a-teal-bg', '#12312f'), TEA, { size: 11, cls: k === 3 ? 'hot' : '' });
+    }
+    if (k >= 4) {
+      e.arrow(210, 242, 210, 282, { stroke: PUR, marker: 'arrP' });
+      e.arrow(610, 242, 610, 282, { stroke: BLU, marker: 'arrB' });
+      e.rect(90, 284, 240, 54, 'd = p_θ( a ∣ q , b_d )|提议分布 · drafter', C('--a-purple-bg', '#2a2140'), PUR, { size: 12 });
+      e.rect(490, 284, 240, 54, 'p = p_θ( a ∣ q , b_v )|目标分布 · verifier', C('--a-blue-bg', '#1b2b40'), BLU, { size: 12 });
+      e.t(410, 316, 'b_d < b_v', { size: 13, weight: 600, mono: true, fill: C('--a-accent', '#FF7A00') });
+      e.t(410, 334, '唯一差别：想了多久', { size: 10, fill: MUT });
+    }
+    if (k >= 5) {
+      e.rect(80, 352, 660, 30, '起草窗口内父子请求同时在服务中 → 瞬时 batch size 与 KV 占用上升', C('--a-red-bg', '#3a1a1a'), RED, { size: 11, dash: '5 4' });
+      e.t(410, 402, 'SSR 省的是墙钟时间，不是 FLOPs —— 高并发下这块「空闲算力」不再免费', { size: 11, weight: 600, fill: RED });
+    }
+    if (k >= 6) {
+      e.rect(80, 352, 660, 56, null, C('--a-code-bg', '#222'), MUT, { dash: '4 4' });
+      e.t(410, 372, 'Qwen 系用 </think>　·　Gemma-4-E4B-it 用原生 <channel|>', { size: 12, mono: true, fill: C('--a-fg', '#ccc') });
+      e.t(410, 394, '某些设置里还要再追加一段「打断串」把模型逼出思考模式 —— 论文没给出它的字面内容', { size: 10, fill: MUT });
+    }
+  }
+  var steps = [
+    ['一份权重', '起点：只有一个模型', 'SSR 不引入任何新参数。drafter 与 verifier 是同一份 θ 在两种条件下的求值结果，这是它 training-free 的全部原因。'],
+    ['共享前缀', 'prompt + partial CoT 已经算过了', '起草不需要重新预填充。子请求的 token 序列是父请求当前序列的延长，vLLM 原生的 prefix caching 直接命中，这段 KV 一次都不用重算。'],
+    ['子请求', '追加「思考结束」标记，逼它作答', '这就是预算强制：在 partial CoT 后面接上结束标记，模型便认为自己想完了，于是给出一个基于不完整推理的答案。它天生比最终答案差，但方向大体一致。'],
+    ['父请求', '父请求毫不知情地继续思考', '父请求的行为与不开 SSR 时完全一样。这一点很重要——它保证了思维链本身没有被污染，验证器看到的仍是原汁原味的 r≤b_v。'],
+    ['两个分布', 'd 与 p：只差一个「想了多久」', '把两条路的输出写成分布，投机解码需要的两个要件就齐了。所有既有自投机方法都要牺牲一点模型保真度来造 d（提前退出、稀疏注意力、量化 KV），SSR 不牺牲任何一点权重精度。'],
+    ['代价', '不是免费的', '起草窗口内两个请求同时在跑。收益来自把开销塞进等待里，而等待只有在负载不满时才存在。论文全部实验都是 batch size = 1。'],
+    ['实现细节', '两个模型家族的结束标记不同', '这是复现时唯一容易踩的坑：结束标记必须与模型的对话模板一致，否则预算强制会失效，草稿变成继续思考的胡言。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 6：实验数字 ---------- */
+function scene6() {
+  function shell(e, k) {
+    var GRN = C('--a-green', '#4CC98A'), BLU = C('--a-blue', '#74B4FF'),
+        TEA = C('--a-teal', '#48CFC4'), RED = C('--a-red', '#FF7268'),
+        AMB = C('--a-amber', '#E9B449'), MUT = C('--a-fg-muted', '#888'),
+        FG = C('--a-fg', '#ccc');
+    e.t(410, 26, 'Qwen3-8B / ClassEval 消融　—— 本文只画论文明确给出的数字', { size: 12, weight: 600, fill: C('--a-fg-strong', '#eee') });
+    var fx = function (v) { return v.toFixed(3) + ' ×'; };
+    if (k >= 0) e.bar(220, 56, 380, 24, '基线（朴素自回归）', 1.000, 1.4, BLU, { fmt: fx });
+    if (k >= 1) e.bar(220, 96, 380, 24, '只开 prefix 验证', 1.086, 1.4, AMB, { fmt: fx, delay: 60 });
+    if (k >= 2) e.bar(220, 136, 380, 24, '只开 suffix 解码', 1.318, 1.4, TEA, { fmt: fx, delay: 120 });
+    if (k >= 2) e.t(410, 176, '加速比', { size: 11, fill: MUT });
+    if (k >= 3) {
+      var fp = function (v) { return '−' + v.toFixed(1) + '%'; };
+      e.bar(220, 200, 380, 22, '延迟降幅 · prefix', 7.9, 26, AMB, { fmt: fp });
+      e.bar(220, 232, 380, 22, '延迟降幅 · suffix', 24.1, 26, TEA, { fmt: fp, delay: 60 });
+    }
+    if (k >= 4) {
+      e.rect(150, 266, 520, 46, '此设置下 prefix 阶段被接受的 token 数 = 0', C('--a-red-bg', '#3a1a1a'), RED, { size: 12, cls: 'hot' });
+      e.t(410, 328, '全部收益来自「越过失配点复用草稿片段」这一层', { size: 11, fill: RED });
+    }
+    if (k >= 5) {
+      e.rect(150, 266, 520, 46, 'AIME-2024 多阶段：18.58 s → 16.37 s　（−11.9%）', C('--a-green-bg', '#16321f'), GRN, { size: 12, mono: true });
+      e.t(410, 328, '论文自己把这一小节标注为 preliminary', { size: 11, fill: MUT });
+    }
+    if (k >= 6) {
+      e.rect(110, 344, 600, 66, null, C('--a-code-bg', '#222'), MUT, { dash: '4 4' });
+      e.t(410, 366, '读这些数字时必须记住的三件事', { size: 12, weight: 600, fill: FG });
+      e.t(410, 386, '① batch size = 1　② 唯一基线是朴素自回归　③ 全文没有任何质量指标', { size: 11, fill: RED });
+    }
+  }
+  var steps = [
+    ['基线', '参照点：同模型朴素自回归', '论文唯一的对照就是这一条——没有 EAGLE、没有 Medusa、也没有把 suffix decoding 单独拿出来跑一遍。这是方法论上最大的空白。'],
+    ['prefix', '只开严格验证', '加速 1.086×。这一层是分布无损的，但收益很薄：逐位对齐的假设在真实生成里经常不成立。'],
+    ['suffix', '只开后缀复用', '加速 1.318×，比 prefix 层高出一个量级的收益。代价是它用贪心精确匹配，不再保分布。'],
+    ['延迟', '换成延迟降幅看', '7.9% 对 24.1%。SSR 论文摘要里那个亮眼的数字来自 suffix 这一层，不是来自投机解码的经典机制。'],
+    ['0 个 token', '最反直觉的一格', '在这个设置里，拒绝采样一个 token 都没接受，加速却有 24.1%。这直接说明「短预算答案与长预算答案逐位对齐」这个强假设不成立，成立的只是「局部片段会重复出现」。'],
+    ['多阶段', 'AIME-2024 上的多阶段结果', '降幅 11.9%，小于单阶段最佳。多阶段的意义在于不用调 b_d。'],
+    ['读数提醒', '这些数字的适用边界', '低并发才有空闲算力可拿；基线偏弱使得增量贡献无法拆分；而「保持输出质量」在开着 suffix decoding 时是一个未经检验的说法。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+/* ---------- 装配 ---------- */
+var builders = { svg1: scene1, svg2: scene2, svg3: scene3, svg4: scene4, svg5: scene5, svg6: scene6 };
+var engines = {};
+function initAll() {
+  for (var id in builders) {
+    var svg = document.getElementById(id);
+    if (!svg) continue;
+    engines[id] = new AnimEngine(svg, { steps: builders[id]() });
+  }
+}
+function engineOf(node) {
+  var frame = node.closest('.anim-frame');
+  if (!frame) return null;
+  var svg = frame.querySelector('svg');
+  return svg ? engines[svg.id] : null;
+}
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('button');
+  if (!b || !b.closest('.anim-frame')) return;
+  var eng = engineOf(b);
+  if (!eng) return;
+  if (b.classList.contains('btn-next')) { eng.pause(); eng.next(); }
+  else if (b.classList.contains('btn-prev')) { eng.pause(); eng.prev(); }
+  else if (b.classList.contains('btn-reset')) eng.reset();
+  else if (b.classList.contains('btn-play')) eng.toggle();
+  else if (b.classList.contains('stage-chip')) { eng.pause(); eng.goTo(+b.dataset.idx); }
+});
+document.addEventListener('input', function (ev) {
+  if (!ev.target.classList.contains('speed')) return;
+  var eng = engineOf(ev.target);
+  if (eng) eng.setSpeed(parseFloat(ev.target.value));
+});
+document.addEventListener('keydown', function (ev) {
+  var frame = document.activeElement && document.activeElement.closest && document.activeElement.closest('.anim-frame');
+  if (!frame) return;
+  var eng = engineOf(document.activeElement);
+  if (!eng) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); eng.pause(); eng.next(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); eng.pause(); eng.prev(); }
+  else if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON') { ev.preventDefault(); eng.toggle(); }
+});
+
+/* SVG 里的色值是切换主题那一刻读出来的具体值，主题一变就过期。
+   用 MutationObserver 盯 data-theme，无论用户点的是站点导航里的开关还是
+   本文右下角这个按钮，都会重绘当前步。存储键与站点保持一致（'theme'）。 */
+function redrawAll() {
+  for (var id in engines) { engines[id].pause(); engines[id].goTo(engines[id].i); }
+}
+window.toggleTheme = function () {
+  var root = document.documentElement;
+  var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (err) {}
+};
+if (window.MutationObserver) {
+  new MutationObserver(function () { setTimeout(redrawAll, 30); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+window.toggleToc = function () {
+  var toc = document.getElementById('tocNav');
+  var btn = document.querySelector('.toc-toggle');
+  var hidden = toc.hasAttribute('hidden');
+  if (hidden) toc.removeAttribute('hidden'); else toc.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+};
+
+/* TOC 高亮 + 回到顶部 */
+function initChrome() {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if ('IntersectionObserver' in window && secs.length) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  var bt = document.getElementById('backTop');
+  if (bt) window.addEventListener('scroll', function () { bt.classList.toggle('show', window.scrollY > 400); }, { passive: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { initAll(); initChrome(); });
+} else { initAll(); initChrome(); }
+})();
+</script>
+</body>
+</html>
+
