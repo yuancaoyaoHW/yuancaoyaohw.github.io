@@ -1,0 +1,2413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AsmEvo：在编译产物上做优化，并且能证明自己没改坏</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.loss { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 620px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+/* ===== 场景过渡动画 (Pattern 1) ===== */
+.anim-canvas-wrap svg .scene-layer { transition: opacity 430ms cubic-bezier(.22,.61,.36,1), transform 430ms cubic-bezier(.22,.61,.36,1); }
+.anim-canvas-wrap svg .scene-enter.from-right { opacity: 0; transform: translateX(18px); }
+.anim-canvas-wrap svg .scene-enter.from-left { opacity: 0; transform: translateX(-18px); }
+.anim-canvas-wrap svg .scene-layer.scene-active { opacity: 1; transform: translateX(0); }
+.anim-canvas-wrap svg .scene-exit.to-left.scene-exit-active { opacity: 0; transform: translateX(-14px); }
+.anim-canvas-wrap svg .scene-exit.to-right.scene-exit-active { opacity: 0; transform: translateX(14px); }
+/* ===== 元素级入场动画 (Pattern 2) ===== */
+.anim-canvas-wrap svg .reveal { opacity: 0; transform: translateY(7px); animation: revealUp .48s cubic-bezier(.22,.61,.36,1) forwards; animation-delay: var(--delay, 0ms); transform-box: fill-box; }
+@keyframes revealUp { to { opacity: 1; transform: translateY(0); } }
+/* ===== 进度条 (Pattern 5) ===== */
+.anim-progress { height: 3px; background: var(--a-border); position: relative; }
+.anim-progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-soft)); width: 0%; transition: width 380ms cubic-bezier(.22,.61,.36,1); }
+/* ===== 步骤条 Stage Rail (Pattern 4) ===== */
+.anim-stage-rail { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 8px; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border: 1px solid var(--a-border); border-radius: 12px; background: var(--card-bg); cursor: pointer; font-size: 11px; color: var(--fg-soft); transition: all 0.15s; }
+.anim-stage-rail .stage-chip:hover { border-color: var(--accent); color: var(--accent); }
+.anim-stage-rail .stage-chip.done { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-soft); }
+.anim-stage-rail .stage-chip.active { background: var(--accent); color: var(--a-on-solid); border-color: var(--accent); font-weight: 600; }
+.anim-status { padding: 8px 16px; border-top: 1px solid var(--a-border); background: var(--bg); font-size: 13px; color: var(--fg-soft); display: flex; gap: 20px; align-items: center; min-height: 48px; }
+.anim-status .step-info { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.anim-status .step-desc { flex: 1; }
+.anim-status .step-desc mjx-container { margin: 0 2px; }
+.anim-legend { padding: 6px 16px; border-top: 1px solid var(--a-border); font-size: 11px; color: var(--fg-muted); display: flex; gap: 16px; flex-wrap: wrap; }
+.anim-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.anim-legend .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.back-top { position: fixed; bottom: 30px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: var(--a-on-solid); border: none; cursor: pointer; font-size: 20px; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.back-top.visible { display: flex; align-items: center; justify-content: center; }
+.theme-toggle { position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--a-border); cursor: pointer; font-size: 18px; z-index: 100; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: opacity 0ms; }
+  :root { --layer-ms: 0ms; }
+}
+@media (max-width: 960px) {
+  .layout { flex-direction: column; gap: 0; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; margin-bottom: 16px; max-height: 200px; }
+  .toc h3 { cursor: pointer; }
+  .toc.collapsed .toc a { display: none; }
+  .content { width: 100%; }
+  section { padding: 18px; }
+  .anim-controls { width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 720px) { section { padding: 14px; } }
+</style>
+</head>
+<body>
+<script>
+/* 语义色的运行时读取。SVG 由脚本生成、fill 走的是属性，属性不解析 var()，
+   所以这里在绘制时从正文容器上把 --a-* 的实际值读出来。第二个参数是深色
+   主题的兜底值，仅在拿不到自定义属性时生效。 */
+window.aC = (function () {
+  var cs = null;
+  return function (name, fallback) {
+    if (!cs) {
+      var host = document.querySelector('.interactive-body, .article-body') || document.body;
+      cs = getComputedStyle(host);
+    }
+    var v = cs.getPropertyValue(name);
+    return (v && v.trim()) || fallback;
+  };
+})();
+</script>
+
+<button class="theme-toggle" id="artThemeBtn" onclick="toggleTheme()" title="切换主题" aria-label="切换深色/浅色主题">🌙</button>
+<button class="back-top" id="backTop" onclick="scrollTo(0,0)" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+<nav class="toc" id="tocNav">
+  <h3 onclick="toggleToc()">导航</h3>
+  <a href="#hook">核心思想</a>
+  <a href="#bg-lowering">前置一：源码级优化管不到的那一层</a>
+  <a href="#bg-elf">前置二：一个 code object 里到底有什么</a>
+  <a href="#setting">问题设定：二进制既是产物也是唯一 oracle</a>
+  <a href="#recover">创新一：恢复可重汇编表示与 round-trip 保真</a>
+  <a href="#rebuild">创新二：metadata 感知重建与 ABI 冻结</a>
+  <a href="#oracle">创新三：两层差分 oracle</a>
+  <a href="#gate">创新四：GatedEval 与方差感知 commit gate</a>
+  <a href="#window">创新五：hot-window 定位</a>
+  <a href="#search">创新六：长时程搜索与验证血统树</a>
+  <a href="#evo">名字里的 Evo：它并不是进化算法</a>
+  <a href="#exp">实验：30 个 KernelBench 与 8 个生产 kernel</a>
+  <a href="#limit">局限：经验等价的边界在哪</a>
+  <a href="#summary">总结</a>
+</nav>
+
+<div class="content">
+
+<section class="hook" id="hook">
+  <h1>AsmEvo</h1>
+  <p class="tagline"><strong>Agentic Assembly-Level Optimization of AMD GPU Kernels with Functional Equivalence Verification</strong></p>
+  <p class="tagline">已经编译完的 GPU kernel 还能再快多少？AsmEvo 把优化的入口放到<strong>编译产物之后</strong>：输入一个 AMDGPU code object，输出另一个更快的 code object，中间不碰任何源码，正确性的唯一裁判就是<strong>原来那个二进制自己</strong>。</p>
+  <div class="badges">
+    <span class="badge badge-accent">KernelBench 30 个 29 改进，几何均值 1.35×</span>
+    <span class="badge badge-green">最大 3.88×</span>
+    <span class="badge badge-blue">生产 kernel 8/8 改进</span>
+    <span class="badge badge-purple">arXiv 2608.20711</span>
+  </div>
+</section>
+
+<section id="bg-lowering">
+  <h2>前置一：源码级优化管不到的那一层</h2>
+  <p>现在做 GPU kernel 优化的 LLM 系统几乎都长一个样：给模型一份 CUDA / Triton / HIP / tensor-program 源码，让它改写，然后拿一份<strong>参考实现</strong>比对输出，快了就留下。KernelBench、Kevin、CUDA-L1、GEAK、CudaForge、KernelEvolve 都在这条线上。</p>
+  <p>这条线有一个共同的隐含前提：<strong>还剩下的性能，都能通过改源码拿到</strong>。AsmEvo 这篇论文的出发点就是质疑这个前提。它指出 kernel 的最终性能不只由 high-level schedule 决定，还由 lowering 之后才落定的一批低层决策决定，原文列的是五类：</p>
+  <ul>
+    <li><strong>wait-counter placement</strong>——AMDGCN 的内存等待是显式的，等在哪一条指令前面直接决定 stall 长度；</li>
+    <li><strong>instruction selection</strong>——同一个语义有多个变体（不同的 cache hint、不同宽度的 load）；</li>
+    <li><strong>register allocation</strong>——VGPR/SGPR 用多少反过来钳住 occupancy；</li>
+    <li><strong>kernel descriptors</strong>——描述这个 kernel 需要多少资源的那张表；</li>
+    <li><strong>ABI-visible metadata</strong>——host 侧 launcher 看得见的那部分接口信息。</li>
+  </ul>
+  <p>论文的原话是，一旦 kernel 变成了 AMDGPU code object，剩下的优化机会「<em>may no longer be exposed through the source program</em>」——不是源码里改不动，而是源码里<strong>看不见</strong>。你在 HIP 层面写不出「把这条 <code>s_waitcnt</code> 往后挪三条指令」。</p>
+  <p>更现实的一层是：<strong>很多部署场景根本没有源码可改</strong>。论文点了三种形态——serving stack 只暴露一个编译好的 HSACO；一个 JIT cache artifact；或者干脆是 vendor binary，比如 AMD 自家的 AITer code object，以及嵌在 vLLM / SGLang 里由 Triton 生成的 kernel。</p>
+  <div class="callout callout-orange">
+    <strong>注意一个容易混淆的点。</strong>这里说的「没有源码」不等于「反编译不出来」。Triton kernel 当然有 Python 源码，但你拿到的是 JIT 编译缓存里的那个 HSACO，它是<strong>实际被 dispatch 的东西</strong>；重新编译一次未必得到同一个二进制，而生产环境要替换的正是这个二进制。所以「source-free」的准确含义是：<strong>可优化对象与可验证对象都只有这个二进制</strong>。
+  </div>
+</section>
+
+<section id="bg-elf">
+  <h2>前置二：一个 AMDGPU code object 里到底有什么</h2>
+  <p>要理解 AsmEvo 的第一个创新点，得先知道它面对的对象长什么样。一个 <code>.co</code> / <code>.hsaco</code> 是个 ELF 容器，里面大致分三类东西：</p>
+  <ul>
+    <li><strong>指令体</strong>：AMDGCN 机器码。这是反汇编器唯一能可靠还给你的部分。</li>
+    <li><strong>kernel descriptor</strong>：一张定长的资源表，告诉运行时这个 kernel 要多少 VGPR、多少 SGPR、多少 LDS、多少 scratch。运行时靠它决定一个 CU 上能并发放几个 workgroup（也就是 occupancy）。</li>
+    <li><strong>AMDGPU metadata 与符号表</strong>：kernarg 的布局与总大小、每个参数的类型与偏移、kernel 的符号名。host 侧的 launcher 靠这些把参数打包进 kernarg buffer 再 dispatch。</li>
+  </ul>
+  <p>关键在于：<strong>资源信息在两个地方各存了一份</strong>——kernel descriptor 里有，AMDGPU metadata 里也有。这两份必须一致，否则运行时的行为就没有定义了。论文把这种情况叫 <em>desynchronize metadata</em>，并把它列为汇编级编辑四大风险之一（另三个是破坏内存、违反 kernarg ABI、以及「只是改了语义所以看起来变快」）。</p>
+  <div class="anim-frame" id="anim1">
+    <div class="anim-header">
+      <span class="anim-title">动画 1：从 HIP 源码到 code object——优化机会在哪一层消失</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg1" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="编译流水线与 code object 结构的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">编译流水线</button><button class="stage-chip" data-step="1">lowering 之后才定的五类决策</button><button class="stage-chip" data-step="2">code object 的内部结构</button><button class="stage-chip" data-step="3">三种 source-free 部署形态</button><button class="stage-chip" data-step="4">AsmEvo 的入口</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-blue)"></span> 源码 / IR 层</span>
+      <span><span class="dot" style="background:var(--a-accent)"></span> 汇编 / 二进制层</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 源码层看不见的决策</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> AsmEvo 的作用点</span>
+    </div>
+  </div>
+</section>
+<section id="setting">
+  <h2>问题设定：二进制既是部署产物，也是唯一 oracle</h2>
+  <p>这是全篇最值得慢慢读的一段，因为它决定了后面所有机制的形状。</p>
+  <p>设待优化的 code object 是 $K_0$。AsmEvo 把「正确」定义为「和 $K_0$ 跑出来一样」，也就是</p>
+  <div class="eq">
+    $$O(x) = \mathrm{run}(K_0,\, x)$$
+    <span class="eq-note">$x$ 是一组输入与 launch 配置，$O$ 是 oracle。这个式子朴素到有点反常——oracle 不是数学定义、不是参考实现、不是 PyTorch 算子，就是<strong>把原二进制跑一遍</strong>。</span>
+  </div>
+  <p>论文的原句是「the original binary is both the deployed artifact and the only behavioral oracle」。这带来一个很好的性质，作者称之为 <strong>non-hackable</strong>：</p>
+  <div class="callout callout-green">
+    <strong>「the optimization signal is non-hackable: fast but incorrect candidates are rejected before timing.」</strong><br>
+    对比一下源码级 LLM kernel 优化的经典失败模式：模型发现只要输出形状对、数值大致对，评测脚本就给分，于是它开始偷工减料——少算一个分支、把 tolerance 内的近似当成等价、甚至缓存住测试输入的答案。这类 reward hacking 之所以可能，是因为<strong>参考实现和被测实现是两个不同的东西</strong>，二者之间有解释空间。而当 oracle 就是 $K_0$ 自己时，解释空间被压缩到只剩「输出是否一致」这一条。
+  </div>
+  <p>代价也很直接：<strong>你失去了「什么叫正确」的独立定义</strong>。如果 $K_0$ 本身有 bug，AsmEvo 会忠实地把这个 bug 保留下来。论文对此的态度是明确的——它要的不是「正确的 kernel」，而是「和已部署的那个 kernel 行为一致但更快的 drop-in 替换件」。这两个目标在生产环境里往往后者更实用。</p>
+  <p>再看它和已有工作的边界。论文的判据是「已有工作都 operate before or during compilation and assume editable source or IR together with a high-level correctness reference」。也就是两个维度同时不同：</p>
+  <table>
+    <thead><tr><th></th><th>优化对象</th><th>正确性参照</th><th>能否 drop-in 替换</th></tr></thead>
+    <tbody>
+      <tr><td>KernelBench / GEAK / CUDA-L1 一类</td><td>CUDA / Triton / HIP 源码</td><td>PyTorch 等参考实现</td><td>需要重编译</td></tr>
+      <tr><td>TVM / Ansor / AutoTVM 一类 autotuner</td><td>tensor program 与 schedule</td><td>算子语义</td><td>需要重编译</td></tr>
+      <tr><td>CuAsmRL（SASS 调度 RL）</td><td>NVIDIA SASS 指令序</td><td>论文未在此对比正确性机制</td><td>部分</td></tr>
+      <tr><td>NVBit / Luthier</td><td>已加载的二进制</td><td>不追求等价，目标是 instrumentation</td><td>会引入开销</td></tr>
+      <tr class="best"><td><strong>AsmEvo</strong></td><td><strong>已编译的 AMDGPU code object</strong></td><td><strong>$K_0$ 自己</strong></td><td><strong>是，ABI 保持</strong></td></tr>
+    </tbody>
+  </table>
+  <p>论文对自身定位的原句：「To our knowledge, AsmEvo is the first system to combine agentic search, ABI- and metadata-preserving AMDGPU code-object rebuilding, and differential verification against the original deployed binary.」注意这是一个<strong>三者组合</strong>的首创声明，不是单项首创——binary 层做 instrumentation 早有 Luthier，汇编层做超优化搜索早有 STOKE / AlphaDev / CuAsmRL。</p>
+  <div class="callout callout-blue">
+    <strong>一个顺带的方法论论点。</strong>论文引用 EquiBench 说明「程序等价性推理对强模型仍然很难」，据此论证不能让模型自己判断改动是否等价，必须用 execution-based verification。这条论证贯穿全篇——后面你会看到，凡是「宣告」性质的判断（能不能编译、ABI 是否一致、是否等价、是否更快、是否 commit）全部由确定性代码持有，模型一条都不碰。
+  </div>
+  <div class="anim-frame" id="anim2">
+    <div class="anim-header">
+      <span class="anim-title">动画 2：两种 oracle 的对照——参考实现 vs 原二进制</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg2" viewBox="0 0 820 400" width="820" height="400" role="img" aria-label="参考实现 oracle 与原二进制 oracle 的对照动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">源码级：参考实现做 oracle</button><button class="stage-chip" data-step="1">解释空间导致 reward hacking</button><button class="stage-chip" data-step="2">AsmEvo：O(x)=run(K₀,x)</button><button class="stage-chip" data-step="3">代价：正确性的独立定义没了</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-blue)"></span> 参考实现</span>
+      <span><span class="dot" style="background:var(--a-accent)"></span> 候选</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 被 hack 的信号</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 不可 hack 的信号</span>
+    </div>
+  </div>
+</section>
+<section id="recover">
+  <h2>创新一：恢复一份「可重汇编」的表示，并用逐字节 round-trip 证明它可信</h2>
+  <p>直接把 <code>K_0</code> 反汇编一遍，然后改指令、再汇编回去——这条路走不通。论文一句话点出原因：</p>
+  <div class="callout callout-red">
+    <strong>「raw disassembly omits the declaration layer.」</strong><br>
+    反汇编器给你的是「这些字节是什么指令」，但汇编器需要的是一份<strong>完整的源文件</strong>：段怎么分、符号怎么声明、kernel descriptor 的每个字段取什么值、metadata 里写了什么。这些信息在反汇编输出里全都是注释或者干脆没有。
+  </div>
+  <p>所以 AsmEvo 的第一步（论文的内部工具名叫 <code>co2s</code>）不是反汇编，而是<strong>重建一份等价的汇编源文件</strong> $s(K_0)$。论文列出它恢复的六类东西：<strong>sections、symbols、notes、kernel descriptors、AMDGPU metadata、AMDGCN instruction body</strong>。其中 kernel descriptor 是以 <code>.amdhsa_kernel</code> 声明的形式重建的。</p>
+
+  <h3>为什么必须 re-symbolize PC-relative 控制流</h3>
+  <p>这一步是整篇论文里最容易被跳过、但技术上最关键的一处。原文：</p>
+  <div class="callout callout-accent">
+    <strong>「re-symbolize PC-relative control flow so that branches remain valid after instruction insertion, deletion, or reordering.」</strong>
+  </div>
+  <p>AMDGCN 的分支是<strong>相对偏移</strong>的：<code>s_branch</code> 里存的是「往前/往后跳多少个指令字」。如果你保留这个数字不动，那么一旦在分支和目标之间<strong>插入或删除任何一条指令</strong>，这个偏移就错了——控制流会跳到指令中间，行为完全不可预测。</p>
+  <p>把偏移换回<strong>符号标签</strong>之后，偏移的计算权就交回给汇编器：每次重新汇编时，汇编器按当时的实际布局重新算所有偏移。这一个动作把可做的编辑从「等长替换」放宽到「任意插入、删除、重排」——而后者才是调度类优化（把 load 提前、把 wait 后移、交错两条依赖链）的必要条件。</p>
+  <div class="callout callout-orange">
+    <strong>反过来看就理解了 fallback 的定位。</strong>后面会讲到的 in-place byte patch 之所以被限制为 <em>size-non-increasing</em>，恰恰是因为它<strong>没有</strong>经过 re-symbolize——指令地址不能变，所有 PC 相对偏移才继续有效。这两条路径的能力差异完全由「偏移是数字还是符号」这一点决定。
+  </div>
+
+  <h3>round-trip gate：一次性的逐字节自证</h3>
+  <p>恢复出来的 $s(K_0)$ 到底忠实不忠实？AsmEvo 不假设，而是<strong>验证</strong>：把 $s(K_0)$ 重新汇编并重新链接，然后拿结果和 $K_0$ 比三样东西——</p>
+  <ol>
+    <li>regenerated <strong>instruction body</strong>；</li>
+    <li><strong>kernel descriptors</strong>；</li>
+    <li><strong>metadata</strong>。</li>
+  </ol>
+  <p>比对时只 mask 掉「由链接决定的字段」（原文 <em>masking only fields determined by linking</em>，比如加载地址一类每次链接都会变的东西）。过了这个 gate，就证明后续所有编辑作用在一份 <em>faithful, rebuildable representation</em> 上。Algorithm 2 的第一行是硬断言 <code>assert RoundTrip(s(K₀), K₀)</code>——过不了，这个 kernel 就直接不进入优化流程。</p>
+  <p>论文还提了一句：偶尔需要对 recovery 做修补（<em>rare recovery repairs</em>），修补后的表示<strong>必须重新通过同一个 byte-level round-trip check</strong> 才被接受。也就是说这道 gate 不是一次性摆设，而是 recovery 层唯一的信任来源。</p>
+  <div class="callout callout-purple">
+    <strong>这个设计的漂亮之处在于它把「反汇编正确性」这个通常无法验证的问题，转化成了一个可判定的等式。</strong>你不需要论证 <code>co2s</code> 的实现没有 bug；你只需要检查这一次的输出重新编译后与输入逐字节相同。不同就拒绝，不冒险。
+  </div>
+  <div class="anim-frame" id="anim3">
+    <div class="anim-header">
+      <span class="anim-title">动画 3：code object 恢复、re-symbolize、与 round-trip gate</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg3" viewBox="0 0 820 430" width="820" height="430" role="img" aria-label="code object 恢复与 round-trip 校验的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">裸反汇编缺声明层</button><button class="stage-chip" data-step="1">co2s 恢复六类内容</button><button class="stage-chip" data-step="2">数字偏移的致命之处</button><button class="stage-chip" data-step="3">re-symbolize 后可任意增删</button><button class="stage-chip" data-step="4">round-trip 逐字节比对</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-accent)"></span> 指令体</span>
+      <span><span class="dot" style="background:var(--a-purple)"></span> 声明层（descriptor / metadata / 符号）</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 失效的偏移</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 校验通过</span>
+    </div>
+  </div>
+</section>
+<section id="rebuild">
+  <h2>创新二：metadata 感知重建——哪些字段必须重算，哪些必须冻结</h2>
+  <p>假设 agent 改了几条指令。现在要把 $s'$ 变回一个能被运行时加载、且能被<strong>原来那个 host launcher 不改一行代码就调用</strong>的 code object。这里有一组精确的「重算 / 冻结」划分，是这一步的全部内容。</p>
+
+  <h3>必须重算的：资源字段</h3>
+  <p>原文：rebuild 时会 <em>rescan</em> 汇编，统计 <strong>VGPR / SGPR / AGPR、LDS、scratch</strong> 的用量，然后<strong>在 kernel descriptor 和 AMDGPU metadata 两处同时重算资源字段</strong>，最后重新链接。</p>
+  <p>为什么必须重算？因为指令一改，资源用量就可能变。举个方向性的例子：agent 为了打散一条依赖链多用了两个 VGPR，声明里却还写着原来的数字——运行时按旧数字分配寄存器，实际执行时越界访问其他 wave 的寄存器，行为不可预测；反过来如果多声明了，occupancy 白掉一档，性能反而变差。而「两处都要改」是因为前置二里说的那件事：<strong>资源信息在 descriptor 和 metadata 里各存了一份</strong>，只改一处就是论文所说的 <em>desynchronize metadata</em>。</p>
+
+  <h3>必须冻结的：接口</h3>
+  <p>原文列的是四样：<strong>kernarg layout、kernarg segment size、symbol interface、launch semantics</strong>，目的是 <em>preserving compatibility with the original launcher</em>。论文把这条整理成需求 R1：$K'$ 保持 symbols、kernarg layout、launch semantics 与 externally visible metadata。</p>
+  <div class="callout callout-blue">
+    <strong>这条冻结要求正是「drop-in」的技术定义。</strong>host 侧代码是这样调用 kernel 的：按 metadata 描述的偏移把每个参数写进 kernarg buffer，按符号名查到 kernel，按自己的 grid/block 配置 dispatch。这三件事任何一件对不上，替换就失败——不是慢一点，是根本调不起来。所以 AsmEvo 允许改的只有<strong>「怎么算」</strong>，一律不许改<strong>「怎么被调用」</strong>。
+  </div>
+
+  <h3>agent 是怎么被阻止破坏这些的</h3>
+  <p>这里体现了论文的核心工程主张：<strong>不靠提示词约束，靠机制</strong>。三层：</p>
+  <ol>
+    <li><strong>metadata 重算不是 agent 做的。</strong>它由确定性 controller 执行。原文的职责划分是「Deterministic gates own build validation, resource checks, equivalence, timing, commit thresholds, and lineage management」——agent 连碰这些的接口都没有。</li>
+    <li><strong>每个候选先过静态一致性检查。</strong>Algorithm 1 的第 3 步：<code>if ¬StaticConsistent(c) then return ⟨abi_invalid⟩</code>。这对应架构图里的 gate <strong>G1（static ABI / resource）</strong>，在任何计时之前。</li>
+    <li><strong>agent 的先验知识里就写了 ABI 规则。</strong>架构图的 "Built-in Knowledge" 一栏是「AMDGCN ISA, hazards, ABI rules, tolerance policy」。这只是降低无效尝试率，不承担安全性。</li>
+  </ol>
+  <div class="callout callout-orange">
+    <strong>要澄清一处，避免读者被我误导：</strong>论文<strong>只</strong>点名了 VGPR / SGPR / AGPR、LDS、scratch、kernarg segment size 这一组字段。像 <code>.amdhsa_accum_offset</code>、<code>.amdhsa_wavefront_size32</code>、<code>kernarg_segment_align</code> 这些具体字段名在全文中<strong>一次都没出现</strong>。如果你在别处看到把它们写成「AsmEvo 保持的字段」，那是补充的工具链背景知识，不是论文内容。
+  </div>
+
+  <h3>兜底路径：保守的 in-place byte patch</h3>
+  <p>如果一个 object 含有 <em>unsupported or incompletely recovered constructs</em>，正常重建就会失败。这时 AsmEvo 可以退到「直接改原二进制的字节」这条路，但被加了两道限制：</p>
+  <ul>
+    <li><strong>resource-neutral</strong>——不改变资源用量；</li>
+    <li><strong>size-non-increasing</strong>——改动后不变长；</li>
+    <li>并且<strong>保留原有的 descriptors 与 metadata</strong>。</li>
+  </ul>
+  <p>三条限制各自封住一类风险，对应关系很干净：保留原 descriptor / metadata ⇒ 不可能出现两处 desync；resource-neutral ⇒ 不动资源声明 ⇒ occupancy 不变；size-non-increasing ⇒ 后续指令地址不变 ⇒ 所有 PC 相对偏移继续有效（这正是创新一里 re-symbolize 解决的问题，在这条路径上是用「不许变长」硬绕过去的）。</p>
+  <p>论文特别强调一句：patched candidate <strong>仍然要过全部 gate</strong>（静态一致性、差分等价、性能），「the fallback therefore changes only the rebuild mechanism, <strong>not the acceptance criterion</strong>」。</p>
+  <p class="note-inline">论文未说明：是否用 <code>s_nop</code> 之类填充空出来的字节、patch 的粒度，以及实际有多少 kernel 走了这条 fallback（没有任何统计）。</p>
+  <div class="anim-frame" id="anim4">
+    <div class="anim-header">
+      <span class="anim-title">动画 4：重算与冻结的分界，以及 desync 的后果</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg4" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="metadata 感知重建与 ABI 冻结的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">编辑后资源用量变了</button><button class="stage-chip" data-step="1">只改一处 → desync</button><button class="stage-chip" data-step="2">两处同时重算</button><button class="stage-chip" data-step="3">接口四样冻结</button><button class="stage-chip" data-step="4">in-place patch 兜底</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-purple)"></span> kernel descriptor</span>
+      <span><span class="dot" style="background:var(--a-teal)"></span> AMDGPU metadata</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 不一致 / 被拒</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 冻结不动</span>
+    </div>
+  </div>
+</section>
+<section id="oracle">
+  <h2>创新三：两层差分 oracle——没有源码，怎么知道该喂什么输入</h2>
+  <p>「拿 $K_0$ 跑一遍当参考」听起来简单，实际有个先决问题：<strong>你都不知道这个 kernel 收哪些参数</strong>。没有函数签名，只有一个 kernarg buffer 的总大小和一堆偏移。AsmEvo 分两层解决。</p>
+
+  <h3>Tier 1：synthetic inference（从 descriptor 与 metadata 推参数）</h3>
+  <p>当 launch structure 能从 descriptors 和 metadata 里恢复时，AsmEvo 推断这五样：<strong>argument offsets、scalar types、pointer roles、buffer sizes、launch dimensions</strong>。然后生成确定性输入，覆盖 <em>representative shapes, strides, dtypes, boundary values, and random seeds</em>。</p>
+  <p>这里有一个很值得学的小设计：</p>
+  <div class="callout callout-green">
+    <strong>allocation 带 guard region，并用 canary 初始化。</strong><br>
+    也就是在每块 buffer 的前后留一段哨兵区、填上已知的魔数。这样等价检查除了「输出对不对」之外，还顺手多检出一类错误：<strong>越界写</strong>。这类 bug 在只比对输出的方案里是完全隐形的——它可能这次没踩到别人的数据，下次就踩到了。用 canary 把它变成一个确定性可观测的信号，成本几乎为零。
+  </div>
+
+  <h3>Tier 2：real-dispatch capture（拦一次真实调用录下来）</h3>
+  <p>Tier 1 有明确的失效边界。论文列了五种情况推不出来：<strong>mixed dtypes、non-contiguous tensors、block tables、nested pointer structures、application-defined workspace layouts</strong>。想想 vLLM 的 paged attention——kernarg 里有个指向 block table 的指针，block table 里又是一堆指向物理块的指针，这种结构不可能从偏移和大小反推出来。</p>
+  <p>所以 Tier 2 换了个思路：<strong>拦截一次真实的 application dispatch，把现场整个录下来</strong>（架构图里这个工具叫 <code>kerncap</code>）。录四样：</p>
+  <ul>
+    <li>kernarg buffer 的内容；</li>
+    <li>grid 与 workgroup dimensions；</li>
+    <li>被引用到的 device-memory regions；</li>
+    <li><strong>pre-dispatch memory state</strong>（执行前的内存快照）。</li>
+  </ul>
+  <p>然后用原 object 跑一次，得到 <strong>reference post-state</strong>（执行后的内存快照）。候选就在<strong>完全相同的 launch 参数与内存内容</strong>下回放，比对 post-state。</p>
+  <p>这里有一句技术细节我认为是全篇最巧的一手：</p>
+  <div class="callout callout-purple">
+    <strong>「When captured arguments contain absolute device pointers, memory regions are restored at their original virtual addresses so that nested pointers remain valid without reconstructing application-level data structures.」</strong><br>
+    录下来的 kernarg 里存的是<strong>绝对设备虚拟地址</strong>。如果回放时把内存分配到别的地址，指针就全废了，而且嵌套指针（指针指向的内存里还有指针）没法简单地做地址重定向——你得先理解应用层的数据结构才能改写内部指针，而那正是 source-free 场景下办不到的事。AsmEvo 的解法是<strong>绕开这个问题</strong>：不改指针，改地址——把内存恢复到<em>原来那个虚拟地址上</em>。这样任意深度的嵌套指针自动全部有效，无需理解任何应用语义。
+  </div>
+
+  <h3>等价判据</h3>
+  <p>两层 oracle 拿到输入集 $\mathcal{X}$ 之后，等价性的定义是（论文 Eq. 1）：</p>
+  <div class="eq">
+    $$\mathrm{eq}(K',x)\;\equiv\; c_x \ge \theta \;\wedge\; \|\Delta_x\|_\infty \le \tau \;\wedge\; \iota(K',x)$$
+    $$c_x=\cos\big(K'(x),\,O(x)\big),\qquad \Delta_x = K'(x)-O(x)$$
+    <span class="eq-note">$c_x$ 是余弦相似度（管方向/整体形状），$\|\Delta_x\|_\infty$ 是最大绝对误差（管单点离群），$\iota$ 是一个布尔谓词，要求<strong>整数 buffer 逐位相同</strong>且<strong>越界哨兵完好</strong>。实验取值：$\theta = 0.9999$、$\tau = 10^{-3}$，每个候选<strong>重复 3 次</strong>。</span>
+  </div>
+  <p>三个条件的分工很清楚。只用余弦相似度会漏掉「一个元素错得很惨但其余全对」的情况；只用 $L_\infty$ 会对大数值的正常浮点抖动过于敏感；而 $\iota$ 处理的是浮点容差<strong>不该适用</strong>的那部分——索引、掩码、计数这些整数结果没有「差不多对」，必须逐位相同。Tier 2 里对 integer buffer、opaque state 和 guard region 同样是<strong>逐字节比较</strong>。</p>
+  <div class="anim-frame" id="anim5">
+    <div class="anim-header">
+      <span class="anim-title">动画 5：两层 oracle 与绝对指针的原址还原</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg5" viewBox="0 0 820 430" width="820" height="430" role="img" aria-label="两层差分 oracle 的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">Tier 1：推参数</button><button class="stage-chip" data-step="1">guard + canary 抓越界写</button><button class="stage-chip" data-step="2">Tier 1 失效：嵌套指针</button><button class="stage-chip" data-step="3">Tier 2：录制真实 dispatch</button><button class="stage-chip" data-step="4">原址还原让嵌套指针继续有效</button><button class="stage-chip" data-step="5">等价判据三件套</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-blue)"></span> kernarg / 参数</span>
+      <span><span class="dot" style="background:var(--a-amber)"></span> canary 哨兵</span>
+      <span><span class="dot" style="background:var(--a-purple)"></span> 设备内存快照</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 比对通过</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 比对失败</span>
+    </div>
+  </div>
+</section>
+<section id="gate">
+  <h2>创新四：GatedEval——正确性严格先于计时，以及一个方差感知的接受阈值</h2>
+  <p>论文把候选评估固化成一条不可交换的流水线，原文：「Every candidate passes GatedEval in a fixed order: functional-equivalence verification first, performance measurement second.」以及「Correctness strictly precedes timing, <strong>preventing broken but fast candidates from receiving a positive optimization signal</strong>」。</p>
+
+  <h3>Algorithm 1：五个出口</h3>
+  <div class="eq">
+    <pre style="margin:0;font-size:12.5px;line-height:1.7;font-family:'JetBrains Mono',Consolas,monospace;color:var(--fg-soft);white-space:pre-wrap">GatedEval(s', (𝒳, O), K₀):
+  1  if ¬Assembles(s')        → return ⟨asm_invalid⟩
+  2  c ← Build(s')
+  3  if ¬StaticConsistent(c)  → return ⟨abi_invalid⟩
+  4  for x ∈ 𝒳:
+       if ¬eq(c, x)           → return ⟨divergent⟩
+  5  ŝ(c) ← T(K₀) / T(c)
+     return ⟨ok, ŝ(c)⟩</pre>
+    <span class="eq-note">注意第 5 步的位置：<strong>计时是最后一件事</strong>。一个语义错了的候选永远拿不到时间数字，因此也永远不可能因为「快」而被搜索采纳。</span>
+  </div>
+  <p>失败不是简单地丢弃，而是变成<strong>结构化反馈</strong>回给 agent。论文枚举的失败类别是五种：<strong>assembly failure、metadata inconsistency、output divergence、runtime failure、insufficient speedup</strong>；对应架构图的五道 gate：<strong>G0 build valid → G1 static ABI / resource → G2 func equiv → G3 timing → G4 commit gate</strong>，横条标题写的是「Correctness-gated verification — correctness before speed」。</p>
+
+  <h3>计时怎么测，以及为什么必须容忍噪声</h3>
+  <p>做法是：<strong>warmup 之后取 $R$ 次 event-timed launch 的中位数</strong>，候选与 oracle 在<strong>相同设备、相同 launch 条件</strong>下测。（$R$ 的具体数值论文未给出。）</p>
+  <p>但论文诚实地承认了一个测量环境问题：「Because the hardware is shared and <strong>clocks cannot be locked</strong>」——共享硬件、频率锁不住。这意味着同一个二进制反复测，结果本身就在抖。他们的两个对策是：用<strong>大而有代表性的 launch 配置</strong>压掉 launch 与 event 的固定噪声；以及在接受阈值里显式建模方差。</p>
+
+  <h3>commit gate：把噪声写进阈值</h3>
+  <div class="eq">
+    $$m^\star=\big(1+\max(\epsilon,\; k\cdot \mathrm{cv})\big)\cdot \hat s(K^\star)$$
+    $$g(c)\;\equiv\;\Big[\textstyle\bigwedge_{x} \mathrm{eq}(c,x)\Big]\;\wedge\;\hat s(c)\ \ge\ \max\big(m^\star,\; s_{\mathrm{floor}}\big)$$
+    <span class="eq-note">$\mathrm{cv}$ 是计时的变异系数（标准差/均值），$\hat s(K^\star)$ 是当前 verified best 的加速比，$\epsilon$ 是最小改进 margin，$s_{\mathrm{floor}}$ 用来拒掉 trivial rewrite。实验取值 $\epsilon=0.002$、$k=0.85$、$s_{\mathrm{floor}}=1.0$。</span>
+  </div>
+  <p>把这个式子读一遍就明白它在防什么。假设当前 best 是 1.20×，某个候选测出 1.21×。这算不算进步？</p>
+  <ul>
+    <li>如果这次测量很稳，$\mathrm{cv}=0.002$，那么 $k\cdot\mathrm{cv}=0.0017 &lt; \epsilon=0.002$，阈值取 $\epsilon$，$m^\star = 1.2024$。候选 1.21 &gt; 1.2024，<strong>接受</strong>。</li>
+    <li>如果这次测量很吵，$\mathrm{cv}=0.02$，那么 $k\cdot\mathrm{cv}=0.017$，$m^\star=1.2204$。候选 1.21 &lt; 1.2204，<strong>拒绝</strong>——它的「进步」淹没在噪声里。</li>
+  </ul>
+  <div class="callout callout-accent">
+    <strong>论文对这一项的说法是「The variance-aware threshold prevents measurement noise from advancing the search.」</strong>这句话的重量在长时程搜索里比看起来大得多。搜索会跑上百个候选、提交七八次；如果每次「进步」都有一半概率是噪声，那么几十步之后 best 的记录值会被噪声推到一个虚高的位置，而后续所有候选都要跟这个虚高的数字比——搜索会自己把自己卡死。$k\cdot\mathrm{cv}$ 这一项就是防止这种<strong>噪声棘轮</strong>。
+  </div>
+  <p>还要注意两处容易读错的细节：$m^\star$ 是相对<strong>当前 verified best</strong> 算的，但对外<strong>报告的 speedup 始终相对原 object</strong>，即 $\hat s(K')=T(K_0)/T(K')$。另外全局 best 遵守 <strong>no-regress invariant</strong>——只会变好，不会退。</p>
+  <div class="anim-frame" id="anim6">
+    <div class="anim-header">
+      <span class="anim-title">动画 6：GatedEval 的五道闸门与方差感知阈值</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg6" viewBox="0 0 820 430" width="820" height="430" role="img" aria-label="GatedEval 闸门与 commit gate 的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">五道闸门</button><button class="stage-chip" data-step="1">四个候选各自卡在哪</button><button class="stage-chip" data-step="2">为什么计时必须在最后</button><button class="stage-chip" data-step="3">低噪声：1.21× 被接受</button><button class="stage-chip" data-step="4">高噪声：同一个 1.21× 被拒</button><button class="stage-chip" data-step="5">噪声棘轮与 no-regress</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-accent)"></span> 候选</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 被拒出口</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 通过 / commit</span>
+      <span><span class="dot" style="background:var(--a-amber)"></span> 噪声带</span>
+    </div>
+  </div>
+</section>
+<section id="window">
+  <h2>创新五：hot-window——把 context 缩小，但不缩小验收范围</h2>
+  <p>一个真实的 kernel 汇编可能有几千条指令。把整份汇编塞进每一次优化 context，既装不下也没意义。AsmEvo 的做法用一句原文概括最准确：</p>
+  <div class="callout callout-accent">
+    <strong>「Instead of placing the entire assembly in every optimization context, AsmEvo selects a hot window together with the surrounding data dependencies and relevant metadata.」</strong>
+  </div>
+  <p>定位手段是三件套：<strong>hardware counters、instruction sampling、static analysis</strong>，目标是找出 <em>stall-dominant instruction windows</em>。汇总给搜索驱动的信息有五类：<strong>instruction mix、dependency chains、memory behavior、occupancy constraints、resource pressure</strong>。</p>
+  <p class="note-inline">论文未说明具体用的是哪个 profiler——rocprof / rocprofv3 / ATT / omniperf 一个字都没提，架构图里只写「① Profile — Counters + sampling → hot window」。window 的长度、呈现格式、prompt 模板与 token 预算同样未说明。</p>
+
+  <h3>关键的那半句：不弱化验收准则</h3>
+  <p>window 编辑完之后，会被 <strong>spliced back into the complete assembly</strong>，然后做<strong>整 kernel 的 rebuild 与 verification</strong>。论文给这个设计的两句总结值得逐字读：</p>
+  <div class="callout callout-green">
+    <strong>「reduces search context and discourages unrelated modifications <strong>without weakening the full-kernel acceptance criterion</strong>.」</strong>
+  </div>
+  <p>这句话拆成两半意思完全不同。前半是<strong>效率</strong>手段：小 context 便宜、且天然抑制模型去改无关的地方。后半是<strong>安全</strong>声明：验收<strong>不是</strong>在 window 上做的。为什么这一点必须强调？因为局部看起来独立的指令序列在 fused kernel 里往往不独立——论文自己举的例子是「an apparently independent instruction sequence may affect a later reduction, normalization, or activation stage」。如果只在 window 内部检查等价，这类跨阶段的破坏就会漏过去。所以 AsmEvo 的 window 只是<strong>注意力的范围</strong>，不是<strong>责任的范围</strong>。</p>
+  <p>另外每次 commit 之后会<strong>重新 profile</strong>（Algorithm 2 第 18 行 "append to ℒ; re-profile"）。这是必要的：改完一处瓶颈，热点就搬家了，拿旧 profile 继续找下一个热点会一直在错的地方打转。</p>
+  <div class="anim-frame" id="anim7">
+    <div class="anim-header">
+      <span class="anim-title">动画 7：hot-window 的选取、编辑、拼回与整 kernel 验证</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg7" viewBox="0 0 820 420" width="820" height="420" role="img" aria-label="hot-window 定位与拼回验证的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">整份汇编与 stall 分布</button><button class="stage-chip" data-step="1">选出 hot window + 依赖</button><button class="stage-chip" data-step="2">编辑后拼回原位</button><button class="stage-chip" data-step="3">验收是整 kernel 级</button><button class="stage-chip" data-step="4">commit 后重新 profile</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-amber)"></span> stall 占比</span>
+      <span><span class="dot" style="background:var(--a-accent)"></span> hot window</span>
+      <span><span class="dot" style="background:var(--a-blue)"></span> 被带上的数据依赖</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 整 kernel 验证范围</span>
+    </div>
+  </div>
+
+  <h3>agent 到底发现了哪些优化</h3>
+  <p>这是我读完全文最想告诉你、也最需要提醒你降低预期的一点：<strong>论文里没有任何一行汇编代码，没有一条指令助记符。</strong>我对全文做过检索，<code>s_waitcnt</code>、<code>v_mfma</code>、<code>buffer_load</code>、<code>ds_read_b128</code>、<code>sched_barrier</code>、<code>s_nop</code>、<code>v_mov_b32</code> 的出现次数<strong>全部为 0</strong>；全文唯一的 AMD 汇编语法字样是 <code>.amdhsa_kernel</code>，出现一次。</p>
+  <p>论文对优化类型的描述全是自然语言，且集中在 AITer 的 case study 那一段。可以引用的就这些：</p>
+  <div class="callout callout-blue">
+    <strong>「AsmEvo's gains arise from narrow opportunities that remain visible in recovered AMDGCN assembly: scheduling around long-latency memory operations, wait-counter placement, cache-hint and buffer-load variants, and reduced conversion or address-generation work.」</strong><br><br>
+    <strong>「Across the AITer cases, the most promising edits are <em>localized rather than structural</em>. ... Hoisting, interleaving, or tighter wait counters can reduce stalls without changing the launcher ABI.」</strong>
+  </div>
+  <p>另外 team mode 分派给并行 worker 的五个正交方向，也可以当作优化类型的官方分类：<strong>latency hiding、dependency reduction、register-pressure control、memory-access restructuring、instruction simplification</strong>。</p>
+  <p>论文还有一句反面论证很有说服力：四个增益最大的 kernel 分别属于 convolution、activation、normalization、structured matmul，作者用它说明「why a <strong>single fixed peephole rule would be insufficient</strong> for the evaluated set」——即这些收益不能被固化成一组窥孔优化规则，因此才需要搜索。</p>
+  <p class="note-inline">如果你在别处看到关于这篇论文的解读里出现了具体的汇编 diff、LDS bank conflict 消除、<code>ds_read_b128</code> 加宽、<code>v_mfma</code> 打包之类的例子，那些都是基于上述优化类别的合理外推，不是论文原文。</p>
+</section>
+<section id="search">
+  <h2>创新六：长时程 agentic 搜索——职责怎么切，血统怎么记</h2>
+  <p>搜索模型是 <strong>Claude Opus 4.8</strong>，provider-default decoding。默认配置是 <strong>4 个 GPU worker、每个 kernel 固定 0.5 天（12 小时）wall-clock 预算</strong>。</p>
+
+  <h3>最重要的一句话</h3>
+  <div class="callout callout-red">
+    <strong>「the model may guide exploration, but it cannot declare either correctness or performance.」</strong>
+  </div>
+  <p>职责划分是明确列举的。<strong>确定性 controller 持有</strong>：wall-clock 预算、workspace 状态、rebuild 与 verification 的调用、commit 决策、candidate lineage、终止条件。<strong>LLM 负责</strong>：分析 profiling 证据、挑瓶颈、提出局部汇编变换、解读结构化失败、在无效尝试后重新规划。</p>
+  <p>这个切法的实际效果是：agent 的所有错误都只是<strong>浪费预算</strong>，不会变成<strong>错误的产出</strong>。它可以提出一百个破坏语义的编辑，一个都过不了 G2。</p>
+
+  <h3>血统树（lineage），而不是一条链</h3>
+  <p>AsmEvo 维护的是<strong>树状</strong>而非单条破坏性链的候选血统。每个节点记录：<strong>parent、verified speedup、changed instruction windows、resource usage、optimization rationale</strong>。worker 既可以从当前 best 分叉，也可以退回到更早的某个 verified 版本重新出发。</p>
+  <p>还有一条很关键的卫生措施：<strong>每次评估之后 controller 把 worker 重置回 verified state</strong>（架构图里画成一条虚线 "reset to verified state"），原文的理由是 <em>preventing unverified modifications from accumulating across iterations</em>。没有这一步，一串各自「看起来没问题」的未验证改动会叠在一起，最后连是哪一处坏的都查不出来。</p>
+
+  <h3>multi-start 与 verified composition</h3>
+  <p>两种模式：<strong>single mode</strong> 从当前 best 提一个编辑；<strong>team mode</strong> 由一个 planner 给并行 worker 分派<strong>正交的优化方向</strong>（就是前面那五个），起点从多样的 verified 节点里选，<strong>不要求所有 worker 改同一个候选</strong>。</p>
+  <p>然后是把并行成果合起来。integrator 只考虑满足两个条件的候选：<strong>共享同一个 base</strong>，且改动的指令区域<strong>互不相交或互补</strong>。合并方式是<strong>增量应用，每一步都 rebuild + verify</strong>。合并结果只有在通过全部正确性 gate <strong>并且优于两个 parent</strong> 时才 commit，否则保留两者中更好的那个单体。</p>
+  <div class="callout callout-purple">
+    <strong>为什么合并必须逐步重验，而不能「改动不相交所以合起来一定对」？</strong>因为汇编级的独立性判断在指令区域上成立，在<strong>硬件资源</strong>上不成立。两个各自合法的编辑可能各多用两个 VGPR，合起来就跨过了 occupancy 的档位；也可能各自调整了 wait counter，合起来某条 load 的等待就不够了。区域不相交只保证「文本上能合」，不保证「语义上能合」。
+  </div>
+
+  <h3>memory 与 anti-stall</h3>
+  <p>有界的 run memory 里存四样：<strong>successful optimization insights、structured gate outcomes、failure signatures、以及重复候选的 hash</strong>。最后这一项是纯工程但很实在的——长时程搜索里模型反复提出同一个改动是常态，用 hash 去重直接省掉一次完整的 build + verify + timing。</p>
+  <p>anti-stall 监督：controller 检测到<strong>长时间无改进、重复提案、或基础设施故障</strong>时，会请求一次 <strong>redirect</strong>，内容是「总结已尝试的方向并标记 exhausted hypotheses」。之后搜索可以换一个瓶颈或回溯到更早的 verified 节点。持续停滞则<strong>升级为更宽的 multi-start 探索</strong>。所有被 redirect 之后产生的候选<strong>仍然走同一批 gate</strong>——这一点论文反复强调，任何机制都不能绕过验收。</p>
+  <div class="anim-frame" id="anim8">
+    <div class="anim-header">
+      <span class="anim-title">动画 8：血统树、多起点、验证式合并与停滞升级</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg8" viewBox="0 0 820 430" width="820" height="430" role="img" aria-label="验证血统树与多起点搜索的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">职责切分</button><button class="stage-chip" data-step="1">血统树逐步长出</button><button class="stage-chip" data-step="2">team mode 五个正交方向</button><button class="stage-chip" data-step="3">合并要逐步重验</button><button class="stage-chip" data-step="4">停滞 → redirect → 升级</button><button class="stage-chip" data-step="5">reset 回 verified state</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-green)"></span> verified 节点</span>
+      <span><span class="dot" style="background:var(--a-accent)"></span> 当前 best</span>
+      <span><span class="dot" style="background:var(--a-red)"></span> 被拒候选</span>
+      <span><span class="dot" style="background:var(--a-purple)"></span> 合并候选</span>
+    </div>
+  </div>
+</section>
+
+<section id="evo">
+  <h2>名字里的 Evo：它其实不是进化算法</h2>
+  <p>叫 AsmEvo，很容易让人以为里面有个种群在做变异和交叉。读完方法一节可以确认：<strong>没有</strong>。全文没有 population size、mutation rate、fitness-proportional selection、island model 这类概念，也<strong>没有引用 AlphaEvolve 或 FunSearch</strong>（参考文献里都没有）。</p>
+  <p>它实际的机制是三样：<strong>树状 verified lineage</strong>、<strong>multi-start</strong>、<strong>verified composition</strong>。如果一定要找对应关系，verified composition 大致对应「重组」，multi-start 大致对应「多样性维持」，但选择压力完全来自一个确定性阈值 $g(c)$，不是概率化的适应度采样。</p>
+  <div class="callout callout-orange">
+    <strong>比较准确的一句描述是：「带验证血统树的多起点长时程 agentic 搜索」。</strong>论文里进化式的相关工作（AVO、KernelEvolve、Lange et al.）只出现在 related work 里，不是它自己的机制。这个区分不是抠字眼——进化算法的收敛性质、探索/利用权衡分析都不适用于这里，用错框架去理解它反而会得出错误的预期。
+  </div>
+</section>
+<section id="exp">
+  <h2>实验：30 个 KernelBench 与 8 个生产 kernel</h2>
+  <p>硬件是 CDNA3 的 AMD Instinct：<strong>KernelBench L1+L2 在 MI308X</strong>，<strong>AITer 与 Triton JIT HSACO 在 MI300X</strong>。未修改的二进制永远是 1.00× 基线。全部结果<strong>只报 speedup，不报原始延迟</strong>。</p>
+
+  <h3>先看一件容易忽略的事：$K_0$ 是怎么来的</h3>
+  <p>KernelBench 部分的输入二进制不是直接编译 benchmark。他们先用一个 <strong>GEAK 风格的 agent 配 GPT-5.0</strong>，把 PyTorch benchmark kernel 改写成 HIP 版本，<strong>迭代 5 轮</strong>，编译之后<strong>只把编译产物交给 AsmEvo</strong>。论文强调：「The selected Level 1 and Level 2 HIP inputs are <strong>all faster than their PyTorch operators</strong> in the source-level benchmark, so $K_0$ is not a weak baseline.」</p>
+  <div class="callout callout-blue">
+    <strong>这一句是整个实验部分最重要的一句。</strong>如果 $K_0$ 是随便编译出来的弱基线，那么 1.35× 的几何均值毫无意义——那只说明源码级优化没做够。他们的设计是：先让源码级 agent 把源码优化到超过 PyTorch，<strong>然后</strong>问「编译之后还剩多少」。1.35× 是<strong>叠加在源码级优化之上</strong>的增量。生产 kernel 那一侧更直接：AITer code object 与 vLLM/SGLang 推理时 emit 的 HSACO 都是 <em>exactly as deployed</em>，本来就是各家调优过的东西。
+  </div>
+
+  <h3>Table 2：KernelBench</h3>
+  <table>
+    <thead><tr><th>Split</th><th>Kernels</th><th>Improved</th><th>Geo.</th><th>Max</th><th>Attempts/K</th><th>Commits/K</th><th>Best case</th></tr></thead>
+    <tbody>
+      <tr><td>KernelBench L1</td><td>15</td><td class="gain">15 (100%)</td><td class="gain">1.56</td><td class="gain">3.88</td><td>119.3</td><td>7.2</td><td>Depthwise Conv2D</td></tr>
+      <tr><td>KernelBench L2</td><td>15</td><td>14 (93%)</td><td>1.17</td><td>2.55</td><td>156.4</td><td>6.8</td><td>Matmul+Swish+Sum+GroupNorm</td></tr>
+      <tr class="best"><td><strong>All</strong></td><td><strong>30</strong></td><td><strong>29 (97%)</strong></td><td><strong>1.35</strong></td><td><strong>3.88</strong></td><td>137.8</td><td>7.0</td><td>Depthwise Conv2D</td></tr>
+    </tbody>
+  </table>
+  <p>逐 kernel 的几个点名数字：L1 的中位数是 <strong>1.31×</strong>，6 个 kernel 超过 1.5×，最高的四个是 <code>84_conv_depthwise_2D_asymmetric_input_square_kernel</code> <strong>3.88×</strong>、<code>88_MinGPTNewGelu</code> <strong>3.82×</strong>、<code>36_RMSNorm_</code> <strong>2.63×</strong>、上三角 matmul <strong>2.28×</strong>。L2 的中位数只有 <strong>1.10×</strong>，只有一个超过 1.5×（<code>37_Matmul_Swish_Sum_GroupNorm</code> <strong>2.55×</strong>），次大是 1.32× 与 1.30×，还有一个 GEMM+GroupNorm+Swish 停在 <strong>1.00×</strong>——那就是唯一没改进的 kernel。</p>
+  <p>论文对 L1 与 L2 差距的解释是：fused kernel 暴露出的 <em>local post-compilation headroom</em> 更少。这个解释是合理的——融合本身就是把多次访存与中间结果消掉，编译器在融合体上已经做过一轮跨阶段调度，留给汇编级局部重排的空隙自然更窄。</p>
+
+  <h3>一个值得盯住的数字：commit rate 5.1%</h3>
+  <p>平均每个 kernel 尝试 137.8 次，提交 7.0 次；整体只有 <strong>5.1%</strong> 的被评估候选成为 verified commit。论文的解读是 <em>indicating that useful assembly rewrites are sparse</em>。</p>
+  <div class="callout callout-accent">
+    <strong>反过来读这个数字更有意思：95% 的失败全部被 gate 吃掉了，没有一个进入产出。</strong>这正是「机制而非提示词」那套设计要买的东西。如果没有 GatedEval，一个 5% 命中率的生成器在 12 小时里会产出一堆看起来能跑、实际有 desync 或越界的二进制。搜索质量低不可怕，可怕的是低质量能蒙混过关。
+  </div>
+
+  <h3>Table 3：生产 kernel（MI300X）</h3>
+  <table>
+    <thead><tr><th>Source</th><th>Kernel</th><th>Speedup</th></tr></thead>
+    <tbody>
+      <tr><td>AITer</td><td><code>aiter_fmoe_fp8_blockscale_subgu256</code></td><td class="gain">1.310</td></tr>
+      <tr><td>AITer</td><td><code>aiter_fmha_hd128_fp8_causal</code></td><td>1.007</td></tr>
+      <tr><td>AITer</td><td><code>new_aiter_fmha_hd192x128_bf16_causal</code></td><td>1.025</td></tr>
+      <tr><td>AITer</td><td><code>new_aiter_fmha_bwd_hd128_bf16_causal_a32</code></td><td>1.049</td></tr>
+      <tr><td>vLLM</td><td><code>gemm_a8w8_blockscale</code></td><td class="gain">1.234</td></tr>
+      <tr><td>SGLang</td><td><code>sglang_fused_moe_lora_kernel</code></td><td>1.025</td></tr>
+      <tr><td>vLLM</td><td><code>fused_moe_kernel</code></td><td class="gain">1.343</td></tr>
+      <tr><td>SGLang</td><td><code>awq_gemm_kernel</code></td><td class="gain">1.133</td></tr>
+    </tbody>
+  </table>
+  <p>族内几何均值：<strong>AITer 1.09×</strong>（max 1.31×），<strong>Triton JIT 1.18×</strong>（max 1.34×），两族都是 4/4 全部改进。看得出 AITer 是「一大三小」——手写调优过的 FMHA 只剩 0.7%–4.9%，而 MoE 那个还有 31%。</p>
+  <p>两处作者自己加的限定值得注意。第一：「We report <strong>only assembly-level optimization for Triton and binary-level optimization for AITer</strong>; IR-level variants are excluded from all aggregates and claims.」——他们做过 IR 级的变体但不计入任何结论。第二：「Because the kernels implement different operators and launch configurations, this comparison <strong>does not isolate the upstream compiler as the cause</strong>.」——Triton 侧收益普遍更高，但不能归因于 Triton 编译器不如手写。</p>
+
+  <h3>drop-in 验证</h3>
+  <p>光在 replay harness 里快没有意义，所以他们做了替换验证：KernelBench 侧直接换掉 object 跑同一个 benchmark harness；AITer 替换件<strong>在原 launch 配置下通过其 unit tests</strong>；vLLM / SGLang 侧<strong>替换缓存的 Triton HSACO 并禁用重新编译</strong>，跑框架测试。结论句是「remain usable as <strong>drop-in artifacts</strong> rather than only as replay-harness gains」。</p>
+  <div class="anim-frame" id="anim9">
+    <div class="anim-header">
+      <span class="anim-title">动画 9：30 个 kernel 的加速分布与算子组成</span>
+      <div class="anim-controls">
+        <button class="btn-prev" aria-label="上一步">⏮</button>
+        <button class="btn-play" aria-label="播放或暂停">▶ 播放</button>
+        <button class="btn-next" aria-label="下一步">⏭</button>
+        <button class="btn-reset" aria-label="重置">↺ 重置</button>
+        <span class="speed-wrap">
+          <span>速度</span>
+          <input type="range" class="speed-slider" min="0.5" max="2.5" step="0.1" value="1" aria-label="播放速度">
+          <span class="speed-label">1.0×</span>
+        </span>
+      </div>
+    </div>
+    <div class="anim-canvas-wrap">
+      <svg id="svg9" viewBox="0 0 820 440" width="820" height="440" role="img" aria-label="30 个 kernel 加速比分布与算子组成矩阵的动画"></svg>
+    </div>
+    <div class="anim-progress"><div class="bar"></div></div>
+    <div class="anim-stage-rail"><button class="stage-chip" data-step="0">30 条加速比（对数轴）</button><button class="stage-chip" data-step="1">L1 与 L2 分层</button><button class="stage-chip" data-step="2">为什么 L2 的收益更薄</button><button class="stage-chip" data-step="3">头部四个是什么算子</button><button class="stage-chip" data-step="4">生产 kernel 八条</button></div>
+    <div class="anim-status">
+      <span class="step-info">—</span>
+      <span class="step-desc"></span>
+    </div>
+    <div class="anim-legend">
+      <span><span class="dot" style="background:var(--a-blue)"></span> KernelBench L1</span>
+      <span><span class="dot" style="background:var(--a-amber)"></span> KernelBench L2</span>
+      <span><span class="dot" style="background:var(--a-green)"></span> 几何均值线</span>
+      <span><span class="dot" style="background:var(--a-purple)"></span> 生产 kernel</span>
+    </div>
+  </div>
+  <p class="note-inline">动画 9 上面板里那 30 条逐个的柱高，是我在论文给出的聚合量约束下重建的一组分布，而不是论文的原始逐条数据。约束条件是：L1 / L2 / 全体的几何均值 1.56× / 1.17× / 1.35×，中位数 1.31× / 1.10×，L1 有 6 条超过 1.5×、L2 只有 1 条，被点名的极值 3.88× / 3.82× / 2.63× / 2.28×（L1）与 2.55×（L2），以及唯一一条 1.00×。重建结果把这五个聚合量全部对上了，但除点名的那几条之外，单条的具体数值只是与统计量相容的示意。论文也没有给出第 4 名之后大部分 kernel 的文件名。</p>
+</section>
+<section id="limit">
+  <h2>局限：经验等价的边界在哪</h2>
+  <p>作者自己的 Scope and Limitations 一节列了四点，我先原样转述，再补两点我认为论文没讲透的。</p>
+  <ol>
+    <li><strong>等价性是经验的，不是形式的。</strong>原句：「AsmEvo provides <em>empirical differential equivalence rather than formal verification</em>; its guarantee is limited to evaluated inputs and launch configurations.」</li>
+    <li><strong>新的 shape 需要新的输入。</strong>换一组张量形状，就要重新推断输入或重新录一次 dispatch。</li>
+    <li><strong>harness 本身架构无关，但当前实现只针对 CDNA。</strong>recovery 与 metadata-aware rebuild 是 <em>calibrated for CDNA-class AMD GPUs</em>。</li>
+    <li><strong>收益上限取决于编译后还剩多少 headroom。</strong>复杂的 application state 可能必须走 real-dispatch capture。</li>
+  </ol>
+
+  <h3>我认为最需要补一句的：非确定性完全没有讨论</h3>
+  <div class="callout callout-red">
+    <strong>全文没有出现 atomic、nondeterminism、data race 这些词。</strong><br>
+    这是个实质性的空白。差分验证的整个逻辑建立在「同样的输入跑 $K_0$ 得到确定的 post-state」之上。但 GPU kernel 里有一整类操作本身就不保证跑两次结果逐位相同——跨 workgroup 的浮点原子加、非确定顺序的归约、依赖 wave 调度顺序的写入。对这类 kernel，$\iota$ 里那条「整数 buffer 逐位相同」的要求可能连 $K_0$ 自己都通不过；而浮点侧的 $\theta=0.9999$、$\tau=10^{-3}$ 是否宽到能容忍归约顺序变化，又是否宽到会放过真实的语义改变，论文没有分析。<br><br>
+    「每个候选重复 3 次」这个设计从侧面说明作者知道存在抖动，但 3 次只够过滤偶发故障，不构成对非确定性的处理。
+  </div>
+
+  <h3>第二点：没有任何消融实验</h3>
+  <p>论文在方法一节声明过比较方式应该是「在同一 harness 内比较 search driver，holding recovery, rebuilding, correctness verification, and commit gates fixed」——这个设计很正确，但<strong>正文里没有给出这个对比的任何数据</strong>。全文没有 ablation 表、没有换模型的对比、没有「去掉 hot-window 会怎样」「去掉方差感知阈值会怎样」。所以论文里那些设计选择（$k=0.85$、team mode 的五个方向、verified composition）的<strong>必要性都没有实验支撑</strong>，只有设计论证。</p>
+  <p>另外还有两处信息缺口：Table 1 里 AITer 写的是「the four <strong>retained</strong> kernels」，retained 这个词暗示有 kernel 被剔除，但剔除了几个、为什么，论文未说明；成本方面除了 12h/kernel × 4 worker 之外，token 数、金额、总 GPU 小时全部未给。</p>
+
+  <h3>定位</h3>
+  <p>作者的自我定位很克制，值得照抄：「AsmEvo <strong>complements rather than replaces</strong> source-level compilers, autotuners, and inference libraries.」结论最后一句是这篇论文真正想立的论点：<strong>「deployed binaries retain recoverable low-level headroom and that agentic search can exploit it safely under deterministic gates.」</strong></p>
+</section>
+
+<section id="summary">
+  <h2>总结</h2>
+  <p>把这篇论文的创新点按「原理上解决了什么问题」重排一遍：</p>
+  <ul>
+    <li><strong>反汇编不可信 → 用逐字节 round-trip 把它变成可判定的。</strong>不论证工具正确，只检查这一次的输出重新编译后与输入相同。</li>
+    <li><strong>指令增删会打断相对分支 → re-symbolize 把偏移换成符号。</strong>这一个动作把可行编辑从「等长替换」放宽到「任意重排」，是所有调度类优化的前提。</li>
+    <li><strong>资源信息两处存放会 desync → 两处同时由确定性代码重算，接口四样冻结。</strong>agent 连碰这些字段的接口都没有。</li>
+    <li><strong>没有函数签名不知道喂什么输入 → 两层 oracle。</strong>能推就推（外加 canary 顺手抓越界写），推不出来就录制真实 dispatch；而<strong>把内存还原到原始虚拟地址</strong>让任意深度的嵌套指针无需被理解就继续有效。</li>
+    <li><strong>快而错的候选会污染搜索信号 → 计时严格排在等价验证之后。</strong>语义错的候选永远拿不到时间数字。</li>
+    <li><strong>时钟锁不住、测量在抖 → 把 cv 写进接受阈值。</strong>防的是长时程搜索里的噪声棘轮。</li>
+    <li><strong>整份汇编放不进 context → hot window 缩小注意力，但验收仍在整 kernel 级。</strong>window 是注意力的范围，不是责任的范围。</li>
+    <li><strong>单链搜索一步走错全废 → 树状 verified lineage + 每轮 reset 回 verified state。</strong>未验证的改动不允许跨轮累积。</li>
+  </ul>
+  <div class="callout callout-purple">
+    <strong>如果只带走一句话：</strong>这篇论文真正的贡献不是「让 LLM 改汇编」，而是<strong>把「让 LLM 改汇编」这件本来极危险的事，用一组确定性闸门包装成了安全的</strong>。它的每一个设计决策都能回答同一个问题——「如果模型这里出错，坏结果会流到哪里去」，而答案总是「流不出去，只是浪费预算」。5.1% 的 commit rate 在这个框架下不是缺点，而是证明：搜索质量可以很低，只要低质量出不了门。
+  </div>
+  <div class="callout callout-orange">
+    <strong>同时要清楚它没做到什么：</strong>等价性只在已评估的输入与 launch 配置上成立，换 shape 就要重新取样；非确定性 kernel 的处理完全没有讨论；没有任何消融实验来支撑内部设计选择；实现绑在 CDNA 上。这些都不否定结果，但决定了你能把这个结论推广到多远。
+  </div>
+  <p class="note-inline">原文：<a href="https://arxiv.org/abs/2608.20711">arXiv:2608.20711</a>，Ji Liu 等 21 人（AMD 与南方科技大学），2026 年 8 月 21 日提交，cs.CL。本文所有公式、字段名与数值均取自 v1；文中凡标注「论文未说明」处，均为我核对全文后确认缺失，请勿据此外推。</p>
+</section>
+
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+
+<script>
+(function () {
+  "use strict";
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function AnimEngine(svg, opts) {
+    this.svg = svg;
+    this.svgId = svg.id;
+    this.steps = opts.steps || [];
+    this.idx = -1;
+    this.currentStep = -1;
+    this.timer = null;
+    this.speed = 1;
+    this.layer = null;
+    this._initDefs();
+  }
+
+  AnimEngine.prototype._initDefs = function () {
+    var ns = SVG_NS;
+    var defs = document.createElementNS(ns, "defs");
+    var uid = this.svgId + "-";
+
+    function marker(id, color, orient) {
+      var m = document.createElementNS(ns, "marker");
+      m.setAttribute("id", id);
+      m.setAttribute("viewBox", "0 0 10 10");
+      m.setAttribute("refX", "8");
+      m.setAttribute("refY", "5");
+      m.setAttribute("markerWidth", "7");
+      m.setAttribute("markerHeight", "7");
+      m.setAttribute("orient", orient || "auto");
+      var p = document.createElementNS(ns, "path");
+      p.setAttribute("d", "M0,0 L10,5 L0,10 Z");
+      p.setAttribute("fill", color);
+      m.appendChild(p);
+      return m;
+    }
+    defs.appendChild(marker(uid + "arr", aC('--a-accent', '#FF7A00'), "auto"));
+    defs.appendChild(marker(uid + "arrG", aC('--a-green', '#4CC98A'), "auto"));
+    defs.appendChild(marker(uid + "arrR", aC('--a-red', '#FF7268'), "auto"));
+    defs.appendChild(marker(uid + "arrB", aC('--a-blue', '#74B4FF'), "auto"));
+    defs.appendChild(marker(uid + "arrO", aC('--a-amber', '#E9B449'), "auto"));
+    defs.appendChild(marker(uid + "arrP", aC('--a-purple', '#B79BFF'), "auto"));
+    defs.appendChild(marker(uid + "arrM", aC('--a-fg-muted', '#808A9E'), "auto"));
+    this.svg.appendChild(defs);
+  };
+
+  AnimEngine.prototype._initLayer = function () {
+    this.layer = document.createElementNS(SVG_NS, "g");
+    this.layer.setAttribute("class", "anim-layer");
+    this.svg.appendChild(this.layer);
+  };
+  AnimEngine.prototype.clear = function () {
+    while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild);
+  };
+
+  AnimEngine.prototype.draw = function (tag, attrs, text) {
+    var el = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (var k in attrs) {
+      if (attrs.hasOwnProperty(k)) el.setAttribute(k, attrs[k]);
+    }
+    if (text !== null && text !== undefined && text !== "") el.textContent = text;
+    this.layer.appendChild(el);
+    return el;
+  };
+
+  AnimEngine.prototype.t = function (x, y, str, opts) {
+    opts = opts || {};
+    var lines = String(str).split("\n");
+    var el = this.draw("text", Object.assign({
+      x: x, y: y,
+      "text-anchor": opts.ta || "middle",
+      "font-size": opts.fs || 12,
+      fill: opts.fill || aC('--a-fg', '#E7ECF3'),
+      "font-family": opts.ff || "inherit",
+      "font-weight": opts.fw || "normal"
+    }, opts.attrs || {}), null);
+    if (lines.length === 1) {
+      el.textContent = str;
+    } else {
+      var fs = opts.fs || 12;
+      lines.forEach(function (line, i) {
+        var ts = document.createElementNS(SVG_NS, "tspan");
+        ts.setAttribute("x", x);
+        ts.setAttribute("dy", i === 0 ? 0 : fs * 1.2);
+        ts.textContent = line;
+        el.appendChild(ts);
+      });
+    }
+    return el;
+  };
+
+  AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, opts) {
+    opts = opts || {};
+    var r = this.draw("rect", {
+      x: x, y: y, width: w, height: h,
+      fill: fill || aC('--a-surface', '#131A24'), stroke: stroke || aC('--a-line', '#1E2733'),
+      "stroke-width": opts.sw || 1.5, rx: opts.rx || 4
+    }, null);
+    if (label) {
+      this.t(x + w / 2, y + h / 2 + (opts.labelDy || 4), label, {
+        fs: opts.fs || 11, fill: opts.labelFill || aC('--a-on-solid', '#14100B'), fw: opts.fw || "600",
+        ta: "middle"
+      });
+    }
+    return r;
+  };
+  AnimEngine.prototype.circle = function (cx, cy, r, label, fill, stroke, opts) {
+    opts = opts || {};
+    var c = this.draw("circle", {
+      cx: cx, cy: cy, r: r,
+      fill: fill || aC('--a-surface', '#131A24'), stroke: stroke || aC('--a-line', '#1E2733'),
+      "stroke-width": opts.sw || 1.5,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+    if (label) {
+      this.t(cx, cy + (opts.labelDy || 4), label, {
+        fs: opts.fs || 11, fill: opts.labelFill || aC('--a-fg-strong', '#FFFFFF'), fw: opts.fw || "600"
+      });
+    }
+    return c;
+  };
+
+  AnimEngine.prototype.arrow = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    var mid = opts.curve ? " Q " + opts.cx + "," + opts.cy + " " : "";
+    var d = "M" + x1 + "," + y1 + mid + " L" + x2 + "," + y2;
+    var markerId = "url(#" + this.svgId + "-" + (opts.marker || "arr") + ")";
+    this.draw("path", {
+      d: d, fill: "none", stroke: color || aC('--a-accent', '#FF7A00'),
+      "stroke-width": opts.sw || 2, "marker-end": markerId,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.line = function (x1, y1, x2, y2, color, opts) {
+    opts = opts || {};
+    this.draw("line", {
+      x1: x1, y1: y1, x2: x2, y2: y2,
+      stroke: color || aC('--a-line', '#1E2733'), "stroke-width": opts.sw || 1,
+      "stroke-dasharray": opts.dash || "none"
+    }, null);
+  };
+
+  AnimEngine.prototype.poly = function (pts, color, opts) {
+    opts = opts || {};
+    var d = pts.map(function (p, i) { return (i === 0 ? "M" : "L") + p[0] + "," + p[1]; }).join(" ");
+    this.draw("path", {
+      d: d, fill: "none", stroke: color, "stroke-width": opts.sw || 2,
+      "stroke-dasharray": opts.dash || "none", "stroke-linejoin": "round"
+    }, null);
+  };
+
+  AnimEngine.prototype.delay = function () { return 1100 / this.speed; };
+  AnimEngine.prototype.goTo = function (i) {
+    if (i < 0 || i >= this.steps.length) return;
+    var prev = this.currentStep;
+    var direction = i >= prev ? 1 : -1;
+    var step = this.steps[i];
+    this._render2(step, i, direction);
+    if (window.MathJax && window.__mathReady && step.desc) {
+      var descEl = this.svg.parentNode.parentNode.querySelector(".step-desc");
+      if (descEl) {
+        try { MathJax.typesetPromise([descEl]); } catch (e) {}
+      }
+    }
+  };
+
+  AnimEngine.prototype._render2 = function (step, index, direction) {
+    var oldLayer = this.layer || null;
+    var nextLayer = document.createElementNS(SVG_NS, "g");
+    nextLayer.setAttribute("class", "anim-layer scene-layer");
+    this.svg.appendChild(nextLayer);
+    this.layer = nextLayer;
+    this.idx = index;
+    step.render(this);
+    this._applyReveal(nextLayer);
+    this.currentStep = index;
+    this._updateUI(step, index);
+    if (oldLayer && !this._reducedMotion()) {
+      nextLayer.classList.add("scene-enter", direction > 0 ? "from-right" : "from-left");
+      oldLayer.classList.add("scene-exit", direction > 0 ? "to-left" : "to-right");
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          nextLayer.classList.add("scene-active");
+          oldLayer.classList.add("scene-exit-active");
+        });
+      });
+      setTimeout(function () {
+        if (oldLayer.parentNode) oldLayer.parentNode.removeChild(oldLayer);
+        nextLayer.classList.remove("scene-enter", "from-right", "from-left");
+      }, 520);
+    } else {
+      if (oldLayer) oldLayer.parentNode.removeChild(oldLayer);
+    }
+  };
+
+  AnimEngine.prototype._reducedMotion = function () {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  };
+  AnimEngine.prototype._applyReveal = function (layer) {
+    if (this._reducedMotion()) return;
+    var els = layer.querySelectorAll("rect, text, circle, path");
+    var delay = 60;
+    for (var i = 0; i < els.length; i++) {
+      els[i].style.setProperty("--delay", delay + "ms");
+      els[i].classList.add("reveal");
+      delay += 40;
+      if (delay > 650) delay = 60;
+    }
+  };
+
+  AnimEngine.prototype._updateUI = function (step, i) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var info = frame.querySelector(".step-info");
+    var desc = frame.querySelector(".step-desc");
+    if (info) info.textContent = "步骤 " + (i + 1) + " / " + this.steps.length;
+    if (desc) desc.innerHTML = step.desc || step.title || "";
+    var prev = frame.querySelector(".btn-prev");
+    var next = frame.querySelector(".btn-next");
+    if (prev) prev.disabled = (i === 0);
+    if (next) next.disabled = (i === this.steps.length - 1);
+    var bar = frame.querySelector(".anim-progress .bar");
+    if (bar) bar.style.width = ((i + 1) / this.steps.length * 100) + "%";
+    var chips = frame.querySelectorAll(".stage-chip");
+    for (var c = 0; c < chips.length; c++) {
+      chips[c].classList.toggle("done", c < i);
+      chips[c].classList.toggle("active", c === i);
+    }
+  };
+
+  AnimEngine.prototype.next = function () { if (this.currentStep < this.steps.length - 1) this.goTo(this.currentStep + 1); };
+  AnimEngine.prototype.prev = function () { if (this.currentStep > 0) this.goTo(this.currentStep - 1); };
+  AnimEngine.prototype.reset = function () { this.pause(); this._setPlayBtn(false); this.goTo(0); };
+  AnimEngine.prototype.play = function () {
+    if (this.timer) return;
+    this._advance();
+  };
+  AnimEngine.prototype._advance = function () {
+    var self = this;
+    if (this.currentStep >= this.steps.length - 1) { this.pause(); this._setPlayBtn(false); return; }
+    this.timer = setTimeout(function () {
+      self.timer = null;
+      self.next();
+      self._advance();
+    }, this.delay());
+  };
+  AnimEngine.prototype.pause = function () {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  };
+  AnimEngine.prototype._setPlayBtn = function (playing) {
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var btn = frame.querySelector(".btn-play");
+    if (btn) btn.textContent = playing ? "⏸ 暂停" : "▶ 播放";
+  };
+  AnimEngine.prototype.toggle = function () {
+    if (this.timer) { this.pause(); this._setPlayBtn(false); return; }
+    if (this.currentStep >= this.steps.length - 1) this.goTo(0);
+    this._setPlayBtn(true);
+    this.play();
+  };
+  AnimEngine.prototype.setSpeed = function (v) {
+    this.speed = v;
+    var frame = this.svg.closest(".anim-frame");
+    if (!frame) return;
+    var lab = frame.querySelector(".speed-label");
+    if (lab) lab.textContent = v.toFixed(1) + "×";
+  };
+
+  /* ---------- 调色板 ---------- */
+  function P() {
+    return {
+      accent: aC('--a-accent', '#FF7A00'),
+      accentSoft: aC('--a-accent-line', 'rgba(255,122,0,.4)'),
+      accentBg: aC('--a-accent-bg', 'rgba(255,122,0,.12)'),
+      green: aC('--a-green', '#4CC98A'),
+      greenBg: aC('--a-green-bg', 'rgba(76,201,138,.12)'),
+      red: aC('--a-red', '#FF7268'),
+      redBg: aC('--a-red-bg', 'rgba(255,114,104,.12)'),
+      blue: aC('--a-blue', '#74B4FF'),
+      blueBg: aC('--a-blue-bg', 'rgba(116,180,255,.12)'),
+      amber: aC('--a-amber', '#E9B449'),
+      amberBg: aC('--a-amber-bg', 'rgba(233,180,73,.12)'),
+      teal: aC('--a-teal', '#54C7C3'),
+      tealBg: aC('--a-teal-bg', 'rgba(84,199,195,.12)'),
+      purple: aC('--a-purple', '#B79BFF'),
+      purpleBg: aC('--a-purple-bg', 'rgba(183,155,255,.12)'),
+      fg: aC('--a-fg', '#E7ECF3'),
+      fgStrong: aC('--a-fg-strong', '#FFFFFF'),
+      soft: aC('--a-fg', '#E7ECF3'),
+      muted: aC('--a-fg-muted', '#808A9E'),
+      line: aC('--a-line', '#1E2733'),
+      surface: aC('--a-surface', '#131A24'),
+      onSolid: aC('--a-on-solid', '#14100B')
+    };
+  }
+
+  function sceneHeader(e, c, title, sub) {
+    e.t(20, 26, title, { ta: "start", fs: 14, fw: "700", fill: c.fgStrong });
+    if (sub) e.t(20, 46, sub, { ta: "start", fs: 11.5, fill: c.muted });
+  }
+
+  /* ================= 动画 1：编译流水线与 source-free 设定 ================= */
+  function pipeRow(e, c, hi) {
+    var xs = [36, 232, 428, 624];
+    var labs = ["HIP / Triton 源码", "LLVM IR", "AMDGCN 汇编", "code object (.co)"];
+    for (var i = 0; i < 4; i++) {
+      var on = (hi === undefined) || (hi === i);
+      var col = i < 2 ? c.blue : c.accent;
+      var bg = i < 2 ? c.blueBg : c.accentBg;
+      e.rect(xs[i], 96, 160, 54, labs[i], on ? bg : c.surface, on ? col : c.line,
+        { labelFill: on ? c.fg : c.muted, fs: 12 });
+      if (i < 3) e.arrow(xs[i] + 160, 123, xs[i + 1] - 6, 123, c.muted, { marker: "arrM" });
+    }
+    return xs;
+  }
+
+  var scene1 = [
+    {
+      desc: "编译把源码一路降到机器码。已有的 LLM kernel 优化器几乎都在前两格里工作，AsmEvo 的输入是最后一格。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "编译流水线：优化的入口放在哪一格", "前两格需要可编辑源码或 IR，最后一格只需要那个二进制本身");
+        pipeRow(e, c);
+        e.rect(36, 200, 356, 44, "已有工作：KernelBench / GEAK / CUDA-L1 / TVM / Ansor", c.blueBg, c.blue, { labelFill: c.fg, fs: 10.5 });
+        e.rect(428, 200, 356, 44, "AsmEvo：输入已编译的 code object", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        e.t(410, 296, "两者的差别不只是「改哪一层」，还包括「拿什么当正确性参照」——见下一格。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "论文列出五类在 lowering 之后才落定的决策：wait-counter placement、instruction selection、register allocation、kernel descriptors、ABI-visible metadata。它们在源码里<strong>不可见</strong>，不是改不动。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "lowering 之后才落定的五类决策", "「may no longer be exposed through the source program」");
+        pipeRow(e, c, 2);
+        e.line(410, 78, 410, 172, c.red, { dash: "5 4", sw: 1.6 });
+        e.t(300, 72, "源码可见性的边界", { fs: 11, fill: c.red, ta: "middle" });
+        var items = ["wait-counter placement", "instruction selection", "register allocation", "kernel descriptors", "ABI-visible metadata"];
+        for (var i = 0; i < 5; i++) {
+          e.rect(60 + i * 148, 208, 138, 40, items[i], c.redBg, c.red, { labelFill: c.fg, fs: 10.5 });
+          e.arrow(60 + i * 148 + 69, 206, 60 + i * 148 + 69, 178, c.red, { marker: "arrR", sw: 1.4 });
+        }
+        e.t(410, 292, "在 HIP 层面你写不出「把这条 s_waitcnt 往后挪三条指令」。", { fs: 11.5, fill: c.fg });
+        e.t(410, 314, "编译器已经替你决定了，而它的决定不一定是最优的。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "一个 code object 里，资源信息在 <strong>kernel descriptor 和 AMDGPU metadata 两处各存一份</strong>。这个冗余是后面所有 ABI 风险的源头。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "code object 的内部结构", "ELF 容器：指令体 + 声明层；声明层里资源信息存了两份");
+        e.rect(60, 80, 700, 30, "AMDGPU code object (ELF 容器)", c.accentBg, c.accent, { labelFill: c.fg, fs: 12 });
+        e.rect(80, 132, 200, 96, null, c.accentBg, c.accent, { rx: 6 });
+        e.t(180, 158, "指令体", { fs: 12.5, fw: "700", fill: c.fg });
+        e.t(180, 180, "AMDGCN 机器码", { fs: 10.5, fill: c.muted });
+        e.t(180, 202, "反汇编器唯一能可靠还原的部分", { fs: 10, fill: c.muted });
+        e.rect(300, 132, 200, 96, null, c.purpleBg, c.purple, { rx: 6 });
+        e.t(400, 158, "kernel descriptor", { fs: 12.5, fw: "700", fill: c.fg });
+        e.t(400, 180, "VGPR / SGPR / AGPR", { fs: 10.5, fill: c.purple });
+        e.t(400, 198, "LDS / scratch", { fs: 10.5, fill: c.purple });
+        e.t(400, 216, "运行时据此决定 occupancy", { fs: 10, fill: c.muted });
+        e.rect(520, 132, 200, 96, null, c.tealBg, c.teal, { rx: 6 });
+        e.t(620, 158, "AMDGPU metadata + 符号", { fs: 12, fw: "700", fill: c.fg });
+        e.t(620, 180, "VGPR / SGPR / AGPR", { fs: 10.5, fill: c.teal });
+        e.t(620, 198, "LDS / scratch（同一份信息）", { fs: 10.5, fill: c.teal });
+        e.t(620, 216, "kernarg 布局与总大小、符号名", { fs: 10, fill: c.muted });
+        e.line(400, 240, 620, 240, c.red, { dash: "4 4", sw: 1.6 });
+        e.t(510, 262, "这两份必须一致", { fs: 12, fw: "700", fill: c.red });
+        e.t(510, 282, "不一致 = 论文所说的 desynchronize metadata", { fs: 10.5, fill: c.muted });
+        e.t(410, 330, "汇编级编辑的四类风险：破坏内存 / 违反 kernarg ABI / metadata desync / 只是改了语义所以看起来变快", { fs: 11, fill: c.muted });
+      }
+    },
+    {
+      desc: "论文点名三种 source-free 部署形态。注意「没有源码」的准确含义不是「反编译不出来」，而是<strong>可优化对象与可验证对象都只有这个二进制</strong>。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "三种 source-free 部署形态", "真实生产里要替换的就是这个二进制，重编译未必得到同一个");
+        var t = [
+          ["serving stack", "只暴露一个编译好的 HSACO", "源码不在部署包里"],
+          ["JIT cache artifact", "Triton 编译缓存里的 HSACO", "实际被 dispatch 的就是它"],
+          ["vendor binary", "AITer code object", "vLLM / SGLang 内嵌 kernel"]
+        ];
+        for (var i = 0; i < 3; i++) {
+          e.rect(50 + i * 250, 100, 220, 110, null, c.surface, c.accent, { rx: 6 });
+          e.t(160 + i * 250, 130, t[i][0], { fs: 13, fw: "700", fill: c.accent });
+          e.t(160 + i * 250, 158, t[i][1], { fs: 11, fill: c.fg });
+          e.t(160 + i * 250, 180, t[i][2], { fs: 11, fill: c.muted });
+        }
+        e.rect(160, 244, 500, 42, "可优化对象 = 可验证对象 = 这一个二进制", c.redBg, c.red, { labelFill: c.fg, fs: 12.5 });
+        e.t(410, 320, "所以正确性的参照物只能是它自己——这就是下一节要讲的 oracle 设定。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "AsmEvo 的输入输出都是 code object：给定 $K_0$，产出一个 ABI 保持、与 $K_0$ 行为一致、但更快的 $K'$，可以直接替换。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "AsmEvo 的作用点", "输入一个 code object，输出另一个 code object");
+        e.rect(50, 130, 170, 70, null, c.accentBg, c.accent, { rx: 6 });
+        e.t(135, 158, "K₀", { fs: 18, fw: "700", fill: c.accent });
+        e.t(135, 182, "已部署的 .co / .hsaco", { fs: 10.5, fill: c.muted });
+        e.rect(300, 118, 220, 94, null, c.surface, c.green, { rx: 8, sw: 2 });
+        e.t(410, 146, "AsmEvo", { fs: 15, fw: "700", fill: c.green });
+        e.t(410, 170, "恢复 → 编辑 → 重建 → 验证", { fs: 10.5, fill: c.fg });
+        e.t(410, 192, "确定性闸门持有全部判断权", { fs: 10, fill: c.muted });
+        e.rect(600, 130, 170, 70, null, c.greenBg, c.green, { rx: 6 });
+        e.t(685, 158, "K′", { fs: 18, fw: "700", fill: c.green });
+        e.t(685, 182, "drop-in 替换件", { fs: 10.5, fill: c.muted });
+        e.arrow(220, 165, 294, 165, c.accent);
+        e.arrow(520, 165, 594, 165, c.green, { marker: "arrG" });
+        e.t(410, 252, "全程不碰源码，不需要重新编译，host 侧 launcher 一行都不用改。", { fs: 12, fill: c.fg });
+        e.t(410, 278, "报告的加速比恒为  ŝ(K′) = T(K₀) / T(K′)", { fs: 11.5, fill: c.green, fw: "600" });
+        e.t(410, 328, "整篇论文剩下的内容，全部是在回答一个问题：怎么保证 K′ 真的和 K₀ 行为一致。", { fs: 11.5, fill: c.muted });
+      }
+    }
+  ];
+  /* ================= 动画 2：oracle 的换位 ================= */
+  var scene2 = [
+    {
+      desc: "源码级优化器的正确性参照是一份<strong>人写的参考实现</strong>。参考实现和候选之间隔着一层「什么算相同」的解释空间。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "源码级：参照物是参考实现", "参考实现 ≠ 被替换的那个二进制");
+        e.rect(50, 100, 190, 62, "参考实现（PyTorch / 人写）", c.blueBg, c.blue, { labelFill: c.fg, fs: 11.5 });
+        e.rect(50, 200, 190, 62, "候选 kernel 源码", c.surface, c.line, { labelFill: c.fg, fs: 11.5 });
+        e.rect(330, 138, 170, 86, null, c.amberBg, c.amber, { rx: 6 });
+        e.t(415, 168, "「什么算相同」", { fs: 12.5, fw: "700", fill: c.fg });
+        e.t(415, 190, "容差、形状、随机种子", { fs: 10.5, fill: c.muted });
+        e.t(415, 208, "由测试脚本自己定", { fs: 10.5, fill: c.muted });
+        e.arrow(240, 131, 324, 160, c.blue);
+        e.arrow(240, 231, 324, 202, c.muted, { marker: "arrM" });
+        e.rect(570, 150, 190, 62, "输出比对通过", c.greenBg, c.green, { labelFill: c.fg, fs: 12 });
+        e.arrow(500, 181, 564, 181, c.muted, { marker: "arrM" });
+        e.t(410, 306, "这层解释空间很有用——它让优化器可以放宽无关紧要的差异。但它同时也是可以被利用的。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "解释空间一旦可以被优化器自己影响，「通过测试」就不再等于「行为一致」。论文把这类问题归为 reward hacking：优化信号本身被绕过去了。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "解释空间会被绕过去", "论文的说法：优化信号必须是 non-hackable 的");
+        e.rect(50, 100, 190, 62, "参考实现", c.blueBg, c.blue, { labelFill: c.fg, fs: 11.5 });
+        e.rect(50, 200, 190, 62, "候选：只在测试形状上对", c.redBg, c.red, { labelFill: c.fg, fs: 11 });
+        e.rect(330, 138, 170, 86, null, c.redBg, c.red, { rx: 6 });
+        e.t(415, 164, "被放宽的判据", { fs: 12.5, fw: "700", fill: c.red });
+        e.t(415, 188, "容差调大、只测一种形状", { fs: 10.5, fill: c.fg });
+        e.t(415, 208, "或者干脆改了测试", { fs: 10.5, fill: c.fg });
+        e.arrow(240, 131, 324, 160, c.blue);
+        e.arrow(240, 231, 324, 202, c.red, { marker: "arrR" });
+        e.rect(570, 150, 190, 62, "「通过」但行为不同", c.redBg, c.red, { labelFill: c.fg, fs: 12 });
+        e.arrow(500, 181, 564, 181, c.red, { marker: "arrR" });
+        e.t(410, 300, "在长时程自动搜索里这尤其危险：搜索会主动找出所有能压低成本的路径，", { fs: 11.5, fill: c.fg });
+        e.t(410, 322, "包括「让判据变松」这一条。", { fs: 11.5, fill: c.red, fw: "600" });
+      }
+    },
+    {
+      desc: "AsmEvo 的做法是把参照物换成 $K_0$ 自己：<strong>$O(x) = \\mathrm{run}(K_0, x)$</strong>。要比对的对象就是要被替换的对象，解释空间被压到最小。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "AsmEvo：把 K₀ 自己当 oracle", "O(x) = run(K₀, x)：oracle 与替换目标是同一个二进制");
+        e.rect(50, 100, 190, 62, "K₀（要被替换的二进制）", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        e.rect(50, 200, 190, 62, "K′（候选二进制）", c.surface, c.green, { labelFill: c.fg, fs: 11.5 });
+        e.rect(340, 140, 150, 82, null, c.greenBg, c.green, { rx: 6 });
+        e.t(415, 166, "同一组输入 x", { fs: 12, fw: "700", fill: c.fg });
+        e.t(415, 190, "同一块显存布局", { fs: 10.5, fill: c.muted });
+        e.t(415, 208, "同一套判据", { fs: 10.5, fill: c.muted });
+        e.arrow(240, 131, 334, 162, c.accent);
+        e.arrow(240, 231, 334, 200, c.green, { marker: "arrG" });
+        e.rect(560, 150, 200, 62, "差分比对（确定性）", c.greenBg, c.green, { labelFill: c.fg, fs: 12 });
+        e.arrow(490, 181, 554, 181, c.green, { marker: "arrG" });
+        e.t(410, 296, "搜索过程动不了 oracle：它就是那个二进制，跑一遍就有答案。", { fs: 12, fill: c.fg });
+        e.t(410, 320, "这是 AsmEvo 全部安全性的地基，后面四个机制都建在它上面。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "换 oracle 是有代价的：<strong>正确性的独立定义消失了</strong>。$K_0$ 若有 bug，AsmEvo 会忠实地保留这个 bug；$K_0$ 若走了不必要的弯路，只要那弯路影响输出，就动不得。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "代价：正确性不再有独立定义", "等价的语义从「符合规范」变成「和这个二进制一样」");
+        e.rect(60, 106, 320, 50, "K₀ 有 bug", c.amberBg, c.amber, { labelFill: c.fg, fs: 12 });
+        e.rect(440, 106, 320, 50, "K₀ 走了不必要的弯路", c.amberBg, c.amber, { labelFill: c.fg, fs: 12 });
+        e.arrow(220, 158, 220, 190, c.amber, { marker: "arrO" });
+        e.arrow(600, 158, 600, 190, c.amber, { marker: "arrO" });
+        e.rect(60, 194, 320, 50, "bug 被逐位保留下来", c.surface, c.amber, { labelFill: c.fg, fs: 12 });
+        e.rect(440, 194, 320, 50, "只要影响输出就不能删", c.surface, c.amber, { labelFill: c.fg, fs: 12 });
+        e.t(410, 282, "论文对这一点是自觉的：它反复说自己给的是 empirical equivalence，不是形式化证明。", { fs: 11.5, fill: c.fg });
+        e.t(410, 306, "换来的好处是：这个判据在 source-free 场景里是唯一可执行的，而且不可被搜索绕过。", { fs: 11.5, fill: c.muted });
+        e.t(410, 340, "接下来的问题是工程性的：怎么把一个二进制变成可以安全编辑、再变回二进制的东西。", { fs: 11.5, fill: c.accent });
+      }
+    }
+  ];
+  /* ================= 动画 3：恢复可重汇编表示 ================= */
+  var MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+
+  var scene3 = [
+    {
+      desc: "直接反汇编只能拿回指令体。声明层——descriptor 字段、kernarg 布局、符号属性——不在反汇编输出里，所以反汇编结果<strong>汇编不回去</strong>。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "裸反汇编缺的是声明层", "拿到指令不等于拿到一个能重新汇编的程序");
+        e.rect(50, 90, 210, 40, "code object", c.accentBg, c.accent, { labelFill: c.fg, fs: 12 });
+        var L = ["指令体", "kernel descriptor 字段", "kernarg 布局 / segment size", "符号与 section 属性"];
+        for (var i = 0; i < 4; i++) {
+          e.rect(50, 146 + i * 46, 210, 38, L[i], i === 0 ? c.accentBg : c.purpleBg,
+            i === 0 ? c.accent : c.purple, { labelFill: c.fg, fs: 11 });
+        }
+        e.arrow(265, 250, 355, 250, c.muted, { marker: "arrM" });
+        e.t(310, 236, "disasm", { fs: 10.5, fill: c.muted });
+        e.rect(370, 146, 210, 38, "指令体", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        for (i = 1; i < 4; i++) {
+          e.rect(370, 146 + i * 46, 210, 38, "缺失", c.surface, c.line, { labelFill: c.muted, fs: 11, dash: "4 3" });
+        }
+        e.rect(618, 190, 152, 100, null, c.redBg, c.red, { rx: 6 });
+        e.t(694, 220, "汇编不回去", { fs: 13, fw: "700", fill: c.red });
+        e.t(694, 246, "缺声明就没有", { fs: 10.5, fill: c.fg });
+        e.t(694, 264, "合法的 ELF 产物", { fs: 10.5, fill: c.fg });
+        e.arrow(585, 240, 612, 240, c.red, { marker: "arrR" });
+        e.t(410, 370, "所以 AsmEvo 的第一步不是「反汇编」，而是「恢复一个可重汇编的等价表示 s(K₀)」。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "论文的 <code>co2s</code> 一次性恢复六类内容——注意后五类都不是指令，而是<strong>让这份汇编能变回二进制</strong>所必需的声明。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "co2s：恢复六类内容", "K₀ → s(K₀)：一份能重新汇编并链接的 AMDGCN 汇编");
+        var t = [
+          ["指令流与操作数", "唯一的「代码」部分", c.accent, c.accentBg],
+          [".amdhsa_kernel 声明", "descriptor 的汇编形式", c.purple, c.purpleBg],
+          ["资源用量字段", "VGPR / SGPR / AGPR / LDS / scratch", c.purple, c.purpleBg],
+          ["kernarg 布局", "偏移、类型、总 segment size", c.teal, c.tealBg],
+          ["符号与 section 属性", "内核符号名、可见性", c.teal, c.tealBg],
+          ["符号化的分支目标", "把 PC 相对偏移换成标签", c.green, c.greenBg]
+        ];
+        for (var i = 0; i < 6; i++) {
+          var x = 40 + (i % 3) * 250, y = 86 + Math.floor(i / 3) * 104;
+          e.rect(x, y, 230, 86, null, t[i][3], t[i][2], { rx: 6 });
+          e.t(x + 115, y + 34, t[i][0], { fs: 12.5, fw: "700", fill: t[i][2] });
+          e.t(x + 115, y + 60, t[i][1], { fs: 10.5, fill: c.fg });
+        }
+        e.t(410, 336, "前三类决定「跑什么」，中间两类决定「怎么被调用」，最后一类决定「能不能被编辑」。", { fs: 11.5, fill: c.fg });
+        e.t(410, 366, "最后一类最容易被忽略，但它是所有结构性编辑的前提——下一格。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "分支目标若保留成<strong>数字偏移</strong>，插入或删除任何一条指令都会让所有跨过它的分支静默地指错地方。这类错误不报编译错，只会算错。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "数字偏移让指令数量不可改", "偏移是相对当前 PC 的，指令一多一少，含义就变了");
+        e.t(140, 84, "原始（偏移 = 跳过 3 条）", { fs: 11.5, fw: "600", fill: c.fg });
+        var a = ["s_cmp_lg_u32 s0, 0", "s_cbranch_scc1 +3", "v_add_f32 v1, v2, v3", "v_mul_f32 v4, v1, v5", "s_nop 0", "v_mov_b32 v6, v4"];
+        for (var i = 0; i < 6; i++) {
+          e.rect(40, 100 + i * 34, 210, 28, null, i === 1 ? c.blueBg : c.surface, i === 1 ? c.blue : c.line, { rx: 3 });
+          e.t(52, 119 + i * 34, a[i], { ta: "start", fs: 10, ff: MONO, fill: c.fg });
+        }
+        e.line(255, 118, 292, 118, c.blue, { sw: 1.4 });
+        e.line(292, 118, 292, 284, c.blue, { sw: 1.4 });
+        e.arrow(292, 284, 258, 284, c.blue, { marker: "arrB", sw: 1.4 });
+        e.t(300, 200, "落在这里", { fs: 10, fill: c.blue, ta: "start" });
+        e.t(500, 84, "插入一条指令后（偏移没动）", { fs: 11.5, fw: "600", fill: c.red });
+        var b = ["s_cmp_lg_u32 s0, 0", "s_cbranch_scc1 +3", "s_waitcnt vmcnt(0)   ← 新插入", "v_add_f32 v1, v2, v3", "v_mul_f32 v4, v1, v5", "s_nop 0", "v_mov_b32 v6, v4"];
+        for (i = 0; i < 7; i++) {
+          var hot = (i === 2);
+          e.rect(400, 100 + i * 34, 250, 28, null, hot ? c.amberBg : c.surface, hot ? c.amber : c.line, { rx: 3 });
+          e.t(412, 119 + i * 34, b[i], { ta: "start", fs: 10, ff: MONO, fill: hot ? c.amber : c.fg });
+        }
+        e.line(655, 118, 692, 118, c.red, { sw: 1.4 });
+        e.line(692, 118, 692, 284, c.red, { sw: 1.4 });
+        e.arrow(692, 284, 658, 284, c.red, { marker: "arrR", sw: 1.4 });
+        e.t(700, 288, "落错了一条", { fs: 10.5, fw: "700", fill: c.red, ta: "start" });
+        e.t(700, 322, "本该落在这里", { fs: 10.5, fill: c.muted, ta: "start" });
+        e.line(658, 318, 692, 318, c.muted, { dash: "3 3" });
+        e.t(410, 400, "错得静默：汇编器不会报错，只是算出来的数不对。", { fs: 11.5, fill: c.red, fw: "600" });
+      }
+    },
+    {
+      desc: "把偏移<strong>重新符号化</strong>成标签后，插入、删除、重排都由汇编器在最后重新计算偏移。这一步是后面所有编辑动作的前提。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "re-symbolize：把偏移换成标签", "论文的说法：结构性编辑成为可能，不再有静默的目标漂移");
+        e.t(140, 84, "符号化后的形式", { fs: 11.5, fw: "600", fill: c.green });
+        var a = ["s_cmp_lg_u32 s0, 0", "s_cbranch_scc1 .LBB0_2", "v_add_f32 v1, v2, v3", "v_mul_f32 v4, v1, v5", ".LBB0_2:", "v_mov_b32 v6, v4"];
+        for (var i = 0; i < 6; i++) {
+          var k = (i === 1 || i === 4);
+          e.rect(40, 100 + i * 34, 230, 28, null, k ? c.greenBg : c.surface, k ? c.green : c.line, { rx: 3 });
+          e.t(52, 119 + i * 34, a[i], { ta: "start", fs: 10, ff: MONO, fill: k ? c.green : c.fg });
+        }
+        e.line(275, 118, 300, 118, c.green, { sw: 1.4 });
+        e.line(300, 118, 300, 250, c.green, { sw: 1.4 });
+        e.arrow(300, 250, 278, 250, c.green, { marker: "arrG", sw: 1.4 });
+        e.t(420, 110, "现在可以做的编辑", { ta: "start", fs: 12, fw: "700", fill: c.fg });
+        var ops = ["插入指令（如补一条 s_waitcnt）", "删除冗余指令", "重排指令以改善调度", "整段替换热点窗口"];
+        for (i = 0; i < 4; i++) {
+          e.rect(420, 128 + i * 44, 350, 36, ops[i], c.greenBg, c.green, { labelFill: c.fg, fs: 11 });
+        }
+        e.rect(420, 314, 350, 40, "标签由汇编器在最后一步重新求偏移", c.surface, c.green, { labelFill: c.green, fs: 11.5 });
+        e.t(410, 400, "注意这只解决了「指令能改」。资源用量与接口声明的一致性是另一回事——见动画 4。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "恢复得对不对，用<strong>round-trip 保真</strong>来证：把 $s(K_0)$ 原样汇编链接回去，与 $K_0$ 逐字节比。只有链接期才能定的字段被 mask 掉，其余必须完全相同。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "round-trip 保真：恢复的自证明", "不通过就不允许进入优化循环——恢复层自己也要过闸门");
+        e.rect(40, 110, 150, 60, "K₀", c.accentBg, c.accent, { labelFill: c.fg, fs: 14 });
+        e.arrow(190, 140, 244, 140, c.accent);
+        e.rect(250, 110, 150, 60, "s(K₀)", c.surface, c.accent, { labelFill: c.accent, fs: 14 });
+        e.t(325, 186, "co2s", { fs: 10.5, fill: c.muted });
+        e.arrow(400, 140, 454, 140, c.accent);
+        e.rect(460, 110, 170, 60, "汇编 + 链接", c.surface, c.line, { labelFill: c.fg, fs: 12 });
+        e.arrow(630, 140, 684, 140, c.accent);
+        e.rect(690, 110, 90, 60, "K̂", c.surface, c.accent, { labelFill: c.accent, fs: 14 });
+        e.line(115, 176, 115, 236, c.muted, { dash: "4 3" });
+        e.line(735, 176, 735, 236, c.muted, { dash: "4 3" });
+        e.rect(200, 236, 450, 46, "逐字节比对：指令体 / descriptor 字段 / metadata", c.greenBg, c.green, { labelFill: c.fg, fs: 12 });
+        e.arrow(115, 236, 196, 259, c.muted, { marker: "arrM", sw: 1.4 });
+        e.arrow(735, 236, 654, 259, c.muted, { marker: "arrM", sw: 1.4 });
+        e.rect(140, 302, 250, 40, "mask：只有链接期才定的字段", c.amberBg, c.amber, { labelFill: c.fg, fs: 11 });
+        e.rect(430, 302, 250, 40, "其余字段：必须完全一致", c.greenBg, c.green, { labelFill: c.fg, fs: 11 });
+        e.t(410, 380, "这就把「反汇编器猜错了」这一整类失败挡在了循环外面——", { fs: 11.5, fill: c.fg });
+        e.t(410, 404, "如果恢复本身有偏差，K̂ 和 K₀ 就不会逐字节相同。", { fs: 11.5, fill: c.muted });
+      }
+    }
+  ];
+  /* ================= 动画 4：metadata 感知重建与 ABI 冻结 ================= */
+  function resPanel(e, c, x, y, title, col, bg, vals, mark) {
+    e.rect(x, y, 210, 128, null, bg, col, { rx: 6 });
+    e.t(x + 105, y + 24, title, { fs: 12, fw: "700", fill: col });
+    var k = ["VGPR", "SGPR", "AGPR", "LDS"];
+    for (var i = 0; i < 4; i++) {
+      var bad = mark && mark[i];
+      e.t(x + 24, y + 50 + i * 20, k[i], { ta: "start", fs: 10.5, fill: c.muted, ff: MONO });
+      e.t(x + 186, y + 50 + i * 20, vals[i], { ta: "end", fs: 10.5, ff: MONO, fw: bad ? "700" : "400", fill: bad ? c.red : c.fg });
+    }
+  }
+
+  var scene4 = [
+    {
+      desc: "一次成功的编辑常常会改变资源用量。比如为了消掉一次 stall 而多用两个 VGPR，48 就变成 50。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "编辑改变了资源用量", "指令改了，寄存器与 LDS 的实际占用也跟着变");
+        e.rect(60, 92, 200, 44, "编辑前的指令体", c.surface, c.line, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(260, 114, 330, 114, c.accent);
+        e.rect(340, 92, 200, 44, "编辑后的指令体", c.accentBg, c.accent, { labelFill: c.fg, fs: 11.5 });
+        resPanel(e, c, 60, 164, "实际用量（编辑前）", c.muted, c.surface, ["48", "16", "0", "8 KB"]);
+        resPanel(e, c, 340, 164, "实际用量（编辑后）", c.accent, c.accentBg, ["50", "16", "0", "8 KB"], [1, 0, 0, 0]);
+        e.arrow(275, 228, 334, 228, c.accent);
+        e.rect(590, 164, 180, 128, null, c.amberBg, c.amber, { rx: 6 });
+        e.t(680, 196, "问题", { fs: 13, fw: "700", fill: c.amber });
+        e.t(680, 224, "声明层里写的还是", { fs: 10.5, fill: c.fg });
+        e.t(680, 242, "48，而且写了两处", { fs: 10.5, fill: c.fg });
+        e.t(680, 270, "运行时只看声明", { fs: 10.5, fill: c.muted });
+        e.t(410, 348, "声明与事实不符 → 运行时按错的数字算 occupancy、分配寄存器窗口。", { fs: 11.5, fill: c.fg });
+        e.t(410, 374, "而资源信息在 descriptor 与 metadata 里各存一份，改一处不够。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "只更新 kernel descriptor 而不同步 metadata，就是论文说的 <strong>desynchronize metadata</strong>：两处声明互相矛盾，故障往往不在此处爆，而是在别处。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "只改一处 = metadata desynchronization", "两份声明一旦不一致，行为就不再可预测");
+        resPanel(e, c, 90, 96, "kernel descriptor（已更新）", c.green, c.greenBg, ["50", "16", "0", "8 KB"]);
+        resPanel(e, c, 520, 96, "AMDGPU metadata（未更新）", c.red, c.redBg, ["48", "16", "0", "8 KB"], [1, 0, 0, 0]);
+        e.line(300, 160, 520, 160, c.red, { dash: "5 4", sw: 1.8 });
+        e.t(410, 148, "≠", { fs: 20, fw: "700", fill: c.red });
+        e.rect(230, 256, 360, 46, "运行时读到互相矛盾的两个数字", c.redBg, c.red, { labelFill: c.fg, fs: 12.5 });
+        e.t(410, 336, "后果不一定立刻显现：可能只是 occupancy 算错，可能到某个 block size 才炸。", { fs: 11.5, fill: c.fg });
+        e.t(410, 362, "这类故障非常难归因，所以必须在重建时就机械地排除掉。", { fs: 11.5, fill: c.red, fw: "600" });
+      }
+    },
+    {
+      desc: "AsmEvo 的重建器<strong>重新扫描编辑后的指令体</strong>算出真实用量，然后把 descriptor 与 metadata 两处一起写成同一个值。这是「metadata 感知」的含义。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "两处同时重算：rebuild 的核心", "重新扫描指令体 → 得到真实用量 → 一次性同步两处声明");
+        e.rect(300, 84, 220, 44, "重新扫描编辑后的指令体", c.accentBg, c.accent, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(410, 128, 410, 152, c.accent);
+        e.rect(310, 152, 200, 40, "真实用量：VGPR 50 …", c.surface, c.accent, { labelFill: c.accent, fs: 11.5 });
+        e.arrow(360, 192, 200, 220, c.green, { marker: "arrG" });
+        e.arrow(460, 192, 620, 220, c.green, { marker: "arrG" });
+        resPanel(e, c, 90, 224, "kernel descriptor", c.green, c.greenBg, ["50", "16", "0", "8 KB"]);
+        resPanel(e, c, 520, 224, "AMDGPU metadata", c.green, c.greenBg, ["50", "16", "0", "8 KB"]);
+        e.line(300, 288, 520, 288, c.green, { dash: "5 4", sw: 1.8 });
+        e.t(410, 282, "=", { fs: 18, fw: "700", fill: c.green });
+        e.t(410, 388, "重算的是「事实」，不是沿用编辑前的旧声明——这是能自动化的关键。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "资源用量重算，但<strong>接口必须冻结</strong>：kernarg 偏移与类型、kernarg segment 总大小、内核符号名、launch 语义。这四样一动，host 侧的 launcher 就得改，drop-in 替换就不成立了。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "重算什么 vs 冻结什么", "分界线来自「host 侧要不要改」");
+        e.rect(40, 86, 340, 40, "重算（跟着指令体变）", c.accentBg, c.accent, { labelFill: c.fg, fs: 12 });
+        var re = ["VGPR / SGPR / AGPR 数量", "LDS 大小", "scratch（private segment）大小", "指令体本身与分支偏移"];
+        for (var i = 0; i < 4; i++) {
+          e.rect(40, 136 + i * 46, 340, 38, re[i], c.surface, c.accent, { labelFill: c.fg, fs: 11 });
+        }
+        e.rect(440, 86, 340, 40, "冻结（一动就破 ABI）", c.redBg, c.red, { labelFill: c.fg, fs: 12 });
+        var fz = ["kernarg 各参数偏移与类型", "kernarg segment 总大小", "内核符号名", "launch 语义（grid / block 约定）"];
+        for (i = 0; i < 4; i++) {
+          e.rect(440, 136 + i * 46, 340, 38, fz[i], c.surface, c.red, { labelFill: c.fg, fs: 11 });
+        }
+        e.line(410, 80, 410, 326, c.line, { dash: "4 4" });
+        e.t(410, 356, "冻结这四样，K′ 才是真正的 drop-in：host 代码、launcher、调用点一行都不用改。", { fs: 11.5, fill: c.fg });
+        e.t(410, 382, "静态闸门（G1）会在跑之前就核对这四样是否与 K₀ 一致。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "如果一次编辑不需要动资源，AsmEvo 还有更保守的一条路：<strong>原地字节补丁</strong>。资源中性、体积不增，于是三类 ABI 风险从结构上就不存在。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "兜底路径：in-place 字节补丁", "把风险从「靠检查发现」降级成「结构上不可能」");
+        e.rect(60, 92, 250, 44, "编辑不改变资源用量？", c.surface, c.line, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(310, 114, 372, 114, c.green, { marker: "arrG" });
+        e.rect(380, 92, 250, 44, "走原地字节补丁", c.greenBg, c.green, { labelFill: c.fg, fs: 11.5 });
+        var t = [
+          ["资源中性", "不改任何用量字段", "→ 两处声明天然一致，desync 不可能发生"],
+          ["体积不增", "不让指令体变长", "→ 后续偏移与 section 布局不动"],
+          ["接口不动", "kernarg 与符号原样保留", "→ host 侧无需感知"]
+        ];
+        for (var i = 0; i < 3; i++) {
+          var y = 164 + i * 62;
+          e.rect(60, y, 150, 50, t[i][0], c.greenBg, c.green, { labelFill: c.fg, fs: 11.5 });
+          e.t(226, y + 22, t[i][1], { ta: "start", fs: 11, fill: c.fg });
+          e.t(226, y + 40, t[i][2], { ta: "start", fs: 10.5, fill: c.muted });
+        }
+        e.t(410, 384, "代价是能做的编辑变少了——但换来一条永远安全的退路。", { fs: 11.5, fill: c.muted });
+      }
+    }
+  ];
+  /* ================= 动画 5：两层差分 oracle ================= */
+  var scene5 = [
+    {
+      desc: "Tier 1 完全靠<strong>从二进制里推</strong>：kernarg 布局给出每个参数的偏移与宽度，指令的访存模式给出它是指针还是标量、是读还是写，据此合成一组输入。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "Tier 1：从二进制推参数，合成输入", "不需要任何 host 端信息，跑起来就能比");
+        e.rect(50, 90, 200, 40, "kernarg 布局（已恢复）", c.tealBg, c.teal, { labelFill: c.fg, fs: 11.5 });
+        e.rect(50, 146, 200, 40, "指令的访存模式", c.tealBg, c.teal, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(250, 110, 320, 132, c.teal, { marker: "arr" });
+        e.arrow(250, 166, 320, 146, c.teal, { marker: "arr" });
+        e.rect(330, 108, 180, 70, null, c.surface, c.accent, { rx: 6 });
+        e.t(420, 134, "推断每个参数的", { fs: 11.5, fill: c.fg });
+        e.t(420, 156, "类型 / 角色 / 读写方向", { fs: 11.5, fw: "600", fill: c.accent });
+        e.arrow(510, 143, 580, 143, c.accent);
+        e.rect(590, 108, 180, 70, "合成一组输入 x", c.accentBg, c.accent, { labelFill: c.fg, fs: 12 });
+        var rows = [
+          ["+0", "ptr（写）", "输出缓冲"],
+          ["+8", "ptr（读）", "输入缓冲"],
+          ["+16", "ptr（读）", "权重"],
+          ["+24", "i32", "N"]
+        ];
+        e.t(410, 224, "推断出的 kernarg 表（示意）", { fs: 11.5, fw: "600", fill: c.fg });
+        for (var i = 0; i < 4; i++) {
+          var y = 238 + i * 32;
+          e.rect(230, y, 90, 26, rows[i][0], c.surface, c.line, { labelFill: c.muted, fs: 10.5, rx: 3 });
+          e.rect(324, y, 130, 26, rows[i][1], c.tealBg, c.teal, { labelFill: c.fg, fs: 10.5, rx: 3 });
+          e.rect(458, y, 130, 26, rows[i][2], c.surface, c.line, { labelFill: c.fg, fs: 10.5, rx: 3 });
+        }
+        e.t(410, 398, "同一组 x 喂给 K₀ 和 K′，比输出——这是最便宜的一层。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "只比输出不够：越界写可能把结果写对了、却顺手踩坏了别的显存。Tier 1 在每个缓冲前后放 <strong>guard region + canary</strong>，越界写会改到哨兵值，从而被抓住。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "guard region + canary：抓越界写", "输出对不代表没有副作用");
+        e.t(410, 82, "显存布局（Tier 1 构造）", { fs: 11.5, fw: "600", fill: c.fg });
+        e.rect(80, 96, 110, 54, "guard", c.amberBg, c.amber, { labelFill: c.fg, fs: 11 });
+        e.rect(196, 96, 240, 54, "输出缓冲", c.accentBg, c.accent, { labelFill: c.fg, fs: 11.5 });
+        e.rect(442, 96, 110, 54, "guard", c.amberBg, c.amber, { labelFill: c.fg, fs: 11 });
+        e.rect(558, 96, 180, 54, "canary 值 0xA5A5…", c.amberBg, c.amber, { labelFill: c.fg, fs: 10.5 });
+        e.rect(50, 194, 340, 106, null, c.greenBg, c.green, { rx: 6 });
+        e.t(220, 220, "K₀ 的行为", { fs: 12.5, fw: "700", fill: c.green });
+        e.t(220, 246, "只写缓冲区内部", { fs: 11, fill: c.fg });
+        e.t(220, 272, "canary 完好 ✓", { fs: 11, fill: c.green, fw: "600" });
+        e.rect(430, 194, 340, 106, null, c.redBg, c.red, { rx: 6 });
+        e.t(600, 220, "某个候选 K′", { fs: 12.5, fw: "700", fill: c.red });
+        e.t(600, 246, "输出比对通过，但多写了 4 字节", { fs: 11, fill: c.fg });
+        e.t(600, 272, "canary 被改 → 判为不等价 ✗", { fs: 11, fill: c.red, fw: "600" });
+        e.t(410, 348, "这条对应等价判据里的 ι(K′,x)：整数性检查，不看数值只看「有没有越界与非法状态」。", { fs: 11.5, fill: c.fg });
+        e.t(410, 376, "换句话说：即使算得对，只要碰了不该碰的地方，也算不等价。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "Tier 1 会在一类情况下失效：kernarg 里存的指针指向的结构里<strong>还有指针</strong>。这种嵌套结构靠推断合成不出来。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "Tier 1 的失效点：嵌套指针", "合成器能造一块缓冲，造不出一整张指向别处的表");
+        e.rect(60, 110, 160, 56, "kernarg 里的指针", c.tealBg, c.teal, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(220, 138, 288, 138, c.teal, { marker: "arr" });
+        e.rect(295, 110, 170, 56, "一张 block table", c.surface, c.purple, { labelFill: c.fg, fs: 11.5 });
+        var ys = [92, 138, 184];
+        for (var i = 0; i < 3; i++) {
+          e.arrow(465, 138, 545, ys[i] + 22, c.purple, { marker: "arrP", sw: 1.5 });
+          e.rect(552, ys[i], 150, 44, "物理块 #" + (i + 1), c.purpleBg, c.purple, { labelFill: c.fg, fs: 11 });
+        }
+        e.rect(180, 226, 460, 44, "表里每一项又是一个指针 —— 合成器不知道该指向哪", c.redBg, c.red, { labelFill: c.fg, fs: 12 });
+        e.t(410, 314, "这不是罕见情况：paged KV cache、ragged batch、间接索引都是这个形状，", { fs: 11.5, fill: c.fg });
+        e.t(410, 338, "而它们恰好就是 LLM 推理里最值得优化的那批 kernel。", { fs: 11.5, fill: c.red, fw: "600" });
+        e.t(410, 386, "所以需要第二层：不去猜输入，而是把真实的一次调用整个录下来。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "Tier 2 用 <code>kerncap</code> 拦一次真实 dispatch，录下 kernarg buffer、launch 配置、被访问的显存区间，以及执行前的显存内容（pre-state）。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "Tier 2：录制一次真实 dispatch", "kerncap 拦截真实调用，把「现场」完整存下来");
+        e.rect(40, 96, 190, 50, "真实框架的一次调用", c.blueBg, c.blue, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(230, 121, 292, 121, c.blue, { marker: "arrB" });
+        e.rect(300, 96, 150, 50, "kerncap 拦截", c.surface, c.accent, { labelFill: c.accent, fs: 12 });
+        var t = ["kernarg buffer 原始字节", "launch 配置（grid / block）", "被访问的显存区间", "执行前的显存内容 pre-state"];
+        for (var i = 0; i < 4; i++) {
+          var y = 176 + i * 46;
+          e.rect(150, y, 340, 38, t[i], c.tealBg, c.teal, { labelFill: c.fg, fs: 11 });
+        }
+        e.arrow(375, 148, 330, 172, c.accent, { sw: 1.4 });
+        e.t(120, 200, "录下来的", { fs: 10.5, fill: c.muted });
+        e.t(120, 218, "四样东西", { fs: 10.5, fill: c.muted });
+        e.rect(540, 176, 240, 84, null, c.surface, c.green, { rx: 6 });
+        e.t(660, 204, "K₀ 在这个现场跑一次", { fs: 11.5, fw: "600", fill: c.fg });
+        e.t(660, 230, "得到 post-state", { fs: 11.5, fill: c.green });
+        e.t(660, 250, "= 参考答案", { fs: 10.5, fill: c.muted });
+        e.arrow(492, 218, 534, 218, c.green, { marker: "arrG" });
+        e.t(410, 392, "从此不再需要「猜输入长什么样」——输入就是生产里真正出现过的那一组。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "关键细节：回放时必须把录下来的显存<strong>还原到原来的虚拟地址</strong>。地址一变，缓冲里存着的那些指针就全部失效。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "为什么必须原址还原", "嵌套指针只有在原来的地址上才继续成立");
+        e.rect(50, 96, 300, 40, "还原到原虚拟地址 0x7f…A000", c.greenBg, c.green, { labelFill: c.fg, fs: 11.5 });
+        e.rect(50, 152, 140, 46, "buffer", c.surface, c.green, { labelFill: c.fg, fs: 11 });
+        e.t(120, 216, "里面存着 0x7f…B000", { fs: 10.5, ff: MONO, fill: c.green });
+        e.rect(210, 152, 140, 46, "0x7f…B000", c.greenBg, c.green, { labelFill: c.fg, fs: 10.5 });
+        e.arrow(190, 175, 204, 175, c.green, { marker: "arrG", sw: 1.5 });
+        e.rect(50, 246, 300, 40, "指针依然指对 ✓", c.greenBg, c.green, { labelFill: c.fg, fs: 12 });
+        e.rect(470, 96, 300, 40, "还原到别的地址 0x7f…C000", c.redBg, c.red, { labelFill: c.fg, fs: 11.5 });
+        e.rect(470, 152, 140, 46, "buffer", c.surface, c.red, { labelFill: c.fg, fs: 11 });
+        e.t(540, 216, "里面还是 0x7f…B000", { fs: 10.5, ff: MONO, fill: c.red });
+        e.rect(630, 152, 140, 46, "已经没东西了", c.redBg, c.red, { labelFill: c.fg, fs: 10.5 });
+        e.arrow(610, 175, 624, 175, c.red, { marker: "arrR", sw: 1.5 });
+        e.rect(470, 246, 300, 40, "指针悬空 ✗", c.redBg, c.red, { labelFill: c.fg, fs: 12 });
+        e.line(410, 88, 410, 296, c.line, { dash: "4 4" });
+        e.t(410, 330, "论文原话：restoring memory at its original virtual addresses，", { fs: 11.5, fill: c.fg });
+        e.t(410, 354, "so that nested pointer structures remain valid。", { fs: 11.5, fill: c.fg });
+        e.t(410, 396, "这一条把 paged KV cache 这类 kernel 也纳入了可验证范围。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "两层都归到同一个判据：$\\mathrm{eq}(K',x) \\equiv c_x \\ge \\theta \\wedge \\|\\Delta_x\\|_\\infty \\le \\tau \\wedge \\iota(K',x)$，取 $\\theta=0.9999$、$\\tau=10^{-3}$，重复 3 次全部通过才算过。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "等价判据的三件套", "三个条件各管一类失效，缺一不可");
+        var t = [
+          ["c_x ≥ θ", "相关性 ≥ 0.9999", "抓「整体形状对不上」：", "算法错了、索引错了", c.blue, c.blueBg],
+          ["‖Δ_x‖∞ ≤ τ", "最大逐元素偏差 ≤ 1e-3", "抓「个别元素错」：", "边界、尾块、一个 lane 漏了", c.purple, c.purpleBg],
+          ["ι(K′,x)", "整数性检查", "抓「输出对但踩了内存」：", "越界写、canary 被改", c.amber, c.amberBg]
+        ];
+        for (var i = 0; i < 3; i++) {
+          var x = 30 + i * 258;
+          e.rect(x, 84, 246, 150, null, t[i][5], t[i][4], { rx: 6 });
+          e.t(x + 123, 116, t[i][0], { fs: 15, fw: "700", fill: t[i][4], ff: MONO });
+          e.t(x + 123, 144, t[i][1], { fs: 11, fill: c.fg });
+          e.t(x + 123, 178, t[i][2], { fs: 10.5, fill: c.muted });
+          e.t(x + 123, 198, t[i][3], { fs: 10.5, fill: c.fg });
+        }
+        e.rect(150, 262, 520, 46, "三个条件同时成立，且重复 3 次全部成立", c.greenBg, c.green, { labelFill: c.fg, fs: 12.5 });
+        e.t(410, 348, "重复 3 次是为了压掉一类特定风险：偶发通过。", { fs: 11.5, fill: c.fg });
+        e.t(410, 374, "注意 θ 与 τ 是数值容差，所以论文自称 empirical equivalence——", { fs: 11.5, fill: c.muted });
+        e.t(410, 398, "它是「在这些输入上、在这个容差下不可区分」，不是形式化等价证明。", { fs: 11.5, fill: c.muted });
+      }
+    }
+  ];
+  /* ================= 动画 6：GatedEval 与 commit gate ================= */
+  var G_LAB = ["G0 构建有效", "G1 静态 ABI / 资源", "G2 功能等价", "G3 计时", "G4 commit gate"];
+  var G_SUB = ["能汇编能链接", "接口四样与 K₀ 一致", "两层 oracle 差分比对", "重复测，算 ŝ 与 cv", "ŝ 是否超过噪声门限"];
+
+  function gateRow(e, c, y, stop) {
+    for (var i = 0; i < 5; i++) {
+      var x = 24 + i * 156;
+      var col, bg;
+      if (stop === undefined) { col = c.accent; bg = c.accentBg; }
+      else if (i < stop) { col = c.green; bg = c.greenBg; }
+      else if (i === stop) { col = c.red; bg = c.redBg; }
+      else { col = c.line; bg = c.surface; }
+      e.rect(x, y, 146, 52, null, bg, col, { rx: 5 });
+      e.t(x + 73, y + 22, G_LAB[i], { fs: 11.5, fw: "700", fill: col === c.line ? c.muted : col });
+      e.t(x + 73, y + 40, G_SUB[i], { fs: 9.5, fill: c.muted });
+      if (i < 4) e.arrow(x + 146, y + 26, x + 152, y + 26, col === c.line ? c.line : c.muted, { marker: "arrM", sw: 1.3 });
+    }
+  }
+
+  function gateRowMini(e, c, y, stop) {
+    for (var i = 0; i < 5; i++) {
+      var x = 24 + i * 156;
+      var col, bg, lab = G_LAB[i];
+      if (i < stop) { col = c.green; bg = c.greenBg; }
+      else if (i === stop) { col = c.red; bg = c.redBg; lab = G_LAB[i] + " ✗"; }
+      else { col = c.line; bg = c.surface; }
+      e.rect(x, y, 146, 34, lab, bg, col, { rx: 5, fs: 10.5, labelFill: col === c.line ? c.muted : col });
+      if (i < 4) e.arrow(x + 146, y + 17, x + 152, y + 17, col === c.line ? c.line : c.muted, { marker: "arrM", sw: 1.2 });
+    }
+  }
+
+  var scene6 = [
+    {
+      desc: "Algorithm 1 <code>GatedEval</code> 就是一条五道闸门的流水线。任何一道不过，候选立即丢弃，<strong>不进入历史、不参与后续</strong>。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "GatedEval：五道确定性闸门", "全部判断权在闸门手里，LLM 只负责提议");
+        gateRow(e, c, 100);
+        e.arrow(410, 158, 410, 186, c.green, { marker: "arrG" });
+        e.rect(280, 190, 260, 44, "全过 → 记入 verified 血统", c.greenBg, c.green, { labelFill: c.fg, fs: 12 });
+        e.t(410, 270, "顺序不是随便排的：便宜的检查在前，最贵的在后，", { fs: 11.5, fill: c.fg });
+        e.t(410, 294, "而且正确性严格先于性能——这一点下面单独讲。", { fs: 11.5, fill: c.fg });
+        e.t(410, 342, "闸门是确定性程序，不是模型判断。这是「LLM 不能自己宣布成功」的机制保证。", { fs: 11.5, fill: c.muted });
+        e.t(410, 380, "候选被拒时会带着失败类型回给模型，作为下一轮的信息。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "论文把失败分成五类，对应五道闸门。四个不同的候选可能卡在完全不同的地方，反馈信号也完全不同。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "四个候选，四个卡点", "被拒的位置本身就是有用的反馈");
+        var cases = [
+          [0, "候选 A：改完汇编不回去", "标签写错 / 指令编码非法"],
+          [1, "候选 B：动了 kernarg 偏移", "静态检查直接拦下"],
+          [2, "候选 C：输出对不上", "或者 canary 被改"],
+          [3, "候选 D：正确但更慢", "ŝ < 1，没意义"]
+        ];
+        for (var i = 0; i < 4; i++) {
+          var y = 92 + i * 78;
+          gateRowMini(e, c, y, cases[i][0]);
+          e.t(24, y - 6, cases[i][1] + " —— " + cases[i][2], { ta: "start", fs: 10.5, fill: c.muted });
+        }
+        e.t(410, 412, "只有一路走到 G4 还活着的候选才会改变 best。", { fs: 11.5, fill: c.green, fw: "600" });
+      }
+    },
+    {
+      desc: "如果计时排在等价检查之前，一个「因为少算了东西所以快」的候选就会拿到<strong>正向信号</strong>。顺序本身就是安全机制。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "为什么计时必须排在最后", "先测快慢等于奖励「算得少」");
+        e.t(210, 88, "假设：先计时再验等价", { fs: 12, fw: "700", fill: c.red });
+        e.rect(40, 102, 340, 42, "候选：把一整块计算跳过了", c.redBg, c.red, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(210, 144, 210, 168, c.red, { marker: "arrR" });
+        e.rect(40, 172, 340, 42, "计时：快了 3×，进入 best", c.redBg, c.red, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(210, 214, 210, 238, c.red, { marker: "arrR" });
+        e.rect(40, 242, 340, 42, "后续搜索都从这个错的起点出发", c.redBg, c.red, { labelFill: c.fg, fs: 11 });
+        e.t(610, 88, "AsmEvo：等价先于计时", { fs: 12, fw: "700", fill: c.green });
+        e.rect(440, 102, 340, 42, "候选：把一整块计算跳过了", c.surface, c.line, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(610, 144, 610, 168, c.green, { marker: "arrG" });
+        e.rect(440, 172, 340, 42, "G2 差分比对：输出对不上", c.greenBg, c.green, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(610, 214, 610, 238, c.green, { marker: "arrG" });
+        e.rect(440, 242, 340, 42, "直接丢弃，从来没被计时", c.greenBg, c.green, { labelFill: c.fg, fs: 11 });
+        e.line(410, 80, 410, 296, c.line, { dash: "4 4" });
+        e.t(410, 336, "「变快」在 AsmEvo 里不是一个可以单独成立的结论，", { fs: 11.5, fill: c.fg });
+        e.t(410, 360, "它只在已经通过等价检查的候选身上才被计算。", { fs: 11.5, fill: c.muted });
+        e.t(410, 402, "但通过 G3 还不够——测出来的数字本身可能只是噪声。", { fs: 11.5, fill: c.accent });
+      }
+    },
+    {
+      desc: "commit gate：$m^{*} = \\bigl(1+\\max(\\varepsilon,\\;k\\cdot cv)\\bigr)\\cdot \\hat{s}(K^{*})$，$\\varepsilon=0.002$、$k=0.85$。噪声小的时候门限几乎贴着当前最好值。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "低噪声：1.21× 被接受", "cv = 0.002 → 门限只比 best 高 0.2%");
+        e.rect(40, 96, 740, 40, "m* = ( 1 + max( ε , k · cv ) ) × ŝ(K*)      ε = 0.002    k = 0.85", c.surface, c.accent, { labelFill: c.accent, fs: 12.5, fw: "600" });
+        var rows = [
+          ["当前最好 ŝ(K*)", "1.20×", c.accent],
+          ["测得 cv", "0.002", c.blue],
+          ["k · cv", "0.0017", c.blue],
+          ["max(ε, k·cv)", "0.002  ← ε 生效", c.amber],
+          ["门限 m*", "1.20 × 1.002 = 1.2024×", c.purple],
+          ["候选 ŝ(K′)", "1.21×", c.green]
+        ];
+        for (var i = 0; i < 6; i++) {
+          var y = 156 + i * 34;
+          e.rect(120, y, 250, 28, rows[i][0], c.surface, c.line, { labelFill: c.fg, fs: 11, rx: 3 });
+          e.rect(374, y, 250, 28, rows[i][1], c.surface, rows[i][2], { labelFill: rows[i][2], fs: 11, rx: 3 });
+        }
+        e.rect(240, 368, 340, 44, "1.21 ≥ 1.2024 → 接受，best 更新", c.greenBg, c.green, { labelFill: c.fg, fs: 12.5 });
+      }
+    },
+    {
+      desc: "同一个 1.21× 的候选，在噪声大的机器上会被<strong>拒掉</strong>。门限跟着实测的 $cv$ 自动抬高，这就是「方差感知」。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "高噪声：同一个 1.21× 被拒", "cv = 0.02 → 门限抬到 1.2204×");
+        e.rect(40, 96, 740, 40, "m* = ( 1 + max( ε , k · cv ) ) × ŝ(K*)      ε = 0.002    k = 0.85", c.surface, c.accent, { labelFill: c.accent, fs: 12.5, fw: "600" });
+        var rows = [
+          ["当前最好 ŝ(K*)", "1.20×", c.accent],
+          ["测得 cv", "0.02  ← 机器更吵", c.red],
+          ["k · cv", "0.017", c.red],
+          ["max(ε, k·cv)", "0.017  ← cv 项生效", c.amber],
+          ["门限 m*", "1.20 × 1.017 = 1.2204×", c.purple],
+          ["候选 ŝ(K′)", "1.21×", c.red]
+        ];
+        for (var i = 0; i < 6; i++) {
+          var y = 156 + i * 34;
+          e.rect(120, y, 250, 28, rows[i][0], c.surface, c.line, { labelFill: c.fg, fs: 11, rx: 3 });
+          e.rect(374, y, 250, 28, rows[i][1], c.surface, rows[i][2], { labelFill: rows[i][2], fs: 11, rx: 3 });
+        }
+        e.rect(220, 368, 380, 44, "1.21 < 1.2204 → 拒绝，best 不动", c.redBg, c.red, { labelFill: c.fg, fs: 12.5 });
+      }
+    },
+    {
+      desc: "这条门限防的是<strong>噪声棘轮</strong>：如果只要「测出来更快」就接受，best 会被一连串偏高的测量值一格一格推上去，最后报出一个复现不了的加速比。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "噪声棘轮与 no-regress 不变量", "门限里的 s_floor = 1.0 保证 K′ 永不比 K₀ 慢");
+        e.t(210, 84, "没有门限：best 被噪声推高", { fs: 12, fw: "700", fill: c.red });
+        e.line(60, 260, 360, 260, c.line);
+        e.line(60, 260, 60, 110, c.line);
+        e.poly([[70, 250], [110, 236], [150, 228], [190, 206], [230, 190], [270, 166], [310, 140], [350, 122]], c.red, { sw: 2 });
+        e.poly([[70, 250], [110, 246], [150, 244], [190, 242], [230, 241], [270, 240], [310, 240], [350, 239]], c.muted, { sw: 1.6, dash: "5 4" });
+        e.t(300, 258, "真实性能", { fs: 10, fill: c.muted });
+        e.t(300, 112, "报出的 best", { fs: 10, fill: c.red });
+        e.t(610, 84, "有门限：只在超过噪声时才动", { fs: 12, fw: "700", fill: c.green });
+        e.line(460, 260, 760, 260, c.line);
+        e.line(460, 260, 460, 110, c.line);
+        e.poly([[470, 250], [510, 250], [550, 224], [590, 224], [630, 224], [670, 196], [710, 196], [750, 196]], c.green, { sw: 2 });
+        e.poly([[470, 250], [510, 249], [550, 226], [590, 225], [630, 224], [670, 198], [710, 197], [750, 196]], c.muted, { sw: 1.6, dash: "5 4" });
+        e.t(700, 258, "两条线贴合", { fs: 10, fill: c.muted });
+        e.rect(140, 292, 540, 40, "s_floor = 1.0：ŝ 低于 1 一律不接受 → K′ 从不慢于 K₀", c.greenBg, c.green, { labelFill: c.fg, fs: 12 });
+        e.t(410, 366, "这条 no-regress 不变量是「可以直接替换生产二进制」的前提：", { fs: 11.5, fill: c.fg });
+        e.t(410, 390, "最坏情况是没变快，不会变慢。", { fs: 11.5, fill: c.green, fw: "600" });
+      }
+    }
+  ];
+  /* ================= 动画 7：hot-window 定位 ================= */
+  var ST_A = [3, 2, 5, 4, 3, 8, 12, 30, 44, 52, 38, 20, 9, 4, 3, 6, 5, 4, 3, 7, 4, 3, 2, 3];
+  var ST_B = [4, 3, 5, 4, 3, 7, 9, 8, 6, 5, 7, 6, 9, 22, 34, 41, 30, 16, 6, 5, 4, 3, 2, 3];
+
+  function stallHist(e, c, st, lo, hi, col) {
+    for (var i = 0; i < 24; i++) {
+      var h = Math.max(2, st[i] * 1.3);
+      var inw = (lo !== undefined && i >= lo && i <= hi);
+      e.rect(40 + i * 30, 168 - h, 24, h, null, inw ? (col || c.red) : c.line, inw ? (col || c.red) : c.line, { rx: 2, sw: 0.5 });
+    }
+    e.line(36, 170, 764, 170, c.line);
+    e.t(20, 96, "stall", { ta: "start", fs: 10, fill: c.muted });
+  }
+
+  function asmBar(e, c, lo, hi, col, bg) {
+    e.rect(40, 182, 720, 34, null, c.surface, c.line, { rx: 4 });
+    for (var i = 0; i < 24; i++) {
+      e.line(40 + i * 30, 182, 40 + i * 30, 216, c.line, { sw: 0.6 });
+    }
+    if (lo !== undefined) {
+      e.rect(40 + lo * 30, 178, (hi - lo + 1) * 30, 42, null, bg || c.accentBg, col || c.accent, { rx: 4, sw: 2 });
+    }
+    e.t(20, 240, "整份汇编（示意：24 段）", { ta: "start", fs: 10.5, fill: c.muted });
+  }
+
+  var scene7 = [
+    {
+      desc: "整个 kernel 的汇编可能有几千条指令，一次性塞给模型既超上下文也没有重点。第一步是<strong>profile</strong>：拿硬件计数器、指令采样和静态分析定位 stall 集中在哪。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "先 profile：stall 集中在哪一段", "硬件计数器 + 指令采样 + 静态分析（论文未点名具体工具）");
+        stallHist(e, c, ST_A);
+        asmBar(e, c);
+        e.t(410, 288, "分布是不均匀的：少数几段吃掉大部分停顿。", { fs: 12, fill: c.fg });
+        e.t(410, 314, "整体重写既浪费上下文，也让每次改动的因果关系变得不可归因。", { fs: 11.5, fill: c.muted });
+        e.t(410, 356, "论文的做法：只把注意力放在热点窗口上。", { fs: 11.5, fill: c.accent, fw: "600" });
+      }
+    },
+    {
+      desc: "选出热点窗口后，进入模型上下文的不止窗口本身，还有<strong>跨窗口的依赖</strong>与相关声明信息——否则模型会做出局部看起来对、全局却错的改动。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "取出 hot window 与它的依赖", "窗口是注意力的范围，不是责任的范围");
+        stallHist(e, c, ST_A, 7, 11);
+        asmBar(e, c, 7, 11);
+        e.arrow(325, 232, 325, 258, c.accent);
+        var t = ["窗口内的指令序列", "跨窗口的寄存器 / 内存依赖", "相关的资源与接口声明"];
+        for (var i = 0; i < 3; i++) {
+          e.rect(200 + i * 200, 262, 190, 40, t[i], i === 0 ? c.accentBg : c.tealBg, i === 0 ? c.accent : c.teal, { labelFill: c.fg, fs: 10.5 });
+        }
+        e.t(410, 344, "只给窗口不给依赖，模型会复用一个其实还活着的寄存器。", { fs: 11.5, fill: c.fg });
+        e.t(410, 370, "依赖信息进上下文，是让局部编辑仍然全局正确的前提。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "模型改完窗口，改动被<strong>拼回原位</strong>，然后整个 kernel 重新汇编、重新链接、重新同步声明——也就是走一遍动画 4 的重建流程。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "编辑后拼回原位并整体重建", "局部改，整体建");
+        e.rect(240, 84, 340, 40, "模型改写窗口内的 5 段 → 4 段", c.accentBg, c.accent, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(410, 124, 410, 150, c.accent);
+        e.rect(40, 158, 720, 34, null, c.surface, c.line, { rx: 4 });
+        for (var i = 0; i < 24; i++) e.line(40 + i * 30, 158, 40 + i * 30, 192, c.line, { sw: 0.6 });
+        e.rect(250, 154, 120, 42, null, c.greenBg, c.green, { rx: 4, sw: 2 });
+        e.t(310, 214, "改动拼回这里", { fs: 10.5, fill: c.green });
+        e.arrow(410, 232, 410, 256, c.green, { marker: "arrG" });
+        var t = ["整份重新汇编 + 链接", "重扫资源用量", "两处声明同步写", "接口四样核对"];
+        for (i = 0; i < 4; i++) {
+          e.rect(30 + i * 195, 260, 180, 40, t[i], c.greenBg, c.green, { labelFill: c.fg, fs: 10.5 });
+        }
+        e.t(410, 348, "分支偏移由汇编器重算，所以窗口变短不会破坏别处的跳转。", { fs: 11.5, fill: c.fg });
+        e.t(410, 374, "这一点就是动画 3 里 re-symbolize 换来的自由度。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "关键的一点：改的是局部，<strong>验收的是整个 kernel</strong>。差分 oracle 与计时都作用在完整的 $K'$ 上，不存在「只验证窗口」这种事。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "验收范围永远是整个 kernel", "局部化只影响「改哪里」，不影响「验什么」");
+        e.rect(40, 96, 720, 40, null, c.surface, c.line, { rx: 4 });
+        e.rect(250, 92, 120, 48, null, c.accentBg, c.accent, { rx: 4, sw: 2 });
+        e.t(310, 122, "改过的窗口", { fs: 10.5, fill: c.accent });
+        e.rect(34, 90, 732, 52, null, "none", c.green, { rx: 6, sw: 2.5 });
+        e.t(410, 166, "绿框 = 送进 GatedEval 的对象", { fs: 11, fill: c.green });
+        gateRow(e, c, 196);
+        e.t(410, 292, "所以窗口选错了不会导致错误上线，只会导致这一轮白费。", { fs: 12, fill: c.fg });
+        e.t(410, 318, "热点定位是效率手段，安全性完全由闸门承担——两件事是解耦的。", { fs: 11.5, fill: c.muted });
+        e.t(410, 366, "这个解耦让 AsmEvo 可以放心用不精确的 profile 信息。", { fs: 11.5, fill: c.accent });
+      }
+    },
+    {
+      desc: "一次 commit 之后重新 profile：原来的瓶颈被削掉，热点会<strong>搬到别的地方</strong>。搜索因此变成一个逐轮转移注意力的过程。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "commit 后重新 profile：热点搬家", "每一轮的注意力位置由上一轮的结果决定");
+        stallHist(e, c, ST_B, 13, 16, c.purple);
+        asmBar(e, c, 13, 16, c.purple, c.purpleBg);
+        e.rect(190, 258, 130, 34, "旧热点", c.surface, c.green, { labelFill: c.green, fs: 11 });
+        e.t(255, 310, "已被削平", { fs: 10.5, fill: c.muted });
+        e.rect(430, 258, 130, 34, "新热点", c.purpleBg, c.purple, { labelFill: c.fg, fs: 11 });
+        e.t(495, 310, "下一轮的目标", { fs: 10.5, fill: c.muted });
+        e.t(410, 356, "论文没有给窗口大小、窗口数量或轮数上限的具体设定。", { fs: 11.5, fill: c.muted });
+        e.t(410, 384, "但这个「profile → 改一处 → 全量验收 → 再 profile」的循环是明确的。", { fs: 11.5, fill: c.fg });
+      }
+    }
+  ];
+  /* ================= 动画 8：长时程搜索与验证血统 ================= */
+  var scene8 = [
+    {
+      desc: "职责切分是整套方法的组织原则：<strong>模型提议，程序判定</strong>。模型可以任意大胆，因为它的输出没有任何一条能绕过闸门。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "职责切分：谁提议，谁判定", "Claude Opus 4.8 + 4 个 GPU worker，每个 kernel 12 小时预算");
+        e.rect(40, 88, 350, 40, "LLM 负责（可以出错）", c.purpleBg, c.purple, { labelFill: c.fg, fs: 12 });
+        var a = ["读 profile 与失败反馈", "提出具体的汇编改写", "在多个优化方向之间取舍", "决定下一步看哪个窗口"];
+        for (var i = 0; i < 4; i++) e.rect(40, 138 + i * 44, 350, 36, a[i], c.surface, c.purple, { labelFill: c.fg, fs: 11 });
+        e.rect(430, 88, 350, 40, "确定性程序负责（不能出错）", c.greenBg, c.green, { labelFill: c.fg, fs: 12 });
+        var b = ["汇编、链接、重建声明", "静态 ABI 与资源核对", "两层差分 oracle 判等价", "计时、cv、commit 门限"];
+        for (i = 0; i < 4; i++) e.rect(430, 138 + i * 44, 350, 36, b[i], c.surface, c.green, { labelFill: c.fg, fs: 11 });
+        e.line(410, 82, 410, 320, c.line, { dash: "4 4" });
+        e.t(410, 352, "论文的说法：模型提出候选，闸门决定什么能进 verified 血统。", { fs: 11.5, fill: c.fg });
+        e.t(410, 378, "这就是为什么「让 LLM 直接改机器码」在这里不是一句危险的话。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "所有通过闸门的候选组成一棵<strong>树状的 verified 血统</strong>：每个节点都是一个被验证过的完整 code object，可以作为下一步的起点。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "verified 血统树逐步长出", "树上每个节点都是一个可以直接部署的二进制");
+        var nodes = [
+          [70, 210, "K₀", "1.00×", c.accent],
+          [200, 150, "A", "1.08×", c.green],
+          [200, 270, "B", "1.04×", c.green],
+          [340, 120, "C", "1.15×", c.green],
+          [340, 196, "D", "1.09×", c.muted],
+          [480, 104, "E", "1.21×", c.green],
+          [480, 176, "F", "1.16×", c.muted],
+          [620, 104, "G", "1.35×", c.green]
+        ];
+        var edges = [[0, 1], [0, 2], [1, 3], [1, 4], [3, 5], [3, 6], [5, 7]];
+        for (var i = 0; i < edges.length; i++) {
+          var p = nodes[edges[i][0]], q = nodes[edges[i][1]];
+          e.arrow(p[0] + 34, p[1] + 20, q[0] - 4, q[1] + 20, q[4] === c.green ? c.green : c.line,
+            { marker: q[4] === c.green ? "arrG" : "arrM", sw: q[4] === c.green ? 2 : 1.3 });
+        }
+        for (i = 0; i < nodes.length; i++) {
+          var n = nodes[i];
+          e.rect(n[0], n[1], 68, 42, null, n[4] === c.muted ? c.surface : (n[4] === c.accent ? c.accentBg : c.greenBg), n[4] === c.muted ? c.line : n[4], { rx: 5 });
+          e.t(n[0] + 34, n[1] + 20, n[2], { fs: 13, fw: "700", fill: n[4] === c.muted ? c.muted : n[4] });
+          e.t(n[0] + 34, n[1] + 36, n[3], { fs: 9.5, fill: c.muted });
+        }
+        e.rect(560, 220, 220, 40, "被拒的候选不进树", c.surface, c.line, { labelFill: c.muted, fs: 11 });
+        e.t(410, 320, "分叉意味着可以从任意一个已验证节点重新出发，而不是只能顺着一条链走。", { fs: 11.5, fill: c.fg });
+        e.t(410, 346, "灰色节点表示「通过了等价检查但没超过 commit 门限」——仍在树上，只是没成为 best。", { fs: 11, fill: c.muted });
+        e.t(410, 392, "论文强调这不是进化算法：没有种群、没有交叉，只有一棵定向生长的验证树。", { fs: 11.5, fill: c.accent });
+      }
+    },
+    {
+      desc: "team mode 让多个 worker 从同一个起点<strong>沿五个正交方向</strong>并行探索，避免所有算力挤在同一条路径上。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "team mode：五个正交方向", "不同方向失败的原因不同，因此彼此提供的信息也不同");
+        e.rect(340, 84, 140, 44, "同一个起点", c.accentBg, c.accent, { labelFill: c.fg, fs: 12 });
+        var d = ["内存访问与合并", "指令调度与延迟隐藏", "寄存器压力与 occupancy", "同步与 wait counter", "指令选择与算术改写"];
+        var cols = [c.blue, c.purple, c.teal, c.amber, c.green];
+        var bgs = [c.blueBg, c.purpleBg, c.tealBg, c.amberBg, c.greenBg];
+        for (var i = 0; i < 5; i++) {
+          var x = 22 + i * 158;
+          e.arrow(410, 128, x + 74, 176, cols[i], { sw: 1.5, marker: "arr" });
+          e.rect(x, 180, 148, 76, null, bgs[i], cols[i], { rx: 6 });
+          e.t(x + 74, 214, d[i], { fs: 10.5, fw: "700", fill: cols[i] });
+          e.t(x + 74, 238, "worker " + (i + 1), { fs: 10, fill: c.muted });
+        }
+        e.t(410, 306, "四个 GPU worker 轮转这些方向；每个方向独立走 GatedEval，互不干扰。", { fs: 11.5, fill: c.fg });
+        e.t(410, 334, "论文把这称为 multi-start：起点相同，探索方向被人为拉开。", { fs: 11.5, fill: c.muted });
+        e.t(410, 382, "接下来的问题是：不同方向各自成功的改动，能不能直接叠加？", { fs: 11.5, fill: c.accent });
+      }
+    },
+    {
+      desc: "答案是<strong>不能直接叠加</strong>。两处改动即使代码区域不相交，资源用量也是全局耦合的——所以合并必须逐步进行，每一步都重新验证。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "verified composition：合并要逐步重验", "区域不相交 ≠ 影响不相交");
+        e.rect(60, 92, 200, 44, "改动 X：省 4 个 VGPR", c.greenBg, c.green, { labelFill: c.fg, fs: 11 });
+        e.rect(60, 152, 200, 44, "改动 Y：多用 6 个 VGPR", c.greenBg, c.green, { labelFill: c.fg, fs: 11 });
+        e.t(160, 218, "各自单独验证都通过", { fs: 10.5, fill: c.muted });
+        e.arrow(260, 144, 320, 144, c.amber, { marker: "arrO" });
+        e.rect(330, 110, 200, 70, null, c.redBg, c.red, { rx: 6 });
+        e.t(430, 138, "合并后 VGPR 净增 2", { fs: 11.5, fw: "700", fill: c.red });
+        e.t(430, 162, "跨过 occupancy 档位", { fs: 10.5, fill: c.fg });
+        e.arrow(530, 144, 590, 144, c.red, { marker: "arrR" });
+        e.rect(600, 110, 180, 70, null, c.redBg, c.red, { rx: 6 });
+        e.t(690, 138, "两个都变快", { fs: 11.5, fill: c.fg });
+        e.t(690, 160, "合起来更慢", { fs: 12, fw: "700", fill: c.red });
+        var s = ["从 verified 起点开始", "并入一个改动", "整体重建 + 重验", "过了才并下一个"];
+        for (var i = 0; i < 4; i++) {
+          e.rect(30 + i * 195, 240, 180, 44, s[i], c.greenBg, c.green, { labelFill: c.fg, fs: 10.5 });
+          if (i < 3) e.arrow(212 + i * 195, 262, 222 + i * 195, 262, c.green, { marker: "arrG", sw: 1.4 });
+        }
+        e.t(410, 328, "所以合并不是一次性 merge，而是一串各自过闸门的小步。", { fs: 11.5, fill: c.fg });
+        e.t(410, 354, "代价是慢，好处是任何一步失败都能准确定位到是哪个改动引入的。", { fs: 11.5, fill: c.muted });
+        e.t(410, 396, "论文没有给合并成功率的数据。", { fs: 11, fill: c.muted });
+      }
+    },
+    {
+      desc: "长时程搜索的主要失效模式是<strong>停滞</strong>：反复提交类似候选、全被拒。AsmEvo 的对策是先换方向，不行再升级到更大的重构。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "反停滞：redirect 然后升级", "候选哈希 + 有界的运行记忆，避免重复劳动");
+        e.rect(280, 84, 260, 42, "连续若干轮没有新的 commit", c.amberBg, c.amber, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(410, 126, 410, 150, c.amber, { marker: "arrO" });
+        e.rect(230, 154, 360, 42, "redirect：换一个优化方向或换一个窗口", c.blueBg, c.blue, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(410, 196, 410, 220, c.blue, { marker: "arrB" });
+        e.rect(230, 224, 360, 42, "escalate：允许更大范围的重构", c.purpleBg, c.purple, { labelFill: c.fg, fs: 11.5 });
+        e.rect(40, 154, 170, 112, null, c.surface, c.teal, { rx: 6 });
+        e.t(125, 182, "有界运行记忆", { fs: 11.5, fw: "700", fill: c.teal });
+        e.t(125, 208, "记候选的哈希", { fs: 10.5, fill: c.fg });
+        e.t(125, 228, "与失败类型", { fs: 10.5, fill: c.fg });
+        e.t(125, 252, "上下文不会撑爆", { fs: 10, fill: c.muted });
+        e.rect(610, 154, 170, 112, null, c.surface, c.teal, { rx: 6 });
+        e.t(695, 182, "去重的作用", { fs: 11.5, fw: "700", fill: c.teal });
+        e.t(695, 208, "同一个候选", { fs: 10.5, fill: c.fg });
+        e.t(695, 228, "不会被重复计时", { fs: 10.5, fill: c.fg });
+        e.t(695, 252, "省 GPU 时间", { fs: 10, fill: c.muted });
+        e.t(410, 320, "记忆是有界的，所以 12 小时的搜索不会因为历史无限增长而失控。", { fs: 11.5, fill: c.fg });
+        e.t(410, 346, "但代价是：早期的失败经验会被逐渐忘掉。论文没有讨论这个取舍。", { fs: 11.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "worker 出错、编译崩溃、GPU 状态异常时，直接<strong>重置回最近一个 verified 节点</strong>。因为每个节点都是完整的 code object，重置是精确且廉价的。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "出错就 reset 回 verified state", "树上的节点是完整二进制，不是 diff");
+        e.rect(50, 120, 150, 50, "verified 节点", c.greenBg, c.green, { labelFill: c.fg, fs: 11.5 });
+        e.arrow(200, 145, 260, 145, c.accent);
+        e.rect(270, 120, 150, 50, "worker 在这里探索", c.accentBg, c.accent, { labelFill: c.fg, fs: 11 });
+        e.arrow(420, 145, 480, 145, c.red, { marker: "arrR" });
+        e.rect(490, 120, 150, 50, "崩了 / 卡住 / 状态脏", c.redBg, c.red, { labelFill: c.fg, fs: 11 });
+        e.line(565, 170, 565, 214, c.red, { dash: "4 4", sw: 1.5 });
+        e.line(125, 214, 565, 214, c.green, { sw: 2 });
+        e.arrow(130, 214, 125, 176, c.green, { marker: "arrG", sw: 2 });
+        e.t(345, 236, "reset：丢掉这一支，回到那个已验证的完整二进制", { fs: 11.5, fill: c.green, fw: "600" });
+        e.rect(200, 268, 420, 44, "没有「半个改动」这种中间状态需要回滚", c.greenBg, c.green, { labelFill: c.fg, fs: 12 });
+        e.t(410, 356, "这一点是「每个节点都完整」这个设计带来的直接好处：", { fs: 11.5, fill: c.fg });
+        e.t(410, 382, "长时程搜索里的故障恢复不需要任何额外机制。", { fs: 11.5, fill: c.muted });
+      }
+    }
+  ];
+  /* ================= 动画 9：结果分布 ================= */
+  var L1V = [3.88, 3.82, 2.63, 2.28, 1.66, 1.52, 1.42, 1.31, 1.20, 1.17, 1.13, 1.10, 1.08, 1.04, 1.02];
+  var L2V = [2.55, 1.28, 1.26, 1.18, 1.16, 1.13, 1.11, 1.10, 1.09, 1.08, 1.07, 1.05, 1.03, 1.01, 1.00];
+
+  function logY(v) { return 300 - Math.log(v) / Math.log(4) * 190; }
+
+  function speedAxis(e, c) {
+    var ticks = [1, 1.5, 2, 3, 4];
+    for (var i = 0; i < ticks.length; i++) {
+      var y = logY(ticks[i]);
+      e.line(56, y, 790, y, i === 0 ? c.line : c.line, { dash: i === 0 ? "none" : "3 4", sw: i === 0 ? 1.4 : 0.8 });
+      e.t(48, y + 4, ticks[i].toFixed(ticks[i] === 1 ? 2 : 1) + "×", { ta: "end", fs: 9.5, fill: c.muted });
+    }
+  }
+
+  function speedBars(e, c, mode) {
+    var all = [];
+    var i;
+    for (i = 0; i < 15; i++) all.push([L1V[i], 1]);
+    for (i = 0; i < 15; i++) all.push([L2V[i], 2]);
+    all.sort(function (a, b) { return b[0] - a[0]; });
+    for (i = 0; i < 30; i++) {
+      var v = all[i][0], lv = all[i][1];
+      var col = (mode === "level") ? (lv === 1 ? c.blue : c.amber) : c.accent;
+      var bg = (mode === "level") ? (lv === 1 ? c.blueBg : c.amberBg) : c.accentBg;
+      var y = logY(v);
+      e.rect(58 + i * 24, y, 20, 300 - y + 1, null, bg, col, { rx: 2, sw: 1 });
+      if (i < 4) e.t(68 + i * 24, y - 6, v.toFixed(2), { fs: 8.5, fill: col });
+    }
+    return all;
+  }
+
+  var scene9 = [
+    {
+      desc: "30 个 KernelBench kernel 里 <strong>29 个</strong>被改进，几何均值 <strong>1.35×</strong>，最大 3.88×。纵轴是对数刻度，所以要注意：绝大多数条其实集中在很低的位置。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "30 个 kernel 的加速分布（对数纵轴）", "MI308X，K₀ = 已被源码级 agent 优化过的二进制，基线恒为 1.00×");
+        speedAxis(e, c);
+        speedBars(e, c, "flat");
+        e.line(56, logY(1.35), 790, logY(1.35), c.green, { sw: 2, dash: "6 4" });
+        e.t(790, logY(1.35) - 8, "几何均值 1.35×", { ta: "end", fs: 10.5, fill: c.green, fw: "700" });
+        e.t(410, 328, "分布是长尾的：头部四条把均值拉起来，尾部十几条只有百分之几。", { fs: 11.5, fill: c.fg });
+        e.t(410, 354, "唯一没有改进的那个停在 1.00×——不是变慢，而是没找到可提交的改动。", { fs: 11.5, fill: c.muted });
+        e.t(410, 400, "看这张图要记住一件事：这 1.35× 是叠加在源码级优化之上的增量。", { fs: 11.5, fill: c.accent, fw: "600" });
+      }
+    },
+    {
+      desc: "按难度分层后差别很清楚：<strong>L1（单算子）几何均值 1.56×、中位数 1.31×</strong>；<strong>L2（融合算子）只有 1.18× / 1.10×</strong>。同一套方法，收益差了一倍。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "L1 与 L2 的分层差异", "蓝 = L1 单算子，琥珀 = L2 融合算子（各 15 个）");
+        speedAxis(e, c);
+        speedBars(e, c, "level");
+        e.rect(80, 322, 300, 84, null, c.blueBg, c.blue, { rx: 6 });
+        e.t(230, 346, "L1（15 个单算子）", { fs: 12, fw: "700", fill: c.blue });
+        e.t(230, 370, "几何均值 1.56×  中位数 1.31×", { fs: 11, fill: c.fg });
+        e.t(230, 392, "6 个超过 1.5×", { fs: 10.5, fill: c.muted });
+        e.rect(440, 322, 300, 84, null, c.amberBg, c.amber, { rx: 6 });
+        e.t(590, 346, "L2（15 个融合算子）", { fs: 12, fw: "700", fill: c.amber });
+        e.t(590, 370, "几何均值 1.18×  中位数 1.10×", { fs: 11, fill: c.fg });
+        e.t(590, 392, "只有 1 个超过 1.5×，1 个停在 1.00×", { fs: 10.5, fill: c.muted });
+      }
+    },
+    {
+      desc: "L2 收益更薄有一个自然的解释：融合 kernel 的低效往往在<strong>融合策略</strong>这一层，而那一层的决定在编译之前就做完了，汇编级动不了它。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "为什么 L2 的收益更薄", "汇编级能修的是 lowering 的产物，不是算法层的决定");
+        e.rect(60, 92, 320, 40, "L1：单算子", c.blueBg, c.blue, { labelFill: c.fg, fs: 12 });
+        var a = ["算法层几乎没有选择空间", "剩下的低效多半来自 lowering", "调度、等待、寄存器分配", "→ 正好是汇编级能碰的东西"];
+        for (var i = 0; i < 4; i++) {
+          e.rect(60, 142 + i * 44, 320, 36, a[i], i === 3 ? c.greenBg : c.surface, i === 3 ? c.green : c.blue, { labelFill: c.fg, fs: 10.5 });
+        }
+        e.rect(440, 92, 320, 40, "L2：融合算子", c.amberBg, c.amber, { labelFill: c.fg, fs: 12 });
+        var b = ["融合边界、tile 划分、数据复用", "这些在源码 / IR 层就定死了", "汇编级只能在给定融合方案内打磨", "→ 天花板本来就更低"];
+        for (i = 0; i < 4; i++) {
+          e.rect(440, 142 + i * 44, 320, 36, b[i], i === 3 ? c.redBg : c.surface, i === 3 ? c.red : c.amber, { labelFill: c.fg, fs: 10.5 });
+        }
+        e.line(410, 86, 410, 326, c.line, { dash: "4 4" });
+        e.t(410, 358, "这是我的解读，论文本身没有对 L1 / L2 的差距做归因，也没有给任何消融实验。", { fs: 11.5, fill: c.muted });
+        e.t(410, 390, "换个角度说：汇编级优化不是源码级优化的替代品，两者管的是不同层的浪费。", { fs: 11.5, fill: c.fg });
+      }
+    },
+    {
+      desc: "被点名的头部四条覆盖了四类完全不同的算子：depthwise conv、GELU、RMSNorm、上三角 matmul。收益不是集中在某一类算子上。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "头部四条是什么算子", "L1 的最高四个（论文点名）");
+        var t = [
+          ["3.88×", "84_conv_depthwise_2D_…", "depthwise 卷积", c.accent],
+          ["3.82×", "88_MinGPTNewGelu", "激活函数", c.purple],
+          ["2.63×", "36_RMSNorm_", "归一化", c.teal],
+          ["2.28×", "上三角 matmul", "带结构的矩阵乘", c.blue]
+        ];
+        for (var i = 0; i < 4; i++) {
+          var y = 88 + i * 66;
+          e.rect(60, y, 120, 52, t[i][0], c.surface, t[i][3], { labelFill: t[i][3], fs: 16 });
+          e.rect(190, y, 330, 52, null, c.surface, c.line, { rx: 4 });
+          e.t(206, y + 32, t[i][1], { ta: "start", fs: 11.5, ff: MONO, fill: c.fg });
+          e.rect(530, y, 230, 52, t[i][2], c.surface, t[i][3], { labelFill: c.fg, fs: 11.5 });
+        }
+        e.rect(140, 366, 540, 42, "L2 侧最高的是 37_Matmul_Swish_Sum_GroupNorm，2.55×", c.amberBg, c.amber, { labelFill: c.fg, fs: 11.5 });
+        e.t(410, 348, "四条来自四类不同算子，说明可利用的浪费是普遍的，不是某一类算子的特例。", { fs: 11, fill: c.muted });
+      }
+    },
+    {
+      desc: "更有说服力的是生产 kernel：8 个全部改进。AITer 族几何均值 <strong>1.09×</strong>，Triton JIT 族 <strong>1.18×</strong>——这些二进制本来就是各家调优过、正在跑的东西。",
+      render: function (e) {
+        var c = P();
+        sceneHeader(e, c, "生产 kernel 八条（MI300X）", "全部 exactly as deployed，8/8 改进");
+        var rows = [
+          ["AITer", "aiter_fmoe_fp8_blockscale_subgu256", 1.310],
+          ["AITer", "aiter_fmha_hd128_fp8_causal", 1.007],
+          ["AITer", "new_aiter_fmha_hd192x128_bf16_causal", 1.025],
+          ["AITer", "new_aiter_fmha_bwd_hd128_bf16_causal_a32", 1.049],
+          ["vLLM", "gemm_a8w8_blockscale", 1.234],
+          ["SGLang", "sglang_fused_moe_lora_kernel", 1.025],
+          ["vLLM", "fused_moe_kernel", 1.343],
+          ["SGLang", "awq_gemm_kernel", 1.133]
+        ];
+        for (var i = 0; i < 8; i++) {
+          var y = 78 + i * 34;
+          var isA = rows[i][0] === "AITer";
+          var col = isA ? c.purple : c.teal;
+          e.rect(40, y, 80, 28, rows[i][0], isA ? c.purpleBg : c.tealBg, col, { labelFill: c.fg, fs: 10, rx: 3 });
+          e.rect(124, y, 330, 28, null, c.surface, c.line, { rx: 3 });
+          e.t(134, y + 19, rows[i][1], { ta: "start", fs: 10, ff: MONO, fill: c.fg });
+          var w = (rows[i][2] - 1) * 700;
+          e.rect(462, y, Math.max(3, w), 28, null, col, col, { rx: 3, sw: 0.5 });
+          e.t(462 + Math.max(3, w) + 8, y + 19, rows[i][2].toFixed(3) + "×", { ta: "start", fs: 10.5, fw: "700", fill: col });
+        }
+        e.line(462, 70, 462, 356, c.line, { sw: 1.2 });
+        e.t(462, 366, "1.00× 基线（条长 = 相对提升，×700 放大）", { ta: "start", fs: 10, fill: c.muted });
+        e.t(410, 396, "AITer 是「一大三小」：手写调优过的 FMHA 只剩 0.7%–4.9%，MoE 那个还有 31%。", { fs: 11.5, fill: c.fg });
+        e.t(410, 420, "论文自己提醒：不同 kernel 算子与 launch 配置都不同，这个对比不能归因于上游编译器。", { fs: 10.5, fill: c.muted });
+      }
+    }
+  ];
+
+  /* ================= WIRING ================= */
+  var builders = {
+    svg1: function () { return scene1; },
+    svg2: function () { return scene2; },
+    svg3: function () { return scene3; },
+    svg4: function () { return scene4; },
+    svg5: function () { return scene5; },
+    svg6: function () { return scene6; },
+    svg7: function () { return scene7; },
+    svg8: function () { return scene8; },
+    svg9: function () { return scene9; }
+  };
+  var engines = {};
+
+  function initScene(svgId) {
+    if (engines[svgId]) return engines[svgId];
+    var svg = document.getElementById(svgId);
+    if (!svg) return null;
+    var buildFn = builders[svgId];
+    if (!buildFn) return null;
+    var eng = new AnimEngine(svg, { steps: buildFn() });
+    engines[svgId] = eng;
+    eng.goTo(0);
+    return eng;
+  }
+
+  document.querySelectorAll(".anim-frame").forEach(function (frame) {
+    var svg = frame.querySelector("svg");
+    if (!svg) return;
+    var svgId = svg.id;
+
+    frame.addEventListener("click", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      var target = ev.target;
+      if (target.classList.contains("btn-play")) { eng.toggle(); }
+      else if (target.classList.contains("btn-next")) { eng.pause(); eng._setPlayBtn(false); eng.next(); }
+      else if (target.classList.contains("btn-prev")) { eng.pause(); eng._setPlayBtn(false); eng.prev(); }
+      else if (target.classList.contains("btn-reset")) { eng.reset(); }
+      else if (target.classList.contains("stage-chip")) {
+        eng.pause();
+        eng._setPlayBtn(false);
+        eng.goTo(parseInt(target.getAttribute("data-step"), 10));
+      }
+    });
+
+    var slider = frame.querySelector(".speed-slider");
+    if (slider) {
+      slider.addEventListener("input", function () {
+        var eng = engines[svgId];
+        if (eng) eng.setSpeed(parseFloat(slider.value));
+      });
+    }
+
+    frame.setAttribute("tabindex", "0");
+    frame.addEventListener("keydown", function (ev) {
+      var eng = engines[svgId];
+      if (!eng) return;
+      if (ev.key === "ArrowRight") { ev.preventDefault(); eng.next(); }
+      else if (ev.key === "ArrowLeft") { ev.preventDefault(); eng.prev(); }
+      else if (ev.key === " ") { ev.preventDefault(); eng.toggle(); }
+    });
+  });
+
+  /* 主题：存储键与站点外壳保持一致（'theme'），值恒为 'light' / 'dark'，
+     并且始终写 data-theme 属性——BaseLayout 的引导脚本也是这么做的，
+     移除属性会让站点样式回落到默认分支。 */
+  /* 按 id 取本文自己的按钮：嵌进站点后页面上还有导航栏的 .theme-toggle
+     （搜索与主题各一个、移动端再一个），用类选择器会改到站点外壳的按钮上。 */
+  function syncThemeBtn() {
+    var tb = document.getElementById("artThemeBtn");
+    if (tb) tb.textContent = document.documentElement.getAttribute("data-theme") === "dark" ? "☀️" : "🌙";
+  }
+  window.toggleTheme = function () {
+    var html = document.documentElement;
+    var next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    html.setAttribute("data-theme", next);
+    syncThemeBtn();
+    try { localStorage.setItem("theme", next); } catch (e) {}
+  };
+
+  /* SVG 里的颜色是绘制那一刻读出来的具体值，主题一变就过期。盯 data-theme
+     的变化重绘当前步——无论用户点的是站点导航里的开关还是本文这个按钮。 */
+  function redrawAll() {
+    for (var id in engines) {
+      if (engines[id]) { engines[id].pause(); engines[id]._setPlayBtn(false); engines[id].goTo(engines[id].currentStep); }
+    }
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(function () { syncThemeBtn(); setTimeout(redrawAll, 30); })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+
+  window.toggleToc = function () {
+    var nav = document.getElementById("tocNav");
+    if (nav) nav.classList.toggle("collapsed");
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    /* 独立打开本文件时没有站点外壳的引导脚本，这里补一次；嵌进站点时
+       data-theme 已经存在，不要覆盖它。 */
+    if (!document.documentElement.getAttribute("data-theme")) {
+      var stored = null;
+      try { stored = localStorage.getItem("theme"); } catch (e) {}
+      document.documentElement.setAttribute("data-theme", stored || "dark");
+    }
+    syncThemeBtn();
+    ["svg1", "svg2", "svg3", "svg4", "svg5", "svg6", "svg7", "svg8", "svg9"].forEach(function (id) { initScene(id); });
+
+    var tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var id = entry.target.id;
+          tocLinks.forEach(function (l) { l.classList.remove("active"); });
+          var link = document.querySelector('.toc a[href="#' + id + '"]');
+          if (link) { link.classList.add("active"); if (window.innerWidth > 768) link.scrollIntoView({ block: "nearest" }); }
+        }
+      });
+    }, { rootMargin: "-30% 0px -50% 0px", threshold: 0 });
+    document.querySelectorAll("section[id]").forEach(function (s) { observer.observe(s); });
+
+    var backTop = document.getElementById("backTop");
+    if (backTop) {
+      window.addEventListener("scroll", function () {
+        if (window.scrollY > 600) backTop.classList.add("visible");
+        else backTop.classList.remove("visible");
+      });
+    }
+
+    tocLinks.forEach(function (a) {
+      a.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        var id = a.getAttribute("href").slice(1);
+        var target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: "smooth" });
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
