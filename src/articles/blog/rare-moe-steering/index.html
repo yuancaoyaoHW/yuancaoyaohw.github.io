@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RARE：把表示工程的扰动藏进路由器的零空间</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --teal: var(--a-teal); --teal-bg: var(--a-teal-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+.callout-teal { background: var(--teal-bg); border-color: var(--teal); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 640px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+.anim-progress { height: 4px; background: var(--code-bg); }
+.anim-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.anim-stage-rail { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid var(--a-border); background: transparent; color: var(--fg-muted); cursor: pointer; }
+.anim-stage-rail .stage-chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--a-on-solid); }
+.anim-stage-rail .stage-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-status { padding: 10px 16px 14px; font-size: 13px; }
+.anim-status .step-info { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.anim-status .step-desc { color: var(--fg-soft); line-height: 1.6; }
+.anim-legend { padding: 0 16px 14px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--fg-muted); }
+.anim-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.anim-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.back-top, .theme-toggle { position: fixed; right: 24px; z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--a-border); background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 15px; }
+.back-top { bottom: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.back-top.show { opacity: 1; pointer-events: auto; }
+.theme-toggle { bottom: 72px; }
+.back-top:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.toc-toggle { display: none; }
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; max-height: 40vh; }
+  .content { width: 100%; }
+  .toc[hidden] { display: none; }
+  .toc-toggle { display: block; margin-bottom: 10px; padding: 6px 12px; border: 1px solid var(--a-border); border-radius: 6px; background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: none; }
+  .anim-canvas-wrap svg .anim-layer .hot { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body class="interactive-body">
+<script>
+/* SVG 的呈现属性（fill / stroke）不解析 var()，所以动画脚本要在运行时把
+   语义令牌读成具体色值。主题切换后重绘即可拿到新值。 */
+(function () {
+  window.aC = function (name, fallback) {
+    var host = document.querySelector('.interactive-body, .article-body') || document.documentElement;
+    var v = getComputedStyle(host).getPropertyValue(name);
+    return (v && v.trim()) || fallback || '#888';
+  };
+})();
+</script>
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="切换深浅主题" title="切换主题">◑</button>
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+  <button class="toc-toggle" onclick="toggleToc()" aria-expanded="true" aria-controls="tocNav">目录</button>
+  <nav class="toc" id="tocNav" aria-label="文章目录">
+    <h3>目录</h3>
+    <a href="#hook">RARE 是什么</a>
+    <a href="#setup">① 前置：路由与表示工程</a>
+    <a href="#mismatch">② 结构性错配</a>
+    <a href="#probes">③ 路由到底对什么敏感</a>
+    <a href="#nullspace">④ 创新一：零空间投影</a>
+    <a href="#drift">⑤ 创新二：下游漂移修正</a>
+    <a href="#layers">⑥ 层选择与超参</a>
+    <a href="#estimators">⑦ 五种扰动估计器</a>
+    <a href="#experiments">⑧ 实验复盘</a>
+    <a href="#critique">⑨ 论文没给的东西</a>
+    <a href="#summary">⑩ 一句话总结</a>
+  </nav>
+
+  <main class="content">
+
+    <section class="hook" id="hook">
+      <h1>RARE：把表示工程的扰动藏进路由器的零空间</h1>
+      <p class="tagline">在稠密模型上一改激活就见效的表示工程，搬到 MoE 上成功率从 ~72% 掉到 9.5%。RARE 的诊断是：扰动同时改了<strong>语义</strong>和<strong>路由</strong>，而路由一动，专家就换了人。解法是让扰动落在路由器矩阵的零空间里——改得动表示，改不动 <code>argmax</code>。</p>
+      <div class="badges">
+        <span class="badge badge-accent">arXiv:2608.21236v1</span>
+        <span class="badge badge-purple">零空间投影</span>
+        <span class="badge badge-green">ASR 8.9% → 53.3%</span>
+        <span class="badge badge-blue">COLM 2026 Workshop</span>
+      </div>
+    </section>
+    <section id="setup">
+      <h2>① 前置：MoE 的路由，和表示工程的扰动</h2>
+      <p>要看懂 RARE 的动机，只需要两个式子。第一个是 MoE 层怎么算：第 $\ell$ 层拿到隐状态 $h_\ell\in\mathbb{R}^{d}$，先过一个线性路由器 $R_\ell\in\mathbb{R}^{E\times d}$ 得到 $E$ 个专家的打分，取 softmax，再选 Top-$k$：</p>
+      <div class="eq">
+        $$p_\ell=\mathrm{softmax}(R_\ell h_\ell),\qquad S_\ell=\mathrm{TopK}(p_\ell,k),\qquad \mathrm{MoE}_\ell(h_\ell)=\sum_{e\in S_\ell}p_{\ell,e}\,f_{\ell,e}(h_\ell)$$
+        <span class="eq-note">$R_\ell$ 的每一行是一个专家的「探测方向」；$h_\ell$ 在这 $E$ 个方向上的投影长度决定了谁被选中。</span>
+      </div>
+      <p>第二个是表示工程（representation engineering / activation steering）怎么干活：在推理时给某些层的隐状态加一个方向向量 $u_\ell$，把模型的行为往目标那一侧推：</p>
+      <div class="eq">
+        $$h'_\ell = h_\ell + u_\ell$$
+        <span class="eq-note">$u_\ell$ 通常由「正例激活集 $\mathbf{H}^+_\ell$ 与负例激活集 $\mathbf{H}^-_\ell$ 的差异」估出来，比如最朴素的均值差 $\Delta\mu_\ell=\mu^+_\ell-\mu^-_\ell$。</span>
+      </div>
+      <p>在稠密 Transformer 上这两件事互不干扰——加完 $u_\ell$，后面还是同一个 FFN，只是输入挪了一点。但在 MoE 上，$h_\ell$ 同时是<strong>两个消费者</strong>的输入：专家网络 $f_{\ell,e}$ 要用它算输出，路由器 $R_\ell$ 要用它决定<em>用哪几个 $f_{\ell,e}$</em>。改 $h_\ell$ 等于同时改「算什么」和「谁来算」。</p>
+      <div class="callout callout-orange">
+        <strong>一句话抓住矛盾：</strong>表示工程假设「改激活 → 改行为」，MoE 却把激活额外当成了离散的分派信号。$R_\ell h_\ell$ 变一点，Top-$k$ 可能整体换人；这是一个不连续的跳变，不是行为的平滑偏移。
+      </div>
+    </section>
+    <section id="mismatch">
+      <h2>② 结构性错配：稠密模型上 72%，MoE 上 9.5%</h2>
+      <p>论文的动机实验（Fig. 1b）很干脆：拿四种成熟的 steering 方法（Soft Prompt / RepE / Activation Scaling / CAA），先在稠密的 Mistral-7B 上跑，再在同门的 Mixtral-8x7B-Instruct 上跑。</p>
+      <table>
+        <thead><tr><th>方法</th><th>Mistral-7B（稠密）</th><th>Mixtral-8x7B（MoE）</th><th>MoE + 冻结路由</th></tr></thead>
+        <tbody>
+          <tr><td>Soft Prompt</td><td>84</td><td class="bad">18</td><td class="gain">65</td></tr>
+          <tr><td>RepE</td><td>71</td><td class="bad">15</td><td class="gain">57</td></tr>
+          <tr><td>Activation Scaling</td><td>68</td><td class="bad">3</td><td class="gain">43</td></tr>
+          <tr><td>CAA</td><td>66</td><td class="bad">2</td><td class="gain">42</td></tr>
+          <tr><td><strong>平均</strong></td><td><strong>72.3</strong></td><td class="bad"><strong>9.5</strong></td><td class="gain"><strong>51.8</strong></td></tr>
+        </tbody>
+      </table>
+      <p class="note-inline">数值为 steering 成功率（%）。第四列是关键：把路由决策强行锁在<em>干净前向</em>（不加扰动那次）的选择上，只让扰动影响专家的计算，成功率从 9.5 回到 51.8。</p>
+      <div class="callout callout-red">
+        <strong>这个对照排除了「MoE 本身更难 steer」的解释。</strong>专家网络对扰动的响应是好的——只要别让扰动去改路由。掉的那 42 个点，是被<em>换掉的专家</em>吃掉的：扰动方向是在原专家的激活统计上估出来的，喂给另一组专家就不再是那个语义方向。
+      </div>
+      <p>更糟的是它会累积。第 $\ell$ 层换了专家 → 输出变了 → $h_{\ell+1}$ 偏离 → 第 $\ell+1$ 层的路由也偏 → 一路滚下去。论文用逐层的路由 logit 余弦距离量了这件事（Eq. 19）：</p>
+      <div class="eq">
+        $$\Delta^{\mathrm{route}}_\ell = 1-\cos\!\big(R_\ell h_\ell^{0},\;R_\ell h_\ell^{\mathrm{steer}}\big)$$
+        <span class="eq-note">Mixtral 上直接注入时，浅层约 $10^{-3}$，到第 27 层已经涨到 $1.19\times10^{-1}$——两个数量级的放大。</span>
+      </div>
+
+      <div class="anim-frame" data-anim="1">
+        <div class="anim-header">
+          <span class="anim-title">动画 1 · 扰动如何把 token 送错专家</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 430" role="img" aria-label="扰动改变路由器打分，Top-2 专家被换掉，误差逐层放大"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>干净前向</span>
+          <span><i style="background:var(--a-red)"></i>被扰动后的路由</span>
+          <span><i style="background:var(--a-green)"></i>命中的专家</span>
+          <span><i style="background:var(--a-amber)"></i>误差累积</span>
+        </div>
+      </div>
+    </section>
+    <section id="probes">
+      <h2>③ 三个探针：路由对<em>语义</em>敏感，对<em>行为</em>几乎不敏感</h2>
+      <p>「锁住路由就能恢复」只说明路由是问题所在，还没说清路由到底编码了什么。论文做了三个探针实验，结论是同一个方向：<strong>路由器读的是话题 / 领域，不是模型将要采取的行为。</strong>这条结论是零空间投影能成立的前提——如果路由本身就携带了「拒答 vs 顺从」的信息，那把扰动挡在路由之外就等于把 steering 阉了。</p>
+
+      <h3>探针 I：同一条 query，拒答 vs 顺从（Table 6）</h3>
+      <p>同一个有害问题，分别取模型拒答时和越狱顺从时的激活，比较两次前向的路由分布。对照组是<em>不同 query</em> 之间的路由差异。</p>
+      <table>
+        <thead><tr><th>模型</th><th>Top-8 重叠（同 query）</th><th>Top-8 重叠（跨 query）</th><th>JSD（同 query）</th><th>JSD（跨 query）</th></tr></thead>
+        <tbody>
+          <tr><td>gpt-oss-20b</td><td class="gain">7.92 / 8</td><td>5.34</td><td class="gain">0.0434</td><td>0.2466</td></tr>
+          <tr><td>Qwen3-30B-A3B</td><td class="gain">7.18 / 8</td><td>6.71</td><td class="gain">0.0135</td><td>0.3491</td></tr>
+          <tr><td>DeepSeek-V2-Lite</td><td class="gain">7.84 / 8</td><td>5.79</td><td class="gain">0.0054</td><td>0.0309</td></tr>
+        </tbody>
+      </table>
+      <p>拒答和顺从这两种<em>截然相反的行为</em>，专家选择几乎一模一样（8 个里重叠 7.2–7.9），JSD 比跨 query 小一到两个数量级。换句话说：路由不知道模型打算拒绝还是配合。</p>
+
+      <h3>探针 II：语义近邻 vs 语义远邻（Table 7）</h3>
+      <p>构造成对文本，只改「是否角色扮演包装（RP）」或只改「话题」，看哪一个更能撬动路由：</p>
+      <table>
+        <thead><tr><th>对比</th><th>变的是</th><th>路由 JSD</th></tr></thead>
+        <tbody>
+          <tr><td>N_code vs RP-N_code</td><td>包装形式</td><td class="gain">0.0098</td></tr>
+          <tr><td>N_tran vs RP-N_tran</td><td>包装形式</td><td class="gain">0.0346</td></tr>
+          <tr><td>RP-N_code vs RP-N_tran</td><td>话题</td><td class="bad">0.3379</td></tr>
+          <tr><td>N_code vs N_tran</td><td>话题</td><td class="bad">0.4149</td></tr>
+          <tr><td>N_code vs H_harm</td><td>话题 + 有害性</td><td class="bad">0.5217</td></tr>
+          <tr><td>N_tran vs H_harm</td><td>话题 + 有害性</td><td class="bad">0.7072</td></tr>
+        </tbody>
+      </table>
+      <p>同话题换包装，JSD 在 $10^{-2}$；换话题，JSD 跳到 $0.34$–$0.41$，差 30 倍以上。</p>
+
+      <h3>探针 III：话题配平后有害性还剩多少信号（Table 8）</h3>
+      <p>把有害样本与话题匹配的无害样本配对（比如都在讲化学），JSD 只有 <span class="gain">0.1006</span>；而在<em>同一类别内部随机配对</em>就有 0.2362 / 0.2282。也就是说，前面看到的 0.52 / 0.71 主要是话题差异冒充的有害性差异，把话题控住之后有害性对路由的边际影响低于类内噪声。</p>
+
+      <div class="callout callout-green">
+        <strong>推论（RARE 的立论基础）：</strong>路由承载语义 / 领域信息，行为方向主要活在<em>专家计算</em>那一侧。因此「保住路由不变、只改专家看到的输入」在信息上是可行的——不是在牺牲 steering 强度换稳定性，而是把两个本来正交的东西解开。
+      </div>
+
+      <div class="anim-frame" data-anim="2">
+        <div class="anim-header">
+          <span class="anim-title">动画 2 · 三个探针：什么能撬动路由</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 430" role="img" aria-label="行为改变几乎不动路由，话题改变大幅改动路由"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>路由几乎不变</span>
+          <span><i style="background:var(--a-red)"></i>路由大幅改变</span>
+          <span><i style="background:var(--a-teal)"></i>对照 / 噪声下界</span>
+        </div>
+      </div>
+    </section>
+    <section id="nullspace">
+      <h2>④ 创新一：把扰动投进路由器的零空间</h2>
+      <p>目标写成约束就一目了然：我们想要一个注入向量，它<strong>改变 $h_\ell$</strong>，但<strong>不改变 $R_\ell h_\ell$</strong>。</p>
+      <div class="eq">
+        $$\text{求 }\delta_\ell\ne 0\quad\text{s.t.}\quad R_\ell\,\delta_\ell=\mathbf{0}$$
+        <span class="eq-note">满足这个条件的 $\delta_\ell$ 构成 $R_\ell$ 的零空间 $\mathcal{N}(R_\ell)=\{x: R_\ell x=0\}$。由于 $R_\ell\in\mathbb{R}^{E\times d}$ 且 $E\ll d$（Mixtral 是 8 对 4096），零空间维度至少 $d-E$ ——极其宽敞。</span>
+      </div>
+      <p>RARE 的做法是取 $R_\ell$ <em>行空间</em>的一组正交基 $Q_\ell$，用投影补把任意估出来的方向 $u_\ell$ 拍进零空间：</p>
+      <div class="eq">
+        $$\Pi_\ell^{\perp}=I-Q_\ell Q_\ell^{\top},\qquad h'_\ell = h_\ell + \Pi_\ell^{\perp}u_\ell \tag{8}$$
+        <span class="eq-note">$Q_\ell Q_\ell^\top$ 是到行空间（即路由器「看得见」的子空间）的正交投影，$I-Q_\ell Q_\ell^\top$ 是到其正交补的投影。</span>
+      </div>
+      <p>验证只需一行：因为 $R_\ell$ 的每一行都在 $\mathrm{row}(R_\ell)=\mathrm{span}(Q_\ell)$ 里，有 $R_\ell = R_\ell Q_\ell Q_\ell^\top$，于是</p>
+      <div class="eq">
+        $$R_\ell\big(h'_\ell-h_\ell\big)=R_\ell\Pi_\ell^{\perp}u_\ell = \big(R_\ell - R_\ell Q_\ell Q_\ell^{\top}\big)u_\ell=\mathbf{0}$$
+        <span class="eq-note">路由 logit 逐位相同 ⇒ softmax 相同 ⇒ Top-$k$ 集合与门控权重<em>完全</em>不变。这是恒等式意义上的不变，不是「近似不变」。</span>
+      </div>
+
+      <h3>几何直觉：把 $u_\ell$ 拆成两半，只留没人看的那一半</h3>
+      <p>任何 $u_\ell$ 都能唯一分解为 $u_\ell = \underbrace{Q_\ell Q_\ell^{\top}u_\ell}_{\text{路由可见分量}} + \underbrace{\Pi_\ell^{\perp}u_\ell}_{\text{路由不可见分量}}$。前者是唯一会搅动专家选择的部分，后者对路由器完全透明，却依然被专家网络 $f_{\ell,e}$（它用的是完整的 $d$ 维输入）看到。所以 steering 的效力来自后者，副作用来自前者——直接删掉前者。</p>
+      <div class="callout callout-purple">
+        <strong>为什么这不是把 steering 削弱到没用？</strong>两个原因叠在一起：(1) 行空间只占 $E$ 维，$\|\Pi^\perp u\|$ 在高维里通常保留了 $u$ 的绝大部分范数；(2) 探针 III 已经说明行为信息不在路由读的那个子空间里，被切掉的分量恰好主要是话题成分。第 ⑧ 节的实验（消融：直接注入 14.6 → 加投影 53.3）就是这条论证的经验回报。
+      </div>
+      <div class="callout callout-orange">
+        <strong>论文在这里留了空白：</strong>它没说 $Q_\ell$ 具体怎么算（SVD？QR？），没给伪逆形式 $\Pi^\perp = I-R^{\top}(RR^{\top})^{-1}R$，也没讨论 $R_\ell$ 行满秩失效时怎么办、投影后是否需要重新归一化范数。工程实现上这几点都得自己补。
+      </div>
+
+      <div class="anim-frame" data-anim="3">
+        <div class="anim-header">
+          <span class="anim-title">动画 3 · $u=Q Q^{\top}u+\Pi^{\perp}u$ 的几何分解</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 430" role="img" aria-label="把扰动向量分解为路由可见分量与零空间分量，只注入后者"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-purple)"></i>原始扰动 $u$</span>
+          <span><i style="background:var(--a-red)"></i>路由可见分量（丢弃）</span>
+          <span><i style="background:var(--a-green)"></i>零空间分量（注入）</span>
+          <span><i style="background:var(--a-blue)"></i>行空间 $\mathrm{span}(Q)$</span>
+        </div>
+      </div>
+    </section>
+    <section id="drift">
+      <h2>⑤ 创新二：下游漂移修正——投影只护住了注入的那一层</h2>
+      <p>Eq. 8 保证第 $\ell$ 层路由不变，但注入之后 $h'_\ell\ne h_\ell$，第 $\ell$ 层的<em>输出</em>就变了（这正是我们想要的效果）。于是 $h_{\ell+1}$ 也变了，而 $h_{\ell+1}$ 的偏移<strong>不再天然落在 $R_{\ell+1}$ 的零空间里</strong>——注意力、LayerNorm、专家 FFN 都是非线性映射，不会保持「垂直于某个子空间」这个性质。第 ⑤ 层之后的每一层，路由都会重新开始漂。</p>
+      <p>RARE 的第二个部件就是对付这个。它在注入之前先跑一次<strong>干净前向</strong>，缓存每层的 $h_\ell^{0}$；在被选中的下游层上，不是投影「扰动量」，而是投影「当前状态相对干净状态的整体偏差」，再把结果贴回干净基底：</p>
+      <div class="eq">
+        $$\widetilde h_\ell = h_\ell^{0} + \Pi_\ell^{\perp}\big(h'_\ell - h_\ell^{0}\big) \tag{9}$$
+        <span class="eq-note">$h_\ell^0$ 是干净前向的第 $\ell$ 层隐状态，$h'_\ell$ 是带扰动前向传到这一层的状态。</span>
+      </div>
+      <p>它保证的等式是：</p>
+      <div class="eq">
+        $$R_\ell\widetilde h_\ell = R_\ell h_\ell^{0} + R_\ell\Pi_\ell^{\perp}(h'_\ell-h_\ell^{0}) = R_\ell h_\ell^{0}$$
+        <span class="eq-note">每一被选层的路由 logit 都被<em>钉回</em>干净前向的值。不是「减小漂移」，是把漂移在路由方向上的分量清零。</span>
+      </div>
+
+      <h3>为什么必须 rebase 到 $h^0$，而不是继续投影增量</h3>
+      <p>如果只做 $\widetilde h_\ell = h_{\ell-1}\text{的输出} + \Pi^\perp(\cdot)$ 这类<em>相对上一步</em>的投影，误差会像积分一样累积：每层都只压掉本层新增的那一点漂移，之前漏过去的部分永远留着。Eq. 9 每层都以干净前向为参照重新对齐，属于<strong>绝对修正</strong>，误差不传递。这是这一步设计的要点。</p>
+      <table>
+        <thead><tr><th>Mixtral 层</th><th>直接注入 $\Delta^{\mathrm{route}}_\ell$</th><th>加投影后</th></tr></thead>
+        <tbody>
+          <tr><td>浅层（典型）</td><td>$\sim 10^{-3}$</td><td class="gain">$\le 10^{-5}$</td></tr>
+          <tr><td>25（最大残差）</td><td>—</td><td class="gain">$4.0\times10^{-3}$</td></tr>
+          <tr><td>27（漂移峰值）</td><td class="bad">$1.19\times10^{-1}$</td><td class="gain">$\le 10^{-5}$</td></tr>
+        </tbody>
+      </table>
+      <p class="note-inline">Table 11。多数层被压到 $10^{-5}$ 以下，即数值噪声量级；残差最大的第 25 层是没被选入 $\mathcal{L}_{\mathrm{proj}}$ 的层。</p>
+      <div class="callout callout-orange">
+        <strong>代价论文没算：</strong>Eq. 9 需要一次完整的干净前向并缓存全部层的 $h^0_\ell$。这意味着推理算力约 ×2、加上 $O(L\cdot d)$ 的激活缓存（batch 与序列长度都要乘进去）。全文没有任何复杂度或开销分析，也没有算法伪码。要落地必须自己估这笔账。
+      </div>
+
+      <div class="anim-frame" data-anim="4">
+        <div class="anim-header">
+          <span class="anim-title">动画 4 · 漂移的累积与逐层 rebase</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 430" role="img" aria-label="干净前向作为基底，逐层把偏差投影回零空间，路由 logit 被钉住"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>干净前向 $h^0$</span>
+          <span><i style="background:var(--a-red)"></i>未修正的漂移</span>
+          <span><i style="background:var(--a-green)"></i>修正后</span>
+          <span><i style="background:var(--a-purple)"></i>rebase 操作</span>
+        </div>
+      </div>
+    </section>
+    <section id="layers">
+      <h2>⑥ 层选择：两套准则，两个独立的层集合</h2>
+      <p>RARE 里有两组层，用不同准则选，可以不重合：</p>
+      <h3>$\mathcal{L}_{\mathrm{pert}}$：在哪些层注入</h3>
+      <p>取正负激活均值<strong>余弦相似度最低</strong>的 $K_{\mathrm{pert}}$ 层：</p>
+      <div class="eq">
+        $$\mathcal{L}_{\mathrm{pert}}=\operatorname*{arg\,min}_{|\mathcal{L}|=K_{\mathrm{pert}}}\ \sum_{\ell\in\mathcal{L}}\cos\!\big(\mu^{+}_\ell,\mu^{-}_\ell\big)$$
+        <span class="eq-note">直觉：$\cos(\mu^+,\mu^-)$ 越小，说明该层的表示把两类行为分得越开，此处的方向 $\Delta\mu_\ell$ 信噪比最高，注入最有效。</span>
+      </div>
+      <h3>$\mathcal{L}_{\mathrm{proj}}$：在哪些层做投影 / 修正</h3>
+      <p>取路由 logit 差异<strong>最大</strong>的 top-$K_{\mathrm{proj}}$ 层——哪儿漏得最厉害就在哪儿堵。</p>
+      <table>
+        <thead><tr><th>模型</th><th>层数 $L$</th><th>激活/总专家</th><th>激活/总参数</th><th>$K_{\mathrm{pert}}$</th><th>$K_{\mathrm{proj}}$</th></tr></thead>
+        <tbody>
+          <tr><td>DeepSeek-V2-Lite-Chat</td><td>27</td><td>6+2 / 64+2</td><td>2.4B / 15.7B</td><td>16</td><td>18</td></tr>
+          <tr><td>Mixtral-8x7B-Instruct</td><td>32</td><td>2 / 8</td><td>12.9B / 46.7B</td><td>20</td><td>22</td></tr>
+          <tr><td>Phi-3.5-MoE</td><td>32</td><td>2 / 16</td><td>6.6B / 42.0B</td><td>20</td><td>22</td></tr>
+          <tr><td>Phi-mini-MoE</td><td>32</td><td>2 / 16</td><td>2.4B / 7.6B</td><td>20</td><td>22</td></tr>
+          <tr><td>Qwen3-30B-A3B-2507</td><td>48</td><td>8 / 128</td><td>3.3B / 30.5B</td><td>30</td><td>37</td></tr>
+          <tr><td>gpt-oss-20b</td><td>24</td><td>4 / 32</td><td>3.6B / 21.0B</td><td>20</td><td>20</td></tr>
+        </tbody>
+      </table>
+      <p class="note-inline">Table 9。注意 $K_{\mathrm{proj}}\ge K_{\mathrm{pert}}$ 是常态（修正的层比注入的层多），且两者都覆盖了模型的大半层数——RARE 不是一个「只碰两三层」的轻量补丁。</p>
+      <div class="callout callout-orange">
+        <strong>可复现性缺口：</strong>论文没有形式化定义 $\mathcal{L}_{\mathrm{proj}}$ 用的「路由 logit 差异」是哪个量（是 Eq. 19 的余弦距离，还是 JSD，在什么数据上统计），也没有给 $K$ 的敏感性分析。表里的取值看起来是每个模型手调的。
+      </div>
+    </section>
+    <section id="estimators">
+      <h2>⑦ 五种扰动估计器：统一接口下的几何谱系</h2>
+      <p>RARE 把「怎么估方向」抽象成一个可替换的算子，投影那一层完全不关心它内部是什么：</p>
+      <div class="eq">
+        $$u_\ell = \mathcal{C}_\ell\big(\mathbf{H}^{+}_\ell,\ \mathbf{H}^{-}_\ell\big)$$
+        <span class="eq-note">输入是正负两组激活矩阵，输出一个 $d$ 维方向。论文实例化了五个 $\mathcal{C}$，从只用一阶统计量到用上二阶统计量。</span>
+      </div>
+      <h3>一阶：只看均值</h3>
+      <div class="eq">
+        $$\textbf{MeanDiff:}\quad u_\ell=\alpha\big(\mu^{+}_\ell-\mu^{-}_\ell\big)=\alpha\,\Delta\mu_\ell \tag{3}$$
+      </div>
+      <div class="eq">
+        $$\textbf{Probe:}\quad w_\ell=\text{线性分类器权重},\quad u_\ell=\alpha\,\frac{w_\ell}{\|w_\ell\|_2}\cdot\varepsilon_{\min} \tag{4}$$
+        <span class="eq-note">训练一个判别正负例的线性探针，沿其法向走一个「最小 margin」步长。比 MeanDiff 更贴判别边界，但只有一个方向自由度。</span>
+      </div>
+      <h3>子空间：先降维，再走均值差</h3>
+      <div class="eq">
+        $$\textbf{LowRank / PCA:}\quad u_\ell=\alpha\,B_{\ell,r}B_{\ell,r}^{\top}\,\Delta\mu_\ell \tag{5}$$
+        <span class="eq-note">$B_{\ell,r}$ 是激活协方差的前 $r$ 个主成分。把均值差限制在数据的主流形上，抑掉低方差噪声方向。形式上和零空间投影同族——都是「乘一个投影矩阵」。</span>
+      </div>
+      <h3>二阶：用上协方差</h3>
+      <div class="eq">
+        $$\textbf{LDA:}\quad u_\ell=\alpha\,\big(\Sigma_\ell+\rho_{\mathrm{LDA}} I\big)^{-1}\Delta\mu_\ell \tag{6}$$
+        <span class="eq-note">用类内协方差白化均值差：在方差大的方向上少走，在方差小但判别性强的方向上多走。$\rho_{\mathrm{LDA}}$ 是岭正则，防止 $\Sigma$ 病态。</span>
+      </div>
+      <div class="eq">
+        $$\textbf{AffineGaussian:}\quad G_\ell=\big(\Sigma^{+}_\ell+\rho I\big)^{1/2}\big(\Sigma^{-}_\ell+\rho I\big)^{-1/2},\quad u_\ell \propto G_\ell\big(h_\ell-\mu^{-}_\ell\big)+\mu^{+}_\ell-h_\ell \tag{7}$$
+        <span class="eq-note">CORAL 式的「白化—再着色」：把当前激活当作从负类高斯里采的样本，先白化到标准球，再按正类的协方差重新着色，最后把结果范数还原成 $\|\Delta\mu_\ell\|_2$。它是唯一<em>依赖当前 token 激活</em>的估计器——其余四个都是离线常向量。</span>
+      </div>
+      <h3>效果排序</h3>
+      <table>
+        <thead><tr><th>估计器</th><th>用到的统计量</th><th>是否随 token 变化</th><th>内嵌 $\alpha$</th><th>平均 ASR（6 模型）</th></tr></thead>
+        <tbody>
+          <tr><td>Probe</td><td>判别边界法向</td><td>否</td><td>3.5</td><td>19.6</td></tr>
+          <tr><td>MeanDiff</td><td>一阶均值</td><td>否</td><td>3.5</td><td>21.5</td></tr>
+          <tr><td>LowRank</td><td>一阶 + 主子空间</td><td>否</td><td>3.75</td><td>31.3</td></tr>
+          <tr><td>LDA</td><td>一阶 + 类内协方差</td><td>否</td><td>4.0</td><td>38.0</td></tr>
+          <tr class="best"><td><strong>AffineGaussian</strong></td><td>两类各自的协方差</td><td><strong>是</strong></td><td>1.75</td><td class="gain"><strong>53.3</strong>（6/6 最优）</td></tr>
+        </tbody>
+      </table>
+      <p>趋势非常干净：<strong>用到的分布信息越多，效果越好</strong>，而且最强的那个所需的缩放系数最小（1.75 vs 3.5–4.0）。后者是个有意思的信号——方向估得准，就不需要靠放大幅度硬推，副作用自然小。</p>
+      <div class="callout callout-blue">
+        <strong>接口设计本身是贡献的一部分。</strong>因为 $\mathcal{C}$ 与 $\Pi^\perp$ 解耦，任何未来的 steering 方向估计器都能直接套进 RARE。论文没有纳入 ITI、SAE 特征、refusal direction 这几类常见方法，是可以补的空位。
+      </div>
+
+      <div class="anim-frame" data-anim="5">
+        <div class="anim-header">
+          <span class="anim-title">动画 5 · 五种估计器给出的方向差在哪</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg5" viewBox="0 0 820 430" role="img" aria-label="在两类激活散点上比较五种估计器给出的方向"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>负类激活 $\mathbf{H}^-$</span>
+          <span><i style="background:var(--a-green)"></i>正类激活 $\mathbf{H}^+$</span>
+          <span><i style="background:var(--a-purple)"></i>估计出的方向</span>
+          <span><i style="background:var(--a-amber)"></i>协方差椭圆</span>
+        </div>
+      </div>
+    </section>
+    <section id="experiments">
+      <h2>⑧ 实验复盘：涨在哪、代价在哪</h2>
+      <h3>主结果：有害性 steering（Table 4）</h3>
+      <table>
+        <thead><tr><th>方法</th><th>DeepSeek</th><th>Mixtral</th><th>Phi-3.5</th><th>Phi-mini</th><th>Qwen3</th><th>GPT-oss</th><th>平均 ASR</th><th>平均 MMLU</th></tr></thead>
+        <tbody>
+          <tr><td>Clean（无干预）</td><td>8.5</td><td>12.0</td><td>6.5</td><td>9.0</td><td>11.0</td><td>6.5</td><td>8.9</td><td>77.8</td></tr>
+          <tr><td>RepE</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>18.7</td><td>65.7</td></tr>
+          <tr><td>SAFEx</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>32.0</td><td class="bad">50.1</td></tr>
+          <tr><td>SteerMoE + AIM</td><td>—</td><td>—</td><td>—</td><td class="gain">48.0</td><td>—</td><td class="gain">39.0</td><td>46.3</td><td>64.5</td></tr>
+          <tr class="best"><td><strong>RARE</strong></td><td>77.5</td><td>59.0</td><td>35.0</td><td>40.0</td><td>73.0</td><td>35.5</td><td class="gain"><strong>53.3</strong></td><td>67.8</td></tr>
+        </tbody>
+      </table>
+      <p>RARE 平均最高，而且 MMLU 掉得比所有基线都少（−10.0，SAFEx 掉 −27.7）。<strong>但它不是全胜</strong>：在 Phi-mini（48.0 vs 40.0）和 GPT-oss（39.0 vs 35.5）上 SteerMoE 更强。这两个模型的共同点是专家数中等而激活专家少，值得注意但论文没深究。DeepSeek 上 77.5 的异常高分，论文自己标注为「架构层面的假设」——归因于共享专家吸收了通用计算，使得可路由专家的方向更纯，属于推测而非验证。</p>
+
+      <h3>横向能力：知识编辑与真实性</h3>
+      <table>
+        <thead><tr><th>任务 / 指标</th><th>Clean</th><th>RepE</th><th>RARE 最优</th><th>次优</th></tr></thead>
+        <tbody>
+          <tr><td>TruthfulQA MC1 ↑</td><td>41.0</td><td>42.2</td><td class="gain">58.6（AffineGaussian）</td><td>55.8（LDA）</td></tr>
+          <tr><td>CounterFact 编辑成功率 ES ↑</td><td>16.8</td><td>28.8</td><td class="gain">96.3</td><td>94.8（LDA）</td></tr>
+          <tr><td>CounterFact 局部性 LS ↑</td><td>85.0</td><td>68.8</td><td class="bad">22.9（AffineGaussian）</td><td>39.5（LDA）</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-red">
+        <strong>这里有个必须点出来的权衡。</strong>CounterFact 上编辑成功率冲到 96.3 的同时，局部性从 85.0 崩到 22.9（MeanDiff 13.8、LowRank 10.8 更差）。也就是说，RARE 改得动目标事实，但顺手把无关事实一起改了。路由被完美保住了，专家的计算却被大幅重塑——「路由不变」不等于「行为局部」。论文报了这组数，但没有在正文里把它当成一个 limitation 讨论。
+      </div>
+
+      <h3>消融：投影是不是那个关键部件</h3>
+      <table>
+        <thead><tr><th>配置</th><th>DeepSeek</th><th>Mixtral</th><th>Phi-3.5</th><th>Phi-mini</th><th>Qwen3</th><th>GPT-oss</th><th>平均</th></tr></thead>
+        <tbody>
+          <tr><td>直接注入（无投影）</td><td>13.5</td><td>19.5</td><td>9.5</td><td>20.0</td><td>15.5</td><td>9.5</td><td class="bad">14.6</td></tr>
+          <tr class="best"><td>+ 投影与漂移修正</td><td>77.5</td><td>59.0</td><td>35.0</td><td>40.0</td><td>73.0</td><td>35.5</td><td class="gain">53.3</td></tr>
+          <tr><td>增量</td><td class="gain">+64.0</td><td class="gain">+39.5</td><td class="gain">+25.5</td><td class="gain">+20.0</td><td class="gain">+57.5</td><td class="gain">+26.0</td><td class="gain">+38.7</td></tr>
+        </tbody>
+      </table>
+      <p class="note-inline">Table 10。6/6 模型上都有大幅提升，这条消融很有说服力——但它把「零空间投影」和「下游漂移修正」<strong>捆在一起</strong>开关，两个部件各自的贡献无从得知。这是全文最想看却没有的那张表。</p>
+
+      <div class="anim-frame" data-anim="6">
+        <div class="anim-header">
+          <span class="anim-title">动画 6 · 收益、代价与消融</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg6" viewBox="0 0 820 430" role="img" aria-label="ASR 提升、MMLU 代价、局部性崩塌与消融对比"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>提升</span>
+          <span><i style="background:var(--a-red)"></i>退化</span>
+          <span><i style="background:var(--a-blue)"></i>基线</span>
+          <span><i style="background:var(--a-purple)"></i>RARE</span>
+        </div>
+      </div>
+    </section>
+    <section id="critique">
+      <h2>⑨ 批判性阅读：论文没给的东西</h2>
+      <p>核心想法很干净，但这是一篇 20 页、3 张图的 workshop 稿，理论与工程细节都留了不少缺口。按重要性排：</p>
+      <h3>数学层面</h3>
+      <ul>
+        <li>没有任何命题或证明。$R_\ell\Pi^\perp_\ell=0$ 是一行可验证的恒等式，但「投影后 steering 效力保留多少」这类真正需要论证的问题完全没碰。</li>
+        <li>没说 $Q_\ell$ 怎么算，也没给等价的伪逆形式；没讨论 $R_\ell$ 秩缺失、数值稳定性。</li>
+        <li>没讨论零空间维度 $d-E$：Mixtral 是 4096−8，Qwen3 是 $d$−128，几何上的宽裕程度差别很大，但论文没有把这个量与效果挂钩。</li>
+        <li>投影会缩短向量（$\|\Pi^\perp u\|\le\|u\|$），论文没说是否重新归一化，而 $\alpha$ 是内嵌在估计器里的常数——两者的相互作用没有交代。</li>
+      </ul>
+      <h3>机制层面</h3>
+      <ul>
+        <li>漂移的来源没有拆解：LayerNorm 的重缩放、注意力的跨 token 混合、专家 FFN 的非线性，哪一个是主因？没有分析。</li>
+        <li>没有测 Top-$k$ 的<strong>翻转率</strong>。Eq. 19 的余弦距离是连续量，而真正致命的是离散跳变；$1.19\times10^{-1}$ 的 logit 距离到底翻掉了几个专家，读者只能猜。</li>
+        <li>$\mathcal{L}_{\mathrm{proj}}$ 的选层准则没有形式化定义，$K$ 没有敏感性分析。</li>
+      </ul>
+      <h3>工程层面</h3>
+      <ul>
+        <li>没有算法伪码，没有复杂度分析，没有实测开销。Eq. 9 隐含的额外干净前向 + 全层激活缓存，全文一字未提。</li>
+        <li>$r$（LowRank 秩）、$\rho$（岭系数）、$\varepsilon$（Probe 步长）都没给具体数值。</li>
+        <li>没有 Limitations / Future Work 章节；CounterFact 局部性崩塌这个明显的负面结果只在表里，没在正文承认。</li>
+      </ul>
+      <div class="callout callout-teal">
+        <strong>公平地说：</strong>这些缺口不影响主张的成立。「路由是 MoE steering 失效的机制性原因」有冻结路由对照 + 三个探针 + 逐层漂移测量三重证据；「零空间注入有效」有 6/6 模型 +38.7 点的消融。缺的是把它从一个<em>有效的技巧</em>变成一个<em>被理解的方法</em>所需的那部分工作。
+      </div>
+    </section>
+
+    <section id="summary">
+      <h2>⑩ 一句话总结</h2>
+      <p>MoE 把隐状态同时用作「计算的输入」和「分派的信号」，表示工程只想改前者却不可避免地改了后者，于是扰动方向被喂给了它没有见过的专家。RARE 的做法是求解一个约束——<strong>$R_\ell\delta_\ell=0$</strong>——用行空间的正交补投影把扰动整体挡在路由器视野之外（Eq. 8），再用干净前向作基底逐层把下游漂移钉回原位（Eq. 9）。因为路由编码的是话题而非行为（三个探针），这个约束几乎不损失 steering 所需的信息。</p>
+      <div class="callout callout-purple">
+        <strong>值得带走的三点：</strong>
+        <ul>
+          <li>诊断 &gt; 方法：冻结路由的对照实验（9.5 → 51.8）是全文最有价值的一格，它把「MoE 难 steer」这个模糊印象变成了一个可定位的机制。</li>
+          <li>约束 &gt; 调参：把「别动路由」写成线性等式再解出投影，比反复调 $\alpha$ 和选层要干净得多。任何「某个模块只该看到状态的一部分」的场景都可以复用这个套路。</li>
+          <li>解耦 &gt; 单点最优：$u_\ell=\mathcal{C}_\ell(\cdot)$ 与 $\Pi^\perp_\ell$ 互不依赖，所以估计器可以整个换掉。AffineGaussian 今天最好，但真正的资产是那个接口。</li>
+        </ul>
+      </div>
+      <p class="note-inline">论文：Zhibo Zhang, Zhen Ouyang, Ling Shi, Kailong Wang. <em>RARE: Decoupling Representation Steering from Expert Routing in Mixture-of-Experts Language Models.</em> arXiv:2608.21236v1, 2026-08-21（HUST / AIDX TECH / NUS；COLM 2026 Actionable Interpretability Workshop）。本文中所有数值均取自论文正文与附录表格。</p>
+    </section>
+
+  </main>
+</div>
+<script>
+(function () {
+'use strict';
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, a) {
+  var n = document.createElementNS(NS, tag);
+  if (a) for (var k in a) if (a[k] != null) n.setAttribute(k, a[k]);
+  return n;
+}
+function C(name, fb) { return window.aC(name, fb); }
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function AnimEngine(svg, cfg) {
+  this.svg = svg;
+  this.steps = cfg.steps || [];
+  this.i = 0;
+  this.speed = 1;
+  this.playing = false;
+  this.timer = null;
+  this.frame = svg.closest('.anim-frame');
+  this._initDefs();
+  this.layer = el('g', { 'class': 'anim-layer' });
+  svg.appendChild(this.layer);
+  this._buildRail();
+  this.goTo(0);
+}
+
+AnimEngine.prototype._initDefs = function () {
+  var defs = el('defs');
+  var mk = [['arrA', C('--a-accent', '#FF7A00')], ['arrG', C('--a-green', '#4CC98A')],
+            ['arrR', C('--a-red', '#FF7268')], ['arrB', C('--a-blue', '#74B4FF')],
+            ['arrP', C('--a-purple', '#B79BFF')], ['arrM', C('--a-fg-muted', '#888')],
+            ['arrY', C('--a-amber', '#E9B449')], ['arrT', C('--a-teal', '#48CFC4')]];
+  var id = this.svg.id;
+  for (var j = 0; j < mk.length; j++) {
+    var m = el('marker', { id: id + '-' + mk[j][0], viewBox: '0 0 10 10', refX: '9', refY: '5',
+      markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse' });
+    m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: mk[j][1] }));
+    defs.appendChild(m);
+  }
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype.mk = function (name) { return 'url(#' + this.svg.id + '-' + name + ')'; };
+AnimEngine.prototype.clear = function () { while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild); };
+
+AnimEngine.prototype.draw = function (node, o) {
+  o = o || {};
+  this.layer.appendChild(node);
+  if (o.reveal && !REDUCED) {
+    node.style.opacity = '0';
+    node.style.transition = 'opacity 320ms ease';
+    var d = o.delay || 0;
+    setTimeout(function () { node.style.opacity = o.opacity != null ? o.opacity : '1'; }, d / this.speed);
+  } else if (o.opacity != null) { node.style.opacity = o.opacity; }
+  if (o.cls) node.setAttribute('class', ((node.getAttribute('class') || '') + ' ' + o.cls).trim());
+  return node;
+};
+
+AnimEngine.prototype.t = function (x, y, str, o) {
+  o = o || {};
+  var n = el('text', { x: x, y: y, 'text-anchor': o.anchor || 'middle',
+    'font-size': o.size || 12, 'font-weight': o.weight || 400,
+    'font-family': o.mono ? '"JetBrains Mono", Consolas, monospace' : 'inherit',
+    fill: o.fill || C('--a-fg', '#ccc') });
+  n.textContent = str;
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, o) {
+  o = o || {};
+  var g = el('g');
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: o.rx != null ? o.rx : 6,
+    fill: fill || 'none', stroke: stroke || C('--a-line', '#444'),
+    'stroke-width': o.sw || 1.5, 'stroke-dasharray': o.dash || null }));
+  if (label) {
+    var lines = String(label).split('|');
+    var y0 = y + h / 2 - (lines.length - 1) * 8 + 4;
+    for (var j = 0; j < lines.length; j++) {
+      var tn = el('text', { x: x + w / 2, y: y0 + j * 16, 'text-anchor': 'middle',
+        'font-size': o.size || 12, 'font-weight': o.weight || 500,
+        fill: o.labelFill || stroke || C('--a-fg', '#ccc') });
+      tn.textContent = lines[j];
+      g.appendChild(tn);
+    }
+  }
+  return this.draw(g, o);
+};
+
+AnimEngine.prototype.line = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  return this.draw(el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, 'stroke-linecap': 'round' }), o);
+};
+AnimEngine.prototype.arrow = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  var n = el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-fg-muted', '#888'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': this.mk(o.marker || 'arrM') });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.circle = function (cx, cy, r, o) {
+  o = o || {};
+  return this.draw(el('circle', { cx: cx, cy: cy, r: r, fill: o.fill || 'none',
+    stroke: o.stroke || 'none', 'stroke-width': o.sw || 1.5 }), o);
+};
+
+AnimEngine.prototype.ellipse = function (cx, cy, rx, ry, rot, o) {
+  o = o || {};
+  var n = el('ellipse', { cx: cx, cy: cy, rx: rx, ry: ry, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, transform: 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.path = function (d, o) {
+  o = o || {};
+  return this.draw(el('path', { d: d, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': o.marker ? this.mk(o.marker) : null }), o);
+};
+
+/* 横向条形：用于实验数据对比。value 已按 max 归一到 w 像素。 */
+AnimEngine.prototype.bar = function (x, y, w, h, label, val, max, color, o) {
+  o = o || {};
+  var len = Math.max(2, w * Math.min(1, val / max));
+  var g = el('g');
+  var lt = el('text', { x: x - 8, y: y + h / 2 + 4, 'text-anchor': 'end', 'font-size': 11,
+    fill: C('--a-fg-muted', '#888') });
+  lt.textContent = label;
+  g.appendChild(lt);
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: 3, fill: C('--a-code-bg', '#222') }));
+  var b = el('rect', { x: x, y: y, width: len, height: h, rx: 3, fill: color });
+  g.appendChild(b);
+  var vt = el('text', { x: x + len + 8, y: y + h / 2 + 4, 'text-anchor': 'start', 'font-size': 11,
+    'font-weight': 600, fill: color });
+  vt.textContent = o.fmt ? o.fmt(val) : val;
+  g.appendChild(vt);
+  if (!REDUCED) {
+    b.setAttribute('width', 0);
+    vt.style.opacity = '0';
+    var sp = this.speed, d = o.delay || 0;
+    setTimeout(function () {
+      b.style.transition = 'width 520ms cubic-bezier(.2,.8,.3,1)';
+      b.setAttribute('width', len);
+      vt.style.transition = 'opacity 300ms ease 260ms';
+      vt.style.opacity = '1';
+    }, d / sp + 30);
+  }
+  return this.draw(g, { cls: o.cls });
+};
+AnimEngine.prototype._buildRail = function () {
+  var rail = this.frame.querySelector('.anim-stage-rail');
+  if (!rail) return;
+  rail.textContent = '';
+  for (var j = 0; j < this.steps.length; j++) {
+    var b = document.createElement('button');
+    b.className = 'stage-chip';
+    b.type = 'button';
+    b.dataset.idx = j;
+    b.setAttribute('role', 'tab');
+    b.textContent = (j + 1) + '. ' + (this.steps[j].chip || this.steps[j].title);
+    rail.appendChild(b);
+  }
+};
+
+AnimEngine.prototype.goTo = function (idx) {
+  if (idx < 0 || idx >= this.steps.length) return;
+  this.i = idx;
+  this.clear();
+  var step = this.steps[idx];
+  step.render(this);
+  this._updateUI();
+};
+
+AnimEngine.prototype._updateUI = function () {
+  var f = this.frame, step = this.steps[this.i], n = this.steps.length;
+  var info = f.querySelector('.step-info'), desc = f.querySelector('.step-desc'),
+      bar = f.querySelector('.anim-progress .bar');
+  if (info) info.textContent = '步骤 ' + (this.i + 1) + ' / ' + n + ' · ' + step.title;
+  if (desc) desc.innerHTML = step.desc || '';
+  if (bar) bar.style.width = ((this.i + 1) / n * 100) + '%';
+  var chips = f.querySelectorAll('.stage-chip');
+  for (var j = 0; j < chips.length; j++) chips[j].setAttribute('aria-current', j === this.i ? 'true' : 'false');
+  var prev = f.querySelector('.btn-prev'), next = f.querySelector('.btn-next');
+  if (prev) prev.disabled = this.i === 0;
+  if (next) next.disabled = this.i === n - 1;
+};
+
+AnimEngine.prototype.next = function () { if (this.i < this.steps.length - 1) this.goTo(this.i + 1); };
+AnimEngine.prototype.prev = function () { if (this.i > 0) this.goTo(this.i - 1); };
+AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+AnimEngine.prototype.setSpeed = function (v) { this.speed = v; };
+
+AnimEngine.prototype.play = function () {
+  var self = this;
+  if (this.i >= this.steps.length - 1) this.goTo(0);
+  this.playing = true;
+  this._setPlayBtn();
+  var tick = function () {
+    if (!self.playing) return;
+    var dur = (self.steps[self.i].duration || 2600) / self.speed;
+    self.timer = setTimeout(function () {
+      if (!self.playing) return;
+      if (self.i >= self.steps.length - 1) { self.pause(); return; }
+      self.goTo(self.i + 1);
+      tick();
+    }, dur);
+  };
+  tick();
+};
+
+AnimEngine.prototype.pause = function () {
+  this.playing = false;
+  if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  this._setPlayBtn();
+};
+AnimEngine.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
+AnimEngine.prototype._setPlayBtn = function () {
+  var b = this.frame.querySelector('.btn-play');
+  if (b) b.textContent = this.playing ? '❙❙ 暂停' : '▶ 播放';
+};
+/* ---------- 场景 1：扰动把 token 送错专家 ---------- */
+function scene1() {
+  var BLUE = function () { return C('--a-blue', '#74B4FF'); },
+      RED = function () { return C('--a-red', '#FF7268'); },
+      GREEN = function () { return C('--a-green', '#4CC98A'); },
+      MUTED = function () { return C('--a-fg-muted', '#888'); },
+      AMBER = function () { return C('--a-amber', '#E9B449'); };
+  var clean = [0.06, 0.09, 0.31, 0.05, 0.07, 0.28, 0.08, 0.06];
+  var pert = [0.07, 0.29, 0.11, 0.06, 0.08, 0.26, 0.07, 0.06];
+  var Y0 = 62, DY = 36;
+
+  function pipeline(e, o) {
+    o = o || {};
+    var hc = o.pert ? RED() : BLUE();
+    e.rect(30, 180, 92, 58, o.pert ? "h'_ℓ = h+u|(被扰动)" : 'h_ℓ|(干净)', 'none', hc, { size: 11, reveal: true });
+    e.arrow(122, 209, 168, 209, { stroke: hc, marker: o.pert ? 'arrR' : 'arrB', reveal: true, delay: 80 });
+    e.rect(168, 180, 84, 58, 'Router|R_ℓ', 'none', C('--a-accent', '#FF7A00'), { size: 11, reveal: true, delay: 120 });
+    e.t(210, 258, 'softmax → Top-2', { size: 10, fill: MUTED(), reveal: true, delay: 160 });
+    var sc = o.scores || clean;
+    for (var j = 0; j < 8; j++) {
+      var y = Y0 + j * DY, hit = o.top.indexOf(j) >= 0;
+      var col = hit ? (o.hitColor || GREEN()) : MUTED();
+      e.line(252, 209, 300, y + 14, { stroke: hit ? col : C('--a-line', '#444'), sw: hit ? 2 : 0.8,
+        dash: hit ? null : '3 3', reveal: true, delay: 200 + j * 30 });
+      e.rect(300, y, 120 * Math.max(0.06, sc[j] / 0.35), 28, null, hit ? col : C('--a-line', '#444'), 'none',
+        { rx: 3, reveal: true, delay: 240 + j * 30, opacity: hit ? 0.9 : 0.35 });
+      e.t(428, y + 18, sc[j].toFixed(2), { size: 10, anchor: 'start', mono: true,
+        fill: hit ? col : MUTED(), reveal: true, delay: 240 + j * 30 });
+      e.rect(486, y, 128, 28, 'Expert ' + (j + 1), 'none', hit ? col : C('--a-line', '#444'),
+        { size: 11, rx: 4, reveal: true, delay: 280 + j * 30, labelFill: hit ? col : MUTED(),
+          cls: hit && o.hot ? 'hot' : null });
+    }
+    e.t(546, 42, '专家池 E = 8', { size: 11, fill: MUTED(), weight: 600, reveal: true });
+    e.t(360, 42, '路由打分 p_ℓ', { size: 11, fill: MUTED(), weight: 600, reveal: true });
+  }
+  return [
+    { chip: '干净前向', title: '干净前向：Top-2 命中 E3 / E6',
+      desc: '没有干预时，路由器给出 p_ℓ = softmax(R_ℓ h_ℓ)，Top-2 选中 Expert 3（0.31）与 Expert 6（0.28）。steering 方向 u_ℓ 正是在这两个专家的激活统计上估出来的。',
+      render: function (e) { pipeline(e, { top: [2, 5], hot: true }); } },
+    { chip: '注入扰动', title: '直接注入 u_ℓ：路由打分被一起改了',
+      desc: 'h_ℓ 同时是专家的输入和路由器的输入。加上 u_ℓ 之后 R_ℓ(h+u) ≠ R_ℓ h，8 个 logit 全部移动——这是表示工程在稠密模型上不存在的副作用。',
+      render: function (e) { pipeline(e, { pert: true, scores: pert, top: [2, 5], hitColor: AMBER() }); } },
+    { chip: 'Top-2 换人', title: 'Top-2 集合发生离散跳变',
+      desc: 'Expert 2 的分数从 0.09 涨到 0.29，把 Expert 3 挤了出去。注意这是<strong>不连续</strong>的：logit 只动了一点，被选中的专家集合却整体换了人。',
+      render: function (e) {
+        pipeline(e, { pert: true, scores: pert, top: [1, 5], hitColor: RED(), hot: true });
+        e.t(550, 400, 'Expert 3 被挤出 → u_ℓ 喂给了没估过它的 Expert 2', { size: 11, fill: RED(), reveal: true, delay: 600 });
+      } },
+    { chip: '误差累积', title: '漂移逐层放大：10⁻³ → 1.19×10⁻¹',
+      desc: '第 ℓ 层换了专家 → 输出变 → h_{ℓ+1} 偏 → 第 ℓ+1 层路由也偏。Mixtral 上按 Eq.19 量测，浅层约 10⁻³，到第 27 层已达 1.19×10⁻¹（Table 11）。',
+      duration: 3400,
+      render: function (e) {
+        e.t(410, 40, '逐层路由 logit 余弦距离 Δ^route_ℓ（Mixtral，对数纵轴示意）', { size: 12, weight: 600, fill: C('--a-fg-strong', '#fff'), reveal: true });
+        e.line(90, 340, 740, 340, { stroke: MUTED(), sw: 1.2 });
+        e.line(90, 340, 90, 80, { stroke: MUTED(), sw: 1.2 });
+        e.t(70, 344, '10⁻⁵', { size: 10, anchor: 'end', fill: MUTED() });
+        e.t(70, 240, '10⁻³', { size: 10, anchor: 'end', fill: MUTED() });
+        e.t(70, 130, '10⁻¹', { size: 10, anchor: 'end', fill: MUTED() });
+        e.t(415, 366, '层索引 ℓ →', { size: 11, fill: MUTED() });
+        var pts = [], ys = [252, 248, 246, 242, 238, 236, 232, 228, 224, 220, 214, 210, 204, 198, 192, 186,
+                   180, 174, 168, 160, 152, 146, 138, 132, 126, 120, 116, 112];
+        for (var j = 0; j < ys.length; j++) pts.push((90 + j * 23) + ',' + ys[j]);
+        var d = 'M' + pts.join(' L');
+        var p = e.path(d, { stroke: RED(), sw: 2.4 });
+        if (!REDUCED) {
+          var L = p.getTotalLength ? p.getTotalLength() : 900;
+          p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+          setTimeout(function () { p.style.transition = 'stroke-dashoffset 1600ms linear'; p.style.strokeDashoffset = '0'; }, 60);
+        }
+        e.circle(90 + 27 * 23, 112, 5, { fill: RED(), reveal: true, delay: 1700 });
+        e.t(700, 96, '1.19×10⁻¹', { size: 11, weight: 600, fill: RED(), reveal: true, delay: 1700 });
+        e.rect(150, 388, 520, 30, '成功率：稠密 72.3%  →  MoE 9.5%  →  MoE + 冻结路由 51.8%', 'none', AMBER(), { size: 12, reveal: true, delay: 2000 });
+      } }
+  ];
+}
+/* ---------- 场景 2：三个探针 ---------- */
+function scene2() {
+  var G = function () { return C('--a-green', '#4CC98A'); },
+      R = function () { return C('--a-red', '#FF7268'); },
+      T = function () { return C('--a-teal', '#48CFC4'); },
+      M = function () { return C('--a-fg-muted', '#888'); },
+      S = function () { return C('--a-fg-strong', '#fff'); };
+  function head(e, s) { e.t(410, 38, s, { size: 13, weight: 600, fill: S(), reveal: true }); }
+  function axis(e, max, unit) {
+    e.t(700, 396, '越大 = 路由差异越大（' + unit + '，上限 ' + max + '）', { size: 10, anchor: 'end', fill: M(), reveal: true });
+  }
+  var f3 = function (v) { return v.toFixed(4); };
+  return [
+    { chip: '探针 I', title: '探针 I：同一条 query，拒答 vs 顺从',
+      duration: 3200,
+      desc: '同一个有害问题，取模型「拒答」与「越狱顺从」两次前向的路由分布对比（绿）；对照组是不同 query 之间（红）。行为完全相反，专家选择却几乎一致。',
+      render: function (e) {
+        head(e, '探针 I · 路由 JSD：同 query 不同行为（绿） vs 跨 query（红）');
+        var rows = [['gpt-oss-20b', 0.0434, 0.2466], ['Qwen3-30B-A3B', 0.0135, 0.3491], ['DeepSeek-V2-Lite', 0.0054, 0.0309]];
+        for (var j = 0; j < 3; j++) {
+          var y = 80 + j * 100;
+          e.t(150, y - 6, rows[j][0], { size: 12, weight: 600, anchor: 'start', fill: S(), reveal: true, delay: j * 120 });
+          e.bar(150, y + 4, 460, 22, '行为变', rows[j][1], 0.36, G(), { fmt: f3, delay: 200 + j * 160 });
+          e.bar(150, y + 36, 460, 22, 'query 变', rows[j][2], 0.36, R(), { fmt: f3, delay: 320 + j * 160 });
+        }
+        e.t(410, 404, 'Top-8 专家重叠（同 query）：7.92 / 7.18 / 7.84（满分 8）——路由不知道模型要拒绝还是配合', { size: 11, fill: G(), reveal: true, delay: 1400 });
+      } },
+    { chip: '探针 II', title: '探针 II：换包装 vs 换话题',
+      duration: 3200,
+      desc: '只改「是否角色扮演包装」时 JSD 在 10⁻² 量级；只改话题就跳到 0.34–0.41，差 30 倍以上。路由器读的是内容在讲什么，不是它被怎么包装。',
+      render: function (e) {
+        head(e, '探针 II · 什么能撬动路由：形式（绿）几乎不动，话题（红）大动');
+        var rows = [['N_code vs RP-N_code', 0.0098, 1], ['N_tran vs RP-N_tran', 0.0346, 1],
+                    ['RP-N_code vs RP-N_tran', 0.3379, 0], ['N_code vs N_tran', 0.4149, 0],
+                    ['N_code vs H_harm', 0.5217, 0], ['N_tran vs H_harm', 0.7072, 0]];
+        for (var j = 0; j < rows.length; j++) {
+          e.bar(230, 74 + j * 46, 400, 24, rows[j][0], rows[j][1], 0.75, rows[j][2] ? G() : R(),
+            { fmt: f3, delay: 120 + j * 130 });
+        }
+        axis(e, 0.75, 'JSD');
+      } },
+    { chip: '探针 III', title: '探针 III：话题配平之后还剩多少有害性信号',
+      duration: 3000,
+      desc: '把有害样本与<em>同话题</em>的无害样本配对，JSD 只有 0.1006；而同类别内部随机配对就有 0.2362 / 0.2282。有害性对路由的边际影响低于类内噪声下界。',
+      render: function (e) {
+        head(e, '探针 III · 配平话题后：信号（绿）低于噪声下界（青）');
+        e.bar(250, 120, 400, 30, '有害 vs 同话题无害', 0.1006, 0.28, G(), { fmt: f3, delay: 100 });
+        e.bar(250, 195, 400, 30, '类内随机配对 (a)', 0.2362, 0.28, T(), { fmt: f3, delay: 320 });
+        e.bar(250, 270, 400, 30, '类内随机配对 (b)', 0.2282, 0.28, T(), { fmt: f3, delay: 480 });
+        e.line(250 + 400 * 0.2282 / 0.28, 100, 250 + 400 * 0.2282 / 0.28, 320, { stroke: T(), sw: 1.4, dash: '5 4', reveal: true, delay: 700 });
+        e.t(410, 356, '前两个探针里 0.52 / 0.71 的差异，主要是话题在冒充「有害性」', { size: 11, fill: M(), reveal: true, delay: 900 });
+      } },
+    { chip: '推论', title: '推论：路由是语义地址，行为在专家计算里',
+      duration: 3000,
+      desc: '这三个探针合起来给出 RARE 的立论基础——把扰动挡在路由之外，不会挡掉 steering 需要的信息。约束与目标在信息上是<strong>可以同时满足</strong>的。',
+      render: function (e) {
+        head(e, '推论 · 两条信息通路本就近乎正交');
+        e.rect(80, 110, 240, 88, 'h_ℓ 的路由可见分量|→ 编码「话题 / 领域」', 'none', C('--a-blue', '#74B4FF'), { size: 12, reveal: true });
+        e.rect(500, 110, 240, 88, 'h_ℓ 的其余分量|→ 承载「行为 / 倾向」', 'none', G(), { size: 12, reveal: true, delay: 200 });
+        e.arrow(320, 154, 496, 154, { stroke: M(), dash: '4 4', reveal: true, delay: 380 });
+        e.t(410, 142, '几乎不重叠', { size: 10, fill: M(), reveal: true, delay: 380 });
+        e.rect(200, 250, 420, 62, 'steering 想改的是右边|所以左边可以整体冻结', 'none', C('--a-purple', '#B79BFF'), { size: 12, reveal: true, delay: 560 });
+        e.t(410, 366, '这就是下一节 Π⊥ = I − QQᵀ 的合法性来源', { size: 11, fill: C('--a-purple', '#B79BFF'), reveal: true, delay: 760 });
+      } }
+  ];
+}
+/* ---------- 场景 3：零空间投影的几何 ---------- */
+function scene3() {
+  var B = function () { return C('--a-blue', '#74B4FF'); },
+      G = function () { return C('--a-green', '#4CC98A'); },
+      R = function () { return C('--a-red', '#FF7268'); },
+      P = function () { return C('--a-purple', '#B79BFF'); },
+      M = function () { return C('--a-fg-muted', '#888'); },
+      S = function () { return C('--a-fg-strong', '#fff'); };
+  var OX = 300, OY = 262, U = [352, 82], PR = [403, 223], PN = [249, 119];
+  function frame(e, o) {
+    o = o || {};
+    e.t(410, 34, o.head || '', { size: 13, weight: 600, fill: S(), reveal: true });
+    e.line(112, 328, 488, 192, { stroke: B(), sw: 2.2, reveal: true });
+    e.t(506, 186, 'row(R_ℓ) = span(Q_ℓ)', { size: 11, anchor: 'start', weight: 600, fill: B(), reveal: true });
+    e.t(506, 202, '路由器「看得见」的 E 维子空间', { size: 10, anchor: 'start', fill: M(), reveal: true });
+    e.line(242, 100, 358, 420, { stroke: G(), sw: 2.2, dash: o.nullDash || null, reveal: true, delay: 100 });
+    e.t(366, 414, 'N(R_ℓ)：零空间（d−E 维）', { size: 11, anchor: 'start', weight: 600, fill: G(), reveal: true, delay: 100 });
+    e.circle(OX, OY, 4, { fill: M() });
+    e.t(OX - 14, OY + 16, 'h_ℓ', { size: 11, fill: M(), reveal: true });
+  }
+  return [
+    { chip: '两个子空间', title: '路由器把 ℝ^d 切成两半',
+      desc: 'R_ℓ ∈ ℝ^{E×d} 的行空间只有 E 维（Mixtral: 8），其正交补即零空间有 d−E 维（4096−8）。落在零空间里的任何位移，路由器<strong>看不见</strong>。',
+      render: function (e) {
+        frame(e, { head: 'ℝ^d = row(R_ℓ) ⊕ N(R_ℓ)' });
+        e.rect(560, 250, 220, 130, null, C('--a-code-bg', '#222'), C('--a-line', '#444'), { reveal: true, delay: 300 });
+        e.t(575, 276, 'Mixtral-8x7B', { size: 11, anchor: 'start', weight: 600, fill: S(), reveal: true, delay: 300 });
+        e.t(575, 300, 'd = 4096（隐维）', { size: 11, anchor: 'start', fill: M(), reveal: true, delay: 360 });
+        e.t(575, 322, 'E = 8（专家 / 行数）', { size: 11, anchor: 'start', fill: B(), reveal: true, delay: 400 });
+        e.t(575, 344, 'dim N(R) ≥ 4088', { size: 11, anchor: 'start', fill: G(), weight: 600, reveal: true, delay: 440 });
+        e.t(575, 366, '→ 零空间极其宽敞', { size: 10, anchor: 'start', fill: M(), reveal: true, delay: 480 });
+      } },
+    { chip: '原始扰动', title: '估计器给出的 u_ℓ 一般不在零空间里',
+      desc: 'u_ℓ = C_ℓ(H⁺, H⁻) 是按行为差异估的，它与路由器的几何毫无关系，因此在行空间上必然有非零分量——这就是直接注入会改路由的原因。',
+      render: function (e) {
+        frame(e, { head: '原始扰动 u_ℓ 与两个子空间都不平行' });
+        e.arrow(OX, OY, U[0], U[1], { stroke: P(), marker: 'arrP', sw: 3, reveal: true, delay: 120 });
+        e.t(U[0] + 12, U[1] - 6, 'u_ℓ', { size: 13, anchor: 'start', weight: 700, fill: P(), reveal: true, delay: 200 });
+        e.t(600, 120, 'R_ℓ u_ℓ ≠ 0  ⇒  logit 改变', { size: 12, anchor: 'start', weight: 600, fill: R(), reveal: true, delay: 400 });
+        e.t(600, 142, '⇒ softmax 改变 ⇒ Top-k 可能换人', { size: 11, anchor: 'start', fill: M(), reveal: true, delay: 460 });
+      } },
+    { chip: '正交分解', title: 'u_ℓ = Q_ℓQ_ℓᵀu_ℓ + Π⊥_ℓ u_ℓ',
+      duration: 3200,
+      desc: '任何向量都能唯一分解成「行空间分量」与「零空间分量」。前者是唯一会搅动专家选择的部分，后者对路由器完全透明，却依然被专家 FFN 看到（它用的是完整的 d 维输入）。',
+      render: function (e) {
+        frame(e, { head: '正交分解：红 = 路由可见，绿 = 路由不可见' });
+        e.arrow(OX, OY, U[0], U[1], { stroke: P(), marker: 'arrP', sw: 3, opacity: 0.55 });
+        e.t(U[0] + 12, U[1] - 6, 'u_ℓ', { size: 12, anchor: 'start', weight: 700, fill: P() });
+        e.line(U[0], U[1], PR[0], PR[1], { stroke: M(), sw: 1, dash: '4 4', reveal: true, delay: 200 });
+        e.line(U[0], U[1], PN[0], PN[1], { stroke: M(), sw: 1, dash: '4 4', reveal: true, delay: 200 });
+        e.arrow(OX, OY, PR[0], PR[1], { stroke: R(), marker: 'arrR', sw: 3, reveal: true, delay: 420 });
+        e.t(PR[0] + 10, PR[1] + 18, 'QQᵀu', { size: 12, anchor: 'start', weight: 700, fill: R(), reveal: true, delay: 500 });
+        e.arrow(OX, OY, PN[0], PN[1], { stroke: G(), marker: 'arrG', sw: 3, reveal: true, delay: 700 });
+        e.t(PN[0] - 10, PN[1] - 6, 'Π⊥u', { size: 12, anchor: 'end', weight: 700, fill: G(), reveal: true, delay: 780 });
+        e.t(600, 300, 'Π⊥_ℓ = I − Q_ℓ Q_ℓᵀ', { size: 13, anchor: 'start', weight: 700, mono: true, fill: G(), reveal: true, delay: 950 });
+      } },
+    { chip: '只注入绿色', title: '丢掉红色分量：h′ = h + Π⊥u',
+      duration: 3200,
+      desc: '因为 R = R QQᵀ，所以 R Π⊥ u = (R − R QQᵀ)u = 0。路由 logit <strong>逐位相同</strong>，Top-k 集合与门控权重完全不变——这是恒等式意义上的不变，不是近似。',
+      render: function (e) {
+        frame(e, { head: 'Eq.8 · 注入后路由 logit 恒等不变' });
+        e.arrow(OX, OY, PR[0], PR[1], { stroke: R(), marker: 'arrR', sw: 2, dash: '5 4', opacity: 0.35 });
+        e.t(PR[0] + 10, PR[1] + 18, '丢弃', { size: 11, anchor: 'start', fill: R(), opacity: 0.6 });
+        e.arrow(OX, OY, PN[0], PN[1], { stroke: G(), marker: 'arrG', sw: 3.4, reveal: true, delay: 200, cls: 'hot' });
+        e.t(PN[0] - 10, PN[1] - 6, 'Π⊥u（注入）', { size: 12, anchor: 'end', weight: 700, fill: G(), reveal: true, delay: 260 });
+        e.rect(540, 96, 250, 118, null, C('--a-green-bg', 'transparent'), G(), { reveal: true, delay: 500 });
+        e.t(556, 122, 'R_ℓ(h′_ℓ − h_ℓ)', { size: 12, anchor: 'start', mono: true, weight: 600, fill: S(), reveal: true, delay: 520 });
+        e.t(556, 146, '= R_ℓ Π⊥_ℓ u_ℓ', { size: 12, anchor: 'start', mono: true, fill: M(), reveal: true, delay: 580 });
+        e.t(556, 170, '= (R − R QQᵀ) u', { size: 12, anchor: 'start', mono: true, fill: M(), reveal: true, delay: 640 });
+        e.t(556, 196, '= 0   ✓', { size: 13, anchor: 'start', mono: true, weight: 700, fill: G(), reveal: true, delay: 720 });
+      } },
+    { chip: '为何不失效', title: '为什么切掉一半不等于把 steering 削没',
+      duration: 3000,
+      desc: '两个理由叠加：行空间只占 E 维，高维里 ‖Π⊥u‖ 通常保留 u 的绝大部分范数；而探针 III 已说明被切掉的分量主要是话题成分。消融数据是这条论证的经验回报。',
+      render: function (e) {
+        e.t(410, 40, '被切掉的是「小而无关」的那一半', { size: 13, weight: 600, fill: S(), reveal: true });
+        e.bar(280, 96, 400, 26, '行空间维度 E', 8, 4096, R(), { delay: 100, fmt: function (v) { return v + ' 维'; } });
+        e.bar(280, 146, 400, 26, '零空间维度 d−E', 4088, 4096, G(), { delay: 260, fmt: function (v) { return v + ' 维'; } });
+        e.t(410, 208, '几何上：随机方向落在 8 / 4096 这个子空间里的能量占比极小', { size: 11, fill: M(), reveal: true, delay: 460 });
+        e.t(410, 230, '语义上：那一小块恰好装的是话题信息（探针 III）', { size: 11, fill: M(), reveal: true, delay: 520 });
+        e.rect(190, 268, 440, 96, null, C('--a-purple-bg', 'transparent'), P(), { reveal: true, delay: 700 });
+        e.t(410, 296, '消融验证（Table 10，6 个模型平均 ASR）', { size: 12, weight: 600, fill: S(), reveal: true, delay: 720 });
+        e.t(300, 328, '直接注入 14.6', { size: 13, weight: 700, fill: R(), reveal: true, delay: 820 });
+        e.t(410, 328, '→', { size: 14, fill: M(), reveal: true, delay: 860 });
+        e.t(530, 328, '加投影 53.3', { size: 13, weight: 700, fill: G(), reveal: true, delay: 900 });
+        e.t(410, 352, '+38.7 点，6/6 模型全部提升', { size: 11, fill: M(), reveal: true, delay: 980 });
+      } }
+  ];
+}
+/* ---------- 场景 4：漂移传播与逐层 rebase ---------- */
+function scene4() {
+  var B = function () { return C('--a-blue', '#74B4FF'); },
+      G = function () { return C('--a-green', '#4CC98A'); },
+      R = function () { return C('--a-red', '#FF7268'); },
+      P = function () { return C('--a-purple', '#B79BFF'); },
+      M = function () { return C('--a-fg-muted', '#888'); },
+      S = function () { return C('--a-fg-strong', '#fff'); };
+  var X = [80, 250, 420, 590], W = 128, H = 52, YC = 104, YS = 262;
+  function head(e, s) { e.t(410, 34, s, { size: 13, weight: 600, fill: S(), reveal: true }); }
+  function track(e, y, col, marker, labels, o) {
+    o = o || {};
+    for (var j = 0; j < 4; j++) {
+      e.rect(X[j], y, W, H, labels[j], 'none', (o.perLayer && o.perLayer[j]) || col,
+        { size: 11, reveal: true, delay: j * 110, cls: o.hot === j ? 'hot' : null });
+      if (j < 3) e.arrow(X[j] + W, y + H / 2, X[j + 1] - 4, y + H / 2,
+        { stroke: (o.perLayer && o.perLayer[j + 1]) || col, marker: (o.perMarker && o.perMarker[j + 1]) || marker, reveal: true, delay: 60 + j * 110 });
+    }
+  }
+  var cleanLabels = ['h⁰_ℓ|层 ℓ', 'h⁰_{ℓ+1}', 'h⁰_{ℓ+2}', 'h⁰_{ℓ+3}'];
+  return [
+    { chip: '缓存干净前向', title: '第一步：先跑一次不加干预的前向，缓存每层 h⁰_ℓ',
+      desc: 'Eq.9 需要一个「参照系」。RARE 用干净前向的隐状态作为基底——这也意味着一次额外的完整前向和全层激活缓存，论文没有算这笔开销。',
+      render: function (e) {
+        head(e, '干净前向：路由 logit 的黄金标准 R_ℓ h⁰_ℓ');
+        track(e, YC, B(), 'arrB', cleanLabels);
+        e.t(410, 200, '缓存 { h⁰_ℓ } 全部层 → 额外 O(L·d) 显存 + 约 ×2 前向算力', { size: 11, fill: M(), reveal: true, delay: 600 });
+      } },
+    { chip: '注入层受保护', title: '注入层：Eq.8 保住了本层的路由',
+      desc: '在 ℓ ∈ L_pert 上注入 Π⊥u。这一层的路由 logit 与干净前向完全一致（绿），但它的<em>输出</em>已经变了——这正是我们要的 steering 效果。',
+      render: function (e) {
+        head(e, '注入层 ℓ：logit 不变，输出已变');
+        track(e, YC, B(), 'arrB', cleanLabels, { });
+        track(e, YS, M(), 'arrM', ["h′_ℓ = h+Π⊥u|logit 不变 ✓", 'h′_{ℓ+1}|?', 'h′_{ℓ+2}|?', 'h′_{ℓ+3}|?'],
+          { perLayer: [G(), M(), M(), M()], perMarker: [null, 'arrM', 'arrM', 'arrM'], hot: 0 });
+        e.arrow(X[0] + W / 2, YC + H + 6, X[0] + W / 2, YS - 8, { stroke: P(), marker: 'arrP', dash: '4 3', reveal: true, delay: 500 });
+        e.t(X[0] + W / 2 + 8, (YC + YS) / 2 + 20, '同一 token', { size: 10, anchor: 'start', fill: M(), reveal: true, delay: 560 });
+      } },
+    { chip: '下游漂移', title: '下游：非线性把偏差转出了零空间',
+      duration: 3200,
+      desc: 'LayerNorm 的重缩放、注意力的跨 token 混合、专家 FFN 的非线性，都不保持「垂直于某个子空间」这一性质。于是 h′_{ℓ+1} − h⁰_{ℓ+1} 在 R_{ℓ+1} 上有了非零投影，路由重新开始漂。',
+      render: function (e) {
+        head(e, '零空间的正交性不被非线性映射保持');
+        track(e, YC, B(), 'arrB', cleanLabels);
+        track(e, YS, R(), 'arrR', ["h′_ℓ|✓", 'h′_{ℓ+1}|漂移 ↑', 'h′_{ℓ+2}|漂移 ↑↑', 'h′_{ℓ+3}|漂移 ↑↑↑'],
+          { perLayer: [G(), R(), R(), R()], hot: 3 });
+        for (var j = 1; j < 4; j++) {
+          e.t(X[j] + W / 2, YS + H + 26, ['', '10⁻³', '10⁻²', '1.19×10⁻¹'][j],
+            { size: 11, mono: true, weight: 600, fill: R(), reveal: true, delay: 400 + j * 160 });
+        }
+        e.t(410, YS + H + 66, 'Δ^route_ℓ = 1 − cos(R_ℓ h⁰_ℓ, R_ℓ h^steer_ℓ)（Eq.19）', { size: 11, mono: true, fill: M(), reveal: true, delay: 900 });
+      } },
+    { chip: 'Eq.9 rebase', title: 'Eq.9：以 h⁰ 为基底，把整体偏差重新投影',
+      duration: 3400,
+      desc: '关键在投影的对象不是「本层新增的扰动」，而是「当前状态相对干净状态的<strong>全部</strong>偏差」，再贴回干净基底：h̃ = h⁰ + Π⊥(h′ − h⁰)。于是 R h̃ = R h⁰ 被逐层钉住。',
+      render: function (e) {
+        head(e, 'h̃_ℓ = h⁰_ℓ + Π⊥_ℓ (h′_ℓ − h⁰_ℓ)');
+        track(e, YC, B(), 'arrB', cleanLabels);
+        track(e, YS, G(), 'arrG', ["h̃_ℓ|✓", 'h̃_{ℓ+1}|✓', 'h̃_{ℓ+2}|✓', 'h̃_{ℓ+3}|✓'], { hot: 2 });
+        for (var j = 1; j < 4; j++) {
+          e.arrow(X[j] + W / 2, YC + H + 6, X[j] + W / 2, YS - 8, { stroke: P(), marker: 'arrP', dash: '4 3', reveal: true, delay: 300 + j * 180 });
+          e.t(X[j] + W / 2 + 8, (YC + YS) / 2 + 6, 'rebase', { size: 10, anchor: 'start', fill: P(), reveal: true, delay: 340 + j * 180 });
+        }
+        e.t(410, YS + H + 34, 'R_ℓ h̃_ℓ = R_ℓ h⁰_ℓ + R_ℓΠ⊥_ℓ(·) = R_ℓ h⁰_ℓ   ✓', { size: 12, mono: true, weight: 600, fill: G(), reveal: true, delay: 1100 });
+      } },
+    { chip: '绝对 vs 相对', title: '为什么必须 rebase 到 h⁰，而不是逐步投影增量',
+      duration: 3200,
+      desc: '若只对「相对上一步的增量」投影，每层只压掉本层新增的漂移，之前漏过去的永远留着，误差像积分一样累积。Eq.9 每层都以干净前向重新对齐，属于<strong>绝对修正</strong>，误差不传递。',
+      render: function (e) {
+        head(e, '相对修正会积分误差；绝对修正不会');
+        e.t(230, 84, '相对增量投影（会累积）', { size: 12, weight: 600, fill: R(), reveal: true });
+        e.t(600, 84, 'Eq.9 绝对 rebase', { size: 12, weight: 600, fill: G(), reveal: true, delay: 100 });
+        var acc = [10, 26, 48, 78], y0 = 130;
+        for (var j = 0; j < 4; j++) {
+          e.rect(120, y0 + j * 56, 220, 34, 'ℓ+' + j, 'none', C('--a-line', '#444'), { size: 11, reveal: true, delay: 120 + j * 120 });
+          e.rect(346, y0 + j * 56 + 7, acc[j] * 1.1, 20, null, R(), 'none', { rx: 3, reveal: true, delay: 180 + j * 120, opacity: 0.85 });
+          e.rect(490, y0 + j * 56, 200, 34, 'ℓ+' + j, 'none', C('--a-line', '#444'), { size: 11, reveal: true, delay: 120 + j * 120 });
+          e.rect(696, y0 + j * 56 + 7, 6, 20, null, G(), 'none', { rx: 3, reveal: true, delay: 180 + j * 120 });
+        }
+        e.t(410, 388, '左：残差逐层叠加　　右：每层归零，与层深无关', { size: 11, fill: M(), reveal: true, delay: 800 });
+      } },
+    { chip: '实测效果', title: '实测：多数层压到 10⁻⁵ 以下',
+      duration: 3000,
+      desc: 'Mixtral 上按 Eq.19 量测：直接注入时第 27 层漂到 1.19×10⁻¹；加了投影与修正后绝大多数层 ≤10⁻⁵（数值噪声量级），残差最大的是<em>没被选入 L_proj</em> 的第 25 层，4.0×10⁻³。',
+      render: function (e) {
+        head(e, 'Table 11 · 路由一致性（Mixtral，Eq.19）');
+        e.t(200, 88, '直接注入', { size: 12, weight: 600, fill: R(), reveal: true });
+        e.t(600, 88, '+ 投影与漂移修正', { size: 12, weight: 600, fill: G(), reveal: true, delay: 80 });
+        var rows = [['浅层（典型）', '~10⁻³', '≤10⁻⁵'], ['层 25（最大残差）', '—', '4.0×10⁻³'], ['层 27（漂移峰值）', '1.19×10⁻¹', '≤10⁻⁵']];
+        for (var j = 0; j < 3; j++) {
+          var y = 136 + j * 70;
+          e.t(60, y, rows[j][0], { size: 11, anchor: 'start', fill: M(), reveal: true, delay: 120 + j * 140 });
+          e.rect(200, y - 20, 170, 40, rows[j][1], 'none', R(), { size: 12, reveal: true, delay: 160 + j * 140 });
+          e.arrow(378, y, 476, y, { stroke: M(), reveal: true, delay: 200 + j * 140 });
+          e.rect(484, y - 20, 170, 40, rows[j][2], 'none', G(), { size: 12, reveal: true, delay: 240 + j * 140 });
+        }
+        e.t(410, 388, '代价：一次额外干净前向 + 全层激活缓存（论文未讨论）', { size: 11, fill: C('--a-amber', '#E9B449'), reveal: true, delay: 700 });
+      } }
+  ];
+}
+/* ---------- 场景 5：五种估计器的几何 ---------- */
+function scene5() {
+  var B = function () { return C('--a-blue', '#74B4FF'); },
+      G = function () { return C('--a-green', '#4CC98A'); },
+      P = function () { return C('--a-purple', '#B79BFF'); },
+      A = function () { return C('--a-amber', '#E9B449'); },
+      R = function () { return C('--a-red', '#FF7268'); },
+      M = function () { return C('--a-fg-muted', '#888'); },
+      S = function () { return C('--a-fg-strong', '#fff'); };
+  var NEG = [270, 300], POS = [470, 170], seed = 20260821;
+  function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff - 0.5; }
+  function cloud(cx, cy) {
+    seed = 20260821 + cx;
+    var pts = [];
+    for (var j = 0; j < 42; j++) {
+      var a = rnd() * 130, b = rnd() * 34;
+      pts.push([cx + a * 0.86 + b * -0.51, cy + a * 0.51 + b * 0.86]);
+    }
+    return pts;
+  }
+  function head(e, s) { e.t(410, 32, s, { size: 13, weight: 600, fill: S(), reveal: true }); }
+  function data(e, o) {
+    o = o || {};
+    var n = cloud(NEG[0], NEG[1]), p = cloud(POS[0], POS[1]);
+    for (var j = 0; j < n.length; j++) {
+      e.circle(n[j][0], n[j][1], 2.6, { fill: B(), opacity: 0.55 });
+      e.circle(p[j][0], p[j][1], 2.6, { fill: G(), opacity: 0.55 });
+    }
+    if (o.ellipse) {
+      e.ellipse(NEG[0], NEG[1], 78, 22, 31, { stroke: A(), dash: '4 3', reveal: true });
+      e.ellipse(POS[0], POS[1], 78, 22, 31, { stroke: A(), dash: '4 3', reveal: true, delay: 80 });
+    }
+    e.circle(NEG[0], NEG[1], 5, { fill: B() });
+    e.t(NEG[0] - 14, NEG[1] + 22, 'μ⁻', { size: 12, weight: 700, fill: B() });
+    e.circle(POS[0], POS[1], 5, { fill: G() });
+    e.t(POS[0] + 14, POS[1] - 12, 'μ⁺', { size: 12, weight: 700, fill: G() });
+  }
+  function card(e, title, formula, note, col, delay) {
+    e.rect(560, 250, 236, 138, null, C('--a-code-bg', '#222'), col, { reveal: true, delay: delay });
+    e.t(576, 278, title, { size: 12, anchor: 'start', weight: 700, fill: col, reveal: true, delay: delay + 40 });
+    var ls = formula.split('|');
+    for (var j = 0; j < ls.length; j++)
+      e.t(576, 306 + j * 22, ls[j], { size: 11, anchor: 'start', mono: true, fill: S(), reveal: true, delay: delay + 80 + j * 40 });
+    e.t(576, 306 + ls.length * 22 + 10, note, { size: 10, anchor: 'start', fill: M(), reveal: true, delay: delay + 200 });
+  }
+  return [
+    { chip: '数据', title: '共同输入：两类激活 H⁺ / H⁻',
+      desc: '五种估计器共享同一个接口 u_ℓ = C_ℓ(H⁺_ℓ, H⁻_ℓ)。差别只在于用到了分布的哪些统计量：均值、判别边界、主子空间、类内协方差，还是两类各自的协方差。',
+      render: function (e) {
+        head(e, '统一接口 u_ℓ = C_ℓ(H⁺_ℓ, H⁻_ℓ)');
+        data(e, { ellipse: true });
+        e.t(410, 402, '注意两类点云都沿同一方向被拉长——这正是二阶方法能赢的地方', { size: 11, fill: M(), reveal: true, delay: 400 });
+      } },
+    { chip: 'MeanDiff', title: 'MeanDiff（Eq.3）：最朴素的一阶方向',
+      desc: 'u = α(μ⁺ − μ⁻)。只用两个均值，完全忽略点云的形状。平均 ASR 21.5，内嵌 α = 3.5——方向不准，只能靠放大幅度硬推。',
+      render: function (e) {
+        head(e, 'MeanDiff · 直接连接两个均值');
+        data(e);
+        e.arrow(NEG[0], NEG[1], POS[0], POS[1], { stroke: P(), marker: 'arrP', sw: 3, reveal: true, delay: 200 });
+        card(e, 'MeanDiff', 'u = α·Δμ|Δμ = μ⁺ − μ⁻', 'α = 3.5　平均 ASR 21.5', P(), 400);
+      } },
+    { chip: 'Probe', title: 'Probe（Eq.4）：沿线性探针法向走最小 margin',
+      desc: '训练一个判别正负例的线性分类器，取其权重方向归一化后走一个最小 margin 步长 ε。比 MeanDiff 更贴判别边界，但仍只有一个方向自由度。平均 ASR 19.6。',
+      render: function (e) {
+        head(e, 'Probe · 判别边界的法向');
+        data(e);
+        e.line(232, 108, 508, 362, { stroke: M(), sw: 1.6, dash: '6 4', reveal: true, delay: 150 });
+        e.t(520, 366, '判别边界', { size: 10, anchor: 'start', fill: M(), reveal: true, delay: 180 });
+        e.arrow(320, 268, 428, 150, { stroke: P(), marker: 'arrP', sw: 3, reveal: true, delay: 320 });
+        e.t(438, 142, 'w/‖w‖', { size: 11, anchor: 'start', weight: 600, fill: P(), reveal: true, delay: 380 });
+        card(e, 'Probe', 'u = α·(w/‖w‖)·ε_min', '论文未给 ε 的数值　ASR 19.6', P(), 500);
+      } },
+    { chip: 'LowRank', title: 'LowRank / PCA（Eq.5）：先投到主子空间',
+      desc: 'u = α·B_r B_rᵀ·Δμ。把均值差限制在激活协方差的前 r 个主成分上，抑掉低方差噪声方向。形式上与零空间投影同族——都是「乘一个投影矩阵」。平均 ASR 31.3。',
+      render: function (e) {
+        head(e, 'LowRank · 把 Δμ 拍进主子空间');
+        data(e, { ellipse: true });
+        e.line(180, 210, 620, 470, { stroke: A(), sw: 2, reveal: true, delay: 150 });
+        e.t(196, 200, '主成分方向 span(B_r)', { size: 10, anchor: 'start', fill: A(), reveal: true, delay: 180 });
+        e.arrow(NEG[0], NEG[1], POS[0], POS[1], { stroke: M(), marker: 'arrM', sw: 1.6, dash: '4 4', reveal: true, delay: 260 });
+        e.arrow(NEG[0], NEG[1], 452, 194, { stroke: P(), marker: 'arrP', sw: 3, reveal: true, delay: 420 });
+        card(e, 'LowRank', 'u = α·B_r B_rᵀ Δμ', '论文未给 r 的数值　ASR 31.3', P(), 560);
+      } },
+    { chip: 'LDA', title: 'LDA（Eq.6）：用类内协方差白化均值差',
+      desc: 'u = α(Σ + ρI)⁻¹Δμ。在方差大的方向上少走，在方差小但判别性强的方向上多走——方向会明显偏离 μ⁻→μ⁺ 的直线。平均 ASR 38.0。',
+      render: function (e) {
+        head(e, 'LDA · Σ⁻¹ 把方向从「拉长轴」上扳开');
+        data(e, { ellipse: true });
+        e.arrow(NEG[0], NEG[1], POS[0], POS[1], { stroke: M(), marker: 'arrM', sw: 1.6, dash: '4 4', reveal: true, delay: 150 });
+        e.t(392, 258, 'Δμ', { size: 11, fill: M(), reveal: true, delay: 180 });
+        e.arrow(NEG[0], NEG[1], 408, 118, { stroke: P(), marker: 'arrP', sw: 3, reveal: true, delay: 340, cls: 'hot' });
+        e.t(416, 110, 'Σ⁻¹Δμ', { size: 11, anchor: 'start', weight: 600, fill: P(), reveal: true, delay: 400 });
+        card(e, 'LDA', 'u = α(Σ + ρI)⁻¹ Δμ', 'ρ 未给数值　ASR 38.0', P(), 520);
+      } },
+    { chip: 'AffineGaussian', title: 'AffineGaussian（Eq.7）：白化—再着色，且随 token 变化',
+      duration: 3400,
+      desc: '把当前激活当作负类高斯的样本，用 G = (Σ⁺+ρI)^{1/2}(Σ⁻+ρI)^{−1/2} 白化再按正类协方差重新着色，最后把范数还原成 ‖Δμ‖₂。它是<strong>唯一依赖当前 token 激活</strong>的估计器，也是唯一 6/6 模型最优的。',
+      render: function (e) {
+        head(e, 'AffineGaussian · CORAL 式仿射搬运（逐 token）');
+        data(e, { ellipse: true });
+        var h = [318, 332];
+        e.circle(h[0], h[1], 6, { fill: R(), cls: 'hot' });
+        e.t(h[0] - 12, h[1] + 20, 'h_ℓ（当前 token）', { size: 10, anchor: 'end', fill: R(), reveal: true, delay: 120 });
+        e.path('M' + h[0] + ',' + h[1] + ' Q 400,340 452,206', { stroke: P(), sw: 3, marker: 'arrP', reveal: true, delay: 320 });
+        e.t(470, 214, 'G(h − μ⁻) + μ⁺ − h', { size: 11, anchor: 'start', weight: 600, fill: P(), reveal: true, delay: 420 });
+        card(e, 'AffineGaussian', 'G = (Σ⁺+ρI)^½(Σ⁻+ρI)^-½|‖u‖ 还原为 ‖Δμ‖₂', 'α = 1.75（最小）　ASR 53.3', G(), 560);
+      } },
+    { chip: '效果排序', title: '用到的分布信息越多，效果越好',
+      duration: 3200,
+      desc: '注意最强的 AffineGaussian 所需的缩放系数最小（1.75 vs 3.5–4.0）：方向估得准，就不必靠放大幅度硬推，副作用自然更小。因为 C 与 Π⊥ 解耦，任何新估计器都能直接套进来。',
+      render: function (e) {
+        head(e, '六模型平均 ASR（Table 1）');
+        var rows = [['Probe（边界法向）', 19.6, 3.5], ['MeanDiff（一阶）', 21.5, 3.5],
+                    ['LowRank（+主子空间）', 31.3, 3.75], ['LDA（+类内协方差）', 38.0, 4.0],
+                    ['AffineGaussian（两类协方差）', 53.3, 1.75]];
+        for (var j = 0; j < rows.length; j++) {
+          var last = j === rows.length - 1;
+          e.bar(300, 78 + j * 56, 340, 26, rows[j][0], rows[j][1], 56, last ? G() : P(),
+            { delay: 120 + j * 150, fmt: function (v) { return v.toFixed(1); } });
+          e.t(700, 96 + j * 56, 'α = ' + rows[j][2], { size: 10, anchor: 'start', mono: true,
+            fill: last ? G() : M(), reveal: true, delay: 300 + j * 150 });
+        }
+        e.t(410, 392, '论文未纳入 ITI / SAE 特征 / refusal direction —— 接口留着的空位', { size: 11, fill: M(), reveal: true, delay: 950 });
+      } }
+  ];
+}
+/* ---------- 场景 6：实验的收益与代价 ---------- */
+function scene6() {
+  var B = function () { return C('--a-blue', '#74B4FF'); },
+      G = function () { return C('--a-green', '#4CC98A'); },
+      R = function () { return C('--a-red', '#FF7268'); },
+      P = function () { return C('--a-purple', '#B79BFF'); },
+      A = function () { return C('--a-amber', '#E9B449'); },
+      M = function () { return C('--a-fg-muted', '#888'); },
+      S = function () { return C('--a-fg-strong', '#fff'); };
+  function head(e, s) { e.t(410, 32, s, { size: 13, weight: 600, fill: S(), reveal: true }); }
+  var f1 = function (v) { return v.toFixed(1); };
+  return [
+    { chip: 'ASR', title: '主结果：平均 ASR 8.9 → 53.3',
+      duration: 3200,
+      desc: '六个 MoE 模型上的平均攻击成功率。RARE 高于所有基线，包括专门为 MoE 设计的 SteerMoE + AIM（46.3）。',
+      render: function (e) {
+        head(e, 'Table 4a · 六模型平均 ASR（%）');
+        var rows = [['Clean（无干预）', 8.9, B()], ['RepE', 18.7, B()], ['SAFEx', 32.0, B()],
+                    ['SteerMoE + AIM', 46.3, A()], ['RARE', 53.3, G()]];
+        for (var j = 0; j < rows.length; j++)
+          e.bar(280, 82 + j * 60, 380, 30, rows[j][0], rows[j][1], 60, rows[j][2], { delay: 120 + j * 160, fmt: f1 });
+        e.t(410, 396, '逐模型：DeepSeek 77.5 · Mixtral 59.0 · Phi-3.5 35.0 · Phi-mini 40.0 · Qwen3 73.0 · GPT-oss 35.5', { size: 11, fill: M(), reveal: true, delay: 1000 });
+      } },
+    { chip: '通用能力代价', title: '代价：MMLU 掉 10 点，但比基线都少',
+      duration: 3000,
+      desc: 'steering 一定会伤通用能力，问题是伤多少。RARE 从 77.8 掉到 67.8（−10.0），而 SAFEx 掉到 50.1（−27.7）。「保住路由」在这里的回报是副作用更小。',
+      render: function (e) {
+        head(e, 'Table 4b · 六模型平均 MMLU（%），越高越好');
+        var rows = [['Clean', 77.8, B()], ['RARE（−10.0）', 67.8, G()], ['RepE（−12.1）', 65.7, A()],
+                    ['SteerMoE（−13.3）', 64.5, A()], ['SAFEx（−27.7）', 50.1, R()]];
+        for (var j = 0; j < rows.length; j++)
+          e.bar(300, 82 + j * 60, 360, 30, rows[j][0], rows[j][1], 80, rows[j][2], { delay: 120 + j * 160, fmt: f1 });
+        e.t(410, 396, 'ASR 更高 + MMLU 掉得更少：这两项同时成立才是 RARE 的真正卖点', { size: 11, fill: M(), reveal: true, delay: 1000 });
+      } },
+    { chip: '不是全胜', title: '两个模型上 SteerMoE 更强',
+      duration: 2800,
+      desc: 'Phi-mini（48.0 vs 40.0）和 GPT-oss（39.0 vs 35.5）上基线胜出。这两个模型都是「总专家数中等、激活专家少」的配置，值得注意，但论文没有深究原因。',
+      render: function (e) {
+        head(e, '逐模型 ASR：RARE（紫） vs SteerMoE + AIM（琥珀）');
+        var rows = [['DeepSeek-V2-Lite', 77.5, 13.5, 1], ['Mixtral-8x7B', 59.0, 40.0, 1],
+                    ['Phi-3.5-MoE', 35.0, 27.0, 1], ['Phi-mini-MoE', 40.0, 48.0, 0],
+                    ['Qwen3-30B-A3B', 73.0, 60.0, 1], ['gpt-oss-20b', 35.5, 39.0, 0]];
+        for (var j = 0; j < rows.length; j++) {
+          var y = 70 + j * 54;
+          e.t(200, y + 14, rows[j][0], { size: 11, anchor: 'end', fill: rows[j][3] ? M() : R(), reveal: true, delay: j * 100 });
+          e.rect(210, y, 400 * rows[j][1] / 80, 12, null, P(), 'none', { rx: 3, reveal: true, delay: 100 + j * 100 });
+          e.rect(210, y + 15, 400 * rows[j][2] / 80, 12, null, A(), 'none', { rx: 3, reveal: true, delay: 160 + j * 100 });
+          e.t(624, y + 18, rows[j][1].toFixed(1) + ' / ' + rows[j][2].toFixed(1), { size: 10, anchor: 'start', mono: true,
+            fill: rows[j][3] ? G() : R(), reveal: true, delay: 200 + j * 100 });
+        }
+        e.t(410, 400, 'DeepSeek 上 77.5 的异常高分，论文自称是「架构层面的假设」（共享专家），未经验证', { size: 11, fill: A(), reveal: true, delay: 780 });
+      } },
+    { chip: '局部性崩塌', title: '被表格藏起来的代价：编辑局部性从 85 崩到 22.9',
+      duration: 3400,
+      desc: 'CounterFact 上编辑成功率冲到 96.3，同时局部性从 85.0 掉到 22.9（MeanDiff 13.8、LowRank 10.8 更差）。改得动目标事实，也顺手改掉了无关事实——<strong>「路由不变」不等于「行为局部」</strong>。',
+      render: function (e) {
+        head(e, 'CounterFact：ES ↑ 与 LS ↓ 的正相关');
+        e.t(210, 74, '编辑成功率 ES ↑', { size: 12, weight: 600, fill: G(), reveal: true });
+        e.t(600, 74, '局部性 LS ↑（越高越好）', { size: 12, weight: 600, fill: R(), reveal: true, delay: 80 });
+        var rows = [['Clean', 16.8, 85.0], ['RepE', 28.8, 68.8], ['LDA', 94.8, 39.5], ['AffineGaussian', 96.3, 22.9]];
+        for (var j = 0; j < rows.length; j++) {
+          var y = 118 + j * 62;
+          e.t(410, y + 16, rows[j][0], { size: 11, weight: 600, fill: M(), reveal: true, delay: j * 130 });
+          e.rect(340 - 170 * rows[j][1] / 100, y, 170 * rows[j][1] / 100, 26, null, G(), 'none', { rx: 3, reveal: true, delay: 80 + j * 130 });
+          e.t(330 - 170 * rows[j][1] / 100, y + 18, rows[j][1].toFixed(1), { size: 10, anchor: 'end', mono: true, fill: G(), reveal: true, delay: 120 + j * 130 });
+          e.rect(480, y, 170 * rows[j][2] / 100, 26, null, R(), 'none', { rx: 3, reveal: true, delay: 80 + j * 130 });
+          e.t(490 + 170 * rows[j][2] / 100, y + 18, rows[j][2].toFixed(1), { size: 10, anchor: 'start', mono: true, fill: R(), reveal: true, delay: 120 + j * 130 });
+        }
+        e.t(410, 396, 'TruthfulQA MC1 则是纯收益：41.0 → 42.2（RepE） → 58.6（AffineGaussian）', { size: 11, fill: M(), reveal: true, delay: 780 });
+      } },
+    { chip: '消融', title: '消融：投影就是那个开关（+38.7）',
+      duration: 3200,
+      desc: '6/6 模型全部大幅提升，最大 +64.0。但这条消融把「零空间投影」与「下游漂移修正」<strong>捆在一起</strong>开关，两个部件各自贡献多少无从得知——这是全文最想看却没有的那张表。',
+      render: function (e) {
+        head(e, 'Table 10 · 直接注入 vs 加投影与修正（ASR %）');
+        var rows = [['DeepSeek', 13.5, 77.5], ['Mixtral', 19.5, 59.0], ['Phi-3.5', 9.5, 35.0],
+                    ['Phi-mini', 20.0, 40.0], ['Qwen3', 15.5, 73.0], ['GPT-oss', 9.5, 35.5]];
+        for (var j = 0; j < rows.length; j++) {
+          var x = 84 + j * 112;
+          e.t(x + 34, 356, rows[j][0], { size: 10, fill: M(), reveal: true, delay: j * 90 });
+          e.rect(x, 336 - 240 * rows[j][1] / 80, 30, 240 * rows[j][1] / 80, null, R(), 'none', { rx: 3, reveal: true, delay: 80 + j * 90 });
+          e.rect(x + 38, 336 - 240 * rows[j][2] / 80, 30, 240 * rows[j][2] / 80, null, G(), 'none', { rx: 3, reveal: true, delay: 160 + j * 90 });
+          e.t(x + 53, 328 - 240 * rows[j][2] / 80, '+' + (rows[j][2] - rows[j][1]).toFixed(1), { size: 10, mono: true, weight: 600, fill: G(), reveal: true, delay: 240 + j * 90 });
+        }
+        e.line(70, 336, 760, 336, { stroke: M(), sw: 1 });
+        e.t(410, 396, '平均 14.6 → 53.3（+38.7）　红 = 无投影，绿 = 完整 RARE', { size: 11, fill: M(), reveal: true, delay: 800 });
+      } },
+    { chip: '总账', title: '总账：换来什么，付出什么',
+      duration: 3000,
+      desc: '把六节的结论摊在一起看：收益是 steering 在 MoE 上重新变得可用，代价是通用能力 −10 点、编辑局部性大幅退化，以及一次额外前向的推理开销。',
+      render: function (e) {
+        head(e, '一张收支表');
+        e.rect(50, 70, 340, 300, null, C('--a-green-bg', 'transparent'), G(), { reveal: true });
+        e.t(220, 100, '收益', { size: 13, weight: 700, fill: G(), reveal: true, delay: 60 });
+        var pros = ['ASR 8.9 → 53.3（超过 MoE 专用基线）', 'MMLU 只掉 10.0（基线掉 12–28）',
+                    'TruthfulQA MC1 41.0 → 58.6', 'CounterFact ES 16.8 → 96.3',
+                    '路由漂移压到 ≤10⁻⁵', '消融 6/6 模型提升，+38.7'];
+        for (var j = 0; j < pros.length; j++)
+          e.t(70, 136 + j * 38, '· ' + pros[j], { size: 11, anchor: 'start', fill: M(), reveal: true, delay: 120 + j * 90 });
+        e.rect(430, 70, 340, 300, null, C('--a-red-bg', 'transparent'), R(), { reveal: true, delay: 200 });
+        e.t(600, 100, '代价与缺口', { size: 13, weight: 700, fill: R(), reveal: true, delay: 260 });
+        var cons = ['编辑局部性 85.0 → 22.9', '两个模型上不如 SteerMoE',
+                    '需一次额外干净前向（≈×2 算力）', '全层激活缓存 O(L·d)',
+                    '两个部件未分开消融', '无复杂度分析 / 伪码 / limitations'];
+        for (var k = 0; k < cons.length; k++)
+          e.t(450, 136 + k * 38, '· ' + cons[k], { size: 11, anchor: 'start', fill: M(), reveal: true, delay: 320 + k * 90 });
+      } }
+  ];
+}
+/* ---------- 装配 ---------- */
+var builders = { svg1: scene1, svg2: scene2, svg3: scene3, svg4: scene4, svg5: scene5, svg6: scene6 };
+var engines = {};
+function initAll() {
+  for (var id in builders) {
+    var svg = document.getElementById(id);
+    if (!svg) continue;
+    engines[id] = new AnimEngine(svg, { steps: builders[id]() });
+  }
+}
+function engineOf(node) {
+  var frame = node.closest('.anim-frame');
+  if (!frame) return null;
+  var svg = frame.querySelector('svg');
+  return svg ? engines[svg.id] : null;
+}
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('button');
+  if (!b || !b.closest('.anim-frame')) return;
+  var eng = engineOf(b);
+  if (!eng) return;
+  if (b.classList.contains('btn-next')) { eng.pause(); eng.next(); }
+  else if (b.classList.contains('btn-prev')) { eng.pause(); eng.prev(); }
+  else if (b.classList.contains('btn-reset')) eng.reset();
+  else if (b.classList.contains('btn-play')) eng.toggle();
+  else if (b.classList.contains('stage-chip')) { eng.pause(); eng.goTo(+b.dataset.idx); }
+});
+document.addEventListener('input', function (ev) {
+  if (!ev.target.classList.contains('speed')) return;
+  var eng = engineOf(ev.target);
+  if (eng) eng.setSpeed(parseFloat(ev.target.value));
+});
+document.addEventListener('keydown', function (ev) {
+  var frame = document.activeElement && document.activeElement.closest && document.activeElement.closest('.anim-frame');
+  if (!frame) return;
+  var eng = engineOf(document.activeElement);
+  if (!eng) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); eng.pause(); eng.next(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); eng.pause(); eng.prev(); }
+  else if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON') { ev.preventDefault(); eng.toggle(); }
+});
+
+/* SVG 里的色值是切换主题那一刻读出来的具体值，主题一变就过期。
+   用 MutationObserver 盯 data-theme，无论用户点的是站点导航里的开关还是
+   本文右下角这个按钮，都会重绘当前步。存储键与站点保持一致（'theme'）。 */
+function redrawAll() {
+  for (var id in engines) { engines[id].pause(); engines[id].goTo(engines[id].i); }
+}
+window.toggleTheme = function () {
+  var root = document.documentElement;
+  var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (err) {}
+};
+if (window.MutationObserver) {
+  new MutationObserver(function () { setTimeout(redrawAll, 30); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+window.toggleToc = function () {
+  var toc = document.getElementById('tocNav');
+  var btn = document.querySelector('.toc-toggle');
+  var hidden = toc.hasAttribute('hidden');
+  if (hidden) toc.removeAttribute('hidden'); else toc.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+};
+
+/* TOC 高亮 + 回到顶部 */
+function initChrome() {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if ('IntersectionObserver' in window && secs.length) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  var bt = document.getElementById('backTop');
+  if (bt) window.addEventListener('scroll', function () { bt.classList.toggle('show', window.scrollY > 400); }, { passive: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { initAll(); initChrome(); });
+} else { initAll(); initChrome(); }
+})();
+</script>
+</body>
+</html>
+
