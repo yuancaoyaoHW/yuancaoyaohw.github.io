@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OAttention：让零向量真正成为注意力的零元</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --teal: var(--a-teal); --teal-bg: var(--a-teal-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+.callout-teal { background: var(--teal-bg); border-color: var(--teal); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 640px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+.anim-progress { height: 4px; background: var(--code-bg); }
+.anim-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.anim-stage-rail { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid var(--a-border); background: transparent; color: var(--fg-muted); cursor: pointer; }
+.anim-stage-rail .stage-chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--a-on-solid); }
+.anim-stage-rail .stage-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-status { padding: 10px 16px 14px; font-size: 13px; }
+.anim-status .step-info { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.anim-status .step-desc { color: var(--fg-soft); line-height: 1.6; }
+.anim-legend { padding: 0 16px 14px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--fg-muted); }
+.anim-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.anim-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.back-top, .theme-toggle { position: fixed; right: 24px; z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--a-border); background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 15px; }
+.back-top { bottom: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.back-top.show { opacity: 1; pointer-events: auto; }
+.theme-toggle { bottom: 72px; }
+.back-top:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.toc-toggle { display: none; }
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; max-height: 40vh; }
+  .content { width: 100%; }
+  .toc[hidden] { display: none; }
+  .toc-toggle { display: block; margin-bottom: 10px; padding: 6px 12px; border: 1px solid var(--a-border); border-radius: 6px; background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: none; }
+  .anim-canvas-wrap svg .anim-layer .hot { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body class="interactive-body">
+<script>
+/* SVG 的呈现属性（fill / stroke）不解析 var()，所以动画脚本要在运行时把
+   语义令牌读成具体色值。主题切换后重绘即可拿到新值。 */
+(function () {
+  window.aC = function (name, fallback) {
+    var host = document.querySelector('.interactive-body, .article-body') || document.documentElement;
+    var v = getComputedStyle(host).getPropertyValue(name);
+    return (v && v.trim()) || fallback || '#888';
+  };
+})();
+</script>
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="切换深浅主题" title="切换主题">◑</button>
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+  <button class="toc-toggle" onclick="toggleToc()" aria-expanded="true" aria-controls="tocNav">目录</button>
+  <nav class="toc" id="tocNav" aria-label="文章目录">
+    <h3>目录</h3>
+    <a href="#hook">这篇论文在补哪个洞</a>
+    <a href="#gap">① mask 管关系，谁管状态</a>
+    <a href="#contract">② 把「惰性」写成四条契约</a>
+    <a href="#presence">③ 创新一：一个径向 presence 系数</a>
+    <a href="#operator">④ 创新二：presence 的三处放置</a>
+    <a href="#proofs">⑤ 三条命题与 vanilla 极限</a>
+    <a href="#closure">⑥ 创新三：O-Closure 与 OTransformer</a>
+    <a href="#ostd">⑦ OStandardize：耦合的第二种拓扑</a>
+    <a href="#experiments">⑧ 实验复盘</a>
+    <a href="#critique">⑨ 边界：论文自己划的红线</a>
+    <a href="#summary">⑩ 一句话总结</a>
+  </nav>
+
+  <main class="content">
+
+    <section class="hook" id="hook">
+      <h1>OAttention：让零向量真正成为注意力的零元</h1>
+      <p class="tagline">attention mask 回答的是「哪两个 token 之间<em>允许</em>交互」。它回答不了「这个表示到底<em>参不参与</em>」。论文给每个 token 一个由自身范数决定的 presence 系数 $p_i=\lVert h_i\rVert^2/(\tau+\lVert h_i\rVert^2)$，把它同时放进接收端的输出门与源端的支撑质量，于是 $h=0$ 从 softmax 的一个「普通状态」变成了算子意义上的<strong>零元</strong>——并且这条性质能沿着残差与组合一路传下去。</p>
+      <div class="badges">
+        <span class="badge badge-accent">arXiv:2608.21174v1</span>
+        <span class="badge badge-purple">presence 系数</span>
+        <span class="badge badge-green">插入零 token：旧输出不变</span>
+        <span class="badge badge-blue">TabPFN v3 零微调改造 +0.088%</span>
+      </div>
+    </section>
+
+    <section id="gap">
+      <h2>① mask 管关系，谁管状态</h2>
+      <p>标准 attention 里唯一的「抑制」手段是 mask $m_{ij}$。它按 <strong>query–source 对</strong> 索引，作为算子的一个独立输入传进来，用来表达因果结构、路由许可、可见性权限。论文的第一句话就是把这件事的适用范围划清楚：mask 是<em>关系级</em>控制，它不提供一个「由表示自身携带」的非参与状态。</p>
+      <p>为什么需要后者？padding、缺失的支撑、未被使用的路由槽位、故意留空的隐状态——这些场合真正想说的是「<strong>这个位置是空的</strong>」，而不是「这条边不许走」。两者的差别在于：前者是位置自带的属性，后者需要调用方在每一条边上都记得写对 mask。</p>
+
+      <h3>标准 SDPA 在原点处会做什么</h3>
+      <p>论文用两行就说明了原点不是惰性的。对可见的源，</p>
+      <div class="eq">
+        $$\alpha_{ij}=\frac{\exp(q_i^\top k_j/\sqrt d)}{\sum_t \exp(q_i^\top k_t/\sqrt d)},\qquad y_i=\sum_j \alpha_{ij}v_j \tag{1}$$
+      </div>
+      <ul>
+        <li><strong>零 receiver。</strong>取 $q_i=0$，所有有限 logit 都变成 $0$，softmax 给出<em>均匀</em>权重，于是 $y_i$ 等于所有可见 value 的<strong>平均值</strong>——不是 $0$。方向信息被抹平了，聚合本身却没有被关掉。</li>
+        <li><strong>零 source。</strong>追加一个 $(k_0,v_0)=(0,0)$。它的 value 贡献确实是 $0$，但它往分母里加了 $\exp(0)=1$：旧的配分函数 $Z_i$ 变成 $Z_i+1$，<em>每一个</em>旧权重被乘上 $Z_i/(Z_i+1)$。</li>
+      </ul>
+      <div class="callout callout-red">
+        <strong>论文对这个现象的定性很关键：</strong>「这些失效来自<em>归一化拓扑</em>，而不是数值不稳定。」不是精度问题，也不是能靠 $\varepsilon$、clamp 或更好的 kernel 修掉的东西。只要归一化的分母是「所有可见项之和」，一个 $\exp(0)=1$ 的项就一定要占位。原点因此是 softmax attention 的一个<strong>普通状态</strong>。
+      </div>
+      <p>顺手补一句实现层面的对照：把这个零 token 的整列 mask 掉当然可以恢复旧权重，但那就回到了「调用方必须记得」的世界。论文要的是让状态自己说话，同时<em>不</em>取消 mask——两者是互补的，不是替代关系。</p>
+
+      <div class="anim-frame" data-anim="1">
+        <div class="anim-header">
+          <span class="anim-title">动画 1 · 原点为什么不是 softmax 注意力的惰性点</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 430" role="img" aria-label="零 query 得到均匀权重输出均值；插入零 source 使配分函数加一，旧权重整体收缩"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>原有可见源</span>
+          <span><i style="background:var(--a-red)"></i>零向量 token</span>
+          <span><i style="background:var(--a-amber)"></i>被污染的权重</span>
+          <span><i style="background:var(--a-green)"></i>期望的惰性行为</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="contract">
+      <h2>② 把「惰性」写成四条契约</h2>
+      <p>论文没有先给算子，而是先给<strong>规格</strong>。Definition 1（null consistency）说：一个 token 级映射 $T$ 是 null-consistent 的，如果下面四条同时成立。这一步很重要——它把「零向量应该惰性」这句直觉变成了可以逐条验证、也可以逐条推翻的命题。</p>
+      <div class="eq">
+        $$\text{(P1) } h_i=0\ \Rightarrow\ T(H)_i=0$$
+        <span class="eq-note"><strong>null receiver。</strong>接收端是零，输出必须是零，不是均值。</span>
+      </div>
+      <div class="eq">
+        $$\text{(P2) } T(H\oplus 0)_i = T(H)_i\quad \forall i\in I$$
+        <span class="eq-note"><strong>null-source insertion。</strong>往上下文里插一个零 token，<em>所有</em>老 token 的输出逐位不变——不是「近似不变」。</span>
+      </div>
+      <div class="eq">
+        $$\text{(P3) } w_{i,\text{new}} = 0,\qquad \text{(P4) } \textstyle\sum_j u_{ij}=0\ \Rightarrow\ T(H)_i=0$$
+        <span class="eq-note"><strong>(P3) self-attention insertion：</strong>插入的零 token 自己作为源分到的权重恰为 $0$；<strong>(P4) empty support：</strong>可见支撑全空时输出为 $0$，而不是 NaN 或均值。</span>
+      </div>
+      <p>四条里最容易被低估的是 (P2)。它意味着零 token 不只是「贡献为零」，而是<strong>在归一化里也不占位</strong>。任何靠 $\exp(0)=1$ 参与分母的方案都过不了这一条。第四条则把 $0/0$ 明确地钉成 $0$：论文用 $\varepsilon_{\text{den}}$ 让这个极限是良定义的，而不是靠运行时的分支判断。</p>
+
+      <h3>已有机制为什么都差一点</h3>
+      <table>
+        <thead><tr><th>机制</th><th>P1 零 receiver</th><th>P2 插入不变</th><th>差在哪</th></tr></thead>
+        <tbody>
+          <tr><td>sparsemax / entmax</td><td class="bad">✗</td><td class="bad">✗</td><td>输出落在单纯形上，行和恒为 1，禁止「整行为零」</td></tr>
+          <tr><td>sigmoid attention</td><td class="bad">✗</td><td class="gain">✓</td><td>去掉了归一化耦合，但 $\sigma(0)=1/2$，零 query 仍在聚合</td></tr>
+          <tr><td>ReLA / Softpick</td><td>部分</td><td>部分</td><td>最接近的先例：在 <em>score</em> 空间做 no-op；但门控由分数而非表示范数决定</td></tr>
+          <tr><td>softmax-plus-one $Z/(Z+\lambda)$</td><td class="bad">✗</td><td class="bad">✗</td><td>方向反了：它<em>主动</em>收缩活跃行，正是 (P2) 要消除的效应</td></tr>
+          <tr><td>StableMask</td><td class="bad">✗</td><td class="bad">✗</td><td>用伪 sink 吸收概率质量，仍然是关系级手段</td></tr>
+          <tr><td>QK-norm</td><td class="bad">✗</td><td class="bad">✗</td><td>控制 logit 尺度，与「是否参与」无关</td></tr>
+        </tbody>
+      </table>
+      <p class="note-inline">论文明确把 ReLA/Softpick 认作最近的先例，并把自己的差异定位在「门控信号取自表示的范数、并且同一个系数被复用到接收端与源端两处」，而不是「在分数上做加法」。</p>
+
+      <div class="anim-frame" data-anim="2">
+        <div class="anim-header">
+          <span class="anim-title">动画 2 · 四条契约逐条体检</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 430" role="img" aria-label="null receiver、插入不变、自权重为零、空支撑四条性质的逐条演示与机制对照矩阵"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>满足契约</span>
+          <span><i style="background:var(--a-red)"></i>违反契约</span>
+          <span><i style="background:var(--a-blue)"></i>老 token</span>
+          <span><i style="background:var(--a-purple)"></i>插入的零 token</span>
+        </div>
+      </div>
+    </section>
+    <section id="presence">
+      <h2>③ 创新一：一个径向 presence 系数</h2>
+      <p>第一个创新是把「参与度」压缩成一个标量，并且让它<strong>只依赖表示的范数</strong>：</p>
+      <div class="eq">
+        $$\rho_\tau(x)=\frac{\lVert x\rVert_2^{\,2}}{\tau+\lVert x\rVert_2^{\,2}},\qquad \tau>0 \tag{2}$$
+        <span class="eq-note">$p_i:=\rho_\tau(h_i)$。$h_i$ 是 token $i$ 的<em>隐状态载体</em>（hidden carrier），$q,k,v$ 都由它投影出来。</span>
+      </div>
+      <p>为什么是这个形式？把四条要求列出来就基本唯一了：</p>
+      <ul>
+        <li><strong>径向。</strong>只看 $\lVert x\rVert$，所以对旋转不变——它测的是「有没有内容」，不是「内容指向哪」。这跟 capsule network 里的 squash 因子形式上同源，但用途完全不同：那里是把长度压成概率，这里是当门控。</li>
+        <li><strong>恰好在原点为零。</strong>$\rho_\tau(x)=0\iff x=0$。这是 (P1)(P2) 能成立的唯一支点：不是「接近零」，是精确等于零，浮点下也精确。</li>
+        <li><strong>处处可微、有界于 $[0,1)$。</strong>没有分支、没有 clamp、没有硬阈值，梯度可以直接穿过去；上界严格小于 1，意味着<em>任何</em>有限范数的 token 都被略微衰减——这一点后面会变成一个需要承认的代价。</li>
+        <li><strong>近原点二次。</strong>展开得 $\rho_\tau(x)=\lVert x\rVert^2/\tau+O(\lVert x\rVert^4)$。二次比线性更「粘」在零附近：小残差被更强地压住，不会一碰就唤醒。论文在 log-log 上测出斜率 <strong>1.9997</strong>，与 2 的偏差在数值精度内。</li>
+      </ul>
+
+      <h3>$\tau$ 是什么，怎么定</h3>
+      <p>$\tau$ 决定「多大的范数才算存在」：$\lVert x\rVert^2=\tau$ 时 $p=1/2$。所以它是一个<strong>与激活尺度同量纲</strong>的旋钮，不是学习率式的超参。论文的做法很直白：</p>
+      <div class="callout callout-blue">
+        改造既有模型时取 <strong>$\tau=10^{-8}$</strong>——远小于典型 $\lVert h\rVert^2$，于是活跃 token 的 $p$ 贴着 1，行为几乎与 vanilla 一致；从头训练的小模型取 $\tau=\varepsilon_{\text{den}}=10^{-6}$。反过来，$\tau=1$ 会把 $p$ 拉到显著小于 1 的区间，等于给每层加了一道全局衰减——这正是后面 stress 实验会爆掉的原因。
+      </div>
+      <div class="eq">
+        $$\tau\to 0^+,\quad \varepsilon_{\text{den}}\to 0^+\ \Longrightarrow\ \text{OAttention}\to\text{标准 softmax attention} \tag{3}$$
+        <span class="eq-note">vanilla limit：在任何 $h_i\neq 0$ 的配置上逐点收敛。这条性质让「改造」成为可能——它保证 $\tau$ 是一个可以连续调回原状的参数，而不是一个新架构。</span>
+      </div>
+
+      <div class="anim-frame" data-anim="3">
+        <div class="anim-header">
+          <span class="anim-title">动画 3 · presence 曲线、二次尾巴与 τ 的量纲</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 430" role="img" aria-label="presence 系数随范数变化的曲线、原点附近的二次行为、不同 tau 取值的对比"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-purple)"></i>$\rho_\tau$ 曲线</span>
+          <span><i style="background:var(--a-green)"></i>$\tau=10^{-8}$（贴近 vanilla）</span>
+          <span><i style="background:var(--a-red)"></i>$\tau=1$（全局衰减）</span>
+          <span><i style="background:var(--a-blue)"></i>二次渐近</span>
+        </div>
+      </div>
+    </section>
+    <section id="operator">
+      <h2>④ 创新二：presence 的三处放置</h2>
+      <p>有了 $p_i$，剩下的问题是往哪儿放。论文的答案是<strong>同一个系数放三个位置</strong>——分子、分母、输出——对应两种语义角色。先看完整算子：</p>
+      <div class="eq">
+        $$q_i=W_Q h_i,\quad k_j=W_K h_j,\quad v_j=W_V h_j,\qquad s_{ij}=\frac{q_i^\top k_j}{\sqrt d} \tag{4}$$
+        <span class="eq-note">这里有个容易忽略的设计约束：$q,k,v$ 必须是 $h$ 的<em>无偏置</em>线性投影。有 bias 的话 $h_i=0$ 不再意味着 $q_i=0$，后面全塌。</span>
+      </div>
+      <div class="eq">
+        $$u_{ij}=m_{ij}\,\underbrace{p_j}_{\text{源质量}}\exp(s_{ij}),\qquad w_{ij}=\frac{u_{ij}}{\varepsilon_{\text{den}}+\sum_t u_{it}},\qquad \mathrm{OA}_i=\underbrace{p_i}_{\text{接收门}}\sum_j w_{ij}v_j \tag{5}$$
+      </div>
+      <p>逐项拆：</p>
+      <ul>
+        <li><strong>$m_{ij}$ 原封不动留着。</strong>关系级控制没有被取代。presence 是加进来的第二个轴。</li>
+        <li><strong>$p_j$ 乘在 $\exp(s_{ij})$ 上，因此同时进分子和分母。</strong>这是全篇最要紧的一处。$p_j=0$ 时该项从<em>配分函数里彻底消失</em>——不是权重为零、分母仍含它，而是分母根本没有它。于是 $Z_i$ 不变，所有旧权重逐位不变，(P2)(P3) 一起成立。</li>
+        <li><strong>$p_i$ 乘在聚合结果外面。</strong>这管的是 (P1)：接收端为零时输出为零，无论上下文里有什么。</li>
+        <li><strong>$\varepsilon_{\text{den}}$ 不是数值补丁，是定义的一部分。</strong>它让「支撑全空」这件事有确定答案：$\sum_t u_{it}=0$ 时 $w_{ij}\equiv 0$，输出为 $0$（P4），而不是 $0/0$。</li>
+      </ul>
+      <div class="callout callout-purple">
+        <strong>一个系数，两种角色。</strong>$p_i$ 作为<em>接收门</em>问的是「这个位置要不要做局部更新」；$p_j$ 作为<em>源质量</em>问的是「这个位置要不要出现在别人的上下文支撑里」。论文特意不给它们两套独立参数——共用同一个 $\rho_\tau(h_i)$ 才能让「零状态」是单一事实，而不是两个需要同步维护的标记。
+      </div>
+
+      <h3>为什么只做输出门不够（Appendix A.4）</h3>
+      <p>一个很自然的省事想法：既然 $p_i$ 已经把输出门住了，源端那份是不是多余？论文在附录里给了反例，逻辑非常干净。设 $\tilde A_r$ 是「只加输出门」的版本：</p>
+      <div class="eq">
+        $$\tilde A_r(H\oplus 0)=p_r\,A_r(H\oplus 0)\ \neq\ p_r\,A_r(H)=\tilde A_r(H)$$
+        <span class="eq-note">问题出在里层：$A_r$ 是<strong>耦合</strong>映射，它的输出依赖整个上下文。外面乘一个 $p_r$ 不能修正里面 $A_r(H\oplus 0)\neq A_r(H)$ 这个事实——那个 $\exp(0)=1$ 还在分母里。</span>
+      </div>
+      <p>换句话说：对<em>逐点</em>映射（FFN、LayerNorm 的仿射部分）输出门就够了；对<em>跨 token 耦合</em>的映射，presence 必须进入支撑本身。这条区分后面直接决定了哪些组件需要改、哪些不需要。</p>
+
+      <h3>和 softmax-plus-one 的方向对比</h3>
+      <p>$Z/(Z+\lambda)$ 那一族做法看起来也在动分母，但符号完全相反：它给分母<em>加</em>常数，效果是让活跃行整体收缩，正好是 (P2) 想要消除的那个 $Z_i/(Z_i+1)$ 因子。OAttention 是把不该在分母里的项<em>拿掉</em>。同一个位置的两个相反操作，一个制造耦合污染，一个消除它。</p>
+
+      <div class="anim-frame" data-anim="4">
+        <div class="anim-header">
+          <span class="anim-title">动画 4 · 分子、分母、输出：三处放置的因果链</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 430" role="img" aria-label="presence 进入分子与配分函数、接收端输出门、只做输出门的反例"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>配分函数项</span>
+          <span><i style="background:var(--a-purple)"></i>源质量 $p_j$</span>
+          <span><i style="background:var(--a-teal)"></i>接收门 $p_i$</span>
+          <span><i style="background:var(--a-red)"></i>只做输出门的漏洞</span>
+        </div>
+      </div>
+    </section>
+    <section id="proofs">
+      <h2>⑤ 三条命题与 vanilla 极限</h2>
+      <p>三个命题的证明都短，短得几乎像验算——这本身就是设计的证据：如果 presence 放对了位置，性质应该是<em>代数上显然</em>的，而不是需要不等式估计的。</p>
+
+      <h3>命题 1（null receiver ⇒ P1）</h3>
+      <p>$h_i=0$。由无偏置投影，$q_i=W_Q\cdot 0=0$；同时 $p_i=\rho_\tau(0)=0$。于是不管 $\sum_j w_{ij}v_j$ 等于什么（它确实等于均值那种东西），外层 $p_i=0$ 直接把它清零：$\mathrm{OA}_i=0\cdot(\cdots)=0$。</p>
+      <p class="note-inline">注意这里<em>不需要</em>论证内层聚合是什么。这是输出门的全部价值：把「接收端为零」这件事和上下文解耦。</p>
+
+      <h3>命题 2（null-source insertion ⇒ P2 + P3）</h3>
+      <p>把 $H$ 扩成 $H\oplus 0$，新源下标记作 $0$。对任意老 receiver $i$：</p>
+      <div class="eq">
+        $$u_{i0}=m_{i0}\cdot \underbrace{\rho_\tau(0)}_{=0}\cdot \exp(s_{i0})=0$$
+      </div>
+      <p>于是新的配分函数 $\varepsilon_{\text{den}}+\sum_{t\in I\cup\{0\}}u_{it}=\varepsilon_{\text{den}}+\sum_{t\in I}u_{it}$——<strong>逐位等于</strong>插入前的值。分子里每个 $u_{ij}$（$j\in I$）也没变，因为 $p_j$ 只依赖 $h_j$ 自己。所以 $w_{ij}$ 全部不变，$\mathrm{OA}_i$ 不变，这就是 (P2)。而 $w_{i0}=0/(\cdots)=0$ 恰为零，这就是 (P3)。</p>
+      <div class="callout callout-green">
+        <strong>对比标准 SDPA：</strong>那里 $u_{i0}=\exp(0)=1$，$Z_i\to Z_i+1$，每个旧权重被乘 $Z_i/(Z_i+1)$。这里 $u_{i0}=0$，$Z_i$ 原样不动。差别就是 $p_j$ 这一个乘子在不在分母里。
+      </div>
+
+      <h3>命题 3（empty support ⇒ P4）</h3>
+      <p>若 $\sum_t u_{it}=0$（所有可见源都被 mask 掉，或全是零向量），则 $w_{ij}=0/\varepsilon_{\text{den}}=0$ 对所有 $j$ 成立，聚合为 $0$，输出为 $0$。$\varepsilon_{\text{den}}>0$ 在这里承担的是<strong>定义 totalization</strong> 的职责：它把一个原本 $0/0$ 的空洞补成一个连续延拓的值。</p>
+
+      <h3>vanilla 极限</h3>
+      <p>取 $\tau\to 0^+$：对任何 $h_j\neq 0$ 有 $p_j\to 1$，于是 $u_{ij}\to m_{ij}\exp(s_{ij})$；再取 $\varepsilon_{\text{den}}\to 0^+$，分母回到 $\sum_t m_{it}\exp(s_{it})$。逐点收敛到式 (1)。</p>
+      <p>这条极限有两个实际含义。其一，OAttention 不是新架构而是<strong>单参数族</strong>，$\tau$ 是连续旋钮，$\tau\to0$ 就是原模型。其二，因此可以对已训练权重做<em>零微调</em>改造——论文对 TabPFN v3 干的正是这件事。</p>
+    </section>
+    <section id="closure">
+      <h2>⑥ 创新三：O-Closure 与 OTransformer</h2>
+      <p>前面只解决了<em>一层</em>。真正的问题是：一个满足契约的 attention，塞进有残差、有 FFN、有 LayerNorm、有位置编码的完整 block 之后，性质还剩多少？答案通常是「不剩」——只要中间任何一个组件在零点不惰性，零 token 就被唤醒了，后面的层再也无从分辨。</p>
+      <p>论文因此把契约从「算子」提升到「族」。Definition 2（O-Closure）：一族按 token 集合索引的映射 $\{M_I\}$ 是 O-closed 的，如果</p>
+      <div class="eq">
+        $$M_{I\cup\{j\}}\bigl(\iota_j H_I;\,c^{+}\bigr)=\iota_j\,M_I\bigl(H_I;\,c\bigr) \tag{6}$$
+        <span class="eq-note">$\iota_j$ 是「在位置 $j$ 插入一个零 token」的嵌入算子，$c\to c^+$ 是相应扩展的元数据（mask、位置等）。</span>
+      </div>
+      <p>这一个等式同时说了两件事，值得分开念：</p>
+      <ul>
+        <li><strong>状态零吸收（左边落在右边的像里）：</strong>插入位置的输出仍然是零。零进零出。</li>
+        <li><strong>上下文擦除（其余分量相等）：</strong>插入这件事对所有老位置<em>完全不可见</em>。$M_I$ 那边根本不知道发生了什么。</li>
+      </ul>
+
+      <h3>Theorem 1：闭包定理</h3>
+      <p>论文证明 O-closed 的族在两种操作下封闭：<strong>复合</strong> $M'\circ M$，以及<strong>残差</strong> $I+U$（$U$ 为 O-closed）。证明是标准归纳：复合时把内层的等式代进外层，插入的分量仍是零、老分量仍相等；残差时恒等映射显然 O-closed（$0+0=0$），逐项相加保持等式。</p>
+      <p>有了这条定理，构造完整模型就变成「把每个组件都做成 O-closed」这件事。论文给了两个通用的提升算子：</p>
+      <div class="eq">
+        $$\mathcal{G}_O[F](h_i)=p_i\,F(h_i)\qquad\text{（branch lift，分支提升）} \tag{7}$$
+        <span class="eq-note">给任意逐点 $F$ 套一个输出门。因为 $F$ 不耦合，只门输出就够（回看 A.4 的区分）。</span>
+      </div>
+      <div class="eq">
+        $$\mathcal{R}_O[F](h_i)=h_i+\rho_\tau(h_i)\,F(h_i)\qquad\text{（residual lift，残差提升）} \tag{8}$$
+        <span class="eq-note">$h_i=0$ 时两项都是零。这比「$h_i+F(h_i)$ 然后指望 $F(0)=0$」稳健得多——后者对有 bias 的 FFN 就失效。</span>
+      </div>
+
+      <h3>拼出 OTransformer</h3>
+      <table>
+        <thead><tr><th>组件</th><th>改法</th><th>为什么这样改</th></tr></thead>
+        <tbody>
+          <tr><td>OAttention</td><td>$p_j$ 进分子与分母，$p_i$ 门输出</td><td>唯一的耦合组件，必须改支撑</td></tr>
+          <tr><td>OFFN</td><td>$\mathcal{G}_O$ 套在 FFN 上</td><td>逐点，输出门足够；顺带容忍 FFN 的 bias</td></tr>
+          <tr><td>ONorm</td><td>$\mathcal{G}_O$ 套在归一化+仿射上</td><td>LayerNorm 的 $\beta$ 会把零点顶起来，需要门住</td></tr>
+          <tr><td>OInject</td><td>$h_i+p_i e_i$</td><td>位置/类型编码是<em>加性</em>的，直接加会唤醒零 token</td></tr>
+          <tr><td>presence 加权 token 测度</td><td>$\nu_H^O=\sum_i p_i\,\delta_{(i,h_i)}$</td><td>任何「对 token 求和/求平均」的读出都要按 presence 计权</td></tr>
+        </tbody>
+      </table>
+      <p>论文特别点出三个<strong>会破功的地方</strong>，它们也正是消融实验里 OA-only 臂失败的原因：加性编码没门住、LayerNorm 的 $\beta\neq0$、FFN 带 bias。任何一个漏掉，零 token 在第一层之后就有了非零范数，presence 随之被点亮，闭包链断裂。</p>
+
+      <div class="anim-frame" data-anim="5">
+        <div class="anim-header">
+          <span class="anim-title">动画 5 · 闭包如何沿层传递，以及在哪里断裂</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg5" viewBox="0 0 820 430" role="img" aria-label="O-Closure 的两半含义、分支与残差提升、闭包沿层传播与 OA-only 的断点"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>闭包保持</span>
+          <span><i style="background:var(--a-red)"></i>零 token 被唤醒</span>
+          <span><i style="background:var(--a-blue)"></i>老 token 通道</span>
+          <span><i style="background:var(--a-amber)"></i>加性编码 / bias</span>
+        </div>
+      </div>
+    </section>
+    <section id="ostd">
+      <h2>⑦ OStandardize：耦合的第二种拓扑</h2>
+      <p>OAttention 之外，论文给了第二个真正跨 token 耦合的例子——沿 token 轴的标准化（TabPFN 这类表格模型里常见的 per-feature 标准化）。它值得单独看，因为耦合的<em>形状</em>不同：attention 的耦合藏在配分函数里，标准化的耦合藏在均值和方差里。修法却是同一个思路：<strong>把求和换成 presence 加权求和。</strong></p>
+      <div class="eq">
+        $$S=\sum_i p_i,\qquad \mu_O=\frac{1}{S}\sum_i p_i h_i,\qquad v_O=\frac{1}{S}\sum_i p_i\,(h_i-\mu_O)^{\odot 2} \tag{9}$$
+      </div>
+      <div class="eq">
+        $$z_i^O=p_i\cdot\frac{h_i-\mu_O}{\sqrt{v_O+\epsilon}},\qquad z_i^O\big|_{S=0}:=0 \tag{10}$$
+        <span class="eq-note">$S=0$ 时（全部 token 皆零）整个式子被 totalize 成 $0$，与 (P4) 同一手法。</span>
+      </div>
+      <p>零 token 在这里以 $p_i=0$ 的身份完全退出统计量：既不拉低均值，也不给方差贡献，也不增加分母 $S$。外层再乘 $p_i$ 保证它自己的输出是零。</p>
+      <div class="callout callout-orange">
+        <strong>但这里有个论文自己承认的摩擦：</strong>中心化会把恰好等于 $\mu_O$ 的活跃 token 映到零。原本非零的表示因此拿到 $p=0$，被误判为「不存在」。这是精确零与「碰巧为零」之间的<em>碰撞</em>——presence 只看范数，分不清这两者。$\tau$ 很小时这种碰撞概率极低，但它在原则上存在，不是可以靠调参消掉的。
+      </div>
+      <p>这也提示了一个更一般的判据：只要某个操作的输出可能在<em>非零输入</em>处取到零，presence 语义就会在那里出现歧义。论文把这归到「presence 是一种操作性约定，而不是本体论断言」。</p>
+    </section>
+    <section id="experiments">
+      <h2>⑧ 实验复盘</h2>
+      <p>论文的实验设计和论证顺序是一致的：先证契约真的成立（不是近似），再证改造不伤性能，最后证只改 attention 不够。</p>
+
+      <h3>1）契约测试：区分「恰为零」与「数值上小」</h3>
+      <table>
+        <thead><tr><th>检查项</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>OAttention 与式 (5) 的逐位一致性</td><td>$L_\infty\le 8.94\times10^{-8}$</td></tr>
+          <tr><td>插入零 token 后，老 token 输出的变化</td><td>$L_\infty\le 4.47\times10^{-8}$</td></tr>
+          <tr><td>插入零 token 后，老权重的变化</td><td>$L_\infty\le 5.96\times10^{-8}$</td></tr>
+          <tr><td>插入 token 作为 receiver 的输出</td><td class="gain">恰为 0</td></tr>
+          <tr><td>插入 token 作为 source 拿到的权重</td><td class="gain">恰为 0</td></tr>
+          <tr><td>dtype × head 数配置的有限性</td><td class="gain">6 / 6 全部有限</td></tr>
+        </tbody>
+      </table>
+      <p class="note-inline">硬件为 NVIDIA GB10。前三行是浮点级一致（$\sim10^{-8}$ 是 fp32 的噪声地板），后两行是<strong>严格等于零</strong>——这个区分是论文刻意做出来的：契约要求的是精确性，不是小量。</p>
+
+      <h3>2）TabPFN v3 零微调改造：代价有多大</h3>
+      <p>拿一个已训练好的表格基础模型，只把 attention 换成 OAttention（$\tau=10^{-8}$），<em>不做任何微调</em>，在 6 个数据集 × 3 个种子 = 18 个组合上测回归误差。</p>
+      <table>
+        <thead><tr><th>改造范围</th><th>平均 RMSE 变化</th><th>平均 $R^2$ 变化</th></tr></thead>
+        <tbody>
+          <tr><td>仅 OAttention</td><td class="gain">+0.088%</td><td>$+8.4\times10^{-5}$</td></tr>
+          <tr><td>Full-O（全组件提升）</td><td>+0.177%</td><td>$+1.2\times10^{-5}$</td></tr>
+        </tbody>
+      </table>
+      <p class="note-inline">数据集 bodyfat / concrete / cpu_small / kin8nm / space_ga / tecator，种子 11 / 23 / 37，上限 512 训练 + 256 测试样本。$+$ 表示 RMSE 略微上升，量级在千分之一以下——基本可以理解为「免费」。</p>
+
+      <h3>3）$\tau=1$ 压力测试：暴露真正的代价</h3>
+      <p>把 $\tau$ 从 $10^{-8}$ 拉到 $1$，54 次拟合：</p>
+      <table>
+        <thead><tr><th>改造范围</th><th>平均 RMSE 变化</th><th>最坏情形</th></tr></thead>
+        <tbody>
+          <tr><td>仅 OAttention</td><td class="gain">+0.138%</td><td>—</td></tr>
+          <tr><td>Full-O</td><td class="bad">+47.050%</td><td class="bad">tecator +100.143%，bodyfat +95.354%</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-red">
+        <strong>这组数字解释了 $p&lt;1$ 这个「有界于 $[0,1)$」的副作用。</strong>attention 内部的 $p_j$ 会被归一化吸收掉（分子分母同乘一个接近的因子，比值受影响小），所以 OA-only 很稳。但 $\mathcal{G}_O$ / $\mathcal{R}_O$ 里的 $p_i$ 是<em>裸乘在输出上</em>的，每层每个分支都乘一次 $p&lt;1$，逐层复合就是指数衰减。$\tau$ 必须相对激活尺度取小，这不是调参偏好，是结构性要求。
+      </div>
+
+      <h3>4）三臂消融：只改 attention 为什么不行</h3>
+      <p>从头训练两层小模型（$d=32$，4 头，FFN 128，100 epoch，lr $10^{-3}$，wd $10^{-4}$，$\tau=\varepsilon_{\text{den}}=10^{-6}$，插入数 $k\in\{0,1,4\}$，共 180 次拟合），测「插入位置的隐状态最终有多大」：</p>
+      <table>
+        <thead><tr><th>臂</th><th>插入位置隐状态 $L_\infty$（最大）</th></tr></thead>
+        <tbody>
+          <tr><td>标准 Transformer</td><td class="bad">7.982</td></tr>
+          <tr><td>仅 OAttention</td><td class="bad">7.983</td></tr>
+          <tr><td>OTransformer（全组件）</td><td class="gain">0</td></tr>
+          <tr><td>结构对照（直接不插入）</td><td class="gain">0</td></tr>
+        </tbody>
+      </table>
+      <p><strong>7.982 → 7.983 这个几乎不动的数字是整篇论文最有说服力的一处。</strong>它说明只把 attention 换掉，零 token 被唤醒的程度<em>丝毫未减</em>——因为唤醒它的不是 attention，是加性位置编码、LayerNorm 的 $\beta$ 和 FFN 的 bias。Theorem 1 要求的是<em>链条上每一环</em>，缺一环等于没做。OTransformer 那边的 0 是真正的 0。</p>
+      <p class="note-inline">同一组里 OTransformer 的老 token 最大漂移 $2.47\times10^{-3}$、预测最大漂移 $2.08\times10^{-3}$：这是训练路径与浮点归约顺序带来的差异，不是契约被违反（契约测试里那一项是 $10^{-8}$ 级）。</p>
+
+      <h3>5）推理期插入：最贴近工程的一张表</h3>
+      <table>
+        <thead><tr><th>插入 token 数</th><th>标准模型预测 RMS 漂移</th><th>OA 预测 RMS 漂移</th><th>插入位隐状态 $L_\infty$</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td class="bad">$7.39\times10^{-2}$</td><td class="gain">$3.69\times10^{-5}$</td><td>标准 1.83–7.42 / OA <span class="gain">恰为 0</span></td></tr>
+          <tr><td>4</td><td class="bad">$2.18\times10^{-1}$</td><td class="gain">$1.64\times10^{-4}$</td><td>同上</td></tr>
+        </tbody>
+      </table>
+      <p>三个数量级的差距。含义是具体的：如果你的系统会在推理时动态增删 slot（padding 对齐、预留路由位、批内变长），标准模型的预测会随之抖动，而 OAttention 不会。</p>
+
+      <div class="anim-frame" data-anim="6">
+        <div class="anim-header">
+          <span class="anim-title">动画 6 · 四组实验数据的读法</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg6" viewBox="0 0 820 430" role="img" aria-label="契约测试、TabPFN 改造代价、tau 压力测试与三臂消融的数据对比"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>OTransformer / OA</span>
+          <span><i style="background:var(--a-red)"></i>标准模型</span>
+          <span><i style="background:var(--a-amber)"></i>OA-only</span>
+          <span><i style="background:var(--a-blue)"></i>参照基线</span>
+        </div>
+      </div>
+    </section>
+    <section id="critique">
+      <h2>⑨ 边界：论文自己划的红线</h2>
+      <p>§7 那一节写得比多数论文诚实，值得逐条抄下来——因为每一条都对应一个真实的落地风险。</p>
+      <ul>
+        <li><strong>presence 是操作性约定。</strong>「$\lVert h\rVert=0$ 表示不存在」这句话是<em>规定</em>，不是发现。模型完全可以把有意义的信息编码到范数很小的方向上；一旦如此，presence 会把它当空气。所以 OTransformer 适合的是「零向量本来就被约定为空槽」的系统。</li>
+        <li><strong>有限尺度衰减。</strong>$p&lt;1$ 严格成立，任何有限范数的 token 都被衰减。$\tau=1$ 那组 +47% 就是这条的实证。</li>
+        <li><strong>中心化下的精确零碰撞。</strong>如 ⑦ 所述，$h_i=\mu_O$ 的活跃 token 会被误灭。</li>
+        <li><strong>宿主范围与元数据。</strong>闭包只覆盖论文列出的组件。三类东西会打破它：绝对位置的<em>重新编号</em>（插入一个 token 导致后面所有位置索引改变，那 $c\to c^+$ 就不是简单扩展）、token 合并/去重、以及 KV cache 的复用；另外<strong>读出层必须是 presence 中性的</strong>——一个对 token 直接求平均的 pooling head 会立刻把插入可见化。</li>
+        <li><strong>缺失语义 ≠ 结构性 NULL。</strong>「这个特征值缺失」和「这个槽位不存在」是两件事。前者需要模型学一个 missing 表示，后者是要求模型完全看不见。论文只解决后者。</li>
+      </ul>
+      <div class="callout callout-teal">
+        <strong>我的一点补充判断：</strong>这篇论文的贡献密度集中在<em>规格</em>而非算子。$\rho_\tau$ 本身平凡（capsule squash 用过同一个式子），$p_j$ 进分母也不复杂。真正难的、也是真正新的，是「把插入不变性写成 Definition 1/2 这样可验证的形式，然后证明它在复合与残差下封闭，并且用 7.982→7.983 这个实验说明局部修补无效」。它更像一份可执行的接口规范，而不是一个新模块。
+      </div>
+    </section>
+
+    <section id="summary">
+      <h2>⑩ 一句话总结</h2>
+      <p>标准 attention 的 mask 是关系级的，因此无法表达「这个位置是空的」；而 softmax 的归一化拓扑决定了零向量必然以 $\exp(0)=1$ 的身份占据分母，让原点成为一个普通状态。OAttention 用一个径向 presence 系数 $p_i=\lVert h_i\rVert^2/(\tau+\lVert h_i\rVert^2)$ 同时承担接收门与源质量两种角色，把零向量变成算子意义上的零元；O-Closure 再把这条性质提升为对复合与残差封闭的族性质，从而给出整个 OTransformer。代价是 $\tau$ 必须相对激活尺度取得足够小，收益是插入或删除空槽位对模型输出的影响从 $10^{-1}$ 量级降到<strong>精确的零</strong>。</p>
+      <div class="callout callout-accent">
+        如果只带走一件事：<strong>7.982 → 7.983</strong>。把 attention 单独换成 OAttention，零 token 被唤醒的程度几乎没变。惰性不是某一层的属性，是整条链的属性。
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(function () {
+'use strict';
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, a) {
+  var n = document.createElementNS(NS, tag);
+  if (a) for (var k in a) if (a[k] != null) n.setAttribute(k, a[k]);
+  return n;
+}
+function C(name, fb) { return window.aC(name, fb); }
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function AnimEngine(svg, cfg) {
+  this.svg = svg;
+  this.steps = cfg.steps || [];
+  this.i = 0;
+  this.speed = 1;
+  this.playing = false;
+  this.timer = null;
+  this.frame = svg.closest('.anim-frame');
+  this._initDefs();
+  this.layer = el('g', { 'class': 'anim-layer' });
+  svg.appendChild(this.layer);
+  this._buildRail();
+  this.goTo(0);
+}
+
+AnimEngine.prototype._initDefs = function () {
+  var defs = el('defs');
+  var mk = [['arrA', C('--a-accent', '#FF7A00')], ['arrG', C('--a-green', '#4CC98A')],
+            ['arrR', C('--a-red', '#FF7268')], ['arrB', C('--a-blue', '#74B4FF')],
+            ['arrP', C('--a-purple', '#B79BFF')], ['arrM', C('--a-fg-muted', '#888')],
+            ['arrY', C('--a-amber', '#E9B449')], ['arrT', C('--a-teal', '#48CFC4')]];
+  var id = this.svg.id;
+  for (var j = 0; j < mk.length; j++) {
+    var m = el('marker', { id: id + '-' + mk[j][0], viewBox: '0 0 10 10', refX: '9', refY: '5',
+      markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse' });
+    m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: mk[j][1] }));
+    defs.appendChild(m);
+  }
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype.mk = function (name) { return 'url(#' + this.svg.id + '-' + name + ')'; };
+AnimEngine.prototype.clear = function () { while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild); };
+
+AnimEngine.prototype.draw = function (node, o) {
+  o = o || {};
+  this.layer.appendChild(node);
+  if (o.reveal && !REDUCED) {
+    node.style.opacity = '0';
+    node.style.transition = 'opacity 320ms ease';
+    var d = o.delay || 0;
+    setTimeout(function () { node.style.opacity = o.opacity != null ? o.opacity : '1'; }, d / this.speed);
+  } else if (o.opacity != null) { node.style.opacity = o.opacity; }
+  if (o.cls) node.setAttribute('class', ((node.getAttribute('class') || '') + ' ' + o.cls).trim());
+  return node;
+};
+
+AnimEngine.prototype.t = function (x, y, str, o) {
+  o = o || {};
+  var n = el('text', { x: x, y: y, 'text-anchor': o.anchor || 'middle',
+    'font-size': o.size || 12, 'font-weight': o.weight || 400,
+    'font-family': o.mono ? '"JetBrains Mono", Consolas, monospace' : 'inherit',
+    fill: o.fill || C('--a-fg', '#ccc') });
+  n.textContent = str;
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, o) {
+  o = o || {};
+  var g = el('g');
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: o.rx != null ? o.rx : 6,
+    fill: fill || 'none', stroke: stroke || C('--a-line', '#444'),
+    'stroke-width': o.sw || 1.5, 'stroke-dasharray': o.dash || null }));
+  if (label) {
+    var lines = String(label).split('|');
+    var y0 = y + h / 2 - (lines.length - 1) * 8 + 4;
+    for (var j = 0; j < lines.length; j++) {
+      var tn = el('text', { x: x + w / 2, y: y0 + j * 16, 'text-anchor': 'middle',
+        'font-size': o.size || 12, 'font-weight': o.weight || 500,
+        fill: o.labelFill || stroke || C('--a-fg', '#ccc') });
+      tn.textContent = lines[j];
+      g.appendChild(tn);
+    }
+  }
+  return this.draw(g, o);
+};
+
+AnimEngine.prototype.line = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  return this.draw(el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, 'stroke-linecap': 'round' }), o);
+};
+AnimEngine.prototype.arrow = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  var n = el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-fg-muted', '#888'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': this.mk(o.marker || 'arrM') });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.circle = function (cx, cy, r, o) {
+  o = o || {};
+  return this.draw(el('circle', { cx: cx, cy: cy, r: r, fill: o.fill || 'none',
+    stroke: o.stroke || 'none', 'stroke-width': o.sw || 1.5 }), o);
+};
+
+AnimEngine.prototype.ellipse = function (cx, cy, rx, ry, rot, o) {
+  o = o || {};
+  var n = el('ellipse', { cx: cx, cy: cy, rx: rx, ry: ry, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, transform: 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.path = function (d, o) {
+  o = o || {};
+  return this.draw(el('path', { d: d, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': o.marker ? this.mk(o.marker) : null }), o);
+};
+
+/* 横向条形：用于实验数据对比。value 已按 max 归一到 w 像素。 */
+AnimEngine.prototype.bar = function (x, y, w, h, label, val, max, color, o) {
+  o = o || {};
+  var len = Math.max(2, w * Math.min(1, val / max));
+  var g = el('g');
+  var lt = el('text', { x: x - 8, y: y + h / 2 + 4, 'text-anchor': 'end', 'font-size': 11,
+    fill: C('--a-fg-muted', '#888') });
+  lt.textContent = label;
+  g.appendChild(lt);
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: 3, fill: C('--a-code-bg', '#222') }));
+  var b = el('rect', { x: x, y: y, width: len, height: h, rx: 3, fill: color });
+  g.appendChild(b);
+  var vt = el('text', { x: x + len + 8, y: y + h / 2 + 4, 'text-anchor': 'start', 'font-size': 11,
+    'font-weight': 600, fill: color });
+  vt.textContent = o.fmt ? o.fmt(val) : val;
+  g.appendChild(vt);
+  if (!REDUCED) {
+    b.setAttribute('width', 0);
+    vt.style.opacity = '0';
+    var sp = this.speed, d = o.delay || 0;
+    setTimeout(function () {
+      b.style.transition = 'width 520ms cubic-bezier(.2,.8,.3,1)';
+      b.setAttribute('width', len);
+      vt.style.transition = 'opacity 300ms ease 260ms';
+      vt.style.opacity = '1';
+    }, d / sp + 30);
+  }
+  return this.draw(g, { cls: o.cls });
+};
+AnimEngine.prototype._buildRail = function () {
+  var rail = this.frame.querySelector('.anim-stage-rail');
+  if (!rail) return;
+  rail.textContent = '';
+  for (var j = 0; j < this.steps.length; j++) {
+    var b = document.createElement('button');
+    b.className = 'stage-chip';
+    b.type = 'button';
+    b.dataset.idx = j;
+    b.setAttribute('role', 'tab');
+    b.textContent = (j + 1) + '. ' + (this.steps[j].chip || this.steps[j].title);
+    rail.appendChild(b);
+  }
+};
+
+AnimEngine.prototype.goTo = function (idx) {
+  if (idx < 0 || idx >= this.steps.length) return;
+  this.i = idx;
+  this.clear();
+  var step = this.steps[idx];
+  step.render(this);
+  this._updateUI();
+};
+
+AnimEngine.prototype._updateUI = function () {
+  var f = this.frame, step = this.steps[this.i], n = this.steps.length;
+  var info = f.querySelector('.step-info'), desc = f.querySelector('.step-desc'),
+      bar = f.querySelector('.anim-progress .bar');
+  if (info) info.textContent = '步骤 ' + (this.i + 1) + ' / ' + n + ' · ' + step.title;
+  if (desc) desc.innerHTML = step.desc || '';
+  if (bar) bar.style.width = ((this.i + 1) / n * 100) + '%';
+  var chips = f.querySelectorAll('.stage-chip');
+  for (var j = 0; j < chips.length; j++) chips[j].setAttribute('aria-current', j === this.i ? 'true' : 'false');
+  var prev = f.querySelector('.btn-prev'), next = f.querySelector('.btn-next');
+  if (prev) prev.disabled = this.i === 0;
+  if (next) next.disabled = this.i === n - 1;
+};
+
+AnimEngine.prototype.next = function () { if (this.i < this.steps.length - 1) this.goTo(this.i + 1); };
+AnimEngine.prototype.prev = function () { if (this.i > 0) this.goTo(this.i - 1); };
+AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+AnimEngine.prototype.setSpeed = function (v) { this.speed = v; };
+
+AnimEngine.prototype.play = function () {
+  var self = this;
+  if (this.i >= this.steps.length - 1) this.goTo(0);
+  this.playing = true;
+  this._setPlayBtn();
+  var tick = function () {
+    if (!self.playing) return;
+    var dur = (self.steps[self.i].duration || 2600) / self.speed;
+    self.timer = setTimeout(function () {
+      if (!self.playing) return;
+      if (self.i >= self.steps.length - 1) { self.pause(); return; }
+      self.goTo(self.i + 1);
+      tick();
+    }, dur);
+  };
+  tick();
+};
+
+AnimEngine.prototype.pause = function () {
+  this.playing = false;
+  if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  this._setPlayBtn();
+};
+AnimEngine.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
+AnimEngine.prototype._setPlayBtn = function () {
+  var b = this.frame.querySelector('.btn-play');
+  if (b) b.textContent = this.playing ? '❙❙ 暂停' : '▶ 播放';
+};
+/* ---------- 场景 1：原点不是 softmax 注意力的惰性点 ---------- */
+function scene1() {
+  var BLUE = function () { return C('--a-blue', '#74B4FF'); },
+      RED = function () { return C('--a-red', '#FF7268'); },
+      GREEN = function () { return C('--a-green', '#4CC98A'); },
+      AMBER = function () { return C('--a-amber', '#E9B449'); },
+      MUTED = function () { return C('--a-fg-muted', '#888'); },
+      LINE = function () { return C('--a-line', '#444'); },
+      STRONG = function () { return C('--a-fg-strong', '#fff'); };
+  var S = [2.0, 0.5, 1.0, -0.5];
+  var EX = [7.389, 1.649, 2.718, 0.607];
+  var Z = 12.363;
+  var Y0 = 82, DY = 74;
+
+  /* o: {qzero, insert, ideal, title} */
+  function board(e, o) {
+    o = o || {};
+    e.t(410, 34, o.head, { size: 13, weight: 600, fill: STRONG(), reveal: true });
+    var qc = o.qzero ? RED() : BLUE();
+    e.rect(34, 196, 96, 56, o.qzero ? 'q_i = 0|(h_i = 0)' : 'query i|q_i ≠ 0', 'none', qc,
+      { size: 11, reveal: true });
+    e.t(82, 272, o.qzero ? '接收端为空' : '接收端活跃', { size: 10, fill: MUTED(), reveal: true, delay: 80 });
+
+    var denom = (o.insert && !o.ideal) ? Z + 1 : Z;
+    for (var j = 0; j < 4; j++) {
+      var y = Y0 + j * DY;
+      var w = o.qzero ? 0.25 : EX[j] / denom;
+      var col = o.qzero ? AMBER() : (o.insert ? AMBER() : BLUE());
+      if (o.ideal) col = GREEN();
+      e.rect(196, y, 104, 40, '(k' + (j + 1) + ', v' + (j + 1) + ')', 'none', BLUE(),
+        { size: 11, rx: 4, reveal: true, delay: 100 + j * 40 });
+      e.arrow(130, 224, 192, y + 20, { stroke: LINE(), marker: 'arrM', sw: 1, reveal: true, delay: 120 + j * 40 });
+      e.t(318, y + 25, o.qzero ? 'exp(0) = 1' : 'exp(s) = ' + EX[j].toFixed(2),
+        { size: 10, anchor: 'start', mono: true, fill: MUTED(), reveal: true, delay: 140 + j * 40 });
+      e.rect(430, y + 6, 150 * Math.max(0.04, w / 0.62), 28, null, col, 'none',
+        { rx: 3, reveal: true, delay: 180 + j * 40, opacity: 0.9 });
+      e.t(596, y + 25, 'w = ' + w.toFixed(3), { size: 10, anchor: 'start', mono: true,
+        fill: col, weight: 600, reveal: true, delay: 200 + j * 40 });
+    }
+    if (o.insert) {
+      var yz = Y0 + 4 * DY - 6;
+      e.rect(196, yz, 104, 34, '(0, 0) 插入', 'none', RED(), { size: 11, rx: 4, dash: '4 3', reveal: true, delay: 340 });
+      e.t(318, yz + 22, o.ideal ? 'p·exp(0) = 0' : 'exp(0) = 1',
+        { size: 10, anchor: 'start', mono: true, fill: o.ideal ? GREEN() : RED(), weight: 600, reveal: true, delay: 360 });
+      e.t(596, yz + 22, o.ideal ? 'w = 0（恰好）' : 'w = ' + (1 / denom).toFixed(3),
+        { size: 10, anchor: 'start', mono: true, fill: o.ideal ? GREEN() : RED(), weight: 600, reveal: true, delay: 380 });
+    }
+    e.t(486, 60, '权重 w_ij', { size: 11, weight: 600, fill: MUTED(), reveal: true });
+    e.t(248, 60, '可见源', { size: 11, weight: 600, fill: MUTED(), reveal: true });
+  }
+  return [
+    { chip: '基线', title: '标准 SDPA：权重来自 exp(s) / Z',
+      desc: '配分函数 Z = Σ_t exp(s_it) = 12.363。四个源分到 0.598 / 0.133 / 0.220 / 0.049，输出是 value 的加权和。这是参照系。',
+      render: function (e) { board(e, { head: '标准 SDPA：Z = 12.363，权重按 exp(s) 分配' }); } },
+    { chip: '零 receiver', title: 'q_i = 0：softmax 给出均匀权重',
+      desc: '所有 logit 变成 0，exp(0) = 1 全部相等，softmax 输出 <strong>均匀</strong>分布 0.25。于是 y_i 等于所有可见 value 的<strong>平均值</strong>——方向信息被抹平，但聚合没有被关掉。这就是 (P1) 被违反的样子。',
+      render: function (e) {
+        board(e, { qzero: true, head: 'q_i = 0 ⇒ 权重均匀 ⇒ 输出 = value 的平均值，不是 0' });
+        e.t(410, 418, 'y_i = (v1+v2+v3+v4)/4 ≠ 0', { size: 12, mono: true, weight: 600, fill: RED(), reveal: true, delay: 460 });
+      } },
+    { chip: '零 source', title: '插入 (0,0)：Z → Z+1，旧权重整体收缩',
+      desc: '零 source 的 value 贡献确实是 0，但它往分母里塞了 exp(0) = 1。Z 从 12.363 变成 13.363，<strong>每一个</strong>旧权重被乘上 Z/(Z+1) = 0.9252。这不是数值误差，是归一化拓扑的必然结果。',
+      duration: 3200,
+      render: function (e) {
+        board(e, { insert: true, head: '插入 (k₀,v₀) = (0,0)：分母多了 exp(0) = 1' });
+        e.t(410, 418, '每个旧权重 × Z/(Z+1) = 12.363 / 13.363 = 0.9252',
+          { size: 12, mono: true, weight: 600, fill: RED(), reveal: true, delay: 500 });
+      } },
+    { chip: '期望行为', title: 'OAttention 想要的：Z 原样不动',
+      desc: '把源质量 p_j 乘进 exp(s_ij)，零 token 的那一项变成 0·1 = 0，从配分函数里<strong>彻底消失</strong>。Z 仍是 12.363，四个旧权重逐位不变，插入位自己的权重恰为 0。这就是 (P2) + (P3)。',
+      render: function (e) {
+        board(e, { insert: true, ideal: true, head: 'u_ij = m_ij · p_j · exp(s_ij)：零源项从分母里消失' });
+        e.t(410, 418, 'Z 不变 = 12.363 ⇒ 旧权重逐位不变（L∞ ≤ 4.47×10⁻⁸）',
+          { size: 12, mono: true, weight: 600, fill: GREEN(), reveal: true, delay: 500 });
+      } }
+  ];
+}
+/* ---------- 场景 2：Definition 1 的四条契约 ---------- */
+function scene2() {
+  var BLUE = function () { return C('--a-blue', '#74B4FF'); },
+      RED = function () { return C('--a-red', '#FF7268'); },
+      GREEN = function () { return C('--a-green', '#4CC98A'); },
+      PURPLE = function () { return C('--a-purple', '#B79BFF'); },
+      MUTED = function () { return C('--a-fg-muted', '#888'); },
+      LINE = function () { return C('--a-line', '#444'); },
+      STRONG = function () { return C('--a-fg-strong', '#fff'); };
+
+  function head(e, tag, txt) {
+    e.rect(30, 20, 54, 26, tag, 'none', PURPLE(), { size: 12, rx: 4, reveal: true });
+    e.t(96, 38, txt, { size: 13, weight: 600, anchor: 'start', fill: STRONG(), reveal: true });
+  }
+  function verdict(e, y, ok, txt) {
+    var c = ok ? GREEN() : RED();
+    e.t(60, y, ok ? '✓' : '✗', { size: 20, weight: 700, fill: c, reveal: true, delay: 400 });
+    e.t(86, y - 4, txt, { size: 12, anchor: 'start', fill: c, weight: 600, reveal: true, delay: 420 });
+  }
+  function strip(e, y, ws, insertIdx, col, label) {
+    e.t(40, y + 22, label, { size: 11, anchor: 'start', fill: MUTED(), reveal: true });
+    for (var j = 0; j < ws.length; j++) {
+      var x = 190 + j * 100, isIns = j === insertIdx;
+      e.rect(x, y, 86, 38, isIns ? '0 向量' : 'tok ' + (j + 1), 'none', isIns ? PURPLE() : BLUE(),
+        { size: 11, rx: 4, dash: isIns ? '4 3' : null, reveal: true, delay: 60 + j * 50 });
+      e.t(x + 43, y + 56, ws[j], { size: 11, mono: true, weight: 600,
+        fill: isIns ? PURPLE() : col, reveal: true, delay: 100 + j * 50 });
+    }
+  }
+  return [
+    { chip: 'P1 零 receiver', title: 'P1：h_i = 0 ⇒ 输出必须是 0',
+      desc: '无偏置投影保证 q_i = W_Q·0 = 0，同时 p_i = ρ_τ(0) = 0。外层乘 p_i 直接清零，<strong>不需要</strong>论证内层聚合等于什么——这就是输出门的全部价值：把「接收端为空」与上下文解耦。',
+      render: function (e) {
+        head(e, 'P1', 'null receiver：接收端为零，输出为零');
+        e.rect(60, 110, 110, 58, 'h_i = 0', 'none', PURPLE(), { size: 12, reveal: true, delay: 60 });
+        e.arrow(170, 139, 246, 139, { stroke: LINE(), marker: 'arrM', reveal: true, delay: 120 });
+        e.rect(250, 100, 150, 78, 'Σ_j w_ij v_j|（= 均值）', 'none', MUTED(), { size: 11, reveal: true, delay: 160 });
+        e.arrow(400, 139, 476, 139, { stroke: RED(), marker: 'arrR', reveal: true, delay: 200 });
+        e.rect(480, 110, 140, 58, '标准：y_i ≠ 0', 'none', RED(), { size: 12, reveal: true, delay: 240 });
+        e.t(325, 216, '× p_i = 0', { size: 14, mono: true, weight: 700, fill: GREEN(), reveal: true, delay: 300 });
+        e.arrow(400, 252, 476, 252, { stroke: GREEN(), marker: 'arrG', reveal: true, delay: 340 });
+        e.rect(480, 224, 140, 56, 'OA：y_i = 0', 'none', GREEN(), { size: 12, reveal: true, delay: 380 });
+        verdict(e, 348, true, 'OAttention 满足 P1；标准 SDPA 给出 value 的平均值');
+      } },
+    { chip: 'P2 插入不变', title: 'P2：插入零 token，所有老输出逐位不变',
+      desc: '标准模型下四个旧权重整体被乘 0.9252；OAttention 下它们<strong>逐位相同</strong>。契约要求的是精确性——论文实测 L∞ ≤ 4.47×10⁻⁸，也就是 fp32 的噪声地板。',
+      duration: 3200,
+      render: function (e) {
+        head(e, 'P2', 'null-source insertion：上下文擦除');
+        strip(e, 84, ['0.598', '0.133', '0.220', '0.049'], -1, BLUE(), '插入前');
+        e.line(40, 176, 780, 176, { stroke: LINE(), sw: 1, dash: '4 4', reveal: true, delay: 260 });
+        strip(e, 200, ['0.553', '0.123', '0.203', '0.045'], 4, RED(), '标准 + 插入');
+        e.t(700, 222, '全部 ×0.9252', { size: 11, anchor: 'start', fill: RED(), weight: 600, reveal: true, delay: 400 });
+        strip(e, 316, ['0.598', '0.133', '0.220', '0.049'], 4, GREEN(), 'OA + 插入');
+        e.t(700, 338, '逐位不变', { size: 11, anchor: 'start', fill: GREEN(), weight: 600, reveal: true, delay: 500 });
+      } },
+    { chip: 'P3 自权重', title: 'P3：插入的零 token 作为源，权重恰为 0',
+      desc: 'u_i0 = m_i0 · ρ_τ(0) · exp(s_i0) = 0，分子是<strong>严格的零</strong>，除以任何正分母仍是零。论文把这一项和 P1 的输出一起报为「exactly 0」，与前面 10⁻⁸ 级的一致性检查刻意区分开。',
+      render: function (e) {
+        head(e, 'P3', 'self-attention insertion：插入位不吸收任何权重');
+        e.rect(300, 80, 220, 52, 'u_i0 = m_i0 · p_0 · exp(s_i0)', 'none', BLUE(), { size: 12, reveal: true, delay: 60 });
+        e.t(410, 164, 'p_0 = ρ_τ(0) = 0', { size: 13, mono: true, weight: 700, fill: PURPLE(), reveal: true, delay: 160 });
+        e.arrow(410, 178, 410, 214, { stroke: PURPLE(), marker: 'arrP', reveal: true, delay: 200 });
+        e.rect(300, 218, 220, 52, 'u_i0 = 0', 'none', GREEN(), { size: 13, reveal: true, delay: 240 });
+        e.arrow(410, 270, 410, 302, { stroke: GREEN(), marker: 'arrG', reveal: true, delay: 300 });
+        e.rect(280, 306, 260, 50, 'w_i0 = 0 / (ε_den + Z) = 0', 'none', GREEN(), { size: 12, reveal: true, delay: 340 });
+        e.t(410, 400, '严格等于零，不是「数值上很小」', { size: 12, fill: GREEN(), weight: 600, reveal: true, delay: 420 });
+      } },
+    { chip: 'P4 空支撑', title: 'P4：支撑全空时输出为 0，而不是 NaN',
+      desc: 'ε_den 不是数值补丁，是定义的一部分：它把原本 0/0 的空洞 <strong>totalize</strong> 成一个确定值。所有可见源都被 mask 掉、或者全是零向量时，w_ij ≡ 0，输出为 0。没有运行时分支判断。',
+      render: function (e) {
+        head(e, 'P4', 'empty support：0/0 被定义成 0');
+        for (var j = 0; j < 4; j++) {
+          e.rect(150 + j * 130, 92, 108, 44, 'm_ij = 0', 'none', LINE(),
+            { size: 11, rx: 4, dash: '4 3', reveal: true, delay: 60 + j * 50, opacity: 0.5 });
+        }
+        e.t(410, 172, 'Σ_t u_it = 0', { size: 14, mono: true, weight: 700, fill: RED(), reveal: true, delay: 280 });
+        e.rect(200, 208, 180, 56, '标准：0 / 0|→ NaN 或均值', 'none', RED(), { size: 11, reveal: true, delay: 340 });
+        e.rect(440, 208, 180, 56, 'OA：0 / ε_den|→ 恰为 0', 'none', GREEN(), { size: 11, reveal: true, delay: 380 });
+        e.t(410, 320, '论文实测 6 / 6 组 dtype × head 配置全部有限', { size: 12, fill: GREEN(), weight: 600, reveal: true, delay: 460 });
+        verdict(e, 384, true, 'ε_den > 0 让空支撑成为良定义的连续延拓');
+      } },
+    { chip: '机制对照', title: '已有机制在这张表上的位置',
+      desc: '关键在于 P2：任何靠 exp(0) = 1 参与分母的方案都过不了。sparsemax 一族被单纯形约束禁止「整行为零」；softmax-plus-one 的方向是反的（<em>主动</em>收缩活跃行）；ReLA / Softpick 是最近的先例，但门控信号来自分数而非表示范数。',
+      duration: 3600,
+      render: function (e) {
+        e.t(410, 34, '四条契约 × 六种机制（✓ 满足 / ~ 部分 / ✗ 违反）',
+          { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        var cols = ['P1 零 receiver', 'P2 插入不变', 'P3 自权重 0', 'P4 空支撑'];
+        for (var c = 0; c < 4; c++) {
+          e.t(360 + c * 108, 72, cols[c], { size: 10, weight: 600, fill: MUTED(), reveal: true, delay: 40 * c });
+        }
+        var rows = [
+          ['sparsemax / entmax', '✗✗✗~'],
+          ['sigmoid attention', '✗✓✓~'],
+          ['ReLA / Softpick', '~~~~'],
+          ['softmax-plus-one', '✗✗✗~'],
+          ['StableMask', '✗✗✗✗'],
+          ['QK-norm', '✗✗✗✗'],
+          ['OAttention', '✓✓✓✓']
+        ];
+        for (var r = 0; r < rows.length; r++) {
+          var y = 100 + r * 42, last = r === rows.length - 1;
+          e.rect(36, y, 288, 34, null, last ? C('--a-green-bg', 'rgba(76,201,138,.12)') : 'none',
+            last ? GREEN() : LINE(), { rx: 4, sw: last ? 1.6 : 0.8, reveal: true, delay: 120 + r * 60 });
+          e.t(48, y + 22, rows[r][0], { size: 11, anchor: 'start', weight: last ? 700 : 500,
+            fill: last ? GREEN() : MUTED(), reveal: true, delay: 140 + r * 60 });
+          for (var c2 = 0; c2 < 4; c2++) {
+            var m = rows[r][1].charAt(c2);
+            var col = m === '✓' ? GREEN() : (m === '✗' ? RED() : C('--a-amber', '#E9B449'));
+            e.t(360 + c2 * 108, y + 25, m, { size: 16, weight: 700, fill: col,
+              reveal: true, delay: 180 + r * 60 + c2 * 20 });
+          }
+        }
+        e.t(410, 414, '差异不在「分数上做加法」，而在「门控取自表示范数、且同一系数复用到接收端与源端」',
+          { size: 11, fill: MUTED(), reveal: true, delay: 700 });
+      } }
+  ];
+}
+/* ---------- 场景 3：presence 系数 ρ_τ ---------- */
+function scene3() {
+  var BLUE = function () { return C('--a-blue', '#74B4FF'); },
+      RED = function () { return C('--a-red', '#FF7268'); },
+      GREEN = function () { return C('--a-green', '#4CC98A'); },
+      PURPLE = function () { return C('--a-purple', '#B79BFF'); },
+      MUTED = function () { return C('--a-fg-muted', '#888'); },
+      LINE = function () { return C('--a-line', '#444'); },
+      STRONG = function () { return C('--a-fg-strong', '#fff'); };
+  var X0 = 96, X1 = 748, Y1 = 356, Y0 = 92, NMAX = 4;
+  function px(n) { return X0 + (n / NMAX) * (X1 - X0); }
+  function py(p) { return Y1 - p * (Y1 - Y0); }
+  function axes(e, xlab) {
+    e.line(X0, Y1, X1, Y1, { stroke: MUTED(), sw: 1.2 });
+    e.line(X0, Y1, X0, Y0 - 12, { stroke: MUTED(), sw: 1.2 });
+    e.t(X0 - 12, Y1 + 4, '0', { size: 10, anchor: 'end', fill: MUTED() });
+    e.t(X0 - 12, py(0.5) + 4, '0.5', { size: 10, anchor: 'end', fill: MUTED() });
+    e.t(X0 - 12, py(1) + 4, '1.0', { size: 10, anchor: 'end', fill: MUTED() });
+    e.line(X0, py(1), X1, py(1), { stroke: LINE(), sw: 1, dash: '4 4' });
+    e.t(X1, py(1) - 8, 'p = 1（永远达不到）', { size: 10, anchor: 'end', fill: MUTED() });
+    e.t(422, Y1 + 30, xlab, { size: 11, fill: MUTED() });
+    e.t(X0 - 46, Y0 + 6, 'p', { size: 12, weight: 600, fill: PURPLE() });
+  }
+  function curve(e, tau, color, sw, dash) {
+    var d = [];
+    for (var k = 0; k <= 120; k++) {
+      var n = NMAX * k / 120, p = (n * n) / (tau + n * n);
+      d.push((k === 0 ? 'M' : 'L') + px(n).toFixed(1) + ' ' + py(p).toFixed(1));
+    }
+    return e.path(d.join(' '), { stroke: color, sw: sw || 2.6, dash: dash || null });
+  }
+  return [
+    { chip: 'ρ 曲线', title: 'ρ_τ(x) = ‖x‖² / (τ + ‖x‖²)：径向、可微、有界',
+      desc: '只依赖范数，所以对旋转不变——它测的是「有没有内容」，不是「内容指向哪」。恰好在原点为零，处处可微，值域 [0,1)。‖x‖² = τ 时 p = 1/2，所以 τ 是一个<strong>与激活尺度同量纲</strong>的旋钮。',
+      render: function (e) {
+        e.t(410, 40, 'presence 系数（图中 τ = 1）', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        axes(e, '‖x‖ →');
+        curve(e, 1, PURPLE());
+        e.circle(px(0), py(0), 5, { fill: GREEN(), reveal: true, delay: 300 });
+        e.t(px(0) + 14, py(0) - 12, 'ρ_τ(0) = 0（恰好）', { size: 11, anchor: 'start', fill: GREEN(), weight: 600, reveal: true, delay: 340 });
+        e.line(px(1), Y1, px(1), py(0.5), { stroke: LINE(), sw: 1, dash: '3 3', reveal: true, delay: 400 });
+        e.line(X0, py(0.5), px(1), py(0.5), { stroke: LINE(), sw: 1, dash: '3 3', reveal: true, delay: 400 });
+        e.circle(px(1), py(0.5), 4.5, { fill: PURPLE(), reveal: true, delay: 440 });
+        e.t(px(1) + 12, py(0.5) + 20, '‖x‖² = τ ⇒ p = 1/2', { size: 11, anchor: 'start', fill: PURPLE(), reveal: true, delay: 480 });
+      } },
+    { chip: '二次尾巴', title: '近原点是二次的：log-log 斜率实测 1.9997',
+      desc: '展开得 ρ_τ(x) = ‖x‖²/τ + O(‖x‖⁴)。二次比线性更「粘」在零附近——小残差被更强地压住，不会一碰就被唤醒。论文在 log-log 上量测斜率为 <strong>1.9997</strong>，与 2 的偏差在数值精度以内。',
+      duration: 3200,
+      render: function (e) {
+        e.t(410, 40, '原点附近：ρ 与二次渐近线重合', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        var Z = 0.55; /* 局部放大：横轴只到 0.55τ^{1/2} 量级 */
+        function lpx(n) { return X0 + (n / Z) * (X1 - X0); }
+        function lpy(p) { return Y1 - (p / 0.32) * (Y1 - Y0); }
+        e.line(X0, Y1, X1, Y1, { stroke: MUTED(), sw: 1.2 });
+        e.line(X0, Y1, X0, Y0 - 12, { stroke: MUTED(), sw: 1.2 });
+        e.t(422, Y1 + 30, '‖x‖ →（局部放大，τ = 1）', { size: 11, fill: MUTED() });
+        e.t(X0 - 12, Y1 + 4, '0', { size: 10, anchor: 'end', fill: MUTED() });
+        e.t(X0 - 12, lpy(0.3) + 4, '0.30', { size: 10, anchor: 'end', fill: MUTED() });
+        var d1 = [], d2 = [];
+        for (var k = 0; k <= 100; k++) {
+          var n = Z * k / 100;
+          d1.push((k ? 'L' : 'M') + lpx(n).toFixed(1) + ' ' + lpy(n * n / (1 + n * n)).toFixed(1));
+          d2.push((k ? 'L' : 'M') + lpx(n).toFixed(1) + ' ' + lpy(n * n).toFixed(1));
+        }
+        e.path(d2.join(' '), { stroke: BLUE(), sw: 2, dash: '6 4' });
+        e.path(d1.join(' '), { stroke: PURPLE(), sw: 2.8 });
+        e.t(X1 - 8, lpy(0.30) - 10, '‖x‖² / τ（二次渐近）', { size: 11, anchor: 'end', fill: BLUE(), reveal: true, delay: 300 });
+        e.t(X1 - 8, lpy(0.24) + 22, 'ρ_τ(x)', { size: 11, anchor: 'end', fill: PURPLE(), weight: 600, reveal: true, delay: 340 });
+        e.rect(300, 386, 226, 30, 'log-log 斜率实测 = 1.9997', 'none', GREEN(), { size: 12, rx: 4, reveal: true, delay: 460 });
+      } },
+    { chip: 'τ 的两端', title: 'τ = 10⁻⁸ 贴近 vanilla，τ = 1 变成全局衰减',
+      desc: '改造既有模型取 τ = 10⁻⁸：远小于典型 ‖h‖²，活跃 token 的 p 贴着 1，行为几乎与原模型一致。从头训练的小模型取 τ = ε_den = 10⁻⁶。而 τ = 1 会把 p 拉到显著小于 1 的区间，等于每层每个分支都加一道衰减。',
+      render: function (e) {
+        e.t(410, 40, '同一条曲线，两种 τ：一个近乎阶跃，一个平缓', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        axes(e, '‖x‖ →');
+        curve(e, 1, RED(), 2.6);
+        curve(e, 1e-8, GREEN(), 2.8);
+        e.t(px(2.6), py(0.94), 'τ = 10⁻⁸：p ≈ 1（除了恰好的 0）', { size: 11, fill: GREEN(), weight: 600, reveal: true, delay: 320 });
+        e.t(px(2.2), py(0.72), 'τ = 1：处处显著衰减', { size: 11, fill: RED(), weight: 600, reveal: true, delay: 400 });
+        e.circle(px(0), py(0), 5, { fill: STRONG(), reveal: true, delay: 460 });
+        e.t(px(0) + 14, py(0.06), '两条曲线在原点都严格等于 0', { size: 11, anchor: 'start', fill: STRONG(), reveal: true, delay: 500 });
+      } },
+    { chip: 'vanilla 极限', title: 'τ → 0⁺、ε_den → 0⁺ 时逐点收敛到标准 attention',
+      desc: 'OAttention 不是新架构，而是一个<strong>单参数族</strong>：τ 是可以连续调回原状的旋钮。这条极限正是「零微调改造」成立的理论依据——论文对 TabPFN v3 做的就是把 τ 设到 10⁻⁸ 然后直接跑。',
+      render: function (e) {
+        e.t(410, 40, 'OAttention 是以 τ 为参数的一族算子', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        var taus = [1, 0.3, 0.08, 0.02, 1e-8];
+        var cols = [RED(), C('--a-amber', '#E9B449'), PURPLE(), BLUE(), GREEN()];
+        axes(e, '‖x‖ →');
+        for (var k = 0; k < taus.length; k++) {
+          curve(e, taus[k], cols[k], k === taus.length - 1 ? 3 : 1.8, k === taus.length - 1 ? null : '5 4');
+        }
+        e.arrow(px(1.1), py(0.42), px(0.35), py(0.86), { stroke: MUTED(), marker: 'arrM', reveal: true, delay: 420 });
+        e.t(px(1.15), py(0.36), 'τ ↓', { size: 13, weight: 700, anchor: 'start', fill: MUTED(), reveal: true, delay: 460 });
+        e.rect(232, 384, 356, 32, 'τ → 0⁺, ε_den → 0⁺  ⇒  标准 softmax attention', 'none', GREEN(),
+          { size: 12, rx: 4, reveal: true, delay: 540 });
+      } }
+  ];
+}
+/* ---------- 场景 4：presence 的三处放置 ---------- */
+function scene4() {
+  var BLUE = function () { return C('--a-blue', '#74B4FF'); },
+      RED = function () { return C('--a-red', '#FF7268'); },
+      GREEN = function () { return C('--a-green', '#4CC98A'); },
+      PURPLE = function () { return C('--a-purple', '#B79BFF'); },
+      TEAL = function () { return C('--a-teal', '#48CFC4'); },
+      MUTED = function () { return C('--a-fg-muted', '#888'); },
+      LINE = function () { return C('--a-line', '#444'); },
+      STRONG = function () { return C('--a-fg-strong', '#fff'); };
+
+  /* 公式骨架：分子三因子 / 分数线 / 分母 / 输出门 */
+  function formula(e, hot) {
+    var f = { m: hot === 'm', pj: hot === 'pj', den: hot === 'den', pi: hot === 'pi' };
+    function col(on, base) { return on ? base : MUTED(); }
+    e.t(150, 96, '分子 u_ij', { size: 11, weight: 600, fill: MUTED(), reveal: true });
+    e.rect(210, 78, 96, 42, 'm_ij', 'none', col(f.m, BLUE()), { size: 13, rx: 4, sw: f.m ? 2.4 : 1.2, reveal: true, delay: 40 });
+    e.t(320, 105, '·', { size: 18, fill: MUTED(), reveal: true });
+    e.rect(336, 78, 96, 42, 'p_j', 'none', col(f.pj, PURPLE()), { size: 13, rx: 4, sw: f.pj ? 2.6 : 1.2, reveal: true, delay: 80, cls: f.pj ? 'hot' : null });
+    e.t(446, 105, '·', { size: 18, fill: MUTED(), reveal: true });
+    e.rect(462, 78, 130, 42, 'exp(s_ij)', 'none', col(false, BLUE()), { size: 13, rx: 4, reveal: true, delay: 120 });
+    e.line(196, 148, 620, 148, { stroke: STRONG(), sw: 2, reveal: true, delay: 160 });
+    e.t(150, 196, '分母', { size: 11, weight: 600, fill: MUTED(), reveal: true });
+    e.rect(210, 176, 120, 42, 'ε_den', 'none', col(f.den, TEAL()), { size: 13, rx: 4, sw: f.den ? 2.4 : 1.2, reveal: true, delay: 200 });
+    e.t(344, 203, '+', { size: 18, fill: MUTED(), reveal: true });
+    e.rect(360, 176, 232, 42, 'Σ_t m_it · p_t · exp(s_it)', 'none', col(f.den, PURPLE()),
+      { size: 12, rx: 4, sw: f.den ? 2.6 : 1.2, reveal: true, delay: 240, cls: f.den ? 'hot' : null });
+    e.t(660, 148, '= w_ij', { size: 14, weight: 600, anchor: 'start', fill: STRONG(), reveal: true, delay: 280 });
+    e.arrow(410, 226, 410, 262, { stroke: LINE(), marker: 'arrM', reveal: true, delay: 300 });
+    e.rect(268, 266, 96, 44, 'p_i', 'none', col(f.pi, TEAL()), { size: 14, rx: 4, sw: f.pi ? 2.8 : 1.2, reveal: true, delay: 340, cls: f.pi ? 'hot' : null });
+    e.t(378, 294, '·', { size: 18, fill: MUTED(), reveal: true });
+    e.rect(394, 266, 174, 44, 'Σ_j w_ij v_j', 'none', BLUE(), { size: 13, rx: 4, reveal: true, delay: 380 });
+    e.t(600, 294, '= OA_i', { size: 14, weight: 600, anchor: 'start', fill: STRONG(), reveal: true, delay: 420 });
+  }
+  return [
+    { chip: 'mask 保留', title: 'm_ij 原封不动：关系级控制没有被取代',
+      desc: 'presence 是<strong>加进来的第二个轴</strong>，不是 mask 的替代品。因果结构、路由许可、可见性权限继续由 m_ij 表达；presence 回答的是另一个问题——这个表示到底参不参与。',
+      render: function (e) {
+        e.t(410, 40, 'OAttention 完整算子：mask 与 presence 两个轴并存', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        formula(e, 'm');
+        e.t(410, 362, 'm_ij 按 query–source 对索引 · p_j 只依赖 h_j 自己', { size: 11, fill: MUTED(), reveal: true, delay: 480 });
+        e.t(410, 400, '前提：q, k, v 必须是 h 的无偏置线性投影，否则 h_i = 0 不再意味着 q_i = 0',
+          { size: 11, fill: C('--a-amber', '#E9B449'), reveal: true, delay: 540 });
+      } },
+    { chip: '源质量 p_j', title: 'p_j 乘在 exp(s_ij) 上 ⇒ 同时进分子和分母',
+      desc: '这是全篇最要紧的一处。p_j = 0 时该项从<strong>配分函数里彻底消失</strong>——不是「权重为零但分母仍含它」，是分母根本没有它。于是 Z 不变、旧权重逐位不变，(P2) 与 (P3) 一起成立。',
+      duration: 3200,
+      render: function (e) {
+        e.t(410, 40, 'p_j 出现在两个位置：分子的一个因子、分母求和的每一项', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        formula(e, 'pj');
+        e.arrow(384, 126, 460, 170, { stroke: PURPLE(), marker: 'arrP', sw: 2, dash: '4 3', reveal: true, delay: 460 });
+        e.t(410, 366, '同一个 p_j：分子里一次，分母求和里一次', { size: 12, fill: PURPLE(), weight: 600, reveal: true, delay: 520 });
+        e.t(410, 402, '⇒ 零源项 = 0 · exp(0) = 0，从归一化中消失，而不是占位 exp(0) = 1',
+          { size: 11, fill: GREEN(), reveal: true, delay: 580 });
+      } },
+    { chip: '分母 totalize', title: 'ε_den 是定义的一部分，不是数值补丁',
+      desc: '它让「支撑全空」有确定答案：Σ_t u_it = 0 时 w_ij ≡ 0，输出为 0（P4），而不是 0/0。这一步把一个需要运行时分支处理的边界情况，变成了公式本身的连续延拓。',
+      render: function (e) {
+        e.t(410, 40, '分母 = ε_den + presence 加权的配分函数', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        formula(e, 'den');
+        e.t(410, 366, '标准：Z → Z + 1（零源占位）　　OA：Z → Z（零源消失）', { size: 12, fill: TEAL(), weight: 600, reveal: true, delay: 500 });
+        e.t(410, 402, '对比 softmax-plus-one 的 Z/(Z+λ)：那是往分母里「加」常数，方向正好相反',
+          { size: 11, fill: RED(), reveal: true, delay: 560 });
+      } },
+    { chip: '只输出门不够', title: 'Appendix A.4：为什么源端那份不能省',
+      desc: '外层乘 p_r 无法修正内层 A_r(H⊕0) ≠ A_r(H) 这个事实——那个 exp(0) = 1 还在分母里。判据很清楚：<strong>逐点</strong>映射（FFN、仿射）输出门就够；<strong>跨 token 耦合</strong>的映射，presence 必须进入支撑本身。',
+      duration: 3400,
+      render: function (e) {
+        e.t(410, 38, '假设只加输出门：Ã_r(H) = p_r · A_r(H)', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        e.rect(56, 82, 300, 116, null, 'none', RED(), { rx: 8, sw: 1.6, reveal: true, delay: 60 });
+        e.t(206, 106, '只做输出门', { size: 12, weight: 700, fill: RED(), reveal: true, delay: 80 });
+        e.t(206, 138, 'Ã_r(H⊕0) = p_r · A_r(H⊕0)', { size: 12, mono: true, fill: MUTED(), reveal: true, delay: 120 });
+        e.t(206, 166, '≠  p_r · A_r(H) = Ã_r(H)', { size: 12, mono: true, weight: 700, fill: RED(), reveal: true, delay: 180 });
+        e.rect(464, 82, 300, 116, null, 'none', GREEN(), { rx: 8, sw: 1.6, reveal: true, delay: 240 });
+        e.t(614, 106, 'presence 进入支撑', { size: 12, weight: 700, fill: GREEN(), reveal: true, delay: 260 });
+        e.t(614, 138, 'OA_r(H⊕0) = OA_r(H)', { size: 12, mono: true, weight: 700, fill: GREEN(), reveal: true, delay: 300 });
+        e.t(614, 166, '零源项从 Z 中消失', { size: 11, fill: MUTED(), reveal: true, delay: 340 });
+        e.t(410, 246, '判据', { size: 12, weight: 700, fill: STRONG(), reveal: true, delay: 400 });
+        e.rect(96, 268, 280, 52, '逐点映射 F(h_i)|输出门 p_i · F(h_i) 足够', 'none', GREEN(), { size: 11, rx: 6, reveal: true, delay: 440 });
+        e.rect(444, 268, 280, 52, '跨 token 耦合映射|必须改写支撑（分子+分母）', 'none', RED(), { size: 11, rx: 6, reveal: true, delay: 480 });
+        e.t(410, 384, '论文里满足后者的两个例子：OAttention（配分函数）与 OStandardize（均值/方差）',
+          { size: 11, fill: MUTED(), reveal: true, delay: 560 });
+      } }
+  ];
+}
+/* ---------- 场景 5：O-Closure 与 OTransformer ---------- */
+function scene5() {
+  var BLUE = function () { return C('--a-blue', '#74B4FF'); },
+      RED = function () { return C('--a-red', '#FF7268'); },
+      GREEN = function () { return C('--a-green', '#4CC98A'); },
+      PURPLE = function () { return C('--a-purple', '#B79BFF'); },
+      AMBER = function () { return C('--a-amber', '#E9B449'); },
+      MUTED = function () { return C('--a-fg-muted', '#888'); },
+      LINE = function () { return C('--a-line', '#444'); },
+      STRONG = function () { return C('--a-fg-strong', '#fff'); };
+
+  var LAYERS = [
+    ['OInject', '加性位置/类型编码 h_i + p_i·e_i'],
+    ['OAttention', 'p_j 进支撑，p_i 门输出'],
+    ['ONorm', '归一化 + 仿射，用 G_O 门住 β'],
+    ['OFFN', '逐点 FFN，用 G_O 容忍 bias'],
+    ['读出 ν_H^O', 'presence 加权 token 测度']
+  ];
+  /* broken: 哪些层泄漏（索引数组） */
+  function stack(e, broken, headTxt) {
+    e.t(410, 36, headTxt, { size: 13, weight: 600, fill: STRONG(), reveal: true });
+    e.t(340, 68, '老 token', { size: 11, weight: 600, fill: BLUE(), reveal: true });
+    e.t(660, 68, '插入的零 token', { size: 11, weight: 600, fill: PURPLE(), reveal: true });
+    var leaked = false;
+    for (var r = 0; r < LAYERS.length; r++) {
+      var y = 88 + r * 62;
+      var bad = broken.indexOf(r) >= 0;
+      if (bad) leaked = true;
+      e.rect(36, y, 246, 46, LAYERS[r][0] + '|' + LAYERS[r][1], 'none', bad ? RED() : GREEN(),
+        { size: 10, rx: 6, sw: bad ? 2.2 : 1.4, reveal: true, delay: 60 + r * 70 });
+      for (var j = 0; j < 3; j++) {
+        e.rect(316 + j * 92, y + 8, 74, 30, 'h', 'none', BLUE(),
+          { size: 10, rx: 4, reveal: true, delay: 100 + r * 70 + j * 20, opacity: 0.85 });
+      }
+      var zc = leaked ? RED() : GREEN();
+      e.rect(618 + 0, y + 8, 108, 30, leaked ? '≠ 0 被唤醒' : '恰为 0', 'none', zc,
+        { size: 10, rx: 4, sw: leaked ? 2.2 : 1.6, reveal: true, delay: 140 + r * 70,
+          cls: bad ? 'hot' : null });
+      if (r < LAYERS.length - 1) {
+        e.arrow(672, y + 40, 672, y + 56, { stroke: zc, marker: leaked ? 'arrR' : 'arrG', sw: 1.4, reveal: true, delay: 160 + r * 70 });
+      }
+    }
+    return leaked;
+  }
+  return [
+    { chip: '交换图', title: 'Definition 2：插入与映射可交换',
+      desc: '一个等式说了两件事：<strong>状态零吸收</strong>（插入位置的输出仍是零）与<strong>上下文擦除</strong>（插入对所有老位置完全不可见）。注意元数据也要一并扩展 c → c⁺，这一点后面会变成一条限制。',
+      render: function (e) {
+        e.t(410, 38, 'M_{I∪{j}}( ι_j H_I ; c⁺ ) = ι_j M_I( H_I ; c )', { size: 15, weight: 700, fill: STRONG(), reveal: true });
+        e.rect(120, 96, 170, 58, 'H_I', 'none', BLUE(), { size: 14, reveal: true, delay: 60 });
+        e.rect(520, 96, 170, 58, 'M_I(H_I)', 'none', BLUE(), { size: 14, reveal: true, delay: 100 });
+        e.arrow(290, 125, 516, 125, { stroke: BLUE(), marker: 'arrB', reveal: true, delay: 140 });
+        e.t(403, 114, 'M_I', { size: 12, weight: 600, fill: BLUE(), reveal: true, delay: 160 });
+        e.rect(120, 258, 170, 58, 'ι_j H_I', 'none', PURPLE(), { size: 14, reveal: true, delay: 200 });
+        e.rect(520, 258, 170, 58, 'ι_j M_I(H_I)', 'none', GREEN(), { size: 13, reveal: true, delay: 300 });
+        e.arrow(205, 154, 205, 254, { stroke: PURPLE(), marker: 'arrP', reveal: true, delay: 240 });
+        e.t(196, 210, 'ι_j', { size: 12, anchor: 'end', weight: 600, fill: PURPLE(), reveal: true, delay: 250 });
+        e.arrow(605, 154, 605, 254, { stroke: PURPLE(), marker: 'arrP', reveal: true, delay: 260 });
+        e.t(616, 210, 'ι_j', { size: 12, anchor: 'start', weight: 600, fill: PURPLE(), reveal: true, delay: 270 });
+        e.arrow(290, 287, 516, 287, { stroke: GREEN(), marker: 'arrG', sw: 2.4, reveal: true, delay: 340 });
+        e.t(403, 276, 'M_{I∪{j}}', { size: 12, weight: 600, fill: GREEN(), reveal: true, delay: 360 });
+        e.t(230, 366, '状态零吸收：插入位输出仍为 0', { size: 11, fill: GREEN(), weight: 600, reveal: true, delay: 420 });
+        e.t(230, 396, '上下文擦除：老位置逐位不变', { size: 11, fill: GREEN(), weight: 600, reveal: true, delay: 460 });
+        e.t(620, 380, '图交换 ⇔ O-closed', { size: 12, weight: 700, fill: STRONG(), reveal: true, delay: 500 });
+      } },
+    { chip: '两个提升算子', title: 'Theorem 1：复合与残差保持 O-closure',
+      desc: '恒等映射显然 O-closed（0 + 0 = 0），逐项相加保持等式；复合时把内层等式代进外层即可。于是构造完整模型就变成「把每个组件都做成 O-closed」这件工程活。',
+      duration: 3200,
+      render: function (e) {
+        e.t(410, 36, '两个通用提升算子', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        e.rect(48, 74, 330, 128, null, 'none', GREEN(), { rx: 8, reveal: true, delay: 60 });
+        e.t(213, 102, 'branch lift（分支提升）', { size: 12, weight: 700, fill: GREEN(), reveal: true, delay: 80 });
+        e.t(213, 138, 'G_O[F](h_i) = p_i · F(h_i)', { size: 14, mono: true, fill: STRONG(), reveal: true, delay: 120 });
+        e.t(213, 174, 'F 逐点 ⇒ 只门输出就够', { size: 11, fill: MUTED(), reveal: true, delay: 160 });
+        e.rect(442, 74, 330, 128, null, 'none', PURPLE(), { rx: 8, reveal: true, delay: 200 });
+        e.t(607, 102, 'residual lift（残差提升）', { size: 12, weight: 700, fill: PURPLE(), reveal: true, delay: 220 });
+        e.t(607, 138, 'R_O[F](h_i) = h_i + ρ_τ(h_i)·F(h_i)', { size: 12, mono: true, fill: STRONG(), reveal: true, delay: 260 });
+        e.t(607, 174, 'h_i = 0 时两项都是 0', { size: 11, fill: MUTED(), reveal: true, delay: 300 });
+        e.t(410, 240, '为什么不直接写 h_i + F(h_i) 然后指望 F(0) = 0？', { size: 12, weight: 600, fill: AMBER(), reveal: true, delay: 360 });
+        e.t(410, 272, '因为带 bias 的 FFN 有 F(0) ≠ 0，LayerNorm 的 β ≠ 0 同理——残差会把零 token 顶起来',
+          { size: 11, fill: MUTED(), reveal: true, delay: 400 });
+        e.rect(200, 300, 420, 46, 'O-closed 族在  M′∘M  与  I + U  下封闭（Theorem 1）', 'none', GREEN(),
+          { size: 12, rx: 6, sw: 1.8, reveal: true, delay: 460 });
+        e.t(410, 388, '归纳步骤：插入分量仍是零 · 老分量仍相等 · 逐层传递', { size: 11, fill: MUTED(), reveal: true, delay: 520 });
+      } },
+    { chip: 'OTransformer', title: '闭包链完整时：插入位隐状态恒为 0',
+      desc: '每一环都被提升：OInject 门住加性编码，OAttention 改支撑，ONorm 门住 β，OFFN 门住 bias，读出改用 presence 加权测度 ν_H^O = Σ_i p_i δ_(i,h_i)。消融实验里这一臂的插入位隐状态 L∞ 是<strong>精确的 0</strong>。',
+      render: function (e) { stack(e, [], 'OTransformer：五个组件全部 O-closed'); } },
+    { chip: '断在哪里', title: 'OA-only：只换 attention，7.982 → 7.983',
+      desc: '唤醒零 token 的<em>不是</em> attention，是加性位置编码、LayerNorm 的 β 和 FFN 的 bias。第一层过后零 token 已有非零范数，presence 随之被点亮，后面的层再也无从分辨。Theorem 1 要求整条链，缺一环等于没做。',
+      duration: 3400,
+      render: function (e) {
+        stack(e, [0, 2, 3], 'OA-only：只提升 attention，其余三处泄漏');
+        e.t(410, 410, '标准 7.982 → OA-only 7.983：几乎没有改善', { size: 12, weight: 700, fill: RED(), reveal: true, delay: 620 });
+      } }
+  ];
+}
+/* ---------- 场景 6：四组实验数据 ---------- */
+function scene6() {
+  var BLUE = function () { return C('--a-blue', '#74B4FF'); },
+      RED = function () { return C('--a-red', '#FF7268'); },
+      GREEN = function () { return C('--a-green', '#4CC98A'); },
+      AMBER = function () { return C('--a-amber', '#E9B449'); },
+      MUTED = function () { return C('--a-fg-muted', '#888'); },
+      STRONG = function () { return C('--a-fg-strong', '#fff'); };
+  var BX = 262, BW = 400, BH = 26;
+  function pct(v) { return '+' + v.toFixed(3) + '%'; }
+  return [
+    { chip: '契约测试', title: '契约测试：区分「恰为零」与「数值上小」',
+      desc: '前三行是浮点级一致（10⁻⁸ 是 fp32 的噪声地板），后两行是<strong>严格等于零</strong>。这个区分是论文刻意做出来的：契约要求的是精确性，不是小量。硬件为 NVIDIA GB10。',
+      render: function (e) {
+        e.t(410, 38, '契约测试（NVIDIA GB10）', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        var rows = [
+          ['OAttention 与式 (5) 的逐位一致性', 'L∞ ≤ 8.94×10⁻⁸', AMBER()],
+          ['插入零 token 后老 token 输出变化', 'L∞ ≤ 4.47×10⁻⁸', AMBER()],
+          ['插入零 token 后老权重变化', 'L∞ ≤ 5.96×10⁻⁸', AMBER()],
+          ['插入 token 作为 receiver 的输出', '恰为 0', GREEN()],
+          ['插入 token 作为 source 的权重', '恰为 0', GREEN()],
+          ['6 组 dtype × head 配置的有限性', '6 / 6 全部有限', GREEN()]
+        ];
+        for (var r = 0; r < rows.length; r++) {
+          var y = 78 + r * 52;
+          e.rect(40, y, 470, 40, null, 'none', C('--a-line', '#444'), { rx: 5, sw: 0.9, reveal: true, delay: 60 + r * 70 });
+          e.t(56, y + 25, rows[r][0], { size: 11, anchor: 'start', fill: MUTED(), reveal: true, delay: 80 + r * 70 });
+          e.t(536, y + 25, rows[r][1], { size: 12, anchor: 'start', mono: true, weight: 700,
+            fill: rows[r][2], reveal: true, delay: 120 + r * 70 });
+        }
+        e.t(410, 414, '「恰为 0」与「≤ 10⁻⁸」是两类不同的结论，不能混着读', { size: 11, fill: MUTED(), reveal: true, delay: 560 });
+      } },
+    { chip: 'TabPFN 改造', title: 'TabPFN v3 零微调改造：代价在千分之一以下',
+      desc: 'τ = 10⁻⁸，6 个数据集 × 3 个种子 = 18 组，<strong>不做任何微调</strong>。数据集 bodyfat / concrete / cpu_small / kin8nm / space_ga / tecator，种子 11/23/37，上限 512 训练 + 256 测试。+ 表示 RMSE 略微上升。',
+      duration: 3000,
+      render: function (e) {
+        e.t(410, 38, '平均 RMSE 相对变化（越小越好，τ = 10⁻⁸）', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        e.bar(BX, 110, BW, BH + 6, '仅 OAttention', 0.088, 0.2, GREEN(), { fmt: pct, delay: 80 });
+        e.bar(BX, 186, BW, BH + 6, 'Full-O（全组件）', 0.177, 0.2, BLUE(), { fmt: pct, delay: 260 });
+        e.t(410, 274, 'R² 变化：OA +8.4×10⁻⁵ · Full-O +1.2×10⁻⁵', { size: 12, fill: MUTED(), reveal: true, delay: 460 });
+        e.rect(180, 306, 460, 44, '基本可以理解为「免费」：改造不需要重新训练', 'none', GREEN(),
+          { size: 12, rx: 6, sw: 1.6, reveal: true, delay: 540 });
+        e.t(410, 396, 'vanilla 极限（τ → 0⁺）正是这件事成立的理论依据', { size: 11, fill: MUTED(), reveal: true, delay: 600 });
+      } },
+    { chip: 'τ = 1 压力', title: 'τ = 1：Full-O 崩到 +47%，OA-only 仍然 +0.138%',
+      desc: 'attention 内部的 p_j 会被归一化吸收（分子分母同乘接近的因子，比值受影响小），所以 OA-only 很稳。但 G_O / R_O 里的 p_i 是<strong>裸乘在输出上</strong>的，每层每个分支乘一次 p &lt; 1，逐层复合就是指数衰减。',
+      duration: 3400,
+      render: function (e) {
+        e.t(410, 38, 'τ 从 10⁻⁸ 拉到 1（54 次拟合）：平均 / 最坏 RMSE 变化', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        e.bar(BX, 90, BW, BH, '仅 OAttention', 0.138, 105, GREEN(), { fmt: pct, delay: 60 });
+        e.bar(BX, 156, BW, BH, 'Full-O 平均', 47.05, 105, RED(), { fmt: pct, delay: 220 });
+        e.bar(BX, 222, BW, BH, 'Full-O · tecator', 100.143, 105, RED(), { fmt: pct, delay: 380 });
+        e.bar(BX, 288, BW, BH, 'Full-O · bodyfat', 95.354, 105, RED(), { fmt: pct, delay: 540 });
+        e.t(410, 366, 'τ 必须相对激活尺度取小——这不是调参偏好，是结构性要求', { size: 12, weight: 600, fill: AMBER(), reveal: true, delay: 700 });
+        e.t(410, 400, '根源是 ρ_τ 的值域严格小于 1：任何有限范数的 token 都被略微衰减', { size: 11, fill: MUTED(), reveal: true, delay: 760 });
+      } },
+    { chip: '三臂消融', title: '7.982 → 7.983：全篇最有说服力的一处',
+      desc: '两层小模型从头训练（d=32，4 头，FFN 128，100 epoch，τ = ε_den = 10⁻⁶，k ∈ {0,1,4}，共 180 次拟合），量测插入位置的隐状态。只换 attention，被唤醒的程度<strong>丝毫未减</strong>；OTransformer 那边的 0 是真正的 0。',
+      duration: 3600,
+      render: function (e) {
+        e.t(410, 36, '插入位置隐状态 L∞（最大值，越小越好）', { size: 13, weight: 600, fill: STRONG(), reveal: true });
+        function f3(v) { return v === 0 ? '0（精确）' : v.toFixed(3); }
+        e.bar(BX, 78, BW, BH, '标准 Transformer', 7.982, 8.4, RED(), { fmt: f3, delay: 60 });
+        e.bar(BX, 138, BW, BH, '仅 OAttention', 7.983, 8.4, AMBER(), { fmt: f3, delay: 220 });
+        e.bar(BX, 198, BW, BH, 'OTransformer', 0, 8.4, GREEN(), { fmt: f3, delay: 380 });
+        e.bar(BX, 258, BW, BH, '结构对照（不插入）', 0, 8.4, BLUE(), { fmt: f3, delay: 500 });
+        e.t(410, 330, '推理期插入时的预测 RMS 漂移：1 个 token 标准 7.39×10⁻² vs OA 3.69×10⁻⁵',
+          { size: 11, fill: MUTED(), reveal: true, delay: 640 });
+        e.t(410, 356, '4 个 token 标准 2.18×10⁻¹ vs OA 1.64×10⁻⁴ —— 三个数量级的差距',
+          { size: 11, fill: MUTED(), reveal: true, delay: 690 });
+        e.rect(140, 378, 540, 40, '惰性不是某一层的属性，是整条链的属性', 'none', GREEN(),
+          { size: 12, rx: 6, sw: 1.8, reveal: true, delay: 760 });
+      } }
+  ];
+}
+/* ---------- 装配 ---------- */
+var builders = { svg1: scene1, svg2: scene2, svg3: scene3, svg4: scene4, svg5: scene5, svg6: scene6 };
+var engines = {};
+function initAll() {
+  for (var id in builders) {
+    var svg = document.getElementById(id);
+    if (!svg) continue;
+    engines[id] = new AnimEngine(svg, { steps: builders[id]() });
+  }
+}
+function engineOf(node) {
+  var frame = node.closest('.anim-frame');
+  if (!frame) return null;
+  var svg = frame.querySelector('svg');
+  return svg ? engines[svg.id] : null;
+}
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('button');
+  if (!b || !b.closest('.anim-frame')) return;
+  var eng = engineOf(b);
+  if (!eng) return;
+  if (b.classList.contains('btn-next')) { eng.pause(); eng.next(); }
+  else if (b.classList.contains('btn-prev')) { eng.pause(); eng.prev(); }
+  else if (b.classList.contains('btn-reset')) eng.reset();
+  else if (b.classList.contains('btn-play')) eng.toggle();
+  else if (b.classList.contains('stage-chip')) { eng.pause(); eng.goTo(+b.dataset.idx); }
+});
+document.addEventListener('input', function (ev) {
+  if (!ev.target.classList.contains('speed')) return;
+  var eng = engineOf(ev.target);
+  if (eng) eng.setSpeed(parseFloat(ev.target.value));
+});
+document.addEventListener('keydown', function (ev) {
+  var frame = document.activeElement && document.activeElement.closest && document.activeElement.closest('.anim-frame');
+  if (!frame) return;
+  var eng = engineOf(document.activeElement);
+  if (!eng) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); eng.pause(); eng.next(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); eng.pause(); eng.prev(); }
+  else if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON') { ev.preventDefault(); eng.toggle(); }
+});
+
+/* SVG 里的色值是切换主题那一刻读出来的具体值，主题一变就过期。
+   用 MutationObserver 盯 data-theme，无论用户点的是站点导航里的开关还是
+   本文右下角这个按钮，都会重绘当前步。存储键与站点保持一致（'theme'）。 */
+function redrawAll() {
+  for (var id in engines) { engines[id].pause(); engines[id].goTo(engines[id].i); }
+}
+window.toggleTheme = function () {
+  var root = document.documentElement;
+  var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (err) {}
+};
+if (window.MutationObserver) {
+  new MutationObserver(function () { setTimeout(redrawAll, 30); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+window.toggleToc = function () {
+  var toc = document.getElementById('tocNav');
+  var btn = document.querySelector('.toc-toggle');
+  var hidden = toc.hasAttribute('hidden');
+  if (hidden) toc.removeAttribute('hidden'); else toc.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+};
+
+/* TOC 高亮 + 回到顶部 */
+function initChrome() {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if ('IntersectionObserver' in window && secs.length) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  var bt = document.getElementById('backTop');
+  if (bt) window.addEventListener('scroll', function () { bt.classList.toggle('show', window.scrollY > 400); }, { passive: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { initAll(); initChrome(); });
+} else { initAll(); initChrome(); }
+})();
+</script>
+</body>
+</html>
