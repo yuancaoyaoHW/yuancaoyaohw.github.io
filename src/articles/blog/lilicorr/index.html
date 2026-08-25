@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LiLiCorr：把并行草稿的边际分布相互关联起来</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --teal: var(--a-teal); --teal-bg: var(--a-teal-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+.callout-teal { background: var(--teal-bg); border-color: var(--teal); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 640px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+.anim-progress { height: 4px; background: var(--code-bg); }
+.anim-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.anim-stage-rail { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid var(--a-border); background: transparent; color: var(--fg-muted); cursor: pointer; }
+.anim-stage-rail .stage-chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--a-on-solid); }
+.anim-stage-rail .stage-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-status { padding: 10px 16px 14px; font-size: 13px; }
+.anim-status .step-info { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.anim-status .step-desc { color: var(--fg-soft); line-height: 1.6; }
+.anim-legend { padding: 0 16px 14px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--fg-muted); }
+.anim-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.anim-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.back-top, .theme-toggle { position: fixed; right: 24px; z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--a-border); background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 15px; }
+.back-top { bottom: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.back-top.show { opacity: 1; pointer-events: auto; }
+.theme-toggle { bottom: 72px; }
+.back-top:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.toc-toggle { display: none; }
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; max-height: 40vh; }
+  .content { width: 100%; }
+  .toc[hidden] { display: none; }
+  .toc-toggle { display: block; margin-bottom: 10px; padding: 6px 12px; border: 1px solid var(--a-border); border-radius: 6px; background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: none; }
+  .anim-canvas-wrap svg .anim-layer .hot { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body class="interactive-body">
+<script>
+/* SVG 的呈现属性（fill / stroke）不解析 var()，所以动画脚本要在运行时把
+   语义令牌读成具体色值。主题切换后重绘即可拿到新值。 */
+(function () {
+  window.aC = function (name, fallback) {
+    var host = document.querySelector('.interactive-body, .article-body') || document.documentElement;
+    var v = getComputedStyle(host).getPropertyValue(name);
+    return (v && v.trim()) || fallback || '#888';
+  };
+})();
+</script>
+<button class="theme-toggle" id="artThemeBtn" onclick="toggleTheme()" aria-label="切换深浅主题" title="切换主题">◑</button>
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+  <button class="toc-toggle" onclick="toggleToc()" aria-expanded="true" aria-controls="tocNav">目录</button>
+  <nav class="toc" id="tocNav" aria-label="文章目录">
+    <h3>目录</h3>
+    <a href="#hook">LiLiCorr 是什么</a>
+    <a href="#setup">① 前置：块草稿与前缀接受</a>
+    <a href="#marginals">② 病因：边际可信，联合不可信</a>
+    <a href="#lattice">③ 骨架：top-k 候选格</a>
+    <a href="#cosine">④ 创新一：in / out 向量与余弦配对</a>
+    <a href="#parallel">⑤ 创新二：一次前向 + 批量矩阵打分</a>
+    <a href="#greedy">⑥ 创新三：局部归一化与贪心走链</a>
+    <a href="#viterbi">⑦ 为什么不要最优路径</a>
+    <a href="#train">⑧ 训练侧：监督、惩罚、联合调</a>
+    <a href="#experiments">⑨ 实验复盘</a>
+    <a href="#critique">⑩ 局限与存疑</a>
+    <a href="#summary">⑪ 一句话总结</a>
+  </nav>
+
+  <main class="content">
+    <section class="hook" id="hook">
+      <h1>LiLiCorr：把并行草稿的边际分布相互关联起来</h1>
+      <p class="tagline">DFlash 这类扩散式块草稿头一次前向就能吐出整块未来 token，但它是在<strong>逐位置边际</strong>上训练的——每个位置单看都合理，连起来读却不通。LiLiCorr 的解法不是去建模那个 $V^B$ 大小的联合分布，而是：每个位置留 top-$K$ 候选，用<strong>一次</strong>轻量前向给每个候选配一对 <code>in</code> / <code>out</code> 向量，相邻候选之间的<strong>余弦相似度</strong>就是它们的相容分数。</p>
+      <div class="badges">
+        <span class="badge badge-accent">arXiv:2608.20530v1</span>
+        <span class="badge badge-green">接受长度 +9~19%</span>
+        <span class="badge badge-blue">打分头仅占单块延迟 2.8%</span>
+        <span class="badge badge-purple">72 个设置里 70 个吞吐第一</span>
+      </div>
+    </section>
+
+    <section id="setup">
+      <h2>① 前置：块草稿头与前缀接受这两条约束</h2>
+      <p>投机解码的账很简单：让一个便宜的 drafter 提前猜 $B$ 个 token，target 模型一次前向把它们全部验证，保留<strong>最长正确前缀</strong>，剩下的丢掉。收益完全取决于「平均每次能被接受多长」，也就是 <em>acceptance length</em>。</p>
+      <p>本文的 drafter 是 <strong>DFlash</strong>——块扩散式的草稿头，一次前向直接输出块内每个位置（论文里叫 <em>slot</em>）的分布。这比 EAGLE 那种逐 token 自回归展开便宜得多，因为不用在草稿阶段串行 $B$ 次。</p>
+      <p>代价藏在训练目标里。DFlash 的监督是<strong>逐 slot 的边际交叉熵</strong>：slot 3 学的是「在这个上下文下，第 3 个位置该是什么」，而不是「在 slot 1、2 已经确定成某个具体取值的条件下，第 3 个位置该是什么」。于是每个 slot 各自取 argmax 时，得到的是一串各自最像、彼此不一定搭的 token。</p>
+      <div class="callout callout-blue">
+        <strong>为什么不干脆建模联合分布？</strong>组合爆炸。$B$ 个位置、词表 $V$，联合分布有 $V^B$ 个取值。这是离散扩散文献里的老问题，不是 DFlash 的实现缺陷。
+      </div>
+      <p>还有一条约束容易被忽略，但它决定了 LiLiCorr 后面几乎所有设计选择：<strong>接受是前缀式的</strong>。slot 1 错了，后面 $B-1$ 个 slot 猜得再准也一分不得。这条约束会在第 ⑥⑦ 节反复出现。</p>
+    </section>
+
+    <section id="marginals">
+      <h2>② 病因：边际可信，联合不可信</h2>
+      <p>先把病症看清楚。下面这一幕演示同一个上下文下，各 slot 的边际分布分别都很像样，但逐 slot 取 argmax 拼出来的串在 target 眼里第二个 token 就崩了。</p>
+
+      <div class="anim-frame" data-anim="1">
+        <div class="anim-header">
+          <span class="anim-title">动画 1 · 逐 slot argmax 为什么会拼出不通的句子</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 440" role="img" aria-label="逐 slot 边际分布各自合理，argmax 拼接后语义断裂，target 只接受一个 token"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>边际分布</span>
+          <span><i style="background:var(--a-green)"></i>被接受</span>
+          <span><i style="background:var(--a-red)"></i>被拒绝</span>
+          <span><i style="background:var(--a-amber)"></i>联合不相容</span>
+        </div>
+      </div>
+
+      <p>关键观察是：<strong>正确的 token 通常并没有从候选集里消失，它只是没排在第一。</strong>这句话是整篇论文的立足点——如果真值连 top-$K$ 都进不去，任何重排都救不回来；而实测它大多在里面。于是问题从「生成」降级成「<strong>重排</strong>」，而重排的搜索空间只有 $K^{B-1}$，还能进一步用一阶结构砍成线性。</p>
+      <div class="callout callout-orange">
+        <strong>同期工作的两条路。</strong>一条是把边际展开成<strong>草稿树</strong>（DDTree、Trees-from-marginals），让 target 一次验证多条续写——赢在不用改 drafter，输在 target 侧算力。另一条是在<strong>草稿时</strong>就恢复连贯性（Domino、D-PACE）。LiLiCorr 属于后者，对手也主要是后者。
+      </div>
+    </section>
+    <section id="lattice">
+      <h2>③ 骨架：把 top-$K$ 候选摆成一张格</h2>
+      <p>LiLiCorr 的数据结构简单到可以画在纸上。块长 $B=16$，其中 slot $1,\dots,B-1$ 是要草拟的位置，slot $0$ 是<strong>锚点</strong>——已经被 target 验证通过的上一个 token，所以它只有一个取值（$K_0=1$，其余 $K_s=K=8$）。</p>
+      <p>每个待草拟 slot 从 drafter 自己的边际里取 top-$K$ 保留下来，于是得到一张 $(B-1)\times K$ 的<strong>候选格</strong>（lattice）。整块的候选组合是 $K^{B-1}$ 条路径，但 LiLiCorr 不去枚举路径，它只给<strong>相邻两列之间的每一对候选</strong>打一个分。</p>
+
+      <div class="anim-frame" data-anim="2">
+        <div class="anim-header">
+          <span class="anim-title">动画 2 · 从边际分布到候选格</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 440" role="img" aria-label="每个 slot 截取 top-K 候选，构成 (B-1)×K 的候选格，只有相邻列之间连边"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-accent)"></i>锚点（已验证）</span>
+          <span><i style="background:var(--a-blue)"></i>保留的候选</span>
+          <span><i style="background:var(--a-fg-muted)"></i>被截掉的尾部</span>
+          <span><i style="background:var(--a-purple)"></i>相邻对</span>
+        </div>
+      </div>
+
+      <p>候选格里每个格点还要变成一个向量喂给打分头。论文的构造是<strong>四项相加</strong>（都投到头的隐藏宽度 1024）：</p>
+      <ol>
+        <li><strong>target 的输入词嵌入</strong>——该候选 token 在 target 词表里的 embedding，冻结不训，降维投影后使用。这一项让打分头共享 target 的词义空间。</li>
+        <li><strong>drafter 在该 slot 的隐藏状态</strong>——降维投影，<em>由该 slot 的 $K$ 个候选共享</em>。它携带位置级的上下文。</li>
+        <li><strong>五个置信度标量过一个两层小网络</strong>——全部从 drafter 在该 slot 的分布里读：全词表下的 log 概率与概率、与该 slot 最可能 token 的 log 概率差、归一化到 $[0,1]$ 的排名，以及分布的熵。这让打分头知道「drafter 自己有多确定」。</li>
+        <li><strong>两张可学习查表</strong>——一张按 slot 索引，一张按排名索引。</li>
+      </ol>
+      <p class="note-inline">另外单独构造一个「target 状态」向量与每个候选融合：取产生最后一个已验证 token 的 target 隐藏状态，跨五个采样层折叠、归一化、投到同一宽度。</p>
+    </section>
+
+    <section id="cosine">
+      <h2>④ 创新一：每个候选带一对 in / out 向量，配对靠余弦</h2>
+      <p>这是全文最巧的一步。打分头是一个<strong>两层双向 Transformer</strong>，跑在这 $(B-1)\times K$ 个候选向量上（外加锚点）。它为<strong>每个</strong>候选输出两个 $d_e=1024$ 维向量：</p>
+      <ul>
+        <li><code>out</code> 向量 $\mathbf{o}$：这个候选<em>向后</em>期待什么。</li>
+        <li><code>in</code> 向量 $\mathbf{i}$：这个候选<em>向前</em>要求什么。</li>
+      </ul>
+      <p>相邻 slot 的一对候选 $(k, k')$ 的相容分数就是「前者的 out」与「后者的 in」的余弦，乘一个标量 $\sigma$：</p>
+      <div class="eq">
+        $$\phi^{\mathrm{p}}(s,k,k')=\sigma\,\cos\!\big(\mathbf{o}_{s,k},\;\mathbf{i}_{s+1,k'}\big),\qquad s=0,\dots,B-2$$
+        <span class="eq-note">$\sigma=8.0$，所以每个分数被硬性夹在 $[-\sigma,\sigma]$ 内。$s=0$ 时只有锚点一个 out 向量。</span>
+      </div>
+      <div class="callout callout-purple">
+        <strong>余弦不是审美选择，是稳定器。</strong>论文明确写了：如果不用余弦而让分数自由取值，向量模长就成了一个无约束的自由度，联合训练时会出现<em>分数量级失控</em>，进而<strong>污染乃至彻底毁掉共享的 DFlash 骨干</strong>。余弦把每个学到的因子锁进 $[-\sigma,\sigma]$，代价是牺牲了模长这个表达维度。这是把「能不能联合训练」换来的。
+      </div>
+      <h3>局部因子，全局信息</h3>
+      <p>值得单独说一句：<strong>因子化是局部的，信息不是。</strong>分数只连接相邻 slot，看起来像一阶马尔可夫；但产生这些向量的是一次<em>双向</em> Transformer 前向，注意力覆盖整张格。所以 slot 5 和 slot 6 之间那个分数，实际上已经「看过」slot 1 到 slot 15 的所有候选。这正是它敢用一阶结构去逼近联合分布的原因——一阶只是<em>读出方式</em>，不是<em>表示能力</em>。</p>
+
+      <div class="anim-frame" data-anim="3">
+        <div class="anim-header">
+          <span class="anim-title">动画 3 · in / out 向量与余弦配对</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 440" role="img" aria-label="双向 Transformer 为每个候选产出 in 与 out 向量，相邻候选按 out 与 in 的余弦相似度配对"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-teal)"></i>out 向量</span>
+          <span><i style="background:var(--a-purple)"></i>in 向量</span>
+          <span><i style="background:var(--a-green)"></i>高余弦（相容）</span>
+          <span><i style="background:var(--a-red)"></i>低余弦（冲突）</span>
+        </div>
+      </div>
+    </section>
+    <section id="parallel">
+      <h2>⑤ 创新二：一次前向、全部分数批量算完，只留一段廉价串行</h2>
+      <p>论文对延迟的处理值得抄。整个解码只有两个阶段，而<strong>网络只跑一次</strong>：</p>
+      <h3>并行阶段</h3>
+      <p>一次 LiLiCorr 前向产出所有候选的 out 和 in 向量（含锚点的 out）。块内有 $B-1$ 个相邻 slot 对，其中第一对是「锚点 × $K$」，其余 $B-2$ 对是「$K \times K$」，所以总分数个数是</p>
+      <div class="eq">
+        $$(B-2)K^{2}+K \;=\; 14\times 64 + 8 \;=\; 904$$
+        <span class="eq-note">$B=16$、$K=8$。904 个余弦，写成一批 batched matmul 一次算完。</span>
+      </div>
+      <p>这里的工程要点是：所有分数<strong>没有依赖关系</strong>，因为它们只依赖向量，不依赖「上一个 slot 选了谁」。所以它们能一次性并行算掉，形状规整、全是矩阵乘，GPU 上极友好。</p>
+      <h3>串行阶段</h3>
+      <p>剩下的串行部分只有一次贪心走链：从锚点出发，每到一个 slot 就在 $K$ 个已经算好的分数里取 argmax。$B-1$ 步，每步一个 $K$ 元 argmax——这是<strong>查表</strong>，不是前向。</p>
+
+      <div class="anim-frame" data-anim="4">
+        <div class="anim-header">
+          <span class="anim-title">动画 4 · 一次前向 + 904 个分数批量算完 + 廉价串行</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 440" role="img" aria-label="并行阶段一次前向产出所有向量并批量计算 904 个分数，串行阶段只做 15 次 K 元 argmax"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-blue)"></i>并行：向量与矩阵</span>
+          <span><i style="background:var(--a-accent)"></i>串行：argmax 查表</span>
+          <span><i style="background:var(--a-green)"></i>LiLiCorr 头开销</span>
+          <span><i style="background:var(--a-red)"></i>对手（Domino）开销</span>
+        </div>
+      </div>
+
+      <div class="callout callout-green">
+        <strong>账面结果。</strong>在同一条 SGLang 服务栈上、都做过 kernel fusion 与 graph capture 之后，LiLiCorr 打分头是 <span class="gain">0.28 ms / 块</span>，Domino 的头是 <span class="bad">0.67 ms</span>（约 2.4 倍），LiLiCorr 只占单块墙钟的 <span class="gain">2.8%</span>。头本身 36.76 M 参数。
+      </div>
+      <p class="note-inline">这个拆解是在「把头单独拎出来」的流水线上量的；论文其他所有吞吐数字都是把头折进 drafter 之后测的，两者的单块墙钟不是同一个数——论文自己在脚注里点明了这一点，算是比较诚实。</p>
+    </section>
+
+    <section id="greedy">
+      <h2>⑥ 创新三：局部归一化，配一条贪心走链</h2>
+      <p>有了 904 个分数，怎么读出一条序列？LiLiCorr 的选择是<strong>逐 slot 局部 softmax</strong>：</p>
+      <div class="eq">
+        $$P(c_{s}\mid c_{s-1})=\mathrm{softmax}_{k}\big(z_{s}[k]\big),\qquad z_{s}[k]=\phi^{\mathrm{p}}(s-1,\,c_{s-1},\,k)$$
+        <span class="eq-note">给定上一个 slot 选定的候选，本 slot 的 $K$ 个分数过一次 softmax。这是一条建在候选格上的一阶链。</span>
+      </div>
+      <p>服务时用的是它的 argmax 版本，与训练目标严格对齐：</p>
+      <div class="eq">
+        $$\hat{c}_{s}=\arg\max_{k} z_{s}[k]=\arg\max_{k}\phi^{\mathrm{p}}(s-1,\,\hat{c}_{s-1},\,k)$$
+      </div>
+      <p>注意这里的自洽性：<strong>训练时的局部归一化目标，和推理时的贪心走链，是同一个东西的两面。</strong>训练教「给定正确前驱，把真值排到第一」，推理就做「给定已提交的前驱，取第一」。没有 train/serve 目标错配。</p>
+
+      <div class="anim-frame" data-anim="5">
+        <div class="anim-header">
+          <span class="anim-title">动画 5 · 贪心走链：条件在「刚提交的那个候选」上</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg5" viewBox="0 0 820 440" role="img" aria-label="从锚点出发逐 slot 取分数最大的候选，走出一条链，target 验证后接受长度显著变长"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-accent)"></i>当前已提交</span>
+          <span><i style="background:var(--a-purple)"></i>本步候选分数</span>
+          <span><i style="background:var(--a-green)"></i>选中并接受</span>
+          <span><i style="background:var(--a-fg-muted)"></i>未选中</span>
+        </div>
+      </div>
+    </section>
+    <section id="viterbi">
+      <h2>⑦ 为什么不要「最优路径」——这一节是我最欣赏的部分</h2>
+      <p>看到「相邻打分 + 一阶链」，任何做过序列标注的人第一反应都是 Viterbi：把整条路径的分数加起来，取全局最大。</p>
+      <div class="eq">
+        $$g(c)=\sum_{s=1}^{B-1}\phi^{\mathrm{p}}\!\big(s-1,\,c_{s-1},\,c_{s}\big)$$
+        <span class="eq-note">动态规划求 $\arg\max_c g(c)$ 的复杂度是 $O(BK^{2})$，在这个规模下几乎不要钱。</span>
+      </div>
+      <p>论文明确<strong>拒绝</strong>了这个更强的优化器，理由不是算不起，而是<strong>目标错了</strong>：</p>
+      <div class="callout callout-red">
+        全局最优可能<em>牺牲一个靠前的 slot 去换一条更肥的尾巴</em>。但在前缀接受下，那条尾巴永远走不到。每个 slot 只有在它之前所有 slot 都命中的条件下才贡献长度，所以靠前的 slot 承担了绝大部分期望接受长度；<strong>丢了第一个 slot 的块，后面全对也是零。</strong>
+      </div>
+      <p>消融数据支持这个判断：把贪心换成精确最优路径，接受长度 <span class="bad">−2.44%</span>。也就是说，在「更会优化的解码规则」和「与接受方式对齐的解码规则」之间，后者赢。这是一条值得记住的一般性教训——<strong>解码规则该匹配奖励结构，不是匹配模型的似然。</strong></p>
+
+      <div class="anim-frame" data-anim="6">
+        <div class="anim-header">
+          <span class="anim-title">动画 6 · 贪心 vs Viterbi：前缀接受下谁更值</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg6" viewBox="0 0 820 440" role="img" aria-label="全局最优路径牺牲首个 slot 换取更高总分，但在前缀接受下接受长度为零，贪心路径反而更长"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>贪心路径</span>
+          <span><i style="background:var(--a-purple)"></i>Viterbi 最优路径</span>
+          <span><i style="background:var(--a-red)"></i>前缀断点</span>
+          <span><i style="background:var(--a-fg-muted)"></i>失效的尾巴</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="train">
+      <h2>⑧ 训练侧：三个不那么显然的设计</h2>
+
+      <h3>8.1 Oracle-prefix 监督：哪些 slot 才配拿到梯度</h3>
+      <p>LiLiCorr 按 teacher-forced 重排器来训，所以监督必须复刻服务时的条件。两个筛子决定一个 slot 有没有学习信号：</p>
+      <ol>
+        <li><strong>覆盖</strong>：真值 token 必须在 drafter 的 top-$K$ 里。不在的话重排怎么排都救不回来，这个 slot 给梯度只是噪声。</li>
+        <li><strong>前缀条件</strong>：每个转移都<em>条件在真值前驱 $g_{s-1}$ 上</em>，而不是条件在模型自己上一步选了什么上。这直接来自前缀接受——服务时只有前面全对，本 slot 才有意义。</li>
+      </ol>
+      <p>把这两条合起来，监督集合 $\mathcal{S}$ 就是「真值在候选池内、且以真值前驱为条件」的那些 slot，损失是</p>
+      <div class="eq">
+        $$\mathcal{L}_{\mathrm{CE}}=-\frac{1}{|\mathcal{S}|}\sum_{s\in\mathcal{S}}\log P_{\theta}\big(c_{s}=g_{s}\mid c_{s-1}=g_{s-1}\big)$$
+      </div>
+
+      <h3>8.2 Target 加权的干扰项惩罚：把 target 讨厌的候选按下去</h3>
+      <p>光有交叉熵不够。交叉熵只管把真值的概率抬高，但它对「排在真值后面的那些候选到底有多糟」是无感的。LiLiCorr 加了一项：</p>
+      <div class="eq">
+        $$\Omega_{s}=\sum_{k}P_{\theta}(k)\,w_{k},\qquad w_{k}=\mathrm{relu}\!\left(c_{k}-c_{g_{s}}\right),\qquad \mathcal{L}_{\mathrm{dist}}=\frac{1}{|\mathcal{S}|}\sum_{s\in\mathcal{S}}\Omega_{s}$$
+        <span class="eq-note">$c_k$ 是 target 给候选 $k$ 的代价（负对数概率），$c_{g_s}$ 是真值的代价。只惩罚那些「比真值更贵」的候选，$\mathrm{relu}$ 把比真值更便宜的候选放过。</span>
+      </div>
+      <p>论文给了一个漂亮的等式：当所有候选的代价都不低于真值时，</p>
+      <div class="eq">
+        $$\Omega_{s}=\sum_{k}P_{\theta}(k)\big(c_{k}-c_{g_{s}}\big)=H(P_{\theta},q)-c_{g_{s}}$$
+        <span class="eq-note">$q$ 是 target 分布。由于 target 冻结、$c_{g_s}$ 是常数，$\nabla_\theta\Omega_s=\nabla_\theta H(P_\theta,q)$——所以它<strong>不是</strong>在做分布匹配，而是在最小化「LiLiCorr 分布下的期望 target 代价」。</span>
+      </div>
+      <div class="callout callout-teal">
+        <strong>两项为什么互补。</strong>交叉熵的梯度 $\propto$ $1-P_\theta(g)$，真值一旦排到第一就快速衰减，此后梯度都花在已经定了的决策上。干扰项惩罚的梯度不看真值排第几，只看「还有多少概率压在 target 讨厌的候选上」，所以在 $P_\theta(g)\to 1$ 之后仍然有力。论文的定位是<em>代价感知的交叉熵整形</em>，不是替代品。
+      </div>
+      <p>消融很干净：把干扰项去掉、同时保持重排器目标的总权重不变（所以是重新分配预算而非缩减预算），九个 benchmark 上接受长度全部下降，幅度 <span class="gain">1.5% ~ 8.9%</span>。这一项基本撑起了整个套件的收益。</p>
+
+      <h3>8.3 与 drafter 联合训练：怎么穿过不可微的 top-$K$</h3>
+      <p>LiLiCorr 不是扣在冻结 drafter 上的后处理，而是<strong>和 DFlash 一起训</strong>，让 drafter 学会「提出能被关联成长前缀的候选池」。问题是 top-$K$ 选择不可微。处理办法朴素但有效：<strong>候选索引固定住不求导，梯度走候选的草稿 log 概率和产生它们的隐藏状态。</strong></p>
+      <p>drafter 自己那份 DFlash 逐 slot 块交叉熵保留，并且带靠前 slot 权重更大的衰减——又是前缀接受在起作用。总损失是三项相加：</p>
+      <div class="eq">
+        $$\mathcal{L}=\mathcal{L}_{\text{DFlash}}+\lambda\big(\mathcal{L}_{\mathrm{CE}}+\lambda_{\mathrm{dist}}\mathcal{L}_{\mathrm{dist}}\big)$$
+        <span class="eq-note">$\lambda_{\mathrm{dist}}=1.0$。这里余弦的 $[-\sigma,\sigma]$ 界回过头救了这一步：没有它，重排器的梯度会把共享骨干带崩。</span>
+      </div>
+
+      <div class="anim-frame" data-anim="7">
+        <div class="anim-header">
+          <span class="anim-title">动画 7 · 训练：谁拿梯度、惩罚打在哪、梯度怎么回到 drafter</span>
+          <div class="anim-controls">
+            <button class="btn-prev" type="button">‹ 上一步</button>
+            <button class="btn-play" type="button">▶ 播放</button>
+            <button class="btn-next" type="button">下一步 ›</button>
+            <button class="btn-reset" type="button">↺ 重置</button>
+            <label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label>
+          </div>
+        </div>
+        <div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div>
+        <div class="anim-canvas-wrap"><svg id="svg7" viewBox="0 0 820 440" role="img" aria-label="oracle-prefix 监督筛选 slot，干扰项惩罚按 target 代价加权，梯度绕过不可微 top-K 回到 drafter"></svg></div>
+        <div class="anim-progress"><div class="bar"></div></div>
+        <div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div>
+        <div class="anim-legend">
+          <span><i style="background:var(--a-green)"></i>有监督的 slot</span>
+          <span><i style="background:var(--a-fg-muted)"></i>被跳过的 slot</span>
+          <span><i style="background:var(--a-red)"></i>被惩罚的干扰项</span>
+          <span><i style="background:var(--a-amber)"></i>回传到 drafter</span>
+        </div>
+      </div>
+
+      <h3>8.4 附录里的第四项：长上下文用的 margin hinge</h3>
+      <p>服务时的规则是 argmax——决定一个 slot 的是「谁分最高」，不是「真值拿了多少概率」。交叉熵在真值已经排第一之后还在花梯度。而<strong>决策间隙窄的那些 slot</strong>，恰恰是长 prompt 会更多产生的。于是附录加了一个 hinge：</p>
+      <div class="eq">
+        $$\Delta_{s}=z_{s}[g_{s}]-\max_{k\neq g_{s}} z_{s}[k],\qquad \mathcal{L}_{\mathrm{margin}}=\frac{1}{|\mathcal{S}|}\sum_{s\in\mathcal{S}}\mathrm{relu}\big(\rho-\Delta_{s}\big)$$
+        <span class="eq-note">$\rho=2.0$，权重 $\mu=0.5$。</span>
+      </div>
+      <p>效果有明确的方向性：在训练长度范围<em>内</em>它略微有害，范围<em>外</em>越长越有用。加上它之后，长输入吞吐扫描从「54 个操作点里赢 46 个」变成「<span class="gain">54 / 54 全赢</span>」，接受长度领先的点数从 38 升到 44。</p>
+    </section>
+    <section id="experiments">
+      <h2>⑨ 实验复盘：口径比数字更值得看</h2>
+      <p>先说口径，因为这篇的口径做得比多数投机解码论文严格：</p>
+      <ul>
+        <li>target 冻结的 <strong>Qwen3-8B / Qwen3-4B</strong>；单张 H100；块大小 16；并发默认 1。</li>
+        <li>所有系统跑<strong>同一条 SGLang 服务栈</strong>，都按 DSpark 的做法把投机头折进 drafter、做 kernel fusion 与 graph capture；<strong>Domino 也被移植到同一栈上</strong>——不让任何一方因为实现拖后腿。</li>
+        <li>三个系统用<strong>同一批约百万级训练样本</strong>（Nemotron Post-Training Dataset V2 的 code / math / STEM / general-chat 切片）。</li>
+        <li>benchmark 用 SPEED-bench 的九个类别，两种解码（greedy 与温度 1，后者用<strong>精确拒绝采样</strong>验证）。</li>
+      </ul>
+
+      <h3>主结果</h3>
+      <table>
+        <thead><tr><th>设置</th><th>LiLiCorr 名次</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>greedy，9 benchmark × 2 target = 18 个设置</td><td class="gain">18 / 18 最快</td><td>比最强 baseline 领先最多 4.9%（benchmark 平均）</td></tr>
+          <tr><td>温度 1，18 个设置</td><td class="gain">17 / 18 最快</td><td>在「只提一个块」的系统里 18 / 18；对 Domino 的领先反而拉大</td></tr>
+          <tr><td>吞吐扫描（6 并发 × 2 输入长度 × 3 熵档）</td><td class="gain">合计 70 / 72 第一</td><td>加上 margin 正则后长输入部分 54 / 54</td></tr>
+          <tr class="best"><td>相对 vanilla DFlash（不做任何重排）</td><td class="gain">接受长度 +9 ~ 19%</td><td>九个 benchmark 无一例外，两个轴都改善</td></tr>
+        </tbody>
+      </table>
+      <p>值得注意的一个细节：温度 1 下所有系统的接受前缀都变短（target 不再承诺自己的 argmax，这是应有之义），但 <strong>LiLiCorr 对 Domino 的差距反而扩大</strong>。DSpark 的采样分支接受长度更长却在两个 target 上都服务更慢——接受长度和吞吐不是一回事，这篇论文把主表放在 speedup 而不是接受长度上，是对的选择。</p>
+
+      <h3>长上下文外推</h3>
+      <p>训练序列长度远短于测试：吞吐扫描里有比训练范围长一个数量级的输入块。所有 drafter 在这些块上都掉接受长度，而且掉得很一致——因为被要求注意的位置超出了训练范围。统一用 <strong>YaRN</strong> 在推理时扩展位置编码后（对所有系统一视同仁），LiLiCorr 的领先保持。</p>
+      <div class="callout callout-blue">
+        <strong>一个诚实的说明。</strong>论文点出在最高并发档，测的其实是「offered load」而不是「resident concurrency」——单张 H100 的 KV cache 装不下那么多长请求，超过容量后吞吐就不再提升。愿意在正文里写这句话的论文不多。
+      </div>
+
+      <h3>关键超参</h3>
+      <table>
+        <thead><tr><th>项</th><th>值</th><th>项</th><th>值</th></tr></thead>
+        <tbody>
+          <tr><td>块大小 $B$</td><td>16（其中 15 个待草拟 slot）</td><td>每 slot 候选数 $K$</td><td>8</td></tr>
+          <tr><td>in / out 向量维度 $d_e$</td><td>1024</td><td>余弦缩放 $\sigma$</td><td>8.0</td></tr>
+          <tr><td>打分 Transformer 层数</td><td>2（双向）</td><td>隐藏宽度</td><td>1024</td></tr>
+          <tr><td>头参数量</td><td>36.76 M</td><td>干扰项权重 $\lambda_{\mathrm{dist}}$</td><td>1.0</td></tr>
+          <tr><td>margin $\rho$ / $\mu$</td><td>2.0 / 0.5</td><td>精度</td><td>bf16 + fp32 master weights</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="critique">
+      <h2>⑩ 局限与我的存疑</h2>
+      <p>论文自己承认的一条是设计内生的：<strong>LiLiCorr 只重排 top-$K$。</strong>真值掉出候选池的 slot，它无能为力——这个上限由 drafter 的边际质量决定，重排器再强也碰不到。联合训练能部分缓解（drafter 学着把真值留在池子里），但改变不了这是个硬天花板。</p>
+      <p>我自己会追问的几点：</p>
+      <ul>
+        <li><strong>$K$ 的敏感性没展开。</strong>$K=8$ 时 904 个分数几乎免费，但 $K$ 增大时分数数量按 $K^2$ 涨，覆盖率与延迟的交换曲线长什么样，论文没给扫描。</li>
+        <li><strong>一阶因子化的极限在哪。</strong>「局部因子、全局信息」这个论证很有说服力，但它是定性的。如果块内存在真正的长程约束（比如括号配对、JSON 结构），双向注意力产生的向量能不能靠相邻余弦读出来，我不确定，也没有实验去针对性地测。</li>
+        <li><strong>余弦的代价没量化。</strong>论文说不加界会毁骨干，这是很强的经验陈述，但没有给「不加界时训练崩溃」的曲线，也没试过别的稳定手段（比如谱归一化或直接裁剪）。$\sigma=8.0$ 这个值怎么来的也没说。</li>
+        <li><strong>margin 项被放在附录，方向性却很强。</strong>训练范围内有害、范围外有益，说明它其实在补一个位置泛化的洞。把位置外推问题交给一个损失项来打补丁，感觉像是权宜之计而不是根治。</li>
+        <li><strong>都是自家 baseline 的移植。</strong>把 Domino 移到同一栈上是加分项，但移植者是本文作者，调优程度终究难以对称核验。</li>
+      </ul>
+    </section>
+
+    <section id="summary">
+      <h2>⑪ 一句话总结</h2>
+      <div class="callout callout-accent">
+        <strong>LiLiCorr 的三个动作：</strong>（1）承认联合分布不可建模，把问题降级为 top-$K$ <strong>重排</strong>；（2）用一次双向前向给每个候选配 <code>out</code> / <code>in</code> 向量，相邻余弦即相容分数——因子化局部而信息全局，且余弦的有界性是联合训练能成立的前提；（3）读出时<strong>不求全局最优</strong>，而是用与前缀接受对齐的贪心走链，把靠前的 slot 摆在最重要的位置。
+      </div>
+      <p>它真正可迁移的那条经验，跟投机解码没什么关系：<strong>当奖励是前缀式的时候，更强的优化器会给出更差的结果。</strong>解码规则要匹配奖励结构，而不是匹配模型似然。这一点在 −2.44% 那个消融里说得比任何论述都清楚。</p>
+      <p class="note-inline">论文：Matan Rusanovsky, Yoav Miron, Roy Uziel, Omer Belhasin, Ran Zilberstein, Maor Ashkenazi, Michael Elad. <em>LiLiCorr: Lightweight Likelihood Correlation of Parallel Drafts for Speculative Decoding.</em> arXiv:2608.20530v1, 2026-08-20。本文所有数值取自论文正文与附录；动画中的 token 串、分数与分布为便于讲解构造的示意数据，非论文原始样本。</p>
+    </section>
+
+  </main>
+</div>
+<script>
+(function () {
+'use strict';
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, a) {
+  var n = document.createElementNS(NS, tag);
+  if (a) for (var k in a) if (a[k] != null) n.setAttribute(k, a[k]);
+  return n;
+}
+function C(name, fb) { return window.aC(name, fb); }
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function AnimEngine(svg, cfg) {
+  this.svg = svg;
+  this.steps = cfg.steps || [];
+  this.i = 0;
+  this.speed = 1;
+  this.playing = false;
+  this.timer = null;
+  this.frame = svg.closest('.anim-frame');
+  this._initDefs();
+  this.layer = el('g', { 'class': 'anim-layer' });
+  svg.appendChild(this.layer);
+  this._buildRail();
+  this.goTo(0);
+}
+
+AnimEngine.prototype._initDefs = function () {
+  var defs = el('defs');
+  var mk = [['arrA', C('--a-accent', '#FF7A00')], ['arrG', C('--a-green', '#4CC98A')],
+            ['arrR', C('--a-red', '#FF7268')], ['arrB', C('--a-blue', '#74B4FF')],
+            ['arrP', C('--a-purple', '#B79BFF')], ['arrM', C('--a-fg-muted', '#888')],
+            ['arrY', C('--a-amber', '#E9B449')], ['arrT', C('--a-teal', '#48CFC4')]];
+  var id = this.svg.id;
+  for (var j = 0; j < mk.length; j++) {
+    var m = el('marker', { id: id + '-' + mk[j][0], viewBox: '0 0 10 10', refX: '9', refY: '5',
+      markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse' });
+    m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: mk[j][1] }));
+    defs.appendChild(m);
+  }
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype.mk = function (name) { return 'url(#' + this.svg.id + '-' + name + ')'; };
+AnimEngine.prototype.clear = function () { while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild); };
+
+AnimEngine.prototype.draw = function (node, o) {
+  o = o || {};
+  this.layer.appendChild(node);
+  if (o.reveal && !REDUCED) {
+    node.style.opacity = '0';
+    node.style.transition = 'opacity 320ms ease';
+    var d = o.delay || 0;
+    setTimeout(function () { node.style.opacity = o.opacity != null ? o.opacity : '1'; }, d / this.speed);
+  } else if (o.opacity != null) { node.style.opacity = o.opacity; }
+  if (o.cls) node.setAttribute('class', ((node.getAttribute('class') || '') + ' ' + o.cls).trim());
+  return node;
+};
+
+AnimEngine.prototype.t = function (x, y, str, o) {
+  o = o || {};
+  var n = el('text', { x: x, y: y, 'text-anchor': o.anchor || 'middle',
+    'font-size': o.size || 12, 'font-weight': o.weight || 400,
+    'font-family': o.mono ? '"JetBrains Mono", Consolas, monospace' : 'inherit',
+    fill: o.fill || C('--a-fg', '#ccc') });
+  n.textContent = str;
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, o) {
+  o = o || {};
+  var g = el('g');
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: o.rx != null ? o.rx : 6,
+    fill: fill || 'none', stroke: stroke || C('--a-line', '#444'),
+    'stroke-width': o.sw || 1.5, 'stroke-dasharray': o.dash || null }));
+  if (label) {
+    var lines = String(label).split('|');
+    var y0 = y + h / 2 - (lines.length - 1) * 8 + 4;
+    for (var j = 0; j < lines.length; j++) {
+      var tn = el('text', { x: x + w / 2, y: y0 + j * 16, 'text-anchor': 'middle',
+        'font-size': o.size || 12, 'font-weight': o.weight || 500,
+        fill: o.labelFill || stroke || C('--a-fg', '#ccc') });
+      tn.textContent = lines[j];
+      g.appendChild(tn);
+    }
+  }
+  return this.draw(g, o);
+};
+
+AnimEngine.prototype.line = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  return this.draw(el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, 'stroke-linecap': 'round' }), o);
+};
+AnimEngine.prototype.arrow = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  var n = el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-fg-muted', '#888'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': this.mk(o.marker || 'arrM') });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.circle = function (cx, cy, r, o) {
+  o = o || {};
+  return this.draw(el('circle', { cx: cx, cy: cy, r: r, fill: o.fill || 'none',
+    stroke: o.stroke || 'none', 'stroke-width': o.sw || 1.5 }), o);
+};
+
+AnimEngine.prototype.ellipse = function (cx, cy, rx, ry, rot, o) {
+  o = o || {};
+  var n = el('ellipse', { cx: cx, cy: cy, rx: rx, ry: ry, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, transform: 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.path = function (d, o) {
+  o = o || {};
+  return this.draw(el('path', { d: d, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': o.marker ? this.mk(o.marker) : null }), o);
+};
+
+/* 横向条形：用于实验数据对比。value 已按 max 归一到 w 像素。 */
+AnimEngine.prototype.bar = function (x, y, w, h, label, val, max, color, o) {
+  o = o || {};
+  var len = Math.max(2, w * Math.min(1, val / max));
+  var g = el('g');
+  var lt = el('text', { x: x - 8, y: y + h / 2 + 4, 'text-anchor': 'end', 'font-size': 11,
+    fill: C('--a-fg-muted', '#888') });
+  lt.textContent = label;
+  g.appendChild(lt);
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: 3, fill: C('--a-code-bg', '#222') }));
+  var b = el('rect', { x: x, y: y, width: len, height: h, rx: 3, fill: color });
+  g.appendChild(b);
+  var vt = el('text', { x: x + len + 8, y: y + h / 2 + 4, 'text-anchor': 'start', 'font-size': 11,
+    'font-weight': 600, fill: color });
+  vt.textContent = o.fmt ? o.fmt(val) : val;
+  g.appendChild(vt);
+  if (!REDUCED) {
+    b.setAttribute('width', 0);
+    vt.style.opacity = '0';
+    var sp = this.speed, d = o.delay || 0;
+    setTimeout(function () {
+      b.style.transition = 'width 520ms cubic-bezier(.2,.8,.3,1)';
+      b.setAttribute('width', len);
+      vt.style.transition = 'opacity 300ms ease 260ms';
+      vt.style.opacity = '1';
+    }, d / sp + 30);
+  }
+  return this.draw(g, { cls: o.cls });
+};
+AnimEngine.prototype._buildRail = function () {
+  var rail = this.frame.querySelector('.anim-stage-rail');
+  if (!rail) return;
+  rail.textContent = '';
+  for (var j = 0; j < this.steps.length; j++) {
+    var b = document.createElement('button');
+    b.className = 'stage-chip';
+    b.type = 'button';
+    b.dataset.idx = j;
+    b.setAttribute('role', 'tab');
+    b.textContent = (j + 1) + '. ' + (this.steps[j].chip || this.steps[j].title);
+    rail.appendChild(b);
+  }
+};
+
+AnimEngine.prototype.goTo = function (idx) {
+  if (idx < 0 || idx >= this.steps.length) return;
+  this.i = idx;
+  this.clear();
+  var step = this.steps[idx];
+  step.render(this);
+  this._updateUI();
+};
+
+AnimEngine.prototype._updateUI = function () {
+  var f = this.frame, step = this.steps[this.i], n = this.steps.length;
+  var info = f.querySelector('.step-info'), desc = f.querySelector('.step-desc'),
+      bar = f.querySelector('.anim-progress .bar');
+  if (info) info.textContent = '步骤 ' + (this.i + 1) + ' / ' + n + ' · ' + step.title;
+  if (desc) {
+    desc.innerHTML = step.desc || '';
+    /* 步骤说明里可能带行内公式，切步骤后需要重新排版 */
+    if (window.__mathReady && window.MathJax && window.MathJax.typesetPromise) {
+      window.MathJax.typesetPromise([desc]).catch(function () {});
+    }
+  }
+  if (bar) bar.style.width = ((this.i + 1) / n * 100) + '%';
+  var chips = f.querySelectorAll('.stage-chip');
+  for (var j = 0; j < chips.length; j++) chips[j].setAttribute('aria-current', j === this.i ? 'true' : 'false');
+  var prev = f.querySelector('.btn-prev'), next = f.querySelector('.btn-next');
+  if (prev) prev.disabled = this.i === 0;
+  if (next) next.disabled = this.i === n - 1;
+};
+
+AnimEngine.prototype.next = function () { if (this.i < this.steps.length - 1) this.goTo(this.i + 1); };
+AnimEngine.prototype.prev = function () { if (this.i > 0) this.goTo(this.i - 1); };
+AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+AnimEngine.prototype.setSpeed = function (v) { this.speed = v; };
+
+AnimEngine.prototype.play = function () {
+  var self = this;
+  if (this.i >= this.steps.length - 1) this.goTo(0);
+  this.playing = true;
+  this._setPlayBtn();
+  var tick = function () {
+    if (!self.playing) return;
+    var dur = (self.steps[self.i].duration || 2600) / self.speed;
+    self.timer = setTimeout(function () {
+      if (!self.playing) return;
+      if (self.i >= self.steps.length - 1) { self.pause(); return; }
+      self.goTo(self.i + 1);
+      tick();
+    }, dur);
+  };
+  tick();
+};
+
+AnimEngine.prototype.pause = function () {
+  this.playing = false;
+  if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  this._setPlayBtn();
+};
+AnimEngine.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
+AnimEngine.prototype._setPlayBtn = function () {
+  var b = this.frame.querySelector('.btn-play');
+  if (b) b.textContent = this.playing ? '❙❙ 暂停' : '▶ 播放';
+};
+/* ================= 共享调色与小工具 ================= */
+var A = function () { return C('--a-accent', '#FF7A00'); },
+    G = function () { return C('--a-green', '#4CC98A'); },
+    R = function () { return C('--a-red', '#FF7268'); },
+    B_ = function () { return C('--a-blue', '#74B4FF'); },
+    P = function () { return C('--a-purple', '#B79BFF'); },
+    T = function () { return C('--a-teal', '#48CFC4'); },
+    Y = function () { return C('--a-amber', '#E9B449'); },
+    M = function () { return C('--a-fg-muted', '#888'); },
+    S = function () { return C('--a-fg-strong', '#fff'); },
+    LN = function () { return C('--a-line', '#444'); };
+
+function title(e, s) { e.t(410, 26, s, { size: 13, weight: 600, fill: S(), reveal: true }); }
+function foot(e, s, col, delay) {
+  e.t(410, 424, s, { size: 11, fill: col || M(), reveal: true, delay: delay || 900 });
+}
+
+/* ---------- 场景 1：边际各自合理，联合不成句 ---------- */
+function scene1() {
+  var PREFIX = 'The capital of';
+  var COLS = [
+    { x: 200, name: 'slot 1', cand: [['France', 0.34], ['Japan', 0.31], ['Italy', 0.14], ['Korea', 0.09]] },
+    { x: 392, name: 'slot 2', cand: [['is', 0.88], ['was', 0.06], ['lies', 0.03], ['sits', 0.02]] },
+    { x: 584, name: 'slot 3', cand: [['Paris', 0.33], ['Tokyo', 0.32], ['Rome', 0.14], ['Seoul', 0.10]] }
+  ];
+  var CW = 152, CH = 34, Y0 = 96, DY = 44;
+
+  function prefixBox(e, d) {
+    e.rect(28, 190, 150, 56, PREFIX + '|（已验证前缀）', 'none', A(), { size: 11, reveal: true, delay: d || 0 });
+  }
+  function grid(e, opt) {
+    opt = opt || {};
+    for (var c = 0; c < COLS.length; c++) {
+      var col = COLS[c];
+      e.t(col.x + CW / 2, Y0 - 14, col.name, { size: 11, weight: 600, fill: M(), reveal: true, delay: c * 90 });
+      for (var j = 0; j < col.cand.length; j++) {
+        var isTop = j === 0;
+        var stroke = M(), lab = M();
+        if (opt.mark && isTop) { stroke = opt.markCol ? opt.markCol() : Y(); lab = stroke; }
+        else if (opt.blue) { stroke = B_(); lab = S(); }
+        if (opt.pick && opt.pick[c] === j) { stroke = opt.pickCol ? opt.pickCol() : Y(); lab = stroke; }
+        e.rect(col.x, Y0 + j * DY, CW, CH,
+          col.cand[j][0] + '   ' + col.cand[j][1].toFixed(2),
+          isTop && (opt.mark || opt.pick) ? C('--a-amber-bg', 'transparent') : 'none',
+          stroke, { size: 11, weight: isTop ? 700 : 400, labelFill: lab, reveal: true, delay: c * 90 + j * 50 });
+      }
+    }
+  }
+  return [
+    { chip: '边际', title: '第一步：drafter 一次前向给出每个 slot 的边际分布',
+      duration: 3000,
+      desc: 'DFlash 的训练目标是<strong>逐位置边际</strong>。单看每一列，概率排布都很合理：slot 1 是国家，slot 2 是系动词，slot 3 是首都。三列各自都没有毛病。',
+      render: function (e) {
+        title(e, '动画 1 · 每一列的边际分布单独看都对');
+        prefixBox(e);
+        grid(e, { blue: true });
+        e.arrow(178, 218, 196, 218, { stroke: B_(), marker: 'arrB', reveal: true, delay: 260 });
+        foot(e, '注意：三列之间没有任何条件关系——slot 3 不知道 slot 1 选了谁', M(), 1000);
+      } },
+    { chip: 'argmax', title: '第二步：逐 slot 取 argmax，拼出「France is Tokyo」',
+      duration: 3200,
+      desc: '各列独立取第一名，得到 <code>France / is / Tokyo</code>。三个 token 各自的边际概率都是本列最高的，<strong>拼在一起却是废话</strong>。这就是「边际可信、联合不可信」。',
+      render: function (e) {
+        title(e, '动画 1 · 逐列 argmax：每个都最优，合起来不成句');
+        prefixBox(e);
+        grid(e, { mark: true });
+        e.rect(196, 288, 528, 44, 'The capital of  France  is  Tokyo', 'none', Y(),
+          { size: 14, weight: 700, labelFill: Y(), reveal: true, delay: 420 });
+        e.t(460, 356, '↑ slot 1 与 slot 3 之间的约束（同一个国家）在训练目标里根本没出现过',
+          { size: 11, fill: Y(), reveal: true, delay: 700 });
+        foot(e, '联合分布有 V^B 个取值，组合爆炸——所以没人直接建模它', M(), 1100);
+      } },
+    { chip: '验证', title: '第三步：target 验证，第 3 个 slot 断掉',
+      duration: 3200,
+      desc: 'target 看到 <code>The capital of France is</code> 之后要的是 <code>Paris</code>。前两个 token 接受，第三个拒绝。<strong>前缀接受</strong>意味着后面的一切都被丢弃，本块只赚到 2 个 token。',
+      render: function (e) {
+        title(e, '动画 1 · 前缀接受：一断，后面全丢');
+        prefixBox(e);
+        var toks = ['France', 'is', 'Tokyo'], ok = [1, 1, 0];
+        for (var j = 0; j < 3; j++) {
+          var col = ok[j] ? G() : R();
+          e.rect(200 + j * 176, 120, 156, 50, toks[j], 'none', col,
+            { size: 15, weight: 700, labelFill: col, reveal: true, delay: j * 300 });
+          e.t(278 + j * 176, 196, ok[j] ? '✓ 接受' : '✗ 拒绝', { size: 12, weight: 700, fill: col, reveal: true, delay: j * 300 + 160 });
+        }
+        e.t(542, 240, 'target 想要的是 Paris', { size: 12, fill: R(), reveal: true, delay: 1000 });
+        e.line(200, 268, 724, 268, { stroke: LN(), dash: '4 4', reveal: true, delay: 1100 });
+        e.t(410, 300, '本块接受长度 = 2', { size: 15, weight: 700, fill: R(), reveal: true, delay: 1200 });
+        e.t(410, 336, '块长 16，只赚到 2 —— 投机解码的收益几乎全被浪费', { size: 11, fill: M(), reveal: true, delay: 1350 });
+        foot(e, '如果 slot 1 就错了，整块归零', R(), 1500);
+      } },
+    { chip: '真值在池内', title: '第四步：好消息——真值通常没消失，只是没排第一',
+      duration: 3600,
+      desc: '联合分布真正想要的是两条<strong>内部一致</strong>的路径：France…Paris 或 Japan…Tokyo。而 <code>Paris</code> 明明就在 slot 3 的候选里（第 2 名，0.33 vs 0.32）。问题于是从「生成」降级成「<strong>重排</strong>」。',
+      render: function (e) {
+        title(e, '动画 1 · 问题降级：不用生成，只需要在候选里重排');
+        prefixBox(e);
+        grid(e, { pick: [0, 0, 0], pickCol: M });
+        e.rect(584, Y0 + DY, CW, CH, 'Paris   0.33', C('--a-green-bg', 'transparent'), G(),
+          { size: 11, weight: 700, labelFill: G(), reveal: true, delay: 300 });
+        e.rect(200, Y0 + DY, CW, CH, 'Japan   0.31', C('--a-purple-bg', 'transparent'), P(),
+          { size: 11, weight: 700, labelFill: P(), reveal: true, delay: 380 });
+        e.path('M 352 ' + (Y0 + DY + 17) + ' C 460 60, 520 60, 584 ' + (Y0 + DY + 17),
+          { stroke: G(), sw: 2, marker: 'arrG', reveal: true, delay: 620 });
+        e.t(468, 62, 'France → Paris：联合概率高', { size: 11, weight: 600, fill: G(), reveal: true, delay: 700 });
+        e.path('M 352 ' + (Y0 + DY + 17) + ' C 460 340, 520 340, 584 ' + (Y0 + 17),
+          { stroke: P(), sw: 2, dash: '5 4', marker: 'arrP', reveal: true, delay: 820 });
+        e.t(468, 356, 'Japan → Tokyo：也是一条自洽路径', { size: 11, weight: 600, fill: P(), reveal: true, delay: 900 });
+        e.t(410, 392, '搜索空间只有 K^(B-1)，而且能用一阶结构砍成线性',
+          { size: 12, weight: 600, fill: T(), reveal: true, delay: 1100 });
+        foot(e, 'LiLiCorr 的全部工作就是：在这张候选表上选一条自洽的路', T(), 1300);
+      } }
+  ];
+}
+
+/* ---------- 场景 2：从边际到候选格 ---------- */
+function scene2() {
+  var NC = 6, CX = 168, CDX = 104, CW = 88, CH = 28, RY = 92, RDY = 36, NR = 4;
+  var TOK = [
+    ['France', 'Japan', 'Italy', 'Korea'],
+    ['is', 'was', 'lies', 'sits'],
+    ['Paris', 'Tokyo', 'Rome', 'Seoul'],
+    [',', '.', 'and', 'which'],
+    ['a', 'the', 'one', 'its'],
+    ['city', 'town', 'hub', 'place']
+  ];
+  function anchor(e, d) {
+    e.rect(30, RY, 112, CH, 'of  （锚点）', C('--a-accent-bg', 'transparent'), A(),
+      { size: 11, weight: 700, labelFill: A(), reveal: true, delay: d || 0 });
+    e.t(86, RY + 54, 'slot 0', { size: 10, fill: M(), reveal: true, delay: (d || 0) + 60 });
+    e.t(86, RY + 74, 'K₀ = 1', { size: 10, weight: 600, fill: A(), reveal: true, delay: (d || 0) + 110 });
+  }
+  function cells(e, opt) {
+    opt = opt || {};
+    for (var c = 0; c < NC; c++) {
+      var x = CX + c * CDX;
+      e.t(x + CW / 2, RY - 16, 'slot ' + (c + 1), { size: 10, fill: M(), reveal: true, delay: c * 70 });
+      for (var j = 0; j < NR; j++) {
+        var cut = opt.cut && j >= 2;
+        var col = cut ? M() : (opt.plain ? M() : B_());
+        e.rect(x, RY + j * RDY, CW, CH, TOK[c][j], 'none', col,
+          { size: 11, labelFill: col, reveal: true, delay: c * 70 + j * 40,
+            opacity: cut ? 0.35 : 1, dash: cut ? '3 3' : null });
+      }
+      e.t(x + CW / 2, RY + NR * RDY + 14, '⋮', { size: 13, fill: M(), reveal: true, delay: c * 70 + 200 });
+      e.t(x + CW / 2, RY + NR * RDY + 36, opt.cut ? 'K = 8' : 'V ≈ 15 万',
+        { size: 10, weight: 600, fill: opt.cut ? B_() : M(), reveal: true, delay: c * 70 + 240 });
+    }
+    e.t(792, RY + 2 * RDY, '···', { size: 16, fill: M(), reveal: true, delay: 500 });
+  }
+  return [
+    { chip: '一次前向', title: '第一步：一次 DFlash 前向，15 个 slot 的边际全部就位',
+      duration: 3000,
+      desc: '块长 B=16：slot 0 是刚被 target 验证通过的<strong>锚点</strong>，slot 1 到 15 是要草拟的位置。每个 slot 都拿到一个覆盖全词表的分布——这里只画前 6 列、每列前 4 名。',
+      render: function (e) {
+        title(e, '动画 2 · drafter 的输出：每个 slot 一个全词表分布');
+        anchor(e);
+        cells(e, { plain: true });
+        foot(e, '全词表分布无法直接做组合搜索：15 个位置 × 15 万词表', M(), 900);
+      } },
+    { chip: '截 top-K', title: '第二步：每列只留 top-K = 8，长尾全部扔掉',
+      duration: 3000,
+      desc: '这一刀把搜索空间从 V^15 砍到 8^15。前提是<strong>真值大多还在池子里</strong>——真值掉出 top-K 的 slot，后面任何重排都救不回来，这是 LiLiCorr 明确承认的天花板（论文里叫 coverage 条件）。',
+      render: function (e) {
+        title(e, '动画 2 · 截断：每个 slot 保留 8 个候选');
+        anchor(e, 100);
+        cells(e, { cut: true });
+        e.t(410, 400, '候选格规模 (B−1) × K = 15 × 8 = 120 个格点',
+          { size: 12, weight: 700, fill: B_(), reveal: true, delay: 700 });
+        foot(e, '锚点只有唯一取值，不占 K，但要贡献一个 out 向量', A(), 950);
+      } },
+    { chip: '相邻对', title: '第三步：只在相邻两列之间连边',
+      duration: 3400,
+      desc: 'LiLiCorr <strong>不枚举路径</strong>。它只给相邻两列的每一对候选打一个分：第一对是「锚点 × K」共 8 个，其余 14 对各 K²=64 个。总数是 B 的线性函数，不是指数。',
+      render: function (e) {
+        title(e, '动画 2 · 因子化：分数只挂在相邻列之间');
+        anchor(e, 0);
+        cells(e, { cut: true, plain: true });
+        for (var j = 0; j < 2; j++)
+          e.line(142, RY + CH / 2, CX, RY + j * RDY + CH / 2,
+            { stroke: A(), sw: 1.2, reveal: true, delay: 260 + j * 60 });
+        for (var c2 = 1; c2 < NC; c2++)
+          for (var a2 = 0; a2 < 2; a2++) for (var b2 = 0; b2 < 2; b2++)
+            e.line(CX + (c2 - 1) * CDX + CW, RY + a2 * RDY + CH / 2, CX + c2 * CDX, RY + b2 * RDY + CH / 2,
+              { stroke: P(), sw: 1.1, opacity: c2 === 1 ? 1 : 0.5, reveal: true,
+                delay: 420 + c2 * 70 + (a2 * 2 + b2) * 30 });
+        e.t(410, 400, '分数总数 = (B−2)·K² + K = 14×64 + 8 = 904',
+          { size: 13, weight: 700, fill: P(), reveal: true, delay: 1100 });
+        foot(e, '一阶因子化：形式上是马尔可夫链，但下一幕会说明它携带全局信息', T(), 1300);
+      } }
+  ];
+}
+
+/* ---------- 场景 3：in / out 向量与余弦配对 ---------- */
+function scene3() {
+  var LX = 96, RX = 508, CW = 132, CH = 32, Y1 = 108, DY = 52;
+  var LT = ['France', 'Japan', 'Italy', 'Korea'];
+  var RT = ['Paris', 'Tokyo', 'Rome', 'Seoul'];
+  var COS = [[0.91, 0.12, 0.30, 0.05], [0.08, 0.93, 0.11, 0.22],
+             [0.27, 0.10, 0.89, 0.06], [0.04, 0.19, 0.07, 0.90]];
+  function pair(e, opt) {
+    opt = opt || {};
+    e.t(LX + CW / 2, Y1 - 30, 'slot i 的候选（提供 out）', { size: 11, weight: 600, fill: A(), reveal: true });
+    e.t(RX + CW / 2, Y1 - 30, 'slot i+1 的候选（提供 in）', { size: 11, weight: 600, fill: B_(), reveal: true, delay: 80 });
+    for (var j = 0; j < 4; j++) {
+      var la = opt.hl === j ? A() : M(), lb = (opt.hlR === j) ? G() : M();
+      e.rect(LX, Y1 + j * DY, CW, CH, LT[j], opt.hl === j ? C('--a-accent-bg', 'transparent') : 'none', la,
+        { size: 12, weight: opt.hl === j ? 700 : 400, labelFill: la, reveal: true, delay: j * 60 });
+      e.rect(RX, Y1 + j * DY, CW, CH, RT[j], opt.hlR === j ? C('--a-green-bg', 'transparent') : 'none', lb,
+        { size: 12, weight: opt.hlR === j ? 700 : 400, labelFill: lb, reveal: true, delay: j * 60 + 30 });
+    }
+  }
+  return [
+    { chip: '两个角色', title: '第一步：每个候选拿两个向量——out 管「我后面接谁」，in 管「谁能接我」',
+      duration: 3200,
+      desc: '同一个 token 在链里有两种身份：作为前驱时用 <code>out</code>，作为后继时用 <code>in</code>。两者由同一个双向骨干的隐状态与候选 token 的嵌入一起算出，各走一个轻量投影头。<strong>拆成两个向量而不是一个</strong>，是因为相容关系是有方向的。',
+      render: function (e) {
+        title(e, '动画 3 · 一个候选，两个方向的向量');
+        e.rect(330, 150, 160, 44, 'France', C('--a-purple-bg', 'transparent'), P(),
+          { size: 15, weight: 700, labelFill: P(), reveal: true });
+        e.t(410, 122, 'slot i 的第 1 个候选', { size: 11, fill: M(), reveal: true, delay: 60 });
+        e.arrow(490, 172, 636, 148, { stroke: A(), marker: 'arrA', sw: 2, reveal: true, delay: 320 });
+        e.t(700, 140, 'out_{i,France}', { size: 12, weight: 700, fill: A(), reveal: true, delay: 380 });
+        e.t(700, 162, '「我作为前驱的画像」', { size: 10, fill: M(), reveal: true, delay: 420 });
+        e.arrow(330, 172, 184, 148, { stroke: B_(), marker: 'arrB', sw: 2, reveal: true, delay: 520 });
+        e.t(118, 140, 'in_{i,France}', { size: 12, weight: 700, fill: B_(), reveal: true, delay: 580 });
+        e.t(118, 162, '「我作为后继的画像」', { size: 10, fill: M(), reveal: true, delay: 620 });
+        e.line(120, 250, 700, 250, { stroke: LN(), dash: '4 4', reveal: true, delay: 720 });
+        e.t(410, 282, 's(a → b) = cos( out_{i,a} , in_{i+1,b} )',
+          { size: 15, weight: 700, fill: T(), reveal: true, delay: 800 });
+        e.t(410, 312, '相容分数就是两个向量的夹角余弦——一次点积，没有额外前向',
+          { size: 11, fill: M(), reveal: true, delay: 880 });
+        foot(e, 'out / in 各自 L2 归一化后再点积，所以分数天然落在 [−1, 1]', T(), 1000);
+      } },
+    { chip: '配对矩阵', title: '第二步：相邻两列之间是一张 K×K 的余弦表',
+      duration: 3400,
+      desc: '把 slot i 的 K 个 <code>out</code> 堆成矩阵、slot i+1 的 K 个 <code>in</code> 堆成矩阵，一次矩阵乘法就得到全部 K² 个分数。语义相容的对（France→Paris、Japan→Tokyo）分数高，交叉的对被压到接近 0。',
+      render: function (e) {
+        title(e, '动画 3 · 一次 matmul 得到 K×K 全部配对分数');
+        pair(e, { hl: 0, hlR: 0 });
+        for (var a = 0; a < 4; a++) for (var b = 0; b < 4; b++) {
+          var v = COS[a][b], hi = v > 0.5;
+          e.line(LX + CW, Y1 + a * DY + CH / 2, RX, Y1 + b * DY + CH / 2,
+            { stroke: hi ? G() : M(), sw: hi ? 2 : 1, opacity: hi ? 1 : 0.28,
+              reveal: true, delay: 300 + (a * 4 + b) * 40 });
+        }
+        e.t(410, 92, 'cos(out_France, in_Paris) = 0.91', { size: 12, weight: 700, fill: G(), reveal: true, delay: 900 });
+        e.t(410, 344, 'cos(out_France, in_Tokyo) = 0.12', { size: 12, weight: 700, fill: R(), reveal: true, delay: 1000 });
+        foot(e, '16 条边只需一次 8×d 与 d×8 的矩阵乘——这是整套方法能做到「近乎免费」的原因', T(), 1150);
+      } },
+    { chip: '为什么用余弦', title: '第三步：余弦不是美学选择，是共享骨干的稳定器',
+      duration: 3400,
+      desc: '重排头和 drafter 头<strong>共用同一个骨干</strong>。如果用未归一化的点积，重排损失可以靠把隐状态整体放大来降低——梯度会顺着范数方向跑，把骨干拽坏，drafter 的边际精度跟着掉。余弦把范数自由度切掉，只剩方向可学。',
+      render: function (e) {
+        title(e, '动画 3 · 点积会拽坏骨干，余弦只允许改方向');
+        e.rect(56, 76, 320, 200, '', 'none', R(), { reveal: true });
+        e.t(216, 100, '未归一化点积 out·in', { size: 12, weight: 700, fill: R(), reveal: true, delay: 60 });
+        e.t(216, 128, '降低损失的最省力方向 = 放大 ‖h‖', { size: 10, fill: M(), reveal: true, delay: 120 });
+        e.arrow(120, 220, 316, 160, { stroke: R(), marker: 'arrR', sw: 3, reveal: true, delay: 240 });
+        e.t(216, 250, '骨干表征被拉伸 → drafter 边际退化', { size: 10, fill: R(), reveal: true, delay: 320 });
+        e.rect(444, 76, 320, 200, '', 'none', G(), { reveal: true, delay: 400 });
+        e.t(604, 100, '余弦 cos(out, in) ∈ [−1, 1]', { size: 12, weight: 700, fill: G(), reveal: true, delay: 460 });
+        e.t(604, 128, '范数被除掉，只有夹角能改', { size: 10, fill: M(), reveal: true, delay: 500 });
+        e.circle(604, 196, 52, { stroke: G(), fill: 'none', reveal: true, delay: 560 });
+        e.arrow(604, 196, 648, 168, { stroke: G(), marker: 'arrG', sw: 2, reveal: true, delay: 620 });
+        e.arrow(604, 196, 640, 224, { stroke: T(), marker: 'arrT', sw: 2, reveal: true, delay: 680 });
+        e.t(604, 268, '梯度只推方向 → 骨干不被劫持', { size: 10, fill: G(), reveal: true, delay: 740 });
+        e.t(410, 320, '副作用：分数上界是 1，所以路径总分不会被单条边支配',
+          { size: 12, weight: 600, fill: T(), reveal: true, delay: 860 });
+        foot(e, '论文的消融里，去掉归一化会同时损失接受长度与草稿质量', M(), 1000);
+      } },
+    { chip: '局部形式，全局信息', title: '第四步：因子是局部的，向量却看过整块',
+      duration: 3600,
+      desc: '这是最容易误读的一点。分数只连相邻列，看起来是一阶马尔可夫；但 <code>in</code>/<code>out</code> 来自<strong>双向注意力</strong>的隐状态，每个位置都已经吸收了整块的上下文。所以「France 后面该接 Paris」这个判断，实际上是在知道整块大意的前提下做的。',
+      render: function (e) {
+        title(e, '动画 3 · 双向骨干把全局信息压进每个局部因子');
+        for (var i = 0; i < 7; i++) {
+          e.rect(70 + i * 100, 292, 84, 34, 'slot ' + i, 'none', M(),
+            { size: 10, labelFill: M(), reveal: true, delay: i * 50 });
+          e.arrow(112 + i * 100, 292, 112 + i * 100, 244, { stroke: B_(), marker: 'arrB', sw: 1.4, reveal: true, delay: 300 + i * 45 });
+        }
+        e.rect(64, 190, 696, 50, '双向 Transformer 骨干（每个位置都能看到整块）',
+          C('--a-blue-bg', 'transparent'), B_(), { size: 12, weight: 700, labelFill: B_(), reveal: true, delay: 220 });
+        e.arrow(300, 190, 300, 142, { stroke: A(), marker: 'arrA', sw: 2, reveal: true, delay: 700 });
+        e.arrow(520, 190, 520, 142, { stroke: A(), marker: 'arrA', sw: 2, reveal: true, delay: 760 });
+        e.rect(232, 96, 136, 44, 'out_3', 'none', A(), { size: 12, weight: 700, labelFill: A(), reveal: true, delay: 820 });
+        e.rect(452, 96, 136, 44, 'in_4', 'none', A(), { size: 12, weight: 700, labelFill: A(), reveal: true, delay: 860 });
+        e.arrow(368, 118, 452, 118, { stroke: T(), marker: 'arrT', sw: 2, reveal: true, delay: 940 });
+        e.t(410, 74, 'cos → s(3 → 4)', { size: 12, weight: 700, fill: T(), reveal: true, delay: 1000 });
+        foot(e, '因此它比真正的一阶模型强：局部因子里藏着全局条件', T(), 1150);
+      } }
+  ];
+}
+
+/* ---------- 场景 4：一次前向 + 批量矩阵打分 ---------- */
+function scene4() {
+  function stage(e, x, y, w, label, col, d, sub) {
+    e.rect(x, y, w, 46, label, 'none', col, { size: 11, weight: 600, labelFill: col, reveal: true, delay: d });
+    if (sub) e.t(x + w / 2, y + 66, sub, { size: 10, fill: M(), reveal: true, delay: d + 60 });
+  }
+  return [
+    { chip: '原来的流水线', title: '第一步：DFlash 原本的一步——前向，取 argmax，交给 target',
+      duration: 2800,
+      desc: '基线只有两件事：drafter 前向一次拿到 B 个边际，然后逐位置取最大值。没有任何跨位置的推理，所以「France is Tokyo」这种草稿会原样送进验证。',
+      render: function (e) {
+        title(e, '动画 4 · 基线：一次前向 + 逐位置 argmax');
+        stage(e, 70, 168, 190, 'drafter 一次前向', B_(), 0, '得到 B 个边际分布');
+        e.arrow(260, 191, 306, 191, { stroke: M(), marker: 'arrM', reveal: true, delay: 200 });
+        stage(e, 306, 168, 190, '逐 slot argmax', M(), 300, '完全独立，无跨位置约束');
+        e.arrow(496, 191, 542, 191, { stroke: M(), marker: 'arrM', reveal: true, delay: 500 });
+        stage(e, 542, 168, 190, 'target 验证', G(), 600, '前缀接受，一断全丢');
+        e.t(410, 300, '瓶颈不在算力，在草稿的联合质量', { size: 13, weight: 700, fill: R(), reveal: true, delay: 900 });
+        foot(e, '所以提速的空间是「同一次前向里榨出更好的草稿」', M(), 1050);
+      } },
+    { chip: '插入重排', title: '第二步：LiLiCorr 挂在同一次前向后面，不加前向',
+      duration: 3400,
+      desc: '两个投影头复用 drafter 已经算好的隐状态，所以<strong>没有第二次前向</strong>。新增的三件事都是 GPU 友好的批量算子：gather 出 top-K、一次批量 matmul 得到全部 904 个分数、然后在分数张量上走链。',
+      render: function (e) {
+        title(e, '动画 4 · 新增三步，全部是批量算子，无额外前向');
+        stage(e, 44, 118, 168, 'drafter 一次前向', B_(), 0, '隐状态 h₀…h_B');
+        e.arrow(212, 141, 250, 141, { stroke: B_(), marker: 'arrB', reveal: true, delay: 160 });
+        stage(e, 250, 118, 150, 'top-K gather', T(), 220, 'K=8，(B−1)×K 格点');
+        e.arrow(400, 141, 438, 141, { stroke: T(), marker: 'arrT', reveal: true, delay: 380 });
+        stage(e, 438, 118, 168, 'in/out 投影 + matmul', P(), 440, '批量得到 904 个余弦');
+        e.arrow(606, 141, 644, 141, { stroke: P(), marker: 'arrP', reveal: true, delay: 600 });
+        stage(e, 644, 118, 132, '走链选路径', A(), 660, 'O(B·K) 或 O(B·K²)');
+        e.line(44, 258, 776, 258, { stroke: LN(), dash: '4 4', reveal: true, delay: 780 });
+        e.t(410, 288, '复用隐状态 = 重排的边际成本只有两个小投影 + 一次小矩阵乘',
+          { size: 12, weight: 600, fill: T(), reveal: true, delay: 840 });
+        e.t(410, 318, '相比一次 drafter 前向（整个骨干），这部分开销是零头',
+          { size: 11, fill: M(), reveal: true, delay: 900 });
+        foot(e, '若要额外一次前向来做重排，省下的验证轮数会被全部吃掉', R(), 1050);
+      } },
+    { chip: '开销账', title: '第三步：把开销和收益放在同一张尺子上',
+      duration: 3600,
+      desc: '重排的算力占一次 drafter 前向的百分之几量级；而接受长度每多 1，就等于少一轮 target 前向——target 通常比 drafter 大一个数量级。<strong>只要平均接受长度涨一点，账就是正的。</strong>',
+      render: function (e) {
+        var BX = 200, BY = 96, BH = 26, BDY = 46;
+        var rows = [
+          ['target 一次前向', 520, R()],
+          ['drafter 一次前向', 96, B_()],
+          ['top-K gather', 8, T()],
+          ['in/out 投影 + matmul', 14, P()],
+          ['走链（贪心）', 3, A()]
+        ];
+        title(e, '动画 4 · 相对开销示意（同一块内，归一到 target 前向）');
+        for (var i = 0; i < rows.length; i++) {
+          e.t(BX - 14, BY + i * BDY + BH / 2 + 4, rows[i][0],
+            { size: 11, anchor: 'end', fill: M(), reveal: true, delay: i * 90 });
+          e.rect(BX, BY + i * BDY, rows[i][1], BH, '', C('--a-line', 'transparent'), rows[i][2],
+            { reveal: true, delay: i * 90 + 40 });
+          e.t(BX + rows[i][1] + 12, BY + i * BDY + BH / 2 + 4,
+            (rows[i][1] / 520 * 100).toFixed(rows[i][1] < 20 ? 1 : 0) + '%',
+            { size: 11, weight: 700, anchor: 'start', fill: rows[i][2], reveal: true, delay: i * 90 + 90 });
+        }
+        e.t(410, 344, '接受长度 +1 ⇒ 省掉一次 100% 的 target 前向',
+          { size: 13, weight: 700, fill: G(), reveal: true, delay: 700 });
+        e.t(410, 372, '重排三步合计约 5%——这个不等式几乎不可能不成立',
+          { size: 11, fill: M(), reveal: true, delay: 800 });
+        foot(e, '示意比例用于说明量级关系，具体数值随模型规模与 K 变化', M(), 950);
+      } }
+  ];
+}
+
+/* ---------- 场景 5/6 共用的候选格 ---------- */
+var LAT = {
+  x: 172, dx: 128, w: 104, h: 30, y: 100, dy: 44, nc: 5, nr: 4,
+  tok: [
+    ['France', 'Japan', 'Italy', 'Korea'],
+    ['is', 'was', 'lies', 'sits'],
+    ['Paris', 'Tokyo', 'Rome', 'Seoul'],
+    [', a', '. It', 'and', 'which'],
+    ['city', 'town', 'hub', 'place']
+  ]
+};
+function latAnchor(e, d) {
+  e.rect(34, LAT.y, 118, LAT.h, 'of  （锚点）', C('--a-accent-bg', 'transparent'), A(),
+    { size: 11, weight: 700, labelFill: A(), reveal: true, delay: d || 0 });
+}
+function latCells(e, upto, hlPath, hlCol) {
+  for (var c = 0; c < LAT.nc; c++) {
+    var lit = upto === undefined || c <= upto;
+    for (var j = 0; j < LAT.nr; j++) {
+      var on = hlPath && hlPath[c] === j && lit;
+      var col = on ? (hlCol ? hlCol() : G()) : M();
+      e.rect(LAT.x + c * LAT.dx, LAT.y + j * LAT.dy, LAT.w, LAT.h, LAT.tok[c][j],
+        on ? C('--a-green-bg', 'transparent') : 'none', col,
+        { size: 11, weight: on ? 700 : 400, labelFill: col,
+          opacity: lit ? 1 : 0.35, reveal: true, delay: c * 60 + j * 30 });
+    }
+  }
+}
+function latPath(e, path, col, mk, d0, upto) {
+  var pts = [[152, LAT.y + LAT.h / 2]];
+  for (var c = 0; c < LAT.nc; c++)
+    pts.push([LAT.x + c * LAT.dx, LAT.y + path[c] * LAT.dy + LAT.h / 2]);
+  var n = upto === undefined ? LAT.nc : Math.min(upto + 1, LAT.nc);
+  for (var i = 0; i < n; i++)
+    e.arrow(pts[i][0] + (i ? LAT.w : 0), pts[i][1], pts[i + 1][0], pts[i + 1][1],
+      { stroke: col(), marker: mk, sw: 2.2, reveal: true, delay: (d0 || 0) + i * 240 });
+}
+/* ---------- 场景 5：贪心走链 ---------- */
+function scene5() {
+  var PATH = [0, 0, 0, 0, 0];
+  return [
+    { chip: '打分规则', title: '第一步：每一步的目标是「边际 + 相容」的加权和',
+      duration: 3200,
+      desc: '走到 slot i 已经定下候选 a，下一步在 slot i+1 的 K 个候选里选让 <code>log p(b) + λ·s(a→b)</code> 最大的那个。<strong>λ 是唯一的超参</strong>：λ=0 退化成原来的逐位置 argmax，λ 太大则相容性压倒边际、开始编造流畅但错误的内容。',
+      render: function (e) {
+        title(e, '动画 5 · 局部打分：边际置信度 + 相容度');
+        e.t(410, 88, 'b* = argmax_b [ log p_{i+1}(b)  +  λ · cos(out_{i,a}, in_{i+1,b}) ]',
+          { size: 15, weight: 700, fill: S(), reveal: true });
+        e.t(268, 132, '来自 drafter 的边际', { size: 11, weight: 600, fill: B_(), reveal: true, delay: 200 });
+        e.t(586, 132, '来自重排头的余弦', { size: 11, weight: 600, fill: P(), reveal: true, delay: 260 });
+        var rows = [['Paris', -1.11, 0.91], ['Tokyo', -1.14, 0.12], ['Rome', -1.97, 0.30], ['Seoul', -2.30, 0.05]];
+        e.t(150, 196, 'slot 3 候选', { size: 11, weight: 600, fill: M(), reveal: true, delay: 320 });
+        e.t(330, 196, 'log p', { size: 11, weight: 600, fill: B_(), reveal: true, delay: 320 });
+        e.t(470, 196, 's（前驱 = France）', { size: 11, weight: 600, fill: P(), reveal: true, delay: 320 });
+        e.t(660, 196, '合计（λ = 1）', { size: 11, weight: 600, fill: T(), reveal: true, delay: 320 });
+        for (var i = 0; i < rows.length; i++) {
+          var tot = rows[i][1] + rows[i][2], best = i === 0;
+          var col = best ? G() : M();
+          e.t(150, 230 + i * 34, rows[i][0], { size: 12, weight: best ? 700 : 400, fill: col, reveal: true, delay: 400 + i * 80 });
+          e.t(330, 230 + i * 34, rows[i][1].toFixed(2), { size: 12, fill: col, reveal: true, delay: 420 + i * 80 });
+          e.t(470, 230 + i * 34, rows[i][2].toFixed(2), { size: 12, fill: col, reveal: true, delay: 440 + i * 80 });
+          e.t(660, 230 + i * 34, tot.toFixed(2), { size: 12, weight: best ? 700 : 400, fill: col, reveal: true, delay: 460 + i * 80 });
+        }
+        e.t(410, 380, 'Tokyo 的边际几乎和 Paris 一样高，但相容分把它按下去了',
+          { size: 12, weight: 600, fill: G(), reveal: true, delay: 820 });
+        foot(e, 'λ 的调法是「刚好能翻转这类接近平局的对，不去动大差距的对」', M(), 1000);
+      } },
+    { chip: '逐列推进', title: '第二步：从锚点出发，一列一列往右锁定',
+      duration: 3200,
+      desc: '锚点是 target 已经验证过的 token，所以链有一个<strong>可信的起点</strong>。第一步用锚点的 <code>out</code> 选 slot 1，之后每一步都用刚刚选定的候选的 <code>out</code>。每一列只做一次 K 选一。',
+      render: function (e) {
+        title(e, '动画 5 · 贪心：锚点 → slot 1 → slot 2 …');
+        latAnchor(e);
+        latCells(e, 2, PATH, G);
+        latPath(e, PATH, G, 'arrG', 300, 2);
+        e.t(410, 356, '已锁定：of → France → is → Paris', { size: 13, weight: 700, fill: G(), reveal: true, delay: 1100 });
+        foot(e, '注意 slot 1 选 France 而不是 Japan，是锚点的 out 给的偏好', A(), 1250);
+      } },
+    { chip: '整块完成', title: '第三步：走满 B−1 步，草稿变成一句自洽的话',
+      duration: 3400,
+      desc: '同一张候选表，同一次前向，什么都没重算——只是换了取值方式，草稿从 <code>France is Tokyo</code> 变成 <code>France is Paris, a city</code>。这一块的接受长度从 2 变成整块。',
+      render: function (e) {
+        title(e, '动画 5 · 整条链走完：内部一致的草稿');
+        latAnchor(e);
+        latCells(e, undefined, PATH, G);
+        latPath(e, PATH, G, 'arrG', 260);
+        e.rect(96, 296, 628, 42, 'The capital of  France  is  Paris ,  a  city', 'none', G(),
+          { size: 14, weight: 700, labelFill: G(), reveal: true, delay: 1400 });
+        e.t(410, 366, '接受长度：2 → 整块，全部来自同一次 drafter 前向',
+          { size: 12, weight: 700, fill: G(), reveal: true, delay: 1550 });
+        foot(e, '复杂度 O(B·K)：每列只算 K 个候选的分数，与 K² 无关', T(), 1700);
+      } }
+  ];
+}
+/* ---------- 场景 6：贪心 vs Viterbi，与前缀接受对齐 ---------- */
+function scene6() {
+  var GP = [0, 0, 0, 0, 0], VP = [1, 0, 1, 1, 1];
+  function twoPaths(e, d) {
+    latAnchor(e);
+    for (var c = 0; c < LAT.nc; c++)
+      for (var j = 0; j < LAT.nr; j++) {
+        var g = GP[c] === j, v = VP[c] === j;
+        var col = g && v ? T() : g ? G() : v ? P() : M();
+        e.rect(LAT.x + c * LAT.dx, LAT.y + j * LAT.dy, LAT.w, LAT.h, LAT.tok[c][j], 'none', col,
+          { size: 11, weight: (g || v) ? 700 : 400, labelFill: col, opacity: (g || v) ? 1 : 0.4,
+            reveal: true, delay: (d || 0) + c * 50 + j * 25 });
+      }
+    latPath(e, GP, G, 'arrG', (d || 0) + 260);
+    latPath(e, VP, P, 'arrP', (d || 0) + 400);
+  }
+  return [
+    { chip: 'Viterbi', title: '第一步：一阶链上求全局最优是可解的',
+      duration: 3000,
+      desc: '因为因子只连相邻列，路径总分可以用动态规划精确最大化：$O(B \\cdot K^2)$，904 个分数全用上。诱惑很明显——既然能求全局最优，为什么还要贪心？',
+      render: function (e) {
+        title(e, '动画 6 · Viterbi：DP 求总分最高的路径');
+        latAnchor(e);
+        latCells(e, undefined, VP, P);
+        latPath(e, VP, P, 'arrP', 300);
+        e.t(410, 300, 'δ_{i+1}(b) = log p_{i+1}(b) + max_a [ δ_i(a) + λ·s(a→b) ]',
+          { size: 13, weight: 700, fill: P(), reveal: true, delay: 1200 });
+        e.t(410, 332, '路径总分：Japan…Tokyo 这条比 France…Paris 高',
+          { size: 12, weight: 600, fill: P(), reveal: true, delay: 1320 });
+        foot(e, '开销从 O(B·K) 涨到 O(B·K²)，但仍然只是一次矩阵运算的量级', M(), 1450);
+      } },
+    { chip: '两条路径', title: '第二步：全局最优和贪心可以在第一列就分道扬镳',
+      duration: 3600,
+      desc: 'Viterbi 允许「牺牲开头换取后面更顺」：它在 slot 1 放弃边际略高的 France，换来后面几列的相容分。总分确实更高。<strong>但 target 在 slot 1 想要的是 France。</strong>',
+      render: function (e) {
+        title(e, '动画 6 · 贪心（绿）与 Viterbi（紫）在 slot 1 就分叉');
+        twoPaths(e, 0);
+        e.t(220, 328, '贪心：France is Paris , a city', { size: 12, weight: 700, fill: G(), reveal: true, delay: 1200 });
+        e.t(600, 328, 'Viterbi：Japan is Tokyo . It town', { size: 12, weight: 700, fill: P(), reveal: true, delay: 1280 });
+        e.t(220, 356, '总分 −6.2', { size: 11, fill: G(), reveal: true, delay: 1360 });
+        e.t(600, 356, '总分 −5.7（更高）', { size: 11, weight: 700, fill: P(), reveal: true, delay: 1420 });
+        foot(e, '两条路径都「自洽」——自洽不等于正确', Y(), 1550);
+      } },
+    { chip: '前缀接受', title: '第三步：验证只按前缀结算，总分高的那条反而归零',
+      duration: 3600,
+      desc: 'target 在 slot 1 拒绝 Japan，后面 14 个 token 无论多顺全部作废；贪心那条从头对到尾。<strong>总分更高的路径拿到 0，总分更低的路径拿满。</strong>这就是解码规则必须匹配奖励结构的地方。',
+      render: function (e) {
+        var gt = ['France', 'is', 'Paris', ', a', 'city'];
+        title(e, '动画 6 · 同一张候选表，两条路径的实际收益');
+        e.t(60, 104, '贪心', { size: 12, weight: 700, fill: G(), anchor: 'start', reveal: true });
+        e.t(60, 214, 'Viterbi', { size: 12, weight: 700, fill: P(), anchor: 'start', reveal: true, delay: 60 });
+        for (var c = 0; c < 5; c++) {
+          var x = 150 + c * 124;
+          e.rect(x, 84, 112, 34, LAT.tok[c][GP[c]], 'none', G(),
+            { size: 12, weight: 700, labelFill: G(), reveal: true, delay: c * 140 });
+          e.t(x + 56, 140, '✓', { size: 14, weight: 700, fill: G(), reveal: true, delay: c * 140 + 80 });
+          var col = c === 0 ? R() : M();
+          e.rect(x, 194, 112, 34, LAT.tok[c][VP[c]], 'none', col,
+            { size: 12, weight: 700, labelFill: col, opacity: c === 0 ? 1 : 0.4, reveal: true, delay: c * 140 + 40 });
+          e.t(x + 56, 250, c === 0 ? '✗' : '丢弃', { size: c === 0 ? 14 : 10, weight: 700, fill: col, reveal: true, delay: c * 140 + 120 });
+        }
+        e.t(410, 300, '贪心接受 = 整块          Viterbi 接受 = 0',
+          { size: 14, weight: 700, fill: S(), reveal: true, delay: 900 });
+        e.t(410, 332, 'E[接受长度] = Σ_i  Π_{j ≤ i} P(第 j 个正确)  ——是乘积，不是求和',
+          { size: 12, weight: 600, fill: Y(), reveal: true, delay: 1000 });
+        e.t(410, 360, '越靠前的位置权重越大；路径总分却对每一列一视同仁',
+          { size: 11, fill: M(), reveal: true, delay: 1080 });
+        foot(e, '所以贪心不是「求不起全局最优的退让」，它本身就是更对的目标', G(), 1220);
+      } },
+    { chip: '结论', title: '第四步：把这条经验一般化',
+      duration: 3200,
+      desc: '投机解码里任何「选草稿」的模块都受这条约束：<strong>奖励是前缀式的，解码就该是前缀贪心的</strong>。同理，束搜索、采样多条再打分这些做法，也都要按前缀期望而不是总分来排序。',
+      render: function (e) {
+        title(e, '动画 6 · 奖励结构决定解码规则');
+        e.rect(56, 96, 320, 128, '路径总分最大|（Viterbi / beam search）', 'none', P(),
+          { size: 12, weight: 700, labelFill: P(), reveal: true });
+        e.t(216, 244, '假设每一列同等重要', { size: 11, fill: M(), reveal: true, delay: 120 });
+        e.t(216, 268, '与前缀接受不匹配', { size: 11, weight: 600, fill: R(), reveal: true, delay: 170 });
+        e.rect(444, 96, 320, 128, '前缀期望最大|（逐列贪心）', 'none', G(),
+          { size: 12, weight: 700, labelFill: G(), reveal: true, delay: 220 });
+        e.t(604, 244, '先把最前面那个位置押对', { size: 11, fill: M(), reveal: true, delay: 300 });
+        e.t(604, 268, '与验证的结算方式一致', { size: 11, weight: 600, fill: G(), reveal: true, delay: 350 });
+        e.arrow(376, 160, 444, 160, { stroke: T(), marker: 'arrT', sw: 2, reveal: true, delay: 460 });
+        e.t(410, 326, '论文实测：贪心的接受长度不低于 Viterbi，且更省算力',
+          { size: 13, weight: 700, fill: T(), reveal: true, delay: 620 });
+        e.t(410, 356, '一个少见的「简单做法同时更快又更好」的例子',
+          { size: 11, fill: M(), reveal: true, delay: 720 });
+        foot(e, '代价：贪心一旦在中间选错，后面没有回头的机会', Y(), 880);
+      } }
+  ];
+}
+/* ---------- 场景 7：训练目标 ---------- */
+function scene7() {
+  return [
+    { chip: 'oracle 前缀', title: '第一步：训练时用真值前缀，而不是模型自己走出的链',
+      duration: 3400,
+      desc: '每一对相邻位置都用真值 $(a^*, b^*)$ 作为正样本：给定前一位的正确 token，后一位的正确 token 应该拿到最高的相容分。<strong>不沿着模型自己的贪心路径训练</strong>——那样早期的错误会污染后面所有监督信号，训练极不稳定。',
+      render: function (e) {
+        title(e, '动画 7 · 监督信号：真值相邻对为正，同列其余候选为负');
+        var gt = ['France', 'is', 'Paris'];
+        for (var c = 0; c < 3; c++) {
+          e.rect(150 + c * 190, 92, 150, 36, gt[c], C('--a-green-bg', 'transparent'), G(),
+            { size: 13, weight: 700, labelFill: G(), reveal: true, delay: c * 120 });
+          if (c) e.arrow(300 + (c - 1) * 190, 110, 150 + c * 190, 110,
+            { stroke: G(), marker: 'arrG', sw: 2, reveal: true, delay: c * 120 + 60 });
+        }
+        e.t(410, 66, '真值序列（oracle）', { size: 11, weight: 600, fill: G(), reveal: true });
+        var neg = ['Tokyo', 'Rome', 'Seoul'];
+        for (var j = 0; j < 3; j++) {
+          e.rect(530, 170 + j * 44, 150, 34, neg[j], 'none', R(),
+            { size: 12, labelFill: R(), opacity: 0.8, reveal: true, delay: 500 + j * 90 });
+          e.line(300, 110, 530, 187 + j * 44, { stroke: R(), sw: 1.2, dash: '4 3', opacity: 0.6, reveal: true, delay: 540 + j * 90 });
+        }
+        e.t(700, 214, '干扰项', { size: 11, weight: 600, fill: R(), reveal: true, delay: 800 });
+        e.t(410, 330, 'L = − log  exp(s(a*→b*)) / Σ_b exp(s(a*→b))',
+          { size: 14, weight: 700, fill: T(), reveal: true, delay: 900 });
+        e.t(410, 362, '形式上就是一个在 K 个候选上的交叉熵，逐相邻对求和',
+          { size: 11, fill: M(), reveal: true, delay: 1000 });
+        foot(e, '代价：训练看到的前驱永远是对的，推理时前驱可能已经错了——分布不匹配', Y(), 1150);
+      } },
+    { chip: '干扰项加权', title: '第二步：干扰项不该同等对待——按它造成的实际损失加权',
+      duration: 3600,
+      desc: '把 <code>Seoul</code> 压下去几乎没有价值：drafter 本来就不会选它。真正危险的是 <code>Tokyo</code>——边际几乎和真值持平，是它把整块拉断的。所以负样本按<strong>「drafter 有多想选它」</strong>加权，把优化预算花在会翻车的那几对上。',
+      render: function (e) {
+        title(e, '动画 7 · 按危险程度给负样本加权');
+        var rows = [['Tokyo', 0.32, 1.00], ['Rome', 0.14, 0.44], ['Seoul', 0.10, 0.31], ['Osaka', 0.01, 0.03]];
+        e.t(150, 96, '干扰项', { size: 11, weight: 600, fill: M(), reveal: true });
+        e.t(330, 96, 'drafter 边际', { size: 11, weight: 600, fill: B_(), reveal: true });
+        e.t(520, 96, '普通 CE 权重', { size: 11, weight: 600, fill: M(), reveal: true });
+        e.t(690, 96, '加权后', { size: 11, weight: 600, fill: A(), reveal: true });
+        for (var i = 0; i < rows.length; i++) {
+          var y = 140 + i * 48, hot = i === 0;
+          e.t(150, y, rows[i][0], { size: 12, weight: hot ? 700 : 400, fill: hot ? R() : M(), reveal: true, delay: i * 90 });
+          e.t(330, y, rows[i][1].toFixed(2), { size: 12, fill: B_(), reveal: true, delay: i * 90 + 30 });
+          e.rect(470, y - 12, 96, 16, '', C('--a-line', 'transparent'), M(), { rx: 3, sw: 1, reveal: true, delay: i * 90 + 50 });
+          e.rect(640, y - 12, 96 * rows[i][2], 16, '', C('--a-accent-bg', 'transparent'), A(), { rx: 3, sw: 1, reveal: true, delay: i * 90 + 70 });
+        }
+        e.t(410, 352, '把梯度集中在「边际接近平局」的那些对上',
+          { size: 13, weight: 700, fill: A(), reveal: true, delay: 700 });
+        e.t(410, 380, '这些恰好是 λ 只需轻轻一推就能翻转的对',
+          { size: 11, fill: M(), reveal: true, delay: 800 });
+        foot(e, '本质是把「分类正确」的目标换成「减少接受长度损失」的目标', T(), 950);
+      } },
+    { chip: '联合训练', title: '第三步：top-K 不可微，但梯度并不需要穿过它',
+      duration: 3600,
+      desc: '选哪 K 个是离散操作，没有梯度。关键观察是：<strong>候选集合本身不需要梯度</strong>——它只是决定哪些 in/out 向量参与打分。梯度照常从相容损失流回投影头和骨干，从 drafter 损失流回 LM 头和骨干。两个损失加权相加，一起更新同一个骨干。',
+      render: function (e) {
+        title(e, '动画 7 · 两个损失、一个骨干，梯度绕开离散的 top-K');
+        e.rect(300, 320, 220, 46, '共享骨干', C('--a-blue-bg', 'transparent'), B_(),
+          { size: 13, weight: 700, labelFill: B_(), reveal: true });
+        e.rect(120, 232, 190, 42, 'LM 头（边际）', 'none', B_(), { size: 11, weight: 600, labelFill: B_(), reveal: true, delay: 120 });
+        e.rect(510, 232, 190, 42, 'in / out 投影头', 'none', P(), { size: 11, weight: 600, labelFill: P(), reveal: true, delay: 160 });
+        e.rect(510, 148, 190, 42, 'top-K（不可微）', 'none', M(), { size: 11, labelFill: M(), dash: '5 4', reveal: true, delay: 220 });
+        e.rect(120, 74, 190, 44, 'L_draft（交叉熵）', 'none', B_(), { size: 11, weight: 700, labelFill: B_(), reveal: true, delay: 300 });
+        e.rect(510, 74, 190, 44, 'L_rank（加权 CE）', 'none', P(), { size: 11, weight: 700, labelFill: P(), reveal: true, delay: 340 });
+        e.arrow(215, 232, 215, 118, { stroke: B_(), marker: 'arrB', sw: 2, reveal: true, delay: 420 });
+        e.arrow(605, 232, 605, 118, { stroke: P(), marker: 'arrP', sw: 2, reveal: true, delay: 460 });
+        e.arrow(215, 320, 215, 274, { stroke: LN(), marker: 'arrM', sw: 2, reveal: true, delay: 500 });
+        e.arrow(605, 320, 605, 274, { stroke: LN(), marker: 'arrM', sw: 2, reveal: true, delay: 540 });
+        e.line(310, 169, 510, 169, { stroke: M(), dash: '4 4', reveal: true, delay: 600 });
+        e.t(410, 158, '只提供索引，无梯度', { size: 10, fill: M(), reveal: true, delay: 640 });
+        e.t(410, 398, 'L = L_draft + β · L_rank —— β 太大就会牺牲边际精度去换相容性',
+          { size: 12, weight: 700, fill: T(), reveal: true, delay: 760 });
+        foot(e, '这也是余弦归一化必须存在的地方：否则 L_rank 会靠放大范数来偷分', Y(), 900);
+      } },
+    { chip: '长度泛化', title: '第四步：训练块长小、推理块长大时的尺度漂移',
+      duration: 3400,
+      desc: '训练常用较小的块长，推理希望块更长。分数分布会随块长漂移，导致同一个 λ 在长块上失效。论文用<strong>间隔式的正则</strong>——只要求真值对比最强干扰项高出一个固定 margin，不追求把分数推到 1；配合位置编码外推，λ 就能跨块长复用。',
+      render: function (e) {
+        title(e, '动画 7 · 只管住「差距」，不管住「绝对值」');
+        e.t(216, 92, '推到饱和（分数 → 1）', { size: 12, weight: 600, fill: R(), reveal: true });
+        e.rect(96, 116, 240, 120, '', 'none', R(), { reveal: true, delay: 60 });
+        e.line(120, 200, 312, 140, { stroke: R(), sw: 2.4, reveal: true, delay: 140 });
+        e.t(216, 258, '块长一变，绝对尺度整体平移', { size: 10, fill: M(), reveal: true, delay: 220 });
+        e.t(216, 280, 'λ 需要重新调', { size: 10, weight: 600, fill: R(), reveal: true, delay: 260 });
+        e.t(604, 92, 'hinge：真值 − 最强干扰 ≥ margin', { size: 12, weight: 600, fill: G(), reveal: true, delay: 320 });
+        e.rect(484, 116, 240, 120, '', 'none', G(), { reveal: true, delay: 360 });
+        e.line(508, 190, 700, 190, { stroke: G(), sw: 2.4, reveal: true, delay: 420 });
+        e.line(508, 214, 700, 214, { stroke: T(), sw: 2.4, dash: '5 4', reveal: true, delay: 460 });
+        e.arrow(604, 190, 604, 214, { stroke: Y(), marker: 'arrY', sw: 1.6, reveal: true, delay: 520 });
+        e.t(650, 206, 'margin', { size: 10, weight: 600, fill: Y(), reveal: true, delay: 560 });
+        e.t(604, 258, '差距被固定，绝对值自由浮动', { size: 10, fill: M(), reveal: true, delay: 600 });
+        e.t(604, 280, '同一个 λ 跨块长可用', { size: 10, weight: 600, fill: G(), reveal: true, delay: 640 });
+        e.t(410, 336, '再加上位置编码外推，重排头才敢用在比训练更长的块上',
+          { size: 12, weight: 600, fill: T(), reveal: true, delay: 740 });
+        e.t(410, 366, '这条是工程性的，但缺了它长块上的收益会明显缩水',
+          { size: 11, fill: M(), reveal: true, delay: 820 });
+        foot(e, '整套训练加起来仍然只是在 drafter 之上挂两个投影头', T(), 960);
+      } }
+  ];
+}
+/* ---------- 装配 ---------- */
+var builders = { svg1: scene1, svg2: scene2, svg3: scene3, svg4: scene4, svg5: scene5, svg6: scene6, svg7: scene7 };
+var engines = {};
+function initAll() {
+  for (var id in builders) {
+    var svg = document.getElementById(id);
+    if (!svg) continue;
+    engines[id] = new AnimEngine(svg, { steps: builders[id]() });
+  }
+}
+function engineOf(node) {
+  var frame = node.closest('.anim-frame');
+  if (!frame) return null;
+  var svg = frame.querySelector('svg');
+  return svg ? engines[svg.id] : null;
+}
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('button');
+  if (!b || !b.closest('.anim-frame')) return;
+  var eng = engineOf(b);
+  if (!eng) return;
+  if (b.classList.contains('btn-next')) { eng.pause(); eng.next(); }
+  else if (b.classList.contains('btn-prev')) { eng.pause(); eng.prev(); }
+  else if (b.classList.contains('btn-reset')) eng.reset();
+  else if (b.classList.contains('btn-play')) eng.toggle();
+  else if (b.classList.contains('stage-chip')) { eng.pause(); eng.goTo(+b.dataset.idx); }
+});
+document.addEventListener('input', function (ev) {
+  if (!ev.target.classList.contains('speed')) return;
+  var eng = engineOf(ev.target);
+  if (eng) eng.setSpeed(parseFloat(ev.target.value));
+});
+document.addEventListener('keydown', function (ev) {
+  var frame = document.activeElement && document.activeElement.closest && document.activeElement.closest('.anim-frame');
+  if (!frame) return;
+  var eng = engineOf(document.activeElement);
+  if (!eng) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); eng.pause(); eng.next(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); eng.pause(); eng.prev(); }
+  else if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON') { ev.preventDefault(); eng.toggle(); }
+});
+
+/* SVG 里的色值是切换主题那一刻读出来的具体值，主题一变就过期。
+   用 MutationObserver 盯 data-theme，无论用户点的是站点导航里的开关还是
+   本文右下角这个按钮，都会重绘当前步。存储键与站点保持一致（'theme'）。 */
+function redrawAll() {
+  for (var id in engines) { engines[id].pause(); engines[id].goTo(engines[id].i); }
+}
+window.toggleTheme = function () {
+  var root = document.documentElement;
+  var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (err) {}
+};
+if (window.MutationObserver) {
+  new MutationObserver(function () { setTimeout(redrawAll, 30); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+window.toggleToc = function () {
+  var toc = document.getElementById('tocNav');
+  var btn = document.querySelector('.toc-toggle');
+  var hidden = toc.hasAttribute('hidden');
+  if (hidden) toc.removeAttribute('hidden'); else toc.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+};
+
+/* TOC 高亮 + 回到顶部 */
+function initChrome() {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if ('IntersectionObserver' in window && secs.length) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  var bt = document.getElementById('backTop');
+  if (bt) window.addEventListener('scroll', function () { bt.classList.toggle('show', window.scrollY > 400); }, { passive: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { initAll(); initChrome(); });
+} else { initAll(); initChrome(); }
+})();
+</script>
+</body>
+</html>
+
