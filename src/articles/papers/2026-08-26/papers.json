@@ -1,0 +1,312 @@
+{
+  "date": "2026-08-26",
+  "title": "2026-08-26 论文精选",
+  "lede": "今日关注三条主线：内存受限服务的扩容经济学（张量并行与 KV 压缩的同一成本轴对比、掩码扩散 LLM 的真实硬件服务刻画、混合格式 KV cache 压缩）、推理与 RL 训练的算法进展（推理并行的再思考、段级再生解码、信念-行为对齐的 agentic RAG 优化）、以及智能体与多模态的架构创新（递归经验-工作记忆进化、编码智能体上下文压缩器、原生声呐-光学多模态 LLM）。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 258
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "More GPUs or a Smaller Cache? Tensor Parallelism versus KV Compression for Memory-Bound LLM Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-26",
+          "authors": "Srikanta Datta Tumkur, Mehar Simhadri, Anshu Bansal, Jay Iyer, Sai Pavan Kumar, Sai Kapil Kumar, Ramesh Nampelly, Raj Dandekar",
+          "institutions": "机构未标注",
+          "abstract": "LLM 服务部署遇到 KV cache 容量瓶颈时通常有两条出路：张量并行（把权重与 KV cache 分片到多卡，换取内存余量，但每层多一次 all-reduce、硬件账单随卡数增长）与 KV 压缩（量化/驱逐，单卡原地缩小 cache，以少量质量换容量）。此前两类工作各自报告吞吐或压缩比，几乎没人把两者放到同一成本坐标上。本文用基于 A100/A40/H100 硬件标定的模拟器，把 1-8 度张量并行与 16/8/4-bit 量化、低至 0.25 保留率的 KV 压缩放在“每百万 token 成本—延迟”同一坐标轴上寻找成本等价交叉点，结果没有找到：跨 Llama-2 7B/70B 两种模型、三种 GPU、全部内存缓解档位，压缩都比加卡便宜 1.20–2.00 倍。7B 模型在 80GB 设备上根本用不完自己上下文窗口内的 KV 预算；两种策略的真正分界线是“模型大小相对设备显存”，约为 80GB 卡上的 36B 参数。低于该墙，压缩主导、多买 GPU 基本是浪费；高于该墙，张量并行从可选项变成入场券——Llama-2-70B 在任何 KV 设置下单张 A100 都不可行，因为绑定资源是权重。张量并行是唯一改善延迟的杠杆（压缩因批处理竞争使每 token 延迟变差 8–93%），压缩则是唯一成倍放大每美元容量的杠杆（16.5 倍，对比八倍硬件花费的 1.21 倍）。",
+          "contributions": [
+            "首次把张量并行与 KV 压缩放在统一“每百万 token 成本—延迟”轴上进行系统对比，基于 A100/A40/H100 标定的 profiled simulator",
+            "发现不存在成本等价交叉点：跨两种模型、三种 GPU、全部内存缓解档位，压缩一律比加卡便宜 1.20–2.00 倍",
+            "给出策略分界判据：模型参数相对设备显存约 36B/80GB，低于则压缩主导，高于则张量并行是必需而非选择"
+          ],
+          "conclusions": [
+            "压缩是放大每美元容量的唯一杠杆（16.5 倍，对比八倍 GPU 花费的 1.21 倍），张量并行是改善延迟的唯一杠杆（压缩使每 token 延迟劣化 8–93%）",
+            "扩容决策本质上由“模型大小 vs 设备显存”决定（约 36B/80GB），而非负载特征本身"
+          ],
+          "experiments": [
+            "成本对比：压缩比张量并行便宜 1.20–2.00 倍（跨 Llama-2 7B/70B、三种 GPU、所有内存缓解档位），未找到任何交叉点",
+            "每美元容量：KV 压缩放大 16.5 倍，八卡投入仅为 1.21 倍",
+            "延迟：张量并行唯一改善延迟；压缩因 batching 竞争使每 token 延迟变差 8–93%"
+          ],
+          "significance": "第一次把“多加卡”与“更小缓存”放到同一成本坐标衡量，给出可操作的分界判据（约 36B/80GB），直接指导内存受限 LLM 服务的硬件扩容与压缩取舍决策。",
+          "arxivUrl": "https://arxiv.org/abs/2608.23962",
+          "pdfUrl": "https://arxiv.org/pdf/2608.23962.pdf",
+          "index": 1,
+          "takeaway": "内存受限服务中 KV 压缩几乎总比加 GPU 划算，分界线是“模型参数 vs 设备显存”（约 36B/80GB）——低于它压缩主导，高于它张量并行成为入场券。",
+          "keyExperiment": "成本归一化对比：跨两种模型、三种 GPU、全部内存缓解档位，压缩都比张量并行便宜 1.20–2.00 倍，且未找到任何成本交叉点。"
+        },
+        {
+          "title": "Serving Masked Diffusion LLMs: Characterization and Design Principles from Real Hardware",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-26",
+          "authors": "Farhana Amin, Sabiha Afroz, Mona Moghadampanah, Dimitrios S. Nikolopoulos",
+          "institutions": "机构未标注",
+          "abstract": "掩码扩散语言模型（dLLM）理论上能比自回归（AR）模型生成更快，因为它可以一次去噪多个 token。近期已出现为 dLLM 搭建服务设施的工作，但还没有人先在真实并发服务负载下测量这类模型的行为——照搬 AR 服务的假设可能并不成立。本文在单张 NVIDIA H200 上用带 D2F（离散扩散强制）LoRA 适配器的 LLaDA-8B-Instruct，在 GSM8K 与 HumanEval 上刻画 dLLM 服务行为，得到三点发现：第一，请求难度（所需去噪步数）是离散而非连续的——请求落入 11 个固定步数档位，且生成开始前没有任何信号能预测其档位（最佳 R²=0.150）；第二，生成预算低于 320 token 的基准会低估服务方差，因为请求在延迟离散度显现前就被截断；第三，单请求墙钟时间中只有 24% 是 GPU 计算，其余是 CPU 侧调度开销。批处理主要靠摊薄该开销获益：batch size 16 时每个去噪步共享一次前向传播，吞吐比逐请求调度基线提升 16.0 倍。文章还从结构上论证输出质量不应随批大小下降（给出三个支撑假设，并在单请求规模实测 GSM8K 74–76% 准确率），并推导了泊松到达下 fixed-fill 同步批处理的批超时规则。整体结论：扩散 LLM 服务需要的是“每个去噪步内部”的并行，其准入与驱逐机制与已共享前向的交互方式同 AR 服务根本不同。",
+          "contributions": [
+            "首次在真实并发负载下刻画掩码扩散 LLM 服务行为，指出照搬 AR 服务假设的系统性风险",
+            "发现请求难度是离散的（11 个固定步数档位）且生成前不可预测（最佳 R²=0.150），并定位瓶颈为 CPU 侧调度开销（占墙钟 76%）",
+            "给出泊松到达下 fixed-fill 同步批处理的批超时规则，以及“质量不随批大小下降”的三个结构假设"
+          ],
+          "conclusions": [
+            "扩散 LLM 服务的并行粒度应在“每个去噪步内部”，准入与驱逐机制不同于 AR 服务——共享前向改变了两者的交互方式",
+            "生成预算低于 320 token 的基准会严重低估真实服务方差，评测协议需要更长预算"
+          ],
+          "experiments": [
+            "单请求墙钟时间分解：仅 24% 为 GPU 计算，其余为 CPU 侧调度开销",
+            "batch size 16 时每个去噪步共享一次前向，吞吐比逐请求调度基线提升 16.0 倍",
+            "单请求规模 GSM8K 准确率 74–76%，支撑“质量不随批大小下降”的结构论证"
+          ],
+          "significance": "给掩码扩散 LLM 服务提供了首批真实硬件数据与设计原则，指明服务优化应聚焦去噪步级并行与 CPU 调度摊薄，而非沿用 AR 推理假设。",
+          "arxivUrl": "https://arxiv.org/abs/2608.23807",
+          "pdfUrl": "https://arxiv.org/pdf/2608.23807.pdf",
+          "index": 2,
+          "takeaway": "掩码扩散 LLM 服务的真实瓶颈是 CPU 调度开销（占 76% 墙钟）而非 GPU 计算，批处理共享去噪步前向可带来 16 倍吞吐提升。",
+          "keyExperiment": "单请求墙钟分解：仅 24% 是 GPU 计算，其余为 CPU 侧调度；批大小 16 共享单次去噪前向把吞吐提升 16.0 倍。"
+        },
+        {
+          "title": "Minima-KV: Retention-Preserving KV Cache Compression with Mixed-Format Paged Attention",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-26",
+          "authors": "Sergii Kozyrev, Davyd Maiboroda",
+          "institutions": "机构未标注",
+          "abstract": "KV cache 是长上下文 LLM 服务的首要容量与带宽瓶颈。本文提出 Minima-KV，一种保留型的混合格式分页注意力层次：近期与受保护的 Anchor 页保持 FP8，较旧的非 Anchor 页迁移到紧凑的 TQ3 格式，所有存活请求的页始终可寻址。格式专用 kernel 各自计算部分注意力状态，再通过全局归一化的 online-softmax 合并，实现无需 cache 级稠密影子（dense shadow）的直接异构解码。在单张 96GB NVIDIA RTX PRO 6000 Blackwell 上、按配置分离的 Qwen3.6-27B 档案中：部署记账为每个活跃 token 仅 18.3 KiB 注意力 KV，相对 BF16 压缩 3.50 倍、相对 FP8 压缩 1.75 倍；物化质量档案在 16K RULER 针-草堆任务上与稠密对照持平；同一 503 题 LongBench v2 集上，16K/32K/64K 的实测差异为 -0.80/-0.60/-0.40 个百分点。另一次单对直接解码 canary 实验（两条各 59008 token 的请求）测得 3.625 倍活跃 KV 压缩、相对对照 0.9821 倍吞吐，全部 16 个全注意力层直通无 fallback，且不保留稠密影子。结果表明：不驱逐活跃请求 KV 页即可压缩长上下文状态的实用混合格式路径是成立的。",
+          "contributions": [
+            "提出 Anchor/非 Anchor 分层 + FP8/TQ3 混合格式的分页注意力层次，所有存活页保持可寻址",
+            "格式专用 kernel + 全局归一化 online-softmax 合并，实现无稠密影子的直接异构解码",
+            "96GB Blackwell 上 Qwen3.6-27B 实证：18.3 KiB/活跃 token（相对 BF16 3.50 倍），16K RULER 与稠密对照持平"
+          ],
+          "conclusions": [
+            "混合格式压缩可在不驱逐活跃 KV 页的前提下实现约 3.5 倍压缩且几乎无损（LongBench 差异最多 0.8 个百分点）",
+            "质量物化档案与部署档案可分轨配置，质量-容量取舍可以显式权衡"
+          ],
+          "experiments": [
+            "部署记账：18.3 KiB 注意力 KV/活跃 token，相对 BF16 压缩 3.50 倍、相对 FP8 1.75 倍",
+            "LongBench v2（503 题）：16K/32K/64K 差异仅 -0.80/-0.60/-0.40 个百分点",
+            "单对直接解码 canary：3.625 倍活跃 KV 压缩、0.9821 倍吞吐、16 层全直通无 fallback"
+          ],
+          "significance": "为长上下文 KV cache 压缩给出“混合格式 + 在线合并”的工程范式，证明压缩比与质量可以解耦，是“不驱逐活跃页”内存优化路线的可落地一步。",
+          "arxivUrl": "https://arxiv.org/abs/2608.23834",
+          "pdfUrl": "https://arxiv.org/pdf/2608.23834.pdf",
+          "index": 3,
+          "takeaway": "近期 Anchor 页保 FP8、旧页转紧凑 TQ3，异构解码在线合并——不驱逐活跃页即可获得 3.5 倍 KV 压缩且质量几乎无损。",
+          "keyExperiment": "部署记账 18.3 KiB/活跃 token（相对 BF16 3.50 倍）；LongBench v2 在 16K/32K/64K 差异仅 -0.80 至 -0.40 个百分点。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Parason: Revealing Subtask and Trial Parallelism in LLM Reasoning",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-26",
+          "authors": "Zhengyang Zhang, Zijian Zhang, Jiaxuan Gao, Shusheng Xu, Yi Wu, Song Han, Ligeng Zhu",
+          "institutions": "MIT、清华大学、普林斯顿大学",
+          "abstract": "扩展测试时推理显著提升了 LLM 的问题求解能力，但标准自回归解码仍顺序执行长推理轨迹，困难任务的延迟可能长达数天甚至数周。并行推理是自然解法，但既有系统主要聚焦子任务并行（模型学会把高层任务分解成可独立求解的小块），忽略了另一种普遍存在的形式——尝试并行：多个投机性尝试并行地探索、验证并聚合竞争假设。本文提出 Parason，揭示并学习 LLM 推理中的两种并行形态。分析发现尝试并行才是可并行推理计算的主体：在 HLE 上占 DeepSeek-V4 推理步骤的 65.5%，且问题越难占比越高。基于该分类，Parason 用上下文无关文法把顺序推理轨迹转化为结构化并行轨迹，再用并行感知的组相对策略优化（PA-GRPO）训练模型——其奖励同时权衡准确率、延迟与两种并行比例。推理时 Parason 通过工具调用执行学到的并行结构，把理论节省转化为真实墙钟加速。在 AIME24、AIME25 等数学推理基准上，Parason 在保持竞争力准确率的同时实现约 1.7 倍平均加速。",
+          "contributions": [
+            "揭示被忽视的尝试并行维度：在 HLE 上占 DeepSeek-V4 可并行推理步骤的 65.5%，且问题越难占比越高",
+            "用上下文无关文法把顺序推理轨迹转成结构化并行轨迹，并提出 PA-GRPO 联合优化准确率、延迟与并行比例",
+            "推理时经工具调用执行学到的并行结构，把理论并行度转化为真实墙钟加速"
+          ],
+          "conclusions": [
+            "可并行推理的主体不是子任务分解而是竞争性尝试并行，为测试时扩展指明新方向",
+            "PA-GRPO 训练出的并行轨迹可在保持竞争力准确率的同时实现约 1.7 倍平均加速"
+          ],
+          "experiments": [
+            "分析：尝试并行占 DeepSeek-V4 在 HLE 上可并行推理步骤的 65.5%，且随难度上升占比增大",
+            "AIME24/AIME25 等数学推理基准：约 1.7 倍平均墙钟加速，准确率保持竞争力"
+          ],
+          "significance": "第一次把推理并行拆解为子任务并行 + 尝试并行两种形态并给出端到端训练-推理方案，把多路推理并行从工程技巧变成可学习的模型能力。",
+          "arxivUrl": "https://arxiv.org/abs/2608.24658",
+          "pdfUrl": "https://arxiv.org/pdf/2608.24658.pdf",
+          "index": 4,
+          "takeaway": "让模型自己学会并行推理：尝试并行占可并行计算的 65.5%，用 PA-GRPO 训练并行轨迹可换来约 1.7 倍加速且不掉准确率。",
+          "keyExperiment": "HLE 上尝试并行占 DeepSeek-V4 可并行推理步骤的 65.5%；AIME24/25 上平均加速约 1.7 倍且准确率保持竞争力。"
+        },
+        {
+          "title": "Selective Regenerative Decoding: Trajectory-Level Intervention for Inference-Time Reasoning",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-26",
+          "authors": "Sophia Xiao Pu, Yumo Xu, Sailik Sengupta, Millennium Bismay, Ruixue Lian, James Gung, Yi-an Lai, Arshit Gupta",
+          "institutions": "机构未标注",
+          "abstract": "推理时解码方法通过探索多条候选轨迹提升 LLM 推理能力，但都把每条轨迹当作原子单元：要么整体保留，要么不可逆丢弃。这浪费了部分有希望的候选——其高质量前缀随劣化后缀一起被放弃。本文提出选择性再生解码（SRD）：把每条候选路由到“丢弃 / 保留 / 仅再生成劣化后缀”三类，保留边缘候选的有用前缀，且不需要更大的目标模型。在温和假设下，SRD 相对拒绝采样取得可证明的 1.28–1.36 倍样本效率提升，期望轨迹质量严格更高，且候选池越大增益越大。在 MATH500、GPQA Diamond、HotpotQA、AlpacaEval 上、多组生成-奖励模型配对下，SRD 用显著更少的生成 token 达到 Best-of-N 同等的准确率，并在低计算预算区胜过投机式拒绝。通过引入段级干预而非整轨迹取舍，SRD 打开了推理时准确率-计算权衡中此前未探索的区域。",
+          "contributions": [
+            "把轨迹处理从原子式取舍细化为段级干预：丢弃 / 保留 / 仅再生成劣化后缀三类路由，保住边缘候选的高质量前缀",
+            "温和假设下给出可证明的 1.28–1.36 倍样本效率提升（相对拒绝采样），增益随候选池增大",
+            "无需更大目标模型，推理成本可控，直接嵌入现有解码流程"
+          ],
+          "conclusions": [
+            "段级干预比整轨迹取舍更划算：同等准确率下生成 token 显著更少，低计算预算区优于投机式拒绝",
+            "“部分再生成”打开了推理时准确率-计算权衡中未曾探索的区域"
+          ],
+          "experiments": [
+            "MATH500、GPQA Diamond、HotpotQA、AlpacaEval 上以显著更少 token 达到 Best-of-N 同等准确率（多组生成-奖励模型配对）",
+            "样本效率相对拒绝采样提升 1.28–1.36 倍（可证明，且随候选池增大）",
+            "低计算预算区优于投机式拒绝（speculative rejection）"
+          ],
+          "significance": "把推理时扩展从“整轨迹选择”推进到“段级再生”，在质量-算力权衡上开辟新区域，为测试时计算提供更细粒度的控制粒度。",
+          "arxivUrl": "https://arxiv.org/abs/2608.24338",
+          "pdfUrl": "https://arxiv.org/pdf/2608.24338.pdf",
+          "index": 5,
+          "takeaway": "与其整条丢弃次优轨迹，不如只再生成其劣化后缀——SRD 用更少 token 拿到 Best-of-N 级准确率，样本效率提升 1.28–1.36 倍。",
+          "keyExperiment": "相对拒绝采样 1.28–1.36 倍样本效率增益（候选池越大越明显），且以显著更少的生成 token 匹配 Best-of-N 准确率。"
+        },
+        {
+          "title": "MetaRAG: Belief-Action Aligned Policy Optimization for Agentic RAG",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-26",
+          "authors": "Qiuyi Qi, Tian Liang, Jiamu Wang, Jinjian Zhang, Wei Zhou, Pengcheng Zhu, Linjian Mo, Ming Kong, Jie Liu, Qiang Zhu",
+          "institutions": "机构未标注",
+          "abstract": "Agentic RAG 要求语言模型自己决定何时继续搜索、何时作答。现有基于 RL 的方法依赖外部监督，忽略了智能体关于“当前证据是否充分”的内部信念。本文把搜索决策质量重构为“信念-行为对齐”（belief-action alignment），提出 MetaRAG 框架：Verify-first Action Generation 在每次实际动作前先引出显式验证过程；Internal Belief Probing 用同一“问题-历史”上下文估计策略模型自身的可作答性信念；由此构造一致性奖励，并用答案正确性做门控，避免强化“内部一致但错误”的轨迹。信念探针只在训练期使用，推理零开销。在七个公开 QA 基准上，MetaRAG 在准确率-效率权衡上一致优于强 RL 基线，增益可迁移到 deep research 场景、不同优化器与多种模型主干。",
+          "contributions": [
+            "把 agentic RAG 的搜索决策质量重构为信念-行为对齐，引入模型自身的可作答性内部信念",
+            "Verify-first Action Generation + Internal Belief Probing 构造一致性奖励，并用答案正确性门控，防止强化内部一致但错误的轨迹",
+            "信念探针仅训练期使用，推理零额外开销"
+          ],
+          "conclusions": [
+            "内部信念监督比外部监督更贴合 agentic RAG 的“何时停搜”决策",
+            "收益跨七个基准、不同优化器与多种模型主干迁移，并适用于 deep research 场景"
+          ],
+          "experiments": [
+            "七个公开 QA 基准上，准确率-效率权衡一致优于强 RL agentic RAG 基线",
+            "增益迁移到 deep research 设置、不同优化器与多个模型骨干"
+          ],
+          "significance": "给 agentic RAG 的 RL 训练引入“模型内部信念”这一自监督信号，让何时停止搜索的决策有可学习的对齐目标。",
+          "arxivUrl": "https://arxiv.org/abs/2608.24214",
+          "pdfUrl": "https://arxiv.org/pdf/2608.24214.pdf",
+          "index": 6,
+          "takeaway": "用模型自己“证据够不够”的内部信念做一致性奖励（并用正确性门控），让 agentic RAG 学会何时停搜：七个基准上一致更优且推理零开销。",
+          "keyExperiment": "七个公开 QA 基准上准确率-效率权衡一致优于强 RL 基线，且收益跨优化器与模型主干迁移。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Recursive Experiential-Working Memory Evolution for Long-Horizon Agent Harnesses",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-26",
+          "authors": "Zhaochen Yu, Yingcheng Wu, Zhenfei Yin, Kaiyuan Chen, Zhe Zhao, Mengdi Wang, Shuicheng Yan, Ling Yang",
+          "institutions": "普林斯顿大学、Skywork AI、北京大学",
+          "abstract": "递归自我改进（RSI）在长时程任务中仍很困难：不断增长的历史模糊了任务状态，技能调用容易错位。本文提出 Recuris——面向长时程智能体 harness 的递归经验-工作记忆架构：工作记忆跟踪任务进展，并从经验记忆中引导技能选择，让技能使用扎根于当前需求而非全部历史；这种耦合还把执行变成结构化证据，把失败定位到具体记忆组件。任务进行中，一个固定的元智能体把这些证据转化为对技能记忆的局部化、带验证门控的更新，重塑后续执行并产生新证据，构成有界的递归记忆进化回路。在四个长时程基准、十个模型上，Recuris 在 37 个模型-基准组合中改善了 35 个，把前沿模型带到 SOTA 级任务成功率：tau-bench 上为 GPT-5.6 Sol +17.8 分、Claude Opus 5 +15.6 分（达到 87.9%），SkillFlow 上为 Qwen3.6-27B/35B 分别 +16.6/+13.5 分；收益随交互时程拉长而扩大（最长任务上 +32.2 分），常见长时程失败最多下降 80%。",
+          "contributions": [
+            "提出“工作记忆跟踪进度 + 经验记忆引导技能选择”的递归记忆架构，执行过程即产生结构化失败证据",
+            "固定元智能体以验证门控方式对技能记忆做局部更新，形成有界递归记忆进化回路",
+            "37 个模型-基准组合中改善 35 个，跨四个长时程基准、十个模型验证，代码开源"
+          ],
+          "conclusions": [
+            "记忆分层 + 证据驱动的局部更新让优势随交互时程增长而扩大（最长任务 +32.2 分），是 RSI 的可扩展记忆基础",
+            "常见长时程失败模式最多下降 80%，技能调用与任务状态错位问题得到实质缓解"
+          ],
+          "experiments": [
+            "tau-bench：GPT-5.6 Sol +17.8 分，Claude Opus 5 +15.6 分（达 87.9%）",
+            "SkillFlow：Qwen3.6-27B/35B 分别 +16.6/+13.5 分",
+            "收益随交互时程拉长而扩大：最长任务上 +32.2 分；常见长时程失败最多下降 80%"
+          ],
+          "significance": "把记忆分层 + 元智能体局部更新做成可规模化的递归自我改进基石，让智能体持续把积累经验转化为更有效的长时程行为。",
+          "arxivUrl": "https://arxiv.org/abs/2608.24876",
+          "pdfUrl": "https://arxiv.org/pdf/2608.24876.pdf",
+          "index": 7,
+          "takeaway": "工作记忆管进度、经验记忆管技能、元智能体做验证门控更新——递归记忆进化让 37 个模型-基准组合中 35 个成功率提升，最长任务 +32.2 分。",
+          "keyExperiment": "tau-bench 上 Claude Opus 5 提升 +15.6 分至 87.9%；收益随交互时程拉长扩大到最长任务 +32.2 分。"
+        },
+        {
+          "title": "Paritok-4B: Intent-Conditioned Context Compression for Coding Agents",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-26",
+          "authors": "Jiayu Shi, Luzhuo Chen",
+          "institutions": "机构未标注",
+          "abstract": "编码智能体每一轮都要把大段文件读取与工具输出重发给前沿 LLM，上下文占据其 token 账单大头。通用提示压缩器在散文上训练、不适合代码：会改写标识符、丢掉智能体编辑所需的精确片段。本文提出 Paritok-4B——面向编码智能体轨迹的 4B LoRA 压缩器，基于两个承诺：抽取式（选择片段而非改写，其输出的 96.0% 标识符/路径/数字已在输入中出现，在保留的 SWE-bench Lite 输出上保持 96.2%）；意图条件化（告知当前任务后，它主要在保留段内行动——决定哪些行存活，而非改变保留多少；保留行相对删除行的意图相关性 +0.067，配对 95% CI [+0.056,+0.078]）。用 gpt-4.1-mini 教师把 67074 条真实 OpenHands 轨迹蒸馏为 40606 条验证样本，微调 Qwen3-4B。在全部 300 个 SWE-bench Lite 实例上，Paritok-4B 把智能体上下文压到 25.7%（比 gpt-4.1-mini 压缩器的 50.2% 硬 2.0 倍、比 gpt-5 的 61.9% 硬 2.4 倍），保留无压缩单发求解质量的 86.5%；对真实的 cat -n 行号输入压缩率略低（27.8%）但保留更多（89.3%），配对检验 30 实例仅无压缩可解、17 仅压缩可解（McNemar p=0.079）——压到约四分之一不显著降低求解率。264MB 适配器可自托管于单张 24GB GPU，无按 token 压缩费：按目录价，gpt-5 当压缩器是净负收益，成本超过它省下的下游 token。权重、数据与评估脚本开源（Apache 2.0）。",
+          "contributions": [
+            "抽取式代码上下文压缩：96.0% 的标识符/路径/数字原样保留（保留输出 96.2%），契合智能体编辑需求",
+            "意图条件化压缩：告知任务后优化“保留哪些行”而非“保留多少”，保留行意图相关性 +0.067（95% CI [+0.056,+0.078]）",
+            "264MB LoRA 适配器可自托管于单张 24GB GPU，无按 token 压缩费，目录价下显著优于 gpt-5 等商用压缩器"
+          ],
+          "conclusions": [
+            "上下文压到约 1/4 不显著降低 SWE-bench Lite 求解率（配对 McNemar p=0.079），压缩经济学与常规相反：本地适配器为正收益、商用 API 压缩为净负",
+            "输入形态影响压缩行为：对 cat -n 行号输入压缩率略低（27.8%）但质量保留更高（89.3%）"
+          ],
+          "experiments": [
+            "300 个 SWE-bench Lite 实例：上下文压至 25.7%，保留 86.5% 无压缩单发求解质量",
+            "压缩硬度：2.0 倍于 gpt-4.1-mini（50.2%）、2.4 倍于 gpt-5（61.9%）",
+            "保留行相对删除行意图相关性 +0.067（95% CI [+0.056,+0.078]）；行号输入下求解质量保留 89.3%"
+          ],
+          "significance": "证明“本地小模型做抽取式、意图条件化压缩”是编码智能体 token 成本问题的经济学答案——264MB 适配器比 gpt-5 压缩器更省钱且更有效。",
+          "arxivUrl": "https://arxiv.org/abs/2608.24188",
+          "pdfUrl": "https://arxiv.org/pdf/2608.24188.pdf",
+          "index": 8,
+          "takeaway": "自托管 264MB 的抽取式压缩器把编码智能体上下文压到 1/4、保留 86.5% 求解质量，还比 gpt-5 当压缩器更省钱。",
+          "keyExperiment": "SWE-bench Lite 300 实例上下文压至 25.7%（压缩硬度 2.4 倍于 gpt-5），保留 86.5% 单发求解质量，压到 1/4 不显著降求解率（p=0.079）。"
+        },
+        {
+          "title": "SonarLLM: A Native Sonar–Optical Multimodal Large Language Model for Underwater Perception",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-26",
+          "authors": "Cong Su, longxuan ma, Ling Dong, Guofeng Tang, Weijie Yin, Haohui Chen, Zhengtao Yu",
+          "institutions": "昆明理工大学",
+          "abstract": "可靠的水下感知需要互补的多传感器：光学相机捕获外观与语义，但浊度升高时迅速退化；成像声呐保留几何结构，却有独特的距离-方位结构与声学伪影。现有 MLLM 主要基于光学编码器，难以建模声呐或自适应利用声呐-光学互补性。本文提出 SonarLLM，把声呐当作原生感知模态：声呐专用编码器 + 模态特定、物理感知的特征增强 + 可靠性感知的分层融合，把声学结构与光学语义对齐，并随感知质量变化动态调整两者贡献。配套发布 SonarBench 配对基准，覆盖识别、计数、视觉问答、图像描述四个任务与声呐单独 / 光学单独 / 融合三种输入设置——通过固定场景与声呐观测、只变化光学退化程度，可受控测量跨模态互补性。SonarLLM 在声呐单独设置的识别/计数/VQA 上达到 72.0% 宏观准确率，比最强基线高 34.4 个百分点；融合设置下 68.7%，超过最优基线 25.1 个百分点。识别与计数任务上，随浊度增大，融合相对光学的增益从 6.0 增至 36.0 个百分点，说明受控光学退化下声呐的互补价值持续上升。整体结论：鲁棒异构感知不仅取决于加装声呐，更取决于按感知特性表示并加权它。",
+          "contributions": [
+            "把声呐作为原生感知模态建模（专用编码器 + 物理感知特征增强 + 可靠性感知分层融合），突破纯光学 MLLM 的能力边界",
+            "发布 SonarBench 配对基准：四任务 × 三输入设置，可受控测量光学退化下的跨模态互补性",
+            "声呐-光学融合增益随浊度上升从 6.0 增至 36.0 个百分点，量化了异构感知的互补价值"
+          ],
+          "conclusions": [
+            "声呐单独即可达 72.0% 宏观准确率（超最强基线 34.4 个百分点），异构建模比堆传感器更重要",
+            "融合的互补价值随光学退化单调上升，可靠性感知的加权融合是鲁棒水下感知的关键"
+          ],
+          "experiments": [
+            "声呐单独设置：识别/计数/VQA 宏观准确率 72.0%，超最强基线 34.4 个百分点",
+            "融合设置：68.7%，超过最优基线 25.1 个百分点",
+            "识别与计数任务：融合相对光学增益随浊度从 6.0 增至 36.0 个百分点"
+          ],
+          "significance": "首个把声呐当原生模态的 MLLM 加配对基准，为异构/退化环境下的多模态感知给出按模态可靠性加权融合的范式。",
+          "arxivUrl": "https://arxiv.org/abs/2608.24325",
+          "pdfUrl": "https://arxiv.org/pdf/2608.24325.pdf",
+          "index": 9,
+          "takeaway": "把声呐当作原生模态而非光学附庸：SonarLLM 声呐独立感知超基线 34.4 个百分点，且融合收益随光学退化而扩大（6→36 分）。",
+          "keyExperiment": "声呐单独宏准确率 72.0%（+34.4pp vs 最强基线）；随浊度上升融合相对光学增益从 6.0 增至 36.0 个百分点。"
+        }
+      ]
+    }
+  ]
+}
