@@ -1,0 +1,336 @@
+{
+  "date": "2026-08-27",
+  "title": "2026-08-27 论文精选",
+  "lede": "今日聚焦推理效率与智能体系统的双向推力：MoE 免训练加速与 KV 缓存逐出真相、RL 后训练的机制拆解，以及多智能体服务的调度与通信优化。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 234
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Trust the Mass: Forced Weights in KV-Cache Eviction",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-27",
+          "authors": "Jack Shi, Jerry Gu",
+          "institutions": "机构未标注",
+          "abstract": "所有已部署的稀疏注意力或 KV 缓存逐出规则都保留键的子集、丢弃其余部分，再在保留集合上重新归一化注意力权重。作者在五个模型的 168,192 个注意力行上穷举最优保留子集，发现“保留最大权重”已接近最优——最优子集只能弥合与完整注意力之间剩余差距的中位数 2%–5%。既然选择本身收益这么小，已发布方法之间的差距必然来自别处，于是作者测量了各方法实际持有的字节数：最强查询无关方法之所以占优，是因为其逐头选择以掩码形式存储、实际持有完整缓存，只有参差（ragged）的按头存储才真正释放内存。在固定选择上强制名义预算会损失 14–62 个基准点；一个 87.6 点的检索优势可追溯到“在问题可见时计算排名”。作者提出免训练分配器 ContourKV，基于丢弃质量统计量分配预算，在与该 SOTA 的 160 组成对比较中赢 93 组、输 22 组，并在预算强制基线的字节条件下与最强方法持平。",
+          "contributions": [
+            "在 168,192 个注意力行上穷举验证：保留最大权重已近最优，最优子集仅能弥合剩余差距的中位数 2%–5%",
+            "揭示逐出方法的真实内存占用：掩码存储等于持有完整缓存，只有参差按头存储才真正释放字节",
+            "提出免训练的预算分配器 ContourKV，基于丢弃质量统计量分配各头预算"
+          ],
+          "conclusions": [
+            "选择机制之间的差距被高估，逐出方法的主要差异在于实际释放了多少字节而非选择有多聪明",
+            "在固定选择上强制预算会损失 14–62 个基准点，预算感知的分配是必要的"
+          ],
+          "experiments": [
+            "五个模型 168,192 个注意力行的最优子集分析：最优选择仅弥合剩余差距的中位数 2%–5%",
+            "强制名义预算使固定选择损失 14–62 个基准点；87.6 点检索优势源于问题可见时计算排名",
+            "ContourKV 在 160 组成对比较中赢 93 组、输 22 组，并持平最强基线（预算强制字节数下）"
+          ],
+          "significance": "这篇论文把 KV 缓存逐出研究的焦点从“选哪些键”拉回“真正释放多少字节”这一更本质的问题。",
+          "arxivUrl": "https://arxiv.org/abs/2608.25230",
+          "pdfUrl": "https://arxiv.org/pdf/2608.25230.pdf",
+          "takeaway": "保留最大权重的简单逐出已近最优，逐出方法间的真实差距在于占用的缓存字节数。",
+          "keyExperiment": "五个模型 168,192 个注意力行的穷举最优子集分析：保留最大权重与最优子集仅差 2%–5%，证明选择机制的边际收益被严重高估。",
+          "index": 1
+        },
+        {
+          "title": "ExFold: Unified Expert Folding for Training-Free MoE Prefill-Decode Acceleration",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-27",
+          "authors": "Juntong Wu, Yifei Liu, Junyi Chen, Siqi Fan, Chaoran Feng, Minghao Li, Liujie Zhang, Weihang Chen, Li Yuan",
+          "institutions": "机构未标注",
+          "abstract": "MoE 模型通过稀疏专家激活，在控制每 token 计算量的同时扩展模型容量，但低延迟服务面临两个瓶颈根本不同的阶段：prefill 受 token 级专家计算主导，decode 受批量激活专家集合的内存流量约束。现有免训练加速方法只优化单一资源代理（每 token 执行的专家数或每 batch 激活的专家集），且要么直接丢弃被排除专家的贡献，要么仅隐式近似。ExFold 将 prefill 与 decode 统一为一个带预算的输出近似问题：只执行阶段特定的受约束专家集，并用校准的标量投影矩阵把预算外专家的贡献“折叠”进保留专家。其出发点是对大量专家输出方向对齐、仅幅度不同的观察。由此 prefill 加速变为 token 级 Top-K 折叠，decode 加速变为批级专家池折叠，两阶段只差保留专家的选择方式，共享同一套折叠机制。ExFold 以 vLLM 即插即用插件实现（含轻量专家折叠 CUDA kernel），TTFT 最高提速 1.41 倍、TPOT 最高提速 2.45 倍，同时保留约 99% 的平均质量。",
+          "contributions": [
+            "把 MoE prefill 与 decode 加速统一为预算化输出近似问题，两阶段共享同一套专家折叠机制",
+            "在无标注数据上校准成对标量投影矩阵，推理时将被排除专家的贡献折入保留专家",
+            "以 vLLM 即插即用插件 + 轻量 CUDA kernel 实现，完全免训练"
+          ],
+          "conclusions": [
+            "专家输出方向对齐、幅度不同，标量投影足以近似被排除专家的贡献",
+            "统一折叠在两阶段均有效，阶段差异只需反映在保留专家的选择方式上"
+          ],
+          "experiments": [
+            "TTFT 最高提速 1.41×，TPOT 最高提速 2.45×（vLLM 集成实测）",
+            "平均输出质量保持约 99%"
+          ],
+          "significance": "首个同时加速 MoE prefill 与 decode 的免训练统一框架，把两个阶段纳入同一个预算化近似视角。",
+          "arxivUrl": "https://arxiv.org/abs/2608.24938",
+          "pdfUrl": "https://arxiv.org/pdf/2608.24938.pdf",
+          "takeaway": "用标量投影把预算外专家的贡献折叠进保留专家，免训练同时加速 MoE prefill 与 decode。",
+          "keyExperiment": "vLLM 集成实测：TTFT 加速 1.41×、TPOT 加速 2.45×，质量保持约 99%。",
+          "index": 2
+        },
+        {
+          "title": "FAMPWQ: Fisher Information-based Adaptive Mixed Precision Weight Quantization for Effective LLM Inference",
+          "score": 3.7,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-27",
+          "authors": "Gongwei Lee, Ji Liu, Juncheng Jia, Ji Wu",
+          "institutions": "机构未标注",
+          "abstract": "LLM 的庞大数据资源需求阻碍了其在资源受限设备上的部署。量化是有效手段，但传统量化方法因均匀位宽或简单启发式的敏感性评估而遭受严重性能退化。FAMPWQ 提出基于 Fisher 信息的自适应混合精度权重量化：首先构建一个以新型 Fisher 信息度量衡量逐层量化敏感性的系统模型；其次在 FAMPWQ 中设计基于强化学习的位宽分配器，根据 Fisher 敏感性度量生成自适应位宽分配策略，用于商品 GPU 上的高效 LLM 推理。在 7 个模型、5 个基准上的大量实验表明，FAMPWQ 在 PPL（最大缩小 3.39）、准确率（最高提升 6.87%）与 LLM-as-judge 对比（最高 76% 胜率）上显著优于 7 个基线方法。",
+          "contributions": [
+            "提出 Fisher 信息度量来衡量逐层对量化的敏感性，替代均匀位宽与简单启发式评估",
+            "设计 RL 位宽分配器，基于 Fisher 敏感性自动生成每层自适应位宽策略",
+            "面向商品 GPU 的高效 LLM 推理管线，7 模型 5 基准全面验证"
+          ],
+          "conclusions": [
+            "Fisher 信息度量的敏感性评估优于启发式，能可靠引导混合精度位宽分配",
+            "RL 生成的自适应混合精度显著优于均匀量化与启发式方案"
+          ],
+          "experiments": [
+            "7 个模型、5 个基准 vs 7 个基线：PPL 最大缩小 3.39",
+            "准确率最高提升 6.87%；LLM-as-judge 对比最高 76% 胜率"
+          ],
+          "significance": "用 Fisher 信息度量 + RL 位宽分配器把混合精度量化从启发式推向系统化。",
+          "arxivUrl": "https://arxiv.org/abs/2608.24945",
+          "pdfUrl": "https://arxiv.org/pdf/2608.24945.pdf",
+          "takeaway": "以 Fisher 信息度量层敏感性、RL 分配位宽的自适应混合精度量化，全面优于均匀与启发式方案。",
+          "keyExperiment": "7 模型 5 基准上 PPL 最低缩小 3.39、准确率最高 +6.87%、法官评测最高 76% 胜率。",
+          "index": 3
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Demystifying Reinforcement Learning Post-Training of Language Models",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-27",
+          "authors": "Donovan Clay, Saket Gollapudi, Sankar Harilal, Min Jang, Jacob Morrison, Sewoong Oh, Natasha Jaques",
+          "institutions": "Google / University of Washington",
+          "abstract": "RL 后训练已成为提升 LLM 推理、数学与编程能力的关键框架，但经典 RL 背后的原理对许多研究者和实践者仍是黑盒。本文在受控且简化的环境中用可验证奖励（RL with Verifiable Rewards）隔离算法机制，逐步拆解 RL 后训练的每一步，考察基座模型的先验分布、奖励信号的粒度、提示分布的多样性以及模型规模如何塑造 RL 结果。作者用策略输出分布的熵作为透镜，对比预训练、SFT 与 RL 后训练学到的分布，揭示各阶段如何塑造模型置信度。研究发现这些选择相互交织、共同决定后训练成败：所谓“伪奖励”（spurious rewards）的作用取决于后训练所用的提示分布；RL 后训练能否成功，取决于基座模型是否已把足够的概率质量放在目标行为上——这与经典 RL 中的探索概念直接呼应。",
+          "contributions": [
+            "在受控简化环境（RLVR）中将 RL 后训练拆解为可独立考察的机制组件",
+            "以策略输出分布的熵为透镜，对比预训练/SFT/RL 三个阶段塑造的模型确定性",
+            "阐明伪奖励与提示分布的关系、基座先验概率质量对 RL 成功的决定作用"
+          ],
+          "conclusions": [
+            "RL 后训练的成功高度依赖基座模型已具备足够的先验概率质量，呼应经典 RL 的探索理论",
+            "伪奖励并非固有有害，其影响由后训练提示分布决定"
+          ],
+          "experiments": [
+            "熵视角下预训练、SFT 与 RL 后训练三个阶段输出分布的系统化对比",
+            "受控实验中验证伪奖励×提示分布的交互效应（RLVR 隔离设置）"
+          ],
+          "significance": "为 NLP 社区提供 RL 后训练的“拆解式”指南，把黑盒机制还原成可理解、可调控的组件。",
+          "arxivUrl": "https://arxiv.org/abs/2608.24949",
+          "pdfUrl": "https://arxiv.org/pdf/2608.24949.pdf",
+          "takeaway": "RL 后训练的成败取决于基座先验概率质量与提示分布，而非什么神秘算法魔法。",
+          "keyExperiment": "受控 RLVR 环境中的机制隔离实验：先验概率质量与提示分布共同决定 RL 后训练成败。",
+          "index": 4
+        },
+        {
+          "title": "Less can be More: Relieving RAG Bottlenecks via Evidence Frontloading and Pressure-Adaptive Budgeting",
+          "score": 3.8,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-27",
+          "authors": "Weibin Cai, Reza Zafarani",
+          "institutions": "机构未标注",
+          "abstract": "现有提升 RAG 效率的方法主要优化下游 LLM 生成（如上下文压缩、服务优化），但 RAG 是端到端系统，其瓶颈会在不同服务负载与重排预算下在上游重排与下游生成之间迁移。作者先实证刻画了这一瓶颈迁移行为：高查询率或大重排预算下，上游重排可能成为主导瓶颈；降低重排预算虽可缓解，却可能丢掉支撑证据、降低召回。为此提出 PACE（Prioritized Adaptive Coverage of Evidence）：一个免训练框架，结合证据前置（evidence frontloading）与压力自适应预算（pressure-adaptive budgeting）。PACE 先按边际证据覆盖度对候选文档重排，优先选择查询相关、互补且利于形成多跳证据链的文档——该目标是单调子模函数，贪心选择具有 (1-1/e) 近似保证；随后根据重排器与 LLM 的相对压力动态调整重排预算。在三个多跳 QA 数据集与在线服务仿真中，PACE 提升了证据召回并降低了高负载下的 p95 延迟。",
+          "contributions": [
+            "实证刻画 RAG 重排/生成瓶颈迁移行为，为效率优化提供端到端系统视角",
+            "提出单调子模的证据覆盖目标，贪心选择具备 (1-1/e) 近似保证",
+            "压力自适应的重排预算动态调整，兼容高查询率与低负载场景"
+          ],
+          "conclusions": [
+            "RAG 瓶颈会在重排与生成间迁移，孤立优化下游会错过真正的瓶颈",
+            "证据前置 + 自适应预算可在保持证据召回的同时压缩重排开销"
+          ],
+          "experiments": [
+            "三个多跳 QA 数据集上证据召回提升",
+            "在线服务仿真下高查询率场景 p95 延迟降低"
+          ],
+          "significance": "把 RAG 效率优化从“下游压缩”扩展到“系统级瓶颈感知”的免训练方案。",
+          "arxivUrl": "https://arxiv.org/abs/2608.25115",
+          "pdfUrl": "https://arxiv.org/pdf/2608.25115.pdf",
+          "takeaway": "按边际证据覆盖度贪心重排并依据系统压力自适应收缩预算，缓解 RAG 上游重排瓶颈。",
+          "keyExperiment": "在线服务仿真显示高查询率下 p95 延迟显著下降，同时证据召回不降反升。",
+          "index": 5
+        },
+        {
+          "title": "From Memorization to Absorption: Mixed-Policy RL for Continual Knowledge Injection",
+          "score": 3.7,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-27",
+          "authors": "Zhibo Hou, Fan Zhao, Zhiyu An, Wan Du",
+          "institutions": "University of California, Merced",
+          "abstract": "持续知识注入对 LLM 跟上快速变化的世界至关重要。现有方法依赖监督微调（SFT），但它记住的只是训练格式下的事实，无法泛化到释义改写、文档组合与推理。本文提出 Golden-GRPO Injection（GRIN）——一个三阶段自学习框架：Golden-GRPO 是专为知识注入设计的混合策略强化学习算法，即使 on-policy rollout 在新事实场景中失败，也注入 golden answer 提供学习信号。作者还引入 Blank 与 Counter 两个文档级基准，分别针对新知识获取与反事实覆盖，每个基准评估单事实召回、多源检索与推理三类问题。实验确立了清晰的经验主张：混合策略 RL 实现的知识“吸收”超越了 SFT 的“记忆”；GRIN 在更难的问题类型上大幅超越 SFT 与混合策略 RL 基线，并在基础事实召回上与基线持平。",
+          "contributions": [
+            "Golden-GRPO 混合策略 RL：on-policy 失败时注入 golden answer，保证新事实的学习信号不中断",
+            "三阶段自学习框架专门针对持续知识注入设计",
+            "Blank/Counter 两个文档级基准：分别衡量新知识获取与反事实覆盖"
+          ],
+          "conclusions": [
+            "混合策略 RL 的知识吸收能力超越 SFT 的格式记忆式拟合",
+            "GRIN 在复杂问题（多源检索、推理）上显著领先，基础事实召回与基线持平"
+          ],
+          "experiments": [
+            "Blank/Counter 基准上，GRIN 在更难的问题类型（推理、多源检索）上大幅超越 SFT 与混合策略 RL 基线",
+            "单事实基础召回上与 SFT 基线持平"
+          ],
+          "significance": "用混合策略 RL 把持续知识注入从“记忆”升级为“吸收”，并配套可复现的文档级基准。",
+          "arxivUrl": "https://arxiv.org/abs/2608.25243",
+          "pdfUrl": "https://arxiv.org/pdf/2608.25243.pdf",
+          "takeaway": "通过注入 golden answer 的混合策略 RL，让模型真正吸收新知识而非背诵训练格式。",
+          "keyExperiment": "Blank/Counter 基准上 GRIN 在推理与多源检索等难问题上显著优于 SFT，基础事实召回持平。",
+          "index": 6
+        },
+        {
+          "title": "TailSFT: Filtered Fine-Tuning Improves Post-Training Performance",
+          "score": 3.8,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-27",
+          "authors": "Sadhika Malladi, Samy Jelassi, Dylan Foster, Jordan T. Ash, Akshay Krishnamurthy",
+          "institutions": "机构未标注",
+          "abstract": "RL 后训练驱动着现代 AI 系统的推理与 agentic 能力，但越来越多的工作表明，它只有在对已经相当能干的基座模型微调时才最有效。本文质疑现有流水线是否产出了最适合 RL 的模型。基于此前“覆盖度与 pass@K 是 RL 后性能预测器”的工作，作者设计了 SFT 的一个简单修改——TailSFT：训练时过滤掉已经拟合好的序列，把学习聚焦到数据分布中欠建模的“尾部”区域。通过受控实验与理论分析验证了设计选择，特别是具体的过滤准则。在 OLMo-3 7B 上，TailSFT 常能提升数学与代码评估的 pass@16，最高达 17 个百分点的绝对提升，且计算开销极小；这些高覆盖检查点一致地转化为后续 GRPO 训练最高 4% 的绝对 pass@1 提升，证明 TailSFT 检查点是更好的 RL 初始化。作者还引入一个轻量诊断方法，用于识别 TailSFT 最可能奏效的场景。",
+          "contributions": [
+            "TailSFT：过滤已拟合序列、聚焦数据分布尾部的 SFT 简单修改",
+            "受控实验 + 理论分析验证过滤准则等设计选择",
+            "轻量诊断方法识别 TailSFT 最有效的应用场景"
+          ],
+          "conclusions": [
+            "面向 RL 的检查点应追求高覆盖度而非一味拟合训练分布",
+            "高覆盖 SFT 检查点是更好的 RL 初始化，收益可稳定传递到 GRPO"
+          ],
+          "experiments": [
+            "OLMo-3 7B 数学/代码评估 pass@16 最高 +17% 绝对提升，计算开销极小",
+            "随后 GRPO 训练 pass@1 最高 +4% 绝对提升"
+          ],
+          "significance": "提出“为下一阶段训练服务”的分阶段模型开发视角：SFT 的职责是为 RL 准备高覆盖检查点。",
+          "arxivUrl": "https://arxiv.org/abs/2608.25756",
+          "pdfUrl": "https://arxiv.org/pdf/2608.25756.pdf",
+          "takeaway": "SFT 时过滤已拟合序列、专注数据尾部，为 RL 后训练提供显著更好的初始化。",
+          "keyExperiment": "OLMo-3 7B 上 TailSFT 提升 pass@16 最高 17%，其检查点使后续 GRPO 的 pass@1 最高提升 4%。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Beyond Scaling: Self-Evolving LLM Agents for Hardware Kernel Optimization via an Experience-Driven Workflow and Experience Graph Memory",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-08-27",
+          "authors": "Siyuan Chen, Runlin Hou, Shenxiu Wu, Yansong Sun, Junming Cao, Yiyu Zhang, Shudi Shao, Junhao Qiu, Zhichao Lu, Qingfu Zhang",
+          "institutions": "City University of Hong Kong",
+          "abstract": "硬件 kernel 优化需要反复的编译、正确性测试、性能剖析与修改。LLM agent 可以自动化其中部分流程，更强的基座模型、更长的上下文窗口与更长的执行视野也确实改善了单任务内的优化。但这些进步本身不足以让 agent 从已完成的优化运行中学习：现有 kernel 优化 agent 很少保存“决策—执行反馈—后续决策”之间的证据链，而保留全部历史轨迹又不可行——不断膨胀的历史会与当前任务争夺上下文。作者提出经验驱动的框架 KOPE：将优化轨迹连同正确性与性能反馈存入 Experience Graph Memory（经验图记忆），再用 Active Context Management and Injection 在固定 token 预算下检索相关经验并注入。图结构保留决策顺序、观察结果与替代分支，使在目标硬件上收集的证据能服务于后续的优化步骤与任务。在相同的 GLM-5.2 设置下，KOPE 每算符加速的几何均值是 CANNBot（最强竞品）的 1.54 倍；53 算符完整消融中，Active Context Management and Injection 将通过率从 60.0% 提升到 84.6%，正字段几何均值从 0.0382 提升到 0.0661，并减少了优化轮数。",
+          "contributions": [
+            "Experience Graph Memory：以图结构保留决策顺序、观察结果与替代分支",
+            "Active Context Management and Injection：固定 token 预算下的经验检索与注入",
+            "经验驱动工作流让 kernel 优化 agent 跨任务持续学习，而非只处理孤立任务"
+          ],
+          "conclusions": [
+            "让 agent 复用历史优化经验比单纯加大模型与上下文更有效",
+            "图结构保留替代分支，支持基于目标硬件证据的后续决策"
+          ],
+          "experiments": [
+            "相同 GLM-5.2 设置下，KOPE 每算符加速几何均值达 CANNBot 的 1.54 倍",
+            "53 算符消融：通过率 60.0%→84.6%，正字段几何均值 0.0382→0.0661，优化轮数减少"
+          ],
+          "significance": "用经验图记忆让 kernel 优化 agent 具备跨任务学习能力，实证“经验驱动优于盲目堆规模”。",
+          "arxivUrl": "https://arxiv.org/abs/2608.25570",
+          "pdfUrl": "https://arxiv.org/pdf/2608.25570.pdf",
+          "takeaway": "把优化轨迹存入经验图并在固定预算下检索注入，KOPE 让 kernel 优化 agent 真正地自我进化。",
+          "keyExperiment": "同 GLM-5.2 设置下每算符加速几何均值达竞品 CANNBot 的 1.54 倍，通过率从 60.0% 升至 84.6%。",
+          "index": 8
+        },
+        {
+          "title": "Routed Graph Handoff: Adaptive Format Selection for Multi-Agent LLM Delegation",
+          "score": 3.5,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-27",
+          "authors": "Pratyay Banerjee, Ankit Chadha",
+          "institutions": "机构未标注",
+          "abstract": "多智能体 LLM 系统通过自然语言消息协调，这会消耗 40%–60% 的 token 预算。用结构化图替代自然语言可以降低成本，但在需要自适应推理的任务上会失败。作者提出 Routed Graph Handoff：由一个轻量 LLM 路由器（仅 155 tokens、0.15% 开销）为每次委派在类型化依赖图与自然语言两种格式之间做选择。在四个基准（1,050+ 条轨迹）上，路由系统在每项任务上都达到或超过纯 NL 方案：τ-retail 上 +12.7 个百分点（3.2× 压缩，p<0.01），BrowseComp 上 +8.7 个百分点（2.2× 压缩，p<0.05），BFCL 与 AppWorld 持平。去掉路由器时，纯图委派在 AppWorld 上倒退 14.6 个百分点，而路由器几乎以零成本消除了这一回归。研究还发现图感知的执行者提示是必需的——同样的 schema 若没有解释性指导则毫无收益；oracle 分析显示仍有 8.6 个百分点的提升空间，指向执行时自适应路由这一未来方向。",
+          "contributions": [
+            "轻量路由器（155 tokens、0.15% 开销）为每次委派在依赖图与自然语言间选择格式",
+            "验证图感知执行者提示的必要性：相同 schema 无指导则无收益",
+            "oracle 分析揭示 8.6pp 额外提升空间，指向执行时自适应路由"
+          ],
+          "conclusions": [
+            "结构化格式降本但可能退化，路由混合策略在成本与质量间取得更优平衡",
+            "格式选择必须配合执行者对图语义的理解才能生效"
+          ],
+          "experiments": [
+            "τ-retail 上 +12.7pp（3.2× 压缩，p<0.01）",
+            "BrowseComp 上 +8.7pp（2.2× 压缩，p<0.05）；BFCL 与 AppWorld 持平",
+            "纯图委派在 AppWorld 退化 14.6pp，路由器几乎零成本消除回归"
+          ],
+          "significance": "为多智能体通信给出“按需选格式”的轻量路由范式，兼顾 token 成本与自适应推理。",
+          "arxivUrl": "https://arxiv.org/abs/2608.25277",
+          "pdfUrl": "https://arxiv.org/pdf/2608.25277.pdf",
+          "takeaway": "用 155 token 的轻量路由器为每次委派选择图或自然语言格式，压缩 2–3 倍且不损质量。",
+          "keyExperiment": "四个基准 1,050+ 轨迹上路由系统全面优于或持平纯 NL：τ-retail +12.7pp 同时实现 3.2× 压缩。",
+          "index": 9
+        },
+        {
+          "title": "TOPAS: Workflow-Aware Prefix-State Scheduling for Multi-Agent LLM Serving",
+          "score": 3.6,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-27",
+          "authors": "Hongqiu Ni, Han Tian, Chi Zhang, Guopeng Li, Haisheng Tan",
+          "institutions": "University of Science and Technology of China",
+          "abstract": "前缀缓存在多智能体 LLM 服务中引入了根本性权衡：为某个 agent 保留长系统提示的 KV 缓存能加速其未来的调用，却会挤占用于批处理并发请求的 GPU 内存。在多阶段工作流中，现有调度器倾向于要么优先即时前缀局部性，要么优先整体工作流进度；但在共享 KV 缓存预算下，孤立优化任一目标都可能因下游延迟或频繁前缀替换而拉长任务级完成时间（JCT）。为此作者提出 TOPAS（Task-Oriented Prefix-Aware Scheduler）：联合决定缓存中保留哪些 agent 的前缀、以及调度哪些请求执行。TOPAS 对候选“决策后状态”打分，权衡每个任务最长剩余服务路径的期望缩减与下游前缀复用的近期收益，并计入前缀搬移与抢占的成本；同时引入任务级老化机制防止饥饿。作者在 SGLang 框架内实现 TOPAS，并在三个合成 DAG 与两个 MetaGPT 软件开发工作流上评估：相对各工作负载与指标下的最强基线，合成负载的均值/p99 JCT 最高降低 39.8%/49.4%，MetaGPT-SOP 平均 JCT 降低 9.8%，MetaGPT-TL 的均值/p99 JCT 降低 22.0%/26.6%。",
+          "contributions": [
+            "首次联合优化前缀缓存保留与请求调度，平衡前缀局部性与工作流进度",
+            "基于最长剩余服务路径缩减期望的决策后状态打分，附任务级老化防饥饿",
+            "在 SGLang 框架内完整实现并在合成 DAG 与 MetaGPT 工作流上验证"
+          ],
+          "conclusions": [
+            "多阶段工作流中孤立优化前缀局部性或进度都会拉长 JCT，必须联合决策",
+            "任务级老化机制有效防止长任务被前缀竞争饿死"
+          ],
+          "experiments": [
+            "合成 DAG：均值/p99 JCT 最高降低 39.8%/49.4%（相对各指标最强基线）",
+            "MetaGPT-SOP 平均 JCT 降低 9.8%；MetaGPT-TL 均值/p99 JCT 降低 22.0%/26.6%"
+          ],
+          "significance": "把多智能体服务调度从“前缀局部性 vs 工作流进度”的二维取舍升级为联合优化问题。",
+          "arxivUrl": "https://arxiv.org/abs/2608.25523",
+          "pdfUrl": "https://arxiv.org/pdf/2608.25523.pdf",
+          "takeaway": "TOPAS 联合决策缓存保留与调度执行，使多智能体工作流的 JCT 最高降低约四成到五成。",
+          "keyExperiment": "合成 DAG 上均值/p99 JCT 最高降低 39.8%/49.4%，MetaGPT 软件工作流 JCT 同样显著下降。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
