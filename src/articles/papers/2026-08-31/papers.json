@@ -1,0 +1,335 @@
+{
+  "date": "2026-08-31",
+  "title": "2026-08-31 论文精选",
+  "lede": "今日关注：KV 缓存治理与压缩（结构感知持久化、驱逐概率形式化）、MoE 训练与架构（通信高效层重配置、可复用专家）、RL 智能体训练（世界模型、验证器信用追溯）与推理效率（自适应预算、滑窗注意力之争、扩散 LM 投机解码）。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 223
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Parser States Already Know: Structure-Conditioned KV Persistence for Structured Generation",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-31",
+          "authors": "Linze Wu, Xinru Chen",
+          "institutions": "机构未标注",
+          "abstract": "结构化生成是 LLM 智能体输出 JSON、SQL 与函数调用的基础，单个字段错误就可能导致下游动作失败。约束解码已在跟踪解析器状态以保证格式合法，这些状态揭示了生成 token 参与哪些与 schema 相关的关键决策（必填字段、参数、结构边界），但现有 KV 压缩方法并未利用这一结构信号。PASK（Parser-Aware Structural KV Persistence）将解析器派生的结构信息转化为逐层分组的 KV 持久化决策：用任务错误敏感度设定最小保护下限，用注意力输出畸变分配剩余 KV 容量，缓解模型侧 KV 敏感性与任务级结构化风险之间的错配。离线校准将信号编译为持久化策略，在线仅需轻量结构条件查找。在目标总 KV 预算 0.33 下，PASK 在 Qwen3-4B 的 8 个 BFCL 子类别上平均超越最强压缩基线 17.39 个百分点；端到端服务中吞吐最高提升 2.2 倍、TPOT 降低 3.3 倍，峰值显存仅为 Full KV 的 0.53 倍。",
+          "contributions": [
+            "首次将解析器状态（必填字段、参数、结构边界）转化为 KV 持久化策略，利用此前被忽略的结构信号",
+            "用任务错误敏感度设定最小保护下限、注意力输出畸变分配剩余容量，实现层分组级压缩决策",
+            "离线校准+在线轻量查询架构，推理期零额外开销"
+          ],
+          "conclusions": [
+            "0.33 KV 预算下 PASK 平均超越最强压缩基线 17.39pp，证明结构感知压缩明显优于通用压缩",
+            "端到端 2.2x 吞吐、3.3x 更低 TPOT、0.53x 峰值显存，结构化场景可大幅节省显存"
+          ],
+          "experiments": [
+            "Qwen3-4B 上 8 个 BFCL 子类别平均 +17.39pp（0.33 KV 预算 vs 最强压缩基线）",
+            "端到端服务吞吐最高 2.2x，TPOT 降低 3.3 倍",
+            "峰值 GPU 显存仅为 Full KV 的 0.53 倍"
+          ],
+          "significance": "把解析器结构知识注入 KV 压缩，为结构化生成场景开辟高压缩比、低成本的服务路径",
+          "arxivUrl": "https://arxiv.org/abs/2608.28276",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28276.pdf",
+          "index": 1,
+          "takeaway": "解析器状态天然携带 KV 持久化的结构线索，PASK 用任务错误敏感度驱动压缩，0.33 预算下大幅领先通用基线",
+          "keyExperiment": "0.33 KV 预算下 8 个 BFCL 子类别平均 +17.39 个百分点，同时端到端吞吐提升 2.2 倍"
+        },
+        {
+          "title": "A Probabilistic Interpretation of KV Cache Eviction",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-31",
+          "authors": "Renato Geh, Alex Chen, Daniel Israel, Aditya Grover, Guy Van den Broeck",
+          "institutions": "UCLA",
+          "abstract": "KV 驱逐的前提与承诺很简单：从 KV 缓存逐出部分条目，就能以可忽略的质量代价换取更高吞吐。这一经验结论对许多现有方法成立，但多数方法依赖启发式规则选择要丢弃的条目，且 KV 驱逐问题在文献中一直缺乏形式化。本文用概率推理视角严格形式化该问题：（1）形式化 KV 驱逐并证明其计算上是困难的；（2）通过概率化框架将其归结为期望估计问题，可用采样近似；（3）使解码阶段的逐出条目修正——一个此前被忽视的问题——变得可行；（4）揭示现有方法本质上是零方差但有偏的估计器，可轻易改造以支持解码期修正。实验显示，带解码期修正的概率版 KV 驱逐在不同任务上比现有驱逐方法更稳健，且在同一压缩预算下达到有竞争力的性能。",
+          "contributions": [
+            "首次将 KV 驱逐形式化为概率推理问题，并证明其计算困难（硬性下限）",
+            "把驱逐归约为期望估计，采样近似与解码期修正成为可行路径",
+            "证明现有驱逐方法均为零方差有偏估计器，并给出统一改造方法"
+          ],
+          "conclusions": [
+            "KV 驱逐本质是期望估计问题，可借采样近似求解",
+            "解码期修正对驱逐后的质量恢复可行，且在同一压缩预算下跨任务更稳健"
+          ],
+          "experiments": [
+            "同一压缩预算下，概率版驱逐在多种任务上比现有方法更稳健",
+            "解码期修正显著缓解逐出条目带来的质量损失"
+          ],
+          "significance": "为 KV 驱逐给出首个严格概率形式化并打通解码期修正，把启发式方法统一到可分析的框架下",
+          "arxivUrl": "https://arxiv.org/abs/2608.28293",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28293.pdf",
+          "index": 2,
+          "takeaway": "KV 驱逐=期望估计，现有方法都是零方差有偏估计器，概率框架让解码期修正首次可行",
+          "keyExperiment": "带解码期修正的概率驱逐在同一压缩预算下跨任务稳健性优于现有启发式方法"
+        },
+        {
+          "title": "H-Scale: Hessian-Guided Scale Refinement for NVFP4 Sub-Byte LLM Inference",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-08-31",
+          "authors": "Hao Yu, Zheng Li, Dayiheng Liu, Jianwei Zhang",
+          "institutions": "Alibaba",
+          "abstract": "NVIDIA Blackwell 架构原生支持超细粒度 NVFP4 格式，为加速 LLM 推理带来新机遇。NVFP4 的微块设计（如 group size 16）在捕捉局部权重分布、隔离离群值上表现力强，但也引入了巨大且高度敏感的逐组缩放因子空间。现有后训练量化（PTQ）方法主要聚焦于精调量化权值，基本忽略了 scale 选择这一步。H-Scale 提出面向 NVFP4 的逐组 scale 精调的轻量后处理方法：不最小化朴素权重重建误差，而是用校准激活的对角二阶代理直接优化层输出扰动，选择硬件合法的 group scale。作为 RTN 式 scale 选择的即插即用替代，它只需适度离线校准，推理期零额外开销。在固定评估协议下，主流 LLM 的实验显示 H-Scale 普遍改善多种 NVFP4 基线，使若干变体更接近 BF16 参考精度。",
+          "contributions": [
+            "首次系统针对 NVFP4 的 scale 选择步骤（而非权值）进行优化",
+            "用激活的对角二阶（Hessian）代理直接瞄准层输出扰动，而非权重重建误差",
+            "作为 RTN 式 scale 选择的 drop-in 替代，离线校准轻量、推理期零开销"
+          ],
+          "conclusions": [
+            "scale 选择是 NVFP4 量化中被忽视但高敏感的一环，H-Scale 可普遍改善各类 NVFP4 基线",
+            "固定评估协议下多个变体精度明显更接近 BF16 参考"
+          ],
+          "experiments": [
+            "主流 LLM 上多种 NVFP4 基线普遍获得精度提升",
+            "若干变体在固定协议下更接近 BF16 参考精度"
+          ],
+          "significance": "把 NVFP4 量化的优化焦点从权值重建转向 scale 选择，为 Blackwell 低比特推理提供零开销精度修复",
+          "arxivUrl": "https://arxiv.org/abs/2608.28113",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28113.pdf",
+          "index": 3,
+          "takeaway": "H-Scale 用 Hessian 引导精调 NVFP4 逐组 scale，直接优化层输出扰动而非权重重建误差",
+          "keyExperiment": "主流 LLM 的多种 NVFP4 基线在固定评估协议下普遍提升，部分变体接近 BF16 参考"
+        },
+        {
+          "title": "Training Communication-Efficient Mixture-of-Experts Language Models with Layer Re-Configuration",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Simeng Sun, Roger Waleffe",
+          "institutions": "机构未标注",
+          "abstract": "用专家并行训练 MoE 语言模型时，all-to-all 的 token dispatch 与 combine 集合通信可占据端到端训练时间的可观比例。本文研究通信高效的 MoE 模型（CE-MoE）：采用异构层模式，解耦 token-mixing 与 channel-mixing 深度。相比在每个 token-mixing 层（如 attention、Mamba-2）后交替插入 MoE 层的常规结构，CE-MoE 把专家容量集中到少数选定的 routed MoE 层，同时用额外的 token-mixing 与稠密 FFN 层维持深度。在 2B 到 31.5B 总参数的缩放阶梯上、匹配总参数量与激活参数量的条件下，CE-MoE 用更少训练成本达到与 full-MoE 基线相当的验证损失与下游指标；31.5B 规模下省 33.3% 的 GPU 小时，同时平均下游分数与推理吞吐还更优。",
+          "contributions": [
+            "提出解耦 token-mixing/channel-mixing 深度的异构层配置，把专家容量集中到少数 routed 层",
+            "2B-31.5B 跨规模验证：匹配总参/激活参数下用更少算力达到同等质量",
+            "同时改善训练成本与推理吞吐，直击 all-to-all 通信瓶颈"
+          ],
+          "conclusions": [
+            "异构层重配置能在不牺牲质量的前提下显著降低 MoE 训练通信成本",
+            "31.5B 规模下 CE-MoE 训练更省，下游分数与推理吞吐双优"
+          ],
+          "experiments": [
+            "31.5B 规模省 33.3% GPU 小时，平均下游分数与推理吞吐优于 full-MoE 基线",
+            "2B→31.5B 缩放阶梯全程匹配验证损失与下游基准"
+          ],
+          "significance": "证明 MoE 层不必与每个 token-mixing 层交错，集中式专家配置是通信高效的更优结构选择",
+          "arxivUrl": "https://arxiv.org/abs/2608.28511",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28511.pdf",
+          "index": 4,
+          "takeaway": "把 MoE 层从逐层交错改为集中配置，CE-MoE 在 31.5B 规模省 33.3% GPU 时且质量不降",
+          "keyExperiment": "31.5B 规模下 33.3% 更少 GPU 小时，同时平均下游分数与推理吞吐均优于 full-MoE"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "WM-R1: Training GUI Agents to Reason and leverage World Models with Reinforcement Learning",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Yu Han, Tianwen Qian",
+          "institutions": "机构未标注",
+          "abstract": "基于强化学习（RL）训练的 GUI 智能体在移动平台上展现出很强的环境学习能力，但 RL 通常需要大量真实环境交互，资源成本高且不稳定，在 GUI 场景尤甚。WM-R1 是首个用世界模型替代真实环境训练移动 GUI 智能体的 RL 框架：所有 rollout 的状态转移都来自世界模型，取代训练循环中的真实 Android 环境；同时把世界模型直接嵌入思考过程，让智能体在做出最终动作前推理候选动作的后果。WM-R1 完全不需要真实环境交互，支持基于世界模型的大规模并行、步骤级细粒度轨迹生成，并设计多维规则奖励联合优化任务成功率、轨迹效率与世界模型利用率。为高效训练，作者构建了 2000 个困难任务的高质量数据集。Android 移动基准实验表明，WM-R1 训练的智能体显著超越 GRPO-only 基线与推理时模拟方法。",
+          "contributions": [
+            "首个以世界模型完全替代真实环境做 rollout 的移动 GUI Agent RL 框架（免真实环境交互）",
+            "把世界模型嵌入思考过程先推演动作后果，支持步骤级细粒度、大规模并行轨迹生成",
+            "多维规则奖励联合优化成功率、轨迹效率与模型利用率，并构建 2000 任务数据集"
+          ],
+          "conclusions": [
+            "世界模型驱动的 RL 可显著优于 GRPO-only 与推理时模拟基线",
+            "免真实环境交互使 GUI Agent 训练的成本与稳定性问题得到根本缓解"
+          ],
+          "experiments": [
+            "Android 移动基准上显著超越 GRPO-only 基线与推理时模拟方法",
+            "2000 个困难任务的数据集支撑高效训练"
+          ],
+          "significance": "把世界模型从推理工具升级为 RL 训练环境，为 GUI 智能体训练开辟低成本、可并行的新范式",
+          "arxivUrl": "https://arxiv.org/abs/2608.27508",
+          "pdfUrl": "https://arxiv.org/pdf/2608.27508.pdf",
+          "index": 5,
+          "takeaway": "WM-R1 用世界模型替代真实 Android 环境做 rollout，免交互训练 GUI Agent 并显著超越 GRPO 基线",
+          "keyExperiment": "Android 移动基准中 WM-R1 智能体显著优于 GRPO-only 与推理时模拟方法"
+        },
+        {
+          "title": "VICT: Verifier-Instrumented Credit Tracing for Long-Horizon LLM Agent Reinforcement Learning",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-31",
+          "authors": "Pengcheng Li, Zhengyang Zhang, Dongxu Zhang, Sui Huang, Shaohua Ma",
+          "institutions": "机构未标注",
+          "abstract": "细粒度信用分配是长程 LLM 智能体强化学习的核心难题。标准目标通常从程序可验证的终止奖励出发，把每个稀疏结果广播到轨迹的每个动作。现有方法多从 rollout 侧寻找更细的信用：构造额外轨迹信号或附加比较来估计动作重要性，虽有用，但仍把判定成败的验证器当作标量奖励，丢弃了其内部任务结构。VICT 的关键洞察是：许多可验证任务的相关检查已经编码在终止验证器中。VICT（Verifier-Instrumented Credit Tracing）提供训练期接口，暴露可执行或证据支撑的原子检查，并通过依赖验证的证明边把原子追溯到动作，仅沿这些边再分配 group-relative advantage——把信用分配从 rollout 侧推断转移到验证器侧追溯。它保持原始终止奖励不变，证据不完整或有歧义时弃权，只改动训练期 advantage 张量：无需学习 critic、过程标签、分支 rollout 或推理期验证器。在 ALFWorld 与 WebShop 上，VICT 显著优于仅结果训练，并接近近期细粒度信用方法；消融排除了稠密原子奖励、最终提交信用、时间邻近与稀疏性作为充分解释。",
+          "contributions": [
+            "洞察验证器内部编码了任务相关检查，将其从标量奖励升级为可追溯的信用来源",
+            "通过依赖验证的证明边把原子检查追溯到具体动作，沿边重分配 advantage（验证器侧追溯而非 rollout 推断）",
+            "无需 critic、过程标签、分支 rollout 或推理期验证器，仅改动训练期 advantage 张量"
+          ],
+          "conclusions": [
+            "验证器侧追溯显著优于仅结果训练，性能接近近期细粒度信用方法",
+            "消融表明稠密原子奖励、最终提交信用、时间邻近与稀疏性都不足以解释收益"
+          ],
+          "experiments": [
+            "ALFWorld 与 WebShop 上显著超越 outcome-only 训练",
+            "与近期细粒度信用方法性能相当，多项消融排除替代性解释"
+          ],
+          "significance": "把验证器的内部结构变成信用追溯的依据，为长程 Agent RL 提供不依赖额外模型的最细粒度信用信号",
+          "arxivUrl": "https://arxiv.org/abs/2608.28128",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28128.pdf",
+          "index": 6,
+          "takeaway": "VICT 让验证器的原子检查沿依赖边追溯回动作，仅改训练期 advantage 就大幅改善长程 Agent RL",
+          "keyExperiment": "ALFWorld 与 WebShop 显著优于仅结果训练，且消融排除了四种替代解释"
+        },
+        {
+          "title": "AERA: Adaptive Evidence Residual Allocation for Efficient Test-Time Reasoning",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Ziming Wang, Ivor Tsang, Hangwei Qian",
+          "institutions": "Nanyang Technological University",
+          "abstract": "测试时扩展通过生成更多候选解提升 LLM 推理，但给每个问题分配相同推理预算在计算上很浪费。现有自适应停止方法通常依赖置信度、一致性或答案稳定性，隐含假设“当前证据越强就越不需要继续计算”。本文证明该假设可能失败：检查点级正确性呈非单调演化，可观测证据可能在答案崩溃前增强、或在恢复前减弱。为此提出 AERA（Adaptive Evidence Residual Allocation）——一个顺序控制器，从检查点可观测证据中学习“继续计算是否可能恢复更好的答案”。AERA 用答案分布、时间、重解、语义与计算五类特征刻画累积响应前缀，反复决策停止或分配下一个响应块；未来检查点正确性仅用于构建离线监督，推理期控制器永远看不到。在 GSM8K 与 GPQA Diamond 上，AERA 捕捉到问题特定的残值机会，同时大幅降低推理计算量。在 300 道未接触 GSM8K 题目的冻结阈值增量生成评估中，AERA 达到 92.61%（128 响应基线 93.01%），同时减少 95.99% 的完成 token。",
+          "contributions": [
+            "揭示“证据越强越该停”假设的失败模式：检查点正确性非单调，证据可能误导",
+            "提出学习“计算残值”的顺序控制器，用五类特征决策停止/继续，训练只用离线监督",
+            "按问题分配推理预算，而非一刀切停止或全量扩展"
+          ],
+          "conclusions": [
+            "自适应推理应估计计算的未来价值，而非把当前置信度等同于正确性",
+            "AERA 在几乎不掉精度的前提下把推理 token 削减 95% 以上"
+          ],
+          "experiments": [
+            "GSM8K 300 道未接触题：92.61% vs 128 响应基线 93.01%，完成 token 减少 95.99%",
+            "GSM8K 与 GPQA Diamond 上均捕捉到问题特定的残值机会并大幅省算力"
+          ],
+          "significance": "把自适应测试时扩展从“置信度停止”转为“计算残值估计”，几乎免费获得 95%+ 的推理算力节省",
+          "arxivUrl": "https://arxiv.org/abs/2608.27964",
+          "pdfUrl": "https://arxiv.org/pdf/2608.27964.pdf",
+          "index": 7,
+          "takeaway": "AERA 学习预留计算能否换回更好答案，GSM8K 上省 95.99% token 仅掉 0.4 个点",
+          "keyExperiment": "300 道未接触 GSM8K：92.61% 精度（基线 93.01%），完成 token 减少 95.99%"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Sliding-window beats linear attention",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-31",
+          "authors": "Alexia Jolicoeur-Martineau, Rhea Sanjay Sukthanker, Pashmina Cameron, Emy Gervais",
+          "institutions": "Samsung AI Center Montreal",
+          "abstract": "由于二次注意力机制的特性，LLM 消耗大量内存与能量，每个新 token 的代价都高于前一个，键值需无限期驻留内存，不可持续。业界提出多种替代方案修复二次缩放问题，其中之一是把 LLM 改造为线性注意力。这一思路因其以低成本达到先进性能的承诺而备受关注，但这类研究与更简单的基线从未被恰当比较。本文证明：带 sink 的滑窗注意力（SWA）在多个 LLM 与下游任务上表现等于或优于后训练的线性注意力模型；在长上下文推理任务（Needle-in-a-Haystack 与 BABILong）上，SWA 高出 2 到 10 倍。SWA 无需后训练、极快、内存低，是极其便宜可靠的方案。作者强烈建议：为降低推理内存成本，改用 SWA 而不是后训练线性模型。线性注意力虽有潜力，但很可能需要从头训练或大量后训练才能追平 SWA。",
+          "contributions": [
+            "首次把后训练线性注意力与更简单的 SWA+sink 基线做系统比较",
+            "证明 SWA 在广泛任务上持平或超越线性注意力，长上下文高出 2-10 倍",
+            "给出工程建议：降推理内存优先选 SWA（免后训练、快、内存低）"
+          ],
+          "conclusions": [
+            "线性注意力宣称的优势在简单 SWA 基线面前不成立，至少在后训练场景如此",
+            "SWA 免后训练即达更优，线性注意力要追平需从头训练或大量后训练"
+          ],
+          "experiments": [
+            "长上下文推理（NIAH/BABILong）SWA 高出线性注意力 2-10 倍",
+            "多模型多下游任务上 SWA 持平或优于后训练线性注意力"
+          ],
+          "significance": "给“线性注意力替代二次注意力”的热潮泼了盆冷水：更简单的滑窗基线可能已够用且更便宜",
+          "arxivUrl": "https://arxiv.org/abs/2608.28444",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28444.pdf",
+          "index": 8,
+          "takeaway": "带 sink 的滑窗注意力无需后训练就全面不低于 post-trained 线性注意力，长上下文高出 2-10 倍",
+          "keyExperiment": "Needle-in-a-Haystack 与 BABILong 上 SWA 性能是线性注意力的 2-10 倍"
+        },
+        {
+          "title": "Trajectory-Level Speculative Decoding for Diffusion Language Models",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-08-31",
+          "authors": "Tianxiang Pan, Baitao Gong, Mo Guang, Hongwei Yong, Tianpeng Jiang, Yaqian Li, Zheng Cao, Kaiwen Long",
+          "institutions": "机构未标注",
+          "abstract": "基于扩散的语言模型（dLLM）通过迭代去噪实现并行 token 生成，但现有解码策略在低置信度下退化为单 token 生成，严重限制吞吐。与自回归模型中投机解码在固定从左到右的 token 序列上进行不同，dLLM 需要在去噪轨迹上投机——即包含显式位置与去掩码顺序的多 token 更新序列。本文提出轨迹级投机框架：通过置信分层树探索构造草稿去噪轨迹，用双向注意力掩码的分块并行评估进行验证；并引入块间投机，利用扩散模型的双向结构做跨块前视。作者形式化刻画了该方法何时精确，并指出轨迹漂移是并行度提升的根本代价。基于 Fast-dLLMs 双缓存基础设施，该框架将去噪迭代减少 30-40%，每步 token 从 2.6 提升到 4.3，相比 vanilla dLLM 获得 7-14 倍加速、相比 Fast-dLLM 1.3 倍，在推理与代码基准上精度变化小于 1%。",
+          "contributions": [
+            "首个面向 dLLM 的轨迹级投机解码框架（草稿=去噪轨迹，而非 token 序列）",
+            "置信分层树探索 + 双向注意力掩码分块并行验证 + 跨块前视投机",
+            "形式化刻画投机精确性条件，并识别轨迹漂移为并行度提升的根本代价"
+          ],
+          "conclusions": [
+            "轨迹级投机可显著提升 dLLM 解码并行度与吞吐，精度损失小于 1%",
+            "并行度越高轨迹漂移越明显，是方法精确性边界的根本来源"
+          ],
+          "experiments": [
+            "去噪迭代减少 30-40%，每步 token 从 2.6 提升到 4.3",
+            "vanilla dLLM 7-14x 加速，Fast-dLLM 之上再快 1.3 倍，精度变化小于 1%"
+          ],
+          "significance": "把投机解码从自回归 token 序列推广到扩散去噪轨迹，为扩散 LM 的吞吐难题提供系统解法",
+          "arxivUrl": "https://arxiv.org/abs/2608.27514",
+          "pdfUrl": "https://arxiv.org/pdf/2608.27514.pdf",
+          "index": 9,
+          "takeaway": "对扩散 LM 在去噪轨迹上做投机解码，7-14x 加速且精度变化小于 1%",
+          "keyExperiment": "去噪迭代 -30-40%，tokens/step 2.6→4.3，比 Fast-dLLM 再快 1.3x"
+        },
+        {
+          "title": "CoRe-MoE: Compact Reusable MoE for Continual Multimodal Instruction Tuning",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Runze Liu, Naibin Gu, Mingxu Ai, Yuqing Li, Peng Fu, Zheng Lin, Weiping Wang",
+          "institutions": "中国科学院计算技术研究所",
+          "abstract": "持续多模态指令微调要求多模态大模型顺序学习新任务能力的同时保留已有知识。LoRA-MoE 通过引入基于专家的容量提供了有前景的解法，但反复学习并维护完整的 LoRA 专家导致可观参数开销。自然的问题是：每个新任务都必须全量扩展专家吗？作者分析任务特定 LoRA 更新的 SVD，发现其输入/输出侧 LoRA 方向子空间存在大量重叠，任务特定适应基本可由这些子空间上的轻量坐标捕捉。基于此观察提出 CoRe-MoE：一个面向参数高效持续多模态指令微调的紧凑可复用 MoE 框架。CoRe-MoE 从初始专家库提取可复用的输入/输出侧方向基，后续任务只训练紧凑坐标专家与任务特定低秩路由器。在两个代表性 MLLM 上的实验显示，CoRe-MoE 相对最强竞争基线最高提升 5.90 个平均分点，且后期任务的可训练参数不到顺序 LoRA 的 1%。",
+          "contributions": [
+            "通过 LoRA 更新的 SVD 分析发现专家子空间高度重叠，指出全量专家扩展并非必要",
+            "提取可复用方向基，新任务仅训练紧凑坐标专家+低秩路由器（不到 1% 参数）",
+            "持续多模态微调中平均性能最高反超最强基线 5.90 分点"
+          ],
+          "conclusions": [
+            "任务间 LoRA 方向子空间重叠显著，共享基+坐标即可承载持续适应",
+            "CoRe-MoE 以不到 1% 的训练参数实现优于顺序 LoRA 的持续多模态性能"
+          ],
+          "experiments": [
+            "两个代表性 MLLM 上平均性能最高超最强基线 5.90 分点",
+            "后期任务训练参数不到顺序 LoRA 的 1%"
+          ],
+          "significance": "用“共享方向基+轻量坐标”重写持续多模态微调，把专家容量成本压缩两个数量级",
+          "arxivUrl": "https://arxiv.org/abs/2608.27867",
+          "pdfUrl": "https://arxiv.org/pdf/2608.27867.pdf",
+          "index": 10,
+          "takeaway": "LoRA 更新的 SVD 显示专家子空间高度共享，CoRe-MoE 用可复用方向基+坐标专家实现不到 1% 参数的持续微调",
+          "keyExperiment": "平均性能最高超最强基线 5.90 分点，训练参数降到顺序 LoRA 的 1% 以下"
+        }
+      ]
+    }
+  ]
+}
