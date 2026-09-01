@@ -1,0 +1,314 @@
+{
+  "date": "2026-09-01",
+  "title": "2026-09-01 论文精选",
+  "lede": "今日关注推理监控、注意力量化与 Agentic RL 训练加速三大基建方向,配以预训练优化器、测试时扩展的新证据,以及三个把 Agent 当操作系统问题来解的架构方案。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 213
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Speculative Probing: LLM Monitoring at Speculative-Decoding Cost",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Collin Zhang, Tingwei Zhang, Vitaly Shmatikov",
+          "institutions": "Cornell University",
+          "abstract": "实时推理分类(安全过滤、行为分析、模型监控)长期面临效率与准确率的权衡:隐状态探针很快,但要么只看单个向量、无法建模跨位置交互(不具上下文感知),要么像专用分类器(Llama Guard、Qwen Guard、LLM-as-judge)或 MultiMax 那样对所有 token 做全量计算,成本很高。本文发现,近期 LLM 中的投机解码模块可以被改造为高效高质量的序列分类器:在目标序列末尾附加一个训练好的软提示,即可把投机解码模块复用作分类器;推理时 KV cache 本就在 GPU 显存中,分类几乎零开销。在 4 个模型(Qwen3.5-4B/9B/27B、MiniCPM4.1-8B)×4 类任务上,小探针一致超越零样本 GPT-5.4-mini,并在多语言提示安全任务上匹敌甚至超越专用 8B 安全分类器(Qwen3Guard-Gen-8B、Llama-Guard-3-8B),无需运行完整 LLM。",
+          "contributions": [
+            "提出把投机解码模块复用为序列分类器的新思路:在目标序列末尾附加训练软提示即可,无需新增模型",
+            "揭示投机解码管线中 KV cache 天然在显存中,分类的附加计算开销可忽略,打破效率-准确率权衡",
+            "在 4 模型×4 任务上系统评估,验证小探针可替代专用 8B 级安全分类器"
+          ],
+          "conclusions": [
+            "投机解码模块可以被『白嫖』为高质量序列分类器,推理监控不再是额外负担",
+            "在多语言提示安全等关键场景,小探针效果匹敌专用大分类器,适合部署在推理链路上"
+          ],
+          "experiments": [
+            "在 Qwen3.5-4B/9B/27B 与 MiniCPM4.1-8B 四个模型上一致超越零样本 GPT-5.4-mini",
+            "多语言提示安全任务上匹敌/超越 Qwen3Guard-Gen-8B 与 Llama-Guard-3-8B 两个 8B 专用分类器",
+            "分类利用已在显存的 KV cache 完成,推理附加开销可忽略"
+          ],
+          "significance": "把投机解码的固有代价转化为分类能力,让推理监控「免费」获得,是推理管线上的巧妙设计。",
+          "arxivUrl": "https://arxiv.org/abs/2608.28099",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28099.pdf",
+          "takeaway": "投机解码模块可复用为零开销的序列分类器,安全监控不再需要专用大模型。",
+          "keyExperiment": "4 个模型上小探针一致超越零样本 GPT-5.4-mini,并在多语言提示安全上匹敌专用 8B 安全分类器。",
+          "index": 1
+        },
+        {
+          "title": "HyQuant: Hybrid-Precision Quantization for LLM Attention",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Jiatong Ding, Bingxin Xing, Yu Zhang, Dian Ding, Xiaodong Yi, Xianbin Ouyang, Feihu Zhou, Kun Zhang, Zhenyu Guo, Hao Pan, Guangtao Xue, Yiming Zhang",
+          "institutions": "Shanghai Jiao Tong University",
+          "abstract": "量化被广泛用于降低 LLM 训练推理成本,但 attention 模块在极低比特下误差很大。现有方法主要靠平滑技术处理离群值,本文提出混合精度设计 HyQuant:大部分 attention 状态用低比特格式,只把少量『竖线 token』(vertical-line tokens)与局部窗口状态保留高精度,并用轻量级的竖线感知注意力模式信号来挑选这些精度关键区域,量化误差小且额外开销有限。Prefill 阶段使用混合精度量化注意力算子:竖线 token 与局部滑动窗口保持全精度,其余上下文量化;Decode 阶段把同一原则用于 KV cache 压缩,并将 KV 反量化与注意力计算融合,提升显存与硬件效率。跨任务、模型、数据集的实验显示,HyQuant 以极简设计保持近无损精度,展示混合精度量化的实用可行性。",
+          "contributions": [
+            "提出以竖线 token + 局部窗口为高精度保留区的混合精度 attention 量化,替代纯平滑方案",
+            "Prefill/Decode 两阶段统一:混合精度注意力算子 + KV cache 压缩与反量化-注意力融合",
+            "用轻量的竖线感知注意力模式信号自动选择高精度区域,开销可控"
+          ],
+          "conclusions": [
+            "混合精度比单纯降低比特位宽更能平衡 attention 量化的精度与效率",
+            "极简设计即能实现近无损量化,具备工程实用性与可部署性"
+          ],
+          "experiments": [
+            "跨多种任务、模型、数据集保持近无损准确率",
+            "Decode 阶段 KV cache 压缩并将反量化与注意力计算融合,提升显存与硬件效率",
+            "高精度区域由轻量信号自动选择,额外开销有限"
+          ],
+          "significance": "attention 量化的新思路:不是压平离群值,而是让竖线 token 与局部窗口这些精度关键区域留在高精度。",
+          "arxivUrl": "https://arxiv.org/abs/2608.27875",
+          "pdfUrl": "https://arxiv.org/pdf/2608.27875.pdf",
+          "takeaway": "只保留竖线 token 和局部窗口高精度,attention 低比特量化即可近无损。",
+          "keyExperiment": "跨任务/模型/数据集近无损,Decode 阶段融合 KV 反量化与注意力计算提升显存与硬件效率。",
+          "index": 2
+        },
+        {
+          "title": "HARTS: Efficient Agentic Reinforcement Learning for Hybrid-Attention Models over Arbitrary Rollout Trees",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-31",
+          "authors": "Boyuan Meng, Peihua Bao, Hong Liu, Xiaowei Zhu, Chao Wang, Gen Li, Zhenxuan Pan",
+          "institutions": "机构未标注",
+          "abstract": "Agentic RL 常产生带共享历史的不规则 rollout 树,按根到叶轨迹独立训练会重复计算共享前缀;现有系统主要面向全注意力模型,缺乏与激活重计算兼容的稠密可微混合注意力执行。HARTS 联合规划 micro-batch、数据并行(DP)副本分配与 slot 调度,在前缀压缩后按非重放 compact-token 工作;对分块线性注意力,用线性时间算法协调 chunk 边界状态恢复与重放,在打包执行模型下产生最少的顺序线性注意力调用。它保留逐轨迹训练的 chunk 状态划分:不重复投影、MLP/MoE 计算或最终输出,只做有界状态重放保证数值对齐;每轮把全部分支打包进一次调用,梯度经可微状态交接传播,支持激活重计算。据作者所述,HARTS 是首个在真实混合注意力模型上展示任意 rollout 树前缀共享加速的系统:SWE-bench 生成的 Agentic RL 负载上,前向/反向/梯度取得 4.81–4.87× 加速,数值差异与基线自重跑相当。",
+          "contributions": [
+            "首个在真实混合注意力模型上实现任意 rollout 树前缀共享加速的 Agentic RL 训练系统",
+            "联合优化 microbatch/DP 副本/slot 调度的打包执行,配合 chunk 边界线性注意力状态恢复",
+            "不重复投影与 MLP/MoE 计算,仅做有界状态重放,保留逐轨迹 chunk 状态划分与目标接口"
+          ],
+          "conclusions": [
+            "HARTS 的数值差异与基线自重跑波动相当,训练奖励趋势与基线一致",
+            "前缀共享优化可推广到 KDA/GDN 类混合注意力模型,打开 Agentic RL 训练效率新空间"
+          ],
+          "experiments": [
+            "SWE-bench 生成的 Agentic RL 负载上,前向/反向/梯度加速 4.81–4.87×",
+            "多种并行配置下加速稳定,数值差异与基线自重跑相当",
+            "τ³-Bench 训练前 120 步奖励趋势与基线相似"
+          ],
+          "significance": "系统性消除混合注意力模型在树状 rollout 场景下的共享前缀重复计算,Agentic RL 训练提速近 5 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2608.28158",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28158.pdf",
+          "takeaway": "HARTS 把 Agentic RL 的共享前缀重计算打包消除,混合注意力模型上实现约 4.8× 训练加速。",
+          "keyExperiment": "SWE-bench Agentic RL 负载上 4.81–4.87× 前向/反向/梯度加速,数值差异与基线自重跑相当。",
+          "index": 3
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Curvature-Conditioned Multiscale Momentum with Sphere Constraints for LLM Pretraining",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-08-31",
+          "authors": "Shuchen Zhu, Yuxin Fang, Mingze Wang, Kun Yuan",
+          "institutions": "Peking University",
+          "abstract": "预训练占据 LLM 训练计算成本的绝大部分,噪声主导的梯度与高度病态的 loss 地形带来严峻挑战。AdamW 与 Muon 等自适应优化器虽在大规模预训练上大获成功,但其梯度归一化对病态曲率的缓解有限:沿平坦方向(小特征值特征方向)的进展依然缓慢,而平坦方向恰恰主导最终 loss 的下降。本文提出带球面约束的曲率条件多尺度动量方法:仅在平坦方向应用多尺度动量,慢衰减分量负责降噪、快衰减分量负责快速适应曲率,利用两者互补优势;并用球面约束技术防止朴素组合导致的参数膨胀与有效学习率过快衰减。大量实验表明,该方法在多种架构(密集、MoE)与模型规模(0.12B–2.3B)上显著加速 Muon;理论上也验证了加速效应,并阐明平坦方向多尺度动量的设计原则。",
+          "contributions": [
+            "提出仅沿平坦方向施加的多尺度动量:慢衰减分量降噪、快衰减分量快速适应曲率",
+            "球面约束技术防止参数膨胀与有效学习率骤降,使多尺度动量可稳定训练",
+            "理论验证加速效应,阐明平坦方向多尺度动量的设计原则"
+          ],
+          "conclusions": [
+            "平坦方向多尺度动量在 dense 与 MoE 架构、0.12B–2.3B 规模上一致显著加速 Muon",
+            "球面约束是防止朴素组合导致学习率失控的关键设计"
+          ],
+          "experiments": [
+            "在 Muon 基础上跨密集/MoE 多种架构显著加速预训练",
+            "模型规模 0.12B–2.3B 范围内均有效",
+            "理论分析验证平坦方向加速机制与设计原则"
+          ],
+          "significance": "直指预训练优化器沿平坦方向进展缓慢的短板,为 Muon 一族优化器提供曲率感知的升级方向。",
+          "arxivUrl": "https://arxiv.org/abs/2608.28442",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28442.pdf",
+          "takeaway": "只在平坦方向叠加多尺度动量并用球面约束稳住参数,可将 Muon 预训练进一步提速。",
+          "keyExperiment": "跨 dense/MoE 架构、0.12B–2.3B 规模一致显著加速 Muon 预训练,并有理论验证。",
+          "index": 4
+        },
+        {
+          "title": "Learning to Use Tools: Reinforcement Learning for Tool-Integrated Mathematical Reasoning",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Minghui Xu, Zi Wang",
+          "institutions": "机构未标注",
+          "abstract": "大模型越来越受益于外部工具集成,尤其是在需要可靠计算与验证的任务上。本文研究 Countdown 任务中计算器工具调用对数学推理的改进:先分析推理失败,发现计算错误占错误响应很大比例;再构造监督微调(SFT)数据集教会模型有用的工具使用模式与结果解读;在此工具化策略之上,用可自动验证的最终答案奖励应用多种 on-policy RL 方法(RLOO、RLOO++、GRPO、DAPO)。为可靠评估,构建了 1024 道与训练数据零重叠的全新 held-out Countdown 基准。结果显示,计算器工具集成一致地提升 SFT 与 RL 基线,pass@k 普遍提升约 10 个百分点;其中 Tool-DAPO 最强,pass@1 从 Tool-SFT 的 35.8% 提升到 66.0%;进一步分析表明,即使只给最终答案奖励,RL 也会促使模型更有效地使用工具。",
+          "contributions": [
+            "系统分析发现计算错误是 Countdown 推理失败主因,据此构造 SFT 工具使用数据集",
+            "对比 RLOO/RLOO++/GRPO/DAPO 四种 on-policy RL 与可自动验证的答案奖励",
+            "构建 1024 题与训练集零重叠的 held-out 基准,保证评估可靠性"
+          ],
+          "conclusions": [
+            "工具集成在 SFT 与 RL 基线上带来一致约 10 个百分点的 pass@k 提升",
+            "RL 即使在仅最终答案奖励下也会促使模型更有效地调用工具"
+          ],
+          "experiments": [
+            "Tool-DAPO 的 pass@1 从 Tool-SFT 的 35.8% 提升至 66.0%",
+            "相比无工具基线,pass@k 普遍提升约 10 个百分点",
+            "RL 提高正确推理轨迹概率,显著减少算术与验证错误"
+          ],
+          "significance": "证明『RL + 工具』组合拳在数学推理上的可验证收益:工具降错、RL 增强探索与利用。",
+          "arxivUrl": "https://arxiv.org/abs/2608.28447",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28447.pdf",
+          "takeaway": "计算器工具叠加 on-policy RL,让 Countdown 推理 pass@1 从 35.8% 跃升至 66.0%。",
+          "keyExperiment": "Tool-DAPO 将 pass@1 从 Tool-SFT 的 35.8% 提升到 66.0%,pass@k 一致提升约 10pp。",
+          "index": 5
+        },
+        {
+          "title": "Ladders in Chaos: When, How, (and Perhaps Why) Does Test-Time Scaling Improve LLM Machine Translation",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-08-31",
+          "authors": "Di Wu, Sergey Troshin, Christof Monz, Antske Fokkens, Vlad Niculae",
+          "institutions": "University of Amsterdam",
+          "abstract": "测试时扩展有两种广泛采用的范式:顺序式(sequential,后续回答尝试依赖前面)与并行式(parallel,如 i.i.d. 采样加重排)。本文研究二者在机器翻译中的性质:首先,顺序式采样性能上限更高,在小采样预算下提供更多样、更有效的样本池;其次,通过对 Best-of-N 译文的多维人工分析,发现顺序式采样显著提升流畅度与自然度,但在推理预算较大时可能损害准确性;最后,受控分析将顺序式自改进的成功部分归因于模型获得了更大的目标侧上下文。消融实验表明顺序式采样对采样温度鲁棒,但对上下文构造方式敏感,为未来改进指明方向。",
+          "contributions": [
+            "首次系统对比顺序式与并行式测试时扩展在机器翻译上的性质差异",
+            "多维人工分析揭示顺序式采样提升流畅度、但大预算下损害准确率",
+            "把顺序式自改进的成功部分归因于更大目标侧上下文,并给出受控验证"
+          ],
+          "conclusions": [
+            "顺序式采样性能上限更高,小采样预算下优势尤其明显",
+            "提升主要来自流畅性/自然度;上下文构造方式对效果影响显著"
+          ],
+          "experiments": [
+            "顺序式采样在小预算下生成更多样、更有效的样本池",
+            "Best-of-N 人工分析:流畅度大幅提升,大预算下准确性下降",
+            "消融显示对温度鲁棒、对上下文构建方式敏感"
+          ],
+          "significance": "为『测试时扩展为什么有效』提供机制级解释,同时划出它在机器翻译上的适用边界。",
+          "arxivUrl": "https://arxiv.org/abs/2608.28496",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28496.pdf",
+          "takeaway": "自回归式顺序采样在翻译上上限更高,但推理预算过大反而损害准确性。",
+          "keyExperiment": "Best-of-N 人工评估显示顺序式采样大幅提升流畅度,但推理预算大时准确性反而下降。",
+          "index": 6
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "CrabOS: An Operating System for Human-AI Co-inhabitation",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Qi Yang, Yun Ma",
+          "institutions": "Peking University",
+          "abstract": "AI agent 正演化成长时运行的计算实体,可调用工具、维护记忆并在应用间完成复杂任务;而真实世界中,一个任务常常需要人与 AI 轮流主导执行,这种交替依赖任务工作状态在人机之间的无缝交接。现有 agent 系统给人机提供分离的工作环境,AI 必须靠额外桥接继续工作:要么开发者构建任务特定接口访问工作状态,要么用户通过截图或文字手动搬运状态,交接成本高且难扩展。本文提出 Human-AI Co-inhabitation(人机共居)这一新型工作环境概念——人与 AI 在同一任务上无缝轮流继续工作——并设计实现 CrabOS:工作状态表示为人类与 AI 共享的自然语言可读文本对象,双方通过同一可审计接口直接访问和操作,无需任何桥接。案例研究表明,CrabOS 把交替主导型复杂任务的支持从依赖桥接的应用级方案,提升为操作系统原生能力。",
+          "contributions": [
+            "提出 Human-AI 共居(co-inhabitation)工作环境:人与 AI 共享同一任务工作状态",
+            "工作状态统一为自然语言可读文本对象,双端经同一可审计接口直接操作、无需桥接",
+            "以 CrabOS 原型把轮流主导的能力从应用层下沉为操作系统原生能力"
+          ],
+          "conclusions": [
+            "共享的文本化工作状态可消除人-AI 交接的桥接成本,交接变得无缝",
+            "操作系统原生支持比应用级桥接更可扩展,是 agent 基础设施的新抽象"
+          ],
+          "experiments": [
+            "案例研究覆盖交替主导型复杂任务,展示无桥接的原生支持",
+            "人与 AI 直接访问同一文本化工作状态,接口可审计",
+            "对比桥接式应用方案,展示扩展性优势"
+          ],
+          "significance": "把『人机接力干活』从应用补丁升华为操作系统原语,为 agent 运行环境提出新抽象。",
+          "arxivUrl": "https://arxiv.org/abs/2608.28165",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28165.pdf",
+          "takeaway": "CrabOS 让人类与 AI 在同一份文本化工作状态上轮流干活,交接零桥接。",
+          "keyExperiment": "案例研究显示交替主导的复杂任务从桥接式应用方案升级为操作系统原生能力。",
+          "index": 7
+        },
+        {
+          "title": "String: An Agentic OS Where Every App Is a Markdown File",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Jookyung Song, Nojun Kwak, Simyung Chang",
+          "institutions": "Seoul National University",
+          "abstract": "LLM agent 已成为新一类软件用户,但它们使用的每个界面都不是为它们设计的:页面给人眼浏览、工具 schema 给程序,agent 每轮都要重新读并为之付费。String 是开源运行时,把这个问题当作操作系统问题处理:工具知识移出 agent 上下文,放入公共层按需以 Markdown 渲染;单个 SFMD(String-Flavored Markdown)文档声明应用的视图、类型化动作、导航与凭据,运行时用 /open(查看)与 /act(执行)两个核心动词处理发现、校验、执行、状态与机密。Web 与应用是同一架构的两种渲染:SFMD 站点给浏览器渲染样式化 HTML,给 agent 渲染原始文档,一种语法即可触达应用、文件、shell 与网页(含旧 HTML),无需逐站集成。视图刻意保持部分披露且因果分段:过早一层披露最多损失 23 个准确率点,而正确分阶段可将错误动作选择从 28% 降到 2%;特权跟随来源:远程页面可调 HTTP 但不可调 shell,调用者文本不展开存储机密。在 87 任务基准上,把流程实体化为按需 String 应用,六种模型(前沿到小型)聚合成功率相当(+1.3pp),完成 episode 的 token 减少 33.5%,常驻接口在任何目录规模下恒定 53 tokens。",
+          "contributions": [
+            "把 agent 界面重新定义为操作系统问题:工具知识移出上下文、按需渲染为 Markdown",
+            "单一 SFMD 文档声明应用,运行时以 /open 与 /act 两动词统一发现/执行/状态/机密",
+            "因果分阶段披露 + 基于来源的特权模型,兼顾 token 效率与安全"
+          ],
+          "conclusions": [
+            "String 应用与人工流程聚合成功率相当(+1.3pp),同时 token 减少 33.5%",
+            "渐进披露对准确率关键:过早披露一层细节最多损失 23 个准确率点"
+          ],
+          "experiments": [
+            "87 任务基准上六种模型聚合成功率 +1.3pp,完成 episode token 减少 33.5%",
+            "常驻接口恒定 53 tokens,与目录规模无关",
+            "正确分阶段披露把错误动作选择从 28% 降到 2%"
+          ],
+          "significance": "给 agent 一个原生界面:把应用/工具降维成 Markdown 文档,系统性省 token 且更安全。",
+          "arxivUrl": "https://arxiv.org/abs/2608.28027",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28027.pdf",
+          "takeaway": "每个应用声明为一个 Markdown 文件,agent 用两个动词操作一切,省 33.5% token。",
+          "keyExperiment": "87 任务基准上六模型聚合成功率 +1.3pp,完成 episode token 减少 33.5%,常驻接口恒定 53 tokens。",
+          "index": 8
+        },
+        {
+          "title": "Logos: An Agent Harness on a Cross-Process Bus",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-08-31",
+          "authors": "Hanzhang Jia, Liheng Zeng, Hao Cheng, Yi Gao, Bo Ma",
+          "institutions": "机构未标注",
+          "abstract": "现代 agent 系统在运行时组装能力。近期时空可组合演算(spatiotemporal-composability calculus)给出形式化:capability 是携带追踪逆的组件,agent 以插件形式组装。但这种插件形态由单进程单上下文承载:所有组件处于同一物理故障域,一个故障挂起全部组件,进程死亡中断其承载的所有会话。本文证明:建模与演算都不要求 agent 绑定单进程——语言模型的无状态性使所有跨步状态都位于模型之外,健全性不变量只定义在状态空间上。这些观察凝练为四条引理,进而构造 Logos:一个类 ROS 的跨进程 agent harness,插件即进程,唯一共享状态是追加式 transcript。80 个会话在工具调用循环的四个边界处被 kill 后均能恢复且无重复副作用;同故障对比中,单进程参考配置一个故障中断所有同驻会话,而 peer-process 构造下,一个故障只终结一个节点。",
+          "contributions": [
+            "证明时空可组合演算不要求单进程承载,LLM 无状态性使跨步状态天然外置",
+            "构造 Logos:类 ROS 的跨进程 agent harness,插件=进程,唯一共享状态=追加式 transcript",
+            "把故障隔离形式化:同故障下多进程构造一个故障只终结一个节点,而非全部会话"
+          ],
+          "conclusions": [
+            "跨进程 harness 的故障隔离特性显著优于单进程配置",
+            "追加式 transcript 作为唯一共享状态,保证会话可恢复且无重复副作用"
+          ],
+          "experiments": [
+            "80 个会话在工具调用循环四个边界处 kill 后全部恢复,无重复副作用",
+            "单进程参考配置下,一个故障中断所有同驻会话",
+            "peer-process 构造下,一个故障只终结一个节点"
+          ],
+          "significance": "把 agent 运行时从『单进程大教堂』重构为『多进程巴别塔』,让故障隔离成为一等公民。",
+          "arxivUrl": "https://arxiv.org/abs/2608.28553",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28553.pdf",
+          "takeaway": "Logos 把 agent 插件放进独立进程,一个组件崩溃不再带走全部会话。",
+          "keyExperiment": "80 会话在工具循环四处 kill 后均无重复副作用地恢复;同故障下单进程全中断、多进程只断一个节点。",
+          "index": 9
+        }
+      ]
+    }
+  ]
+}
