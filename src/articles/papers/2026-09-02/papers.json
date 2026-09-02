@@ -1,0 +1,346 @@
+{
+  "date": "2026-09-02",
+  "title": "2026-09-02 论文精选",
+  "lede": "今日关注：稀疏与混合注意力再进一步——Qwen3.8-Flash-Next 用 1/9 FLOPs 追平 397B 前代、A.X K2 只读 2048 位置撑住 256K 上下文；推理侧 SemKV/Tail-Replay 直击 KV 量化悬崖与前缀缓存；训练侧 TrainSDC 守护静默数据损坏，LLM RL 的批次与 token 选择有了定量判据。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 606
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "SemKV: Semantic Mixed-Precision KV Cache Quantization Guided by the Quality Cliff for Long-Context LLM Inference",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-01",
+          "authors": "Daeha Lee, Do-Hyung Kim, Jae-Hong Kim",
+          "institutions": "机构未标注",
+          "abstract": "KV cache 是长上下文 LLM 推理最主要的显存瓶颈，随上下文长度线性增长。本文证明均匀 KV 量化在分数位网格上并不会优雅地退化：在多随机种子统计协议下，Llama-3.1-8B-Instruct 采用仿射量化器时，低至 2.322 code bits/值仍与 FP16 KV 统计上不可区分，但在 2.0 bits 处突然崩溃——(2.0, 2.322] 区间存在一个“质量悬崖”，且该悬崖在生成时量化、多轮对话中反复出现并迁移到 Mistral-7B。这一发现重构了重要性感知混合精度：悬崖之上，8 种模型内部重要性指标统计上可互换，混合的收益来自网格插值，能达到均匀量化无法实现的平均精度。SemKV 保留全部 token，按模型内部打分排序并分配两个相邻的悬崖之上精度，实现实测 6.0x 存储压缩且与完整 KV 无统计可检测差异（n=900，三随机种子），并优于拥有 1.5x 更大显存预算的 FP16 token 剪枝。将仿射基替换为失真优化的 TurboQuant-MSE 量化器后，所有协议下的悬崖都下移，无损运行点提升到 7.9x。核心配方：为部署场景测量悬崖，然后在悬崖之上做插值。",
+          "contributions": [
+            "首次精确定位 KV 均匀量化的质量悬崖区间 (2.0, 2.322] bits，并验证其跨量化时机、跨模型迁移",
+            "证明悬崖之上 8 种重要性指标统计等价，混合精度收益本质是网格插值而非指标优劣",
+            "提出 SemKV：保留全部 token、按模型内部得分分配两个相邻精度，无损压缩 6.0x"
+          ],
+          "conclusions": [
+            "均匀 KV 量化存在陡峭质量悬崖：2.322 bits 仍统计无损，2.0 bits 崩溃",
+            "用失真优化基础量化器（TurboQuant-MSE）可将无损压缩点从 6.0x 提升到 7.9x"
+          ],
+          "experiments": [
+            "Llama-3.1-8B-Instruct 在 2.322 code bits 与 FP16 KV 统计不可区分，2.0 bits 崩溃",
+            "SemKV 实测 6.0x 存储压缩，n=900、三种子下与完整 KV 无统计显著差异",
+            "以 1.5x 显存预算优势胜过 FP16 token 剪枝"
+          ],
+          "significance": "为长上下文 KV 量化提供了“先测悬崖、其上插值”的可复现工程配方，使混合精度量化从经验调参变为有统计依据的系统方法",
+          "arxivUrl": "https://arxiv.org/abs/2608.28911",
+          "pdfUrl": "https://arxiv.org/pdf/2608.28911.pdf",
+          "index": 1,
+          "takeaway": "KV 量化存在统计意义上的质量悬崖，在悬崖之上做语义混合精度即可实现 6–7.9x 无损压缩",
+          "keyExperiment": "SemKV 在 n=900、三种子协议下实现 6.0x 存储压缩且与完整 KV 无统计可检测质量差异"
+        },
+        {
+          "title": "Strong Drafts Need Compact Memories: Long-Context Speculative Decoding with Compressed KV Cache",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-01",
+          "authors": "Tong Yuan, Chengxi Liao, Zeyi Wen",
+          "institutions": "机构未标注",
+          "abstract": "长上下文 LLM 应用（文档摘要、多轮 agent）需要从数万 token 的前缀开始生成，解码延迟成为主要瓶颈。投机解码（SD）在不改变模型输出的前提下降低延迟，但其加速同时取决于草稿被接受的 token 数与草稿步延迟：轻量草稿快但缺乏捕获长距离依赖的能力，强独立草稿恢复接受率却又在长前缀下付出不断增长的 KV 访问成本。本文提出面向长上下文 SD 的记忆增强草稿：为强独立草稿配上压缩的草稿侧 KV 记忆——一个轻量适配器构建并增量更新该记忆，以保留遥远信息与精确的近期上下文；目标验证器保留完整 KV cache 并应用标准接受/拒绝规则，保持 SD 的无损保证。在 Llama 3.1-8B 与 70B 目标、前缀最长 32K 的实验表明，草稿侧显存减少超 70%，相对自回归解码分别取得最高 2.08x 与 3.33x 加速。",
+          "contributions": [
+            "提出记忆增强草稿：强独立草稿 + 压缩草稿侧 KV 记忆，同时改善接受率与草稿步延迟",
+            "轻量适配器增量维护“远期信息 + 精确近期上下文”的双重记忆",
+            "目标验证器保持完整 KV cache 与标准接受/拒绝规则，无损保证不变"
+          ],
+          "conclusions": [
+            "长上下文投机解码中草稿质量与 KV 访问成本难以兼得，压缩草稿侧记忆是有效出路",
+            "方法在 8B/70B 两个量级、32K 前缀下均显著优于自回归解码"
+          ],
+          "experiments": [
+            "Llama 3.1-8B 目标最大加速 2.08x",
+            "Llama 3.1-70B 目标最大加速 3.33x",
+            "草稿侧显存减少超过 70%（前缀最长 32K）"
+          ],
+          "significance": "为长上下文投机解码提供了一种兼顾草稿质量与显存成本的通路，直接缓解规模化部署的 decode 瓶颈",
+          "arxivUrl": "https://arxiv.org/abs/2608.30252",
+          "pdfUrl": "https://arxiv.org/pdf/2608.30252.pdf",
+          "index": 2,
+          "takeaway": "强草稿配压缩记忆，而非追求更轻草稿，是长上下文投机解码提速的关键",
+          "keyExperiment": "Llama 3.1-70B 在 32K 前缀下相对自回归解码获得 3.33x 加速，草稿侧显存减少超 70%"
+        },
+        {
+          "title": "Tail-Replay: Escaping the Curse of Linear Attention in Prefix Caching for Hybrid LLMs",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-01",
+          "authors": "Yirui Liu, Ruoling Qi, Xuaner Wu, Penghang Liu, Jian Chen",
+          "institutions": "机构未标注",
+          "abstract": "混合 LLM 交错使用全注意力层与线性注意力层来降低长上下文推理成本，但这让前缀缓存变复杂：全注意力 KV cache 可按 token 寻址，而线性注意力层维护的循环状态无法回滚到任意前缀边界。现有混合前缀缓存手段通过存储循环状态检查点来应对这一错配，导致 token 级匹配只能在检查点对齐位置直接复用，前缀重用被限制在离散边界集合上。本文提出 Tail-Replay，在混合 LLM 中实现不受约束的 token 级前缀复用。关键洞察是：Gated DeltaNet 等线性注意力机制可视为对输入前缀的结构化有损压缩——门控循环更新会逐渐衰减早期输入的贡献，因此匹配前缀的循环状态可用仅重放该前缀的短近期后缀来近似。Tail-Replay 缓存精确的全注意力 KV cache 而省略循环状态检查点；缓存命中时，通过重放匹配前缀的短近期后缀重建线性注意力状态。评估在三个基于 Gated DeltaNet 的混合模型、LongBench 与 RULER 上进行：仅 5–10% 的重放预算即保留完整预填充质量的 92.8–99.9%；服务效率上，TTFT 加速随前缀长度增长，32K 时达全预填充的 9.1–14.3x。",
+          "contributions": [
+            "将线性注意力层重新理解为前缀的结构化有损压缩，据此省去循环状态检查点",
+            "缓存命中时仅重放短近期后缀即可近似重建线性注意力状态，复用边界由共享 token 决定",
+            "在 Gated DeltaNet 混合模型上实现任意 token 级前缀复用，兼容现有框架"
+          ],
+          "conclusions": [
+            "混合 LLM 的前缀缓存不必受循环状态检查点约束，短后缀重放足以近似",
+            "TTFT 加速随匹配前缀长度增大，32K 时相对全预填充达 9.1–14.3x"
+          ],
+          "experiments": [
+            "LongBench 与 RULER 上 5–10% 重放预算保留 92.8–99.9% 的完整预填充质量",
+            "32K 匹配前缀下 TTFT 加速 9.1–14.3x（三个混合模型）",
+            "8K/16K/32K 前缀长度下加速比单调增长"
+          ],
+          "significance": "解开了线性注意力“状态不可回卷”对前缀缓存的束缚，让混合架构长上下文 serving 复用率大幅提升",
+          "arxivUrl": "https://arxiv.org/abs/2608.30310",
+          "pdfUrl": "https://arxiv.org/pdf/2608.30310.pdf",
+          "index": 3,
+          "takeaway": "把门控线性注意力当有损压缩看，短后缀重放即可解锁混合 LLM 的任意 token 级前缀复用",
+          "keyExperiment": "仅 5–10% 重放预算保留 92.8–99.9% 质量，32K 前缀 TTFT 相对全预填充加速 9.1–14.3x"
+        },
+        {
+          "title": "TrainSDC: Characterizing and Mitigating Silent Data Corruption in Large Language Model Training",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-01",
+          "authors": "Zhipeng Xia, Haotian Xu, Siyu Yun, Liqi Lin, Hu Liu, Yu Li, Cheng Zhuo",
+          "institutions": "机构未标注",
+          "abstract": "LLM 训练日益容易受静默数据损坏（SDC）影响，而现有防护方法由于对脆弱性缺乏理解，往往把 Transformer 各计算环节一刀切。本文首次系统刻画 Transformer 训练前向与后向各主要计算接口的 SDC 脆弱性，揭示两种截然不同的错误传播机制：前向脆弱性高度依赖计算位置，Q/K 路径上的故障会造成持续的训练偏差；后向脆弱性则主要由梯度指数分布决定，与计算位置关系不大。基于这些观察提出 TrainSDC——一个由特征刻画驱动的防护框架，包含 Q/K 路径重计算、残差增益监控与指数感知梯度缩放三个组件。在 Llama 3.2-1B 与 Qwen3-0.6B 上，无论稀疏还是密集故障注入，TrainSDC 都能让训练行为接近无故障执行，且仅引入 1.65%–6.76% 的运行时开销。",
+          "contributions": [
+            "首个针对 Transformer 前向/后向各计算接口的系统性 SDC 脆弱性刻画",
+            "发现前向脆弱性“位置相关”（Q/K 路径是关键），后向脆弱性“指数分布主导”",
+            "提出 TrainSDC 三件套：Q/K 重算、残差增益监控、指数感知梯度缩放"
+          ],
+          "conclusions": [
+            "SDC 防护应按错误传播机制差异化设计，而非对全部计算均匀对待",
+            "TrainSDC 以极低开销在密集故障注入下逼近无故障训练行为"
+          ],
+          "experiments": [
+            "Llama 3.2-1B 与 Qwen3-0.6B 上训练行为接近无故障基线",
+            "稀疏与密集两种故障注入下均有效",
+            "运行时开销仅 1.65%–6.76%"
+          ],
+          "significance": "为大规模 LLM 训练的可靠性工程提供了第一个按错误机制定向的 SDC 防护框架，是机房级训练稳定性的基础组件",
+          "arxivUrl": "https://arxiv.org/abs/2608.30769",
+          "pdfUrl": "https://arxiv.org/pdf/2608.30769.pdf",
+          "index": 4,
+          "takeaway": "Transformer 训练的 SDC 脆弱性是结构化的一前向看 Q/K 路径、后向着梯度指数，按机制定向防护即可",
+          "keyExperiment": "密集故障注入下 TrainSDC 使训练行为接近无故障执行，开销仅 1.65%–6.76%"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "When Do Larger Batches Help Scale LLM Reinforcement Learning?",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-01",
+          "authors": "Ziniu Li, Jinbo Wang, Guanhua Huang, Feiyuan Zhang, Pengbo Li, Alex Chen",
+          "institutions": "机构未标注",
+          "abstract": "更大批次能降低每次更新的随机梯度方差，因此常被认为可以加速训练；但其统计收益能否转化为更低的墙钟达到目标时间仍不明确，因为每次更新消耗更多样本、执行也更久。本文在 LLM 强化学习中研究这一权衡，沿算法与系统两条轴分开比较：算法层面，在累计样本数相等的前提下对比配置并重调批次相关超参——在有界批次范围内，该流程得到近似批次不变的轨迹族，成员遵循相似的样本索引学习轨迹；系统层面，利用 rollout 生成与训练之间的算力不对称——低并发下自回归生成常受内存带宽限制，而训练工作量近似正比于处理的 token 数。两视角合成一条直接决策规则：只有当更大批次的吞吐增益超过其样本到目标惩罚时，它才真正缩短达到目标时间。GRPO 与 PPO 实验支持分解的两侧：算法层面 Adam 配合平方根学习率缩放可在有界批次范围内产生近似批次不变的学习曲线；系统层面更大批次在固定硬件上提升生成吞吐最高 2.29x；GRPO 中，更高吞吐叠加学习率重调最多省 29% 时间到目标，而不重调就增大批次反而更慢。",
+          "contributions": [
+            "将 LLM RL 的批次大小效应拆解为算法（样本轨迹）与系统（吞吐）两个正交维度",
+            "算法端证明有界范围内“Adam + 平方根 LR 缩放”可得到近似批次不变学习曲线",
+            "给出可操作的决策规则：吞吐增益超过样本代价才值得加大批次"
+          ],
+          "conclusions": [
+            "更大批次不是无条件更好，其收益取决于吞吐增益与样本代价的相对大小",
+            "GRPO 中吞吐提升叠加 LR 重调可省最多 29% 时间到目标；不重调反而更慢"
+          ],
+          "experiments": [
+            "固定硬件上更大批次提升生成吞吐最高 2.29x",
+            "GRPO 中结合吞吐提升与 LR 重调，时间到目标最多降低 29%",
+            "PPO/GRPO 两个算法均验证批次不变性与决策规则"
+          ],
+          "significance": "给 LLM RL 超参调优提供了稀缺的“批次大小何时该加大”的定量判据，直接指导大规模训练算力分配",
+          "arxivUrl": "https://arxiv.org/abs/2608.29296",
+          "pdfUrl": "https://arxiv.org/pdf/2608.29296.pdf",
+          "index": 5,
+          "takeaway": "LLM RL 中加大批次只有在吞吐增益盖过样本代价时才省时间，且需配合学习率重调",
+          "keyExperiment": "GRPO 下吞吐提升 2.29x 叠加 LR 重调，时间到目标最多降低 29%；不重调反而更慢"
+        },
+        {
+          "title": "GMTS: Gradient Magnitude-based Token Selection Improves RLVR Training for LLM Reasoning",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-01",
+          "authors": "Outongyi Lv, Yuanwei Zhang, Xiaoqun Zhang",
+          "institutions": "机构未标注",
+          "abstract": "强化学习，尤其是可验证奖励 RL（RLVR），已成为增强 LLM 推理能力的核心范式。近期研究指出高熵 token 在训练中作用突出——只用最高 20% 熵的 token 训练即可获得显著性能提升；但高熵 token 为何有益尚不清楚。本文发现，单条答案内部的高熵 token 确实往往伴随大幅度梯度，但熵本身无法跨答案一致反映 token 重要性，因为答案级奖励信号存在差异。基于此观察提出 GMTS（基于梯度幅度的 token 选择），利用熵-梯度连接来近似梯度幅度排序，实现 token 选择。在三个推理领域与多种模型规模上，按 GMTS 排名取前 20% token 训练一致优于基于熵的选择，说明 GMTS 为 RLVR 训练提供了更细粒度的 token 贡献估计。",
+          "contributions": [
+            "揭示熵-梯度强关联仅存在于单答案内部，跨答案失效的原因是奖励信号差异",
+            "提出 GMTS：用熵-梯度连接近似梯度幅度排序，替代纯熵选择",
+            "在三个推理域、多种模型规模上验证前 20% token 的 GMTS 选择一致更优"
+          ],
+          "conclusions": [
+            "高熵 token 的有效性本质来自其梯度幅度代理，而非熵本身",
+            "GMTS 是比熵更细粒度的 RLVR token 重要性估计器"
+          ],
+          "experiments": [
+            "三个推理领域上 top-20% GMTS token 训练一致优于熵选择",
+            "多种模型规模下结论稳定",
+            "与主流 RLVR 训练成本相比无额外开销地提升性能"
+          ],
+          "significance": "为 RLVR 数据效率提供一个即插即用的 token 级筛选准则，说明梯度信号比熵更贴近 token 的真实学习价值",
+          "arxivUrl": "https://arxiv.org/abs/2608.30632",
+          "pdfUrl": "https://arxiv.org/pdf/2608.30632.pdf",
+          "index": 6,
+          "takeaway": "RLVR 训练里 entropy 只是梯度幅度的代理——按梯度幅度（GMTS）选 token 训练，比按熵选更有效",
+          "keyExperiment": "在三个推理领域、多种模型规模下，top-20% GMTS token 训练一致超越基于熵的 token 选择"
+        },
+        {
+          "title": "PLC-DPO: Posterior Label Correction in Noisy and Ambiguous Preference Optimization",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-01",
+          "authors": "Boryeong Cho, Sumyeong Ahn, Se-Young Yun",
+          "institutions": "KAIST",
+          "abstract": "直接偏好优化（DPO）通过成对比较简化了对齐流程，但假设所有可观察偏好都可靠。真实数据常违背这一假设：反转、微弱或模糊的标签会造成有害的策略更新。为此提出 PLC-DPO（后验标签纠正 DPO），将每对样本的训练信号路由为 clean、flip 或 tie 三种情形，从而稳健地优化偏好。核心思想是用校准的策略-参考边际作为在线证据，采取相应的纠正动作——这把噪声偏好学习重构为主动纠正监督方向与强度，而非简单地过滤可疑样本。在 57 个数据集-模型-基准组合中，PLC-DPO 对 DPO 取得最佳平均胜率（60.5 vs 次优方法 55.5）。注入噪声与 tie 压力测试、人类分歧分析以及自我确认诊断进一步表明：路由保持稳定，并能区分翻转对与弱方向对。",
+          "contributions": [
+            "提出三路路由（clean/flip/tie）与边际导向的在线标签纠正，替代简单过滤",
+            "用校准的策略-参考边际作为证据，同时处理反转、弱标签与模糊标签",
+            "在 57 个数据集-模型-基准组合中系统验证有效性"
+          ],
+          "conclusions": [
+            "噪声偏好学习的正确姿势是纠正监督的方向与强度，而非丢弃样本",
+            "路由器能稳定区分翻转对与仅方向偏弱的对"
+          ],
+          "experiments": [
+            "57 个组合上平均胜率 60.5，次优方法仅 55.5",
+            "注入噪声与 tie 压力测试通过",
+            "人类分歧分析与自我确认诊断验证路由稳定性"
+          ],
+          "significance": "为真实世界带噪偏好数据下的 DPO 对齐提供了开箱即用的鲁棒化方案，工程落地门槛低",
+          "arxivUrl": "https://arxiv.org/abs/2608.30597",
+          "pdfUrl": "https://arxiv.org/pdf/2608.30597.pdf",
+          "index": 7,
+          "takeaway": "偏好数据噪声大？用策略-参考边际把每对样本在线纠正为 clean/flip/tie 再训练，比过滤更有效",
+          "keyExperiment": "57 个数据集-模型-基准组合中 PLC-DPO 平均胜率 60.5，领先次优方法 5 个点"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "On the Design of Qwen3.8-Next Architecture: Evaluation, Efficiency, and Training Stability",
+          "score": 4.8,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-01",
+          "authors": "Zihan Qiu, Zekun Wang, Xiao Li, Yanpeng Li, Yang Xu, Yixuan Wang, Huaqing Zhang, Rui Men, Bochao Mao, Chengruidong Zhang, Fan Zhou, Hao Luo, Haofeng Huang, Haoran Lian, Haoyan Huang, Hongqing Chen, Jianwei Zhang, Jing Xu, Junjie Wang, Langshi Chen, Liangyu Wang, Linlang Jiang, Man Yuan, Minmin Sun",
+          "institutions": "Alibaba",
+          "abstract": "本文描述 Qwen3.8-Flash-Next 的架构与消融研究：一个 125B 参数稀疏 MoE 模型，每 token 激活 6B，另有 51B 参数的 n-gram 嵌入表存放在加速器之外。在 14 个预训练基准上，该模型在 8 个上领先 397B-A17B 前代，其余最多落后 2.6 分——而激活参数仅为前代 1/3、训练 token 为 1/3、训练 FLOPs 约 1/9。token 混合采用 Gated DeltaNet（GDN）与全局注意力的逐层混合（每四层一个全注意力层）；继续预训练时这些全注意力层被替换为 Qwen Sparse Attention（QSA）——用压缩轻量索引器在微块粒度给上下文打分。残差流加宽为四分支并经逐元素门读取，称为 Gated Residual（GR）。容量在主干之外通过单个 n-gram 嵌入层扩展，表从主机内存预取。作者从三个轴评估每个候选变更：loss 与下游基准；训练、prefill 与 decode 的成本；以及对最优超参与训练稳定性的影响。loss 与下游精度并不总是同步移动：扩大 n-gram 词表会单调降低 loss，但下游精度趋于饱和。该架构与 Muon 优化器一起把最优学习率与批次上移、使批次预热不再必要，并显著提升压力测试下的稳定性。loss、基准、效率与稳定性是一个统一设计问题，联合求解才能得到同时更高效、更强、更稳的配方。",
+          "contributions": [
+            "公开 Qwen3.8-Flash-Next 完整架构：GDN+全局注意力混合、QSA 稀疏注意力、Gated Residual 残差流",
+            "以 1/3 激活参数、1/3 token、约 1/9 FLOPs 在 14 个基准中的 8 个上超越 397B 前代",
+            "提出 loss/下游/效率/稳定性四维联合评估方法论，揭示 loss 与下游精度可背离"
+          ],
+          "conclusions": [
+            "效率、能力与稳定性必须作为一个联合设计问题求解，不能分头优化",
+            "GDN/QSA 混合 + Muon 可上移最优学习率与批次、省去批次预热并增强稳定性",
+            "n-gram 词表扩大单调降 loss 但下游饱和，工程取舍需以基准而非 loss 为准"
+          ],
+          "experiments": [
+            "14 个预训练基准中 8 个领先 397B-A17B 前代，其余最多落后 2.6 分",
+            "以 1/9 训练 FLOPs、1/3 激活参数实现上述表现",
+            "压力测试下训练稳定性大幅提升、训练成本显著下降"
+          ],
+          "significance": "Qwen 下一代稀疏 MoE 架构的设计档位公开，是一份同时覆盖“能力/效率/稳定性”的旗舰级架构档案",
+          "arxivUrl": "https://arxiv.org/abs/2608.30320",
+          "pdfUrl": "https://arxiv.org/pdf/2608.30320.pdf",
+          "index": 8,
+          "takeaway": "Qwen3.8-Flash-Next 用 1/9 的 FLOPs 追平 397B 前代——靠 GDN+QSA 混合注意力与 Gated Residual，且 loss 与下游精度并非总一致",
+          "keyExperiment": "125B-A6B 模型以 1/9 训练 FLOPs 在 14 个预训练基准中的 8 个上超过 397B-A17B 前代"
+        },
+        {
+          "title": "A.X K2 Technical Report",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-01",
+          "authors": "Cheolseung Baek, Dhammiko Arya, Eunki Kim, Gun Song, Gyoungeun Han, Hyunho Yang, Hyunjun Eun, Jin Kim, Junyoung Park, Juyun Wee, Minki Hong, Minkyung Park, Minsang Kim, Minsoo Kang, SaeRom Kim, Sangjin Kim, Sangyeol Lee, Seojin Lee, Seokhwan Jo, Seokyoung Hong, Seongho Choi, Seonghye Cho, Seongmin O",
+          "institutions": "机构未标注",
+          "abstract": "A.X K2 是一个 688B 参数的 MoE 语言模型，从头训练，作为面向 agentic 应用的高性能基础模型。它仅用约 8.5T token 训练——比前代 A.X K1 更少——但采用更小更高质量的混合数据，并大幅扩充 agentic 与软件工程数据，因此在各项基准上全面超越 K1，部分基准提升超过 30 个百分点，体现了显著的 token 效率增益。为高效支持长上下文，K2 引入 Sparse Gated Attention（SGA）：将稀疏注意力与门控注意力结合；并采用 Gated Norm（GN）稳定大规模训练。SGA 原生以 128K 训练，通过“稀疏索引器预热”——索引器针对自身的稀疏 top-k 选择而非密集注意力分布做优化，使适配显著更廉价：每个 query 只读取 2,048 个位置，长上下文质量不受影响，K2 在 RULER 上直至 256K 得 94.6。GN 的离群值抑制使 4-bit NVFP4 推理精度保持在距 FP8 一个点以内。简单的 Think-Fusion 配方让用户在单一统一模型内切换思考与非思考模式。广泛评估显示 A.X K2 与强开源基线竞争，在数学与韩语基准上持平或超越。",
+          "contributions": [
+            "发布 688B MoE 旗舰 A.X K2：8.5T token 训练、部分基准较前代提升 30+ 点",
+            "提出 Sparse Gated Attention（SGA）：稀疏索引器预热 + 每 query 仅读 2,048 位置",
+            "Think-Fusion 允许单模型内切换思考/非思考模式，Gated Norm 保障 4-bit 推理精度"
+          ],
+          "conclusions": [
+            "更少但更高质的数据 + 扩增 agentic 数据可带来极高的 token 效率，8.5T 即可全面超越前代",
+            "SGA 在极稀疏读取下保持 256K 长上下文能力（RULER 94.6）",
+            "Gated Norm 让 4-bit NVFP4 serving 距 FP8 仅 1 点以内"
+          ],
+          "experiments": [
+            "RULER 256K 得分 94.6，每 query 仅读 2,048 位置",
+            "部分基准相对 A.X K1 提升超过 30 个百分点",
+            "4-bit NVFP4 推理精度距 FP8 在 1 点以内，数学与韩语基准持平或超越强基线"
+          ],
+          "significance": "展示了一条“稀疏门控注意力 + 高质量数据混合”的 agentic 大模型训练路径，长上下文与低比特 serving 兼顾",
+          "arxivUrl": "https://arxiv.org/abs/2608.30181",
+          "pdfUrl": "https://arxiv.org/pdf/2608.30181.pdf",
+          "index": 9,
+          "takeaway": "688B 的 A.X K2 只读 2,048 个位置就能在 RULER 256K 拿 94.6——Sparse Gated Attention 是长上下文稀疏化的新样本",
+          "keyExperiment": "SGA 下每个 query 仅读取 2,048 个位置，RULER 直至 256K 仍达 94.6"
+        },
+        {
+          "title": "Higher-Dimensional Rotary Position Embedding",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-01",
+          "authors": "Yixing Li, Ruobing Xie, Yudong Zhang, Yushi Bai, Samm Sun, Yu Cheng",
+          "institutions": "机构未标注",
+          "abstract": "Transformer 在长上下文建模中大多依赖位置编码。旋转位置编码（RoPE）以相互独立的 2D 旋转嵌入位置信息，在自注意力中形成相对位置项；但其成对、分块、解耦的结构限制了通道间的深度混合与鲁棒性。本文提出 HD-RoPE：把 RoPE 从独立 2D 旋转推广到高维旋转，并引入 Paley-I 正交基，在每个旋转子空间内获得均衡、各向同性且稠密的相位混合，显著增强通道耦合与旋转自由度，同时保持正交稳定性与相对位置闭包性质。HD-RoPE 不引入额外可训练参数，且易于面向工程效率做优化。大量评估表明，在长、短上下文以及多种流行基准上，HD-RoPE 相比标准 RoPE 均有显著性能提升。",
+          "contributions": [
+            "将 RoPE 从独立 2D 旋转推广为高维旋转，并用 Paley-I 正交基获得稠密均衡的相位混合",
+            "在不引入额外可训练参数的前提下增强通道耦合与旋转自由度",
+            "保持正交稳定性、相对位置闭包，同时便于工程化加速"
+          ],
+          "conclusions": [
+            "高维旋转能显著提升位置编码的通道间混合能力与鲁棒性",
+            "长短上下文下 HD-RoPE 均一致优于标准 RoPE，且零新增参数量"
+          ],
+          "experiments": [
+            "多个主流基准上相对标准 RoPE 显著提升",
+            "长上下文与短上下文设置均验证有效",
+            "无新增可训练参数，工程效率可优化"
+          ],
+          "significance": "为位置编码给出一个轻量升级方向：把 2D 旋转升到高维并用正交基混合，长短上下文通吃且零参数代价",
+          "arxivUrl": "https://arxiv.org/abs/2608.29715",
+          "pdfUrl": "https://arxiv.org/pdf/2608.29715.pdf",
+          "index": 10,
+          "takeaway": "将 RoPE 的 2D 旋转升级为高维旋转 + Paley-I 正交基，以零额外参数换来更强的通道耦合与长上下文表现",
+          "keyExperiment": "多个流行基准上相对标准 RoPE 取得显著提升，长/短上下文均有效且无新增参数"
+        }
+      ]
+    }
+  ]
+}
