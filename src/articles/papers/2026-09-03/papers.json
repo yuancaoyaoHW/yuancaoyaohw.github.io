@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-03",
+  "title": "2026-09-03 论文精选",
+  "lede": "今日关注：KV 缓存按头预算、输入自适应稀疏预填充与 FP4 预训练三大推理基础设施进展齐发；模型合并与 LoRA 优化器的几何化改造、以及让模型自己声明注意力的新架构思路同样亮眼。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 207
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "HeadWiseKV: Budgeted Per-Head Cache Residency for Hybrid Long-Context Language Models",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-03",
+          "authors": "Renjie Xie, Juncheng Yang, Aoting Hu, Mingxi Zhang, Liyao Wu, Zheheng Hong, Wei Xu",
+          "institutions": "机构未标注",
+          "abstract": "长上下文推理在解码阶段会持续累积 key-value（KV）缓存，占用大量 GPU 显存并拉低生成吞吐；混合架构语言模型中的残差全局注意力层仍是这一瓶颈的主要来源。论文研究在总 KV 驻留预算约束下如何分配缓存状态：提出免训练的 HeadWiseKV 框架，为每个物理 KV 头分配静态的多级历史窗口，使服务前的缓存需求即可预测；把分配问题形式化为受限的操作率失真问题，并提出 SeqCalib 策略生成算法——按执行顺序逐层处理、以部署时的低层策略为条件，从而刻画跨层交互。配套的 grouped-cache 运行时把选定策略物化为真实的每头 KV 驻留，而非对完整缓存的掩码。论文在 4 个混合长上下文模型上评估下游质量，并在 Qwen3.6-27B 上研究物理驻留与服务行为。",
+          "contributions": [
+            "提出免训练框架 HeadWiseKV，压缩混合长上下文模型的残差全局 KV 缓存，同时保留其原生局部、循环与线性路径",
+            "将每头缓存驻留分配建模为受限操作率失真问题，提出考虑跨层交互的 SeqCalib 策略生成算法",
+            "引入分组缓存（grouped-cache）运行时，将策略物化为真实每头 KV 驻留而不是在全缓存上加掩码"
+          ],
+          "conclusions": [
+            "HeadWiseKV 在 RULER 与 LoCoMo 基准上保持了接近全 KV 缓存的质量",
+            "固定模型系统研究中，112K 上下文下采样峰值设备显存降低 8.59%，最大可验证成功上下文从 114K 扩展到 161K"
+          ],
+          "experiments": [
+            "四个混合长上下文模型上，RULER/LoCoMo 质量均接近 Full-KV 基线",
+            "Qwen3.6-27B 在 112K 上下文的峰值设备显存减少 8.59%",
+            "最大可验证上下文长度从 114K 提升到 161K"
+          ],
+          "significance": "为混合长上下文模型提供了免训练的按头 KV 预算分配方案，把缓存需求的不确定性提前到服务之前消除。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02029",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02029.pdf",
+          "takeaway": "按头分配静态历史窗口并预算 KV 驻留，可在几乎不掉质量的前提下把有效上下文从 114K 拉到 161K。",
+          "keyExperiment": "Qwen3.6-27B 上峰值显存降低 8.59%、最大验证上下文 114K→161K，同时 RULER/LoCoMo 质量与全 KV 基本持平。",
+          "index": 1
+        },
+        {
+          "title": "CRISP: Cliff-awaRe Input-adaptive Sparse Prefilling with Structural-Mass-Motivated Routing",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-03",
+          "authors": "Huu Huy Nguyen, Chien Van Nguyen, Franck Dernoncourt, Ryan A. Rossi, Linh Ngo Van, Jieyang Chen, Thien Huu Nguyen",
+          "institutions": "University of Oregon, Adobe Research",
+          "abstract": "长上下文 LLM 推理的注意力预填充阶段随序列长度二次增长，是严重的计算瓶颈。传统稀疏注意力用固定模式或离线画像缓解，却无法适应输入相关的注意力结构；近期动态方法实时把头路由到稀疏模式，但依赖间接的路由代理，其预算分配机制也忽视了 post-softmax 的质量层级。CRISP 指出并解决该动态路由范式的两个结构问题：第一，路由决策可以直接从代理注意力图的结构读出——用 C_struct 结构代理取代 Jensen-Shannon 散度（JSD）路由，在复现 JSD 路由决策的同时消除池化矩阵乘与后续 KL 散度开销；第二，形式化 post-softmax 的“质量峭壁”，从理论上证明严格累积覆盖阈值在长上下文会累积 O(n) 背景噪声，并给出基于噪声地板的 sink-aware 阈值来规避。在 InfiniteBench、RULER 与 LongBench 上跨两个模型家族，CRISP 是整体最强的稀疏方法，在检索密集型任务上恢复最高 +28.0 个百分点，512k token 下注意力加速达 5.30×。",
+          "contributions": [
+            "提出结构代理 C_struct：直接从代理注意力图结构读出路由决策，消除 JSD 路由的池化矩阵乘与 KL 散度开销",
+            "形式化 post-softmax 质量峭壁，证明严格累积覆盖阈值在长上下文累积 O(n) 背景噪声，提出基于噪声地板的 sink-aware 阈值",
+            "给出输入自适应的稀疏预填充端到端方案，不依赖固定模式或离线画像"
+          ],
+          "conclusions": [
+            "CRISP 是 InfiniteBench/RULER/LongBench 上整体最强的稀疏方法，在检索密集型基准上达到甚至超过精确稠密注意力",
+            "加速收益主要由选择阶段消除 O(n) 噪声驱动，同时保持结构完整性"
+          ],
+          "experiments": [
+            "检索型任务相对基线最高恢复 +28.0 个百分点（pp）",
+            "512k token 下实现最高 5.30× 注意力加速",
+            "在两个模型家族、三个长上下文基准上整体排名第一"
+          ],
+          "significance": "把稀疏预填充的路由决策直接建立在注意力结构上，并数学上消解长上下文噪声累积，是动态稀疏注意力的一个清晰进展。",
+          "arxivUrl": "https://arxiv.org/abs/2609.01925",
+          "pdfUrl": "https://arxiv.org/pdf/2609.01925.pdf",
+          "takeaway": "路由决策可直接读自代理注意力图结构，配合噪声地板阈值，检索任务 +28pp、512k 上下文加速 5.3×。",
+          "keyExperiment": "长上下文检索任务最高 +28.0pp、512k token 下 5.30× 注意力加速，检索密集型基准上匹配或超过稠密注意力。",
+          "index": 2
+        },
+        {
+          "title": "UE5M3 FP4 Block Scaling for Stable Language Model Pretraining",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-03",
+          "authors": "Robert Hu, Carlo Luschi, Paul Balanca",
+          "institutions": "机构未标注",
+          "abstract": "稳定的 4 位浮点（FP4）预训练很困难，因为 E2M1 尾码只能表示很窄的数值范围。NVIDIA Transformer Engine 的 FP4 方案依赖逐张量缩放、随机化 Hadamard 变换（RHT）与 bfloat16 末层豁免，在 FP4 矩阵乘之外增加了额外工作。本文改为将 E2M1 尾码与无符号 E5M3 块缩放配对：E5M3 更宽的范围允许周期性张量缩放；配方对反向梯度应用选择性随机舍入、省略 RHT、并在所有符合条件的内部线性层使用 FP4。作者用该配方预训练 Nemotron-H 8B 近 1900 亿 token：相比 Transformer Engine 配方，块大小为 16 的新配方在最终窗口训练损失上更低，并在各自量化推理策略下取得更低的验证负对数似然；三个下游聚合指标的量化推理点估计也全部更高。去掉 RHT 与 BF16 末块豁免的原生执行消融使模型主体 token 吞吐提升 21.2%。",
+          "contributions": [
+            "提出 E2M1 尾码 + 无符号 E5M3 块缩放的简化 FP4 预训练配方，无需 RHT 与 BF16 末层豁免",
+            "对反向梯度使用选择性随机舍入稳定训练，替代逐张量缩放的复杂机制",
+            "用 Nemotron-H 8B 近 1900 亿 token 的完整预训练验证配方有效性，并量化端到端吞吐收益"
+          ],
+          "conclusions": [
+            "块大小为 16 的新配方相比 Transformer Engine 获得更低的最终窗口训练损失与验证 NLL",
+            "量化推理下的三个下游聚合指标点估计全部高于对照方案，证明更简单的配方也能更稳"
+          ],
+          "experiments": [
+            "Nemotron-H 8B 预训练约 1900 亿 token，最终窗口训练损失与验证负对数似然均优于 Transformer Engine 配方",
+            "原生执行消融（同时去除 RHT 与 BF16 末块豁免）提升模型主体 token 吞吐 21.2%",
+            "三个下游聚合指标在量化推理策略下点估计全部更高"
+          ],
+          "significance": "以更简单的 E5M3 块缩放配方实现更稳定的 FP4 端到端预训练，为原生 FP4 硬件支持提供了动机。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02846",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02846.pdf",
+          "takeaway": "用 E5M3 块缩放替代逐张量缩放+RHT，FP4 预训练更简单更稳，还顺带获得 21.2% 吞吐增益。",
+          "keyExperiment": "Nemotron-H 8B 预训练 1900 亿 token：训练/验证损失均优于 Transformer Engine，去除 RHT 与 BF16 豁免使 token 吞吐 +21.2%。",
+          "index": 3
+        },
+        {
+          "title": "Unfolding the Leech Lattice: Fused Multi-Shell Decoding and VRAM Layouts for 2-Bit LLM Weights",
+          "score": 3.6,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-03",
+          "authors": "Pier-Jean Malandrino",
+          "institutions": "机构未标注",
+          "abstract": "Leech 格向量量化在其自身评估协议下拥有最强的 2 位权重质量，但其核只解码一个壳层，速率所需的多壳解码器此前没有实现。本文补上这一实现并测量 batch 1 解码阶段 GEMV 的服务成本。首先给出完整 301 类码本的 Serving 路径：离线展开为 GPU 布局，融合去量化加矩阵向量乘（dequantize-plus-matvec）核在无 warp 发散的情况下读取布局，并用 f64 验证。其次指出显存内（in-VRAM）速率是与磁盘上速率不同的一维设计轴：同一进程内计时四种位精确布局，二进制位平面在恒定带宽下体积与速度均优于 one-hot 掩码（每权重 4.80 位，为 FP16 的 2.15×）；低于 4.3 位出现第二条非规则流，3.6 位以下解码不再是移位与掩码。再次，与部署态的四位（AWQ）和两位（QTIP）GEMV 核对比：trellis 核读取字节数比本文布局少 2.40×、速度快 2.27×——“展开一个查表装不下的码本”的代价正是流量差距。最后刻画有效性包络，输出头一致时端到端在 4B/8B/14B 获得 1.11×/1.29×/1.41× 增益，服务态 4B 在 2.60 GB 内达 87.0 tok/s；质量代价为 4B 时困惑度 1.38×、MMLU 掉 14.7 分。",
+          "contributions": [
+            "首次实现 Leech 格 301 类码本的多壳解码服务路径：离线 GPU 布局展开 + 无 warp 发散的融合去量化-矩阵向量乘核",
+            "将显存内（in-VRAM）速率确立为独立于磁盘速率的设计轴，对比四种位精确布局并揭示 4.3/3.6 位处的结构相变",
+            "在同一进程内与部署态 AWQ/QTIP 核头对头测量，量化“展开超大码本”的吞吐代价与质量代价"
+          ],
+          "conclusions": [
+            "二进制位平面布局在恒定带宽下体积与速度均优于 one-hot 掩码，记 4.80 位/权重（FP16 的 2.15×）",
+            "Leech 布局在服务速度上不敌 trellis（QTIP）核：字节读取多 2.40×、速度慢 2.27×，差距源于码本展开；以 int8 输出头服务态 4B 达 87.0 tok/s（2.60 GB）"
+          ],
+          "experiments": [
+            "端到端（输出头一致）在 4B/8B/14B 分别获得 1.11×/1.29×/1.41× 增益",
+            "服务态 4B 达 87.0 tok/s、占用 2.60 GB 显存",
+            "4B 时质量代价为 1.38× 困惑度与 14.7 MMLU 分，随模型规模增大而收窄"
+          ],
+          "significance": "首次把 Leech 格 2 位量化的多壳解码与显存布局工程补齐，为超低位宽权重的 Serving 落地提供了可复现的基线测量。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02652",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02652.pdf",
+          "takeaway": "首次实现 Leech 格 2 位权重多壳解码与 VRAM 布局；服务态 4B 模型 2.60GB 显存跑 87 tok/s，但质量与速度仍不及 trellis 方案。",
+          "keyExperiment": "int8 输出头下服务态 4B 达 87.0 tok/s（2.60 GB），但 trellis 核读取字节少 2.40×、速度快 2.27×，4B 质量代价 1.38× 困惑度。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "CoMerge: Conflict-Driven Preference Optimization for Multi-Task Model Merging",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-03",
+          "authors": "Mingjie Zheng, Zihao Chen, Wenqing Chen, Weile Yuan, Zhixuan Chu, Jianxing Yu, Zibin Zheng",
+          "institutions": "Sun Yat-sen University",
+          "abstract": "模型合并为构建多任务大语言模型提供了不重新训练的高效范式，但仍受参数干扰困扰。现有方法致力于保留各专家模型能力并缓解干扰，却普遍不直接学习朴素合并暴露出的退化行为。本文提出基于冲突驱动的偏好优化合并框架 CoMerge，把模型合并重新表述为偏好优化问题：采用自监督的冲突驱动策略，把朴素合并方法（如任务算术）的缺陷当作难负样本构造偏好对，无需任何外部标注；通过偏好优化精修逐张量（tensor-wise）合并系数，使模型在缓解参数空间冲突的同时保留任务专属能力。大量实验表明，CoMerge 在 MergeBench 上平均归一化性能达 0.9968，超过所有评估过的无数据与有数据合并基线；在 Llama-3.1-8B-Instruct 上，仅优化 1,445 个标量系数便在指令跟随与安全等冲突敏感任务上显著提升，并保持与全参数微调相当的水平。",
+          "contributions": [
+            "把模型合并重新表述为偏好优化问题，用自监督的冲突驱动策略以朴素合并缺陷为难负样本构造偏好对，无需外部标注",
+            "仅精修轻量级逐张量合并系数（Llama-3.1-8B-Instruct 上仅 1,445 个标量）即可显著缓解参数空间冲突",
+            "在 MergeBench 上取得平均归一化性能 0.9968，超越全部无数据与有数据合并基线"
+          ],
+          "conclusions": [
+            "CoMerge 在 MergeBench 上成为最强合并方法，兼具保留任务能力与降低干扰",
+            "在指令跟随与安全等冲突敏感任务上的提升明显，接近全参数微调水平"
+          ],
+          "experiments": [
+            "MergeBench 平均归一化性能 0.9968，超过所有评估基线",
+            "Llama-3.1-8B-Instruct 上指令跟随与安全任务显著改善",
+            "仅优化 1,445 个标量系数即取得上述效果"
+          ],
+          "significance": "把“合并产生的缺陷”转化为偏好信号，让模型合并本身从启发式走向可学习的优化问题。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02273",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02273.pdf",
+          "takeaway": "用朴素合并的失败样例当难负样本做偏好优化，只调 1,445 个合并系数就在 MergeBench 登顶。",
+          "keyExperiment": "MergeBench 归一化性能 0.9968 全场第一；Llama-3.1-8B-Instruct 仅用 1,445 个标量系数逼近全参数微调。",
+          "index": 5
+        },
+        {
+          "title": "WMLLM: Self-Evolving Optimization Agents via Predict-Then-Act World Modeling",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-03",
+          "authors": "Zhongzheng Li, Qingsong Ran, Shikun Feng, Nian Ran, Wenhao Li, Xiaoyuan Zhang, Yue Wang, Xiaoguang Zhao",
+          "institutions": "机构未标注",
+          "abstract": "黑盒优化问题因搜索空间大、结构弱、维度高而充满挑战。现有方法依赖直接候选生成或试错式精修，样本效率低下。提升搜索效率的自然思路是世界建模——在昂贵评估之前先识别有希望的优化方向；大语言模型凭借隐含知识可以非平凡精度预测候选结果。基于此观察，本文提出 WMLLM，一个基于“先预测后行动”世界建模的自进化优化代理框架：代理先预测有希望的方向，再据此行动生成候选；结合代理式多轮精修、种群搜索与强化学习，WMLLM 在搜索过程中同时精炼其隐式世界模型与优化策略。在黑盒优化任务（尤其是多目标分子优化）上，WMLLM 提升了样本效率与最终优化性能，并在有限评估预算下取得多目标分子优化基准的最先进结果。",
+          "contributions": [
+            "提出先预测后行动（predict-then-act）的世界建模范式，让优化代理在昂贵的黑盒评估前先锁定有希望的方向",
+            "将代理式多轮精修、种群搜索与强化学习耦合，使隐式世界模型与优化策略在搜索中共同演化",
+            "在多目标分子优化基准上以有限评估预算取得 SOTA 结果"
+          ],
+          "conclusions": [
+            "世界模型预测显著提升黑盒优化的样本效率与最终性能",
+            "自进化机制使代理无需外部监督即可持续改进其方向预测能力"
+          ],
+          "experiments": [
+            "多目标分子优化基准取得 SOTA（有限评估预算下）",
+            "在多种黑盒优化任务上样本效率普遍提升",
+            "消融表明世界建模预测能力随搜索轮次自进化增强"
+          ],
+          "significance": "让 LLM 优化代理先“想清楚再动手”，用世界模型把昂贵的黑盒评估预算花在刀刃上。",
+          "arxivUrl": "https://arxiv.org/abs/2609.01608",
+          "pdfUrl": "https://arxiv.org/pdf/2609.01608.pdf",
+          "takeaway": "LLM 优化代理先预测候选结果再生成候选，世界模型与策略一起自进化，分子优化基准 SOTA。",
+          "keyExperiment": "多目标分子优化在有限评估预算下达到 SOTA，样本效率与最终性能同时优于直接生成/试错式基线。",
+          "index": 6
+        },
+        {
+          "title": "LoRA-TSD: Tangent-Space Spectral Descent for LoRA via Muon-Style Updates",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-03",
+          "authors": "Dmitrii Andriianov, Andrey Veprikov, Aleksandr Beznosikov",
+          "institutions": "机构未标注",
+          "abstract": "低秩适配（LoRA）是微调大模型的标准方式，但两个因子独立训练时，更新忽略了其引发的低秩权重变化的几何结构。本文提出优化器 LoRA-TSD：把每一步 LoRA 更新视为固定秩矩阵流形上的切向量，在切空间内执行 Muon 的谱范数最速下降步，再通过 LoRA 参数化固有的 retraction 把结果映射回因子。该步法避免了对完整权重矩阵的昂贵操作，其 retraction 比先前流形方法使用的截断 SVD retraction 便宜最多 2.8×。作者证明其代理的 Frobenius 范数版本可恢复 LoRA-Pro，并把切向投影梯度（即流形的黎曼梯度）确立为 LoRA 训练的自然平稳性度量，且仅由因子梯度即可计算。在该度量下给出 LoRA-Pro 与 LoRA-TSD 的首个全局收敛保证，收敛率驱动因子梯度范数趋于零。在 Llama-3.2-1B、Llama-3.1-8B 与 Qwen3-32B 上的六个常识与自然语言推理基准中，LoRA-TSD 胜过所有对比 LoRA 优化器，并对适配器秩稳健。",
+          "contributions": [
+            "将 LoRA 更新重构为固定秩流形切空间上的谱范数最速下降（Muon 风格），并用 LoRA 原生 retraction 映射回因子",
+            "证明 Frobenius 版本可恢复 LoRA-Pro，确立切向投影梯度为 LoRA 训练的自然平稳性度量（仅由因子梯度可算）",
+            "给出 LoRA-Pro 与 LoRA-TSD 的首个全局收敛保证，retraction 比截断 SVD 便宜最多 2.8×"
+          ],
+          "conclusions": [
+            "LoRA-TSD 在三个模型、六个基准上胜过所有对比 LoRA 优化器，且对适配器秩稳健",
+            "全局收敛保证下因子梯度范数趋于零，训练过程具备可证明的稳定性"
+          ],
+          "experiments": [
+            "六个常识推理与 NLI 基准全面优于对比 LoRA 优化器",
+            "Llama-3.2-1B、Llama-3.1-8B、Qwen3-32B 三档规模均验证",
+            "retraction 成本最高降低 2.8×（相对截断 SVD）"
+          ],
+          "significance": "把 Muon 式谱下降的几何直觉带进 LoRA，兼得更优收敛与首个理论保证，且更新无需触碰完整权重矩阵。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02734",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02734.pdf",
+          "takeaway": "把 LoRA 每一步更新当作流形切向量做谱范数最速下降，六个基准全面胜出并给出首个全局收敛证明。",
+          "keyExperiment": "Llama-3.2-1B/3.1-8B/Qwen3-32B 六基准全面超过对比 LoRA 优化器，retraction 成本较截断 SVD 低至 2.8×。",
+          "index": 7
+        },
+        {
+          "title": "CORAL: An LLM-Native Harness for Production Recommender Systems",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-03",
+          "authors": "Muhammad Rafay Azhar, Yuhang Zhou, Gilbert Jiang, Yuchen Wang, Rahul Sharma, Matthew DeSousa, Jiayi Liu, Xin Guo, Lizhu Zhang, Xiangjun Fan",
+          "institutions": "机构未标注",
+          "abstract": "生产级推荐系统塑造着数十亿人看到的内容，其持续优化需求来自内容、用户行为与上游模型的不断漂移——检索、排序与服务环节的配置需要被反复审视。传统上由人类工程师通过在线实验测试这类变更，过程缓慢、被动且受人力限制。虽然大语言模型已被用于排序、用户建模与离线模型开发，但很少有系统让代理进入持续的闭环、直接作用于线上推荐器并从决策的实测效果中学习。本文提出 CORAL（约束优化推荐代理环）：一个 LLM 原生的闭环 harness，每个周期代理观察运行信号、基于历史决策与结果的记忆进行推理，并调用工具——包括把变更限制在固定运行预算内的数值优化器——来重新配置推荐器，实测结果再反馈到下一周期。问题被形式化为部分可观测、非平稳、带约束的优化问题，策略在上下文中改进、无需参数更新。在两个大型社交平台上的 A/B 实验中，同一 harness 在一个平台上不增加服务成本地提升互动，在另一个平台上不损失互动地降低服务成本，横跨互动-效率前沿；性能随循环迭代提升，表明单一代理环可自动化传统上由人类算法工程师在显式护栏下完成的持续优化工作。",
+          "contributions": [
+            "提出 LLM 原生的代理闭环 harness：观察→记忆推理→工具调用（含预算约束的数值优化器）→重配置推荐器→反馈",
+            "将问题形式化为部分可观测、非平稳、带约束的在线优化，策略在上下文中改进、无需参数更新",
+            "在两个大型社交平台以 A/B 实验验证，同时覆盖“提互动”与“降成本”两种目标"
+          ],
+          "conclusions": [
+            "同一 harness 在一个平台不增加服务成本提升互动、在另一平台不损失互动降低服务成本",
+            "性能随闭环迭代持续改进，展示代理自动化持续优化工作的可行性"
+          ],
+          "experiments": [
+            "平台一：互动提升、服务成本不变（A/B 实测）",
+            "平台二：服务成本下降、互动不降（A/B 实测）",
+            "随循环迭代次数增加性能继续改善"
+          ],
+          "significance": "把推荐系统的持续调优从“人跑实验”推进到“代理闭环自优化”，是 LLM 接管生产系统运营级任务的一个实证。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02730",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02730.pdf",
+          "takeaway": "LLM 代理在闭环中持续重配置生产推荐器：一个平台免成本提互动、另一个平台降成本不掉互动。",
+          "keyExperiment": "两个大型社交平台 A/B：平台 A 互动提升且服务成本不变，平台 B 服务成本下降且互动不降，性能随循环迭代上升。",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "XMerge: Cross-Axis Selection and Reconstructive Layer Merging for LLM Depth Compression",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-03",
+          "authors": "Jundong Hu, Shekar Ramachandran",
+          "institutions": "机构未标注",
+          "abstract": "移除完整 Transformer 层能保持标准服务架构，但现有深度压缩方法可能损失较多质量，且损失随模型不可预测地波动。本文提出训练后方法 XMerge，包含两个组件：跨轴选择（cross-axis selection）找出隐藏状态变化（相对幅度与角度）都较小的块；局部边界重建（local boundary reconstruction）把相邻幸存块重新拟合，以匹配原始两块的输出。XMerge 不需要任务标签或端到端微调，不引入架构改动，也不增加推理期参数。在七个 Llama/Qwen 骨干（0.5B–8B）、五个已发表基线与三个层缩减级别上，其相对基线优势在最大胆的移除力度下最明显：k=4 时在 CORE（22 任务聚合）六个/七个骨干上排名第一、在 MMLU 上同样六/七，同时规避了多个竞争算子的巨大困惑度暴涨；在 14 个（模型、场景）单元格中，它是唯一从不坍缩的算子。任务级 bootstrap 显示三个最大 CORE 差距的 95% 置信区间不含零。消融表明局部重建贡献了大部分增益，跨轴融合在两个轴意见分歧时有帮助；额外构建成本在约数万个请求后通过每 token 解码节省回收。",
+          "contributions": [
+            "提出跨轴选择：以隐藏状态相对幅度与角度双轴联合定位低变化块，替代单度量贪心",
+            "提出局部边界重建：重新拟合相邻幸存块以匹配原始两块的输出，无需标签与微调",
+            "在 7 个骨干、5 个基线、3 个缩减级别上系统评估，k=4 时 CORE/MMLU 均六/七第一且从不坍缩"
+          ],
+          "conclusions": [
+            "XMerge 在最强层移除力度下领先优势最大，是唯一在全部 14 个（模型、场景）单元格不坍缩的算子",
+            "局部重建贡献大部分增益，跨轴融合仅在双轴分歧时有用"
+          ],
+          "experiments": [
+            "k=4 时 CORE（22 任务）与 MMLU 均六个/七个骨干排名第一",
+            "三个最大 CORE 差距的 95% 置信区间不含零",
+            "构建成本在约数万次请求后通过解码提速回收"
+          ],
+          "significance": "用“双轴选块 + 局部重建”的纯训练后手段做层压缩，规避了深度剪枝常见的质量暴雷与不确定性。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02083",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02083.pdf",
+          "takeaway": "选双轴变化最小的层做局部重建式合并，k=4 深度压缩下 CORE/MMLU 六/七第一且从不坍缩。",
+          "keyExperiment": "七个 Llama/Qwen 骨干上 k=4 削减时 CORE 与 MMLU 均 6/7 第一，且为唯一在所有 14 个测试单元中不坍缩的算子。",
+          "index": 9
+        },
+        {
+          "title": "Language Models Can Control Their Own Attention",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-03",
+          "authors": "Namgyu Ho, Huzama Ahmad, Woosung Koh, Se-Young Yun, Tal Schuster, Cicero Nogueira dos Santos",
+          "institutions": "KAIST, Google DeepMind",
+          "abstract": "语言模型把大部分注意力花在上下文的一小部分上，却仍要读取整个 KV 缓存去寻找真正重要的几个 token。用户在一百万 token 对话中追问某个细节时，全局注意力层必须为回复的每个 token 扫描完整上下文。主流缓解思路是用轻量代理分数预选相关 token，但这种外部打分每步仍要 O(N) 开销。本文采取内在方法，出发点是一个简单问题：模型自己难道不知道上下文的哪些部分相关吗？由此提出声明式注意力（Declarative Attention, DA）协议：在思维链中诱导模型声明它需要关注哪里，把生成划分为三种模式——<global>（全上下文）、<focus>（特定区域）与 <local>（仅近期输出）；推理引擎像解析工具调用一样解析这些声明，跳过大部分 KV 缓存读取。在 15 个长上下文任务的零样本评估中，DA 在现成模型（Gemma-4-31B、Qwen-3.6-27B）上显著减少解码期间的总注意力 token——分别减少 52.0% 与 31.1%——而准确率仅下降 1.27pp 与 2.75pp，且随模型规模增大差距收窄。DA 为稀疏注意力开辟了一条新轴，并给未来基于训练的方法留下空间。",
+          "contributions": [
+            "提出声明式注意力协议：让模型在思维链中主动声明 <global>/<focus>/<local> 三种关注模式",
+            "推理引擎把声明当作工具调用解析并跳过大部分 KV 缓存读取，无需外部代理打分",
+            "在 15 个长上下文任务上证明现成模型即可受益，为稀疏注意力开辟“模型自选”新轴"
+          ],
+          "conclusions": [
+            "零样本下 DA 使解码期总注意力 token 减少 52.0%（Gemma-4-31B）与 31.1%（Qwen-3.6-27B）",
+            "准确率损失随模型规模增大而收窄，提示训练耦合方法有更大潜力"
+          ],
+          "experiments": [
+            "Gemma-4-31B：注意力 token 减少 52.0%，准确率仅降 1.27pp",
+            "Qwen-3.6-27B：注意力 token 减少 31.1%，准确率降 2.75pp",
+            "15 个长上下文任务零样本评估，两个现成模型均显著受益"
+          ],
+          "significance": "让模型在推理时“自己声明该看哪里”，把外部代理选 token 的 O(N) 开销直接省掉，是稀疏注意力的一条全新思路。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02737",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02737.pdf",
+          "takeaway": "模型在思维链里声明 <global>/<focus>/<local> 模式，引擎据此跳过大部分 KV 读取：注意力 token −52%，准确率只掉 1.3pp。",
+          "keyExperiment": "零样本 15 任务：Gemma-4-31B 注意力 token 减少 52.0% 仅掉 1.27pp，Qwen-3.6-27B 减 31.1% 掉 2.75pp。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
