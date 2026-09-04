@@ -1,0 +1,334 @@
+{
+  "date": "2026-09-04",
+  "title": "2026-09-04 论文精选",
+  "lede": "今日关注：KV 缓存三连——按需预算增长、EMA 时序淘汰与 NoPE-MLA 自带淘汰信号；免训练推测解码提速 56%、Gated DeltaNet 全 4-bit 量化无损；GRPO 虚假优势与头级混合架构设计同步推进。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 234
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "5 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "5 篇推荐",
+      "papers": [
+        {
+          "title": "GrowPage: On-Demand KV Budgeting for Efficient LLM Reasoning Serving",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-04",
+          "authors": "Qiankun Ma, Yanjiang Zhou, Zinan Xiong, Haofei Wang, Zhen Song, Yang Xiang, Ziyao Zhang, Hairong Zheng",
+          "institutions": "机构未标注",
+          "abstract": "长输出的推理任务使 KV 缓存成为 LLM 高效服务的关键内存瓶颈。现有 KV 压缩方法通常依赖预先设定的每请求预算，只调整保留哪些 KV 状态，总容量在解码过程中保持不变。然而推理负载的需求差异很大：不同请求需要不同的 KV 容量，单个请求的注意力需求也会随生成过程演化。GrowPage 将 KV 容量视为运行时资源：维护轻量级双时间尺度查询摘要，捕捉近期与长期注意力行为，并用相对注意力工作集估计需求演化；在每个容量边界，要么在当前分配内压缩 KV 状态，要么在更大需求出现时获取额外物理页。通过集成 PagedAttention 的页级内存抽象，GrowPage 保持连续批处理与前缀缓存。在多个模型的推理基准上，GrowPage 获得了优于现有方法的性能-吞吐权衡。",
+          "contributions": [
+            "将 KV 容量从静态预算转变为按需分配的运行时资源，支持扩容与压缩双向调节",
+            "双时间尺度查询摘要估计注意力需求演化，无需重训练即可适配推理服务",
+            "与 PagedAttention 页级抽象集成，兼容连续批处理与前缀缓存"
+          ],
+          "conclusions": [
+            "推理请求对 KV 容量的需求随请求与生成阶段动态变化，固定预算次优",
+            "按需获取物理页比单纯调整保留集合更能提升推理服务的性价比"
+          ],
+          "experiments": [
+            "多模型推理基准上性能-吞吐权衡优于现有 KV 压缩方法",
+            "与 PagedAttention 集成后保留连续批处理与前缀缓存能力"
+          ],
+          "significance": "把 KV 容量变成可增长的运行时资源，为长输出推理服务提供新的优化维度。",
+          "arxivUrl": "https://arxiv.org/abs/2609.03494",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03494.pdf",
+          "takeaway": "推理服务中 KV 容量应按需增长，而非固定预算压缩。",
+          "keyExperiment": "推理基准上以更优的性能-吞吐权衡超越现有 KV 压缩方法。",
+          "index": 1
+        },
+        {
+          "title": "What Matters for Aggressive Decoding-Time KV Eviction? Temporal Aggregation and Ranking Preservation",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-04",
+          "authors": "Bo Zeng, Yu Zhao, Yefeng Liu, Zhihong Lu, Xuanfan Ni, Xintong Wang",
+          "institutions": "机构未标注",
+          "abstract": "解码时 KV 压缩研究高度聚焦于设计更好的 token 打分函数，而跨解码步骤聚合得分的时序规则常被视为实现细节。本文发现在激进压缩下，指数移动平均（EMA）聚合使近似保序的打分器改动在淘汰集层面几乎不可区分：value-norm 与 entropy 变体仍与注意力高度相关，保留集几乎不变；而 KeyDiff、key norm、recency 与学习型打分器改变排序并显著退化。基于此观察提出 InertiaKV——基于 EMA 的解码时淘汰方法，及其周期刷新变体 InertiaKV-Lazy，相对全量刷新吞吐提升 1.34-1.46×；同时研究 Score-Free 解码这一独立操作点：首步对全上下文打分一次并冻结排序，平均质量变化仅 +0.03。在六个开源骨干与 LongBench、LongBench-v2、RULER 基准上，结果表明时序聚合与排序保持是独立且重要的设计因素。",
+          "contributions": [
+            "揭示 EMA 时序聚合使近似保序的打分器改进在淘汰集层面不可区分",
+            "提出 InertiaKV 及周期刷新变体 InertiaKV-Lazy，吞吐提升 1.34-1.46×",
+            "提出 Score-Free 解码操作点：一次打分冻结排序，平均质量 +0.03"
+          ],
+          "conclusions": [
+            "激进 KV 压缩下时序聚合与排序保持比打分函数本身更关键",
+            "打分质量并非无关，但改进窗口被聚合规则大幅压缩"
+          ],
+          "experiments": [
+            "六个开源骨干 × LongBench/LongBench-v2/RULER：InertiaKV-Lazy 吞吐 1.34-1.46×",
+            "Score-Free 解码移除全部后续打分，平均质量变化仅 +0.03"
+          ],
+          "significance": "把 KV 淘汰研究的焦点从打分函数拉回时序聚合与排序保持。",
+          "arxivUrl": "https://arxiv.org/abs/2609.03515",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03515.pdf",
+          "takeaway": "激进 KV 淘汰下，EMA 聚合让打分器改进失效，时序聚合才是关键。",
+          "keyExperiment": "InertiaKV-Lazy 相对全量刷新实现 1.34-1.46× 解码吞吐。",
+          "index": 2
+        },
+        {
+          "title": "VestigeKV: The NoPE-MLA KV Cache Carries Its Own Eviction Signal in a Vestigial Branch",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-04",
+          "authors": "WenJie Fan",
+          "institutions": "机构未标注",
+          "abstract": "长期 KV 缓存必须在查询出现之前被压缩，而基于观测注意力的选择（H2O、SnapKV）在 NoPE-MLA 模型上崩溃（针检索 0.00-0.33），因为 token 的重要性尚未被观测到。VestigeKV 在 Kimi Linear 上利用缓存自带的查询无关信号淘汰：64 维解耦分支——RoPE 的残迹——被 NoPE 训练重塑为显著性通道。每行仅读 11%，把缓存分区：top-m 行留在被注意层，其余行精确移动（绝不删除）到 GPU 驻留的归档层，可由认证触发器逐步访问。无训练、无量化、无权重或内核改动，开销可测为零：8× 压缩下检索保持 1.00，32× 下 0.92（8k-65k 上下文），与全行选择零差距；标准配置下 128× 仍为 1.00。Kimi K3 据称采用 NoPE Gated-MLA 变体，若缓存布局匹配该方法可扩展。同一算子作用在 RoPE-MLA 上崩溃至 0.08，证明查询无关显著性只在无旋转下存在。",
+          "contributions": [
+            "识别 NoPE-MLA 缓存的 64 维解耦分支为自带的查询无关淘汰信号",
+            "分层归档设计：精确移动而非删除，认证触发器按需访问，无训练/量化/内核改动",
+            "零可测开销：0.25 KB 被注意层即可驱动 8×-128× 压缩"
+          ],
+          "conclusions": [
+            "NoPE 训练把 RoPE 残迹重塑为显著性通道，可无损驱动 KV 淘汰",
+            "RoPE 下查询无关显著性不存在，同算子必然崩溃（0.08）"
+          ],
+          "experiments": [
+            "8× 压缩针检索 1.00、32× 下 0.92（8k-65k），标准配置 128× 保持 1.00",
+            "RoPE-MLA 对照崩溃至 0.08，普通淘汰仅 0.42"
+          ],
+          "significance": "为 NoPE/MLA 系模型（如 Kimi）提供零成本的自带信号 KV 压缩路径。",
+          "arxivUrl": "https://arxiv.org/abs/2609.03949",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03949.pdf",
+          "takeaway": "NoPE-MLA 缓存自带的 RoPE 残迹分支就是免费的淘汰信号。",
+          "keyExperiment": "标准配置 128× 压缩下针检索仍保持 1.00，与全行选择零差距。",
+          "index": 3
+        },
+        {
+          "title": "Why Gated DeltaNet Survives 4-Bit Quantization: NVFP4 W4A4 for the Recurrent Half of a Hybrid 27B LLM",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-04",
+          "authors": "Sergii Kozyrev, Davyd Maiboroda",
+          "institutions": "机构未标注",
+          "abstract": "混合 LLM 将 softmax 注意力与 Gated DeltaNet（GDN）等线性注意力配对，后者用固定大小的循环状态总结上下文。社区对 Qwen3.8-27B（48 个 GDN 层 + 16 个注意力层）的早期 4-bit 量化把 GDN 块留在 8 或 16-bit 精度——尤其是 decay 与 write-strength 门——直觉是循环中的误差会沿长上下文累积。本文构建 Minima 检验该直觉：全部 496 个线性层（含 GDN）使用 NVFP4 W4A4。在 4K/32K 困惑度、MMLU-Pro、GSM8K、AIME25、GPQA-Diamond、LiveCodeBench 与 RULER（至 64K）上，Minima 与 BF16 在种子噪声内持平（5 任务平均 -0.52），且是最小（17.5 GiB）与最快 prefill（+14-19%）的方案。四部分机制研究解释原因：NVFP4 的 16 元素块缩放定位了残差流的极端离群值；看似脆弱的门投影最不敏感（softplus/exp/sigmoid 参数化把约 11% 的 GEMM 误差压缩到约 2% 的输出误差）；delta 规则循环把注入噪声压平在平台期并短期遗忘；逐 token 量化成本随上下文摊薄而非累积。",
+          "contributions": [
+            "首次对含 GDN 的混合 27B 模型全部 496 个线性层做 NVFP4 W4A4 量化",
+            "四部分机制研究解释循环层量化鲁棒性的来源",
+            "最小（17.5 GiB）且最快 prefill（+14-19%）的无损量化配方"
+          ],
+          "conclusions": [
+            "循环门并非最敏感部分，门参数化的压缩效应显著",
+            "delta 规则循环对量化噪声自稳定，误差不随上下文累积"
+          ],
+          "experiments": [
+            "5 任务平均 -0.52（种子噪声内），32K 困惑度差距随位置缩小",
+            "prefill 提升 +14-19%，模型体积压至 17.5 GiB"
+          ],
+          "significance": "推翻了“循环层必须保持高精度”的普遍假设，混合架构可全 4-bit 部署。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04098",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04098.pdf",
+          "takeaway": "Gated DeltaNet 的 4-bit 量化无损，循环误差不会累积。",
+          "keyExperiment": "496 个线性层全 NVFP4 W4A4，5 任务平均仅 -0.52，prefill 提速 +14-19%。",
+          "index": 4
+        },
+        {
+          "title": "Margins, Not Windows: Training-Free Per-Step Lossy Speculative Decoding",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-04",
+          "authors": "Oszkár Urbán, Young D. Kwon, Stylianos I. Venieris, Cecilia Mascolo",
+          "institutions": "University of Cambridge",
+          "abstract": "推测解码通过草拟候选 token 并并行验证来加速 LLM 推理。EAGLE-3 等树形注意力草稿者被广泛采用，但通常固定两个决策：严格的 token 匹配验证规则与静态草稿树形状。AdaptiveSpec 是免训练、逐步的推测解码方法，同时用解码过程已产生的内部信号自适应这两个决策：逐步 margin 规则在草稿 token 的目标概率与其 top-1 概率之比超过阈值时提升该 token，不依赖草稿长度或底层草稿者架构；逐步树策略用草稿 top-1 置信度与滚动接受历史的融合信号直接调整树的深度、宽度与节点数，使总草稿数可变而非仅重新分配。两个自适应作用于正交轴，效果叠加。在 SGLang 生产级引擎上实现后，相对最先进的回归式推测解码方法 EAGLE-3，吞吐最高提升 56%，并在 GSM8K、MATH-500、HumanEval 上恢复 93% 到完全无损的任务精度（DeepSeek-R1-Distill-Llama-8B、Llama-3.1-8B-Instruct、Qwen3-8B 三个目标模型）。",
+          "contributions": [
+            "免训练同时自适应验证规则与草稿树形状两个正交决策",
+            "margin 规则与草稿长度及草稿者架构无关，具备通用性",
+            "SGLang 生产引擎实现，相对 EAGLE-3 吞吐最高 +56%"
+          ],
+          "conclusions": [
+            "逐 token 的 margin 阈值与自适应树策略可正交叠加",
+            "激进推测解码可以做到接近甚至完全无损"
+          ],
+          "experiments": [
+            "SGLang 上相对 EAGLE-3 吞吐最高提升 56%",
+            "GSM8K/MATH-500/HumanEval 精度恢复 93% 至完全无损"
+          ],
+          "significance": "零训练成本把生产级推测解码吞吐再提升 56%，且精度几乎无损。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02897",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02897.pdf",
+          "takeaway": "用解码内部信号同时调整验证规则与树形，免训练提速 56%。",
+          "keyExperiment": "SGLang 引擎上相对 EAGLE-3 吞吐最高 +56%，三基准精度恢复 93%-100%。",
+          "index": 5
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Spurious Advantage Hidden in GRPO",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-04",
+          "authors": "Jiamian Wang, Samyadeep Basu, Koustava Goswami, Tong Yu, Zhiqiang Tao",
+          "institutions": "机构未标注",
+          "abstract": "GRPO 被广泛用于可验证奖励强化学习，其优势估计器通过组内奖励统计为每个 rollout 赋予幅度。常见情形下，该幅度奖励那些通过推理得到正确答案的 rollout；但存在一个被忽视的表面同构情形：rollout 可能靠猜测命中答案，公式仍赋予高幅度——本文称之为虚假优势。它出现在三种场景：小候选集的限定答案任务；开放答案集内包含有界子情况；以及预算打开多条通向同一答案路径的搜索 agent。三者都会把策略推向类猜测行为。作者提出 SIGNBALANCE，其幅度是组合自由的：保留验证器符号，使用全局尺度，并通过 stop-gradient 逐类重缩放恢复零均值平衡。在数学与搜索 agent 基准的不同规模上，SIGNBALANCE 在开放答案数学上与 GRPO 持平，在限定答案数学与搜索 agent 上更优。",
+          "contributions": [
+            "识别 GRPO 中被忽视的“猜中即高奖励”虚假优势及其三种场景",
+            "提出组合自由的 SIGNBALANCE 优势估计：符号保留 + 全局尺度 + 逐类重缩放",
+            "在数学与搜索 agent 基准上系统验证，代码将开源"
+          ],
+          "conclusions": [
+            "GRPO 的组内统计幅度会在猜测路径上产生虚假优势",
+            "组合自由的估计器可纠正该类偏差而不损失开放答案性能"
+          ],
+          "experiments": [
+            "开放答案数学上与 GRPO 持平，限定答案数学与搜索 agent 上更优",
+            "覆盖 math 与 search agent 多个规模基准"
+          ],
+          "significance": "修复 GRPO 中奖励“猜中”的行为偏差，提升 RLVR 训练信号质量。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04063",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04063.pdf",
+          "takeaway": "GRPO 的高幅值奖励可能在奖励猜测，组合自由的估计器更稳。",
+          "keyExperiment": "限定答案数学与搜索 agent 上超越 GRPO，开放答案数学持平。",
+          "index": 6
+        },
+        {
+          "title": "DE-Venus: A Data-Efficient RLVR Framework for Large Language Models",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-04",
+          "authors": "Shenzhi Yang, Guangcheng Zhu, Kai Tang, Zhengqing Zang, Xing Zheng, Haobo Wang, Yingfan Ma, Bowen Song, Bo Han, Bo An, Lei Feng, Weiqiang Wang, Junbo Zhao, Gang Chen",
+          "institutions": "Nanyang Technological University 等",
+          "abstract": "可验证奖励强化学习（RLVR）提升 LLM 推理能力，但其规模化受限于昂贵的 on-policy rollout 与大规模可靠目标的获取成本。现有方法分别处理样本选择、不完整监督或噪声标签，常把监督逻辑与分布式训练纠缠在一起，阻碍受控比较与复用。DE-Venus 是一个统一的数据高效 RLVR 框架，把监督视为跨数据准备与策略优化两个阶段演化的状态，组织为三个模块：主动数据选择（分配训练与标注预算）、弱监督构建（从未标注样本中推导学习信号）、训练时监督精化（过滤或修正不可靠监督）。它支持七种代表性方法与一个数据选择流水线，把方法特定决策表达为离线数据集转换或对 target、奖励、批次、优势的在线变换，同时保持 veRL 分布式执行契约。在公开基准与三个业务场景中，独立配置只用 10% 的标签或最少 13% 的相关数据即可保持或提升模型质量；业务配置还使观测到的收敛步数减少 63%-75%。",
+          "contributions": [
+            "统一 RLVR 数据效率框架：监督生命周期三模块（选择/构建/精化）",
+            "兼容 veRL 分布式执行契约，支持七种代表方法与数据选择流水线",
+            "10% 标签或 13% 数据即保持质量，业务场景收敛步数 -63%~75%"
+          ],
+          "conclusions": [
+            "监督应作为演化状态被系统管理，而非一次性信号",
+            "数据效率与可扩展的分布式 RL 执行可以并行不悖"
+          ],
+          "experiments": [
+            "公开基准 + 三业务场景：10% 标签或最少 13% 数据保持/提升质量",
+            "业务配置收敛步数减少 63%-75%"
+          ],
+          "significance": "把 RLVR 的标注与训练成本大幅压缩，同时保持分布式可扩展执行。",
+          "arxivUrl": "https://arxiv.org/abs/2609.03324",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03324.pdf",
+          "takeaway": "RLVR 用 10% 标签即可保持质量：把监督当生命周期管理。",
+          "keyExperiment": "只用 10% 标签或 13% 相关数据，模型质量保持或提升，收敛步数 -63%~75%。",
+          "index": 7
+        },
+        {
+          "title": "DRACO: Fine-Grained Credit Assignment with Dynamic Rubrics for Long-Horizon Agent Training",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-04",
+          "authors": "Shubham Gandhi, Saurabh Goyal, Kiran Kate, Yara Rizk",
+          "institutions": "机构未标注",
+          "abstract": "任务有程序化检查器时，RLVR（可验证奖励强化学习）效果很好，但大多数长时程 agent 领域没有检查器。本文工作在 outcome-blind 设置下：地面真值成功信号不可得。多准则 rubric 是提供这类奖励的流行方式，每条轨迹打分一次，但单个标量对数十步而言是糟糕的信号。DRACO（Distributing Rubric-based Advantage for Credit Optimization）在训练中动态生成 rubric 以追踪策略不断演化的能力，每条完成轨迹打分一次，再把这一判断重分配到负责被标注 rubric 的步骤上，从而在 GRPO 中产生差异化的逐步优势。重分配是闭式解，不引入任何训练式归属模块。在 AppWorld 上，DRACO 相对基础模型提升 15.9 分，相对用稀疏地面真值奖励训练的 GRPO 提升 5.3 分（自身不使用任何验证器）；在域外 Tau-Bench 上相对基础模型提升 5.3 分，且无需前沿裁判模型。",
+          "contributions": [
+            "训练中动态生成 rubric 追踪策略能力演化，避免静态准则失配",
+            "闭式重分配把单轨迹标量判断分布到相关步骤，无训练归属模块",
+            "无验证器条件下超越稀疏地面真值奖励训练的 GRPO"
+          ],
+          "conclusions": [
+            "对于数十步的长时程轨迹，单标量 rubric 分数不足以指导学习",
+            "rubric 判断应重分配到负责该准则的具体步骤以产生稠密信号"
+          ],
+          "experiments": [
+            "AppWorld：相对基础模型 +15.9 分，相对 GRPO（稀疏奖励）+5.3 分",
+            "域外 Tau-Bench：无前沿裁判下相对基础模型 +5.3 分"
+          ],
+          "significance": "在没有程序化检查器的长时程 agent 域，也能提供稠密且可迁移的训练信号。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04094",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04094.pdf",
+          "takeaway": "无验证器的长时程 agent 用动态 rubric 做闭式信用分配。",
+          "keyExperiment": "AppWorld 上超稀疏真实奖励 GRPO 5.3 分，且自身零验证器、零训练式归属模块。",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "Modern Transformers Are Implicit Hybrids: From Functional Differentiation to Principled Hybrid Architecture Design",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-04",
+          "authors": "Runlin Shi, Bojian Yin, Guoqi Li",
+          "institutions": "Tsinghua University",
+          "abstract": "结合全注意力（FA）与线性注意力（LA）的混合架构日益突出，但两者的分配仍是启发式的。本文在 RoPE Transformer 学习到的头级功能组织中寻找证据基础：提出两个干预度量——RFIS（每个频率如何影响一个头的注意力分布）与 RPD（隔离对旋转位置调制的依赖）。在 Qwen3 系列与 Llama3.1 上，RFIS 提示、RPD 验证了一个完整的检索/位置头分类学，二者被一个显著的中低频带分隔；受控 Transformer 表明该边界跟随训练长度的位置尺度，作者称之为全局位置带（GPBand）。分析还给出了零样本长度外推失败的一个潜在成因，并导出两条设计原则：位置建模应只在局部进行，全局访问通过位置无关的检索实现；两种功能应按头粒度分配并逐层配置。实例化为头级混合架构 HwH：NoPE FA 做全局检索，LA 做局部位置建模。在 FA 与 LA 比例低于 1:3 时，HwH 保持强大的语言建模与常识推理，同时改善检索并显著增强零样本长上下文外推，全面超过 Transformer、LA 与分层混合基线。",
+          "contributions": [
+            "提出 RFIS/RPD 干预度量，实证导出检索/位置头的完整分类学",
+            "发现中低频带边界（GPBand）并解释零样本长度外推失败成因",
+            "实例化 HwH 头级混合架构：NoPE FA 全局检索 + LA 局部位置建模"
+          ],
+          "conclusions": [
+            "FA/LA 分配应基于头级功能分化证据而非启发式",
+            "位置建模局部化 + 位置无关检索是混合设计的普适原则"
+          ],
+          "experiments": [
+            "FA:LA < 1:3 时保持语言建模与常识推理，检索与零样本长上下文外推显著提升",
+            "消融实验验证两条原则与组件角色的必要性"
+          ],
+          "significance": "把混合架构的 FA/LA 分配从启发式升级为有证据基础的头级设计原则。",
+          "arxivUrl": "https://arxiv.org/abs/2609.02986",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02986.pdf",
+          "takeaway": "混合架构的 FA/LA 分配不是玄学：头级功能分化说了算。",
+          "keyExperiment": "FA:LA 低于 1:3 时，零样本长上下文外推显著强于 Transformer、LA 与分层混合基线。",
+          "index": 9
+        },
+        {
+          "title": "Free Pause Tokens",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-04",
+          "authors": "John Langford, Nathan Godey, Giovanni Monea, Yoav Artzi, Harry Dong, Ying Fan, Gustavo de Rosa, Zheng Zhan",
+          "institutions": "Microsoft Research, Cornell University",
+          "abstract": "免费暂停 token 给语言模型额外算力以形成每个 next-token 预测（与 pause/thinking token 作用相同），但算力由权重共享骨干上的并行预测流携带，而不是序列中的额外 token。在 1B 参数模型上，实际改进 next-token 预测 2-3 centinats（每 token 对数概率的单位）。因为暂停挂载在已有位置而非新增位置，推理时它是免费的：不增加上下文长度、不增加 KV 缓存，且延迟基本无增长（额外的推理 flops 通常不是吞吐瓶颈）。主要成本只在训练端：相对优化的预训练流水线，额外训练算力可低至 x1.14，同时保留大部分收益。结果是相对标准 next-token 训练的 Transformer 在等计算量、等参数量、等 token 数条件下的全面改进。",
+          "contributions": [
+            "并行预测流中的免费暂停 token：不占序列位置的思考算力",
+            "推理零额外成本：无上下文长度、无 KV 缓存、无实质延迟增长",
+            "等计算/参数/token 条件下的 isoflop 改进，训练开销低至 x1.14"
+          ],
+          "conclusions": [
+            "连续思考式算力可以放在权重共享的并行流中，避免序列成本",
+            "训练端一次性开销换推理端永久免费，且保留大部分收益"
+          ],
+          "experiments": [
+            "1B 模型 next-token 预测提升 2-3 centinats",
+            "相对优化预训练流水线额外训练算力低至 x1.14"
+          ],
+          "significance": "提供一条不占序列、不占 KV 缓存的思考 token 替代路线。",
+          "arxivUrl": "https://arxiv.org/abs/2609.03807",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03807.pdf",
+          "takeaway": "暂停 token 的算力放进并行预测流，推理零成本。",
+          "keyExperiment": "1B 模型 next-token 预测提高 2-3 centinats，训练开销仅为 x1.14。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
