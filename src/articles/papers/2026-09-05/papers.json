@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-05",
+  "title": "2026-09-05 论文精选",
+  "lede": "今日关注加速与后训练两条主线：FP4 直接概率映射与扩散并行生成解锁无损提速，梯度对齐奖励与“先蒸馏后 RL”重排后训练顺序；随机驱逐则证明 KV 驱逐的选择信号近乎无用。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 234
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Jina-OCR-v1: Efficient Document Parsing with Speculative Decoding and Dense Verifiable Rewards",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "Computation and Language (cs.CL)",
+          "date": "2026-09-05",
+          "authors": "Alejandro Barón García, Feng Wang, Emilia Garcia Casademont, Han Xiao",
+          "institutions": "Jina AI",
+          "abstract": "Jina-OCR-v1 是面向低预算 GPU 服务的端到端文档解析模型：复用 DeepSeek-OCR 的压缩视觉编码器与 3B MoE 解码器（每 token 仅激活约 570M 参数），并配备 FastMTP 推测解码头——单一草稿块在 K=3 个预测步间递归共享，贪心验证保证解码无损。后训练结合指令对齐、困难文档鲁棒微调与 GRPO 下的稠密可验证奖励：对公式、表格与结构做确定性检查并给予部分得分。训练数据混合清洗后的公开语料与定向合成页面。默认动态分辨率设置下，OmniDocBench v1.6 得分 91.14、olmOCR-Bench 得分 83.4，对比中页面吞吐最高（2.57 页/秒）；在 NVIDIA L4 上 FastMTP 相对贪心自回归解码提速 2 倍。模型已公开。",
+          "contributions": [
+            "复用 DeepSeek-OCR 压缩视觉编码器与 3B MoE 解码器（每 token 激活约 570M 参数），构建可服务低预算 GPU 的端到端文档解析模型",
+            "FastMTP 推测解码头：单一草稿块跨 K=3 预测步递归共享，贪心验证保证无损",
+            "GRPO 下稠密可验证奖励：公式/表格/结构的确定性检查并给予部分评分"
+          ],
+          "conclusions": [
+            "低预算 GPU（如 L4）即可获得 SOTA 级文档解析精度，页面吞吐最高 2.57 页/秒",
+            "合成页面与清洗公开语料混合训练对困难文档鲁棒性有实质帮助"
+          ],
+          "experiments": [
+            "OmniDocBench v1.6 得分 91.14、olmOCR-Bench 得分 83.4",
+            "L4 上 FastMTP 解码速度是贪心自回归的 2 倍，无精度损失",
+            "对比模型中页面吞吐最高（2.57 pages/s）"
+          ],
+          "significance": "以推测解码+可验证奖励的组合，把高精度文档解析拉进消费级 GPU 区间",
+          "arxivUrl": "https://arxiv.org/abs/2609.03181",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03181.pdf",
+          "takeaway": "FastMTP 推测解码头让 Jina-OCR-v1 在 L4 上解码快 2 倍，精度仍居 SOTA",
+          "keyExperiment": "L4 低预算 GPU 上 FastMTP 解码 2× 于贪心自回归，OmniDocBench 仍达 91.14",
+          "index": 1
+        },
+        {
+          "title": "Hardware-Aware FP4 FlashAttention-4",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "Machine Learning (cs.LG)",
+          "date": "2026-09-05",
+          "authors": "Robert Hu",
+          "institutions": "机构未标注",
+          "abstract": "Blackwell 的 4 位浮点（FP4）张量核心并不会自动让注意力变快——一旦矩阵乘积缩小，softmax 转换与片上依赖便成为主导瓶颈。本文提出面向非因果推理的 Direct-P 与将前向量化直接传入反向的因果路径：Direct-P 把注意力得分直接映射为 FP4 概率，在 NVIDIA GB200 上达到 BF16 前向吞吐的 2.13 倍；因果路径从保存的量化 Q/K 重建概率、使用 FP8 梯度操作数，把完整单 GPU 80 亿参数更新加速至 1.14 倍。匹配的分布式训练必须保留 FP8 概率与值——所有测试的 MXFP4 概率/值训练轨迹均发散。",
+          "contributions": [
+            "指出 FP4 张量核心下 softmax 转换与片上依赖取代矩阵乘积成为注意力真正瓶颈",
+            "Direct-P：非因果推理将得分直接映射为 FP4 概率，绕开显式 softmax 转换",
+            "因果路径：前向量化直达反向，量化 Q/K 重建概率 + FP8 梯度操作数"
+          ],
+          "conclusions": [
+            "GB200 上 FP4 注意力前向吞吐达 BF16 的 2.13 倍",
+            "分布式训练必须保留 FP8 概率/值，MXFP4 概率/值轨迹全部发散"
+          ],
+          "experiments": [
+            "GB200 非因果前向吞吐 2.13× BF16",
+            "8B 模型单 GPU 完整更新（含反向）加速最多 1.14×",
+            "MXFP4 概率/值训练全部发散；保留 FP8 概率/值后稳定收敛"
+          ],
+          "significance": "把 Blackwell FP4 张量核心的带宽优势真正兑现到注意力计算上",
+          "arxivUrl": "https://arxiv.org/abs/2609.04105",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04105.pdf",
+          "takeaway": "softmax 转换才是 FP4 注意力瓶颈，Direct-P 直接映射概率换来 GB200 上 2.13× 吞吐",
+          "keyExperiment": "GB200 上 Direct-P 达 BF16 前向吞吐 2.13 倍，8B 单卡更新 1.14× 加速且无不稳定",
+          "index": 2
+        },
+        {
+          "title": "Unlocking Lossless Speedups in LLMs via Discrete Diffusion",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "Machine Learning (cs.LG)",
+          "date": "2026-09-05",
+          "authors": "Subham Sekhar Sahoo, Lingjie Chen, Khiem Pham, Jonathan Geuter, Chaitanya Dwivedi, Varad Pimpalkhute, Yash Akhauri, Alexander Moreno, Mikhail Yurochkin, Zhenting Wang, Mostafa Elhoushi, Nolan Dey, Shane Bergsma, Joel Hestness, John Thickstun, Eric Xing, Zhengzhong Liu",
+          "institutions": "机构未标注",
+          "abstract": "LLM 的成功很大程度上归功于 next-token prediction（NTP），但自回归结构要求缓慢的顺序生成。本文提出 diffusion-augmented LLM：定义自回归模型分布，同时用扩散从该分布并行抽取多个 token。参数解耦为两组——AR 权重按标准 NTP 目标训练，轻量扩散权重负责同时生成多个 token，后者通过简单的 Diffusion Distillation 阶段学习，对现有训练管线开销可忽略。配套的 Ψ-Spec 采样器族实现固定上下文长度下的无损加速与推理时扩展。与推测解码不同，无需独立草稿模型；与 d-LLM 不同，不牺牲底层 AR 模型质量。得到的 Uno 模型可从头训练或增强现成开源 AR LLM：在所有测试 batch size 下吞吐均高于领先推测解码方法，相对基础 AR 模型最高 3 倍加速（含设备支持的最大 batch）；8B Uno 在 agentic 工具使用、编码、长上下文推理的全部基准上超越领先开源 d-LLM 26B DiffusionGemma 与闭源 Mercury 2。代码与权重已开源。",
+          "contributions": [
+            "diffusion-augmented LLM：AR 权重（NTP）+ 轻量扩散权重双参数集，从 AR 分布并行采样多 token",
+            "Ψ-Spec 采样器族：固定上下文下的无损加速与推理时扩展，无需草稿模型",
+            "Diffusion Distillation 阶段开销可忽略，可直接增强现成开源 AR 模型"
+          ],
+          "conclusions": [
+            "所有测试 batch size 下吞吐超过领先推测解码方法，最大 batch 仍最高 3× 基础 AR 速度",
+            "8B Uno 全面超越 26B DiffusionGemma 与闭源 Mercury 2，质量无妥协"
+          ],
+          "experiments": [
+            "8B Uno 在 agentic 工具使用、编码、长上下文推理全部基准优于 26B DiffusionGemma",
+            "相对基础 AR 模型最高 3× 加速，含设备支持的最大 batch size",
+            "每个评估 batch size 吞吐均高于领先推测解码方法"
+          ],
+          "significance": "把扩散并行生成接进自回归分布，无损加速且不引入草稿模型",
+          "arxivUrl": "https://arxiv.org/abs/2609.04010",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04010.pdf",
+          "takeaway": "扩散权重从 AR 分布并行采样多 token，8B Uno 全面胜过 26B DiffusionGemma 与 Mercury 2",
+          "keyExperiment": "8B Uno 在全部基准超过 26B DiffusionGemma 与闭源 Mercury 2，同时最高 3× 加速",
+          "index": 3
+        },
+        {
+          "title": "Random Attention: Rethinking KV Cache Eviction for Efficient Reasoning",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "Computation and Language (cs.CL)",
+          "date": "2026-09-05",
+          "authors": "Heng Wang, Jielin Qiu, Wenting Zhao, Cheng Qian, Liangwei Yang, Jiawei Han, Heng Ji, Silvio Savarese, Shelby Heinecke, Huan Wang",
+          "institutions": "University of Illinois Urbana-Champaign",
+          "abstract": "LLM 在长推理任务上表现出色，但长思维链使 KV cache 成为严重内存瓶颈。现有 KV cache 压缩方法遵循同一范式：按某种估计给每个缓存 token 打分，保留高分者。本文证明这个“选择信号”几乎毫无贡献：Random Attention 只保留 prompt、在每个注意力头内均匀随机驱逐，完全不算分，就在四个模型六个推理任务上匹配最强既有驱逐器，并在 vLLM 部署中吞吐高出 32-43%。受控实验给出解释：1）prompt 才是缓存中脆弱的部分，各选择器之间的差距大多只是它们的选择信号是否恰好保住了 prompt；2）推理轨迹靠两级冗余自我保护——文本层面（模型边推理边重申还需的内容）与跨注意力头层面（每个头各留一份轨迹副本）——因此只要 prompt 安全，随机抽取就能保留足够副本，打分毫无必要。",
+          "contributions": [
+            "反直觉实证：KV 驱逐的“选择信号”几乎无贡献，均匀随机驱逐即匹配最强基线",
+            "机制解释：prompt 是缓存脆弱部分；推理轨迹具备文本+跨头两级冗余",
+            "零开销实现：不计算任何分数，vLLM 部署即插即用"
+          ],
+          "conclusions": [
+            "打分驱逐的收益主要来自“恰好保住 prompt”，而非选择本身",
+            "推理轨迹的冗余自保护使随机驱逐在长 CoT 场景可靠可行"
+          ],
+          "experiments": [
+            "vLLM 部署吞吐比最强既有驱逐器高 32-43%",
+            "四个模型、六个推理任务精度与最强 evictor 持平",
+            "受控实验确认：保住 prompt 后随机抽取即足够，分数信息近乎冗余"
+          ],
+          "significance": "挑战 KV 驱逐“打分-保留”范式的负结果，直接降低系统复杂度",
+          "arxivUrl": "https://arxiv.org/abs/2609.03430",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03430.pdf",
+          "takeaway": "打分驱逐的选择信号几乎没用，均匀随机驱逐就能持平并快 32-43%",
+          "keyExperiment": "随机驱逐在 vLLM 下吞吐高 32-43%，4 模型 6 任务精度与最强 evictor 持平",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Gradients Know What Outcomes Don&#39;t: Unlocking Reinforcement Learning for LLM Reasoning with Gradient-Aligned Rewards",
+          "score": 4.6,
+          "channel": "Algorithms",
+          "category": "Machine Learning (cs.LG)",
+          "date": "2026-09-05",
+          "authors": "Leqi Zheng, Jinbo Su, Fang Niu, Chaokun Wang, Weiping Wang, Jiajun Zhang, Shannan Yan, Jie Wu, Zhaolu Kang, Rong Fu, Hang Zhang",
+          "institutions": "Institute of Computing Technology, CAS",
+          "abstract": "可验证奖励强化学习（RLVR）驱动了 LLM 思维链推理，但二元结果奖励无法区分同样是正确轨迹之间的差异。现有稠密奖励替代方案——从表面启发式到过程奖励模型——要么忽略训练语料中已有的专家解，要么需要昂贵的离线标注。本文提出 Gradient-Aligned Reward（GAR）：在策略自身的梯度空间操作，用截断反向传播穿过输出投影层为每条 rollout 提取紧凑梯度向量，与专家锚点梯度的余弦相似度即构成稠密、推理感知的奖励，墙钟开销小于 9%。作者证明该余弦可分解为预测误差与激活模式两个因子的乘积，刻画了对齐信号到底在度量什么。在 Qwen3-4B 与 Qwen3-8B 上，GAR 在竞赛级数学基准稳定超越 GRPO 等基线，且无需领域数据即可迁移到 GPQA Diamond 与 MMLU-Pro。",
+          "contributions": [
+            "GAR：截断反传穿过输出投影层提取紧凑梯度，与专家锚点梯度余弦相似度作稠密奖励",
+            "理论刻画：余弦可分解为预测误差因子 × 激活模式因子",
+            "直接复用训练语料中的专家解，无需昂贵的离线标注"
+          ],
+          "conclusions": [
+            "小于 9% 墙钟开销即可获得推理感知的稠密奖励",
+            "竞赛数学提升可泛化至 GPQA Diamond 与 MMLU-Pro，无需领域数据"
+          ],
+          "experiments": [
+            "Qwen3-4B 与 Qwen3-8B 竞赛级数学基准稳定优于 GRPO 及既有基线",
+            "迁移到 GPQA Diamond 与 MMLU-Pro 无需领域特定数据",
+            "奖励计算墙钟开销低于 9%"
+          ],
+          "significance": "用梯度对齐给 RLVR 补上“过程稠密信号”，且坐落在策略自己的梯度空间",
+          "arxivUrl": "https://arxiv.org/abs/2609.03342",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03342.pdf",
+          "takeaway": "截断反传梯度与专家锚点做余弦对齐，<9% 开销给出稠密推理奖励",
+          "keyExperiment": "Qwen3-4B/8B 竞赛数学稳定超 GRPO，开销 <9%，并迁移 GPQA Diamond、MMLU-Pro",
+          "index": 5
+        },
+        {
+          "title": "Sequential Beats Joint: On the Interplay between On-Policy Distillation and RLVR",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "Computation and Language (cs.CL)",
+          "date": "2026-09-05",
+          "authors": "Boyan Li, Bingsen Chen, Chenghao Yang, Ping Nie, Chen Zhao, Xi Ye",
+          "institutions": "机构未标注",
+          "abstract": "可验证奖励强化学习（RLVR）与 on-policy 蒸馏（OPD）是后训练推理 LLM 的两大主流方法。先前的做法用 OPD 的稠密 token 级监督去补稀疏的 RL 奖励，在单步内融合两个信号：要么加权加和，要么对 RL advantage 做教师调制重缩放。本文证明一个简单的两阶段方案 OPD-then-RL 在逻辑与数学推理基准上一致超越纯 OPD、纯 RLVR 以及全部联合基线。通过 pass@k、学习动态与参数更新给出系统解释：OPD 扩展学生对教师支持解空间的覆盖，RL 在该空间内锐化；而联合优化会让两个信号互相干扰。实用配方方面：OPD 验证分数是切换 RL 的关键信号，且 OPD 是比 SFT 更好的 RL 冷启动。",
+          "contributions": [
+            "两阶段 OPD-then-RL 一致胜过纯 OPD、纯 RLVR 与所有单步联合融合基线",
+            "机制解释：OPD 扩展覆盖、RL 在支持空间内锐化，联合融合则互相干扰",
+            "实用配方：OPD 验证分决定切换时机，OPD 优于 SFT 作为 RL 冷启动"
+          ],
+          "conclusions": [
+            "顺序解耦优于信号融合——同样的监督内容，分两阶段而非单步糅合",
+            "OPD 验证分数是何时切到 RL 的可靠信号"
+          ],
+          "experiments": [
+            "逻辑与数学推理基准上一致超越全部联合基线（加权加和/教师调制重缩放）",
+            "pass@k 与参数更新分析确认“OPD 扩展 + RL 锐化”的解释",
+            "OPD 冷启动在 RLVR 上优于 SFT 冷启动"
+          ],
+          "significance": "把纠缠在一起的两路后训练信号改造成互补的两个阶段，简单且强",
+          "arxivUrl": "https://arxiv.org/abs/2609.04108",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04108.pdf",
+          "takeaway": "先蒸馏后 RL 的两阶段方案一致胜过所有单步融合方法",
+          "keyExperiment": "OPD-then-RL 在逻辑与数学基准上超过纯 OPD、纯 RLVR 及全部联合基线",
+          "index": 6
+        },
+        {
+          "title": "Making Every Tool Call Count: Necessary Tool-Evidence Path Rewards for Agentic Vision-Language Models",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "Artificial Intelligence (cs.AI)",
+          "date": "2026-09-05",
+          "authors": "Xingming Long, Yu Liu, Zhiwei Yang, Hanqi Feng, Shaojie Zhang, Barnabas Poczos, Chao Jiang, Zhenbo Luo, Lei Jiang, Pei Fu",
+          "institutions": "机构未标注",
+          "abstract": "现代 VLM 能直接回答许多图像问题，但复杂查询往往需要细粒度视觉细节或外部知识。为获取缺失证据，agentic VLM 会调用图像裁剪、图像搜索、文本搜索等工具。然而现有训练范式主要按最终答案正确性评估工具使用，对证据采集与利用的监督不足，导致两个缺陷：1）频繁发出冗余或偏离目标的工具调用；2）即使调对了工具，也常无法从返回的观察结果中提取所需信息。本文提出 NTEP（Necessary Tool-Evidence Path）标注方案，显式规定每条查询的关键外部证据与对应的工具调用；在此基础上提出 NTEP-R 奖励，确保每次工具调用都严格推进推理——奖励调用前意图与必要证据目标的对齐、以及调用后观察摘要与必要证据的对齐，并用非重复目标正则化器惩罚重访已满足目标的冗余调用。七个图像基准的评估显示，8B 实例 NTEP-8B 在统一三工具框架下显著提升面向搜索的准确率与工具使用效率。",
+          "contributions": [
+            "NTEP 标注方案：显式规定每条查询的必要外部证据与对应工具链",
+            "NTEP-R 奖励：调用前意图对齐 + 调用后摘要对齐，保证每次调用严格推进推理",
+            "非重复目标正则化器惩罚重访已满足目标的冗余调用"
+          ],
+          "conclusions": [
+            "细粒度的工具-证据路径监督对训练鲁棒 agentic VLM 至关重要",
+            "意图级对齐使工具调用数量下降的同时准确率上升，消除“冗余/偏离”调用"
+          ],
+          "experiments": [
+            "七个图像基准上 NTEP-8B 同时提升面向搜索的准确率与工具使用效率",
+            "8B 规模统一三工具框架（图像裁剪/图像搜索/文本搜索）",
+            "非重复目标正则化有效抑制冗余工具调用"
+          ],
+          "significance": "把 agentic VLM 的训练监督从“答案对不对”细化到“每一步工具调用是否在采集必要证据”",
+          "arxivUrl": "https://arxiv.org/abs/2609.03493",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03493.pdf",
+          "takeaway": "显式规定必要工具-证据路径并逐调用奖励，8B NTEP 同时提准确率与效率",
+          "keyExperiment": "NTEP-8B 在 7 个图像基准上同时提升搜索准确率与工具使用效率",
+          "index": 7
+        },
+        {
+          "title": "Verify Before You Distill: Prompt-Level Teacher Gating for On-Policy Distillation",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "Machine Learning (cs.LG)",
+          "date": "2026-09-05",
+          "authors": "Zhiwei Zhang, Zechen Sun, Fei Zhao, Kang Peng, Bin Liang, Huayu Deng, Yao Hu, Kam-Fai Wong, Mu Chuan",
+          "institutions": "机构未标注",
+          "abstract": "on-policy 蒸馏（OPD）用冻结教师在学生自身 rollouts 上提供稠密 token 级监督，加速后训练。vanilla OPD 对所有 prompt 统一施加监督，不检查教师对每条 prompt 是否可靠：由于 reverse KL 是模式寻求的，自信但错误的教师会诱导出强烈而误导的更新。熵或师生似然一致性等分布代理只能衡量不确定性/一致性，并不直接验证结果正确性。本文提出 Teacher-Gated OPD（TGOPD）：在稠密监督进入之前，先在 prompt 级验证教师可靠性——用一小批 verifier 评分的教师探针估计可靠性，通过则路由到稠密 OPD，否则路由到 verifier 支撑的 GRPO。在 4B 与 35B 学生的数学、代码、指令跟随实验中，TGOPD 在全部六个单域设置超越 vanilla OPD，多域训练下两个规模的七基准平均也更高。由于用原本闲置的教师容量做可靠性估计，异步 OPD 中教师侧计算浪费被削减，实测 4B 单域教师节点 GPU 利用率从 9.8% 提升到 78.9%。",
+          "contributions": [
+            "prompt 级教师门控：verifier 评分的教师探针估计可靠性，通过才喂稠密 OPD",
+            "失败样本路由到 verifier-grounded GRPO，避免自信错误教师的误导更新",
+            "复用闲置教师容量做可靠性估计，同步降低异步 OPD 的教师侧算力浪费"
+          ],
+          "conclusions": [
+            "教师可靠性必须逐 prompt 验证——分布代理（熵/似然一致性）不够",
+            "6/6 单域设置优于 vanilla OPD，多域七基准平均也更高"
+          ],
+          "experiments": [
+            "4B 与 35B 学生在数学、代码、指令跟随六个单域设置全部超越 vanilla OPD",
+            "多域训练下 4B/35B 七基准平均均更高",
+            "教师节点 GPU 利用率从 9.8% 提升到 78.9%（4B 单域实测）"
+          ],
+          "significance": "给 on-policy 蒸馏装上“可靠教师门禁”，顺带盘活原本闲置的教师算力",
+          "arxivUrl": "https://arxiv.org/abs/2609.02998",
+          "pdfUrl": "https://arxiv.org/pdf/2609.02998.pdf",
+          "takeaway": "蒸馏前先用 verifier 探针验证教师可靠性，门控路由让 6/6 设置反超 vanilla OPD",
+          "keyExperiment": "TGOPD 6/6 单域设置超越 vanilla OPD，教师节点利用率 9.8%→78.9%",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "RecurTrace: Adaptive Latent Reasoning with Loop-Time Memory",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "Machine Learning (cs.LG)",
+          "date": "2026-09-05",
+          "authors": "Yuxiang Wang, Kunyu Feng, Yingda Shen, Haoning Xu, Junyu Wang, Zhizheng Wu",
+          "institutions": "ShanghaiTech University",
+          "abstract": "重复中间层的一个小块能增加语言模型的有效推理深度，不加参数也不产生额外 token，近期工作表明这种潜变量循环能改善推理。但两个设计选择限制了收益：每次迭代只见前一轮输出，无法直接访问更早的计算；固定循环次数让简单输入浪费深度、困难输入算力不足。本文提出 RecurTrace，利用循环自身的轨迹解决这两个限制：Loop Memory Attention 让每个循环层沿 loop-time 轴关注自己历史迭代的状态，从而能回溯更早的计算；halting head 读取循环状态预测是否继续，并以能识别“何时更多深度仍会降低 loss”的 oracle 监督。MathQA 受控对比（同一循环骨干）中，RecurTrace 平均 2.0 次循环达到 56.9% 准确率，在匹配算力下超过最佳固定循环深度 2.2 个点；相比之下 ACT 与 PonderNet 坍缩为 1 次循环，CALM 用 5.6 次循环仅达 54.1%，更强的 LoopUS-Conf 与 TaH-Mismatch 基线分别为 3.2 次循环 55.3%、2.1 次循环 55.7%。最后，在 0.6B/1.7B/4B/8B 上 RecurTrace 相对同预算微调基线提升生成准确率，增益随规模从 0.6 增至 3.4 个点。",
+          "contributions": [
+            "Loop Memory Attention：循环层沿 loop-time 轴关注自身历史状态，可回溯更早计算",
+            "halting head + oracle 监督：按输入难度自适应决定循环次数",
+            "零参数、零额外 token 的前提下增加有效推理深度"
+          ],
+          "conclusions": [
+            "自适应循环在匹配算力下胜出最佳固定循环深度 2.2 个点",
+            "增益随模型规模增长：0.6B→8B 为 +0.6→+3.4 个点"
+          ],
+          "experiments": [
+            "MathQA 平均 2.0 次循环达 56.9%，匹配算力下超最佳固定深度 2.2 点",
+            "CALM 5.6 次循环仅 54.1%；LoopUS-Conf 3.2 循环 55.3%、TaH-Mismatch 2.1 循环 55.7%",
+            "0.6B/1.7B/4B/8B 上生成准确率增益从 0.6 增至 3.4 个点"
+          ],
+          "significance": "用循环轨迹让潜变量推理的深度按难度自适应，小模型也能白赚深度",
+          "arxivUrl": "https://arxiv.org/abs/2609.03379",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03379.pdf",
+          "takeaway": "循环层可回看自己的历史状态并按难度自适应停，MathQA 匹配算力 +2.2 点",
+          "keyExperiment": "平均 2.0 次循环达 56.9%，超过最佳固定循环深度 2.2 点且比 CALM 省 3.6 次循环",
+          "index": 9
+        },
+        {
+          "title": "Xiaomi-TabLDM: A Tabular Foundation Model Technical Report",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "Artificial Intelligence (cs.AI)",
+          "date": "2026-09-05",
+          "authors": "Xiaomi-TabLDM Team, Penghui Wang, Wei Liu, Hong Wang, Chengyue Huang, Yuxi Sun, Zirui Wang, Hongming Huang, Quan Wang, Chunxiao Liu, Erli Meng, Bin Wang",
+          "institutions": "Xiaomi",
+          "abstract": "Xiaomi-TabLDM 是面向分类与回归的表格大语言“数据”基础模型，通过 in-context learning 无需任务特化微调即可获得优越预测精度。它仅用结构因果模型（SCM）生成的合成数据预训练，从而支持更灵活的上下文利用与更高效的容量扩展。i）新性能标准：回归基准 OpenML-CTR23 排名第 1，TALENT、TabArena、BCCO 回归均排第 2；效率方面在 TabArena 回归拿到第二高 Elo 的同时，训练时间比排名第一的 TabFM 少 82%、预测时间少 68%。ii）大规模合成预训练：扩大合成表格数据的覆盖与多样性，配合三阶段训练策略、双流特征分组、轻量 Attention Residual 与稀疏 MoE，学得更丰富的特征交互与专家特化。iii）测试时扩展：推理时分配更多计算可稳定提升预测性能。",
+          "contributions": [
+            "仅凭 SCM 合成数据预训练 + 三阶段训练策略，上下文利用更灵活、容量扩展更高效",
+            "双流特征分组 + 轻量 Attention Residual + 稀疏 MoE，学习特征交互与专家特化",
+            "引入测试时计算扩展（test-time scaling）持续提升预测"
+          ],
+          "conclusions": [
+            "回归性能标杆：OpenML-CTR23 第 1，TALENT/TabArena/BCCO 第 2",
+            "效率优势显著：训练时间省 82%、预测时间省 68%（相对 TabFM）"
+          ],
+          "experiments": [
+            "OpenML-CTR23 回归排名第 1",
+            "TabArena 回归 Elo 第二高，训练时间比 TabFM 少 82%、预测少 68%",
+            "测试时扩展随计算分配增加稳定提升预测性能"
+          ],
+          "significance": "用结构因果合成数据+MoE 架构把表格 ICL 基础模型做到 SOTA 且显著降本",
+          "arxivUrl": "https://arxiv.org/abs/2609.03880",
+          "pdfUrl": "https://arxiv.org/pdf/2609.03880.pdf",
+          "takeaway": "仅凭 SCM 合成数据预训练，小米表格模型回归登顶 OpenML-CTR23 且省 82% 训练时间",
+          "keyExperiment": "TabArena 回归 Elo 第二高，训练时间比 TabFM 少 82%、预测少 68%",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
