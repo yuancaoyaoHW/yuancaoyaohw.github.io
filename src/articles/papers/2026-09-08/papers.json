@@ -1,0 +1,343 @@
+{
+  "date": "2026-09-08",
+  "title": "2026-09-08 论文精选",
+  "lede": "今日关注智能体长程上下文与推理效率:KV缓存压缩与虚拟化让长思维链、百万token工作区跑上消费级GPU,MoE推理加速与免训练专家削减降低服务成本,agentic kernel生成与训练时程感知的优化器研究则分别拓展硬件与训练两个前沿。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 254
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "BeaconKV: Key-Value Cache Compression Guided by Beacon Queries for Efficient Large Reasoning Model Inference",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-08",
+          "authors": "Janghyeon Kim, Minsoo Kim, Kyuhong Shim, Jungwook Choi",
+          "institutions": "Hanyang University",
+          "abstract": "大推理模型(LRM)通过生成长思维链获得更强解题能力,但KV缓存随序列长度线性增长,长推理轨迹常超出GPU显存。现有KV压缩方法依赖近期查询估计未来token重要性,本文证明这一假设在长程推理中失效:某些解码步骤会产生“思维回溯token”(TRT),重新关注轨迹早期制定的解题计划等遥远上下文。系统分析发现TRT对应的查询在嵌入空间中聚为少量相似簇,据此提出BeaconKV——一种免训练的KV缓存压缩方法,为每个全局查询簇维护紧凑的信标查询,无需存储完整查询历史即可预判哪些KV对会被重新访问。在四个开源LRM和多个推理基准上,BeaconKV普遍优于现有压缩方法,实现最高5.8×显存缩减,几乎保持全缓存精度,吞吐提升超过4.3×。",
+          "contributions": [
+            "揭示长程推理中“思维回溯token”会重新关注遥远上下文,使近期查询≈未来注意力的传统压缩假设失效",
+            "发现TRT对应查询在嵌入空间聚为少量相似簇,据此设计信标查询机制,免训练即可预判被重访的KV对",
+            "方法与模型无关、无需任何训练或校准数据,可直接用于现有开源推理模型"
+          ],
+          "conclusions": [
+            "大推理模型长思维链场景下,基于近期查询的KV压缩假设系统性失效,需要显式建模回溯注意力",
+            "BeaconKV免训练实现5.8×显存压缩的同时几乎保持全缓存精度,推理吞吐提升超4.3×"
+          ],
+          "experiments": [
+            "在4个开源LRM与多样推理基准上,BeaconKV的显存压缩最高达5.8×",
+            "压缩后精度几乎与全缓存相当,同时吞吐提升超过4.3×",
+            "相比现有KV压缩方法,BeaconKV在大多数设置下准确率与效率均占优"
+          ],
+          "significance": "为大推理模型长思维链推理提供首个免训练的KV缓存压缩方案,直接缓解显存瓶颈。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04971",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04971.pdf",
+          "takeaway": "用“信标查询”聚类预判思维回溯token会重访的KV对,免训练实现5.8×显存压缩与4.3×吞吐提升。",
+          "keyExperiment": "4个LRM上最高5.8×显存压缩、几乎无损精度且吞吐提升超4.3×。",
+          "index": 1
+        },
+        {
+          "title": "KVMem: Virtualizing Million-Token Agent Workspaces on a Consumer GPU",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-08",
+          "authors": "Di Chai, Leye Wang, Zeshen Su, Zhiguo Xia, Zhihang Yu",
+          "institutions": "Peking University",
+          "abstract": "现代LLM智能体运行在持久工作区中,累积历史可同时超出GPU的KV容量与模型原生上下文窗口。现有系统通常把旧上下文压缩为摘要或事后以文本方式检索,要么丢失细粒度执行证据,要么反复预填充模型已处理过的内容。KVMem提出KV上下文虚拟化:将溢出工作区历史以分页KV状态保存在GPU显存、主机内存与NVMe之间,用轻量且模型原生的注意力空间索引选择相关历史块,物化受模型原生上下文窗口约束的查询相关执行视图。在覆盖百万token历史的LongMemEval、MemoryAgentBench、AgentLongBench等长上下文智能体基准上,KVMem相比压缩式方案普遍获得更高任务效用与推理效率。DeepSWE长上下文测试中(KVMem+Qwen3.8-27B)任务成功率从压缩式管理的43.8%提升到48.4%。本地部署实验在24GB显存的RTX 5090 Laptop GPU上运行Qwen3.6/3.8-27B,虚拟化高达1M token工作区,为模型原生256K窗口的4倍,单会话约50 tokens/s。",
+          "contributions": [
+            "提出KV上下文虚拟化,把溢出工作区历史以分页KV状态跨GPU显存、主机内存与NVMe分层保存",
+            "用模型原生注意力空间索引选择相关历史块,替代有损文本摘要或重复预填充",
+            "在消费级GPU上支持超出模型原生上下文窗口4倍(1M token)的智能体工作区"
+          ],
+          "conclusions": [
+            "KV虚拟化在长上下文智能体任务上普遍优于压缩式上下文管理,任务效用与推理效率双提升",
+            "将可寻址工作区大小与模型原生上下文窗口解耦,为长时运行智能体提供了实用路径"
+          ],
+          "experiments": [
+            "DeepSWE长上下文测试中,任务成功率从压缩式管理的43.8%提升至48.4%(Qwen3.8-27B)",
+            "24GB RTX 5090 Laptop GPU上虚拟化1M token工作区(原生256K窗口的4倍),达约50 tokens/s",
+            "在LongMemEval、MemoryAgentBench、AgentLongBench上普遍优于压缩式基线"
+          ],
+          "significance": "把百万token智能体工作区从数据中心级显存需求降到消费级笔记本,显著降低长时agent的门槛。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04852",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04852.pdf",
+          "takeaway": "把溢出历史做成可分页KV状态跨GPU/内存/NVMe虚拟化,24GB笔记本即可承载百万token agent工作区。",
+          "keyExperiment": "24GB RTX 5090 Laptop GPU上虚拟化1M token工作区,DeepSWE成功率43.8%→48.4%。",
+          "index": 2
+        },
+        {
+          "title": "ACE: Adaptive Calibration-Free Expert Skipping for MoE-based LLMs",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-08",
+          "authors": "Zukang Xu, Zhixiong Zhao, Xing Hu, Jiangyong Yu, Houji Wen, Jun Li, Zhe Jiang, Dawei Yang",
+          "institutions": "机构未标注",
+          "abstract": "混合专家(MoE)架构是扩展大语言模型的高效范式,但固定top-k路由让每个token激活相同数量的专家槽,产生大量冗余计算。现有专家跳过方法常依赖路由器置信度、校准数据或额外训练,无法可靠估计被路由专家的实际贡献。ACE提出免训练、免校准、保留checkpoint的token自适应专家跳过框架,包含两个互补组件:全局频谱代理(GSP)从耦合的gate/up/down投影与RMSNorm缩放估计全局变换容量;路由器条件细化(RCR)从中心化路由器权重构造专家特定方向原型,沿路由偏好方向评估专家响应。推理时ACE结合两者与运行时路由器门控,仅在两个视角都判定低贡献时跳过专家槽,且始终保留top-1专家。所有专家统计离线计算,在线仅需查表与轻量标量运算。在三个MoE LLM与八个基准上,ACE一致优于现有静态与动态基线,且激进跳过时优势更明显:50%跳过率下Qwen3.6-35B-A3B的WikiText-2困惑度降低7.96%,平均下游准确率比最强竞品高4.15个百分点。",
+          "contributions": [
+            "提出全局频谱代理GSP,从耦合投影与RMSNorm缩放估计专家全局变换容量,免训练免校准",
+            "设计路由器条件细化RCR,沿路由偏好方向评估专家响应,与GSP双视角合议决定跳过",
+            "所有统计离线计算,在线仅查表与标量运算,推理开销可忽略"
+          ],
+          "conclusions": [
+            "基于容量估计与路由方向双视角可更可靠识别低贡献专家,优于单一路由置信度",
+            "ACE在不同跳过率下持续优于静态与动态基线,激进跳过(50%)时优势最大"
+          ],
+          "experiments": [
+            "50%跳过率下,Qwen3.6-35B-A3B的WikiText-2困惑度相对最强竞品降低7.96%",
+            "同一设置下平均下游准确率比最强竞品高4.15个百分点",
+            "在3个MoE LLM与8个基准上一致优于静态与动态跳过基线"
+          ],
+          "significance": "为零训练开销的MoE推理加速提供了可靠的低贡献专家判定方法,兼顾精度与显存。",
+          "arxivUrl": "https://arxiv.org/abs/2609.05228",
+          "pdfUrl": "https://arxiv.org/pdf/2609.05228.pdf",
+          "takeaway": "用“全局容量+路由方向”双视角判定低贡献专家,免训练免校准实现token自适应专家跳过。",
+          "keyExperiment": "50%跳过率下Qwen3.6-35B-A3B困惑度降7.96%、下游准确率比最强竞品高4.15pp。",
+          "index": 3
+        },
+        {
+          "title": "Cache-Aware Joint Router Adaptation for Memory-Efficient MoE Inference",
+          "score": 3.9,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-08",
+          "authors": "Zhenhe Wu, Yaping Jin, Qinghua Xing, Hang Zhou, Wei He, Xianjie Wu, Xianfu Cheng, Jian Yang, Hanting Chen",
+          "institutions": "Huawei",
+          "abstract": "MoE模型每个token只激活少量专家,但完整专家集合常超出GPU显存,导致解码时反复进行权重换入换出。本文将专家缓存管理形式化为模型侧算法问题,提出缓存感知的后训练框架,联合适配MoE主干与轻量辅助缓存路由器,同时在推理时保留原生Top-K专家选择规则。仅更新模式的时间路由器(Temporal Router)预测同层复用并保留专家供未来token使用,无需主动预取;完整版时空路由器(Spatio-Temporal Router)增加空间路由器,在目标层访问前用因果前驱的隐藏状态细化时间缓存。在Qwen3与GPT-OSS上、GSM8K/MATH/CommonsenseQA三个任务评估:时间路由器一致提升缓存命中率、降低专家权重传输;Qwen3上时空路由器取得最佳负载调整效率,命中率提升1.15–18.03点,流量相对最强预取基线降低4.6–53.3%;GPT-OSS上结果有竞争力但依任务而异。消融表明仅加辅助路由器收益有限,联合后训练带来更大改进。",
+          "contributions": [
+            "将MoE专家缓存管理建模为模型侧算法问题,提出缓存感知联合后训练框架",
+            "时间路由器预测同层复用并保留专家,空间路由器用因果前驱状态细化缓存",
+            "推理时保持原生Top-K选择规则,无需修改部署接口"
+          ],
+          "conclusions": [
+            "联合适配主干与辅助路由器比仅添加辅助路由器带来更大缓存收益",
+            "缓存容量控制传输需求,细化预算权衡预访问覆盖与主动流量"
+          ],
+          "experiments": [
+            "Qwen3上时空路由器调整命中率提升1.15–18.03点,专家权重流量降低4.6–53.3%",
+            "时间路由器在GSM8K/MATH/CommonsenseQA上一致提升命中率并减少权重传输",
+            "GPT-OSS上结果有竞争力但任务依赖性强"
+          ],
+          "significance": "从模型侧算法角度治理MoE解码的专家换入换出,为显存受限场景提供缓存感知路由方案。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04895",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04895.pdf",
+          "takeaway": "联合后训练主干与缓存路由器,空间路由器用前驱状态细化缓存,命中率最高+18点、流量最高-53.3%。",
+          "keyExperiment": "Qwen3上命中率提升最高18.03点,专家权重流量相对最强预取基线降53.3%。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "RISE: Recursive Improvement via Self-Extrapolating Policy Distillation",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-08",
+          "authors": "Yang Li, Semih Yavuz, Shafiq Joty",
+          "institutions": "Salesforce Research",
+          "abstract": "在策略蒸馏(OPD)为语言模型后训练提供密集的逐token监督,但其有效性受教师质量瓶颈限制:外部教师存在分布不匹配,带特权条件的自蒸馏又受限于上下文学习容量。RISE提出直接从模型自身的RLVR训练轨迹构造合成教师:在参数空间或输出logit空间外推当前检查点与滞后锚点之间的位移,把稀疏的结局驱动参数更新转化为密集的token级目标,无需外部模型或特权条件。RISE将RLVR与OPD组合成互补循环:结局奖励锚定外推方向朝向正确推理,外推教师细化token级决策。由于教师随学生进步每轮刷新,蒸馏成为递归改进机制而非一次性压缩。在数学推理、多领域STEM、代码生成与多轮agent任务上,RISE全面优于纯RLVR训练与在策略自蒸馏。",
+          "contributions": [
+            "提出自外推策略蒸馏:用轨迹位移外推构造合成教师,免外部模型与特权条件",
+            "将RLVR与OPD互补组合,结局奖励锚定外推方向、外推教师细化token级决策",
+            "教师随训练每轮刷新,使蒸馏成为递归改进机制"
+          ],
+          "conclusions": [
+            "RISE在数学推理、STEM、代码生成与多轮agent任务上均优于RLVR-only与在策略自蒸馏",
+            "自外推教师避免了外部教师分布不匹配与自蒸馏容量瓶颈"
+          ],
+          "experiments": [
+            "数学推理、多领域STEM、代码生成、多轮agentic任务上全面超过RLVR-only与在策略自蒸馏",
+            "参数空间与输出logit空间两种外推均有效,无需外部教师模型"
+          ],
+          "significance": "把蒸馏从一次性压缩升级为随训练持续进步的递归机制,有望成为RLVR的高效替代或补充。",
+          "arxivUrl": "https://arxiv.org/abs/2609.05295",
+          "pdfUrl": "https://arxiv.org/pdf/2609.05295.pdf",
+          "takeaway": "从自身RLVR轨迹外推构造合成教师,让蒸馏变成随训练递归改进的机制。",
+          "keyExperiment": "四类任务(数学/STEM/代码/agent)上均优于纯RLVR训练与在策略自蒸馏。",
+          "index": 5
+        },
+        {
+          "title": "DEX-Comp: Compression Beyond the Uncompressed — A Two-Stage Training Recipe for Soft Context Compression in RAG",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-08",
+          "authors": "Shuyu Guo, Shuo Zhang, Zhaochun Ren",
+          "institutions": "机构未标注",
+          "abstract": "检索增强生成(RAG)借助外部知识增强语言模型,但冗长的检索上下文膨胀输入、拖慢推理。软上下文压缩把每篇文档编码成大幅缩短的嵌入序列,然而现有方法大多通过蒸馏未压缩RAG系统的输出来训练,性能天然受限于原模型。DEX-Comp提出两阶段训练配方:纯蒸馏阶段仅在未压缩RAG的正确响应上热启动压缩模型;硬探索阶段只对未压缩RAG失败的查询运行强化学习,迫使模型探索更适合压缩表示的计算模式。在五个开放域QA基准、top-5到top-30检索深度下,DEX-Comp以16×压缩检索上下文,推理加速4×–24×,性能达到或超过未压缩RAG基线。跨数据集与不同骨干的消融进一步确认了两个阶段各自的贡献与方法的泛化性。",
+          "contributions": [
+            "两阶段配方:纯蒸馏热启动+失败查询上的硬探索RL,突破蒸馏性能上限",
+            "只在未压缩RAG失败的查询上做RL,迫使模型为压缩表示探索新计算模式",
+            "压缩16×且推理加速4×–24×,性能达到或超过未压缩RAG"
+          ],
+          "conclusions": [
+            "对未压缩RAG已答对的查询仅做蒸馏即可保住性能,关键增益来自失败查询上的RL",
+            "DEX-Comp在多个检索深度、数据集与骨干上稳定优于蒸馏基线"
+          ],
+          "experiments": [
+            "五个开放域QA基准上16×压缩检索上下文,推理加速4×–24×",
+            "压缩后性能达到或超过未压缩RAG基线",
+            "跨数据集与骨干的消融确认两阶段各自贡献"
+          ],
+          "significance": "证明软上下文压缩可以超越其“教师”,为RAG压缩模型的训练范式提供了新思路。",
+          "arxivUrl": "https://arxiv.org/abs/2609.05152",
+          "pdfUrl": "https://arxiv.org/pdf/2609.05152.pdf",
+          "takeaway": "蒸馏热启动+失败查询RL硬探索,让压缩16×的RAG模型性能反超未压缩基线。",
+          "keyExperiment": "16×压缩下五基准性能达到或超过未压缩RAG,推理加速最高24×。",
+          "index": 6
+        },
+        {
+          "title": "Optimizer Memory Schedules for Outscaling the Overtraining Axis",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-08",
+          "authors": "Katie Everett, Shikai Qiu",
+          "institutions": "机构未标注",
+          "abstract": "本文研究优化器在过训练轴上的扩展规律,发现相对优化器性能与最优超参数随训练时长显著变化。作者对比矩阵预条件方法(Muon、SOAP)与动量调度方法(ADANA)相对AdamW的表现,在51M到253M参数模型、1×到256×过训练因子下全扫基础学习率。结果显示:最优学习率调度可随过训练轴反转,最优权重衰减系数近似按sqrt(OT)扩展,更长的训练时程普遍偏好更长的固定记忆。单独为每个时程调优AdamW的固定记忆后,ADANA相对AdamW的扩展优势依然存在;对数时间权重衰减与动量冷却为ADANA带来显著增益且随训练累积。处理后ADANA相对AdamW的指数优势接近DANA理论在幂律随机特征上的预测;Muon与SOAP在大多数区间相对AdamW提供大致恒定的token效率优势,SOAP在最高过训练因子下可能进一步受益。",
+          "contributions": [
+            "系统测量四类优化器在1×–256×过训练因子下的相对扩展与最优超参数变化",
+            "发现最优学习率调度可反转、最优权重衰减≈sqrt(OT)等新扩展规律",
+            "ADANA理论预测的指数优势在幂律特征上得到实证确认"
+          ],
+          "conclusions": [
+            "训练时长必须作为优化器评估与设计的关键轴,单一固定时程的结论不可外推",
+            "ADANA相对AdamW优势在过训练轴上持续,高OT下超越Muon、接近SOAP"
+          ],
+          "experiments": [
+            "51M–253M参数、1×–256×过训练因子、全扫学习率的系统对比",
+            "ADANA的扩展指数优势接近DANA理论预测,对数时间权重衰减+动量冷却增益随训练叠加",
+            "Muon与SOAP相对AdamW提供大致恒定的token效率优势"
+          ],
+          "significance": "确立训练时程为优化器评估的核心坐标轴,为超训(over-trained)模型选优化器提供实证指南。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04577",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04577.pdf",
+          "takeaway": "优化器优劣随训练时长反转:过训练轴上ADANA反超矩阵预条件方法,权重衰减应按√OT缩放。",
+          "keyExperiment": "1×–256×过训练扫描中,ADANA指数优势接近DANA理论预测并在高OT下逼近SOAP。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "MaxKernel: Agentic Kernel Generation for TPUs",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-08",
+          "authors": "Shangkun Wang, Nina Cai, Charles Hoong, Julian Walker, Gerson Kroiz, George Vanica, Deepak Patil, Andi Gavrilescu, Hassan Sipra, Sethu Sankaran",
+          "institutions": "Google",
+          "abstract": "为加速器设计并编写高性能自定义kernel是一项需要深厚硬件专业知识的复杂任务。MaxKernel利用大语言模型结合实时编译器反馈,构建面向TPU kernel开发的agentic系统,实现三种范式:人在回路(HITL)智能体用于协作式逐步设计;自主(Auto)智能体执行完全自动化的指标/追踪驱动优化循环;基于图的自主搜索把Auto智能体扩展到设计空间的全局探索。三种范式共享一组专业子智能体,分别负责规划、实现、自调试、测试与硬件性能剖析。在JaxBench(TPU的50个多样化kernel任务套件)以及来自顶尖开源模型的复杂真实负载上,MaxKernel一致生成高度优化的实现,匹配专家手工调优基线并在基准上带来显著性能提升。系统已开源。",
+          "contributions": [
+            "提出三类TPU kernel开发范式:HITL协作设计、Auto全自动优化循环、图搜索全局探索",
+            "以共享专业子智能体池(规划/实现/自调试/测试/剖析)支撑端到端kernel生成",
+            "在JaxBench 50任务与真实开源模型负载上匹配专家手调基线并已开源"
+          ],
+          "conclusions": [
+            "LLM+实时编译器反馈足以生成匹配专家手调水平的TPU高性能kernel",
+            "图搜索范式把Auto智能体扩展到更大设计空间,进一步提升优化上限"
+          ],
+          "experiments": [
+            "JaxBench上50个多样化TPU kernel任务一致生成高度优化实现",
+            "在SOTA开源模型的复杂真实负载上匹配专家手调基线",
+            "三种范式共享子智能体池,均取得显著性能提升"
+          ],
+          "significance": "把硬件kernel开发的“专家手艺”自动化,展示LLM+编译器反馈在系统软件层的agentic落地。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04523",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04523.pdf",
+          "takeaway": "多智能体+实时编译器反馈自动生成TPU kernel,在JaxBench上匹配专家手调水平。",
+          "keyExperiment": "JaxBench 50个TPU kernel任务与真实模型负载上,生成实现匹配专家手调基线。",
+          "index": 8
+        },
+        {
+          "title": "Don't Drop Dropout: Optimizing Layer Sparsity for Efficient LLM Training and Inference",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-08",
+          "authors": "Mostafa Elhoushi, Alex Pretko, Nolan Dey, Bin Claire Zhang, Gavia Gray, Gurpreet Gosal, Abdulrahman Mahmoud, Shane Bergsma, Joel Hestness",
+          "institutions": "Cerebras Systems",
+          "abstract": "层dropout(亦称随机深度)已被证明在语言与视觉Transformer上带来更快的训练、更高精度与对零样本层剪枝的鲁棒性。然而随着模型与数据规模扩大,dropout——尤其是层dropout——几乎从LLM预训练配方中消失。虽有先前工作称dropout会损害精度,但没有人系统量化、更不用说缓解这一效应。本文证明SOTA LLM训练应该使用层dropout,并建立训练与训练后收益的最佳实践与扩展分析:在最优层分布、时间调度与优化器超参下,相同训练FLOPs中层dropout带来更低loss;给定训练步数,LLM可节省高达25%训练FLOPs同时获得更低或相近的验证loss。此外层dropout催生显著训练后优化,如早退、中间层跳过与自推测解码,实现最高1.5×推理加速且精度损失可忽略。超过2400次训练实验,覆盖271M至8.2B参数模型与高达160B token数据集,结果可靠扩展到大规模训练。全部预训练在Cerebras CS-3系统上完成。",
+          "contributions": [
+            "系统量化层dropout对LLM训练的影响,证明SOTA训练中应使用并给出最佳实践",
+            "相同FLOPs下更低loss,最多节省25%训练FLOPs",
+            "层dropout解锁早退、层跳过与自推测解码,最高1.5×推理加速"
+          ],
+          "conclusions": [
+            "层dropout在大规模LLM训练中仍是净收益,不是过时的正则化技巧",
+            "训练阶段的层稀疏性与推理阶段的层剪枝/早退能力天然衔接"
+          ],
+          "experiments": [
+            "2400+次训练实验,271M–8.2B参数、最高160B token,结果稳定扩展",
+            "相同FLOPs下层dropout loss更低,最多节省25%训练FLOPs",
+            "训练后早退/层跳过/自推测解码带来最高1.5×推理加速且精度损失可忽略"
+          ],
+          "significance": "为“大模型不做dropout”的主流做法提供了反例与实证,重拾层稀疏性作为训练/推理效率杠杆。",
+          "arxivUrl": "https://arxiv.org/abs/2609.05275",
+          "pdfUrl": "https://arxiv.org/pdf/2609.05275.pdf",
+          "takeaway": "最优调度的层dropout在相同FLOPs下loss更低、省25%训练算力,并解锁1.5×推理加速。",
+          "keyExperiment": "2400+实验(271M–8.2B)证明层dropout省25%训练FLOPs、支持1.5×自推测解码加速。",
+          "index": 9
+        },
+        {
+          "title": "Training-Free Halving of Activated Experts in Fine-Grained Mixture-of-Experts Models",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-08",
+          "authors": "Xing Chen, Hengshuai Yao",
+          "institutions": "Huawei",
+          "abstract": "现代细粒度MoE模型把每个token路由到少量专家并重归一化路由概率。本文证明这种重归一化隐式地把专家输出增益校准到训练top-k:推理时减小k不仅改变使用哪些专家,也改变专家分支的强度。作者把两种效应分离——激活top k1个专家,同时用top k2个专家的概率质量归一化——只引入一个整数,无参数、无训练、无可测计算开销。在Qwen3.6-35B-A3B上,从8个专家减到4个,标准重归一化导致MMLU下降4.65分,而k2=16时仅下降0.35分,同时路由专家计算减半。结果在11×更大的Qwen3.5-397B-A17B上复现:10个减到5个专家仅损失0.55分。完全移除重归一化是灾难性的,说明保留合适参考质量至关重要。进一步发现困惑度与下游准确率偏好不同的k2,警示不要仅凭无标注文本选择MoE压缩设置。分析还表明专家身份远比专家权重重要,而均衡与领域特化路由留给专家剪枝的空间有限。",
+          "contributions": [
+            "把“换k激活”与“重归一化强度”分解开,揭示MoE推理时可调的隐藏自由度",
+            "仅用单个整数k2参考质量即可在免训练下把激活专家减半且几乎无损",
+            "指出困惑度与下游准确率对压缩配置偏好不同,纠正仅凭困惑度选参的做法"
+          ],
+          "conclusions": [
+            "保持合适的参考质量(k2)是免训练专家削减的关键,移除重归一化会灾难性退化",
+            "专家身份比专家权重更影响性能,均衡/特化路由下剪枝空间有限"
+          ],
+          "experiments": [
+            "Qwen3.6-35B-A3B从8→4专家,MMLU仅降0.35分(k2=16)而标准归一化降4.65分,计算减半",
+            "Qwen3.5-397B-A17B从10→5专家仅损失0.55分",
+            "困惑度与准确率偏好不同k2,提示压缩配置需按下游指标选择"
+          ],
+          "significance": "用单个整数的免训练改动,在细粒度MoE上实现近乎无损的激活专家减半,直接压缩推理成本。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04575",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04575.pdf",
+          "takeaway": "激活top k1专家、按top k2质量归一化:免训练把MoE激活专家减半,35B仅掉0.35分。",
+          "keyExperiment": "35B模型8→4专家MMLU仅降0.35分且计算减半,397B上10→5仅降0.55分。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
