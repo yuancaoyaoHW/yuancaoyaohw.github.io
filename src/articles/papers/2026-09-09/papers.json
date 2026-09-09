@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-09",
+  "title": "2026-09-09 论文精选",
+  "lede": "今日关注推理部署与算力效率：过度负载均衡训练让MoE专家剪枝的路由重要性信号失效，领域感知评分MESA以最坏退化目标修复；4-bit微缩放LLM探索码不平面的无损LoRA合并，裸机微控制器实现55.8×权重压缩；训练侧发现0.05%稀疏监督即可激励推理，草稿模型门控为黑盒agent提供失败的“预感”，连续扩散语言模型更把代码生成蒸馏到单步。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 254
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "When Load-Balancing Goes Too Far: Expert Pruning in Over-Dispersed Mixture-of-Experts Models",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-09",
+          "authors": "Berkcan Kapusuzoglu, Connor Pryor, Sangwoo Cho, Supriyo Chakraborty, Shi-Xiong Zhang, Sambit Sahu, Milind Naphade",
+          "institutions": "IBM Research",
+          "abstract": "专家剪枝通过移除路由器识别出的低重要性专家来降低MoE模型的显存与服务成本，其前提是路由器概率能提供可靠的重要性信号。本文观察到，在过度分散路由（over-dispersed routing）这一与训练中激进负载均衡相关的状态下，该假设不再成立：token近乎均匀地分布在专家上，重要性信号坍缩。在此状态下，困惑度无法预测下游任务准确率——在gpt-oss-20B上，困惑度最低的剪枝配置数学推理反而最差，困惑度最高的配置却保留了推理能力；标准路由（如Mixtral-8x7B-Instruct）下并无此现象。过度分散路由下的剪枝还暴露能力权衡：激活感知评分保留数学推理但严重损害知识密集型科学任务（GPQA上18分差距），而频率评分则相反。作者提出Minimax Expert Score Allocation（MESA），一种领域感知方法，迭代提升当前受损最严重领域对应专家的重要性分数，最小化最坏域退化而非平均精度。在25%专家剪枝下，MESA取得最小最坏域退化，在11个基准中的7个上优于激活感知基线，并泛化到gpt-oss-120B、Gemma-4-26B-A4B与OLMoE-1B-7B。",
+          "contributions": [
+            "揭示过度分散路由是MoE剪枝的独特状态：负载均衡训练使token近乎均匀分布，路由器概率作为重要性信号失效，困惑度与下游准确率脱钩",
+            "提出MESA领域感知评分分配，迭代提升受损最严重领域对应专家的得分，以最坏域退化而非平均精度为优化目标",
+            "在gpt-oss-120B、Gemma-4-26B-A4B、OLMoE等模型上验证MESA的泛化性"
+          ],
+          "conclusions": [
+            "过度分散路由下标准剪枝假设失败，是定性的不同剪枝状态，需要领域感知策略",
+            "MESA在25%剪枝率下取得最小最坏域退化，并在7/11基准上优于激活感知基线"
+          ],
+          "experiments": [
+            "gpt-oss-20B上困惑度最低的剪枝配置数学推理最差，最高困惑度配置反而保留推理能力",
+            "激活感知评分保留数学推理但在GPQA上科学知识退化18分，频率评分呈现相反模式",
+            "25%专家剪枝下MESA在11个基准中的7个优于激活感知基线，且最坏域退化最小"
+          ],
+          "significance": "为负载均衡训练的MoE模型确立领域感知的专家剪枝新范式。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04453",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04453.pdf",
+          "takeaway": "过度的负载均衡训练会让路由器概率失效，剪枝需要按领域最坏退化分配专家评分而非依赖困惑度。",
+          "keyExperiment": "25%剪枝下MESA在11个基准的7个上优于激活感知基线，且最坏域退化最小。",
+          "index": 1
+        },
+        {
+          "title": "Scale-QLoRA: Code-Invariant Adapter Merging for Native 4-bit Microscaling LLMs",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-09",
+          "authors": "Tung-Ling Li, Jiale Huang, Lee-Chi Wang, Janaki Ram Gotei",
+          "institutions": "机构未标注",
+          "abstract": "将LoRA适配器合并回基座模型是标准部署实践：它消除每次前向的适配器开销，留下任何服务栈都能加载的单一检查点。但在原生4-bit微缩放检查点（NVFP4、MXFP4）上，这一步不再免费——合并权重必须经量化器写回，重新推导检查点离散E2M1码平面（约占工件字节的90%），使部署工件耦合到一种量化约定，生命周期中每次触碰码的操作都可能改变它。朴素合并甚至不止脆弱：它会删除适配效果，最多达39个百分点。Scale-QLoRA只适配原生逐块缩放字段，在部署网格上训练这些缩放并冻结所有E2M1码。在固定原生格式、缩放网格、块布局与码平面下，合并变为逐位精确的恒等操作，合并工件码不变。在四个模型、四个任务上，Scale-QLoRA与合并感知QAT-LoRA均无损，差异在于QAT-LoRA经量化器重推导码平面，而Scale-QLoRA精确保留它。保留码平面还让训练去掉直通估计器（稠密8B模型每步快3.9×），并支持精确回滚、码平面去重与约125×更快的仅缩放任务切换。",
+          "contributions": [
+            "提出Scale-QLoRA：4-bit微缩放模型上只适配并训练逐块缩放字段、冻结E2M1码平面，使LoRA合并成为逐位精确的恒等操作",
+            "揭示朴素合并最多删除39个百分点适配效果的失败模式，并量化码平面生命周期漂移风险",
+            "码平面保留带来训练免直通估计器、精确回滚、码平面去重与125×更快任务切换等工程收益"
+          ],
+          "conclusions": [
+            "原生4-bit微缩放检查点的LoRA合并可以做到码不变、无损，理顺量化模型部署生命周期",
+            "Scale-QLoRA与合并感知QAT-LoRA均无损，但前者结构性保留了码平面"
+          ],
+          "experiments": [
+            "朴素合并删除适配效果最多39个百分点",
+            "稠密8B模型上去掉直通估计器，每步训练快3.9×",
+            "仅缩放任务切换比重新合并快约125×"
+          ],
+          "significance": "让4-bit微缩放LLM的LoRA合并从脆弱操作变成码不变的精确恒等。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04526",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04526.pdf",
+          "takeaway": "冻结E2M1码平面、只训练缩放字段，4-bit微缩放模型的LoRA合并即可无损且码不变。",
+          "keyExperiment": "四个模型四个任务上无损合并，且训练每步提速3.9×、任务切换快125×。",
+          "index": 2
+        },
+        {
+          "title": "Deep Microcompression: Structured Pruning and Bit-packed Quantization for Microcontrollers",
+          "score": 3.8,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-09",
+          "authors": "Opegbemi Matthias Busoye, Tolulope Matthew Busoye, Eghonghon-aye Eigbe",
+          "institutions": "机构未标注",
+          "abstract": "本文提出Deep Microcompression（DMC），一个面向裸机微控制器的深度学习推理硬件感知流水线。DMC整合结构化剪枝、量化感知训练和定长位打包，在LeNet-5上实现55.8×权重压缩比（98.77%准确率），生成无依赖C库并具有确定性延迟。在RP2040（Cortex-M0+）上，DMC相比TensorFlow Lite将二进制体积减少3×同时保持准确率。更重要的是，DMC首次实现了标准CNN在ATmega328P上的部署——该设备仅有2KB SRAM，此前被认为无法进行CNN推理。",
+          "contributions": [
+            "提出整合结构化剪枝、量化感知训练与位打包的微控制器推理流水线DMC",
+            "在LeNet-5上实现55.8×权重压缩并保持98.77%准确率，生成零依赖C库",
+            "首次在2KB SRAM的ATmega328P上部署标准CNN"
+          ],
+          "conclusions": [
+            "硬件感知的剪枝+量化+位打包组合可将CNN压到裸机微控制器可运行的规模",
+            "DMC在RP2040上比TensorFlow Lite二进制小3×且准确率相当"
+          ],
+          "experiments": [
+            "LeNet-5权重压缩55.8×，准确率98.77%",
+            "RP2040上二进制体积比TensorFlow Lite小3×",
+            "首次在2KB SRAM的ATmega328P上部署标准CNN"
+          ],
+          "significance": "把CNN推理推进到2KB SRAM的裸机微控制器，解锁超低功耗端侧AI。",
+          "arxivUrl": "https://arxiv.org/abs/2609.05081",
+          "pdfUrl": "https://arxiv.org/pdf/2609.05081.pdf",
+          "takeaway": "剪枝+量化感知训练+位打包三合一，让CNN首次跑进2KB SRAM的ATmega328P。",
+          "keyExperiment": "55.8×压缩比下保持98.77%准确率，并首次在2KB SRAM的ATmega328P上部署CNN。",
+          "index": 3
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Extremely Sparse Supervision Incentivizes Reasoning Ability",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-09",
+          "authors": "Zhishuai Liu, Xingzi Xu, Mehmet Saygin Seyfioglu, Pan Xu, Karim Bouyarmane",
+          "institutions": "机构未标注",
+          "abstract": "大语言模型通过有效的后训练展现出越来越强的推理能力，但主流后训练方法在大量token上优化，隐含假设有效学习必须token密集。本文在on-policy蒸馏（OPD）设置中重新审视这一假设——该设置天然允许在每个生成token上提供密集教师监督。使用Qwen3系列，作者发现反直觉现象：推理能力可以被极小比例的生成token有效激励——每条推理轨迹仅需一两个token，约占全部token的0.05%。多数情况下，这种稀疏监督在提升推理能力上匹配甚至超越全token训练，尽管训练目标排除了绝大多数生成token。该现象在覆盖不同模型规模的9个师生配置的数学推理任务上一致出现，并在编码推理、Llama模型及基于可验证奖励的PPO（RLVR）上得到验证。极稀疏监督可能更接近自然学习：不逐词纠正每一步，而是反思少数关键推理步骤、更新已有理解、继续试错。",
+          "contributions": [
+            "揭示反直觉现象：每条推理轨迹仅1-2个token（约0.05%）的稀疏监督即可有效激励推理能力",
+            "在9个跨规模师生配置的数学推理任务上一致验证，并推广到编码推理、Llama与PPO-RLVR",
+            "挑战“有效后训练必须token密集”的隐含假设，指向更高效的后训练算法设计"
+          ],
+          "conclusions": [
+            "极稀疏监督在多数场景匹配或超越全token训练，排除绝大多数token不影响推理提升",
+            "稀疏监督可能更接近人类“反思关键步骤再试错”的自然学习方式"
+          ],
+          "experiments": [
+            "每条轨迹1-2个token（0.05%）监督在多数配置匹配或超越全token训练",
+            "9个师生配置跨模型规模一致复现该现象",
+            "在编码推理、Llama模型与PPO-RLVR上进一步验证"
+          ],
+          "significance": "挑战后训练必须token密集的默认假设，为高效推理后训练提供新方向。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04565",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04565.pdf",
+          "takeaway": "每条推理轨迹只监督1-2个关键token（0.05%）就能匹配甚至超越全token训练。",
+          "keyExperiment": "0.05% token监督在9个师生配置上普遍匹配或超越全token蒸馏。",
+          "index": 4
+        },
+        {
+          "title": "How to Speculate about Uncertainty in Agentic Coding? A Draft-Model Gate Method",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-09",
+          "authors": "Konstantin Grotov, Valentin Malykh",
+          "institutions": "机构未标注",
+          "abstract": "部署于软件工程的LLM智能体会以高昂代价失败：它们自信地犯错，坏动作往往要在昂贵执行与重试之后才被识别。本文提出Speculative Uncertainty（SU），仅从黑盒智能体输出token中恢复预测性失败信号——不需要访问logits、权重、激活或重复采样。SU反转推测解码：一个小的开放权重草稿模型在单次前向中为智能体已生成的轨迹打分。从这些推测交叉似然中，按推理与动作片段分离提取阶段感知特征，并针对可验证目标校准。SU产出失败似然分数，任何下游策略（路由、人工干预、额外测试时计算）可直接消费。为展示信号可用性，作者在软件工程智能体Qwen3-Coder-480B与闭源Claude 3.5 Sonnet上实现了执行前否决门控，将执行错误率降低6-8个百分点、token成本降低14-19%，且无需重训练即可迁移到分布外基准并跨智能体模型泛化。",
+          "contributions": [
+            "提出Speculative Uncertainty：仅凭黑盒智能体输出token即可恢复失败预测信号，零内部访问",
+            "反转推测解码，用小型草稿模型单次前向为整个轨迹打分，分离推理/动作片段提取阶段感知特征",
+            "实现执行前否决门控，错误率降6-8个百分点、token成本降14-19%，跨模型与分布外泛化"
+          ],
+          "conclusions": [
+            "失败似然信号可由草稿模型交叉似然可靠恢复，无需权重与logits",
+            "该信号可直接驱动路由、人工干预或提前终止等下游策略"
+          ],
+          "experiments": [
+            "Qwen3-Coder-480B上执行错误率降低6-8个百分点",
+            "Claude 3.5 Sonnet上token成本降低14-19%",
+            "无需重训练迁移到分布外基准并跨智能体模型泛化"
+          ],
+          "significance": "为黑盒agent提供免内部访问的“失败预感”，可直接转化为执行前拦截与成本节约。",
+          "arxivUrl": "https://arxiv.org/abs/2609.05274",
+          "pdfUrl": "https://arxiv.org/pdf/2609.05274.pdf",
+          "takeaway": "用草稿模型单次前向给agent轨迹打失败分，执行前否决门控能把错误率降6-8个百分点、成本降14-19%。",
+          "keyExperiment": "软件工程agent上执行错误率降6-8pp、token成本降14-19%，且跨模型泛化。",
+          "index": 5
+        },
+        {
+          "title": "At Equal Inference Cost, Multi-Agent Structure Does Not Beat a Single Frozen Agent",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.MA",
+          "date": "2026-09-09",
+          "authors": "David Dylan, Aoife Brennan, Cian Murphy, Niamh O'Sullivan, Conor Kelly, Saoirse Walsh",
+          "institutions": "机构未标注",
+          "abstract": "多智能体LLM流水线（如Planner-Executor-Critic团队）常报告优于单智能体，但这些增益通常伴随更高推理成本——团队每个环境步要做多次模型调用。现有自动化方法搜索角色、拓扑与提示，但通常在同一环境rollout数下比较团队与单智能体，给了团队额外算力。本文固定语言模型调用总数，考察同等预算下进化多智能体团队是否仍优于进化单智能体。作者提出MA-Evolve，将Planner-Executor-Critic团队表示为三个可进化角色提示，在共享冻结7B骨干上按角色做坐标上升优化。在ALFWorld上，进化单个executor显著优于未进化智能体，而完整团队均值最高但与单智能体无统计显著差异：0.769对0.754，p=0.80，尽管用了1.8倍评估调用。Leave-one-in分析显示实际价值全部来自executor；planner与critic进化成空或低影响提示，很少改变executor的动作。即使有2-3倍免费算力，团队也只追平单智能体；WebShop上进化无效且团队趋势更差。",
+          "contributions": [
+            "在固定推理调用数下公平对比多智能体团队与单智能体进化，消除算力偏置",
+            "提出MA-Evolve，在共享冻结7B骨干上按角色坐标上升进化Planner-Executor-Critic团队",
+            "Leave-one-in分析定位价值来源：仅executor有贡献，planner与critic几乎不改变行为"
+          ],
+          "conclusions": [
+            "同等推理成本下，多智能体结构没有带来统计显著的收益提升",
+            "团队报告的增益多来自隐式的额外算力而非结构本身"
+          ],
+          "experiments": [
+            "ALFWorld上团队0.769 vs 单executor 0.754，p=0.80不显著，团队用了1.8倍调用",
+            "2-3倍免费算力下团队仅追平单智能体",
+            "WebShop上进化无效且团队趋势更差"
+          ],
+          "significance": "给“多智能体必然更强”降温：同算力下结构不优于单智能体，为agent系统设计提供公平对照基准。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04217",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04217.pdf",
+          "takeaway": "固定推理预算下，Planner-Executor-Critic团队的增益几乎全部来自executor本身。",
+          "keyExperiment": "等推理成本下团队0.769 vs 单agent 0.754（p=0.80）无显著差异，团队反而多花1.8倍调用。",
+          "index": 6
+        },
+        {
+          "title": "SQL-Zero: Self-Evolving Text-to-SQL",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-09",
+          "authors": "Daniel Machado Pedrozo, Julia Soares Dollis, Bryan Lincoln Marques de Oliveira, Vinicius Alboneti Aguiar, Savio Salvarino Teles de Oliveira, Telma Woerle de Lima Soares",
+          "institutions": "机构未标注",
+          "abstract": "训练有竞争力的Text-to-SQL智能体通常依赖人工标注的自然语言/SQL对，这类数据昂贵、领域特定，是扩展到新数据库的瓶颈。本文证明可以在零标注对的条件下训练出有竞争力的求解器。作者提出SQL-Zero，一种proposer-solver自博弈：challenger与solver从同一基座LLM出发，唯一真值是数据库上的执行结果。challenger生成与solver当前难度校准的SQL对（瞄准困难但可解的），两个角色交替用GRPO更新，并对challenger施加模板级重复惩罚防止多样性坍缩。在BIRD数据库上无标注训练，自博弈在BIRD dev上比零样本基座提升6.6点（3B）和7.3点（7B），且得分高于在同一数据库上用人类BIRD gold按相同配方训练的对照组。迁移依赖规模：3B下每轮迭代都优于基座在未见Spider及词汇扰动（Spider-Syn）上的表现，退化也小于BIRD-gold对照；7B下仅第一轮迭代保持迁移。",
+          "contributions": [
+            "提出SQL-Zero：零人工标注的proposer-solver自博弈，唯一真值来自数据库执行",
+            "challenger自适应生成难度匹配的SQL对，模板级重复惩罚防多样性坍缩，双角色交替GRPO更新",
+            "BIRD上无标签训练，dev集较零样本基座提升6.6-7.3点，并高于gold监督对照"
+          ],
+          "conclusions": [
+            "数据库执行可作为唯一训练信号，零标注对即可练出有竞争力的Text-to-SQL",
+            "迁移依赖规模：3B稳定泛化，7B仅首轮迁移"
+          ],
+          "experiments": [
+            "BIRD dev上3B提升6.6点、7B提升7.3点（对零样本基座）",
+            "得分高于BIRD gold监督对照（配对检验未给出决定性证据）",
+            "3B在Spider与Spider-Syn上每轮均优于基座；7B仅第一轮保持迁移"
+          ],
+          "significance": "把Text-to-SQL训练从标注瓶颈中解放出来，展示执行反馈自博弈的规模化潜力。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04697",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04697.pdf",
+          "takeaway": "靠数据库执行反馈做proposer-solver自博弈，零标注也能在BIRD dev提升6.6-7.3点。",
+          "keyExperiment": "零标注训练在BIRD dev上比零样本基座高6.6点（3B）/7.3点（7B）。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Fast Gauss Sums via Flash Attention",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-09",
+          "authors": "Nicolaj Rux, Sebastian Neumayer",
+          "institutions": "机构未标注",
+          "abstract": "高斯核和是最大均值差异（MMD）、核梯度流、Stein变分梯度下降（SVGD）等众多核方法的计算核心；而softmax注意力已经历大量硬件感知的代码工程优化，最终形态即flash attention。本文证明，带任意符号权重的高斯核和可以通过flash attention计算：两次小的输入增广就能把归一化softmax约简变成非归一化高斯和，无需编写一行自定义GPU代码。在特征维度D>8的fp16下，该方法在速度、显存开销和精度上均优于编译版PyTorch代码和PyKeOps内核，且显存扩展保持线性。",
+          "contributions": [
+            "提出将带符号权重的高斯核和编码为flash attention的计算方法，零自定义GPU内核",
+            "两次输入增广把归一化softmax约简改写为非归一化高斯和",
+            "fp16、D>8时同时超越PyTorch编译与PyKeOps的速度、显存与精度"
+          ],
+          "conclusions": [
+            "高斯核和可剥离专用核方法实现，直接复用attention的硬件优化",
+            "flash attention实现显存线性扩展，适合大规模核方法"
+          ],
+          "experiments": [
+            "特征维度D>8时fp16下速度快于编译PyTorch代码",
+            "显存开销与精度均优于PyKeOps内核",
+            "显存扩展保持线性"
+          ],
+          "significance": "把成熟的attention硬件工程直接借给核方法社区，免去专用kernel开发。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04910",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04910.pdf",
+          "takeaway": "两次小增广即可让flash attention计算任意符号权重的高斯核和，免写GPU自定义代码。",
+          "keyExperiment": "D>8的fp16下，flash attention编码的高斯和比PyKeOps更快、更省显存且精度更高。",
+          "index": 8
+        },
+        {
+          "title": "What Attention Recalls and Recurrence Controls in Hybrid Language Models",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-09",
+          "authors": "Kirill Afendulev, Alexey Dontsov, Elena Tutubalina, Anton Korznikov",
+          "institutions": "Kazan Federal University",
+          "abstract": "混合语言模型将注意力与固定大小循环状态结合，但每个通道的角色仍不清楚。本文引入两种缓存级干预：split-prefill只保留预填充上下文的KV缓存或只保留循环状态再生成答案；state-swap在单次前向中将一个上下文的KV缓存与另一上下文的循环状态配对。在Qwen3.5与Falcon-H1上，两个通道在功能上截然分工：精确检索只通过注意力存活（全精度64-98%），经循环通道则塌缩到零；输出语言与人格则相反——两者经循环存活（70-80%与3-5×），而仅KV时语言准确率降至约1%。state-swap因果确认：答案取值来自KV侧，语言来自循环侧。仅用循环生成时还会接受从未出现在上下文中但与所见内容共享语义或部分的词。注意力提供了对“说过什么”的查表，循环状态塑造“接下来怎么说”。",
+          "contributions": [
+            "提出split-prefill与state-swap两种缓存级干预，在单次前向中因果分离混合模型两通道功能",
+            "量化分工：精确检索仅经attention存活（64-98%），语言/人格仅经循环存活（70-80%）",
+            "state-swap证明答案值来自KV侧、语言来自循环侧，并揭示循环通道会泛化到未见词汇"
+          ],
+          "conclusions": [
+            "混合模型两通道功能正交：attention管内容查表，循环管生成风格",
+            "循环状态对语义相关但未见的词也敏感，说明它编码抽象而非简单记忆"
+          ],
+          "experiments": [
+            "检索经attention保持64-98%全精度，经循环降为0",
+            "语言与人格经循环存活70-80%与3-5×，仅KV时语言准确率约1%",
+            "state-swap：答案内容取KV侧、语言取循环侧"
+          ],
+          "significance": "首次在Qwen3.5/Falcon-H1上把混合架构两通道的“记忆”与“风格”职能切割清楚，指导架构取舍。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04434",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04434.pdf",
+          "takeaway": "注意力管“记住什么”，循环状态管“怎么说”——混合模型两通道职能正交。",
+          "keyExperiment": "state-swap实验证明答案内容来自KV侧、语言风格来自循环侧；检索经attention存活64-98%而经循环归零。",
+          "index": 9
+        },
+        {
+          "title": "Distilled Continuous Diffusion Language Models Can Write Code in Few Steps---or One",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-09",
+          "authors": "Fred Zhangzhi Peng, Kaiwen Zheng, Anru R. Zhang",
+          "institutions": "Duke University",
+          "abstract": "语言生成几乎普遍被视为顺序过程：自回归模型一次吐一个token，扩散语言模型则用长时间迭代细化轨迹取代token级串行。本文提出PlaidQ，一个0.7B的代码生成连续扩散语言模型，并证明其轨迹能被激进蒸馏到仅几步去噪——甚至一步，实现高效代码生成。PlaidQ将预训练自回归模型改造为连续token嵌入上的双向去噪器，用分布匹配蒸馏少步生成、用配对轨迹监督蒸馏单步生成。在匹配模型规模下，PlaidQ在代码生成上与离散扩散语言模型竞争。蒸馏移动质量-计算前沿：16步学生模型在HumanEval与MBPP+上分别达到31.78与40.49的pass@10，超越同一PlaidQ教师采样512步的结果。极端情况下，配对轨迹蒸馏以单步去噪在HumanEval上取得7.07的pass@1，生成功能正确的程序。连续扩散不仅是语言的另一种表示，它提供接口让语言模型继承连续扩散建模的加速与蒸馏机制。",
+          "contributions": [
+            "提出PlaidQ：0.7B连续扩散代码生成模型，将预训练自回归模型改造为双向去噪器",
+            "分布匹配蒸馏到16步、配对轨迹蒸馏到单步，大幅移动质量-计算前沿",
+            "展示连续扩散作为语言模型继承扩散加速与蒸馏机制的通用接口"
+          ],
+          "conclusions": [
+            "连续扩散路径支持少步乃至单步代码生成，且质量超过长轨迹教师",
+            "单步去噪也能产出功能正确的程序，证明极端蒸馏可行"
+          ],
+          "experiments": [
+            "16步学生在HumanEval与MBPP+达到31.78/40.49 pass@10，超512步教师",
+            "单步去噪在HumanEval取得7.07 pass@1",
+            "匹配规模下与离散扩散语言模型竞争"
+          ],
+          "significance": "让扩散语言模型从“长轨迹”走向“单步”，代码生成效率获得数量级提升潜力。",
+          "arxivUrl": "https://arxiv.org/abs/2609.04531",
+          "pdfUrl": "https://arxiv.org/pdf/2609.04531.pdf",
+          "takeaway": "0.7B连续扩散模型PlaidQ可蒸馏到单步去噪，HumanEval单步pass@1达7.07、16步超越512步教师。",
+          "keyExperiment": "16步学生pass@10（31.78/40.49）超越512步教师，单步去噪HumanEval pass@1达7.07。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
