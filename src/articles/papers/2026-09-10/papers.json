@@ -1,0 +1,339 @@
+{
+  "date": "2026-09-10",
+  "title": "2026-09-10 论文精选",
+  "lede": "今日关注推理加速与智能体训练：投机解码在词表异构与草案器泛化上双线突破，KV 缓存复用走向拼接感知微调，合成奖励让诊断型 agent 训练进入可规模化 RLVR 轨道。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 197
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "X-CoSD: Communication-Efficient Cross-Vocabulary Collaborative Speculative Decoding",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-10",
+          "authors": "Jaeduk Lee, Wan Choi",
+          "institutions": "Seoul National University",
+          "abstract": "协作式投机解码(CoSD)把设备端小语言模型(SLM)的草拟与服务器大模型(LLM)的验证结合起来，是分布式 LLM 推理的重要范式。现有 CoSD 方法假设 SLM 与 LLM 共享词表，且残余重采样需要在设备与边缘服务器之间传输完整 token 分布，通信开销巨大。本文提出跨词表协作投机解码 X-CoSD，面向异构 SLM-LLM 词表：核心是混合重采样(HR)，把残余重采样拆分为设备端公共词表区域与服务器端 LLM 独有区域，只需传输公共词表区域的分布；进一步提出 X-CoSD-E 变体，采用服务器重采样+设备验证(SR-DV)，服务器只发送替换候选及其概率供设备本地验证。理论证明两种方法均严格保持服务器 LLM 的采样分布，实验显示在保持生成质量的同时显著提升 token 生成速度。",
+          "contributions": [
+            "首次面向异构词表提出协作投机解码框架 X-CoSD，摆脱 SLM/LLM 共享词表假设",
+            "设计混合重采样(HR)，按词表区域拆分残余重采样，通信量只覆盖公共词表区域",
+            "提出 X-CoSD-E(服务器重采样+设备验证)，进一步把通信压缩为仅替换候选及其概率"
+          ],
+          "conclusions": [
+            "X-CoSD 与 X-CoSD-E 均被证明严格保持服务器 LLM 的采样分布，是无损加速",
+            "异构词表场景下仍能显著提升 token 生成速度并保持与服务器 LLM 相当的质量"
+          ],
+          "experiments": [
+            "相比共享词表 CoSD，通信负载大幅下降，仅公共词表区域需要传输 token 分布",
+            "token 生成速度显著提升，生成质量与服务器 LLM 相当",
+            "理论保证：两种变体均保留服务器 LLM 原始分布(无损失)"
+          ],
+          "significance": "打破协作投机解码的共享词表限制，让设备端草拟模型选型不再被词表绑定，是端云协同推理通信优化的重要一步。",
+          "arxivUrl": "https://arxiv.org/abs/2609.09166",
+          "pdfUrl": "https://arxiv.org/pdf/2609.09166.pdf",
+          "takeaway": "把残余重采样按“公共词表/服务器独有词表”区域拆分，跨词表协作投机解码也能无损且低通信。",
+          "keyExperiment": "在异构 SLM-LLM 词表设置下，X-CoSD/X-CoSD-E 显著提升生成速度且质量与服务器 LLM 相当、严格保持原分布。",
+          "index": 1
+        },
+        {
+          "title": "Osprey: Target-agnostic Pre-training Makes Stronger Drafters in Speculative Decoding",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-10",
+          "authors": "Fengxiang Bie, Yuqing Jian, Yifan Yu, Zhongzhu Zhou, Zelei Shao, Ben Athiwaratkun, Shuaiwen Leon Song, Chenfeng Xu, Xiaoxia Wu, Tianyi Zhang",
+          "institutions": "机构未标注",
+          "abstract": "投机解码对 LLM 推理加速至关重要，但速度增益脆弱：草案器通常针对单一目标模型的窄分布训练，工作负载一变化接受率就崩——这与现代 LLM 开发中“目标模型因大规模预训练获得泛化”的逻辑正好相反。作者论证草案器同样可以受益于预训练，但现有配方是目标相关的(草案器要消费目标模型隐状态、在目标 logits 上蒸馏)，每个目标都要重做预训练。Osprey 改为从现成预训练小模型引导草案器，把广泛预训练当作可复用、目标无关的资产，每个目标只做一次轻量适配。为此需克服两个挑战：小模型远深于延迟受限的草案器；草案器学习消费目标隐状态、用目标词表发 token 时，其预训练计算必须保持完好。Osprey 的解法是剪枝出浅层骨干、用目标无关的 next-token 预训练恢复语言建模能力，再经词表对齐、零初始化 QKV 扩展、目标输出分布蒸馏完成逐目标适配。",
+          "contributions": [
+            "首次提出目标无关的草案器预训练范式，把预训练沉淀为跨目标可复用的资产",
+            "用剪枝+目标无关 next-token 预训练解决“小模型太深、预算有限”的矛盾",
+            "词表对齐、零初始化 QKV 扩展与目标分布蒸馏组成轻量逐目标适配流程"
+          ],
+          "conclusions": [
+            "单一预训练骨干可跨多个目标模型迁移，草案器不再需要逐目标重训",
+            "接受率提升在分布外与多语言数据上最大，直接修复投机解码的脆弱性"
+          ],
+          "experiments": [
+            "Qwen3-8B 平均接受长度 +16.1%，Llama-3.3-70B-Instruct +21.2%",
+            "229B MiniMax-M2.5 平均接受长度 +22.7%、每秒 token 数 +17.5%",
+            "最大增益出现在分布外与多语言数据上"
+          ],
+          "significance": "把草案器训练从“逐目标重做”降为“一次预训练+轻量适配”，系统性提升投机解码在负载漂移下的稳定性。",
+          "arxivUrl": "https://arxiv.org/abs/2609.09338",
+          "pdfUrl": "https://arxiv.org/pdf/2609.09338.pdf",
+          "takeaway": "草案器也可以做目标无关预训练：一个骨干跨目标复用，接受的分布变化不再让投机解码失效。",
+          "keyExperiment": "单个 Osprey 预训练骨干跨 8B 到 229B 三个目标迁移，平均接受长度提升 16.1%–22.7%。",
+          "index": 2
+        },
+        {
+          "title": "Fine-Tuning a KV Cache Concatenation-Aware Model or Recomputing KV Caches? Why Not Both?",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-10",
+          "authors": "Fumihiko Tachibana, Daisuke Miyashita, Jun Deguchi",
+          "institutions": "NEC Corporation",
+          "abstract": "RAG 系统中大量检索块拼接成输入上下文，上下文长度大增导致 prefill 计算量激增、首 token 时延(TTFT)上升。已有工作通过复用预计算的键值(KV)缓存有效降低长上下文 TTFT，但上下文极长时响应质量能否保持尚不明确。本文提出组合方案：(i) 微调时把 KV 缓存拼接纳入考量(拼接感知微调)，(ii) 选择性重算一部分 KV 缓存——两项技术叠加改善长上下文准确率。RULER 基准上，124k token 输入时，相比只重算 KV 缓存的基线，RULER 分数提升 9.7 分；TTFT 相比全注意力降低 80%。",
+          "contributions": [
+            "首次把 KV 缓存拼接感知纳入微调目标，让模型适应拼接上下文而非从头重算",
+            "提出微调+选择性重算的组合策略，兼顾长上下文准确率与首 token 时延"
+          ],
+          "conclusions": [
+            "单靠复用或单靠重算均不充分，拼接感知微调与部分重算互为补充",
+            "长上下文输入下准确率显著改善，同时保留 KV 复用的时延优势"
+          ],
+          "experiments": [
+            "RULER 基准 124k token 输入：相比仅重算基线 +9.7 分",
+            "TTFT 相比全注意力降低 80%"
+          ],
+          "significance": "为 RAG 长上下文推理给出“KV 复用+微调”的组合解，兼顾质量与首 token 时延。",
+          "arxivUrl": "https://arxiv.org/abs/2609.09768",
+          "pdfUrl": "https://arxiv.org/pdf/2609.09768.pdf",
+          "takeaway": "KV 缓存拼接感知微调与部分重算可以兼得：124k 上下文 RULER +9.7 分、TTFT 降 80%。",
+          "keyExperiment": "124k token 输入下 RULER 分数较仅重算基线提升 9.7 分，TTFT 较全注意力降低 80%。",
+          "index": 3
+        },
+        {
+          "title": "PELM: Power Efficient On-Device LLM Inference with Speculative Decoding and Dynamic Voltage Frequency Scaling",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-10",
+          "authors": "Weisi Yang, Stephen Xia",
+          "institutions": "Columbia University",
+          "abstract": "在移动端直接部署 LLM 可以带来隐私、个性化与低延迟的好处，但 LLM 算力需求重，资源受限的移动与边缘平台难以满足；且移动设备体积小、缺乏散热机制(如风扇)，高负载下容易触发降频。先前针对移动 LLM 的动态电压频率缩放(DVFS)方案大多只优化硬件参数与处理器频率，在热约束场景下表现不足。PELM 抓住“并非所有 token 都需要全深度推理才能维持高质量生成”这一洞察，在传统 DVFS 频率调节之外增加两个工作负载相关旋钮——投机解码与可变验证深度——把功耗优化空间扩展到多个维度。跨硬件平台与数据集评估，PELM 相比最先进功耗治理方法最高实现 23.1% 加速与 52.4% 能耗下降，任务性能相当。",
+          "contributions": [
+            "在 DVFS 基础上引入投机解码与可变验证深度两个负载感知旋钮，扩展功耗优化维度",
+            "把“token 不必都全深度推理”与硬件调频结合，形成软硬协同的端侧功耗管理"
+          ],
+          "conclusions": [
+            "多维联合调优优于单纯调处理器频率，热约束场景下尤其明显",
+            "功耗优化不以任务性能为代价，性能与基线相当"
+          ],
+          "experiments": [
+            "相比 SOTA 功耗治理方法最高提速 23.1%",
+            "最高降低 52.4% 能耗，任务性能保持相当",
+            "跨多个硬件平台与数据集评估，结果一致"
+          ],
+          "significance": "为资源受限且散热差的下沉端设备提供软硬协同的 LLM 推理功耗治理方案。",
+          "arxivUrl": "https://arxiv.org/abs/2609.09662",
+          "pdfUrl": "https://arxiv.org/pdf/2609.09662.pdf",
+          "takeaway": "端侧推理别只调频率：投机解码+可变验证深度+DVFS 联合优化，能耗最高降 52.4%。",
+          "keyExperiment": "跨平台评估相比 SOTA 功耗治理方法最高 23.1% 提速、52.4% 能耗下降且任务性能相当。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "TRACE: Training Reasoning Agents for Causal Exploration with Synthesized Rewards",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-10",
+          "authors": "Rui Sun, Zhan Shi, Bing He",
+          "institutions": "机构未标注",
+          "abstract": "可验证奖励的强化学习(RLVR)在数学、代码等客观答案易检验的领域推动了 LM 推理进步，但复杂数据的诊断推理没有这一优势：确定异常的真实原因往往需要昂贵专家调查，事后仍可能模糊不清。本文问：能否把这种“验证不对称”工程化？做法是采样一个干预、注入受控模拟器、生成其观测——隐藏干预提供 oracle 标签与客观奖励，agent 仍需在含噪、混淆、分布式的证据中侦查。实例化为 TRACE：数字广告诊断环境，含 12 个根因与细粒度 segment 归因，agent 用 Python 与 SQL 调查每个 episode，识别根因及受影响 segment。235-episode 留出测试集上，最强提示基线 Claude Opus 5 达到 0.686 FullAttr@1；SFT 把 Qwen3.5-35B-A3B 从 0.159 提到 0.637，随后用合成奖励 RL 达到 0.757，超过所有提示基线(含前沿闭源模型与提示版 Qwen3.5-122B-A10B)，且工具调用明显更少。",
+          "contributions": [
+            "提出用受控模拟器合成干预+观测，把含混的诊断推理改造成有客观奖励的 RL 任务",
+            "构建 TRACE 数字广告诊断环境(12 根因+segment 归因)，agent 用 Python/SQL 侦查",
+            "验证“可扩展客观训练信号可能比模型规模更关键”这一反直觉结论"
+          ],
+          "conclusions": [
+            "合成奖励 RL 让 35B 模型在诊断任务上超越闭源前沿模型的提示版",
+            "训练出的策略工具调用更少、更高效，验证模拟器训练的规模化潜力"
+          ],
+          "experiments": [
+            "Qwen3.5-35B-A3B：SFT 0.159→0.637，加 RL 后达 0.757 FullAttr@1",
+            "Claude Opus 5(提示基线)为 0.686，被 35B 微调模型超越",
+            "提示版 Qwen3.5-122B-A10B 同样被超越，且训练策略工具调用显著更少"
+          ],
+          "significance": "证明“验证不对称”可被工程化：模拟器合成奖励让原本不可规模化的诊断推理进入 RLVR 轨道。",
+          "arxivUrl": "https://arxiv.org/abs/2609.10315",
+          "pdfUrl": "https://arxiv.org/pdf/2609.10315.pdf",
+          "takeaway": "用模拟器合成干预与观测，诊断 agent 也能拿到客观奖励：35B 模型 0.757 反超 Claude Opus 5。",
+          "keyExperiment": "235-episode 测试集上，Qwen3.5-35B-A3B 经 SFT+合成奖励 RL 达 0.757 FullAttr@1，超越 Claude Opus 5 的 0.686。",
+          "index": 5
+        },
+        {
+          "title": "Which Tokens Should SFT Actually Learn? A Token-Trimming Perspective on Mathematical Reasoning",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-10",
+          "authors": "Yaning Jia, Chunhui Zhang, Wenxuan Xu, Xingjian Diao, Xiaoyuan Wang, Soroush Vosoughi",
+          "institutions": "Dartmouth College",
+          "abstract": "监督微调(SFT)对所有目标 token 施加均匀交叉熵损失，但不同 token 对数学推理的学习信号并不等价：均匀处理会过度锐化已掌握的 token，同时放大对不确定、低置信 token 的学习压力，导致次优训练动态。本文提出 TrimSFT(Trimmed Logit-Gap SFT)：按金标 token 与最强竞争 token 之间的 logit gap 缩放 SFT 损失，从两个极端裁剪监督——已掌握的(large gap)与当前模型支持弱的(small 或 negative gap)token，把学习集中在中间 logit gap 区域。用中心 margin m、带宽 τ 的高斯权重实例化，无需参考模型或额外前向。在 Llama、Qwen、DeepMath 家族 6 个基础模型 × 5 个数学推理基准上评估：一致性优于标准 SFT，6 个模型中 5 个取得最佳平均性能，MATH500 上最高比 SFT 提升 +26.9 分。进一步分析显示带宽 τ 比 margin 精确位置更重要；只裁一侧的变体权衡更差；token 级 logit gap 分布分析表明 TrimSFT 比均匀 SFT 或单调重加权更均衡地重塑模型置信度。",
+          "contributions": [
+            "提出 token 级 logit gap 重加权：同时裁掉已掌握与弱支持两个极端，只学中间区域",
+            "高斯权重单超参数实例化，无需参考模型与额外前向，即插即用",
+            "揭示“带宽比 margin 位置更重要”、单侧裁剪次优等训练动态规律"
+          ],
+          "conclusions": [
+            "推理 SFT 受益于裁两头而非均匀对待所有 token",
+            "TrimSFT 重塑置信度比均匀 SFT 与单调重加权更均衡"
+          ],
+          "experiments": [
+            "6 个基础模型(Llama/Qwen/DeepMath)× 5 个数学推理基准，5/6 取得最佳平均性能",
+            "MATH500 上最高比标准 SFT 提升 +26.9 分"
+          ],
+          "significance": "为数学推理 SFT 提供零成本 token 级重加权方案，直指均匀交叉熵的过锐化/欠学习问题。",
+          "arxivUrl": "https://arxiv.org/abs/2609.09707",
+          "pdfUrl": "https://arxiv.org/pdf/2609.09707.pdf",
+          "takeaway": "SFT 别对每个 token 一视同仁：按 logit gap 裁掉两头，MATH500 最高 +26.9 分。",
+          "keyExperiment": "MATH500 上 TrimSFT 较标准 SFT 最高提升 +26.9 分，6 模型中 5 个平均性能最佳。",
+          "index": 6
+        },
+        {
+          "title": "BRACE: Anchored Bellman-Residual Correction for Stale Critics in Asynchronous RL",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-10",
+          "authors": "Guanqun Zhao, Zijun Xie, Binbin Zheng, Jiafeng Lu, Enlei Gong, Zeyu Chen",
+          "institutions": "机构未标注",
+          "abstract": "异步强化学习已成为规模化训练语言模型的标准方式，但策略滞后使 critic 偏向陈旧行为策略。现有异步 LLM 训练工作只校正 actor，遗留这一偏差；经典 RL 的 off-policy 值校正又无法迁移到长程 agent 任务——校正视野短则回归目标缺少奖励，长则重要性比乘积随轨迹长度指数漂移。BRACE 提出锚定 Bellman 残差校正(anchored Bellman-residual correction)：把校正视野限制在策略 token 前缀，之后用常数权重蒙特卡洛尾部锚定，从而把策略校正与奖励传播解耦。在 BrowseComp-Plus 上 mean@1 比最强基线高 2.4%，每步运行比同步训练快 2.46×，且 off-policy 更新 50 步保持稳定。",
+          "contributions": [
+            "首次针对异步 RL 中陈旧 critic 的偏差做专门校正(此前只校正 actor)",
+            "用“受限前缀 Bellman 校正+常数权重 MC 尾部”解耦策略校正与奖励传播，规避重要性比指数漂移",
+            "给出稳定、高效的异步训练方案，不牺牲同步训练的质量"
+          ],
+          "conclusions": [
+            "陈旧 critic 偏差可被锚定残差校正有效消除，长程 agent 任务上质量提升",
+            "异步训练每步成本显著低于同步训练且 off-policy 长时间稳定"
+          ],
+          "experiments": [
+            "BrowseComp-Plus 上 mean@1 比最强基线提升 2.4%",
+            "每步运行比同步训练快 2.46×",
+            "off-policy 更新 50 步保持稳定"
+          ],
+          "significance": "补齐异步 RL 训练中被长期忽略的 critic 侧偏差，为规模化 agent 训练提供更稳的异步配方。",
+          "arxivUrl": "https://arxiv.org/abs/2609.09783",
+          "pdfUrl": "https://arxiv.org/pdf/2609.09783.pdf",
+          "takeaway": "异步 RL 不止要校正 actor：锚定 Bellman 残差校正修好陈旧 critic，BrowseComp-Plus +2.4% 且快 2.46×。",
+          "keyExperiment": "BrowseComp-Plus mean@1 较最强基线 +2.4%，每步比同步训练快 2.46× 且 50 步 off-policy 稳定。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "DiffLUT-Net: Differentiable Training of FPGA LUT Networks with Learnable Connectivity",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-10",
+          "authors": "Jiaqi Ye, Xinrui Gong, Jingcun Wang, Olga Kondrateva, Bing Li, Grace Li Zhang",
+          "institutions": "TU Darmstadt",
+          "abstract": "FPGA 能高效执行神经网络推理，但现有部署流程要么加速乘加运算，要么把预训练量化模型转成查找表(LUT)。本文提出 DiffLUT-Net：由六输入 LUT 组成的 FPGA 原生网络，从零开始可微训练。用可微 LUT 函数松弛与硬件源选择，联合学习每个 LUT 的 64 项真值表条目与 6 个输入端口的信号来源；训练后真值表与连接离散化，未用逻辑可剪枝，网络直接导出为可综合 Verilog。跨五个基准，DiffLUT-Net 取得有利的精度-资源权衡，验证了联合学习 LUT 函数与稀疏连接对紧凑 FPGA 原生推理的有效性。",
+          "contributions": [
+            "提出直接从零训练的 FPGA 原生六输入 LUT 网络，跳过量化模型转表路线",
+            "可微 LUT 松弛+可学习端口连接，联合优化真值表与稀疏连接",
+            "训练后一键导出可综合 Verilog，未用逻辑自动剪枝"
+          ],
+          "conclusions": [
+            "LUT 网络可端到端可微训练，无需预训练模型转换",
+            "联合学习连接稀疏性带来有利的精度-资源权衡"
+          ],
+          "experiments": [
+            "跨五个基准均取得有利的精度-资源权衡",
+            "导出可综合 Verilog，训练后未用逻辑可剪枝"
+          ],
+          "significance": "把 FPGA 推断从“加速已有模型”推进到“直接生长出 LUT 原生网络”，为低资源部署提供新路线。",
+          "arxivUrl": "https://arxiv.org/abs/2609.09254",
+          "pdfUrl": "https://arxiv.org/pdf/2609.09254.pdf",
+          "takeaway": "FPGA 上的 LUT 网络可以从零可微训练：真值表与连接一起学，端到端导出 Verilog。",
+          "keyExperiment": "五个基准上以可训练连接取得有利的精度-资源权衡，模型直接导出为可综合 Verilog。",
+          "index": 8
+        },
+        {
+          "title": "Looped GPT-BERT: Trading Parameters for Computation in Small Language Modeling",
+          "score": 3.7,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-10",
+          "authors": "Tingshuo Fan, Hongtao Mu, Tianyu Zhou, Hansen Liu, Tao Ji",
+          "institutions": "机构未标注",
+          "abstract": "训练数据有限时，增加参数量不是提升语言模型性能的唯一途径——小参数集被反复应用也能达到相当性能。本文在 BabyLM 2026 Strict-small 设置下研究 Looped GPT-BERT：把 GPT-BERT 的掩码 next-token 目标与因果语言建模目标结合深度方向参数共享。在预处理后的 7.48M 英文词语料上训练，比较目标比例、非循环与循环架构、循环次数。最终 4×12 模型用 4 个物理层做 12 次循环遍历，仅 12.18M 参数，BabyLM 2026 榜单 Overall Average 35.42、NLP Average 48.48；与公开的 10M 参数 GPT-2/GPT-BERT 基线相比，在 BLiMP、GLUE 等指标上性能相当而参数更少。循环消融显示：额外循环计算可改善训练并保持部分语言任务性能，而某些任务表现变差暴露了循环设计的固有限制——仅用少数物理层反复遍历可能不足以承载全部能力。",
+          "contributions": [
+            "把深度参数共享(循环)与 GPT-BERT 双目标结合，在 BabyLM 严格小设置下用计算换参数",
+            "4 个物理层×12 次循环、12.18M 参数即达榜单级性能，与 10M 基线相当",
+            "系统消融目标比例、循环架构与循环次数，揭示循环设计的收益与边界"
+          ],
+          "conclusions": [
+            "数据受限时循环计算可作为参数数量的替代杠杆，性能可比 10M 基线",
+            "部分语言任务上循环带来收益，其余任务变差说明少数物理层反复遍历存在承载上限"
+          ],
+          "experiments": [
+            "4×12 模型(12.18M 参数)在 BabyLM 2026 榜单 Overall Average 35.42、NLP Average 48.48",
+            "与公开 10M 参数 GPT-2/GPT-BERT 基线在 BLiMP/GLUE 等指标相当",
+            "循环次数消融显示更多循环计算可提升训练质量"
+          ],
+          "significance": "为数据稀缺的小语言建模提供“参数换计算”的架构证据，并标出循环设计的能力边界。",
+          "arxivUrl": "https://arxiv.org/abs/2609.09691",
+          "pdfUrl": "https://arxiv.org/pdf/2609.09691.pdf",
+          "takeaway": "数据少的时候用深度共享换参数：4×12 循环 GPT-BERT(12.18M)打平 10M 常规基线。",
+          "keyExperiment": "12.18M 参数的 4 物理层×12 循环模型在 BabyLM 2026 达 Overall 35.42，与公开 10M 基线相当。",
+          "index": 9
+        },
+        {
+          "title": "Time-Frequency Geometric Cross-Attention for Chunked Vision-Language-Action Models",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-10",
+          "authors": "Shengye Dong, Haochen Niu, Hao Liu, Peiwen Lin, Chuang Wang, Shanmin Pang",
+          "institutions": "机构未标注",
+          "abstract": "现代视觉-语言-动作(VLA)策略一次前向生成整块动作(1–2 秒协调运动)，但动作块本质是短多变量轨迹，模型内部却只是线性头解码的逐时间步通用隐 token，无法服务两种运动结构：频率上，动作块叠加了平滑全局趋势与细粒度修正运动，单一 token 把它们缠在一起；跨相几何上，不同相位(reach、contact、grasp adjustment、settling)的运动沿近正交方向展开却又与任务紧密相关。点积注意力按内积衡量对齐，最不敏感于近正交方向。本文提出时频几何交叉注意力(TFGCA)：用逐维可学习平稳小波变换把动作块分解为时频 token，每个时间 token 通过融合点积(相似度)与楔积幅度(对近正交敏感)的交叉注意力检索信息；零初始化残差保证初始化时还原基座行为，可直接挂载到预训练 VLA 联合微调。同源基座对比：分布内 LIBERO 平均 +1.5，分布外 LIBERO-Plus +6.3，RoboTwin 域随机化平均 +28.5，三任务真实机器人 AgiBot A2 总成功率 +11.67，分布外增益更大。",
+          "contributions": [
+            "指出动作块内“频率纠缠”与“跨相近正交几何”两个被通用 token 掩盖的结构，点积注意力对后者天然失敏",
+            "TFGCA 以逐维可学习平稳小波分解+点积×楔积融合的交叉注意力修复两个盲区",
+            "零初始化残差使其成为可即插即用、随预训练 VLA 联合微调的 drop-in 模块"
+          ],
+          "conclusions": [
+            "显式建模时频与跨相几何可提升动作块预测，分布外收益尤为显著",
+            "零初始化挂载不破坏预训练行为，联合微调即可生效"
+          ],
+          "experiments": [
+            "分布内 LIBERO 平均 +1.5，分布外 LIBERO-Plus +6.3",
+            "RoboTwin 域随机化下平均 +28.5",
+            "三任务真实机器人 AgiBot A2 总成功率 +11.67 个百分点"
+          ],
+          "significance": "给动作块解码补上时频与几何结构先验，是 VLA 架构上小而有效的一处关键修补。",
+          "arxivUrl": "https://arxiv.org/abs/2609.09925",
+          "pdfUrl": "https://arxiv.org/pdf/2609.09925.pdf",
+          "takeaway": "动作块要拆开看：时频小波分解+楔积交叉注意力治好 VLA 的两个注意力盲区，OOD 增益 +6.3。",
+          "keyExperiment": "同源基座下 OOD LIBERO-Plus +6.3、RoboTwin 域随机化 +28.5，真实机器人 AgiBot A2 成功率 +11.67。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
