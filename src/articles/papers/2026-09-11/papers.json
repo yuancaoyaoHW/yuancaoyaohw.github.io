@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-11",
+  "title": "2026-09-11 论文精选",
+  "lede": "今日关注开源模型冲顶与训练效率:Nemotron 开源配方把 IMO 金牌带进纯自然语言路线,T1 用路由重放把 MoE agent RL 推到长程终端 SOTA;MoE 吃不起重复数据、Muon 谱裁剪根治 loss spike、分离服务逐 lane 功耗校准——从数据、优化器到电力,训练栈每一层都在找新的效率空间。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 213
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Phase-Decoupled, Model-Calibrated Power Control for Disaggregated LLM Serving",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Jae Gon Kim, Donghoon Yoo, Hanyul Ryu, Sungho Ha, Juyeon Lee, Soojung Ryu",
+          "institutions": "机构未标注",
+          "abstract": "数据中心 GPU 功耗已成为 LLM 服务的容量瓶颈,而生产级服务已转向 prefill/decode(PD)分离部署。作者在分离式 B200 系统上实测 NVIDIA Max-Q 推理功耗配置,发现其实际收益有限(+8.6% tokens/J)且依赖模型,还带来 +5.2% 平均端到端延迟开销——纯吞吐评估会掩盖这一代价;且该配置对处于相反硬件状态的 prefill 与 decode GPU 施加同一设置。论文假设最优功耗设定是(模型、量化、引擎、硬件)组合的属性而非 GPU 型号的属性,每条 lane 都应有独立配置;把 SLO 余量安全转化为能耗节省需要运行时 SLO 门控下的延迟感知校准,而非固定配方。提出相位解耦、按模型校准的控制器:prefill lane 运行在 SM 时钟窗口内(下限即构造性延迟保证),decode lane 通过自动校准把功耗上限设在实测吞吐/延迟悬崖稍上方。由于分离式 decode lane 功耗平坦、访存受限,上限持续生效,POLCA 当年拒绝限流的反应式过冲问题不复存在,GPU 自带功耗管理器可在上限内维持吞吐。在 8×B200 节点以 agentic 负载服务 Qwen3-Coder-480B(FP8)时,balanced 模式实现 +20.4% tokens/J、+3.5% 平均 e2e,对 Max-Q 的 +8.6%/+5.2% 构成双轴 Pareto 改进;Qwen3-235B-A22B(NVFP4)上所有运行模式均满足 ITL-p99 SLO,厂商配置则全部违约。decode 执行器 A/B 显示校准上限优于静态锁频,三天持续运行节省 32.3% 的一对 lane 电力。两个模型均为 MoE,dense 模型收益约小 5 倍,因此结论限定于 MoE 服务。",
+          "contributions": [
+            "实测指出 NVIDIA Max-Q 功耗配置在分离式 B200 上收益有限(+8.6% tokens/J)且隐藏 +5.2% 延迟代价,主张最优功耗设定应按模型-量化-引擎-硬件组合逐 lane 校准",
+            "设计相位解耦控制器:prefill 用带构造性延迟下限的 SM 时钟窗口,decode 用自动校准的功耗上限,规避 POLCA 式反应式过冲",
+            "在 Qwen3-Coder-480B(FP8) agentic 负载上 +20.4% tokens/J、+3.5% e2e,双轴超越 Max-Q,三天实测省电 32.3%"
+          ],
+          "conclusions": [
+            "分离式 LLM 服务的功耗调优必须 prefill/decode 分开做,SLO 余量转能耗需运行时 SLO 门控校准",
+            "MoE 模型功耗弹性大,dense 收益约小 5 倍,结论限定于 MoE 服务场景"
+          ],
+          "experiments": [
+            "8×B200 + Qwen3-Coder-480B(FP8):balanced 模式 +20.4% tokens/J、+3.5% 平均 e2e,对比 Max-Q 的 +8.6%/+5.2%",
+            "Qwen3-235B-A22B(NVFP4):所有运行模式均满足 ITL-p99 SLO,Max-Q 等厂商配置全部违约",
+            "decode 执行器 A/B:校准功耗上限优于静态锁频;三天持续运行节省 32.3% lane 对电力"
+          ],
+          "significance": "首个针对 PD 分离架构逐 lane 校准功耗的控制系统,把能效与 SLO 的权衡做成可复现工程。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11133",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11133.pdf",
+          "takeaway": "分离式 MoE 推理功耗要按 lane 校准——decode 限功率 + prefill 控时钟,能效与 SLO 双赢。",
+          "keyExperiment": "8×B200 节点 Qwen3-Coder-480B(FP8) agentic 负载下 +20.4% tokens/J 且 e2e 延迟仅 +3.5%,双轴优于 Max-Q 配置。",
+          "index": 1
+        },
+        {
+          "title": "Structured Transforms for Low-Overhead Quantization of Language Models",
+          "score": 3.8,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-11",
+          "authors": "Daria Cherniuk, Alexander Rudikov, Boris Kashin, Ivan Oseledets",
+          "institutions": "Skoltech",
+          "abstract": "论文 revisits 基于 Kashin 分解的 LLM 权重量化,提出收敛性更强、变换结构化且高效的改进算法。方法保留把每块权重分解为两个分量的核心做法(一个无穷范数有界、另一个经正交变换后无穷范数有界),但把稠密随机正交矩阵替换为符号随机化 DCT,把每次迭代代价从 O(N²) 降到 O(N log N)。新的贪婪交替更新算法保证稳定 2-bit 聚类所需的四峰分布,且聚类中心可闭式初始化,消除先前工作的多次重启 k-means 瓶颈。与 OPTQ 式顺序误差补偿和 QuIP 式不相干预处理组合后,该 JAX 流水线在 4-bit 每通道下于 OPT/Llama-2/Pythia 上与 OPTQ、QuIP、QuIP-RG 以及免微调免向量量化的 QuIP# 变体打平,且 wall-clock 扩展性更好。有界 l∞ 分解还异常稳健:在 QuIP 变体发散到四位数困惑度(Pythia-6.9B)或 LDL 回代出现 NaN(Mistral-7B)的压力配置下,Kashin-DCT 数值稳定并贴近 FP16 基线。推理时每个权重分解为每通道两个 2-bit 因子码,天然适配原生 2-bit 硬件。",
+          "contributions": [
+            "把 Kashin 分解量化的随机正交变换换成符号随机化 DCT,迭代代价 O(N²)→O(N log N)",
+            "贪婪交替更新 + 闭式初始化消除 k-means 多重启瓶颈,保证 2-bit 稳定聚类所需四峰分布",
+            "数值稳健性:QuIP 变体发散或 NaN 的压力配置下仍贴近 FP16 基线"
+          ],
+          "conclusions": [
+            "结构化 DCT 变换让 Kashin 分解量化在 4-bit 达到 SOTA 水平且工程开销更低",
+            "有界 l∞ 分解对病态配置异常稳健,因子码结构适配原生 2-bit 硬件"
+          ],
+          "experiments": [
+            "OPT/Llama-2/Pythia 4-bit 每通道:与 OPTQ/QuIP/QuIP-RG/QuIP#(免微调免 VQ 变体)打平",
+            "压力测试:Pythia-6.9B 上 QuIP 发散到四位数 perplexity、Mistral-7B 上 LDL 回代 NaN,Kashin-DCT 保持稳定",
+            "迭代复杂度从 O(N²) 降至 O(N log N),wall-clock 扩展性更好"
+          ],
+          "significance": "给极低比特量化补上变换要快、数值要稳两块工程短板,让 2-bit 分解码离原生硬件更近一步。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11687",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11687.pdf",
+          "takeaway": "用结构化 DCT 换掉随机正交阵,Kashin 分解量化快一个量级且在 QuIP 崩掉的场景下依然稳定。",
+          "keyExperiment": "Pythia-6.9B/Mistral-7B 压力配置下 QuIP 变体发散或 NaN,而 Kashin-DCT 保持数值稳定并贴近 FP16 基线。",
+          "index": 2
+        },
+        {
+          "title": "REVA: Reusable Evidence View Aggregation for Context-Efficient RAG Serving",
+          "score": 3.7,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Tuan Nguyen, Qiran Hu, Banruo Liu, Khoa D. Doan, Kok-Seng Wong, Fan Lai",
+          "institutions": "University of Illinois Urbana-Champaign",
+          "abstract": "RAG 通过让生成以检索文档为条件提升知识密集型应用,但更长上下文推高延迟、KV cache 显存与 token 成本。检索后压缩可降成本,但现有压缩器通常逐查询独立运行、依赖辅助模型或改写,在线开销可能抵消短 prompt 的收益。论文从数据挖掘视角重构 RAG 压缩:把历史的 query-文档-模型交互聚合成可复用的证据视图。作者先证明现代压缩器相对简单截断的收益不稳定、且引入可观推理时延迟;进而提出 REVA 框架——挖掘目标生成器的历史 attention 轨迹,构建按文档键控、与预算无关的分数库;把 token 级 attention 映射回可读词元、跨重复文档访问聚合重要性,并渲染保留文档顺序与标准 RAG 接口的预算特定纯文本视图。在 4 个代表性基准与现代 LLM 上,REVA 较现有方法提升生成质量 1.0~5.8 分,压缩开销降低 5.3~15.6 倍,新增延迟不到 40ms。",
+          "contributions": [
+            "实证揭示现有 RAG 压缩器相对简单截断收益不稳定且有可观在线开销",
+            "提出把历史 query-文档-模型交互聚合成可复用证据视图:attention 轨迹→按文档键控、预算无关的分数库",
+            "REVA 渲染保序纯文本视图,接口与标准 RAG 兼容,无需辅助模型或改写"
+          ],
+          "conclusions": [
+            "压缩收益应跨查询复用而非每次现算",
+            "REVA 在质量与开销两端同时超越逐查询压缩"
+          ],
+          "experiments": [
+            "4 个代表性基准:生成质量较现有方法 +1.0~5.8 分",
+            "压缩开销降低 5.3~15.6 倍,在线延迟 <40ms",
+            "对简单截断的增益稳定性对比实验"
+          ],
+          "significance": "把 RAG 压缩从逐查询在线计算变成历史注意力复用,用缓存化思路同时降 KV 成本与压缩开销。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11209",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11209.pdf",
+          "takeaway": "复用生成器历史 attention 轨迹做证据视图,RAG 压缩质量更高、开销降一个量级。",
+          "keyExperiment": "4 基准上质量 +1.0~5.8 分的同时压缩开销降 5.3~15.6 倍、在线延迟 <40ms。",
+          "index": 3
+        },
+        {
+          "title": "Characterizing Job Power Elasticity for Power-Flexible AI Training",
+          "score": 3.6,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-11",
+          "authors": "Philip Colangelo, Charles Dawson, Shayan Sengupta, Ayse Coskun, Varun Sivaram",
+          "institutions": "Boston University,Columbia University",
+          "abstract": "LLM 训练是现代数据中心增长最快的电力需求来源之一,电力可用性是 AI 基础设施扩张的首要瓶颈;让训练负载功耗变得灵活可调,可为 AI 增长释放电力、抑制电价上涨并提高电网设施利用率。实现的前提是先弄清降功率后训练作业性能如何变化。论文首次系统刻画 LLM 训练的作业功耗弹性(throughput 对降功率的敏感度),提出归一化指标 Power Flexibility Index(PFI)量化降功率的性能代价,并作为 SLA 感知功耗灵活性的控制原语。数据来自 131 次 H200 LLM 训练(另含 24 次 H200 验证与 34 次匹配 H100 运行),覆盖 dense 与 MoE、预训练与微调、最多 32 卡。结果显示训练作业功耗弹性可观但差异很大,且可通过遥测信号在运行时预测 PFI;基于 PFI 的功率分配能在功率约束下最大化总 tokens/s 吞吐。在 30% 降功率下,PFI 感知分配每作业回收约 1.5k tokens/s,达到等权分配与全知 oracle 之间性能差距的 63%。",
+          "contributions": [
+            "首次系统定义并测量 LLM 训练作业功耗弹性,提出 PFI 归一化指标",
+            "131 次 H200(加 24 次验证 + 34 次匹配 H100)运行数据集,覆盖 dense/MoE、预训练/微调、最多 32 卡",
+            "证明可用遥测信号运行时预测 PFI,并做 SLA 感知功率分配"
+          ],
+          "conclusions": [
+            "训练作业功耗弹性是可测量、可预测的作业属性",
+            "PFI 感知功率分配显著优于等权分配,为功耗感知、电网响应式 AI 基础设施奠定基础"
+          ],
+          "experiments": [
+            "131 次 H200 训练运行表征:弹性可观但作业间差异大",
+            "30% 降功率下 PFI 感知分配回收约 1.5k tokens/s/作业,达等权-oracle 差距的 63%",
+            "34 次匹配 H100 运行验证跨硬件一致性"
+          ],
+          "significance": "把训练能省多少电从经验问题变成可量化、可调度的工程指标,是电网友好型 AI 训练的第一块拼图。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11542",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11542.pdf",
+          "takeaway": "LLM 训练降功率的性能损失因作业而异,PFI 让它可预测、可调度——省电不必等比降吞吐。",
+          "keyExperiment": "30% 降功率下 PFI 感知功率分配每作业回收约 1500 tokens/s,恢复等权分配到 oracle 差距的 63%。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "An Open Recipe for IMO Gold: Training Nemotron for Olympiad Mathematics",
+          "score": 4.8,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-11",
+          "authors": "Ivan Moshkov, Stephen Ge, George Armstrong, Wei Du, Sadegh Mahdavi, Igor Gitman",
+          "institutions": "NVIDIA",
+          "abstract": "研究模型后训练与测试时推理设计如何影响高难度奥数的自然语言证明生成。从 Nemotron 3 Ultra 出发,用 SFT 与 RL 训练两个特化 checkpoint,并评估 checkpoint 选择、验证与精修环节的影响。基于发现给出开源模型的测试时算力流水线:全程自然语言,无形式化证明器、无外部工具、无联网;三个 Nemotron 3 Ultra checkpoint(GA 版 + 两个特化版)驱动迭代搜索,生成-验证-精修候选证明,再由独立高算力阶段选出最终提交。系统在 IMO 2026 得到 30/42 分,达到金牌线。作者发布两个特化 checkpoint、训练数据、训练与推理代码、提交解答,以及含 200 道新奥数题的 Nemotron-IMO-Bench。",
+          "contributions": [
+            "纯自然语言(无形式化证明器/外部工具/联网)的 IMO 金牌系统,30/42 分",
+            "开源双特化 checkpoint + 训练数据 + 全部训练/推理代码与提交解答",
+            "发布含 200 道新奥数题的 Nemotron-IMO-Bench"
+          ],
+          "conclusions": [
+            "SFT+RL 特化与测试时生成-验证-精修编排足以把开源权重模型推到奥数金牌水平",
+            "checkpoint 选择、验证与精修策略是自然语言证明质量的关键杠杆"
+          ],
+          "experiments": [
+            "IMO 2026 官方评测 30/42 分达金牌线",
+            "三 checkpoint 迭代搜索 + 高算力终选流水线的分阶段消融",
+            "Nemotron-IMO-Bench:200 道新奥数题基准"
+          ],
+          "significance": "首个开源全套配方(checkpoint+数据+代码)的 IMO 金牌级自然语言证明系统。",
+          "arxivUrl": "https://arxiv.org/abs/2609.10712",
+          "pdfUrl": "https://arxiv.org/pdf/2609.10712.pdf",
+          "takeaway": "开源权重也能拿 IMO 金牌:Nemotron 3 Ultra + SFT/RL 特化 + 生成-验证-精修测试时流水线,30/42 全公开。",
+          "keyExperiment": "IMO 2026 官方题面下 30/42 分,无形式化证明器与外部工具,全流程自然语言。",
+          "index": 5
+        },
+        {
+          "title": "T1: Terminal Agent Reinforcement Learning for Long-Horizon Tasks",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Junyao Yang, Yucheng Shi, Zhongzhi Li, Ruhan Wang, Zongxia Li, Haitao Mi, Leowei Liang",
+          "institutions": "机构未标注",
+          "abstract": "Agent 使用正转向编码、科学发现等长程任务,其中终端(terminal)任务尤为关键。论文提出 T1:122B 总参 MoE 模型,以 RL 在云端沙箱操作真实 shell,单任务最多 300+ 次工具调用,由任务自带 verifier 的执行结果作奖励。给出完整训练配方:一是激进 warm-start 稳定 actor-critic,以通过 verifier 的绝对数量做稠密过程奖励;二是通过 TITO 构造稳定优化——在精确采样 token id 上训练、回合边界漂移修复、rollout 路由重放(记录每个 MoE 层采样器的逐 token 专家选择并在训练时重放);三是完全 OOD 训练语料:隔离种子与合成任务、同 Terminal-Bench 2.1 不相交,确保增益反映真实能力迁移而非刷榜。TITO 与 R3 把训练-推理 log 概率差从 0.021 降到 0.013,loss 区域实现零 token 漂移。Terminal-Bench 2.1 上,后训练流水线把基座 43.8% 提升到 T1 的 64.0%;Long-Horizon Terminal Bench 上 T1 达 27.9%,超过 GPT-5.4 与 GLM-5.1。",
+          "contributions": [
+            "122B MoE + 云沙箱真实 shell 的 RL,单任务 300+ 工具调用长程终端任务",
+            "TITO 精确 token id 训练 + 回合边界漂移修复 + 逐 MoE 层专家路由重放(R3),把训练-推理分布差压到 0.013",
+            "完全 OOD 语料隔离设计,排除基准过拟合"
+          ],
+          "conclusions": [
+            "MoE 的 RL 训练需要显式对齐训练-推理路由,否则长程任务收益不可信",
+            "以任务 verifier 为奖励的端到端 RL 可把终端 agent 能力大幅推高"
+          ],
+          "experiments": [
+            "Terminal-Bench 2.1:基座 43.8% → T1 64.0%",
+            "Long-Horizon Terminal Bench 27.9%,超过 GPT-5.4 与 GLM-5.1",
+            "TITO+R3 把训练-推理 log 概率差从 0.021 降到 0.013,loss 区域零 token 漂移"
+          ],
+          "significance": "给 MoE agent RL 提供工程可复用的路由对齐配方,拿下长程终端任务 SOTA。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11042",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11042.pdf",
+          "takeaway": "122B MoE 在真实 shell 里做 RL:路由重放对齐训练/推理分布,Terminal-Bench 43.8%→64.0%。",
+          "keyExperiment": "Terminal-Bench 2.1 解题率 43.8%→64.0%,Long-Horizon Terminal Bench 27.9% 超 GPT-5.4 与 GLM-5.1。",
+          "index": 6
+        },
+        {
+          "title": "Data Scarcity and Model Sparsity: Mixtures-of-Experts Overfit More to Repeated Data",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Atindra Jha, Margaret Li, Jure Leskovec, Percy Liang, Luke Zettlemoyer",
+          "institutions": "Stanford University,University of Washington,Meta",
+          "abstract": "人类文本供给见顶后,重复使用训练数据已成惯例;此前对数据重复的研究集中在稠密 Transformer,而 MoE 这类稀疏架构上的影响基本未被探索。论文在单域/多域数据混合以及专家数与粒度等 MoE 设置上变化数据重复率,发现 80M~1B 激活(8.5B 总量)参数范围内 MoE 在数据重复下退化更快:效应随稀疏度增强,由总参数量而非激活参数量主导。80M dense 模型重复 8 倍几乎无损,MoE 从 4 倍开始受损、32 倍后迅速恶化,把全唯一数据下的性能优势拱手让给 dense。正则化实验:dropout 等方法可缓解,强 masking 正则下 MoE 在数据重复 64 倍以上仍能反超 dense,但没有方法能完全追平全唯一数据训练。机制分析:MoE 路由在训练早期普遍固化,专家特化程度与对重复数据的过拟合相关。论文揭示了稀疏与数据重复的不利交互,给出过拟合机制证据与潜在补救,并指出通过打断记忆模式抑制专家过特化的方向。",
+          "contributions": [
+            "首次系统刻画 MoE 在数据重复下的过拟合:退化比 dense 快,由总参数量(稀疏度)主导",
+            "缓解方案:强 masking 正则下 MoE 在 64 倍重复仍胜 dense",
+            "机制分析:路由早期固化、专家特化与重复数据过拟合正相关"
+          ],
+          "conclusions": [
+            "数据稀缺时代 MoE 的数据配方要更保守,重复上限远低于 dense",
+            "打断记忆模式、抑制专家过特化是后续方法方向"
+          ],
+          "experiments": [
+            "80M~1B 激活(8.5B 总参):dense 重复 8 倍几乎无损 vs MoE 4 倍起损、32 倍快速恶化",
+            "强 masking 正则:MoE 在 64 倍以上重复反超 dense",
+            "专家特化程度与重复数据过拟合正相关"
+          ],
+          "significance": "在数据墙背景下给 MoE 缩放泼冷水——稀疏红利的代价是对数据重复更脆弱。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11917",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11917.pdf",
+          "takeaway": "MoE 更吃不起重复数据:退化比 dense 快、由总参数量主导,masking 正则可缓解但追不平全唯一数据。",
+          "keyExperiment": "80M dense 重复 8 倍几乎无损,同规模 MoE 4 倍即受损、32 倍后反被 dense 反超。",
+          "index": 7
+        },
+        {
+          "title": "Musec: MomentUm SpEctral Clipping for Stable Muon-type Training",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Zhuanghua Liu, Menglian Wang, Luo Luo",
+          "institutions": "Fudan University",
+          "abstract": "Muon 已成为大模型训练中高效优化器,常胜过 Adam/AdamW,但其谱平滑化(spectral flattening)易致训练不稳,表现为 loss spike 与权重无界增长;现有对策依赖权重或 attention logit 裁剪,需针对具体架构修改且无法覆盖全部组件。论文提出 Musec:用谱裁剪替代谱平滑——不再把动量矩阵所有奇异值近似置 1,而是裁掉超过阈值的奇异值、保留动量谱结构,提供优化器级、架构无关的稳定机制;进一步给出 Soft Musec,用耦合 Newton-Schulz 迭代近似的光滑谱饱和函数高效实现。理论上首次为非凸非光滑随机优化中的 Muon 型方法建立收敛保证。实验显示 Soft Musec 在宽学习率与模型尺寸范围上一致提升现有 Muon 变体的训练稳定性;在现有变体发散的设置下保持稳定,而在调好参的配置下性能持平。",
+          "contributions": [
+            "以谱裁剪替代谱平滑,架构无关地在优化器层稳定 Muon 训练",
+            "Soft Musec:耦合 Newton-Schulz 迭代实现光滑谱饱和的高效版本",
+            "首个非凸非光滑设定下 Muon 型方法的收敛保证"
+          ],
+          "conclusions": [
+            "Muon 不稳定根因在谱平滑这一步,裁剪超阈值奇异值即可根治",
+            "Soft Musec 在发散场景稳定、调参场景不掉点"
+          ],
+          "experiments": [
+            "宽学习率/模型尺寸范围:Soft Musec 一致优于现有 Muon 变体的稳定性",
+            "现有变体发散的设置下 Soft Musec 保持稳定",
+            "调好参配置下性能与现有变体持平"
+          ],
+          "significance": "直击 Muon 落地最大痛点 loss spike,并补上第一个理论收敛证明。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11655",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11655.pdf",
+          "takeaway": "把 Muon 的谱置一改成谱裁剪,loss spike 从根上消失,还拿到首个非凸收敛保证。",
+          "keyExperiment": "在现有 Muon 变体全部发散的训练设置中,Soft Musec 保持稳定收敛,调参场景性能不变。",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "NCP-ArchPreview Technical Report: Moving towards Latent Space Language Models through Next Concept Prediction",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-11",
+          "authors": "Intern-NCP Team, Jiaqi Cao, Chiyu Chen, Shuang Cheng, Xu Cheng, Beiya Dai, Yufan Feng, Kewen Ge, Ruijun Ge, Jiayi Huang, Yang Jiao, Dahua Lin, Biqing Qi, et al.",
+          "institutions": "Shanghai AI Laboratory",
+          "abstract": "NCP-ArchPreview 是把自回归预训练推向 token 之外潜空间的语言模型:在 NTP 之外引入 Next Concept Prediction(NCP),预测跨越多个 token 的离散概念——在保留标准 token 级自回归生成的同时,引入显式且更难的概念级目标。架构从隐藏状态构建乘积量化的概念词表,由专门 Concept Module 学习预测未来概念,预测出的概念再回馈 token 级引导后续生成,NTP 与 NCP 端到端联合训练。该架构扩展到 8.9B 参数、5.73T tokens(Dolma-3),是目前最大的潜空间语言模型。仅用 51.3% 训练 token 即达到 OLMo-3-7B 的最终预训练损失;完整预训练后下游宏平均超出 OLMo-3-7B 2.45 分,其中 GSM8K +5.99。控制实验分离出潜架构与 NCP 目标各自的收益贡献;仅用 85% 计算量即逼近参数严格对齐的 8.9B 基线训练损失。预训练后潜空间依然好用:只更新 17M 参数 VQ 模块即可做轻量域适配;把概念表示注入 DFlash2 草案器,平均接受长度 +4.17%,开销可忽略。",
+          "contributions": [
+            "NCP 目标:概念级预测与 NTP 端到端联合训练,潜空间由乘积量化概念词表构成",
+            "8.9B/5.73T tokens 的最大潜空间 LM,51.3% token 达 OLMo-3-7B 终损",
+            "预训练后潜空间可复用:17M VQ 模块轻量域适配 + DFlash2 草案器接受长度 +4.17%"
+          ],
+          "conclusions": [
+            "概念级预测是比 NTP 更高效的学习信号,收益来自潜架构与 NCP 目标双因素叠加",
+            "潜空间概念表示是预训练后任务的通用接口(域适配/投机解码)"
+          ],
+          "experiments": [
+            "51.3% 训练 token 达 OLMo-3-7B 最终预训练损失",
+            "下游宏平均 +2.45,GSM8K +5.99",
+            "85% 计算量逼近参数对齐 8.9B 基线;DFlash2 平均接受长度 +4.17%"
+          ],
+          "significance": "下一个概念作为预训练目标的最大规模验证,采样效率与下游双收益,还能白嫖给投机解码。",
+          "arxivUrl": "https://arxiv.org/abs/2609.10715",
+          "pdfUrl": "https://arxiv.org/pdf/2609.10715.pdf",
+          "takeaway": "让 8.9B 模型同时学下一个 token 和下一个概念:一半 token 达到 OLMo-3 终损,GSM8K +5.99。",
+          "keyExperiment": "仅消耗 51.3% 训练 token 即达到 OLMo-3-7B 的最终预训练损失,下游宏平均反超 2.45 分。",
+          "index": 9
+        },
+        {
+          "title": "LILA: Calibration-Free Structured Pruning of Large Language Models via Latent Spectral Geometry",
+          "score": 3.2,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Sankar Behera, Dhruv Singh, Anshika Agnihotri, Raj Kumar Choudhary, Satyadev Ahlawat, Yamuna Prasad",
+          "institutions": "机构未标注",
+          "abstract": "LLM 结构化剪枝可带来硬件友好的压缩,但现有方法在剪枝时需要校准数据、梯度计算或大型辅助策略网络。LILA(Latent-Informed Layer Analysis)用全量与神经元消融后 FFN 权重矩阵奇异值经验分布之间的 KS 距离为神经元重要性打分,给出闭式谱规则——无需训练、校准数据或辅助网络。不做任何微调,LILA 在 LLaMA-2-7B 25% 稀疏度上零样本精度超 PruneNet(45M 参数 RL 策略)1.57 pp,各稀疏度水平上超 WikiText-2 校准的 SliceGPT 至多 6.0 pp,同时保持原架构。仅一轮 LoRA 恢复微调后,LILA 在 LLaMA-2-7B 与 Phi-2 上与重校准的 SliceGPT 差距缩小到 0.48 pp 内——且零校准数据。NTK 分析确认相对随机剪枝 22 倍的功能失真降低,为谱重要性准则提供理论支撑;进一步用 KS 分数动态分配稀疏预算,在中等压缩下取得 SOTA 的生成保真,并在高压缩区暴露单层架构瓶颈。",
+          "contributions": [
+            "闭式谱重要性打分(奇异值分布 KS 距离),免校准/免梯度/免辅助网络",
+            "零微调即超 RL 策略 PruneNet 与校准 SliceGPT",
+            "NTK 分析给出相对随机剪枝 22 倍功能失真降低的理论支撑"
+          ],
+          "conclusions": [
+            "权重谱几何本身足以定位重要神经元,校准数据并非必需",
+            "动态稀疏预算可进一步提升生成保真,但高压缩受单层瓶颈限制"
+          ],
+          "experiments": [
+            "LLaMA-2-7B 25% 稀疏:零样本精度超 PruneNet 1.57 pp",
+            "超 SliceGPT 至多 6.0 pp(各稀疏度水平)",
+            "一轮 LoRA 恢复后与 SliceGPT 差 0.48 pp 内,全程零校准数据"
+          ],
+          "significance": "把结构化剪枝的门槛从有校准数据加辅助模型降到一行闭式公式。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11163",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11163.pdf",
+          "takeaway": "剪枝不必喂校准数据:比较 FFN 权重奇异值分布的 KS 距离,免校准打平重校准方法。",
+          "keyExperiment": "LLaMA-2-7B 25% 稀疏度零样本精度超 PruneNet 1.57 pp、超 SliceGPT 至多 6.0 pp,全程零校准数据。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
