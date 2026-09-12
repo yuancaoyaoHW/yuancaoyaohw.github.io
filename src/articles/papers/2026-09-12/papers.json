@@ -1,0 +1,343 @@
+{
+  "date": "2026-09-12",
+  "title": "2026-09-12 论文精选",
+  "lede": "今日关注：从“为什么有效”到“怎么更省”的一批系统与训练侧工作——任意比例上下文压缩、agent 沙箱内存压缩 8.7×、PTQ 有效的误差对抗机理、一秩演化策略的方差分析，以及扩散 VLM 的免训练解码路由。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 213
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "FlexComp: One Model for Every Ratio in Context Compression",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-11",
+          "authors": "Kaiyan Zhao, Zhongtao Miao, Akiko Aizawa, Yoshimasa Tsuruoka",
+          "institutions": "University of Tokyo",
+          "abstract": "软上下文压缩把长上下文压缩成少量记忆 token 供冻结 LLM 使用，但现有压缩器在训练与推理时都固定压缩比：每个部署比例都要单独训练一个模型，且统一比例被一刀切地用于需求差异极大的输入。FlexComp 提出与具体压缩方法解耦的框架，把压缩比从训练与部署中剥离：Matryoshka 式训练按实例采样记忆预算 K，使一个模型成为任意比例压缩器；部署时用置信度级联路由或轻量学习式 K 预测器按输入选预算。在 ICAE、500xCompressor、SAC 三种压缩方法与 MRQA 数据上，单一 FlexComp 模型匹配各自独立训练的固定比例专家模型且性能几乎不降。级联路由在平均 266× 压缩下保持最温和比例 98% 以上的准确率；K 预测器单次压缩-解码达到 158–236× 压缩、F1 距最温和比例 0.7 以内。在服务级 batch 规模下，K 预测器把上下文 KV cache 减少 50%、解码吞吐提升 47%。",
+          "contributions": [
+            "提出方法无关的 FlexComp 框架，Matryoshka 式训练让单一模型支持任意压缩比，替代“一个比例一个模型”的部署模式。",
+            "设计两种按输入自适应选择记忆预算的机制：置信度级联路由与轻量学习式 K 预测器。",
+            "在三种软压缩方法上验证单一 any-ratio 模型可整体替代固定比例专家模型集合。"
+          ],
+          "conclusions": [
+            "压缩比不必绑定模型：一个 any-ratio 模型加按实例路由即可覆盖所有部署比例，性能几乎无损。",
+            "自适应预算选择在服务级带来实际收益：上下文 KV cache 减少 50%、解码吞吐提升 47%。"
+          ],
+          "experiments": [
+            "MRQA 上单一 FlexComp 模型匹配三个独立训练的固定比例专家模型（ICAE/500xCompressor/SAC），性能几乎不降。",
+            "级联路由在平均 266× 压缩下保持最温和比例 98% 以上的准确率。",
+            "服务级 batch 规模下 K 预测器单次压缩-解码达到 158–236× 压缩、F1 差距 0.7 以内，KV cache 减少 50%、解码吞吐提升 47%。"
+          ],
+          "significance": "把上下文压缩从“一个比例一个模型”推进到“一个模型任意比例”，并给出可直接落地的服务收益数字。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11192",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11192.pdf",
+          "takeaway": "一个模型吃下所有压缩比：按输入路由记忆预算，KV cache 减半、解码吞吐 +47%。",
+          "keyExperiment": "服务级 batch 规模下，K 预测器将上下文 KV cache 减少 50%、解码吞吐提升 47%。",
+          "index": 1
+        },
+        {
+          "title": "Memory Compression for High-Fanout Agent Sandboxes",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-11",
+          "authors": "Mengming Li, Ceyu Xu, Qijun Zhang, Jiangnan Yu, Xiangfeng Sun, Haohui Mai, Zhiyao Xie",
+          "institutions": "HKUST",
+          "abstract": "高扇出 agent 工作负载中，单个任务会派生大量并发沙箱会话，内存成为瓶颈。这些沙箱并非相互独立：它们源自共享模板、执行相关轨迹，存在大量模板相对冗余与跨沙箱冗余。传统内存压缩在三个维度失配：怎么压（无法利用非相同页之间的相似性）、压什么（用保守的页选择控制页缺失开销）、何时压（或按内存压力触发、或对 agent 执行阶段无感知）。论文提出首个专为 AI-agent 沙箱设计的内存压缩系统 AgentZip：同时利用模板相对与跨沙箱两类冗余，把压缩范围扩大到任何“压缩表示有利可图”的页，把开销控制从压缩时页选择转移到恢复时预取，并把昂贵压缩与 LLM 等待期对齐以免干扰前台工具执行。在 LLM 训练与推理负载上，AgentZip 将沙箱内存最多减少 8.7×（Linux 配置为 2.1×）；恢复预取与执行感知调度把激进压缩的减速控制在较低水平。",
+          "contributions": [
+            "首个面向 AI-agent 沙箱的内存压缩系统 AgentZip，同时利用模板相对与跨沙箱两类冗余。",
+            "把压缩范围从保守页选择扩展到任何有利可图的页，并把开销控制转移到恢复时预取。",
+            "提出执行感知调度：把昂贵压缩对齐到 LLM 等待期，避免干扰前台工具执行。"
+          ],
+          "conclusions": [
+            "agent 沙箱的高冗余性使专用压缩大幅超越通用操作系统配置（8.7× vs 2.1×）。",
+            "恢复时预取加等待期对齐，让激进压缩不再拖慢前台执行。"
+          ],
+          "experiments": [
+            "LLM 训练与推理负载上，AgentZip 将沙箱内存最多减少 8.7×，而 Linux 默认配置仅 2.1×。",
+            "恢复时预取显著降低压缩页恢复带来的额外延迟。",
+            "执行感知调度使激进压缩期间前台工具执行几乎不减速。"
+          ],
+          "significance": "为多沙箱 agent 平台的内存瓶颈给出系统级解法，8.7× 压缩比直接影响 agent 集群的成本与部署密度。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11294",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11294.pdf",
+          "takeaway": "agent 沙箱内存可压 8.7×：吃透模板与跨沙箱冗余，把压缩挪到 LLM 等待期做。",
+          "keyExperiment": "与 Linux 默认配置对比，AgentZip 在 LLM 负载上把沙箱内存减少 8.7×（对照组 2.1×）。",
+          "index": 2
+        },
+        {
+          "title": "Why Does Post-Training Quantization Work?",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Yuxiang Chen, Michael Beyer, Jun Zhu, Jianfei Chen",
+          "institutions": "Tsinghua University",
+          "abstract": "后训练量化（PTQ）以低精度存储 LLM 权重，每个量化权重都会给隐藏状态引入误差。朴素预期是误差随深度累积并破坏下一 token 预测——随机初始化模型确实如此，而量化后的预训练模型却几乎不累积隐藏误差、下游任务基本无损，尽管它们从未在量化噪声下训练过。论文对比全精度与量化前向，识别出支撑预训练量化鲁棒性的两个机制：其一，某一层新引入的误差倾向于与它从输入继承的误差方向相反，两者部分抵消，使全精度与量化前向的差异缓慢增长——这种对抗性残差交互在预训练中自发形成，定量分析表明它是减缓隐藏误差增长的主要因素；其二，LM-head 几何优先保持高排名 token 的分数与概率，即模型最有把握的预测。两个机制共同解释了为何穿过大量层的量化误差仍只产生微小输出变化，并在多个模型与量化设置下得到验证。",
+          "contributions": [
+            "系统提出“PTQ 为何有效”这一问题：量化误差应随深度累积，但预训练模型几乎不累积。",
+            "发现层间“新误差对抗继承误差”的抵消机制，是减缓隐藏误差增长的主要因素。",
+            "揭示 LM-head 几何优先保护高排名 token 分数与概率的性质。"
+          ],
+          "conclusions": [
+            "PTQ 鲁棒性源于预训练中自发形成的误差对抗抵消，而非训练时见过量化噪声。",
+            "输出头对 top token 的保护使较大隐藏误差只造成微小输出变化。"
+          ],
+          "experiments": [
+            "随机初始化模型与预训练模型在同样量化下隐藏误差累积速度的直接对比，定位机制差异。",
+            "定量分析显示对抗性残差交互是隐藏误差增长放缓的主要因素。",
+            "跨多个模型与量化设置验证两个机制的普适性。"
+          ],
+          "significance": "首次系统回答“PTQ 为什么能行”，为设计更激进量化方案提供机理依据。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11716",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11716.pdf",
+          "takeaway": "PTQ 有效靠两个预训练自带的机制：层间误差互相抵消 + LM-head 保住高置信 token。",
+          "keyExperiment": "预训练与随机初始化模型在同样量化下隐藏误差累积速度的对比，定位对抗性残差交互为主因。",
+          "index": 3
+        },
+        {
+          "title": "K/V-Cache Interventions Dissociate Representation Alignment from Persona Expression in Decoder-Only Language Models",
+          "score": 3.5,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-11",
+          "authors": "Yu Sun, Mengyin Lu, Cong Feng, Guangming Lu, Huimin Han",
+          "institutions": "机构未标注",
+          "abstract": "论文研究 K/V-cache 干预——把一条以目标人格为条件的 K/V 轨迹“移植”进源人格的生成过程，作为 decoder-only 大模型人格控制的结构化手段。在 Llama-3.1-8B 上针对固定的源-目标人格对施加 13 种干预配置，作者报告了表征层对齐与行为层表达之间的两种系统性解耦：其一，早/中/晚层的 K/V 替换都能取得很强的局部 V 空间对齐（V-gap 0.91/0.89/0.84），但只有中层（9–20 层）替换能同时带来显著的目标人格标记表达并保持词汇多样性；其二，全层与中层替换的对齐程度相当（V-gap 0.94 vs 0.89），词汇多样性却明显不同（TTR 0.65 vs 0.77）；此外，滞后与打乱两种位置扰动虽然操作不同，却一致地压制目标人格表达。结论：仅凭表征相似度无法预测下游人格表达；K/V cache 是一个可控但受结构约束的干预面，移植本质是携带目标自生成 token 历史的轨迹级移植，而非孤立的人格表征注入。",
+          "contributions": [
+            "提出以 K/V 轨迹移植作为人格控制的结构化干预面，并给出 13 种干预配置的系统评估。",
+            "揭示表征对齐与行为表达的双重解耦：只有中层（9–20 层）替换兼顾目标表达与词汇多样性。",
+            "证明位置扰动（滞后/打乱）一致压制人格表达，表征相似度指标不足以预测行为。"
+          ],
+          "conclusions": [
+            "表征层相似度不是人格表达的可靠预测器，干预的层位与方式共同决定效果。",
+            "K/V cache 干预是可控但受结构约束的面，移植是轨迹级而非孤立表征注入。"
+          ],
+          "experiments": [
+            "Llama-3.1-8B、13 种干预配置：早/中/晚层 V-gap 分别为 0.91/0.89/0.84，仅中层兼顾表达与多样性。",
+            "全层 vs 中层替换 V-gap 0.94 vs 0.89 相当，但 TTR 0.65 vs 0.77 差异显著。",
+            "位置扰动（lag/shuffle）一致抑制目标人格表达，构成共同行为失效模式。"
+          ],
+          "significance": "为 KV cache 干预类研究补充“对齐不等于表达”的证据，指明中层替换是人格控制的有效窗口。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11020",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11020.pdf",
+          "takeaway": "中层（9–20 层）K/V 替换是人格移植的最佳窗口：表征对齐好不等于行为表达好。",
+          "keyExperiment": "13 种配置中只有中层替换同时实现目标人格表达与词汇多样性保持（V-gap 0.89、TTR 0.77）。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "EGGROLL, Unrolled: Understanding and Improving Low-Rank Evolution Strategies at Scale",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Ege C. Kaya, Abolfazl Hashemi",
+          "institutions": "机构未标注",
+          "abstract": "EGGROLL 用低秩（常为一秩）高斯乘积扰动替代稠密高斯扰动，使演化策略（ES）在 LLM 上变得实用，但几何上极为苛刻：每个一秩扰动都落在矩阵空间的零测度子集里。论文刻画了有限秩、非零扰动半径下 EGGROLL 的平均更新场：总体场由显式预解子作用于被扰动平滑的目标梯度得到；预解子会引入非保守分量、甚至逆转最优点的局部稳定性——不过 EGGROLL 在每个秩与半径下对所有二次目标都精确。对光滑目标，首个局部有限秩修正为 O(σ²/r)；非渐近界在光滑性假设下控制场误差。在局部仿射模型下，一秩扰动相对稠密高斯 ES 只把梯度估计方差增加 2(m+n+1)/(mn+1)，对 4096×4096 矩阵仅 0.098%。论文进一步提出 LOO-ROLL 留一估计器：在保持有限秩总体场的同时把每方向两次对抗评估减为一次，等评估成本下在 transformer 块上把估计器 MSE 减半。",
+          "contributions": [
+            "首次给出有限秩 EGGROLL 更新场的解析刻画（预解子形式）与场误差的非渐近界。",
+            "证明一秩扰动的统计代价几乎可忽略：4096×4096 矩阵上方差仅比稠密 ES 高 0.098%。",
+            "提出 LOO-ROLL 留一估计器，等评估成本下把估计器 MSE 减半。"
+          ],
+          "conclusions": [
+            "一秩扰动几何虽退化，但统计代价可忽略，EGGROLL 的规模化选择有理论支撑。",
+            "LOO-ROLL 在不牺牲精度的前提下把每方向评估成本再砍一半。"
+          ],
+          "experiments": [
+            "4096×4096 矩阵上秩一扰动相对稠密高斯 ES 的估计方差仅增加 0.098%。",
+            "transformer 块上 LOO-ROLL 在等评估成本下把估计器 MSE 减半。",
+            "EGGROLL 在所有二次目标上于任意秩与半径下精确，光滑目标首个修正为 O(σ²/r)。"
+          ],
+          "significance": "为“低秩 ES 能否真正替代稠密 ES”补上理论拼图，并给出更省一半评估的实用变体。",
+          "arxivUrl": "https://arxiv.org/abs/2609.10980",
+          "pdfUrl": "https://arxiv.org/pdf/2609.10980.pdf",
+          "takeaway": "一秩扰动的统计代价只有 0.098%：EGGROLL 场论被补齐，LOO-ROLL 再省一半评估。",
+          "keyExperiment": "4096×4096 矩阵上秩一 vs 稠密高斯扰动的估计方差仅差 0.098%，LOO-ROLL 等成本 MSE 减半。",
+          "index": 5
+        },
+        {
+          "title": "Negative Self-Distillation: Learning to Reason by Avoiding Flaws",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-11",
+          "authors": "Rongcan Pei, Zhepei Wei, Shuyao Xu, Xinyu Zhu, Wei-Lin Chen, Yu Meng",
+          "institutions": "University of Virginia",
+          "abstract": "在线策略自蒸馏（OPSD）让 LLM 以标准答案等特权信息为条件充当自己的老师，但近期发现它在复杂推理上会严重损害性能：强迫学生模仿特权加持下过度自信的推理轨迹，会压制不确定性表达与解题所需的探索性自我纠错。论文提出负向自蒸馏（NSD）：不模仿特权解，而是远离有缺陷的推理——用模型自己生成问题特定的负向条件（如扮演“粗心的推理者”），把学生分布推离这个自生成的负向教师。直接套用遗忘目标有问题：缺陷推理 token 与基础语言 token 混杂，无差别惩罚会灾难性损害基础语言能力。NSD 设计动态门控机制自动识别并隔离推理关键 token，确保梯度更新只作用于行为相关的 token。实验显示 NSD 在复杂推理任务上避免 OPSD 式退化并取得提升，同时保持模型的通用语言能力，且全程无需标准答案或外部监督。",
+          "contributions": [
+            "提出 NSD 框架：以“远离自生成负向条件”替代“模仿特权解”的自我提升范式。",
+            "指出无差别遗忘目标会连带损害基础语言能力，设计动态门控隔离推理关键 token。",
+            "系统分析 OPSD 在复杂推理上的退化机理：特权条件下的过度自信模仿压制探索与自我纠错。"
+          ],
+          "conclusions": [
+            "负向学习比正向模仿更适合无外部监督的推理自提升。",
+            "门控保护是避免自蒸馏伤及基础语言能力的关键。"
+          ],
+          "experiments": [
+            "相同设置下 OPSD 在复杂推理任务上性能退化，NSD 避免退化并取得提升。",
+            "动态门控使梯度只作用于推理关键 token，基础语言能力保持。",
+            "训练全程不需要标准答案或外部特权信息。"
+          ],
+          "significance": "把“不学什么”变成可执行的训练信号，为无监督推理自提升提供 OPSD 之外的路线。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11699",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11699.pdf",
+          "takeaway": "不学怎么答、学怎么别错：让模型远离自己扮演的“粗心推理者”，推理提升且语言能力不掉。",
+          "keyExperiment": "OPSD 在复杂推理上退化而 NSD 持续提升，动态门控同时保住基础语言能力。",
+          "index": 6
+        },
+        {
+          "title": "A Unified Per-Token Gating Family for On-Policy Distillation: FKL/RKL Mixing with Multi-Channel and Bias Coefficients",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-11",
+          "authors": "Suwan Wu, Yumeng Lin, Pengcheng Yuan, Xiaolong Jiang",
+          "institutions": "机构未标注",
+          "abstract": "前向/反向 KL 损失的逐 token 门控已成为在线策略蒸馏（OPD）的标准技术，但现有方法如 EOPD 与 ToDi 各自固定单一门控信号与单一门控方向，且从未被直接比较。论文提出四系数参数化 λ_t = σ(a·h_t + b·u(x) + c + d·gap_t)，把 EOPD 与 ToDi 的方向对齐代理作为其一维特例纳入，并增加多通道组合与显式偏置两个自由度。在 TweetEval 情绪与仇恨分类上以 Qwen3-32B 为教师、Qwen3-4B 为学生：完整族配置在 36 个可比单元中的 33 个超过同量级的单通道一维限制；26 单元均值匹配隔离实验中动态门控在 19 个单元优于等效 KL 匹配的静态基线。由于各单元共享训练数据、模型与参数子结构，作者把两项计数定位为探索性方向性证据而非独立假设检验；对 9 个头条比较的三种子配对复制方向一致但幅度更小且 n=3 下不显著。作者因此主要将其作为统一参数化与可复现实验协议提出。",
+          "contributions": [
+            "统一 EOPD 与 ToDi 为四系数逐 token 门控族的两个一维特例，并首次直接比较二者。",
+            "引入多通道组合与显式偏置，扩展逐 token 门控的自由度。",
+            "给出诚实标注证据强度的对照协议：均值匹配隔离实验加三种子配对复制。"
+          ],
+          "conclusions": [
+            "方向性证据支持更丰富的动态门控优于单信号一维门控，但仍需更大规模确认。",
+            "统一参数化使门控方法可比较、可复现，是该子领域缺位的公共基础设施。"
+          ],
+          "experiments": [
+            "Qwen3-32B→Qwen3-4B、TweetEval 情绪/仇恨：完整族在 36 个可比单元中 33 个胜过同量级单通道一维门控。",
+            "26 单元均值匹配隔离实验中动态门控在 19 个单元优于等效 KL 静态基线。",
+            "9 个头条比较的三种子复制方向一致但 n=3 不显著，作者如实标注探索性质。"
+          ],
+          "significance": "为在线策略蒸馏的门控设计给出首个统一框架与直接对比，并严谨标注证据边界。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11768",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11768.pdf",
+          "takeaway": "在线蒸馏的 token 门控统一成四参数族，EOPD/ToDi 都是特例；动态门控方向性占优但证据仍是探索级。",
+          "keyExperiment": "Qwen3-32B→4B 蒸馏中 36 个可比单元 33 个胜过同量级单通道一维门控。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Distance generalization in transformers: why bother with positional encoding?",
+          "score": 3.5,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-11",
+          "authors": "Daniel Henrik Nevermann, Claudius Gros",
+          "institutions": "Goethe University Frankfurt",
+          "abstract": "与研究长度外推的 OOD 长度泛化不同，论文聚焦“距离泛化”：上下文长度固定、而 token 间距离在训练与推理之间改变时的性能。作者构造两个合成延迟复制任务（全量复制与选择性复制，源与回忆之间存在有限距离），在训练未见过的延迟上测试模型，并回答三个问题：(A) RoPE、ALiBi 等位置编码方案相对无位置编码（NoPE）是否改善距离分辨率？(B) 数据多样性——训练时见过的 token 间距离数量——如何影响性能？(C) 距离迁移学习何时为正、何时为负？论文给出系统研究，指出理解底层机制至关重要，为位置编码的必要性提供了受控实验视角。",
+          "contributions": [
+            "提出与长度泛化正交的“距离泛化”研究切面，构造两个延迟复制任务。",
+            "在受控设置下系统对比 RoPE、ALiBi 与 NoPE 的距离分辨率。",
+            "考察训练距离覆盖（数据多样性）与距离迁移的正负效应。"
+          ],
+          "conclusions": [
+            "位置编码的价值取决于任务性质与训练见过的距离覆盖，并非在所有设置下必要。",
+            "距离迁移可为负向，任务设计需谨慎控制训练距离分布。"
+          ],
+          "experiments": [
+            "两个延迟复制任务上对训练未见延迟的系统测试。",
+            "RoPE/ALiBi/NoPE 三种位置编码设置的距离分辨率对比。",
+            "训练时见过的距离数量（数据多样性）消融实验。"
+          ],
+          "significance": "把泛化研究从“更长”转向“更远”，用受控实验重新审视位置编码设计的必要性。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11913",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11913.pdf",
+          "takeaway": "固定长度变距离：RoPE/ALiBi 未必比 NoPE 强，训练距离覆盖才是关键变量。",
+          "keyExperiment": "训练未见延迟上的延迟复制测试中系统对比 RoPE/ALiBi/NoPE。",
+          "index": 8
+        },
+        {
+          "title": "Routing by Reasoning Need: Trajectory-Aware Decoding Control for Diffusion Vision-Language Models",
+          "score": 3.5,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-11",
+          "authors": "Yixiang Liu, Zhongxing Xu, Zhonghua Wang, Xiaoying Tang",
+          "institutions": "机构未标注",
+          "abstract": "扩散视觉语言模型通过迭代精化生成答案，暴露出可在推理时检视与控制的中间答案轨迹，但也带来推理需求错配：统一的生成长度被施加在推理需求差异极大的问题上——视觉封闭题在稳定答案形成后继续精化反而受损，推理敏感题则受害于过早定答。论文将其形式化为推理预算错配问题并在 LLaDA-V 上研究：不选统一生成长度，而是用免训练控制器依据轨迹信号（答案闭合度、承诺证据、表征修订压力）把每个样本路由到早承诺、基线保持或推理支持式解码，全程不使用真实答案。在答案导向、混合推理与 CoT 敏感三类基准上，路由控制的鲁棒性优于固定长解码、纯短解码与单规则干预，且增益不能仅由输出更短解释。结果表明扩散 VLM 的推理时控制应按观测轨迹状态路由，而非依赖统一解码长度。",
+          "contributions": [
+            "形式化扩散 VLM 的“推理预算错配”问题。",
+            "设计免训练、轨迹感知的三路解码控制器：早承诺、基线保持、推理支持式解码。",
+            "证明增益不来自输出更短，而来自按需路由的机制本身。"
+          ],
+          "conclusions": [
+            "扩散 VLM 解码应按观测轨迹状态做推理时路由，而非统一生成长度。",
+            "视觉封闭题受益于早承诺，CoT 敏感题需要保护或支持中间推理。"
+          ],
+          "experiments": [
+            "LLaDA-V 上答案导向、混合推理、CoT 敏感三类基准的对比实验。",
+            "路由控制同时优于固定长解码、纯短解码与单规则干预。",
+            "对照分析证明增益非“输出更短”所能解释。"
+          ],
+          "significance": "为扩散式多模态模型给出零训练成本的推理时解码控制方案。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11315",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11315.pdf",
+          "takeaway": "扩散 VLM 别用统一生成长度：看轨迹状态路由早承诺还是继续推理，免训练提升鲁棒性。",
+          "keyExperiment": "LLaDA-V 混合推理基准上，轨迹路由控制同时优于固定长解码与纯短解码。",
+          "index": 9
+        },
+        {
+          "title": "EMMI: Edge Multi-Modal Intelligence for Communication-Efficient MLLM Inference via Fused Representation Compression",
+          "score": 3.5,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Motahare Mounesan, Irfan Khan",
+          "institutions": "机构未标注",
+          "abstract": "多模态大模型（MLLM）为边缘智能带来跨视觉、文本、遥测等异构传感器模态推理的机会，但其计算、内存与通信需求使其难以部署在资源受限的边缘平台。EMMI 不传输原始传感器观测、也不做网络中间层切分，而是在边缘完成模态特定编码、跨模态表征融合与学习式压缩，仅向服务器侧传输紧凑的潜在表征，由服务端大模型完成重推理。这种以表征为中心的设计降低通信开销、保护本地数据隐私，并为异构边缘设备与服务端 MLLM 提供固定尺寸接口。在代表性多模态基准上的评估显示：EMMI 在保持可比下游精度的同时把通信负载减少 32×，在带宽受限的边缘条件下把估计的端到端推理延迟最多降低 3.4×。",
+          "contributions": [
+            "提出表征中心而非数据/模型切分中心的边缘-服务器协同推理架构。",
+            "边缘侧完成模态特定编码、跨模态融合与学习式压缩的完整流水线。",
+            "固定尺寸接口设计统一异构边缘设备与服务端 MLLM 的交互。"
+          ],
+          "conclusions": [
+            "传紧凑表征比传原始数据或切分网络更划算，且天然保护数据隐私。",
+            "通信缩减直接转化为带宽受限场景的端到端延迟下降。"
+          ],
+          "experiments": [
+            "代表性多模态基准上通信负载减少 32×，下游精度可比。",
+            "带宽受限边缘条件下估计端到端推理延迟最多降低 3.4×。"
+          ],
+          "significance": "给边缘 MLLM 部署提供“少传数据、多传语义”的工程模板，隐私与效率兼得。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11058",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11058.pdf",
+          "takeaway": "边缘 MLLM 推理传表征不传原始数据：通信负载 -32×、端到端延迟最多 -3.4×。",
+          "keyExperiment": "多模态基准上 32× 通信缩减且下游精度可比，带宽受限时延迟最多降 3.4×。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
