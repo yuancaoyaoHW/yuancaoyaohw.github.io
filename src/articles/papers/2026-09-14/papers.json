@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-14",
+  "title": "2026-09-14 论文精选",
+  "lede": "今日聚焦推理效率的两次跃迁：扩散语言模型的 O(1) 状态缓存与按注意力类型切分的异构分离正在重写长上下文成本曲线；agent RL 的信用分配与探索边界、AMD kernel 生态与 MoE 量化服务路由也在同步演进。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 213
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Fixed State, Long Reach: What a Constant-Size Cache Buys Block Diffusion at Scale",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-14",
+          "authors": "Vaibhav Singh, Pierre-André Noël, Torsten Scholak, Eugene Belilovsky, Oleksiy Ostapenko",
+          "institutions": "Concordia University",
+          "abstract": "扩散语言模型并行解码，但其双向去噪器无法使用自回归推理的 KV cache。Block diffusion 通过逐块解码恢复了缓存能力，但现有块缓存都绑定注意力：显存 O(L)，作为免训练补丁时只是模型计算的近似。本文证明两个约束都能克服：能把已定稿块摘要为可复用状态的序列混合器支持块缓存，配套的块因果训练目标使缓存精确。作者用同一单一前沿目标预训练三个 3B block-diffusion 去噪器（注意力/Mamba/混合），300B tokens，并经统一缓存接口解码。只有状态空间缓存的显存与每步延迟与序列长度无关（O(1)）：在 256k tokens 处注意力缓存已膨胀到 82GB、29ms/步，Mamba 缓存延迟降低 4.3 倍、显存减少 11 倍、单流吞吐提升 2.6 倍；且因占用恒定可随 batch 扩展，聚合吞吐达 14 倍，而注意力在单流之外无法运行。同一线性状态偏置还让 Mamba/混合骨干把检索能力外推至训练长度的 8-16 倍，注意力在 2 倍即崩溃，且无质量代价。",
+          "contributions": [
+            "指出 block diffusion 注意力块缓存的 O(L) 显存与近似性两大约束，给出状态摘要混合器加块因果训练目标的完整解法",
+            "首次在规模上（3 个 3B 模型、300B tokens、单一目标）系统对比注意力/Mamba/混合骨干的块缓存行为",
+            "证明 O(1) 状态缓存带来延迟、显存、吞吐全维度优势，且检索能力外推至训练长度 8-16 倍"
+          ],
+          "conclusions": [
+            "状态空间缓存在任意上下文长度保持恒定显存与每步延迟，注意力缓存随长度线性膨胀",
+            "线性状态偏置带来的外推是免费的：8-16 倍训练长度的检索不损失质量"
+          ],
+          "experiments": [
+            "256k tokens 时注意力缓存 82GB、29ms/步，Mamba 缓存延迟 4.3 倍更低",
+            "Mamba 缓存显存减少 11 倍、单流吞吐提升 2.6 倍",
+            "批量场景聚合吞吐达 14 倍，检索外推 8-16 倍对比注意力 2 倍崩溃"
+          ],
+          "significance": "为扩散语言模型的 KV cache 问题给出状态空间答案：O(1) 缓存加精确训练目标，长上下文吞吐提升一个量级。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11998",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11998.pdf",
+          "takeaway": "扩散 LM 的 O(1) 状态缓存：256k 上下文 14 倍吞吐、11 倍省显存。",
+          "keyExperiment": "三个 3B block-diffusion 去噪器在同一 300B tokens 目标下预训练，256k 上下文下 Mamba 缓存 4.3 倍低延迟、11 倍省显存、14 倍聚合吞吐。",
+          "index": 1
+        },
+        {
+          "title": "AMDKernelVault: Large-Scale Datasets and Agentic Training for AMD GPU Kernel Optimization",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-14",
+          "authors": "Ji Liu, Saptarshi Majumder, Yiqing Huang, Wenwen Ouyang, Umang Pandey, Zeping Li, Chushi Chen, Zihao An, Puyuan Yang, Zekai Li, Sina Rafati, Ziqiong Liu, Pratik Prabhanjan Brahma, Dong Li, Zicheng Liu, Sharon Zhou, Emad Barsoum et al.",
+          "institutions": "AMD",
+          "abstract": "现有 LLM kernel 生成 agent 几乎全围绕 CUDA/NVIDIA，且依赖反复调用前沿 LLM 做生成、反思与优化。本文发布面向 AMD CDNA GPU 的开放 HIP/Triton kernel 语料与训练框架：HIPKernelGen 与 TritonKernelGen 两条 agent 流水线把 PyTorch 参考实现转成 HIP 或 Triton kernel，在 ROCm 下编译验证并在 AMD 硬件上做延迟画像。语料含 62,153 条执行验证的 HIP kernel 样本、2,377 条生产级 ROCm Libraries QA 与 39,893 条 Triton kernel。作者用 SFT 加执行感知 RL 训练 Qwen3-8B 验证语料效用：固定评测预算下，其正确率在 PyTorch-to-HIP（34.0% Pass@1）、TritonBench-G（33.2% Corr@3）、ROCmBench（41.94% Corr@3）三项居对比模型之首，但编译率与加速比并非全面领先。语料、文档、训练与生成代码全部开源。",
+          "contributions": [
+            "首个大规模 AMD GPU kernel 语料：62,153 执行验证 HIP kernel、39,893 Triton kernel、2,377 ROCm Libraries QA",
+            "两条 agent 驱动流水线完成 PyTorch 到 HIP/Triton 的转换、ROCm 编译验证与硬件延迟画像",
+            "SFT 加执行感知 RL 训练 Qwen3-8B，三项基准正确率第一，摆脱对前沿 LLM 反复调用的依赖"
+          ],
+          "conclusions": [
+            "小模型用上执行感知 RL 后可在 AMD kernel 正确率上超过更大的通用模型",
+            "正确率领先但编译率与加速比未全面领先，说明 kernel 性能优化仍需更多执行反馈数据"
+          ],
+          "experiments": [
+            "语料规模：62,153 HIP + 39,893 Triton + 2,377 QA",
+            "PyTorch-to-HIP 34.0% Pass@1（对比模型中最高）",
+            "TritonBench-G 33.2% Corr@3，ROCmBench 41.94% Corr@3"
+          ],
+          "significance": "把 LLM kernel agent 生态从 CUDA 扩展到 AMD ROCm：执行验证语料加 agent 流水线全部开源。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12471",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12471.pdf",
+          "takeaway": "AMD 版 kernel 语料库：6.2 万执行验证 HIP kernel，Qwen3-8B 三项正确率第一。",
+          "keyExperiment": "SFT 加执行感知 RL 的 Qwen3-8B 在固定预算下取得 PyTorch-to-HIP 34.0% Pass@1、ROCmBench 41.94% Corr@3，均为对比模型最高。",
+          "index": 2
+        },
+        {
+          "title": "SAS: Simple Attention Sparsification via End-to-End Optimization of Context Ranking",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-14",
+          "authors": "Zhiwei Li, Lei Zhu, Hao Gu, Xiang Hu, Yan Wang, Haitao Mi, Sirui Han, Leo Liang, Zhijiang Guo",
+          "institutions": "机构未标注",
+          "abstract": "训练后注意力稀疏化通过为每个 query 选少量上下文单元降低二次注意力成本。现有可训练方法用轻量 selector 打分后做硬 Top-K，梯度被阻断，只能蒸馏原模型的逐层稠密注意力分布，但稠密注意力权重排序与固定预算下对预测的实际影响并不对齐，有限预算常浪费在无用单元上。SAS 提出 gated 稀疏注意力：训练时把 selector 的连续分数注入注意力 logits，让 LM loss 经标准反传直接更新 selector，实现端到端的上下文排序优化。作者找到三个关键设计：门控以 log 形式置于注意力 softmax 内部、用归一化 softmax 门校准历史上下文与始终保留的当前块、保留连续分数让模型学习相对优先级而非仅硬选择。并实现显存高效的 Triton kernel，把 SAS 融入 FlashAttention 式计算以支持长序列训练。推理、长上下文理解与 agentic 任务上，SAS 在各注意力预算下一致超越可训练稀疏注意力基线，紧预算下优势最大。",
+          "contributions": [
+            "把上下文选择从蒸馏稠密注意力分布改为由 LM loss 端到端直接优化排序",
+            "识别 log 形式门控、归一化 softmax 门、连续分数三个使设计成立的关键选择",
+            "FlashAttention 式显存高效 Triton kernel，支持长序列下的端到端稀疏训练"
+          ],
+          "conclusions": [
+            "selector 排序与预测影响的对齐比模仿稠密注意力权重更重要",
+            "预算越紧，端到端排序优化的收益越大"
+          ],
+          "experiments": [
+            "推理、长上下文、agentic 三类任务上一致超越可训练稀疏注意力基线",
+            "紧注意力预算下增益最大",
+            "Triton kernel 融入 FlashAttention 式计算完成长序列训练"
+          ],
+          "significance": "注意力稀疏化第一次真正端到端：不再模仿稠密权重，而是让 LM loss 直接教 selector 排序。",
+          "arxivUrl": "https://arxiv.org/abs/2609.13141",
+          "pdfUrl": "https://arxiv.org/pdf/2609.13141.pdf",
+          "takeaway": "稀疏注意力的排序直接由 LM loss 端到端训练，Triton kernel 落地，紧预算增益最大。",
+          "keyExperiment": "跨推理、长上下文、agentic 任务与多档注意力预算，SAS 全面超越蒸馏式可训练稀疏基线，紧预算下差距最大。",
+          "index": 3
+        },
+        {
+          "title": "Quality-Constrained Routing over a Fixed Pool of Quantized Mixture-of-Experts Instances",
+          "score": 3.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-14",
+          "authors": "Zhenghong Huang, Hongfan Wu, Jiheng Zhang",
+          "institutions": "HKUST",
+          "abstract": "量化 MoE 服务可常驻同一基模的多个不同位宽实例，但量化损伤随请求与位宽剧烈变化；实例物化与副本数消耗显存且重配置缓慢，故本文将其视为上游供应决策，研究固定常驻池内的路由问题。目标是在类级期望质量退化预算与实测实例容量约束下最大化建模吞吐。为预测请求级风险，作者提出 FWP（Fragility-Weighted Perplexity）：在参考实例 prefill 时由 prompt tokens 计算并校准到候选实例退化程度的请求级风险预测，底层是精确的两专家 affinity-fragility 分解与条件多层 top-k 展开，偏差、交互、换路、可分性与高阶项均显式保留。用校准后的风险求解窗口级线性规划，得到与 LP 最优 KKT 一致的符号化 reduced-reward 分数。88 条扩展 Qwen prompt 上，W2/W3/W4 全量化 6,144 个专家块的均值 ΔNLL 分别为 0.9437、0.1832、0.0513；在 τ=0.1513 质量预算下，FWP 分配达到 1.284 倍离线模型乘数，高于请求无关混合的 1.253 倍与静态 W4 的 1.000 倍，相对增量 2.5%。",
+          "contributions": [
+            "把量化 MoE 多实例服务的路由形式化为固定常驻池内、质量预算约束下的吞吐最大化问题",
+            "提出请求级量化风险预测 FWP，底层是精确的两专家 affinity-fragility 分解",
+            "窗口级线性规划给出 KKT 一致的最优路由分数，免重配置即提升有效吞吐"
+          ],
+          "conclusions": [
+            "量化损伤高度请求相关，请求无关的位宽混合并非最优",
+            "FWP 的增量收益（相对 2.5%）来自把每个请求路由到其脆弱性最低的位宽实例"
+          ],
+          "experiments": [
+            "W2/W3/W4 全量化 6,144 专家块均值 ΔNLL：0.9437 / 0.1832 / 0.0513",
+            "τ=0.1513 质量预算下 FWP 1.284 倍 vs 请求无关混合 1.253 倍 vs 静态 W4 1.000 倍",
+            "88 条扩展 Qwen prompt 上的离线模型化评测"
+          ],
+          "significance": "给量化 MoE 服务补上请求级风险路由这块拼图：显存不变，质量预算内多榨 2.5% 吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12550",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12550.pdf",
+          "takeaway": "量化 MoE 多实例服务的请求级风险路由：质量预算内吞吐再 +2.5%。",
+          "keyExperiment": "W2/W3/W4 三种位宽全量化 6,144 专家块测得 ΔNLL 0.9437/0.1832/0.0513，FWP 在 τ=0.1513 预算下达 1.284 倍吞吐乘数。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "MInTRL: Off-policy Intervention can boost On-policy RL",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-14",
+          "authors": "Mingyu Chen, Yefan Tao, Gerald Friedland, Xuezhou Zhang, Chris Kong",
+          "institutions": "UC Berkeley",
+          "abstract": "可验证奖励的 RL 通常 on-policy：数据贴近当前策略，但学习被限制在策略自己能发现的轨迹内；SFT 等离策略方法可引入模型能力之外的知识，却有大分布偏移。核心挑战是在不牺牲可学性的前提下扩大探索。MInTRL 用稀疏局部干预扩展 on-policy rollout 的探索前沿：生成时，judge-干预策略周期性审查当前策略输出，把错误后缀替换为简短修正后立即交还控制权；训练时采用序列级 advantage 回归目标，免去重要性采样。作者证明稀疏局部干预能在有限预算下大幅提升覆盖，同时保持轨迹整体 on-policy 性质。数学与代码基准上，MInTRL 一致超越标准 on-policy 与 off-policy 基线；消融显示自我干预与不同 judge 策略均有效，中等干预强度最优，凸显最小干预的重要性。这些结果确立了最小干预作为增强 on-policy RL 的有效范式。",
+          "contributions": [
+            "提出 judge 周期性修错误后缀再立即交还控制权的最小干预 rollout 机制",
+            "序列级 advantage 回归目标免去重要性采样，训练保持 on-policy 性质",
+            "证明稀疏局部干预可超越有限预算 on-policy 采样的覆盖上限"
+          ],
+          "conclusions": [
+            "干预强度存在甜点：太少探索不足，太多破坏可学性",
+            "最小干预可同时吸收 off-policy 的知识注入与 on-policy 的稳定性"
+          ],
+          "experiments": [
+            "数学与代码基准一致超越 on-policy 与 off-policy 基线",
+            "自我干预与不同 judge 策略下仍有效",
+            "中等干预强度性能最优"
+          ],
+          "significance": "在 on-policy RL 里植入最小干预：让外部知识进来一点，又不破坏策略自己的探索。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12419",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12419.pdf",
+          "takeaway": "on-policy RL 做最小干预：judge 修错误后缀再交还控制权，探索与可学性兼得。",
+          "keyExperiment": "数学与代码基准上全面超越 on-policy/off-policy 基线，中等干预强度最优；自我干预与多 judge 消融均有效。",
+          "index": 5
+        },
+        {
+          "title": "Granularity-Adaptive Credit Assignment for Long-Horizon LLM Agent Reinforcement Learning",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-14",
+          "authors": "Taoran Liang, Yang Liu, Shang Luo, Yingguang Yang, Rongrong Zhang, Yingzong Min, Yulin Huang, Jianshen Zhang, Yongzhi Qi, Kefu Xu, Congjing Ran, Bin Chong et al.",
+          "institutions": "机构未标注",
+          "abstract": "RL 已是训练长程 LLM agent 的标准方式：数十个相互依赖的动作之后才有单一稀疏奖励。GRPO 类无 critic 的组相对方法把一条轨迹级标量广播到每一步，说不清哪个决策决定了结果；GiGPO 用锚定状态分组恢复步级信号，却以固定权重混合步级与回合级估计，把同样分辨率花在关键分支决策与例行转移上。GACA 主张分辨率应随状态而定：以每步自身 rollout 已记录的负对数似然（NLL）作为不确定性关键度代理，逐步权重随该分数增长，梯度在高 NLL 步侧重细粒度步级信号、低 NLL 步侧重回合级信号。作者推导了该混合估计的精确风险分解，证明正方向对齐下充分小的调制优于固定混合；并用条件结果以期望 NLL 界定局部 action-value 变化，误差投影分析刻画混合何时超越标量不确定性重加权。ALFWorld 与 WebShop 上，GACA 在 1.5B 与 7B 两个规模下的任务成功率均超 GRPO 与 GiGPO。",
+          "contributions": [
+            "提出状态依赖的信用分配粒度：以逐步 NLL 作为关键度代理自适应混合步级与回合级优势",
+            "推导混合估计的精确风险分解与正方向对齐下的最优性条件",
+            "免 critic 设计即插即用，直接叠加在 GRPO/GiGPO 框架上"
+          ],
+          "conclusions": [
+            "关键分支决策值得更多步级分辨率，例行转移应回落到回合级信号",
+            "NLL 是免训练的关键度代理，无需额外价值网络"
+          ],
+          "experiments": [
+            "ALFWorld 与 WebShop 任务成功率超越 GRPO 与 GiGPO",
+            "1.5B 与 7B 两个模型规模下均成立",
+            "理论：精确风险分解证明小调制优于固定混合"
+          ],
+          "significance": "agent RL 信用分配迈过固定混合这一步：粒度跟着状态不确定性走，关键决策才有细粒度信号。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12424",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12424.pdf",
+          "takeaway": "信用分配粒度随状态 NLL 自适应，ALFWorld/WebShop 双规模超越 GRPO/GiGPO。",
+          "keyExperiment": "ALFWorld 与 WebShop 上，GACA 在 1.5B/7B 两规模下任务成功率均超过 GRPO 与 GiGPO。",
+          "index": 6
+        },
+        {
+          "title": "CanvasAnneal: Curriculum Reinforcement Learning for Diffusion Language Models",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-14",
+          "authors": "Blake Olson, Yuhang Song, Emmett McQuinn, Yuan Shangguan",
+          "institutions": "机构未标注",
+          "abstract": "扩散语言模型（DLM）具备可观的并行生成能力，但复杂推理与工具使用落后于自回归模型；对 DLM 施加 RL 又受探索瓶颈困扰。CanvasAnneal 引入课程式引导的扩散 RL 框架：RL 初期把更强教师模型生成的推理轨迹注入初始扩散画布热启动探索，随训练推进逐步撤除引导，要求模型独立生成更多推理轨迹。数学推理与工具使用基准上，CanvasAnneal 超越标准 diffu-GRPO（MATH500、Countdown、Tau2），并在多个任务上显著加速奖励提升，但收益随任务而异。结果表明结构化的训练时引导能缓解扩散 RL 的探索瓶颈、加速难任务收敛。这一课程化思路与自回归 RL 里已验证的引导-撤除模式相呼应，为 DLM 的推理能力提升提供了低成本路径。",
+          "contributions": [
+            "把教师推理轨迹注入扩散画布做热启动，再课程式撤除引导",
+            "缓解 DLM 上 RL 的探索瓶颈，加速难任务的奖励提升",
+            "MATH500、Countdown、Tau2 三个基准上超越 diffu-GRPO"
+          ],
+          "conclusions": [
+            "训练时结构化引导可改善扩散 RL 的探索效率，撤除后不留下依赖",
+            "收益随任务类型而异，工具使用类任务提升更明显"
+          ],
+          "experiments": [
+            "MATH500、Countdown、Tau2 均超越 diffu-GRPO",
+            "多个任务奖励提升速度显著加快",
+            "课程撤除后模型保持独立生成能力"
+          ],
+          "significance": "扩散 LM 的 RL 训练第一次有了课程方案：教师画布热启动、逐步放手，探索瓶颈被结构性缓解。",
+          "arxivUrl": "https://arxiv.org/abs/2609.13060",
+          "pdfUrl": "https://arxiv.org/pdf/2609.13060.pdf",
+          "takeaway": "扩散 LM 的 RL：教师轨迹画布热启动再逐步撤除，缓解探索瓶颈加速收敛。",
+          "keyExperiment": "课程引导下 MATH500/Countdown/Tau2 全部超越 diffu-GRPO，多个任务奖励提升显著加速。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Rethinking Heterogeneous System Disaggregation for Subquadratic Attention",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-14",
+          "authors": "Arya Tschand, Yaosheng Fu, Vikram Sharma Mailthody, Nicolai Oswald, Po-An Tsai, Ritchie Zhao, Oreste Villa, Vijay Janapa Reddi, Karu Sankaralingam",
+          "institutions": "Harvard, NVIDIA, UW-Madison",
+          "abstract": "前沿模型正积极采用亚二次注意力降低推理显存与算力，但现有系统仍按稠密注意力假设做分离式服务决策。SQD（SubQuadratic Disaggregation）按二次与亚二次注意力而非算子类型切分 decode 的细粒度异构分离方案，适用各亚二次注意力变体：稀疏注意力 LLM 把 decode 拆为必须索引全 KV 的 top-k 选择与显存占用静态的 top-k 注意力加 FFN；线性与滑窗注意力 LLM 拆为稠密注意力层与亚二次注意力层加 FFN。在调整后的 8xB200 异构系统代理上，GLM 5.2、Nemotron 3 Ultra、Gemma 4 31B 的平均能效（tokens/J）较最强 GPU-only 基线分别提升 53%、31%、56%；固定功耗的 Rubin 加 LPX 解析模型中，可达延迟较最优注意力-FFN 分离基线紧 1.2-1.5 倍，吞吐最高 3.6 倍。实验还给出面向下一代异构系统、服务亚二次注意力的芯片与互连配置洞见。",
+          "contributions": [
+            "首次针对亚二次注意力 LLM 重新设计分离式推理：按注意力类型而非算子切分 decode",
+            "稀疏/线性/滑窗三种亚二次变体统一的拆分原则与内存足迹分析",
+            "在真实 8xB200 代理与 Rubin+LPX 解析模型双轨验证能效与吞吐收益"
+          ],
+          "conclusions": [
+            "亚二次注意力的算术强度与显存足迹不同于稠密注意力，需要专门的异构分离策略",
+            "top-k 选择必须访问全 KV，是唯一适合配大显存节点的阶段"
+          ],
+          "experiments": [
+            "8xB200 上能效提升：GLM 5.2 +53%、Nemotron 3 Ultra +31%、Gemma 4 31B +56%",
+            "Rubin+LPX 固定功耗下延迟紧 1.2-1.5 倍、吞吐最高 3.6 倍",
+            "对比基线为最强 GPU-only 与注意力-FFN 分离方案"
+          ],
+          "significance": "分离式推理的设计坐标从算子类型换成注意力类型：亚二次注意力时代的系统能效新上限。",
+          "arxivUrl": "https://arxiv.org/abs/2609.13134",
+          "pdfUrl": "https://arxiv.org/pdf/2609.13134.pdf",
+          "takeaway": "按注意力类型切分 decode：8xB200 能效 +31~56%，Rubin+LPX 吞吐最高 3.6 倍。",
+          "keyExperiment": "8xB200 异构代理上三个前沿模型能效提升 53%/31%/56%；Rubin+LPX 解析模型延迟紧 1.2-1.5 倍、吞吐最高 3.6 倍。",
+          "index": 8
+        },
+        {
+          "title": "Occamy-1.0: Open Pareto-frontier 35B Intelligence for Co-work",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-14",
+          "authors": "Wenhui Chen, Shiwen Cheng, Hao Dong, Chenda Duan, Ruixiang Feng, Zhong Guan, Boqiang Guo, Xueyuan Han, Haojie Hao, Liangmeng Huang, Zhelong Huang, Xinke Kong et al.",
+          "institutions": "机构未标注",
+          "abstract": "Co-work agent 跨多次模型调用执行信息收集、工具使用、编码与文件操作，成本与延迟随整个 episode 累积，其实际价值不仅取决于峰值能力，更取决于能力交付的效率；而日常工作中的大量步骤是状态跟踪、协调、恢复与跟进，而非前沿级推理。Occamy-1.0 是以后训练的 Qwen3.6-35B-A3B checkpoint 为基座继续训练的高性价比 co-work 模型：作者构建执行落地数据与环境，跨多个 harness 捕获可重放的长程轨迹，用分阶段后训练开发并巩固互补的执行能力。在广泛的 co-work 基准套件上，Occamy-1.0 稳居同规模模型最强之列，并在多个任务上与明显更大的前沿系统竞争；按给定评测与定价协议，四个代表性基准的聚合表现落在成本-性能 Pareto 前沿的低成本拐点。工具调用、编码与指令遵循的支持评测表明，这种专门化并未损害通用 agentic 能力。模型权重与部分训练数据开源。",
+          "contributions": [
+            "以 Qwen3.6-35B-A3B 为基座，用执行落地数据与多 harness 长程轨迹做分阶段后训练",
+            "聚合表现落在成本-性能 Pareto 前沿的低成本拐点，同规模最强之一",
+            "模型权重与部分训练数据开源"
+          ],
+          "conclusions": [
+            "co-work 场景的成本效率比峰值推理能力更决定实际价值",
+            "面向执行的专门化不必牺牲通用 agentic 能力"
+          ],
+          "experiments": [
+            "四个代表性 co-work 基准聚合表现位于低成本拐点",
+            "同规模模型中最强之列，部分任务逼近更大前沿系统",
+            "工具调用、编码、指令遵循评测显示通用能力保留"
+          ],
+          "significance": "35B-A3B 档开源 co-work 模型的性价比标杆：能力不看峰值看交付效率。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11977",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11977.pdf",
+          "takeaway": "Qwen3.6-35B-A3B 深造的开源 co-work 模型，落在成本-性能 Pareto 低成本拐点。",
+          "keyExperiment": "四基准聚合表现位于成本-性能 Pareto 前沿低成本拐点；工具调用/编码/指令遵循评测证明专门化未损害通用 agentic 能力。",
+          "index": 9
+        },
+        {
+          "title": "RunningTensor: Generalizing Linear Attention to Higher-Order Recurrent States",
+          "score": 3.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-14",
+          "authors": "Luca Herranz-Celotti, Vincent Guigue",
+          "institutions": "Sorbonne Université",
+          "abstract": "线性注意力与状态空间模型提供线性时间序列建模，但它们的循环记忆只是二阶张量（矩阵），限制了状态可表达的交互阶数。RunningTensor 把循环记忆推广为 o 阶张量：以 rank-1 外积更新、与 o-1 个向量 query 收缩读取；阶数 2 恰好退化为线性注意力。作者以阶数 3 作概念验证：循环与并行两种形式均保留，序列长度仍线性，而工作记忆容量从 O(W 的平方) 提升到 O(W 的 o 次方)。合成多查询联想记忆任务上，RunningTensor 超越线性注意力与 SSM 基线；预训练后在语言理解与非合成检索任务上也有提升，表明高阶循环状态能提供矩阵状态之外的有效记忆容量。这一推广为线性注意力家族打开了一个此前被矩阵状态形式锁死的设计维度。",
+          "contributions": [
+            "把循环状态从矩阵推广到任意阶张量：rank-1 外积更新、收缩读取，阶数 2 退化为线性注意力",
+            "阶数 3 概念验证同时保留循环与并行形式，计算仍随序列长度线性",
+            "工作记忆容量从 O(W^2) 跃升至 O(W^o)"
+          ],
+          "conclusions": [
+            "高阶循环状态提供的额外记忆容量在合成检索与真实任务上都可兑现",
+            "矩阵状态形式是线性注意力家族被忽视的表达力瓶颈"
+          ],
+          "experiments": [
+            "合成多查询联想记忆超越线性注意力与 SSM 基线",
+            "预训练后语言理解与非合成检索任务均有提升",
+            "容量从 O(W^2) 到 O(W^3) 的理论提升在多查询任务上得到验证"
+          ],
+          "significance": "线性注意力状态的一次干净推广：从矩阵到三阶张量，容量指数级放大而计算仍线性。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12814",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12814.pdf",
+          "takeaway": "循环状态从矩阵推广到 3 阶张量：容量 O(W^2) 到 O(W^3)，联想记忆任务全面提升。",
+          "keyExperiment": "阶数 3 的 RunningTensor 在合成多查询联想记忆上超越线性注意力/SSM 基线，预训练后语言理解与真实检索任务亦有提升。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
