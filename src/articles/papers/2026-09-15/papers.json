@@ -1,0 +1,340 @@
+{
+  "date": "2026-09-15",
+  "title": "2026-09-15 论文精选",
+  "lede": "今日聚焦 MoE 从训练到部署的落地闭环：offloading 用序列预测逼近全载性能、RL 把专家路由变成新探索维度、Muon 谱裁剪稳住大规模训练；byte 级小模型 scaling、推理系统 DSL 架构搜索与免训练推理增强同期亮相。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 504
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "SeqMoE: Toward Full-Load Performance via Predictive and Graph-Compatible MoE Offloading",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-14",
+          "authors": "Zihan Wang, Yuqi Wang, Lei Gong, Cheng Tang, Wenqi Lou, Teng Wang, Chao Wang, Xuehai Zhou",
+          "institutions": "北京大学",
+          "abstract": "MoE 架构天然适合 offloading：任意时刻只需一小部分激活专家驻留显存，若能及时加载，offloading 理论上可逼近「全载性能」（全部权重在显存）。本文提出 SeqMoE 弥合这一差距。为最大化专家命中，构建预测式内存管理：(i) 首次将专家激活预测重构为序列到序列建模，实现精确的多步、多层预测，为下游决策提供长而可靠的窗口；(ii) 把预取调度形式化为带截止时间的作业排序问题，最大化期望专家命中并提升带宽效率；(iii) 利用序列建模的递归性质，引入概率化 Belady 策略做面向未来的缓存淘汰。为消除执行瓶颈，还开发图兼容的 offloading 运行时：计算透明的专家放置与无同步编排纪律，支持端到端图捕获。仅 45% 专家常驻显存时，SeqMoE 平均命中率 96.97%，达到全载性能的 80.22%，刷新 MoE offloading 最优水平。",
+          "contributions": [
+            "首次把专家激活预测重构为序列到序列建模，支持多步多层预测，显著拉长预取决策窗口",
+            "预取调度形式化为带截止时间的作业排序问题，并提出概率化 Belady 淘汰策略",
+            "图兼容运行时：计算透明专家放置 + 无同步编排，支持端到端图捕获"
+          ],
+          "conclusions": [
+            "预测式内存管理能让 MoE offloading 以不足一半的专家常驻逼近全载性能",
+            "offloading 必须与现代推理引擎的图捕获兼容，才能真正吃满收益"
+          ],
+          "experiments": [
+            "仅 45% 专家常驻显存，平均专家命中率达 96.97%",
+            "端到端性能达到全载性能的 80.22%",
+            "整体刷新 MoE offloading 此前最优水平"
+          ],
+          "significance": "让单卡/消费级显存跑大 MoE 更接近全载速度，offloading 从「能用」走向「好用」。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12978",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12978.pdf",
+          "takeaway": "序列预测式预取让 MoE offloading 以 45% 显存拿到 80% 全载性能。",
+          "keyExperiment": "45% 专家常驻时命中率 96.97%、端到端性能达全载的 80.22%。",
+          "index": 1
+        },
+        {
+          "title": "Dissecting GPU Utilization for LLM Inference on Nvidia Hopper",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-14",
+          "authors": "Mohammad Siavashi, Gerald Q. Maguire Jr., Dejan Kostic, Marco Chiesa",
+          "institutions": "瑞典皇家理工学院（KTH）",
+          "abstract": "单一的 SM 利用率数字会让 LLM 推理负载看似「算力打满」，却掩盖真实有效工作量——问题不在计数器错误，而在于它把多种机制折叠成一个数。这在 decode 阶段最严重：每个请求每步只产出一个新 token，稠密投影 GEMM 退化为小行数矩阵乘；Hopper 的 bf16 GMMA 路径按固定 64 行矩阵分片执行，小批量 decode 只能填充分片的极小部分。本文在 H100 NVL 上剖析 vLLM+FlashAttention-3+cuBLASLt，覆盖冷/热 prefill 与 decode，扫描序列长度与批量大小，用 8 个由原始 Nsight Compute 报告导出、绑定到 NCU 计数器或显式公式的交叉验证视图替换惯用的单一利用率数字，把利用率缺口映射到分片填充率、占用上限、停顿特征、波量化与 kernel 选择等具体机制，横跨 4 个生产级模型与 6 类逐层 kernel 角色。",
+          "contributions": [
+            "揭示单一 SM 利用率对小批量 decode 的误导性：GMMA 64 行分片大量空转",
+            "提出 8 个绑定 NCU 计数器/显式公式、可交叉验证的利用率视图",
+            "把利用率损失定位到分片填充、占用、停顿、波量化、kernel 选择五类机制"
+          ],
+          "conclusions": [
+            "「利用率高」不等于「有效算力高」，decode 阶段的张量核分片填充率远低于表面数字",
+            "推理性能诊断需要计数器级多维视图，而非单一利用率指标"
+          ],
+          "experiments": [
+            "H100 NVL 上 vLLM+FlashAttention-3+cuBLASLt 全链路画像",
+            "覆盖冷/热 prefill 与 decode，扫描序列长度与 batch 大小",
+            "横跨 4 个生产级模型、6 类逐层 kernel 角色"
+          ],
+          "significance": "给 LLM 推理的 GPU 利用率测量立了方法论标准，是任何调优前该做的「体检表」。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12923",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12923.pdf",
+          "takeaway": "Hopper 小批量 decode 的高利用率是假象：64 行 GMMA 分片大部分是空行。",
+          "keyExperiment": "8 个 NCU 计数器视图证实 decode GEMM 的分片填充率远低于表面利用率。",
+          "index": 2
+        },
+        {
+          "title": "RoofLang: Enabling AI-Driven Architecting of LLM Inference Systems",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-14",
+          "authors": "Ziyue Yang, Yuting Jiang, Lei Qu, Peng Cheng",
+          "institutions": "鹏城实验室",
+          "abstract": "AI 正在实质性贡献于 LLM 推理优化，但现有 AI 优化以 profiling 为主要反馈，搜索被锁死在既有软件栈的能力与性能之内，无法发现本质上更好的系统架构。为打通 AI 驱动的推理系统「架构循环」，本文认为需要通用的负载表示、可验证的变异空间与实现无关的评估器三要素，并提出领域专用语言 RoofLang。评测中，RoofLang 揭示 DeepSeek V4 系列模型可获得比其他代表性模型高 3.5-39.5 倍的峰值 decode 吞吐；这一差距与其总参数量不成比例，主要来自紧凑 KV-cache 设计——支撑更大批量并减少显存流量。一个持久化优化 agent 还进一步发现多个新架构，把 DeepSeek V4 Pro 在 NVIDIA B300 上的吞吐与交互性同时提升 6.23-50.1%。",
+          "contributions": [
+            "提出通用负载表示 + 可验证变异空间 + 实现无关评估器三要素，定义 AI 驱动的系统架构循环",
+            "设计 DSL RoofLang 承载该循环，使架构空间可被机器搜索与验证",
+            "优化 agent 在 DSL 空间内自动发现新架构，实测吞吐与交互性双提升"
+          ],
+          "conclusions": [
+            "KV-cache 设计（而非总参数量）是 decode 吞吐差距的主要来源",
+            "把架构空间形式化为 DSL 后，优化 agent 能突破现有软件栈的天花板"
+          ],
+          "experiments": [
+            "DeepSeek V4 系列峰值 decode 吞吐比其他代表模型高 3.5-39.5 倍",
+            "agent 发现的新架构使 DeepSeek V4 Pro 在 B300 上吞吐与交互性提升 6.23-50.1%"
+          ],
+          "significance": "把「LLM 推理系统设计」本身变成可被 AI 搜索的空间，是 infra 领域的方法论转向。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12551",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12551.pdf",
+          "takeaway": "用 DSL 形式化推理系统架构空间，agent 自动搜出 6-50% 吞吐提升。",
+          "keyExperiment": "优化 agent 发现的新架构让 DeepSeek V4 Pro 在 B300 上提升 6.23-50.1%。",
+          "index": 3
+        },
+        {
+          "title": "ESTS at WMT26: Routing-Informed Expert Pruning for Model Compression",
+          "score": 3.9,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-14",
+          "authors": "Liu O. Martin, Lucas Bandarkar, Nanyun Peng",
+          "institutions": "加州大学洛杉矶分校（UCLA）",
+          "abstract": "本文介绍 ESTS 队伍在 WMT26 无约束模型压缩共享任务（英→简中、英→埃及阿拉伯语）的六个提交，均由 GPT-OSS-20B 压缩而来，每个方向三个压缩档位。方法：用任务特定路由质量（routing mass）为专家排序，用跨语言路由分歧决定各层保留容量，然后物理移除低重要性专家；得到的专用模型再用 GPT-5.1 生成的合成翻译数据做恢复微调，并对保留的专家投影权重施加 MXFP4 量化进一步压缩。团队还实现了面向指令条件的稳健推理系统：类别推断、输出校验、重试、分段回退与源端 JSON 重建。六个提交的参数量在 4.186B-7.770B 之间，打包产物 4.55-6.33 GiB；用 GPT-5.1 伪参考的内部 xCOMET-XL 评测给出各压缩档位的横向对比。",
+          "contributions": [
+            "路由信息驱动的专家剪枝：任务路由质量排序 + 跨语言路由分歧分配各层容量",
+            "剪枝 → 恢复微调 → MXFP4 量化的完整压缩流水线（GPT-OSS-20B → 4.2-7.8B）",
+            "面向 WMT26 指令条件的稳健推理系统（校验/重试/分段回退/JSON 重建）"
+          ],
+          "conclusions": [
+            "路由统计是 MoE 剪枝的免费信号：按任务路由分布移除专家，质量损失可控",
+            "物理移除 + 恢复微调 + MXFP4 可把 20B 级模型压到 4-8B 仍有竞争力"
+          ],
+          "experiments": [
+            "六个提交：参数量 4.186B-7.770B，打包产物 4.55-6.33 GiB",
+            "两个语言方向、每个方向三个压缩档位的系统对比（xCOMET-XL 内部评测）"
+          ],
+          "significance": "WMT26 压缩赛道的完整 recipe，给 MoE 部署提供一条可复制的压缩路线。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12310",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12310.pdf",
+          "takeaway": "按路由质量剪专家 + MXFP4，GPT-OSS-20B 压成 4-8B 翻译专用模型。",
+          "keyExperiment": "6 个提交、2 个语言方向、3 个压缩档位的全链路压缩对比。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Expert-Space Exploration in MoE Reinforcement Learning",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-14",
+          "authors": "Hongyi He, Zhenghao Lin, Xiao Liu, Peng Cheng, Yan Lu, Yeyun Gong",
+          "institutions": "微软亚洲研究院,清华大学",
+          "abstract": "RL 已成大模型后训练核心，但 MoE 的 RL 研究集中于优化稳定性与训练效率，专家路由被当作固定组件。由于路由决定引发输出分布的稀疏计算路径，专家选择本身是 rollout 多样性的额外来源。实证分析发现：扰动专家路由能有效改变输出、提升 rollout 多样性，效果类似提高解码温度；但直接扰动会激活不合适的专家、明显劣化 rollout 质量。据此提出 ESRL（Expert-Space Exploration RL）：保留高置信专家作锚点，把随机路由限制在合理候选池内，维持可靠计算路径；按 router 熵自适应调节扰动强度以防过度扰动；并在 rollout 中记录所用专家路径、在策略优化时重放，消除扰动带来的路由不匹配。ESRL 在 top-K、top-1 与共享专家路由骨干、数学/科学/代码任务上均取得最佳表现，且不增加额外采样与计算成本：Qwen3-30B-A3B 上相对 GRPO，平均 Pass@1 与 Pass@8 分别提升 3.2 与 4.5 个百分点。",
+          "contributions": [
+            "首次把专家路由空间作为 RL 的探索维度：路由扰动 ≈ 提高解码温度",
+            "架构感知探索：锚定高置信专家 + 受限候选池 + router 熵自适应扰动强度",
+            "专家路径重放消除策略优化的路由不匹配，零额外采样与计算成本"
+          ],
+          "conclusions": [
+            "MoE 路由结构是 RL 后训练尚未开发的多样性来源",
+            "受约束的路由探索能同时保住 rollout 质量与探索覆盖"
+          ],
+          "experiments": [
+            "Qwen3-30B-A3B：相对 GRPO 平均 Pass@1 +3.2pp、Pass@8 +4.5pp",
+            "在 top-K、top-1、共享专家路由骨干上均取得最优",
+            "数学/科学/代码任务全面领先，无额外采样与计算成本"
+          ],
+          "significance": "给 MoE+RL 打开「路由自由度」这一新探索维度，方法即插即用。",
+          "arxivUrl": "https://arxiv.org/abs/2609.13058",
+          "pdfUrl": "https://arxiv.org/pdf/2609.13058.pdf",
+          "takeaway": "把专家路由当作 RL 探索空间，Qwen3-30B-A3B 上 Pass@8 +4.5pp。",
+          "keyExperiment": "Qwen3-30B-A3B 上 ESRL 相对 GRPO 平均 Pass@1 +3.2pp、Pass@8 +4.5pp。",
+          "index": 5
+        },
+        {
+          "title": "From Collaboration to Capability: Internalizing Routed LLM Experts into Compact Reasoners",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-14",
+          "authors": "Frank Nie, Shuyao Wang, Ethan B. Liu",
+          "institutions": "未注明机构",
+          "abstract": "紧凑的 controller 可以通过选择咨询对象、构造请求并整合回应来协调更强的专家。本文研究：controller 能否从自身决策与专家的推理、代码中学习，使专家移除后仍保持生成能力。提出 Rivet（协作内化）框架：专家增强 RL 对 controller 决策与返回的专家片段施加共享结果信号；验证轨迹内化通过格式感知监督巩固完整成功交互。部署的 controller 独立生成推理、代码与交互结构，仅带本地 Python 执行、不依赖外部 LLM。在七个竞赛数学基准上，RIVET-1.7B 与 RIVET-4B 平均准确率 28.25% 与 44.16%；阶段二使 RIVET-4B 在专家移除后准确率再提 6.49 点；GPQA-Diamond 结果证明可泛化到科学推理。消融显示普通轨迹监督与格式加权均有增益，支持「在验证过的协作内容与结构上训练」的有效性。",
+          "contributions": [
+            "提出「协作内化」新范式：把 controller-专家协作经验蒸馏进单个小模型",
+            "专家增强 RL（共享结果信号作用于决策与专家片段）+ 验证轨迹的格式感知监督",
+            "部署零依赖：本地 Python 执行，无外部 LLM 调用"
+          ],
+          "conclusions": [
+            "在成功协作的完整内容与结构上训练，能显著缓解专家移除后的能力损失",
+            "格式感知监督与格式加权带来额外增益"
+          ],
+          "experiments": [
+            "RIVET-1.7B/4B 在七个竞赛数学基准平均 28.25%/44.16%",
+            "阶段二使 RIVET-4B 专家移除后准确率 +6.49 点",
+            "GPQA-Diamond 验证对科学推理的泛化"
+          ],
+          "significance": "为「小模型内化专家协作」给出系统化训练配方，部署时彻底摆脱外部专家。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12578",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12578.pdf",
+          "takeaway": "先和强专家协作、再内化经验：4B 模型独立达成 44.2% 竞赛数学均值。",
+          "keyExperiment": "七个竞赛数学基准上 RIVET-4B 平均 44.16%，专家移除后仍 +6.49 点。",
+          "index": 6
+        },
+        {
+          "title": "Sampling via Decision-Flow: Training-Free Extraction of Improved Latent Reasoning Paths in Large Language Models",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-14",
+          "authors": "Zhendong Mi, Shaoyi Huang",
+          "institutions": "未注明机构",
+          "abstract": "LLM 推理的核心问题之一：RL 到底注入了新能力，还是只是重塑既有知识在推理期的表达方式？基于「分布锐化」假设——RL 把概率质量重新分配给基座模型中本已潜在的高奖励轨迹——本文问：能否不经昂贵的 RL 微调就解锁这些潜在路径？提出 Decision-Flow Sampling（DF-Sample）：免训练、免数据的推理期框架，构建层次化推理树，对终端节点做质量评分，并把效用反向传播用于每个中间分支决策。不同于只做局部逐步选择的常规采样，DF-Sample 在承诺路径前做显式的全局轨迹评估，找回标准解码忽略的高质量低概率推理链。GPQA 上 DF-Sample 达 45.6%，超过 power sampling（38.9%）与 GRPO（39.9%）——免训练方法胜过训练方法。跨 3 个模型与 4 个基准一致领先，说明预训练基座蕴含可观的潜在推理能力。",
+          "contributions": [
+            "免训练、免数据的推理期框架，检验并利用「分布锐化」假设",
+            "层次推理树 + 终端节点质量评分 + 效用回传的全局路径评估",
+            "找回常规解码遗漏的高质量低概率推理链"
+          ],
+          "conclusions": [
+            "RL 的增益相当部分来自「锐化」既有潜在路径，这些路径可被推理期方法直接解锁",
+            "基座模型的潜在推理能力远超其常规解码表现"
+          ],
+          "experiments": [
+            "GPQA：DF-Sample 45.6% vs power sampling 38.9% vs GRPO 39.9%",
+            "3 个模型 × 4 个基准一致超越基线"
+          ],
+          "significance": "免训练即可复现部分 RL 增益，为「推理时扩展 vs RL 训练」的边界提供定量证据。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12317",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12317.pdf",
+          "takeaway": "不用 RL 微调：推理树全局评估让基座在 GPQA 上超过 GRPO 训练版。",
+          "keyExperiment": "GPQA 上 DF-Sample 45.6% > GRPO 39.9% > power sampling 38.9%。",
+          "index": 7
+        },
+        {
+          "title": "Musec: MomentUm SpEctral Clipping for Stable Muon-type Training",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-11",
+          "authors": "Zhuanghua Liu, Menglian Wang, Luo Luo",
+          "institutions": "复旦大学",
+          "abstract": "Muon 已成为大模型训练中极具竞争力的高效优化器，常优于广泛采用的 Adam/AdamW；但其谱平滑化机制易引发训练不稳定，表现为 loss 尖峰与权重无界增长。现有修复依赖权重或注意力 logit 裁剪，需要架构特定修改，且无法覆盖全部组件的不稳定。提出 Musec：用谱裁剪替换谱平滑——不再把动量矩阵所有奇异值压到约 1，而是只裁剪超过阈值的奇异值、保留动量的固有谱结构，提供优化器级、架构无关的稳定化机制。理论上建立了非凸非光滑随机优化下的收敛保证；实践上给出 Soft Musec，用耦合 Newton-Schulz 迭代逼近光滑谱饱和函数的高效实现。实验表明 Soft Musec 在宽学习率与模型规模范围上持续改善训练稳定性：在现有 Muon 变体发散的设置下保持稳定，调参良好时性能相当。",
+          "contributions": [
+            "诊断 Muon 不稳定根源：谱平滑破坏动量谱结构",
+            "Musec：仅裁剪超阈奇异值的谱裁剪，优化器级、架构无关",
+            "非凸非光滑随机优化下的收敛保证 + Soft Musec 高效实现（耦合 Newton-Schulz 迭代）"
+          ],
+          "conclusions": [
+            "保留动量谱结构是稳定 Muon 型训练的关键",
+            "优化器级修复优于权重/注意力裁剪等架构特定手段"
+          ],
+          "experiments": [
+            "宽学习率与模型规模范围上稳定性全面优于现有 Muon 变体",
+            "在现有 Muon 变体发散的设置下保持稳定",
+            "调参良好时性能与现有变体持平"
+          ],
+          "significance": "扫清 Muon 走向大规模 LLM 训练的稳定性障碍。",
+          "arxivUrl": "https://arxiv.org/abs/2609.11655",
+          "pdfUrl": "https://arxiv.org/pdf/2609.11655.pdf",
+          "takeaway": "只裁过大的奇异值而非全部压平，Muon 训练稳定性大幅提升。",
+          "keyExperiment": "在现有 Muon 变体发散的学习率设置下 Soft Musec 保持稳定。",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "Breaking the Token Ceiling: Distilling Smaller, Stronger Byte Models",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-14",
+          "authors": "Kalyani Marathe, Artidoro Pagnoni, Tomasz Limisiewicz, Margaret Li, Mike Lewis, Luke Zettlemoyer, Srinivasan Iyer",
+          "institutions": "Meta,华盛顿大学",
+          "abstract": "小模型通常通过与共享词表的大模型蒸馏来增强能力；但 byte 模型与 token 模型在算力/数据增长下的 scaling 行为是否一致？为支持对比，提出两种把 token logits 高效转成 Byte Logits 的变体：近似的 Marginalize-It 与精确的 End-Of-Token。随后开展首个大规模 overtraining 研究：同时变动词元化方案（Tokens/Bytes/Bytes+eot）与训练目标（蒸馏 vs 交叉熵）两个维度，sweep 层-参数对齐的约 1B 参数模型、数据量直至 1 万亿 byte。八个基准（选择题 QA/生成/翻译）显示：Token-1B 在低算力区间占优但终将平台化；byte 模型起步更差却随算力反超，触及更高性能天花板。按平均 top-1 错误率与验证 BPB 的 scaling 律外推：渐近上蒸馏 End-Of-Token-1B 超蒸馏 Token-1B 最多 4%，且数据效率高得多——用六分之一训练数据追平蒸馏 Token-1B。256 byte 小词表免去 top-k 截断，logit 存储降到约五分之一。下游 scaling 律预测：蒸馏 EOT-1B 渐近超越 Llama 3.2-1B（6.5%）、Gemma-3-1B-pt（8.1%）、Gemma 2B（2.1%）。",
+          "contributions": [
+            "两种 token→Byte logits 转换（近似 Marginalize-It / 精确 End-Of-Token）打通蒸馏通道",
+            "首个同时变动词元化与训练目标的大规模 overtraining 对照（1B 参数、至 1T bytes 数据）",
+            "发现 byte 模型「低算力落后、高算力反超」的交叉现象与更高性能天花板"
+          ],
+          "conclusions": [
+            "byte 词表蒸馏模型的数据效率约为 token 模型的 6 倍",
+            "256 byte 小词表省掉 top-k 截断，logit 存储约 1/5，蒸馏管线更简单"
+          ],
+          "experiments": [
+            "蒸馏 EOT-1B 渐近超蒸馏 Token-1B 至多 4%",
+            "用 1/6 训练数据追平蒸馏 Token-1B",
+            "下游 scaling 律预测超 Llama 3.2-1B 达 6.5%、Gemma-3-1B-pt 达 8.1%"
+          ],
+          "significance": "为「小词表/byte 级模型」路线提供首个大规模 scaling 证据，挑战 token 词表的默认地位。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12303",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12303.pdf",
+          "takeaway": "byte 模型起点差但天花板更高：1/6 数据追平 token 模型，渐近再超 4%。",
+          "keyExperiment": "1B 参数、至 1T bytes 的 overtraining 扫描，byte 模型在 8 基准上高算力区反超 token 模型。",
+          "index": 9
+        },
+        {
+          "title": "Tracing and Coordinating Cross-Layer Influence for Multimodal Model Merging",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-14",
+          "authors": "Pengyang Zhou, Xiaobin Tu, Zhengxi Liu, Rongkun Xue, Haochen Li, Miancan Liu, Ziyuan Chen, Yinggui Wang, Jinkui Ren, Xiantao Zhang",
+          "institutions": "未注明机构",
+          "abstract": "多模态模型合并旨在把任务专家整合进单一模型并保留其互补能力。多数单模态合并方法在单层内组合专家更新，多模态方法大多沿用该设计。但专家更新会改变传递给后续层的表示，其影响沿深度传播、改变视觉与文本信息的交互方式；当视觉与语言更新合并时，后层更新作用于已被前层修改的输入，效应相互耦合。这带来两个挑战：(1) 如何刻画单个专家更新沿深度的多模态影响；(2) 如何按多模态影响联合组合专家更新。提出 TAC-Merge，含两个模块：多模态影响映射（MIM）构建更新效应图，用 Ricci 曲率与专家预测定义共享融合目标；耦合合并控制（CMC）建模系数调整间的交互，联合优化区域权重合成单一模型。跨多种多模态任务的实验证明其整合互补专家能力、并泛化到未见任务的有效性。",
+          "contributions": [
+            "指出多模态合并中「跨层影响传播 + 模态耦合」被传统逐层合并忽略",
+            "MIM：更新效应图 + Ricci 曲率刻画专家更新的跨层多模态影响",
+            "CMC：把合并系数的交互建模为联合优化问题，整体求解区域权重"
+          ],
+          "conclusions": [
+            "专家更新的影响跨层传播，逐层独立合并会错配多模态信息交互",
+            "按多模态影响联合调整系数可同时保住任务能力与对未见任务的泛化"
+          ],
+          "experiments": [
+            "多种多模态任务上超越逐层独立合并基线",
+            "对未见任务的泛化能力验证"
+          ],
+          "significance": "把模型合并从「逐层独立」推进到「跨层耦合」视角，多模态合并的系统性改进。",
+          "arxivUrl": "https://arxiv.org/abs/2609.12897",
+          "pdfUrl": "https://arxiv.org/pdf/2609.12897.pdf",
+          "takeaway": "多模态合并要算跨层账：Ricci 曲率刻画影响传播，合并系数联合优化。",
+          "keyExperiment": "多模态任务套件上 TAC-Merge 一致优于逐层独立合并基线。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
