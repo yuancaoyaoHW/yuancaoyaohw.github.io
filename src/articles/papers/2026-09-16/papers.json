@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-16",
+  "title": "2026-09-16 论文精选",
+  "lede": "Agentic 负载重塑推理系统：KV 按阶段驱逐、被拒草稿回收复用、注意力 DSL 直编译 GPU kernel；RL 侧三项研究揭示过滤谓词陷阱、教师课程与表示漂移真相；架构侧谱重参数化与 DAG 依赖建模继续推进线性注意力和扩散语言模型。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 475
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "AgentKV: Phase-Aware KV Eviction for Agentic LLMs",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-15",
+          "authors": "Taowen Tony Liu, Jeffrey T. H. Wong, Can Xiao, Bowen Yang, Hao Mark Chen, Yiren Zhao",
+          "institutions": "Imperial College London",
+          "abstract": "Agentic 服务的 token 消耗可比聊天场景高出数个量级，同时压垮 KV 容量与解码带宽。现有 KV 驱逐方法普遍用“最近的 token 代表未来 query”，假设未来注意力形态与最近相似。作者发现 agentic 生成违反该假设：未来 query 按“思考、行动、工具调用”等阶段混合分布，主角度分析显示各阶段占据可测度不同的 query 子空间，基于近期的代表 query 会系统性低估后续阶段需要的 key。AgentKV 为每个阶段维护一个小型 query buffer，用其并集对缓存 key 打分；并在持久化多轮服务路径中实现，跨轮携带压缩 KV 状态、在线压缩 KV 页。跨 2 个模型、6 个任务域、3 档 KV 预算，平均任务分超过 R-KV 5.5 分、超过 Tri-attention 5.3 分；相对上游 full-KV SGLang 输出吞吐最高提升 1.80×。",
+          "contributions": [
+            "首次揭示 agentic 工作负载的 query 分布按阶段（think/act/tool）混合、占据不同子空间，推翻“近期 query 代表未来”的驱逐假设",
+            "提出按阶段维护 query buffer 的 AgentKV 驱逐策略，并在多轮持久服务路径中实现跨轮 KV 携带与在线页压缩",
+            "在 2 模型 × 6 任务域 × 3 档 KV 预算网格上验证一致增益，相对 full-KV SGLang 吞吐最高 1.80×"
+          ],
+          "conclusions": [
+            "KV 驱逐打分必须匹配未来 query 的阶段混合结构，否则会系统性丢弃后续阶段需要的 key",
+            "阶段感知驱逐在大幅压缩 KV 的同时保住任务分并提升输出吞吐"
+          ],
+          "experiments": [
+            "2 模型 × 6 任务域 × 3 档预算：平均任务分超过 R-KV 5.5 分、超过 Tri-attention 5.3 分",
+            "相对 full-KV SGLang 输出吞吐最高提升 1.80×",
+            "主角度分析定量显示 think/act/tool 各阶段 query 子空间可测度地分离"
+          ],
+          "significance": "把 KV 驱逐从“注意力相似性”推进到“工作负载阶段结构”，agentic serving 的容量与带宽瓶颈有了针对性解法",
+          "arxivUrl": "https://arxiv.org/abs/2609.14872",
+          "pdfUrl": "https://arxiv.org/pdf/2609.14872.pdf",
+          "index": 1,
+          "takeaway": "agentic 生成按阶段切换 query 分布，KV 驱逐得按阶段打分才能不丢关键缓存",
+          "keyExperiment": "相对 full-KV SGLang 输出吞吐最高提升 1.80×，任务分超过 R-KV 5.5 分"
+        },
+        {
+          "title": "Carryover Drafting: Recycling Rejected States for Speculative Decoding",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-15",
+          "authors": "Jahyun Koo, Sunghyeon Woo, Jaeeun Kil, Jeongtae Lee, Sungjae Lee, Kyomin Jung, Minsub Kim",
+          "institutions": "Seoul National University",
+          "abstract": "投机解码在验证阶段同时计算被接受与被拒 token 的表示，但传统 drafter 只保留接受部分，被拒 token 的验证算力被浪费。作者发现被丢弃的 hidden states 保留着未来 token 的有用信息，但复用受困于：推理端回收开销拉长草稿延迟，并行训练不产生推理对齐的被拒状态。Carryover 把被拒的 target hidden states 作为临时 KV 上下文供 drafter 选择性关注，复用原有接口、只加一个学习嵌入区分被拒状态；临时 KV 每轮替换、长度限于一个 proposal block。训练侧并行 draft–verify–draft 补齐对齐与并行。DFlash 与 DSpark 衍生 drafter、两个 target 模型上，平均接受长度提升 6.5–14.7%，vLLM 端到端加速提升 7.9–14.4%，翻译任务最高 28.8%。",
+          "contributions": [
+            "揭示投机解码验证阶段计算的被拒 hidden states 含可复用的未来 token 信息",
+            "提出 Carryover：被拒状态作为临时 KV 上下文供 drafter 选择性关注，仅增加单个学习嵌入，临时 KV 长度限制在一个 proposal block",
+            "并行 draft–verify–draft 训练让 drafter 接触推理对齐的被拒状态、同时保持训练并行性"
+          ],
+          "conclusions": [
+            "被拒 token 的验证算力不是纯浪费，回收可稳定延长接受长度",
+            "推理/训练两端的对齐设计（临时 KV + 并行 draft–verify–draft）是回收增益成立的前提"
+          ],
+          "experiments": [
+            "DFlash 与 DSpark 衍生 drafter × 两个 target 模型：平均接受长度 +6.5–14.7%",
+            "vLLM 端到端加速比基线提升 7.9–14.4%",
+            "翻译任务加速增益最高达 28.8%"
+          ],
+          "significance": "免费回收验证阶段本来就算过的状态，为投机解码再榨出两位数端到端加速",
+          "arxivUrl": "https://arxiv.org/abs/2609.14717",
+          "pdfUrl": "https://arxiv.org/pdf/2609.14717.pdf",
+          "index": 2,
+          "takeaway": "被拒 draft 的 hidden states 别扔——当作临时 KV 喂回 drafter，接受长度与端到端加速双双提升",
+          "keyExperiment": "vLLM 端到端加速比对应基线提升 7.9–14.4%，翻译任务最高 28.8%"
+        },
+        {
+          "title": "AttnFuse: A Composable DSL for Compiling Attentions to Fused GPU Kernels",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-15",
+          "authors": "Varun Kumar Dasoju, Tian Zhao",
+          "institutions": "机构未标注",
+          "abstract": "注意力是 Transformer 计算与显存开销的大头，新变体层出不穷，但每个都要专家手写 GPU 代码才能跑出可用速度。PyTorch 的 flex_attention 允许用 Python 描述自定义注意力并编译融合 kernel，但只支持矩阵乘之后的修改，把每个主流 LLM 都在用的 RoPE 排除在外。AttnFuse 是一个注意力专用小型 DSL，让 RoPE 这类“乘法前变换”成为一等公民：研究者用 10 个积木组合描述变体，编译器发射单个融合 GPU kernel。RTX 3090 上 RoPE+causal 模式比 flex_attention 快 2.10×；H100 上完整 Llama-3-8B 训练步落在 PyTorch 手调后端的 5% 以内。作者总结出 Rotation Calculus：是否融合 RoPE 取决于 GPU 的算力带宽比，推导的交叉点与实测吻合。",
+          "contributions": [
+            "首个把 pre-multiplication 变换（RoPE）作为一等公民的注意力 DSL，10 个积木组合描述变体并编译单融合 kernel",
+            "Rotation Calculus 判据：按 GPU 算力带宽比决定融合还是单独应用 RoPE，交叉点有解析推导且与实测吻合",
+            "RTX 3090 上比 flex_attention 快 2.10×，H100 上与 PyTorch 手调后端差距 5% 以内"
+          ],
+          "conclusions": [
+            "小型注意力专用编译器可以弥合“灵活研究代码”与“生产级 kernel”的鸿沟",
+            "RoPE 是否融合不是普适结论，而是由硬件算力带宽比决定的工程选择"
+          ],
+          "experiments": [
+            "RTX 3090 上 RoPE+causal 模式比 flex_attention 快 2.10×",
+            "H100 上 Llama-3-8B 完整训练步落在 PyTorch 手调后端的 5% 以内",
+            "Rotation Calculus 推导的融合交叉点与多 GPU 实测吻合"
+          ],
+          "significance": "注意力变体研究不再需要 CUDA 专家——小型专用 DSL 把新想法直接编译到接近手调的性能",
+          "arxivUrl": "https://arxiv.org/abs/2609.13612",
+          "pdfUrl": "https://arxiv.org/pdf/2609.13612.pdf",
+          "index": 3,
+          "takeaway": "RoPE 该不该融进注意力 kernel 由 GPU 算力带宽比决定，AttnFuse 用 10 个积木把决策自动化",
+          "keyExperiment": "RTX 3090 上 RoPE+causal 比 flex_attention 快 2.10×，H100 上追平手调后端至 5% 以内"
+        },
+        {
+          "title": "MAPS: Memory-Aware Predictive Scheduling Framework for Large Language Model Serving",
+          "score": 3.8,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-15",
+          "authors": "Tiancheng Zhang, Yulin Chen, Yunfeng Zhao, Shaoyuan Huang, Cheng Zhang, Xiaofei Wang",
+          "institutions": "Tianjin University",
+          "abstract": "个人设备上的 LLM 应用给云端 serving 基础设施带来大规模突发负载。prefill-decode 分离架构提升了吞吐与可扩展性，但解码实例是内存受限的，请求到达时输出长度未知，解码侧长期负载不均。MAPS 在云端 prefill 的同时由设备端并行做投机式输出长度预测，几乎不增加延迟；针对生成不确定性，用不确定性感知校准推导带目标覆盖率的输出长度上界，保证调度决策安全；在此之上用分层全局-局部调度缓解解码器之间的队列堆积与解码器内的队头阻塞。两个真实工作负载、两个 LLM 上，MAPS 显著超越三个 SOTA 系统：平均端到端延迟降低 42.6%，尾延迟最高降低 84.8%。",
+          "contributions": [
+            "设备端投机输出长度预测与云端 prefill 重叠执行，近零延迟开销",
+            "不确定性感知校准给出带覆盖率保证的长度上界，使调度决策安全化",
+            "分层全局-局部调度同时缓解解码器间负载不均与解码器内队头阻塞"
+          ],
+          "conclusions": [
+            "输出长度不可知是 decode 侧负载不均的根因，预测加校准上界足以支撑安全调度",
+            "分层调度在真实突发负载下稳定优于现有 SOTA serving 系统"
+          ],
+          "experiments": [
+            "两个真实工作负载 × 两个 LLM：平均端到端延迟降低 42.6%",
+            "尾延迟最高降低 84.8%",
+            "对比三个 SOTA 系统全面占优"
+          ],
+          "significance": "给 prefill-decode 分离 serving 补上“输出长度预测”拼图，decode 集群负载均衡有了可证安全的新抓手",
+          "arxivUrl": "https://arxiv.org/abs/2609.15359",
+          "pdfUrl": "https://arxiv.org/pdf/2609.15359.pdf",
+          "index": 4,
+          "takeaway": "边 prefill 边预测输出长度、用校准上界做安全调度，分离式 serving 平均延迟降 42.6%",
+          "keyExperiment": "平均端到端延迟降 42.6%、尾延迟最高降 84.8%（两真实负载 × 两 LLM）"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "What Does an LLM Learn from Reinforcement Learning? A Mechanistic Interpretability Perspective with Fixed-SAE Track",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-15",
+          "authors": "Lingheng Du, Yiming Tang, Xufeng Duan, Dianbo Liu",
+          "institutions": "机构未标注",
+          "abstract": "RL 广泛用于 LLM 训练，但它到底如何重塑模型仍不清楚。以往解释多为行为视角，表示层面的问题悬而未决：RL 能否创造真正的新特征？增强或抑制了哪些既有特征？作者提出 Fixed-SAE Track：在每个考察层训练一个共享 SAE，激活池取自基座模型与全部 RL checkpoint，特征方向全部固定，使表示漂移通过可解释 SAE 潜变量的激活变化被严格定义，还能检测新特征涌现。跨多数据集与多种 RL 算法验证发现：RL 诱导的漂移小、渐变、概念特定、集中在后层，主要是提升一小撮“梯子 token”与格式脚手架（步骤分隔、答案定界符）的采样率，而非重塑题目内容。把这些特征 steer 进基座模型即可恢复约 80% 的 RL 性能增益，说明 RL 主要是在唤出模型已有的能力。作者还设计了特征已知的合成 benchmark，检验 RL 能否注入真正的新特征。",
+          "contributions": [
+            "Fixed-SAE Track 框架：共享 SAE + 冻结特征方向，跨 checkpoint 严格定义并追踪表示漂移",
+            "发现 RL 漂移集中于后层格式脚手架特征（梯子 token、步骤分隔等），而非重塑问题内容",
+            "steering 复现约 80% RL 增益，并用特征已知的合成 benchmark 检验新特征注入"
+          ],
+          "conclusions": [
+            "RL 主要“唤出”基座已有的能力（类似 steering），而非创造全新的问题求解特征",
+            "RL 引起的表示变化小而渐变、概念特定、集中于后层格式特征"
+          ],
+          "experiments": [
+            "把 RL 增强的特征 steer 进基座模型恢复约 80% 的性能增益",
+            "多数据集 × 多 RL 算法下漂移模式一致：小、渐变、后层集中",
+            "特征已知的合成 benchmark 用于检验 RL 注入新特征的能力"
+          ],
+          "significance": "为“RL 到底教会了模型什么”提供表示层面的定量答案——更像放大已有能力而非灌输新能力",
+          "arxivUrl": "https://arxiv.org/abs/2609.15064",
+          "pdfUrl": "https://arxiv.org/pdf/2609.15064.pdf",
+          "index": 5,
+          "takeaway": "固定 SAE 追踪显示 RL 只是把后层格式脚手架特征的采样率调高，steering 就能拿回八成 RL 增益",
+          "keyExperiment": "steering RL 强化出的特征进基座模型即可恢复约 80% 的 RL 性能增益"
+        },
+        {
+          "title": "The Filter Metric is Safety-Critical: Phantom Advantages in Group-Relative RL under Shaped Rewards",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-15",
+          "authors": "Juntao Yu",
+          "institutions": "机构未标注",
+          "abstract": "GRPO 及其衍生算法可用动态采样丢弃无对比性的 rollout 组，而主流实现都暴露一个可配置的过滤度量。作者识别并量化了复合 shaped reward 下的“度量-谓词不匹配”：当过滤按 shaped 训练分数而非任务结果进行时，全错组的组内仍有非零散度、通过过滤谓词，标准差归一化随后把失败之间的塑形差异放大成正常规模的“幻影优势”。受控 GSM8K 实验（Qwen2.5-1.5B + LoRA）中，不过滤与按 shaped 分数过滤的最终 EM 仅 0.080 与 0.040，按二值任务结果过滤则稳定在 0.754；verls 原生 trainer 上固定模型、数据、奖励与 trainer、只改度量，分数臂 40 步零重填、最终 EM 0.160，准确率臂 29/40 步重填、最终 0.763。关闭标准差归一化可避免崩溃。结论：复合奖励下的过滤应使用与塑形语义无关的任务结果信号。",
+          "contributions": [
+            "识别 GRPO 类算法的度量-谓词不匹配：shaped 分数过滤让全错组漏网、幻影优势被放大",
+            "在受控 GSM8K 与 verls 原生 trainer 上只改度量一个变量，干净隔离因果",
+            "给出修复方案：按任务结果二值信号过滤，或关闭标准差归一化"
+          ],
+          "conclusions": [
+            "复合 shaped reward 下用训练分数做过滤谓词是安全关键错误",
+            "过滤信号必须与塑形语义解耦，任务结果才是可靠的谓词"
+          ],
+          "experiments": [
+            "GSM8K（Qwen2.5-1.5B, LoRA）：shaped 过滤 EM 0.040 vs 二值结果过滤 0.754（每组四次运行）",
+            "verls 原生 trainer：分数臂 EM 0.160、40 步零重填；准确率臂 0.763、29/40 步重填",
+            "关闭标准差归一化后崩溃消失；GSPO 与 MATH 上也复现同样失败"
+          ],
+          "significance": "一个默认配置就能让 GRPO 训练悄悄崩溃——凡是用复合奖励的团队都该检查 filter metric",
+          "arxivUrl": "https://arxiv.org/abs/2609.13866",
+          "pdfUrl": "https://arxiv.org/pdf/2609.13866.pdf",
+          "index": 6,
+          "takeaway": "GRPO 的过滤谓词要用任务结果而非 shaped 分数，否则全错组的幻影优势会拖垮训练（EM 0.04 vs 0.75）",
+          "keyExperiment": "同一 trainer 只改过滤度量，GSM8K 最终 EM 从 0.040（shaped 分数）跃至 0.754（任务结果）"
+        },
+        {
+          "title": "Unlocking the Unsolvable: Teacher-Guided Curriculum for Data-Efficient RLVR",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-15",
+          "authors": "Yukang Zhu, Zhen Han",
+          "institutions": "机构未标注",
+          "abstract": "RLVR 显著提升 LLM 数学推理，但超出模型当前能力的问题——rollout 全部失败、不产生任何学习信号——在结构上被浪费，尽管它们标记了最有信息量的训练前沿。作者证明这类“惰性”问题可以通过教师引导课程解锁：用更强模型的部分推理轨迹构造分级难度地形，backward-chaining 课程逐步撤走引导，直到模型独立解题。只用 128 道无解问题训练，在九个 benchmark 平均分上达到甚至超过用完整 2000 题语料训练的 GRPO（约 16× 数据效率），并显著扩大 pass@k 大 k 下测得的推理边界。作者还发现“无解题-only”训练存在尖锐的分布偏移代价，并提出 Monotone Frontier Curriculum（MFC）：单调地把训练推向无引导解题，持续超越现有课程方法。",
+          "contributions": [
+            "用教师部分轨迹构造分级难度地形 + backward-chaining 课程，解锁 rollout 全失败的难题",
+            "128 道题达到 2000 题 GRPO 语料的水平，约 16× 数据效率",
+            "MFC 单调前沿课程解决无解题-only 训练的分布偏移代价"
+          ],
+          "conclusions": [
+            "超出能力的难题不是死资源，教师引导可将其转化为学习信号",
+            "课程方向必须单调收敛到无引导解题，否则分布偏移反噬收益"
+          ],
+          "experiments": [
+            "128 道无解题训练在九 benchmark 平均上追平或超过 2000 题全语料 GRPO（两个基座模型）",
+            "pass@k 大 k 下推理边界显著扩大",
+            "MFC 持续超越现有课程方法"
+          ],
+          "significance": "16× 的 RLVR 数据效率意味着小团队也能用 128 道精选难题撬动可观的推理增益",
+          "arxivUrl": "https://arxiv.org/abs/2609.13997",
+          "pdfUrl": "https://arxiv.org/pdf/2609.13997.pdf",
+          "index": 7,
+          "takeaway": "128 道教师部分轨迹的难题 ≈ 2000 题 GRPO 语料，backward-chaining 逐步撤引导是关键",
+          "keyExperiment": "仅 128 道无解问题训练，九 benchmark 平均达到甚至超过 2000 题全语料 GRPO（约 16× 数据效率）"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SpectralShift: Effective Context Window Extension of Gated DeltaNet via Spectral Reparameterization",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-15",
+          "authors": "Zian Liu, Yiwen Hu, Zican Dong, Tian Xie, Wayne Xin Zhao, Yucheng Ding, Ran Tao, Bryan Dai",
+          "institutions": "Renmin University of China",
+          "abstract": "线性注意力正被大规模采用以替代 softmax attention 做长上下文建模，但现有上下文扩展方法通常直接续训、不改这些层，忽视了线性注意力状态动力学的谱性质。作者从转移矩阵的谱视角研究 Gated DeltaNet（GDN）的长上下文扩展，识别出决定长程信息检索的两个关键因素：与目标依赖长度对齐的足够宽的慢谱带，以及为状态清空与上下文切换保留的快衰减模态。据此提出 SpectralShift——一种面向 GDN 长上下文持续预训练的谱重参数化方法：重参数化 alpha 投影的初始化来重塑衰减谱、增强慢传播能力，并对 alpha 投影引入学习率缩放以促进长上下文训练。实验显示 SpectralShift 在持续预训练中一致提升长上下文能力，为线性注意力模型的上下文窗口扩展提供了有效且高效的方案，代码已开源。",
+          "contributions": [
+            "从转移矩阵谱视角剖析 GDN 长程检索的两个决定因素：慢谱带宽度与快衰减模态保留",
+            "SpectralShift：alpha 投影初始化重参数化 + 学习率缩放的谱整形方案，不改架构结构",
+            "持续预训练中一致提升长上下文能力，代码开源"
+          ],
+          "conclusions": [
+            "线性注意力上下文扩展应先整形状态转移谱，再谈数据与步数",
+            "谱重参数化是低成本高收益的架构级上下文扩展路径"
+          ],
+          "experiments": [
+            "GDN 持续预训练中长上下文能力一致超越直接续训基线",
+            "谱分析确认慢谱带与目标依赖长度对齐、快衰减模态得到保留",
+            "代码开源，方法即插即用于既有训练管线"
+          ],
+          "significance": "为 Gated DeltaNet 系线性注意力补上“如何科学扩上下文”的谱理论",
+          "arxivUrl": "https://arxiv.org/abs/2609.14320",
+          "pdfUrl": "https://arxiv.org/pdf/2609.14320.pdf",
+          "index": 8,
+          "takeaway": "扩 GDN 上下文先动 alpha 投影的谱——加宽慢带、保留快模态，SpectralShift 无需魔改架构",
+          "keyExperiment": "对 GDN 持续预训练，SpectralShift 在长上下文任务上一致超越直接续训"
+        },
+        {
+          "title": "DA-DLM: Explicitly Modeling Token Dependencies in Diffusion Language Models",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-15",
+          "authors": "Pengyu Ji, Zichen Zhang, Xiang Hu, Kewei Tu",
+          "institutions": "ShanghaiTech University",
+          "abstract": "扩散语言模型通过迭代去噪掩码序列生成文本，每步独立预测多个 token——这种条件独立性丢掉了 token 间依赖、损害连贯性，与非自回归翻译的多峰问题同源。借鉴用有向无环图（DAG）解决 NAT 多峰问题的 Directed Acyclic Transformer，作者提出 DA-DLM：用位置导向的 DAG 设计把 DAG 依赖建模适配到 DLM 的迭代设定。位置导向 DAG 把节点组绑定到固定输出位置，让早前步骤中已确定的 token 通过学习到的转移来锚定邻近预测，并随去噪过程演化——随着锚点积累，焦点逐步转向剩余不确定性。在语言建模、开放生成与摘要任务上，DA-DLM 一致超越 Block Diffusion，尤其在更少去噪步数下优势明显，并能匹配自回归模型、同时保留并行生成优势。代码开源。",
+          "contributions": [
+            "首次把 DAG 依赖建模引入扩散语言模型的迭代去噪设定",
+            "位置导向 DAG：锚定 token 引导邻近预测、随去噪演化聚焦剩余不确定性",
+            "少步去噪下优势放大，匹配自回归精度的同时保留并行生成"
+          ],
+          "conclusions": [
+            "DLM 的条件独立假设是少步场景的质量瓶颈，显式依赖建模可修复",
+            "NAT 的 DAG 经验可迁移到 DLM，两条技术路线正在合流"
+          ],
+          "experiments": [
+            "语言建模/开放生成/摘要上一致超越 Block Diffusion",
+            "更少去噪步数下优势更明显",
+            "精度匹配自回归模型且保留并行生成优势"
+          ],
+          "significance": "把非自回归时代的多峰问题解法搬进扩散 LM，少步高速区间的质量短板有了架构级修法",
+          "arxivUrl": "https://arxiv.org/abs/2609.15070",
+          "pdfUrl": "https://arxiv.org/pdf/2609.15070.pdf",
+          "index": 9,
+          "takeaway": "用位置导向 DAG 显式建模 token 依赖，DA-DLM 让扩散语言模型在少步去噪下追平自回归",
+          "keyExperiment": "在更少去噪步数下一致超越 Block Diffusion，并匹配自回归模型精度"
+        },
+        {
+          "title": "ZGCM-1: A Fully Open and Extremely Efficient Foundation Model for Math and Agentic Search",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-15",
+          "authors": "Jiyan He, Guang Liang, Hao Liu, Haoxiang Guan, Jinbo Sun, Junyi Guo, Wenjun Feng, Yantai Xie, Yifei Shen, Bin Shao, Chuyang Wei, Kai Chen, Kexin Zhou, Minghang Zhu, Shuxin Zheng, Tie-Yan Liu, Taine Zhao, Wenhui Zhu, Xueyin Xu, Xiaoqing Zhang, Yatao Li, Yuxuan Ren",
+          "institutions": "Microsoft Research",
+          "abstract": "ZGCM-1 是完全开源的 7B 稠密基座模型，以极致的数据、系统与算法效率从零训练。核心前提：紧凑模型无法被动记忆开放网络，但能靠“深度思考 + 主动工具调用”突破参数容量限制。为在 256K 上下文支撑该范式，作者开发端到端高效开源训练配方：架构与系统协同设计（交错门控滑窗+全注意力、稳定 FP8 Muon 优化器）、渐进课程与 MDP 中训（16K/64K/256K 上下文扩展、交互轨迹重构为马尔可夫决策过程），并建立 AI 原生研发工作流——agent 集群自主管理运维、数据策划与诊断评估。ZGCM-1-7B 在 7B 家族通用基准上有竞争力，在高难数学与 agentic search 套件上与 Qwen3-235B-A22B、GLM-5.1 等大数十倍的 frontier 模型竞争力相当；16K 预训练时间到损失效率提升约 4.2×。权重、代码、数据、配方与日志全部开源。",
+          "contributions": [
+            "全开源 7B 稠密模型：交错门控滑窗+全注意力、稳定 FP8 Muon 优化器，256K 上下文",
+            "渐进课程 + MDP 中训把交互轨迹重构为决策过程，agentic search 与数学推理比肩 frontier 大模型",
+            "AI 原生研发工作流：agent 集群自主运维/数据/评估，八条可操作经验全公开"
+          ],
+          "conclusions": [
+            "紧凑模型 + 深思考 + 工具调用可对冲参数劣势，7B 在 agentic 套件上打平数十倍大模型",
+            "FP8 Muon 等架构系统协同设计让从零训练效率提升约 4.2×（16K 预训练）"
+          ],
+          "experiments": [
+            "高难数学推理与 agentic search 套件上与 Qwen3-235B-A22B、GLM-5.1 保持竞争力",
+            "16K 预训练 time-to-loss 效率提升约 4.2×",
+            "7B 家族通用基准有竞争力；权重/检查点/代码/数据/W&B 日志全开源"
+          ],
+          "significance": "全开源的 7B “会思考会调用工具”基座 + 完整训练配方，把 frontier 级 agentic 能力的门槛拉到 7B",
+          "arxivUrl": "https://arxiv.org/abs/2609.13356",
+          "pdfUrl": "https://arxiv.org/pdf/2609.13356.pdf",
+          "index": 10,
+          "takeaway": "7B 稠密模型靠 FP8 Muon + 滑窗注意力 + MDP 中训，在 agentic search 上打平 235B frontier 模型，全部开源",
+          "keyExperiment": "高难数学与 agentic search 套件上与 Qwen3-235B-A22B / GLM-5.1 保持竞争力"
+        }
+      ]
+    }
+  ]
+}
