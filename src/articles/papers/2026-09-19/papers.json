@@ -1,0 +1,341 @@
+{
+  "date": "2026-09-19",
+  "title": "2026-09-19 论文精选",
+  "lede": "今日聚焦 KV cache 压缩与训练效率：DeepSeek-V4.1-Flash 把全局 KV 占用压到每 token 890 字节，配合扩散 LM 块并行训练、推测解码自适应切换与 GRPO 尺度校准，压缩、并行与训练稳定性三线并进。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 271
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-18",
+          "authors": "DeepSeek-AI",
+          "institutions": "DeepSeek-AI",
+          "abstract": "长程 agent 负载日益“输入密集”：prefill 计算昂贵，庞大 KV cache 挤压 HBM/SSD 容量与带宽，构成主要部署瓶颈。DeepSeek-V4.1-Flash 是 552B 骨干的多模态 MoE 模型，支持百万 token 上下文；其因果编码器-解码器（CED）架构 decode 每 token 激活 16B 参数、prefill 仅激活 8B。KV 压缩上，CSA2 跨层 KV 复用与 FP4 KV 缓存结合，把常驻 HBM 的全局 KV 压到每 token 890 字节，约为 DeepSeek-V4-Flash 的 1/4；再经 SWA Bounded Replay 部署优化，持久化 KV 占用（SSD/主机内存）降至基线约 1/8，且性能反超基线。模型在 45T token 多模态语料上预训练，文本/多模态 agent 场景表现强劲，checkpoint 开源。",
+          "contributions": [
+            "提出 CED 因果编码器-解码器架构：decode 每激活 16B 参数、prefill 仅 8B，专为准入密集的 agent 工作负载降本",
+            "结合 CSA2 跨层 KV 复用与 FP4 KV 缓存，全局 KV 占用压至每 token 890 字节（约为 V4-Flash 的 1/4）",
+            "SWA Bounded Replay 将持久化 KV 占用降至基线约 1/8，同时性能反超基线"
+          ],
+          "conclusions": [
+            "KV 压缩与架构协同设计可在大幅降低显存/存储/带宽占用的同时取得更强性能",
+            "长上下文 agent 部署成本的主要矛盾已从计算转向 KV 容量与带宽，必须系统性治理"
+          ],
+          "experiments": [
+            "全局 KV cache 890 字节/token，约为 DeepSeek-V4-Flash 的 1/4",
+            "持久化 KV 占用降至基线约 1/8（SWA Bounded Replay）",
+            "45T token 多模态预训练 + 完整后训练，文本/多模态 agent 基准性能优于基线，checkpoint 开源"
+          ],
+          "significance": "旗舰开源模型把 KV cache 压缩推到新极限，直接改写长上下文 agent 的部署成本曲线",
+          "arxivUrl": "https://arxiv.org/abs/2609.19969",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19969.pdf",
+          "index": 1,
+          "takeaway": "CSA2 跨层复用 + FP4 KV，全局 KV 压到每 token 890 字节（约基线 1/4）且性能反超",
+          "keyExperiment": "全局 KV 每 token 890 字节、持久化 KV 约 1/8 基线占用下，多模态 agent 基准性能仍优于 DeepSeek-V4-Flash"
+        },
+        {
+          "title": "D-Quant: Driftable Entropy Coding for KV Cache Quantization",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-18",
+          "authors": "Yi Su, Hong Liu, Guanghua Yu, Jianchen Zhu",
+          "institutions": "机构未标注",
+          "abstract": "KV cache 随序列长度与 batch 大小线性增长，是 LLM 部署的核心瓶颈；主流定点量化在位宽降低时可用量化级数指数级缩减，信息损失严重。作者观察到 KV 值经旋转与归一化后近似正态分布、高度非均匀，而定宽编码对高频与稀有符号分配相同位宽，浪费明显。熵编码天然适配这种非均匀性——频繁符号短码、稀有符号长码，可大幅降低平均位宽，但其变长输出与注意力 kernel 依赖的规则内存布局、固定步长访问相冲突。D-Quant 引入 drift 机制，把每个 token 的熵编码表示转换为固定大小比特流，使注意力 kernel 内可实现规则访存与并行反量化，在超低位宽下同时保住压缩率与 kernel 执行效率，为 KV 量化开辟了定宽方案之外的新路线。",
+          "contributions": [
+            "诊断定宽量化的双重缺陷：级数随位宽指数缩减 + 无视 KV 分布的非均匀性",
+            "用熵编码按符号频率分配码长，显著降低 KV 表示的平均位宽",
+            "drift 机制把变长熵编码流转为固定大小比特流，兼容注意力 kernel 的并行反量化"
+          ],
+          "conclusions": [
+            "熵编码是突破固定位宽 2^b 级数上限的自然途径",
+            "变长压缩与并行 kernel 的矛盾可通过固定尺寸比特流化解"
+          ],
+          "experiments": [
+            "在旋转归一化后的近正态 KV 分布上验证熵编码对非均匀符号分布的压缩优势",
+            "drift 比特流使 kernel 内固定步长访存与并行反量化成为可能",
+            "构建覆盖量化、编码与 kernel 执行的完整 KV 量化框架"
+          ],
+          "significance": "把熵编码引入 KV 量化，跳出定宽位数的指数级损失怪圈",
+          "arxivUrl": "https://arxiv.org/abs/2609.19880",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19880.pdf",
+          "index": 2,
+          "takeaway": "熵编码 + drift 固定尺寸比特流，让超低位宽 KV 量化同时保住精度与 kernel 效率",
+          "keyExperiment": "drift 机制将每 token 变长熵编码转为固定大小比特流，实现注意力 kernel 内规则访存与并行反量化"
+        },
+        {
+          "title": "To Copy or Not to Copy: Controlling Speculative Decoding via Intrinsic Model Signals",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-18",
+          "authors": "Roy Eisenstadt, Ido Cohen, Edo Cohen-Karlik, Lior Wolf, Itamar Zimerman",
+          "institutions": "Tel Aviv University",
+          "abstract": "推测解码（SD）大幅加速 LLM 推理，但神经起草与上下文复制两种起草策略存在根本权衡：神经起草（如 EAGLE3）在多样文本上稳健，复制式方法在重复密集场景靠近乎完美的长重复段投机获得更高加速。作者分析发现现有复制式方法易被“意外重复”误导——表层 n-gram 重叠并不代表结构性的复制意图，假阳性触发反而拉低吞吐。SwitchSD 把“是否复制”视为 LLM 的隐式控制信号：在目标模型内部表示上训练轻量探针识别真实复制意图（AUC>0.99），据此在神经起草与上下文复制之间动态切换。在 Llama 与 Qwen 系列上，SwitchSD 相对 EAGLE3 等 SOTA 基线取得最高 15% 的吞吐增益，把复制从噪声启发式升级为有原则、模型感知的解码模式。",
+          "contributions": [
+            "揭示复制式推测解码的假阳性问题：表层 n-gram 重叠不等于结构复制意图",
+            "在内部表示上训练轻量探针检测复制意图（AUC>0.99），驱动两种起草策略自适应切换",
+            "把复制从启发式触发升级为模型感知的隐式控制信号"
+          ],
+          "conclusions": [
+            "复制与否应由模型内部状态决定，而非表层文本统计",
+            "自适应切换可同时覆盖神经起草的稳健性与复制式的高加速区"
+          ],
+          "experiments": [
+            "探针识别真实复制意图 AUC>0.99",
+            "Llama/Qwen 系列端到端吞吐较 EAGLE3 最高提升 15%",
+            "证实现有复制式方法的假阳性触发会降低吞吐"
+          ],
+          "significance": "给推测解码补上“何时该抄”的模型感知开关，白拿重复文本的加速而不踩假阳性坑",
+          "arxivUrl": "https://arxiv.org/abs/2609.20186",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20186.pdf",
+          "index": 3,
+          "takeaway": "探针读内部表示判断“该不该抄”，SwitchSD 在 EAGLE 与复制式起草间动态切换，吞吐最高 +15%",
+          "keyExperiment": "AUC>0.99 的复制意图探针带来相对 EAGLE3 最高 15% 的端到端吞吐增益"
+        },
+        {
+          "title": "Block Parallelism For Efficient Distributed Long-Context Diffusion Language Model Training",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-18",
+          "authors": "Tarun Suresh, Pranshu Chaturvedi, Hangoo Kang, Parth Shroff, Ishan S. Khare, Hermann Kumbong, Azalia Mirhoseini",
+          "institutions": "Stanford University",
+          "abstract": "块扩散语言模型（BDLM）跨块自回归、块内并行去噪，但长上下文训练受分布式注意力通信与激活显存制约。常规上下文并行（CP）按位置切分序列，须同时通信共享 clean K/V 与各块专属 corrupted K/V 及其梯度。作者观察到 BDLM 目标可按目标块分解，提出块并行（BP）：每个 corrupted 块的计算指派给一个 rank；其上的上下文分片块并行（CSBP）把共享 clean 序列也在 rank 间分片，使 corrupted K/V 与梯度保持本地、避免 clean 前缀复制，并保持训练语义。16×H200@256K 下，CSBP 吞吐较最优基线提升 1.18–1.45×（SFT）与 1.27–1.33×（AR 转 BDLM），峰值显存持平或更低；512K 全模型加速 1.61×；8×H100 上 DFlash2 训练在 512K/1M 分别加速 2.48×/7.59×。",
+          "contributions": [
+            "发现 BDLM 目标按目标块可分解，提出块并行（BP）这一新并行维度",
+            "CSBP 将共享 clean 序列分片到各 rank，corrupted K/V 与梯度本地化、免除 clean 前缀复制",
+            "将扩散 LM 长上下文训练扩展到 256K–1M 且训练语义不变"
+          ],
+          "conclusions": [
+            "针对扩散 LM 训练结构定制的并行维度优于通用上下文并行",
+            "收益随上下文长度增大而扩大，1M 上下文加速 7.59×"
+          ],
+          "experiments": [
+            "16×H200@256K：SFT 吞吐 1.18–1.45×、AR 转 BDLM 1.27–1.33×，512K 全模型 1.61×",
+            "8×H100：DFlash2 训练 512K 加速 2.48×、1M 加速 7.59×",
+            "12 小时 DiffusionGemma 26B-A4B SFT 对比中，各 checkpoint 在 SWE-bench Verified 与 Terminal-Bench Lite 通过率全部更高"
+          ],
+          "significance": "补上块扩散 LM 长上下文训练的分布式短板，让百万级上下文扩散训练变得实际可行",
+          "arxivUrl": "https://arxiv.org/abs/2609.19242",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19242.pdf",
+          "index": 4,
+          "takeaway": "按“块”而非“位置”切分的新并行维度，1M 上下文训练加速 7.59×",
+          "keyExperiment": "8×H100 上 1M 上下文 DFlash2 训练加速 7.59×，且 12 小时 SFT 各 checkpoint 下游通过率全面更高"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Advantage Scale Calibration Imbalance in Group-Relative Optimization under Low-Variance Rewards: Diagnosis and Bounded Recovery",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-18",
+          "authors": "Fei Ding",
+          "institutions": "机构未标注",
+          "abstract": "在验证器式 RLVR 中，组相对优化通常把 advantage 尺度当作实现细节。论文区分两类低方差情形：不应成为偏好信号的亚分辨率抖动，以及应被学习但不该扭曲 KL 校准的可信小幅基数差距。作者提出 advantage 尺度三方校准接口：同一组内尺度分母同时决定奖励分支强度、prompt 级 batch 权重、以及奖励分支换回原始基数尺度时的有效 KL 校准。该接口解释了 RLOO/Dr.GRPO 类方法为何让可信小差距被 KL 主导，而 GRPO 的标准差分母为何会无界放大小差距。据此提出 Reward-Resolution Protocol（过滤亚分辨率差距）与 MaxNorm-AC（对可信非零差距提供有界基数恢复）。在稠密/MoE 架构与数学/代码推理任务上，MaxNorm-AC 超过最强鲁棒尺度基线，并截断低方差逆尺度长尾。",
+          "contributions": [
+            "提出 advantage 尺度三方校准接口：一个分母同时决定奖励强度、batch 加权与 KL 校准",
+            "统一解释 RLOO/Dr.GRPO 与 GRPO 在低方差奖励下的两种失效模式",
+            "Reward-Resolution Protocol 过滤亚分辨率抖动，MaxNorm-AC 提供有界基数恢复"
+          ],
+          "conclusions": [
+            "advantage 尺度并非实现细节，而是组相对优化三个环节的共同耦合点",
+            "有界恢复可同时保住可信小差距的学习与 KL 校准稳定"
+          ],
+          "experiments": [
+            "覆盖稠密与 MoE 架构、数学与代码推理任务",
+            "MaxNorm-AC 优于最强鲁棒尺度基线",
+            "截断低方差逆尺度长尾，避免小差距被无界放大"
+          ],
+          "significance": "给 GRPO 系算法的低方差病根一个统一诊断框架与有界修复方案",
+          "arxivUrl": "https://arxiv.org/abs/2609.19164",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19164.pdf",
+          "index": 5,
+          "takeaway": "一个尺度分母管三件事——统一诊断 GRPO 低方差失效，MaxNorm-AC 有界修复",
+          "keyExperiment": "稠密/MoE、数学/代码推理上 MaxNorm-AC 全面优于最强鲁棒尺度基线并截断逆尺度长尾"
+        },
+        {
+          "title": "When2Think: Learning Difficulty-Aware Length Control for Efficient Hybrid Reasoning Models",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-18",
+          "authors": "Jaejun Shim, HyunJin Kim, Young Jin Kim, JinYeong Bak",
+          "institutions": "机构未标注",
+          "abstract": "大推理模型（LRM）存在系统性低效：简单题过度思考、难题思考不足；统一长度惩罚或刚性路由会征收“效率税”，省了简单题的计算却丢了难题的准确率。论文把高效推理形式化为按实例难度自适应分配计算的问题，提出面向混合推理的后训练框架 When2Think。核心是实例级难度感知控制（IDAC）奖励塑形：利用预先计算的参考统计量（准确率与 token 用量）调节推理深度，配合基于验证器的奖励与 batch 级标准化 advantage，实现无需学习式奖励模型或在线参考模型查询的稳定 critic-free 优化。模型学会简单实例直接作答、困难实例保留长推理，即学会何时用 System 1（NoThink）与 System 2（Think）。数学基准上 AIME24 Pass@3 提升 10.0%、token 用量降 27.9%；AIME25 Pass@3 达 40.0%，优于压缩与纯路由基线。",
+          "contributions": [
+            "将高效推理形式化为实例级自适应计算分配问题",
+            "IDAC 奖励塑形利用预计算参考统计量调节推理深度，无需奖励模型或在线查询",
+            "学会 NoThink/Think 混合切换：简单题直答、难题深思"
+          ],
+          "conclusions": [
+            "难度感知的计算分配可同时改善准确率与效率，避免统一惩罚的效率税",
+            "后训练即可为混合推理模型注入难度判断能力"
+          ],
+          "experiments": [
+            "AIME24：Pass@3 提升 10.0%，token 用量减少 27.9%",
+            "AIME25：Pass@3 达 40.0%，优于压缩与路由基线"
+          ],
+          "significance": "用奖励塑形而非结构改造教会模型“何时不思考”，双向纠正 overthink 与 underthink",
+          "arxivUrl": "https://arxiv.org/abs/2609.19671",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19671.pdf",
+          "index": 6,
+          "takeaway": "IDAC 奖励塑形让模型按题难度自选 Think/NoThink：AIME24 准确率 +10%、token −28%",
+          "keyExperiment": "AIME24 Pass@3 提升 10.0% 且 token 用量减少 27.9%，AIME25 达 40.0% Pass@3"
+        },
+        {
+          "title": "Self Improvement via Fast Tree-search",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-18",
+          "authors": "Xinghong Fu, Aravinth Kulanthaivelu, Yutaro Yamada",
+          "institutions": "机构未标注",
+          "abstract": "编码 agent 可以递归修改自身实现、形成自我改进回路，但现有方法的代价高昂：评估候选改动需要用改后的 agent 重跑基准任务子集，构成主要运行时瓶颈。论文提出 SIFT（经快速树搜索的递归自我改进）：用 LLM-as-a-judge 对候选补丁做两两比较，胜负记录经正则化 Bradley-Terry 模型聚合成强度分数，驱动轻量解耦树搜索中基于排名的父节点采样；昂贵的下游任务评估只保留给最有希望的节点。判分信号为探索提供中间反馈，使系统不被慢评估卡住。SIFT 在完整 Polyglot 基准上超越现有基于树搜索的自进化框架，同时 CPU 小时、墙钟时间与 API 成本显著更低，把 agent 递归自我改进从算力奢侈品变成预算友好的常规操作。",
+          "contributions": [
+            "识别自我改进回路的真瓶颈：候选改动的下游评估成本",
+            "LLM-judge 两两比较 + 正则化 Bradley-Terry 强度分数驱动树搜索父节点采样",
+            "昂贵评估只留给最有希望的节点，判分与评估解耦流水线化"
+          ],
+          "conclusions": [
+            "廉价的 LLM 判分信号足以引导自我改进树搜索的探索方向",
+            "以更低资源即可取得更强的编码自我改进效果"
+          ],
+          "experiments": [
+            "完整 Polyglot 基准上超越现有树搜索式自进化框架",
+            "CPU 小时、墙钟时间与 API 成本显著低于基线"
+          ],
+          "significance": "让 agent 递归自我改进在严格预算约束下变得可行",
+          "arxivUrl": "https://arxiv.org/abs/2609.19526",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19526.pdf",
+          "index": 7,
+          "takeaway": "Bradley-Terry 聚合 LLM 判分驱动树搜索，昂贵评估只给最优节点，Polyglot 更强且更省",
+          "keyExperiment": "完整 Polyglot 基准性能超越基线，CPU 小时/墙钟/API 成本同时显著下降"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Zarya: A Hybrid Autoregressive--Masked Diffusion Language Model with Flexible Training and Dual-Mode Inference",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-18",
+          "authors": "Leonid Sinev, Ilya Koziev, Vladislav Leshchuk",
+          "institutions": "机构未标注",
+          "abstract": "自回归模型受限于从左到右的串行生成；掩码扩散模型（MDM）可并行解码，却因无法复用 KV cache 而计算开销高，且在难解的 token 组合空间上学习依赖导致生成不连贯。Zarya 在单一架构内联合优化自回归与掩码扩散两个目标：把训练数据组织成可变大小槽位，以逐步增大槽位粒度的课程实现从细粒度 AR 学习到粗粒度扩散学习的平滑过渡。推理时通过统一接口提供两种解码范式：带 first-hitting 去噪的 MDM 采样，以及槽位化推测解码——槽间扩散选择与槽内自回归填充交错，实现完整 KV cache 复用。训练与推理完全解耦，任意配置训练的模型可部署于任一模式；支持分组噪声模式（Prefix Completion/Fill-In-the-Prefix/Fill-In-the-Middle）、有序采样调度与噪声级置换策略。开源 0.6B/1.7B/4B 三档模型，基准表现有竞争力。",
+          "contributions": [
+            "单一架构联合优化 AR + 掩码扩散目标，槽位化数据与课程实现平滑过渡",
+            "双模式推理统一接口：MDM 采样与槽位化推测解码（完整 KV cache 复用）",
+            "训练与推理完全解耦，开源 0.6B/1.7B/4B 模型家族"
+          ],
+          "conclusions": [
+            "AR 与扩散两种范式可在同一模型内原则性融合",
+            "槽位化推测解码让扩散模型重获 KV cache 复用能力"
+          ],
+          "experiments": [
+            "0.6B/1.7B/4B 三档模型在标准基准上表现有竞争力",
+            "支持 Prefix Completion/Fill-In-the-Prefix/Fill-In-the-Middle 等分组噪声模式与有序采样调度"
+          ],
+          "significance": "给 AR-扩散混合模型补上 KV 复用与灵活部署两块拼图，开源小模型家族可玩性强",
+          "arxivUrl": "https://arxiv.org/abs/2609.19868",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19868.pdf",
+          "index": 8,
+          "takeaway": "AR+扩散双目标单架构，槽位化推测解码找回 KV cache 复用，0.6B–4B 全开源",
+          "keyExperiment": "0.6B/1.7B/4B 模型在标准基准上有竞争力，且同一模型可任选 MDM 或推测解码双模式部署"
+        },
+        {
+          "title": "Placement Is Free, Composition Is Not: The Latin Square as a Provably-Balanced Construction for Heterogeneous Sequence-Mixer Stacks",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-18",
+          "authors": "Taebong Kim, Youngsik Hong, Minsik Kim, Sunyoung Choi, Jaewon Jang, Minseo Kim",
+          "institutions": "机构未标注",
+          "abstract": "自 GPT 以来 Transformer 每层重复同一注意力机制更像惯例而非验证过的结论；多种序列混合器混搭时，收益究竟来自机制选择还是排布位置难以归因。论文提出 Aether-7B-5Attn：6.59B 参数 MoE（激活约 2.98B），49 层内排布七种序列混合机制构成 7×7 拉丁方——每种机制在每行每列恰出现一次，保证跨深度均衡暴露并消除位置混淆。参数匹配的 4×4 拉丁方代理模型（700.9M、每臂 8 个种子）揭示清晰分离：把分布式异构栈重排为均衡周期循环仅改变验证损失 0.16%（位置几乎无影响）；把机制聚成连续深度带损失 +0.59%；换成同构栈损失 +1.68%。在 2.16× 规模（1.514B）复现：同构惩罚增至 2.63%，移除 SSM 族机制损失 3.20%。性能主要取决于异构组合沿深度的分布式铺开，而非具体排列。",
+          "contributions": [
+            "提出 7×7 拉丁方排布的 49 层异构序列混合器栈，可证明地均衡且消除位置混淆",
+            "8 种子参数匹配对照实验，分离机制选择、排布位置与组合多样性三个因素",
+            "开源权重、训练配方、训练代码与全部日志"
+          ],
+          "conclusions": [
+            "放置位置近乎免费（0.16%），异构组合本身才是收益来源（同构替换 +1.68%）",
+            "机制多样性的重要性随规模放大：同构惩罚 2.63%、移除 SSM 族 3.20%"
+          ],
+          "experiments": [
+            "重排为周期循环仅 0.16% 验证损失变化",
+            "聚类成连续深度带 +0.59%，同构栈 +1.68%",
+            "1.514B 规模复现：同构惩罚 2.63%，去 SSM 族 3.20%"
+          ],
+          "significance": "用拉丁方把“混合架构怎么排”变成可归因的实证问题，为异构层设计正名",
+          "arxivUrl": "https://arxiv.org/abs/2609.20269",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20269.pdf",
+          "index": 9,
+          "takeaway": "位置不重要、多样性才重要——7×7 拉丁方七种注意力机制的严格对照实验",
+          "keyExperiment": "700.9M×8 种子对照：重排仅 0.16% vs 同构替换 1.68% 验证损失惩罚，1.5B 规模放大到 2.63%"
+        },
+        {
+          "title": "Stiefel Attention: When the Geometry of Transformer Projection Matrices Dominates Optimizer Choice---and When It Does Not",
+          "score": 3.7,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-18",
+          "authors": "Rubén Darío Guerrero",
+          "institutions": "机构未标注",
+          "abstract": "注意力的 Q/K 投影矩阵几乎总由欧氏优化器无几何约束地训练。论文把 W_Q、W_K 约束到 Stiefel 流形，用黎曼 Adam 优化：每帧携带一个标量二阶矩、以信赖域限制步长、极收缩回映射。四个命题证明该更新是嵌入度量下的最速下降、与梯度尺度无关、良条件且精确 O(d) 等变，全部经数值认证；第五个命题给出机制：权重衰减在 Stiefel 流形上的黎曼梯度恒为零，学到的注意力几何得以在衰减驱动的坍缩中幸存。模运算 grokking 上单次运行在 epoch 20000 保持 97.0% 验证精度（基线 61.1%）；CIFAR-10 patch 上 12 对配对起点平均 +8.98pp（t=60.6，12/12 全胜）。消融显示收益完全来自步长与梯度尺度解耦：固定步长黎曼更新每步移动量仅为同形 AdamW 的 1/24–1/40。",
+          "contributions": [
+            "将 Q/K 投影约束到 Stiefel 流形并用带信赖域的黎曼 Adam 优化，四个命题 float64 数值认证",
+            "证明权重衰减在 Stiefel 流形上黎曼梯度恒为零——注意力几何免于衰减坍缩的机制",
+            "grokking 与 CIFAR-10 双设定验证，消融精确定位收益来源"
+          ],
+          "conclusions": [
+            "收益来自步长与梯度尺度解耦，与等变性或投影子无关",
+            "注意力投影矩阵的几何约束在特定设定下可主导优化器选择"
+          ],
+          "experiments": [
+            "模运算 grokking：epoch 20000 保持 97.0% vs 基线 61.1%",
+            "CIFAR-10 patch：12 对起点平均 +8.98pp（t=60.6，12/12 全胜）",
+            "固定步长黎曼更新每步移动量为 AdamW 的 1/24–1/40，冻结帧仅损失 0.28pp"
+          ],
+          "significance": "为“优化器选择何时重要”给出几何视角的边界刻画与机制解释",
+          "arxivUrl": "https://arxiv.org/abs/2609.19363",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19363.pdf",
+          "index": 10,
+          "takeaway": "把 Q/K 投影搬上 Stiefel 流形，权重衰减归零让注意力几何在 grokking 中存活（97% vs 61%）",
+          "keyExperiment": "grokking 单次运行 97.0% vs 61.1%，CIFAR-10 12/12 起点全胜 +8.98pp"
+        }
+      ]
+    }
+  ]
+}
