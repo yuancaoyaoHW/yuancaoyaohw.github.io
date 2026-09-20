@@ -1,8 +1,330 @@
 {
   "date": "2026-09-20",
   "title": "2026-09-20 论文精选",
-  "lede": "周日休息，无论文推荐。",
-  "stats": {"selected": 0, "channels": 0, "candidates": 0},
-  "channels": [],
-  "channelGroups": []
+  "lede": "周日特辑：GPU 通信与调度优化专题。常规批次已被前两期消费，本期从 arXiv cs.DC 分布式计算分类补充：token 级 DiT serving 调度、联邦学习原则改造 FSDP 通信、LLM 训练网络通信全景教程、CPU 边缘张量并行，以及 GPU 静默数据损坏的检测与现场恢复。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 25
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Reliability & Scheduling",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "PixelFlow: Token-Level Workload Management for Efficient Distributed DiT Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-18",
+          "authors": "Zhexiang Zhang, Minchen Yu, Yifan Sun, Xu Bai, Xingliang Yuan, Adel N. Toosi",
+          "institutions": "CMU / Monash University 等",
+          "abstract": "扩散 Transformer（DiT）在线图像生成必须在延迟 SLO 内榨干 GPU 利用率。请求级批处理的批大小不可控：批太小打不满算力，批太大又违反 SLO；全局协同调度还要独立推进的 GPU 先同步再准入新请求，引入额外延迟。PixelFlow 提出令牌级负载管理：以 token 为调度粒度在分布式 GPU 间切分与调度工作负载，无需全局同步即可动态调节每卡在批负载，兼顾吞吐与尾延迟，为高并发图像生成服务提供细粒度资源编排能力。",
+          "contributions": [
+            "提出 token 级负载管理：调度粒度从请求降到 token，批大小可细粒度动态调节",
+            "免除全局同步准入：GPU 独立推进，消除协同调度的同步等待",
+            "在多 GPU DiT serving 上同时保住吞吐与延迟 SLO"
+          ],
+          "conclusions": [
+            "请求级批处理在 DiT serving 上存在批大小与 SLO 的两难，token 粒度是出路",
+            "全局协同调度的同步开销在高吞吐场景不可忽视"
+          ],
+          "experiments": [
+            "与请求级批处理及全局协同调度基线对比，GPU 利用率与 SLO 达标率同时改善",
+            "分布式多 GPU 设置下验证 token 级调度的可扩展性"
+          ],
+          "significance": "DiT serving 调度的粒度革命：从“整请求”降到“token”，直击批处理两难",
+          "arxivUrl": "https://arxiv.org/abs/2609.20723",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20723.pdf",
+          "takeaway": "以 token 为粒度调度 DiT 负载，免全局同步即可动态调批，吞吐与 SLO 兼得",
+          "keyExperiment": "与请求级批处理/全局协同调度对比，GPU 利用率与 SLO 达标率同时提升",
+          "index": 1
+        },
+        {
+          "title": "SiliconBench: Speed, Memory, and Fidelity for LLM Serving on Unified-Memory Desktops",
+          "score": 3.8,
+          "channel": "AI Infra",
+          "category": "cs.AR",
+          "date": "2026-09-18",
+          "authors": "Ranran Haoran Zhang, Aysa Xuemo Fan, David Munhá Correia, Alex Cheema, Rui Zhang",
+          "institutions": "LUMS / HKUST 等",
+          "abstract": "统一内存桌面设备（Apple Silicon）上并发本地 LLM serving 必须同时守住内存余量与输出保真度，而纯速度排行忽略了这两点。SiliconBench 用速度、内存、保真三个镜头评估 9 个 Apple Silicon serving 引擎，覆盖 Qwen3、Qwen3.5、Gemma 4 的 chat 与 agent 负载，并用分类任务对照 NVIDIA 参考检测质量退化，DGX Spark 提供性能参照。Qwen3-0.6B 上 vllm-metal 在两类负载的并发吞吐均翻倍以上。",
+          "contributions": [
+            "首个统一内存桌面 LLM serving 的三维度 benchmark：速度之外纳入内存纪律与输出保真度",
+            "覆盖 9 个引擎、3 个模型家族的 chat 与 agent 并发负载",
+            "以分类任务对 NVIDIA 参考做保真度回归检测"
+          ],
+          "conclusions": [
+            "端侧 serving 引擎选型不能只看吞吐，内存余量与质量回归同样关键",
+            "统一内存架构的 serving 就绪度差异巨大，需系统性评估"
+          ],
+          "experiments": [
+            "Qwen3-0.6B 上 vllm-metal 并发吞吐较其他引擎翻倍以上",
+            "9 引擎在内存占用与输出保真度上拉开明显差距"
+          ],
+          "significance": "端侧 LLM serving 首次有了“速度+内存+保真”三镜头横评，选型有了客观依据",
+          "arxivUrl": "https://arxiv.org/abs/2609.19169",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19169.pdf",
+          "takeaway": "9 个 Apple Silicon serving 引擎的三维横评：速度、内存、保真一个都不能少",
+          "keyExperiment": "Qwen3-0.6B 上 vllm-metal 并发吞吐翻倍以上，且内存与保真指标完整公开",
+          "index": 2
+        },
+        {
+          "title": "Sample Count Is Not Enough: Candidate-Generation Strategy Shapes the Energy and Performance of LLM Test-Time Scaling",
+          "score": 3.9,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-18",
+          "authors": "Mobina Kashaniyan, Ali Jannesari",
+          "institutions": "University of Illinois Chicago",
+          "abstract": "测试时扩展靠生成并组合多个候选回答提升推理能力，但推理预算通常只用候选数 N 描述——N 只说明生成多少个，不说明怎么执行。同样的 N 可以一次大批量生成，也可拆成多次小批量串行调用。作者用 Phi-3-mini 与 Qwen2.5-1.5B 在 500 条 GSM8K 上研究发现：N 从 1 到 8 使准确率分别提升 8.4 与 18.4 个百分点，但候选生成策略（批量 vs 串行、batch 大小）对能耗与性能的塑造作用被严重低估，调度层的选择直接改变测试时扩展的成本曲线。",
+          "contributions": [
+            "指出候选数 N 不是完整的推理预算描述：生成策略维度缺失",
+            "系统研究批量 vs 串行生成对准确率、延迟、能耗的影响",
+            "在 GSM8K 上量化不同生成策略的能耗-性能 trade-off"
+          ],
+          "conclusions": [
+            "测试时扩展的预算控制需要从“数多少”进化到“怎么生成”",
+            "serving 层调度策略对测试时扩展成本有系统性影响"
+          ],
+          "experiments": [
+            "Phi-3-mini / Qwen2.5-1.5B 上 N:1→8 准确率分别 +8.4 / +18.4 百分点",
+            "同一 N 下不同生成策略的能耗与延迟显著不同"
+          ],
+          "significance": "给测试时扩展补上了被忽略的一半预算变量：候选怎么生成和生成多少同样重要",
+          "arxivUrl": "https://arxiv.org/abs/2609.19499",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19499.pdf",
+          "takeaway": "测试时扩展的预算=候选数×生成策略，后者才是能耗与延迟的隐藏塑造者",
+          "keyExperiment": "同一 N、不同生成策略在 GSM8K 上能耗与延迟差异显著",
+          "index": 3
+        },
+        {
+          "title": "A Kubernetes-Native Request Router for Quality-Aware Inference Serving in the Computing Continuum",
+          "score": 3.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-18",
+          "authors": "Ignjat Karanovic, Pantelis A. Frangoudis, Ivan Čilić, Ivana Podnar Žarko, Schahram Dustdar",
+          "institutions": "TU Wien",
+          "abstract": "云-边-端计算连续体上的 ML 推理服务需要请求路由同时照顾基础设施、响应时间与应用层输出质量。ASRB 是 Kubernetes 原生的动态评分路由机制：把服务方定义的 QoS 策略编码为加权组合，联合基础设施层信息、实测响应时间与输出质量指标做路由决策，在延迟-精度 trade-off 上按策略灵活倾斜，并具备对运行环境变化的快速适应能力，是面向云边端推理服务调度策略层缺失环节的系统性补全方案。",
+          "contributions": [
+            "Kubernetes 原生的质量感知请求路由器，策略以 QoS 加权组合形式声明",
+            "联合基础设施状态、响应时间与输出质量三类信号做动态路由",
+            "面向计算连续体的 ML serving，支持延迟-精度策略倾斜"
+          ],
+          "conclusions": [
+            "推理服务的路由决策应纳入应用层质量，而非只看负载与时延",
+            "云边端连续体上的路由需要声明式策略与快速适应能力"
+          ],
+          "experiments": [
+            "在 K8s 部署的 ML 服务上验证路由策略对延迟-精度 trade-off 的控制力",
+            "环境变化下路由决策的适应速度与稳定性得到验证"
+          ],
+          "significance": "把“质量感知”做成 K8s 原生路由原语，云边端推理调度的策略层补全了一块",
+          "arxivUrl": "https://arxiv.org/abs/2609.20497",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20497.pdf",
+          "takeaway": "K8s 原生质量感知路由：基础设施+时延+输出质量三类信号联合决策",
+          "keyExperiment": "声明式 QoS 策略下，延迟-精度 trade-off 可按需倾斜",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "The Life of a Token: from Words to Bits on the Wire",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-18",
+          "authors": "Davide Avesani, Pengwenlong Gu, Sotiris Skaperas, Stefano Secci",
+          "institutions": "CEDRIC-ROC / Cnam（法国国家工艺学院）",
+          "abstract": "一篇系统教程：跟随一个 token 从文本到网络流量的完整旅程。词变成 token、token 变成向量、向量最终变成在 HPC 系统中流动的比特流。随着 LLM 增长到数千亿参数，这条路径横跨数千个互联加速器，底层通信织络成为训练的关键且常被忽视的组件。教程从网络视角拆解 LLM 训练：集合通信原语如何映射到网络拓扑、参数/梯度/激活如何在互联上流动、通信与计算如何重叠调度，是 GPU 通信方向的系统性入门与进阶材料。",
+          "contributions": [
+            "以“token 生命周期”为线索的 LLM 训练网络通信全景教程",
+            "覆盖集合通信原语、网络拓扑映射、流量模式与通信-计算重叠",
+            "面向 HPC 网络研究者与系统工程师的入门进阶一体材料"
+          ],
+          "conclusions": [
+            "通信织络是大规模训练的第一等公民，不应被视为黑盒",
+            "理解流量模式是优化互联与集合通信的前提"
+          ],
+          "experiments": [
+            "以真实训练流程为例拆解各阶段通信流量的来源与特征"
+          ],
+          "significance": "把“LLM 训练到底怎么吃网络带宽”讲透的教程，GPU 通信方向必读入门材料",
+          "arxivUrl": "https://arxiv.org/abs/2609.19924",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19924.pdf",
+          "takeaway": "一个 token 的旅程：从文本到网络比特流，LLM 训练通信全景拆解",
+          "keyExperiment": "以真实训练流程逐段拆解参数/梯度/激活流在互联上的流动",
+          "index": 5
+        },
+        {
+          "title": "Accelerating Sharded Data Parallelism at Scale with Federated Learning",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-18",
+          "authors": "Gianluca Mittone, Marco Aldinucci",
+          "institutions": "University of Turin",
+          "abstract": "分片数据并行（FSDP 类）是基础模型训练的主导策略，但大规模部署尤其多层异构互联上通信开销过高。作者借鉴联邦学习的高效通信原则，提出两个混合算法 FL+FSDP 与 FL+SDP：用 FL 的通信压缩与异步思路改造分片并行的 all-gather 流量模式，降低多层互联上的通信瓶颈，在保持收敛性的前提下显著改善数千 GPU 规模训练的可扩展性，为跨圈层的通信优化方法论研究提供了新的可行思路与样本。",
+          "contributions": [
+            "诊断 FSDP 在多层异构互联上的通信开销问题",
+            "把联邦学习的通信高效原则引入分片数据并行，提出 FL+FSDP / FL+SDP 混合算法",
+            "在数千 GPU 规模模拟下验证通信开销降低与收敛性保持"
+          ],
+          "conclusions": [
+            "FL 与 DP 的通信原语可以互补：FL 的压缩/异步思路对分片并行同样适用",
+            "多层互联的异构性是 FSDP 通信开销的结构性来源"
+          ],
+          "experiments": [
+            "大规模训练模拟中通信开销显著降低且收敛性保持",
+            "多层互联（参数面+计算面）设置下的可扩展性改善"
+          ],
+          "significance": "跨圈借刀：用 FL 的通信优化思路解决 FSDP 的通信瓶颈，通信优化新弹药",
+          "arxivUrl": "https://arxiv.org/abs/2609.20359",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20359.pdf",
+          "takeaway": "联邦学习通信原则反哺 FSDP：多层互联上的分片并行通信开销显著降低",
+          "keyExperiment": "数千 GPU 模拟下 FL+FSDP 通信开销降低且收敛性保持",
+          "index": 6
+        },
+        {
+          "title": "Xronos: Heterogeneity-Aware Tensor Parallelism for Collaborative LLM Fine-Tuning on Edge CPUs",
+          "score": 3.8,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-18",
+          "authors": "Wonmi Choi, Sunjae Park, Dohyeok Kwon, Zhixiong Niu, Yeonho Yoo, Chuck Yoo, Gyeongsik Yang",
+          "institutions": "Seoul National University",
+          "abstract": "协同微调让边缘设备在数据不出本地的前提下适配 LLM，但 SOTA 方案多为 GPU 边缘设备设计、依赖流水线并行。多数边缘平台（IoT 网关、智能家居中枢、车载计算机）以 CPU 为主。本文发现流水线并行在 CPU 边缘设备上失效：同一 CPU 既做模型计算又做通信，造成严重 CPU 争用，计算停顿比 GPU 设备平均高 5.75 倍。Xronos 提出异构感知的张量并行方案，把通信与计算调度到不同核心，适配 CPU 边缘的协同微调。",
+          "contributions": [
+            "实证诊断：流水线并行在 CPU 边缘设备因计算-通信 CPU 争用而失效（stall 比 GPU 平均高 5.75 倍）",
+            "提出异构感知张量并行 Xronos，将通信与计算调度分离",
+            "面向 CPU 边缘设备的协同 LLM 微调系统"
+          ],
+          "conclusions": [
+            "并行策略的选择必须匹配设备的计算-通信资源模型",
+            "CPU 边缘设备上通信与计算争用同一资源，需要显式隔离调度"
+          ],
+          "experiments": [
+            "CPU 边缘设备上计算停顿比显著降低，微调吞吐改善",
+            "多设备异构场景下验证可扩展性"
+          ],
+          "significance": "并行策略不是放之四海皆准：CPU 边缘设备的通信-计算争用改写了选型规则",
+          "arxivUrl": "https://arxiv.org/abs/2609.19909",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19909.pdf",
+          "takeaway": "CPU 边缘设备上流水线并行失效（stall 高 5.75 倍），张量并行+核分离调度才是出路",
+          "keyExperiment": "CPU 边缘协同微调中计算停顿比显著降低、吞吐改善",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Reliability & Scheduling",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Syndrome Decoding for Silent Data Corruption in Quantized Integer GPU Arithmetic",
+          "score": 3.7,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-18",
+          "authors": "Pranav Napolean, Vikas Srivastava, Napolean Periathambi",
+          "institutions": "机构未标注",
+          "abstract": "量化神经网络推理在 GPU tensor core 上跑整数矩阵乘，但核心内 INT32 累加器既无奇偶校验也无 ECC——数据通路中的瞬态故障会返回“合法但错误”的整数且不触发任何中断。基于校验和的 ABFT 能检测这类静默数据损坏（SDC），但其判定是二值的：无法定位损坏元素或其量级，且无权重行列校验和在双轴上抵消的误差前天生失明。SProbe 是一个后验验证 kernel，读取未修改厂商 GEMM 的输出，用带三个独立随机 Freivalds 门的校验解码定位错误。",
+          "contributions": [
+            "指出量化整数 GPU 算术的可靠性盲区：tensor core INT32 累加器无 ECC",
+            "SProbe 后验 kernel：不改 GEMM、不加编码，事后校验输出",
+            "随机 Freivalds 门 + 校验解码，超越二值 ABFT 判定"
+          ],
+          "conclusions": [
+            "量化推理的可靠性需要独立于硬件 ECC 的软件防线",
+            "后验校验是不侵入 kernel 的可行路线"
+          ],
+          "experiments": [
+            "NPB 级 benchmark 上 SDC 检测与定位能力验证"
+          ],
+          "significance": "量化时代的 GPU 可靠性：厂商 GEMM 不动一根毫毛，错误照样抓得到",
+          "arxivUrl": "https://arxiv.org/abs/2609.19743",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19743.pdf",
+          "takeaway": "tensor core INT32 累加器无 ECC，SProbe 用后验校验解码抓住静默数据损坏",
+          "keyExperiment": "对未修改厂商 GEMM 输出做 Freivalds 门校验，检测并定位 SDC",
+          "index": 8
+        },
+        {
+          "title": "Sketching the Error, Not the Product: Post Hoc Fault Recovery for Half Precision GPU Matrix Multiplication",
+          "score": 3.7,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-18",
+          "authors": "Pranav Napolean, Vikas Srivastava, Napolean Periathambi",
+          "institutions": "机构未标注",
+          "abstract": " defective 加速器的静默数据损坏（SDC）已在大规模训练中造成中断，而部署中的缓解手段只能整节点替换。单个 GEMM 的 ABFT 必须融合进 kernel 或对操作数编码，且每个校验和至多定位一个错误。FP-Sketch 是运行在未修改 tensor core GEMM（FP16 操作数、FP32 累加输出）之后的验证器：求和 sketch 每次调用都检测损坏；哈希一阶矩 sketch 经独立重算确认后，构造性无假阳性地定位多个损坏条目，每个故障给出坐标与量级，可现场恢复而非整节点丢弃。",
+          "contributions": [
+            "FP-Sketch 后验验证器：FP16 GEMM 之后运行，不修改 kernel",
+            "求和 sketch 检测 + 哈希一阶矩 sketch 定位，构造性无假阳性",
+            "从“整节点丢弃”升级到“按坐标与量级现场恢复”"
+          ],
+          "conclusions": [
+            "SDC 缓解的粒度可以从节点级降到条目级",
+            "sketch 方法为高精度定位提供构造性保证"
+          ],
+          "experiments": [
+            "多个损坏条目同时定位与量级恢复的验证"
+          ],
+          "significance": "训练集群的 SDC 处置从“换节点”进化到“修条目”，停机成本大幅下降",
+          "arxivUrl": "https://arxiv.org/abs/2609.19758",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19758.pdf",
+          "takeaway": "FP16 GEMM 的 SDC 检测+定位+现场恢复，不再整节点丢弃",
+          "keyExperiment": "哈希一阶矩 sketch 构造性无假阳性地定位多个损坏条目并给出量级",
+          "index": 9
+        },
+        {
+          "title": "VERA: Reinforcement Learning for Dynamic Memory Scaling of HPC Workloads in Kubernetes",
+          "score": 3.5,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-18",
+          "authors": "Ade Pramono, Jie Ren, Ivy Peng",
+          "institutions": "Norwegian University of Science and Technology (NTNU)",
+          "abstract": "Kubernetes 上的 HPC 工作负载普遍内存超配导致资源利用率低下，默认 Vertical Pod Autoscaler（VPA）无法预判首跑任务的相位驱动内存尖峰。VERA 把垂直内存扩展建模为马尔可夫决策过程，在 3353 条真实 Prometheus trace 上训练 RL agent。在 GKE 集群上用 LAMMPS、图分析、内存分析与 MLPerf 3D-UNet 评估：VERA 回收 31.6% 可用内存余量且至多触发一次 OOM，同期 VPA 反而多占 7.9%。",
+          "contributions": [
+            "把 K8s 垂直内存扩展建模为 MDP，RL 在 3353 条真实 trace 上训练",
+            "针对首跑 HPC 任务的相位驱动内存尖峰（VPA 的盲区）",
+            "GKE 实测：LAMMPS/图分析/MLPerf 3D-UNet 等负载"
+          ],
+          "conclusions": [
+            "HPC 负载的内存调度需要相位预测能力，启发式 VPA 不够",
+            "RL 学到的内存画像策略可显著提高集群利用率"
+          ],
+          "experiments": [
+            "回收 31.6% 可用内存余量、至多 1 次 OOM；VPA 同期反而 +7.9% 内存占用"
+          ],
+          "significance": "K8s 上 HPC 内存调度的 RL 化：超配治理有了可复现的实测基线",
+          "arxivUrl": "https://arxiv.org/abs/2609.19936",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19936.pdf",
+          "takeaway": "RL 学内存相位：K8s HPC 负载回收 31.6% 内存余量，VPA 反而多占 7.9%",
+          "keyExperiment": "GKE 实测回收 31.6% 内存余量且至多 1 次 OOM，对比 VPA 的 -7.9%",
+          "index": 10
+        }
+      ]
+    }
+  ]
 }
