@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-21",
+  "title": "2026-09-21 论文精选",
+  "lede": "今日关注长时程 agent 时代的模型与系统重构：DeepSeek 把 KV cache 压缩推到极限、扩散语言模型与 AR 范式双向融合、agent 自身开始被当作可剖析的系统对象。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 271
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-21",
+          "authors": "DeepSeek-AI, Anyi Xu, B. Li, Bangcai Lin, Bing Xue, et al.",
+          "institutions": "DeepSeek",
+          "abstract": "长时程 agent 让负载偏输入侧：prefill 贵、KV cache 挤压 HBM/SSD 容量与带宽，是压低部署成本的主要瓶颈。DeepSeek-V4.1-Flash 是 552B 多模态 MoE，支持 100 万 token 上下文；CED 架构 decode 每 token 激活 16B、prefill 仅 8B，契合 agent 负载。模型将 CSA2 跨层 KV 复用与 FP4 KV 缓存结合，把常驻 HBM 的全局 KV 压到每 token 890 字节（V4-Flash 的 1/4）；SWA Bounded Replay 再把常驻 SSD/主存的持久 KV 降到 1/8。足迹缩小 4-8 倍后性能仍优于基线，模型用 45T token 多模态语料完成预训练与后训练，权重已开源。",
+          "contributions": [
+            "提出 CED 因果编码器-解码器架构：prefill 只激活 8B 参数、decode 激活 16B，为输入偏重的 agent 负载省钱",
+            "CSA2 跨层 KV 复用 + FP4 KV 缓存叠加，把全局 KV cache 压到每 token 890 字节（V4-Flash 的约 1/4）",
+            "SWA Bounded Replay 部署优化把持久 KV cache 降到约 1/8，552B 多模态 MoE + 1M 上下文并开源权重"
+          ],
+          "conclusions": [
+            "KV 足迹缩小 4-8 倍的同时性能反而优于基线，说明跨层复用与 FP4 的信息损失可控",
+            "输入偏重的 agent 时代，prefill 与 KV 存储而非 decode 成为主导成本，架构设计需围绕它们重排"
+          ],
+          "experiments": [
+            "全局 KV cache 降至 890 字节/token，约为 DeepSeek-V4-Flash 的 1/4",
+            "SWA Bounded Replay 使持久 KV cache 降至约 V4-Flash 的 1/8",
+            "45T token 多模态预训练 + 全套后训练，文本与多模态 agent 场景显著优于基线"
+          ],
+          "significance": "把 KV cache 压缩从单点技巧整合为旗舰模型的系统设计，为长时程 agent 的低成本部署立下新标杆。",
+          "arxivUrl": "https://arxiv.org/abs/2609.19969",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19969.pdf",
+          "index": 1,
+          "takeaway": "552B 多模态 MoE 用 CED + CSA2 + FP4 把每 token KV 压到 890 字节，agent 部署成本的天花板被重新定义。",
+          "keyExperiment": "在 KV 足迹缩小 4-8 倍的条件下，V4.1-Flash 的 agent 基准成绩仍全面高于 KV 大 4 倍的 V4-Flash。"
+        },
+        {
+          "title": "D-Quant: Driftable Entropy Coding for KV Cache Quantization",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-21",
+          "authors": "Yi Su, Hong Liu, Guanghua Yu, Jianchen Zhu",
+          "institutions": "机构未标注",
+          "abstract": "KV cache 随序列长度与批大小线性增长，是 LLM 部署的主要瓶颈之一，量化是其中最易落地的压缩路线。但现有方法多为定宽量化：b 位表示天然只有 2 的 b 次方个量化级，位宽降低时可用级数指数收缩，信息损失严重。作者进一步指出，定宽编码没有利用 KV cache 高度非均匀的分布——旋转与归一化后 KV 值近似正态，多数取值集中在中心、少数落在尾部，而定宽编码给高频与稀有符号分配相同比特。熵编码恰好能利用这种非均匀性：高频符号短码字、稀有符号长码字，可大幅降低平均比特数；但其变长输出与高度并行注意力 kernel 依赖的规则内存布局、固定步长访存相冲突。为此 D-Quant 提出 drift 机制，把每个 token 的熵编码表示转换为固定大小的位流，使注意力 kernel 内可以做规则访存与并行反量化，兼顾压缩率与硬件效率。",
+          "contributions": [
+            "指出定宽量化未利用 KV cache 的非均匀分布，熵编码可显著降低平均码长",
+            "提出 drift 机制：把变长熵编码流转换为每 token 固定尺寸位流，兼容并行注意力 kernel",
+            "构建灵活的 KV cache 量化框架，让熵编码首次可用于高吞吐注意力 kernel"
+          ],
+          "conclusions": [
+            "熵编码 + drift 化是定宽量化之外的新压缩维度，可与其他 KV 压缩正交叠加",
+            "可变长压缩与 GPU 规则访存之间的鸿沟可以靠表示层转换弥合"
+          ],
+          "experiments": [
+            "固定 b 位量化在低位宽下因 2^b 级数收缩导致性能快速退化（作者的核心动机实验）",
+            "drift 转换后 KV 值保持规则内存布局，支持 kernel 内并行反量化",
+            "熵编码对近似正态分布的 KV 值显著降低平均比特数"
+          ],
+          "significance": "把熵编码引入 KV cache 量化并解决其与并行 kernel 的兼容问题，开辟了定宽量化之外的新压缩路线。",
+          "arxivUrl": "https://arxiv.org/abs/2609.19880",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19880.pdf",
+          "index": 2,
+          "takeaway": "D-Quant 用 drift 机制把熵编码的变长位流变成固定尺寸，让 KV cache 量化同时吃到非均匀分布的红利和硬件并行性。",
+          "keyExperiment": "相比定宽量化，熵编码利用 KV 近似正态分布大幅降低平均码长，drift 化后在注意力 kernel 内保持规则访存。"
+        },
+        {
+          "title": "To Copy or Not to Copy: Controlling Speculative Decoding via Intrinsic Model Signals",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-21",
+          "authors": "Roy Eisenstadt, Ido Cohen, Edo Cohen-Karlik, Lior Wolf, Itamar Zimerman",
+          "institutions": "Tel Aviv University",
+          "abstract": "投机解码显著加速 LLM 推理，但两类草稿策略存在根本权衡：神经草稿（如 EAGLE3）在多种文本上表现稳健，而基于上下文复制的草稿在复制密集场景中生成候选更快、可利用长重复片段实现近乎完美的投机，加速更高。作者分析现有复制式方法后发现，表面 n-gram 重叠并不总是反映结构性的复制意图，会造成误触发，反而降低吞吐。SwitchSD 把是否复制当作 LLM 的潜在控制信号：在目标模型内部表示上训练轻量探针，以超过 0.99 的 AUC 高精度识别真正的复制意图，并据此在神经草稿与上下文复制之间动态切换。在 Llama 与 Qwen 系列上的实验显示，相比 EAGLE3 等 SOTA 基线可带来最高 15% 的吞吐提升，把复制从噪声启发式变成有模型感知的原则化解码机制。",
+          "contributions": [
+            "揭示复制式投机解码的误触发根因：表面 n-gram 重叠不等于结构性复制意图",
+            "提出 SwitchSD：用内部表示上的轻量探针识别复制意图（AUC 大于 0.99），动态切换神经草稿与复制草稿",
+            "把投机解码的草稿选择变成模型自知的控制问题，而非固定启发式"
+          ],
+          "conclusions": [
+            "单一草稿策略无法覆盖所有文本形态，意图感知的动态切换是吞吐优化的正确抽象",
+            "模型内部表示已编码了是否处于复制状态的充分信息"
+          ],
+          "experiments": [
+            "复制意图探针 AUC 超过 0.99",
+            "Llama 与 Qwen 系列上相比 EAGLE3 吞吐最高提升 15%",
+            "误触发被消除后，复制密集场景不再出现吞吐回退"
+          ],
+          "significance": "给投机解码装上意图识别开关，用不到 1% 的开销把两类草稿策略的优势区间拼成全程最优。",
+          "arxivUrl": "https://arxiv.org/abs/2609.20186",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20186.pdf",
+          "index": 3,
+          "takeaway": "SwitchSD 用轻量探针判断模型此刻是真复制还是假重叠，在 EAGLE 和复制草稿间动态切换，吞吐再涨 15%。",
+          "keyExperiment": "探针以 AUC 大于 0.99 区分真伪复制意图，动态切换策略在 Llama/Qwen 上稳定超过 EAGLE3 最高 15%。"
+        },
+        {
+          "title": "AgentPProf: Semantic Profiler for Long Horizon AI Agents",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-21",
+          "authors": "Yusheng Zheng, Chaokun Chang, Yu Mao, Tianyuan Wu, Yuxi Huang, Tao Ma, et al.",
+          "institutions": "机构未标注",
+          "abstract": "AI agent 正在执行跨越数天乃至数周的任务，开发者需要知道失败在哪、什么触发不安全行为、哪些任务烧预算最多。系统软件用 profiler 聚合资源消耗并归因到代码路径定位热点，但现有 agent 观测工具只做单次调试与追踪，缺乏跨运行的长期 profiling；而 agent 的归因主体是“诊断认证失败”“比较分支”这类任务意图而非代码路径，且缺少稳定聚合标识符，传统 profiler 无法直接套用。AgentPProf 提出语义操作栈模型：用统一操作表示所有活动，用操作栈替代运行时调用栈，实现多粒度层级归因；利用任务占据连续区间且可分解为子任务的性质，递归在任务边界切分轨迹，聚合为 pprof 兼容 profile 供火焰图分析。CodeTraceBench 上与人工标注达 0.764 的 B3 F1；三个问题定位基准上 MAP 最高提升 56%。",
+          "contributions": [
+            "把系统软件的 profiling 范式引入 agent 观测：从单次追踪升级为跨运行、按任务意图聚合",
+            "提出语义操作栈与递归任务边界分割，解决 agent 轨迹无稳定标识符、归因主体是意图的难题",
+            "输出 pprof 兼容 profile，火焰图生态直接可用"
+          ],
+          "conclusions": [
+            "agent 工程的下一阶段需要 profiler 级基础设施，而非更多调试工具",
+            "按任务意图聚合的语义剖面能有效定位失败热点并指导 token 成本优化"
+          ],
+          "experiments": [
+            "CodeTraceBench 上与人工标注达成 0.764 的 B3 F1",
+            "三个问题定位基准上 MAP 最高提升 56%",
+            "在实用 profiling 开销下支撑 token 成本优化"
+          ],
+          "significance": "为长时程 agent 补上了 profiling 这块系统基础设施拼图，让“哪个子任务烧钱、哪步出错”第一次可以像代码热点一样被火焰图回答。",
+          "arxivUrl": "https://arxiv.org/abs/2609.20301",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20301.pdf",
+          "index": 4,
+          "takeaway": "AgentPProf 把 agent 轨迹聚合成 pprof 火焰图，按任务意图而非代码路径归因资源，问题定位 MAP 提升最高 56%。",
+          "keyExperiment": "对三套问题定位基准，AgentPProf 的语义剖面把 MAP 最多抬高 56%，同时保持可接受的 profiling 开销。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "dQwen3.5: Hybrid-Attention Diffusion Language Models",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-21",
+          "authors": "Anton Xue, Litu Rout, Aditya Akella, Adam Klivans, Sujay Sanghavi, Sanjay Shakkottai",
+          "institutions": "UT Austin",
+          "abstract": "把预训练自回归（AR）模型改造成扩散语言模型（DLM）是高性价比路线，但几乎所有此类改造都从全注意力 transformer 出发——而当代 AR 建模已转向注意力与 RNN 层交错的混合架构。RNN 结构上因果、难以双向化，这给适配带来障碍。作者研究这类骨干能否成为有效的 DLM：在 0.8B、2B、4B、9B 规模上适配 Qwen3.5，得到 dQwen3.5 家族。结果显示混合骨干是高效的适配起点：相对全注意力对照组，达到同等训练损失只需约一半 token；跨规模上 dQwen3.5 在任意序解码行为上与全注意力 DLM 相当，且并行解码下表现强劲。这表明混合注意力主干的结构因果性并非扩散化的硬障碍，为存量混合架构模型的扩散化提供了可行路径。",
+          "contributions": [
+            "首次系统研究混合注意力骨干（注意力+RNN 交错）的扩散语言模型适配问题",
+            "在四个规模上适配 Qwen3.5 得到 dQwen3.5 家族，验证混合骨干可高效双向化为 DLM",
+            "证明混合骨干达同等训练损失只需全注意力约一半 token，是更省的适配起点"
+          ],
+          "conclusions": [
+            "RNN 层的结构因果性不阻碍扩散化，混合骨干反而带来训练效率优势",
+            "存量混合架构模型无需回退到全注意力即可获得扩散推理能力"
+          ],
+          "experiments": [
+            "0.8B/2B/4B/9B 四个规模全部完成适配并收敛",
+            "混合骨干达到同损失约 0.5 倍 token 消耗（对比全注意力对照组）",
+            "任意序解码行为与全注意力 DLM 相当，并行解码表现强劲"
+          ],
+          "significance": "打开了混合注意力时代预训练模型通往扩散语言模型的适配通道，直接影响下一代主流骨干的扩散化路线图。",
+          "arxivUrl": "https://arxiv.org/abs/2609.20751",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20751.pdf",
+          "index": 5,
+          "takeaway": "dQwen3.5 证明注意力-RNN 混合骨干能以一半 token 代价高效扩散化，存量混合模型不必为 DLM 重训全注意力版。",
+          "keyExperiment": "四个规模一致显示混合骨干约一半 token 达到全注意力对照的同等训练损失，且任意序解码行为不打折。"
+        },
+        {
+          "title": "RetireOPD: Self-Retiring On-Policy Distillation for Agentic Reinforcement Learning",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-21",
+          "authors": "Yan Yu, Zhengxi Lu, Yizhou Liu, Yichen Pan, Aozhe Wang, Qipeng Chen, Yongliang Shen, et al.",
+          "institutions": "Zhejiang University",
+          "abstract": "用 RL 训练多轮 agent 时，每条轨迹只给一个标量奖励，监督信号稀疏。自策略在线蒸馏（OPD）让持有特权任务技能的自教师提供密集 token 级监督，帮助无技能学生内化这些技能。但作者在 agent 任务中发现两个反直觉事实：特权信息并不总让教师更可靠；教师监督的收益随训练阶段而变。RetireOPD 先用环境奖励优化解耦的技能条件教师，再联合 RL 与 OPD 训练无技能学生；不同于预设蒸馏日程，其自适应退休机制让学生在师生差异停止缩小、且达到教师成功率目标比例后自行解聘教师，此后仅用 RL 继续。在 1.5B 到 7B 的 Qwen2.5 模型上，RetireOPD 相对纯 RL 基线把 ALFWorld 成功率提升 14.1% 至 18.8%，WebShop 准确率提升 11.8% 至 19.0%，且在所有设置下超越其技能条件教师本身。",
+          "contributions": [
+            "实证发现 agent 任务中特权信息不保证教师可靠、蒸馏收益随阶段变化两个反直觉结论",
+            "提出自适应退休机制：学生依师生差距与目标比例自行决定何时退出蒸馏",
+            "联合 RL 与 OPD 的训练配方在多轮 agent 基准上大幅超越纯 RL 且超过教师"
+          ],
+          "conclusions": [
+            "蒸馏不是全程有益的固定课程，学生主导的退休时机比预设日程更有效",
+            "技能条件教师 + 自适应退休让学生最终青出于蓝"
+          ],
+          "experiments": [
+            "ALFWorld 成功率比 RL 基线提升 14.1% 至 18.8%（Qwen2.5 1.5B-7B）",
+            "WebShop 准确率提升 11.8% 至 19.0%",
+            "所有模型规模与任务设置下均超越其技能条件教师"
+          ],
+          "significance": "给 agent RL 的蒸馏课程装上自动退休机制，回答了“教师该陪跑多久”这一悬而未决的训练工程问题。",
+          "arxivUrl": "https://arxiv.org/abs/2609.20784",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20784.pdf",
+          "index": 6,
+          "takeaway": "RetireOPD 让学生在差距停止缩小后自行解聘教师，ALFWorld/WebShop 相对纯 RL 最高提升约 19%，还反超教师。",
+          "keyExperiment": "1.5B-7B 全规模上，自适应退休后的学生成功率普遍高于其技能条件教师 10 个百分点以上。"
+        },
+        {
+          "title": "EPIG-Tree: Compute-Optimal Branching for Gradient-Efficient Reinforcement Learning",
+          "score": 3.8,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-21",
+          "authors": "Nikita Khomich, Leopold Hermansson, Ido Hakimi",
+          "institutions": "机构未标注",
+          "abstract": "以 GRPO 为代表的奖励驱动 RL 把整条随机轨迹坍缩成一个标量奖励，干净可扩展，但探索与奖励分配低效：轨迹可能包含多个因果决策、恢复尝试与环境随机事件，每个 token 却继承同一条轨迹级优势。作者把树状 rollout 构建视为策略梯度估计的计算分配问题，核心主张是：分支不应放在策略“不确定”之处，而应放在每单位算力最能降低策略梯度不确定性的地方。基于全方差定律分解导出两条分配律——新分支降低决策不确定性、重复后缀 rollout 降低延续不确定性；由此得到的 EPIG-Tree 分数只利用已算出的 rollout 分配分支。实验上，EPIG 在克隆状态控制中降低梯度 MSE，在 13 环境横评的 9 个稠密连续控制环境中全胜；在线多轮 Wordle 中最终胜率 0.850，超过早期饱和的扁平 GRPO 的 0.790。",
+          "contributions": [
+            "把树状 rollout 构建形式化为策略梯度估计的计算分配问题，给出每算力不确定性减少的分配准则",
+            "从全方差定律导出两条分支分配律：新分支对决策不确定性、重复后缀对延续不确定性",
+            "EPIG-Tree 分数完全复用已计算 rollout，无需额外前向"
+          ],
+          "conclusions": [
+            "分支放哪里与 token 级信用如何分配是两个正交问题，后者在单轮任务中更关键",
+            "梯度估计效率的提升能转化为有状态多轮任务的最终胜率"
+          ],
+          "experiments": [
+            "13 环境横评中在 9 个稠密连续控制环境上梯度 MSE 全胜",
+            "克隆状态控制中近乎完美恢复参考梯度方向",
+            "在线多轮 Wordle 最终胜率 0.850，对比扁平 GRPO 的 0.790"
+          ],
+          "significance": "为 GRPO 的采样预算给出了有理论依据的最优分配律，让同样的 rollout 算力买到更多梯度信息。",
+          "arxivUrl": "https://arxiv.org/abs/2609.20004",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20004.pdf",
+          "index": 7,
+          "takeaway": "EPIG-Tree 用全方差分解决定分支位置，同样的算力下 Wordle 胜率 0.850 对 GRPO 的 0.790。",
+          "keyExperiment": "在 13 个环境的克隆状态控制横评中，EPIG 于全部 9 个稠密连续控制环境上梯度 MSE 领先。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Zarya: A Hybrid Autoregressive--Masked Diffusion Language Model with Flexible Training and Dual-Mode Inference",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-21",
+          "authors": "Leonid Sinev, Ilya Koziev, Vladislav Leshchuk",
+          "institutions": "机构未标注",
+          "abstract": "自回归模型受限于从左到右的顺序生成，掩码扩散模型（MDM）支持并行解码，但无法复用 KV cache、计算开销大，且在难处理的 token 组合空间上学习依赖导致生成不连贯。Zarya 是一族混合语言模型：在单一架构内同时优化 AR 目标与掩码扩散目标。训练数据被组织为可变大小槽位，采用逐步增大槽位粒度的课程，从细粒度 AR 学习平滑过渡到粗粒度扩散学习。推理时通过统一接口提供两种解码范式：带 first-hitting 去噪的 MDM 采样，以及槽位化投机解码——槽间用扩散选择、槽内用 AR 填充，实现完整 KV cache 复用。训练与推理完全解耦，任一配置训练的模型都能以任一模式部署；还提供分组噪声模式（前缀补全、填中、填前）、有序采样调度等丰富配置。作者发布 0.6B、1.7B、4B 三个公开模型，在标准基准上表现良好。",
+          "contributions": [
+            "单架构内联合优化 AR 与掩码扩散双目标，配合槽位粒度课程实现平滑过渡",
+            "槽位化投机解码：槽间扩散选择 + 槽内 AR 填充，兼得并行性与完整 KV cache 复用",
+            "训练与推理全解耦 + 丰富的噪声模式配置，0.6B/1.7B/4B 全部开源"
+          ],
+          "conclusions": [
+            "AR 与 MDM 的目标冲突可以通过槽位课程化解，无需牺牲任一模式的解码质量",
+            "扩散模型缺失 KV cache 复用的传统短板可由混合架构的推理端设计补齐"
+          ],
+          "experiments": [
+            "发布 0.6B、1.7B、4B 三个开源模型，标准基准表现良好",
+            "槽位化投机解码实现完整 KV cache 复用（对比纯 MDM 无法复用）",
+            "同一模型可在 MDM 采样与槽位投机两种模式间无损切换"
+          ],
+          "significance": "给出了 AR 与扩散范式融合的完整工程答案：一次训练、双模推理、KV 复用不打折，且模型全部开源可复现。",
+          "arxivUrl": "https://arxiv.org/abs/2609.19868",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19868.pdf",
+          "index": 8,
+          "takeaway": "Zarya 用槽位课程联合训练 AR 与扩散目标，槽位化投机解码让扩散模型第一次吃满 KV cache 复用。",
+          "keyExperiment": "0.6B-4B 三个规模开源模型在标准基准上与同尺寸模型竞争，同时槽位化解码保留完整 KV 复用。"
+        },
+        {
+          "title": "On-Demand Attention: Language Models Know When to Recall",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-21",
+          "authors": "Haibo Feng, Ruiqi Liang, Hanyang Peng, Shiqi Yu",
+          "institutions": "机构未标注",
+          "abstract": "推理与 agent 负载日益要求高效长上下文推理，但全注意力解码每一步都读取全部历史，无论其对下一 token 的预测是否有益。作者发现：预训练模型的解码状态本身就携带足以预测这种收益的信息，且在全局读取之前即可获得。基于此提出按需注意力（ODA）：一种局部优先的解码方法，用轻量 recall 头在生成过程中随预测收益的变化选择性地唤起全局注意力。ODA 只训练 recall 头，预训练权重保持不变，完整历史 KV cache 保留待召回。作者在 vLLM 中实现 GPU 侧条件执行，把全局读取的减少转化为长上下文解码的实际加速。在 Qwen 与 Gemma 模型（含混合注意力骨干）上的实验显示，选择性召回恢复了局部注意力下损失的大部分性能，同时大幅减少全局读取次数——预训练模型可以自己决定何时访问自己记住的信息。",
+          "contributions": [
+            "发现预训练模型解码状态在全局读取前即可预测读取历史对当前步的收益",
+            "提出 ODA：局部优先解码 + 轻量 recall 头按需唤起全局注意力，预训练权重零改动",
+            "在 vLLM 实现 GPU 侧条件执行，把减少的全局读取变成端到端解码加速"
+          ],
+          "conclusions": [
+            "全注意力的每步全量读取存在大量可避免开销，模型自身状态是廉价的读取必要性预言器",
+            "选择性召回在保留 KV 完整性的前提下逼近全注意力质量"
+          ],
+          "experiments": [
+            "Qwen 与 Gemma（含混合注意力骨干）上恢复局部注意力损失的大部分性能",
+            "全局读取次数大幅减少并经 vLLM 条件执行转化为实际解码加速",
+            "仅训练轻量 recall 头，完整历史 KV cache 随时可召回"
+          ],
+          "significance": "把“读不读全历史”从固定架构属性变成模型自决策的运行时选择，为长上下文推理提供零权重改动的降本开关。",
+          "arxivUrl": "https://arxiv.org/abs/2609.20734",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20734.pdf",
+          "index": 9,
+          "takeaway": "On-Demand Attention 只加一个 recall 头，让模型自己决定何时读全历史，vLLM 里长上下文解码显著提速而性能近乎全注意力。",
+          "keyExperiment": "在 Qwen/Gemma（含混合骨干）上，选择性召回以大幅减少的全局读取恢复了局部注意力损失的大部分质量。"
+        },
+        {
+          "title": "An Architecture for Long-Horizon Agents: Levels, Ticks and Cascaded Intelligence",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-21",
+          "authors": "Erik Nijkamp, Anurag Koul, Egor Pakhomov, Bo Pang",
+          "institutions": "Salesforce Research",
+          "abstract": "语言模型 agent 越来越多被要求执行跨越数天或数周的工作，如运维修复或研究项目——这类任务超出任何上下文窗口、任何进程和任何人可参与的间隔。作者论证：长时程 agent 必须先做到持续运行而不遗忘，才谈得上持续学习；这一能力存在于模型外围的 harness 而非模型本身。论文从长时程设定推导出七个瓶颈，并用三部分层级架构回答：按时间尺度索引的 levels，每层维护一个有界的下层摘要文件；时钟驱动的 tick 作为自主行动单元；级联智能——只有未通过审查的工作才升级到更强模型。报告了一次十天的战役：基于该架构的 agent 在人类每天只参与一次的条件下复现了一项已发表的强化学习结果，跨每个上下文重置与会话边界保持线索，早期写入的操作知识在不改动模型权重的情况下改变了后续行为。作者认为持续学习需要超出每个上下文与进程的基底，而 harness 已运行的检查正是学习器应当嵌入的位置。",
+          "contributions": [
+            "从长时程设定推导七个瓶颈，提出 levels/tick/级联智能三件套 harness 架构",
+            "十天真实战役验证：跨上下文重置与进程边界保持任务线索",
+            "论证持续学习的基础设施位置：harness 的检查机制是学习器的嵌入点"
+          ],
+          "conclusions": [
+            "长时程能力的瓶颈在 harness 而非模型权重，架构先于学习",
+            "早期写入的操作知识可在权重不变的情况下持续改变行为"
+          ],
+          "experiments": [
+            "十天战役中人类每天只参与一次，agent 复现了一项已发表的强化学习结果",
+            "跨每次上下文重置与会话边界无一失联",
+            "以有界文件层级维持数周任务的状态管理"
+          ],
+          "significance": "把“数周级自主 agent”从概念推向可运行的架构模板，十天复现 RL 论文的战役是目前少有的长时程实证。",
+          "arxivUrl": "https://arxiv.org/abs/2609.19519",
+          "pdfUrl": "https://arxiv.org/pdf/2609.19519.pdf",
+          "index": 10,
+          "takeaway": "Salesforce 用 levels+tick+级联智能的 harness 让 agent 连跑十天、每天只需人类看一眼，持续自主运行有了参考架构。",
+          "keyExperiment": "十天战役：agent 在每日一次人类参与下跨全部上下文重置保持线索，最终复现一项已发表 RL 结果。"
+        }
+      ]
+    }
+  ]
+}
