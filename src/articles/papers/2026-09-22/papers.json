@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-22",
+  "title": "2026-09-22 论文精选",
+  "lede": "今日主打 GPU 通信与调度优化:从 MoE megakernel 内的动态 SM 划分、超节点拓扑感知训练,到 Google 生产级推理负载均衡;算法侧聚焦可学习稀疏注意力、超稀疏在线蒸馏与源码级 agent RL 环境。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 395
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Weave: Fine-Grained Dynamic SM Scheduling in an MoE Megakernel for Compute-Communication Overlap",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-21",
+          "authors": "Ziyu Huang, Yangjie Zhou, Chenhao Zhu, Zihan Liu, Jinyu Liu, Shulai Zhang, Xingxun Tang, Hongzhe Yan, Xinhao Luo, Minyi Guo, Xiu Lin, Yinghao Yu 等",
+          "institutions": "Shanghai Jiao Tong University",
+          "abstract": "专家并行下的 MoE 推理把每层变成带 dispatch/combine 通信的分布式计算,主流系统靠划分 SM 做通信-计算重叠,但固定切分在空间上与逐层路由结果失配,浪费 NVLink 带宽或算力;时间上复杂的数据依赖又带来 SM 空泡。Weave 是首个在 MoE megakernel 内做细粒度动态 SM 调度的重叠系统:路由完成后各层通信与计算量可预知,常驻 megakernel 内的轻量代价模型据此为每层、每 GPU 重新划分通信 worker 与计算 worker,时间调度器再协同两组 worker 消除空闲。在 4×H100 SXM 上对比五个 SOTA 基线,跨六个主流 MoE 模型取得 MoE 层几何平均 2.89 倍、端到端 1.33 倍加速。",
+          "contributions": [
+            "指出静态 SM 切分的空间失配与依赖空泡两类资源浪费,把逐层路由结果变成运行时调度信号",
+            "在常驻 megakernel 内实现代价模型驱动的空间调度(按吞吐比划分通信/计算 worker)与时间调度(协同两组 worker 消空泡)",
+            "首个逐层、逐 GPU 动态划分 SM 的 MoE 通信-计算重叠系统"
+          ],
+          "conclusions": [
+            "MoE 层的通信/计算量在路由完成后可预知,足以支撑 kernel 内实时重调度",
+            "动态 SM 划分在六种 MoE 模型上一致优于静态切分与现有重叠方案"
+          ],
+          "experiments": [
+            "4×H100 SXM、六个主流 MoE 模型、五个 SOTA 基线:MoE 层几何平均加速 2.89 倍",
+            "端到端几何平均加速 1.33 倍",
+            "在带宽受限与算力受限两种失配场景下均消除固定切分的浪费"
+          ],
+          "significance": "把 MoE 通信-计算重叠从静态分区推进到逐层动态再平衡,刷新 MoE 推理系统的调度上限。",
+          "arxivUrl": "https://arxiv.org/abs/2609.21483",
+          "pdfUrl": "https://arxiv.org/pdf/2609.21483.pdf",
+          "index": 1,
+          "takeaway": "MoE megakernel 内按逐层路由结果动态划分 SM,通信与计算 worker 实时再平衡。",
+          "keyExperiment": "4×H100 上六模型几何平均:MoE 层 2.89×、端到端 1.33×,全面超越五个 SOTA 重叠基线。"
+        },
+        {
+          "title": "HyperParallel-FSDP: Topology-Aware Fully Sharded Training with Layout-Driven Muon on Ascend SuperPods",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-21",
+          "authors": "Mo Sun, Yifan Yao, Yanwei Liu, Luobin Liu, Zhenzhang Yang, Kaisheng Wang, Xiangyu Meng, Chen Li, Xizheng Pang, Huilan Li, Xinglei Xu, Yushi Cui 等",
+          "institutions": "Huawei",
+          "abstract": "声明式 SPMD 用张量分片驱动分布式执行,但 PyTorch DTensor 栈逐算子派发带来反复的元数据开销,现有 FSDP 与分布式 Muon 又与超节点拓扑错配。核心观察:分片语义只需在 autograd 之上的张量 API 边界表达。据此实现:双模 DTensor(生产稳态零派发/验证廉价梯度校验);拓扑感知 FSDP,超节点内零拷贝集合通信、跨超节点融合规约与跨层反向流水线;布局驱动分布式 Muon:分片推导通信组、正交化去重、形状融合 Newton-Schulz 迭代。Atlas 900 A3 SuperPoD 上从 16 die 扩到 384 卡,505B MoE 持续 42.1 万 tokens/s,FSDP 通信仅占步时 2.9%;步时较 PyTorch FSDP2 -29.7%、较 Megatron DDP -25.5%;分布式 Muon 再降 5.4%-16.0%。",
+          "contributions": [
+            "双模 DTensor 执行:生产模式稳态零派发,验证模式廉价全链路校验",
+            "拓扑感知 FSDP 匹配两级超节点:节点内零拷贝、跨节点融合规约、跨层反向流水线",
+            "布局驱动分布式 Muon,解决整矩阵正交化与参数分片的冲突"
+          ],
+          "conclusions": [
+            "分片语义上移到 autograd 边界即可同时消掉稳态派发开销与验证成本",
+            "Muon 可原生融入分片训练而不损失正交化精度"
+          ],
+          "experiments": [
+            "384 卡 768 rank 训 505B MoE:421k tokens/s,FSDP 通信仅占步时 2.9%",
+            "平均步时较 PyTorch FSDP2 -29.7%、较 Megatron DDP -25.5%,1000 步梯度相关度超 0.999997",
+            "分布式 Muon 较同类系统步时再降 5.4%-16.0%"
+          ],
+          "significance": "华为超节点上打通声明式分片、FSDP 与 Muon 的完整训练栈,是国产超节点大规模训练的代表性系统工作。",
+          "arxivUrl": "https://arxiv.org/abs/2609.21594",
+          "pdfUrl": "https://arxiv.org/pdf/2609.21594.pdf",
+          "index": 2,
+          "takeaway": "分片语义只在张量 API 边界表达;超节点内零拷贝、跨超节点融合通信;Muon 原生分布式化。",
+          "keyExperiment": "Atlas 900 A3 SuperPoD 384 卡训 505B MoE:421k tokens/s,步时较 PyTorch FSDP2 -29.7%。"
+        },
+        {
+          "title": "DLB: Distributed Load Balancing at Scale for Generative AI Inference",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-21",
+          "authors": "Santiago R. Balseiro, Bartek Wydrowski, Sameer Agarwal, David Applegate, Aaron Archer, Soheil Hassas Yeganeh, Alex Iriza, Bobby Kleinberg, Balasubramanian Sivan, Pranav Vaish, Oscar Zegarra, Wenxin Zhang 等",
+          "institutions": "Google",
+          "abstract": "生成式 AI 请求的服务时间高度异质且处理链路多阶段,传统负载均衡难以维持 SLO,数据中心只能靠昂贵的过度供给兜底。论文提出分布式负载均衡器 DLB:用点对点探测在大规模、地理分布的基础设施上维持服务器容量的实时视图;持续学习延迟模型来估计每个路由决策的延迟影响,从而管理异构硬件与多样模型架构;并给出路由算法稳定性与全局性能保证的新理论分析,仿真显示相对 SOTA 负载均衡算法有显著增益。DLB 已在 Google 生产部署 22 个月,支撑数千个 ML 模型、每秒数百万请求的生成式 AI 推理;生产迁移分析显示,相比旧基线中位延迟下降 17%、p95 尾延迟下降 13%,均具统计显著性。",
+          "contributions": [
+            "点对点探测实现大规模集群容量的实时分布式视图",
+            "学习型延迟模型估计路由决策的延迟影响,适配异构硬件与多模型",
+            "路由算法稳定性与全局性能保证的理论分析,叠加 22 个月生产验证"
+          ],
+          "conclusions": [
+            "对服务时间异质的多阶段负载,实时容量探测加学习型路由优于传统集中式方案",
+            "系统设计经 Google 生产环境千模型、百万 QPS 量级验证"
+          ],
+          "experiments": [
+            "Google 生产部署 22 个月,服务数千模型、每秒数百万请求",
+            "生产迁移分析:中位延迟 -17%",
+            "p95 尾延迟 -13%,均具统计显著性"
+          ],
+          "significance": "少有的披露生产级生成式 AI 推理负载均衡设计的论文,直接来自 Google 基础设施一线实践。",
+          "arxivUrl": "https://arxiv.org/abs/2609.21079",
+          "pdfUrl": "https://arxiv.org/pdf/2609.21079.pdf",
+          "index": 3,
+          "takeaway": "点对点探测+学习型延迟模型,让异构 GPU 集群上的生成式 AI 推理路由既稳定又压低尾延迟。",
+          "keyExperiment": "生产迁移实测:中位延迟 -17%、p95 -13%,支撑数千模型、每秒百万级请求。"
+        },
+        {
+          "title": "NSP: Accelerating Variable-Length LLM Training via Nested Sequence Parallelism",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-21",
+          "authors": "Yi’ou Wang, Xiaoyang Li, Yijie Zheng, Shouda Liu, Yuxuan Wang",
+          "institutions": "机构未标注",
+          "abstract": "长尾语料上的长上下文 LLM 训练面临通信-负载均衡权衡:序列长度高度异质使任何单一序列并行(SP)度都不合适——度小则少数长序列严重失衡,度大则占多数的短序列付出过量通信。已有动态 SP 系统在批内混用不同 SP 度,但为并行运行多组不得不把 GPU 切成互斥分组,重新引入组间失衡并被迫采用昂贵的微批绕行。NSP 在单次训练迭代内把不同规模的 SP 组嵌套到共享 GPU 上:长序列用大 SP 组、短序列留在小 SP 组,通信只花在需要处,负载按 GPU 而非按组均衡。系统用树形路由规划器在显存约束下分配序列,执行器通过层级间相位流与层级重计算利用该层级结构,兼容常见 SP 后端且不需改动模型。在内部生产 GPU 集群的 Qwen3-MoE、最长 384K 上下文、多个长尾数据集上,NSP 一致提升端到端训练吞吐:较静态 SP 最高 1.48 倍,较 FlexSP 最高 1.16 倍。",
+          "contributions": [
+            "嵌套式 SP 组共享同一批 GPU,消除分组互斥带来的组间失衡",
+            "树形路由规划器在显存约束下分配序列,执行器以相位流与层级重计算利用层次结构",
+            "不改模型、兼容常见 SP 后端"
+          ],
+          "conclusions": [
+            "变长训练的最优 SP 度应随序列自适应且多种度可共存",
+            "嵌套层次结构可用重计算换取显存"
+          ],
+          "experiments": [
+            "Qwen3-MoE、最长 384K 上下文、生产集群多个长尾数据集一致提升吞吐",
+            "较静态 SP 最高 1.48 倍",
+            "较 FlexSP 最高 1.16 倍"
+          ],
+          "significance": "为长尾语料时代的长上下文训练提供了新的并行组织方式,通信与均衡可以兼得。",
+          "arxivUrl": "https://arxiv.org/abs/2609.22755",
+          "pdfUrl": "https://arxiv.org/pdf/2609.22755.pdf",
+          "index": 4,
+          "takeaway": "大小序列并行组嵌套在同一批 GPU 上:长序列大组、短序列小组,通信只花在长序列。",
+          "keyExperiment": "384K 上下文 Qwen3-MoE 训练:较 FlexSP 最高 1.16×、较静态 SP 最高 1.48×。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Elastic Threshold Attention: Learned Contextual Sparsity for Long-Context Decoding",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-21",
+          "authors": "Themistoklis Haris, Henry Li, Maryam Karimzadehgan",
+          "institutions": "机构未标注",
+          "abstract": "长上下文解码时巨型 KV cache 造成严重内存带宽瓶颈,稀疏注意力靠选择性加载缓解,但固定启发式会丢掉必要上下文导致质量退化。Elastic Threshold Attention(ETA)是端到端可训练架构:直接从 query 表示预测动态、上下文相关的阈值,困难检索或推理步骤分配接近稠密的上下文,常规 token 则剪掉。训练时对低于阈值的 logits 乘性抑制而非删除,平滑注意力地板消除了初始 token 的注意力汇聚,并支持推理期硬剪枝。1.45B 预训练 ETA 在语言建模、常识推理与大海捞针上匹敌稠密注意力,训练稀疏度约 85%、解码活跃密度约 38%;自研 Triton 解码核以 O(1) 时间筛选 KV 块,512K 序列上较 FlashAttention-2 解码最高 2.5 倍加速;离线校准冻结逐头阈值后注意力计算再省 27%。",
+          "contributions": [
+            "从 query 表示预测上下文相关阈值的可学习稀疏注意力",
+            "乘性抑制的训练目标消除注意力汇聚,并使推理期硬剪枝成为可能",
+            "Triton O(1) KV 块筛选核+离线校准冻结阈值进一步降本"
+          ],
+          "conclusions": [
+            "稀疏注意力可以训练出来而非仅靠启发式,质量与速度可以兼得",
+            "阈值可离线冻结为常数,部署时无需在线预测"
+          ],
+          "experiments": [
+            "1.45B 模型在 85% 训练稀疏、38% 活跃密度下匹敌稠密注意力(含大海捞针)",
+            "512K 序列较 FlashAttention-2 最高 2.5× 解码加速",
+            "离线校准后注意力计算再省 27%"
+          ],
+          "significance": "把注意力稀疏化从推理启发式升级为可训练架构,长上下文解码的带宽瓶颈有了新解法。",
+          "arxivUrl": "https://arxiv.org/abs/2609.20888",
+          "pdfUrl": "https://arxiv.org/pdf/2609.20888.pdf",
+          "index": 5,
+          "takeaway": "让模型自己学会每个 query 该看多少 KV:困难步骤给稠密上下文,常规步骤大胆剪枝。",
+          "keyExperiment": "512K 长序列较 FA-2 最高 2.5× 解码加速,同时长上下文检索质量不掉点。"
+        },
+        {
+          "title": "1% of Tokens Can Be Enough: On Gradient Estimation in On-Policy Distillation",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-21",
+          "authors": "Huanxin Sheng, Zhiling Ye, Haonan Wang, Jian Wang, Jinjie Gu, Jian Kang",
+          "institutions": "Ant Group",
+          "abstract": "稀疏在线策略蒸馏(OPD)只把教师监督分配到学生生成轨迹中的一小部分 token,但教师指导的梯度是从采样出的下一个 token 估计的,有用信号可能变成噪声更新。论文在信息几何视角下研究固定前缀处的这一估计问题,基于信噪分解提出信息效率比(IER),刻画最优标量基线下的相对梯度估计误差;借助候选集近似,可按 IER 或其与现有有用性得分的组合来选择 token,同时保留采样的反向 KL 训练目标。在数学与医疗推理任务上,加入 IER 在多种设置下改进现有选择器;0.1%-1% 的极小 token 预算即可匹配甚至超过不做选择的全量 OPD。结果表明稀疏监督的分配需同时考虑有用性与梯度估计可靠性。代码已开源。",
+          "contributions": [
+            "用信息几何刻画稀疏蒸馏中的梯度估计误差,提出 IER 指标",
+            "IER 与有用性得分结合的 token 选择,保留反向 KL 训练目标",
+            "0.1%-1% 预算匹配全量监督的稀疏蒸馏配置"
+          ],
+          "conclusions": [
+            "稀疏蒸馏的 token 选择必须同时考虑有用性与梯度估计可靠性",
+            "IER 与现有选择器正交互补,可叠加使用"
+          ],
+          "experiments": [
+            "数学与医疗推理任务上 IER 改进多种现有选择器",
+            "0.1%-1% token 预算匹配或超过全量 OPD",
+            "代码开源:github.com/BruceSheng1202/IER-OPD"
+          ],
+          "significance": "用 1% 甚至 0.1% 的教师监督拿到全量蒸馏效果,直接压低后训练成本。",
+          "arxivUrl": "https://arxiv.org/abs/2609.24432",
+          "pdfUrl": "https://arxiv.org/pdf/2609.24432.pdf",
+          "index": 6,
+          "takeaway": "选 token 不只看教师说什么,还要看梯度估得准不准:信息效率比决定预算。",
+          "keyExperiment": "0.1%-1% token 预算下匹配或超过全量在线策略蒸馏。"
+        },
+        {
+          "title": "CodeMidas: Scaling Agentic Coding RL Environments from Code Itself",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-21",
+          "authors": "Bowen Ye, Lei Li, Shicheng Li, Zihao Yue, Linghao Zhang, Hanglong Lv, Yuanxin Liu, Wenhan Ma, Hao Tian, Rang Li, Jinhao Dong, Yikai Zhao 等",
+          "institutions": "机构未标注",
+          "abstract": "用强化学习训练编码 agent 需要带可靠验证器的多样任务。开源代码库是富矿,但现有方法通常依赖 issue、commit 等开发工件,可提取任务受限。CodeMidas 把代码库已实现的功能直接转成可执行 RL 环境,唯一输入就是源码,构建各阶段投入 agent 算力:探索功能形成行为规格、基于原代码执行构造测试、经执行检查与重复求解 rollout 过滤候选任务。产出数据集覆盖 3185 个开源库、23 种语言、15 个技术领域的 5545 个训练任务。用 GRPO 训练 MiMo-V2.5,五个基准全面提升:DeepSWE +11.7%、ProgramBench +17%、Terminal-Bench v2.1 +8.5%。消融显示高质量任务越多性能越好;轨迹分析显示 RL 后 agent 更善于探索代码库、自我验证更多样。",
+          "contributions": [
+            "只用源码即可构建 agentic coding RL 环境,不依赖 issue/commit 等开发工件",
+            "环境构建全流程 agent 化:行为规格、测试构造、执行验证层层把关",
+            "5545 任务/3185 库/23 语言的规模化数据集"
+          ],
+          "conclusions": [
+            "源码本身足以作为编码 RL 环境的可扩展基础",
+            "高质量训练任务数量是性能的关键变量"
+          ],
+          "experiments": [
+            "GRPO 训练 MiMo-V2.5:DeepSWE +11.7%",
+            "ProgramBench +17%",
+            "Terminal-Bench v2.1 +8.5%,五个基准全面提升"
+          ],
+          "significance": "给 coding agent RL 提供不依赖开发工件的任务供给管线,环境规模化有了新范式。",
+          "arxivUrl": "https://arxiv.org/abs/2609.22068",
+          "pdfUrl": "https://arxiv.org/pdf/2609.22068.pdf",
+          "index": 7,
+          "takeaway": "不用 issue 和 commit,直接从源码长出可验证的 RL 环境,5545 个任务全面抬升编码 agent。",
+          "keyExperiment": "GRPO 训 MiMo-V2.5:DeepSWE +11.7%、ProgramBench +17%、Terminal-Bench v2.1 +8.5%。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Dissecting How Die Scaling Breaks GPU Fine-grained Scheduling",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-09-21",
+          "authors": "Xiaoze Fan, Jianhao Wang, Weihao Cui, Han Zhao, Zhuobin Huang, Yangjie Zhou, Yuxian Qiu, Shixuan Sun, Bingsheng He, Quan Chen, Minyi Guo",
+          "institutions": "Shanghai Jiao Tong University, National University of Singapore",
+          "abstract": "现代 GPU 在物理上不再对称:die 扩展同时带来制造驱动的 floorshipping(形成芯片特定的计算拓扑)与缓存/内存分区(导致非一致访存)。这些不对称相当可观:拓扑无关的计算单元分配造成最高 1.33 倍性能差异;远端访问使 HBM 延迟增加最高 67%、L2 延迟接近翻倍——而它们被 GPU 的逻辑资源抽象掩盖,且逐芯片各不相同。论文开发轻量表征方法揭示每颗芯片的计算拓扑与内存亲和性,进而让现有细粒度调度变得不对称感知:不仅决定分配多少资源,还决定分配哪些物理资源。在全 GPU kernel 执行、应用内多路复用、应用间共存三类场景下,不对称感知调度使主流 kernel 提升最高 1.22 倍,多路复用 LLM 推理提升最高 14.3%,并避免最高 1.33 倍的性能波动。",
+          "contributions": [
+            "系统揭示 die scaling 的双重不对称及其被逻辑资源抽象掩盖的事实",
+            "轻量表征方法逐芯片发现计算拓扑与内存亲和性",
+            "把不对称感知引入全 GPU 执行、应用内复用与应用间共存三类细粒度调度"
+          ],
+          "conclusions": [
+            "细粒度调度必须关心物理资源的身份,而不只是数量",
+            "不对称逐芯片不同,需要运行时表征支撑调度决策"
+          ],
+          "experiments": [
+            "主流 kernel 最高提升 1.22 倍",
+            "多路复用 LLM 推理最高提升 14.3%",
+            "消除最高 1.33 倍的跨芯片性能波动"
+          ],
+          "significance": "点出多 die GPU 时代细粒度调度的新第一性问题,对后续 GPU 系统与编译栈设计有直接影响。",
+          "arxivUrl": "https://arxiv.org/abs/2609.24270",
+          "pdfUrl": "https://arxiv.org/pdf/2609.24270.pdf",
+          "index": 8,
+          "takeaway": "多 die GPU 的芯片间不对称被逻辑抽象藏住了:调度器要看物理位置,不只看数量。",
+          "keyExperiment": "多路复用 LLM 推理最高 +14.3%,kernel 最高 1.22×,同时消除 1.33× 性能波动。"
+        },
+        {
+          "title": "DeepSeek Elastic Compute (DSec): A Sandbox Infrastructure for Effective Agentic Training at Scale",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-21",
+          "authors": "Jialiang Huang, Hongxuan Tang, Jingchang Chen, Yuxuan Liu, Yixiao Chen, Yuan Cheng, Yi Tao, Jingli Zhou, Yupeng Chen, Haoyu Chen, Jiarui Wang, Shengkai Lin 等",
+          "institutions": "DeepSeek",
+          "abstract": "大规模 agentic 训练与评测依赖隔离、有状态的执行环境:模型要检查仓库、调用工具、执行命令、与任务服务交互。这类负载突发式海量创建沙箱、隔离需求异质、跨长交互保留状态、镜像语料巨大且复用有限,需要弹性执行平台而非单一沙箱运行时。DeepSeek 弹性计算(DSec)是生产级沙箱平台:统一 SDK 暴露 FnCall、容器、microVM 与完整 VM 后端;跨集群协调放置与生命周期;以独立版本层组合环境;结合内存共享、回收与 CPU 调度实现高密度执行;从 3FS 按需加载镜像。DSec 与 RL 框架协同设计,把有状态 rollout 执行与可抢占 GPU 训练解耦,协调沙箱生命周期以保留状态、回收空闲资源,并抑制 reward hacking 等 agent 异常行为。单生产单元约 160 节点,日均约 300 万沙箱;支撑超 38 万并发沙箱、每秒超 5000 次创建。",
+          "contributions": [
+            "统一 SDK 聚合 FnCall、容器、microVM、完整 VM 四种隔离粒度",
+            "与 RL 框架协同设计:rollout 与可抢占训练解耦,生命周期协同回收资源",
+            "高密度内存管理+3FS 按需镜像加载,抑制 reward hacking 等异常行为"
+          ],
+          "conclusions": [
+            "agentic RL 的瓶颈在环境供给,弹性沙箱平台是必要基础设施",
+            "沙箱生命周期与训练协同可回收大量空闲资源"
+          ],
+          "experiments": [
+            "单生产单元约 160 节点,日均约 300 万沙箱",
+            "生产支撑超 38 万并发沙箱",
+            "每秒超 5000 次沙箱创建,高密度超卖下保持延迟敏感性能"
+          ],
+          "significance": "DeepSeek 首次系统披露 agentic 训练的环境侧基础设施,是 agent RL 规模化的关键拼图。",
+          "arxivUrl": "https://arxiv.org/abs/2609.22978",
+          "pdfUrl": "https://arxiv.org/pdf/2609.22978.pdf",
+          "index": 9,
+          "takeaway": "agent 训练要的不是沙箱运行时,而是每天 300 万次创建的弹性沙箱平台:DSec 交出生产答案。",
+          "keyExperiment": "约 160 节点支撑 38 万+并发沙箱、每秒 5000+ 创建、日均约 300 万沙箱。"
+        },
+        {
+          "title": "A principled approach for energy-efficient training via phase-aware GPU frequency tuning",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-21",
+          "authors": "Miguel Braga, Júlio Pinto, Rahma Nouaji, Olivier Michaud, Bettina Kemme, Oana Balmau, Cláudia Brito, Ricardo Macedo",
+          "institutions": "McGill University",
+          "abstract": "现代 AI 模型训练是数据中心能耗的重要来源,但训练中相当一部分能耗并未转化为有效计算——流水线各处的瓶颈让 GPU 空等。论文提出 PAFT,一个相位感知、动态可调的 GPU 降频系统:核心洞察是把瓶颈视为节能机会而非纯性能问题,当 GPU 即将停顿时机会性降低时钟频率,去匹配瓶颈设备的节奏,从而在不影响执行时间的情况下省电;系统持续监测流水线行为并做细粒度频率调整,适应负载与系统状态变化。在 12 个广泛使用的模型上的实验显示,PAFT 全面优于所有基线,节能最高 46%,平均性能开销仅 4%。",
+          "contributions": [
+            "相位感知的动态 GPU 频率调节,把瓶颈窗口变成节能窗口",
+            "持续监测流水线行为、细粒度调整频率以适应负载变化",
+            "12 个主流模型的广泛验证"
+          ],
+          "conclusions": [
+            "训练流水线瓶颈期 GPU 降频几乎可以免费省能",
+            "需要连续监测与细粒度调整才能守住性能"
+          ],
+          "experiments": [
+            "12 个广泛使用模型上全面优于所有基线",
+            "最高节能 46%",
+            "平均性能开销仅 4%"
+          ],
+          "significance": "把 GPU 频率调节做成训练能效的标准化手段,对算力成本与能耗都有直接意义。",
+          "arxivUrl": "https://arxiv.org/abs/2609.24205",
+          "pdfUrl": "https://arxiv.org/pdf/2609.24205.pdf",
+          "index": 10,
+          "takeaway": "GPU 等瓶颈时主动降频:训练能耗最高省 46%,性能只让 4%。",
+          "keyExperiment": "12 个主流模型上节能最高 46%、平均开销 4%,全面超越基线。"
+        }
+      ]
+    }
+  ]
+}
