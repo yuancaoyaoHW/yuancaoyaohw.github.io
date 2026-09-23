@@ -1,0 +1,300 @@
+{
+  "date": "2026-09-23",
+  "title": "2026-09-23 论文精选",
+  "lede": "今日关注：光交换调度与训练时间线的联合优化、dLLM 显存 I/O 优化、推理服务故障秒级恢复与 SLO 驱动资源配置——从通信、缓存到高可用，训练与推理系统的确定性效率工程密集上新。",
+  "stats": {"selected": 9, "channels": 3, "candidates": 100},
+  "channels": [
+    {"name": "AI Infra", "countText": "4 篇推荐"},
+    {"name": "Algorithms", "countText": "3 篇推荐"},
+    {"name": "Architecture", "countText": "2 篇推荐"}
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Flux: Optimal Scheduling of Optical Circuit Switches for LLM Training",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.NI",
+          "date": "2026-09-22",
+          "authors": "Arno Troch, Seyyidahmed Lahmer, Abubakr Nada, Jeroen Famaey, Michael Peeters",
+          "institutions": "安特卫普大学 IDLab, Nokia Bell Labs",
+          "abstract": "光交换（OCS）为 LLM 训练提供高带宽密度与能效，但重构延迟不可忽略。以往工作大多把光交换调度与计算割裂开，仅凭聚合流量需求决定建哪些链路、何时建。论文指出这种割裂是根本性低效：忽略计算时间线的重构会直接阻塞通信，导致电路利用率低、缓冲需求暴涨。作者提出 Flux 调度器，基于整个训练 workload 的结构对光电路进行最优编排，通过电路复用并把重构延迟摊藏在计算与通信背后，在很宽的交换速度范围内保持有效。相比传统周期性调度器，训练迭代时间最多降低 10 倍，NIC 峰值缓冲需求降低超过 3 个数量级。",
+          "contributions": [
+            "指出\"计算-交换分离调度\"是 OCS 训练集群低效的根源：与计算时间线脱节的重构会直接阻塞通信",
+            "提出 Flux 调度器，利用整个训练 workload 的结构对光电路进行最优编排",
+            "通过电路复用与重构延迟摊藏，使方案对很宽范围的交换速度都稳健"
+          ],
+          "conclusions": [
+            "把 OCS 调度与计算时间线联合建模，可同时提升电路利用率并大幅削减缓冲需求",
+            "Flux 在迭代时间与峰值缓冲两个维度都显著优于传统周期性调度器"
+          ],
+          "experiments": [
+            "相比传统周期性调度器，训练迭代时间最多降低 10 倍",
+            "峰值 NIC 缓冲需求降低超过 3 个数量级",
+            "在很宽的光交换重构速度范围内收益保持稳定"
+          ],
+          "significance": "为光交换 AI 集群确立了\"通信-计算联合调度\"的最优性基准",
+          "arxivUrl": "https://arxiv.org/abs/2609.25949",
+          "pdfUrl": "https://arxiv.org/pdf/2609.25949.pdf",
+          "index": 1,
+          "takeaway": "光交换机调度必须贴着训练计算时间线走，才能把重构延迟藏进计算缝隙里",
+          "keyExperiment": "同一 workload 下 Flux 相比周期性调度器将训练迭代时间最多缩短 10 倍，NIC 峰值缓冲降低 3 个数量级以上"
+        },
+        {
+          "title": "Flash-dLLM: IO-Aware KV Caching and Parallel Decoding for Fast, Memory-Efficient Diffusion LLMs",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-22",
+          "authors": "Quan Nguyen-Tri, Mukul Ranjan, Zhiqiang Shen",
+          "institutions": "MBZUAI",
+          "abstract": "扩散式大语言模型（dLLM）以非自回归生成成为自回归 LLM 的有力替代，但缺乏有效的 KV caching 与可扩展并行解码，实际部署受制于低效推理。已有加速方法把 KV cache 与并行解码分开研究，忽视了两者联合使用时出现的显存 I/O 瓶颈。Flash-dLLM 是免训练的 dLLM 推理加速框架：首先确认 GPU 显存 I/O 是开启 KV cache 的 dLLM 推理的主导瓶颈，用 I/O 感知的融合 KV-cache kernel 减少冗余显存搬运；再基于优化后的 cache 机制提出 KV-cache 驱动的 draft-and-verify 解码策略，由 dLLM 自身同时充当 drafter 与 verifier，无需辅助模型。统一设计在保持生成质量的同时加速解码，并向长序列、大 batch 扩展。在 GSM8K 与 HumanEval 上分别较此前最强基线 Elastic-Cache 加速 5.1 倍与 11.0 倍。",
+          "contributions": [
+            "定位 GPU 显存 I/O 为开启 KV cache 的 dLLM 推理主导瓶颈，设计 I/O 感知的融合 KV-cache kernel",
+            "提出 KV-cache 驱动的 draft-and-verify 策略，单模型自草稿自验证，免辅助 draft 模型",
+            "免训练即得，同时改善速度、显存效率与长序列/大 batch 可扩展性"
+          ],
+          "conclusions": [
+            "KV cache 复用与并行验证必须联合优化，单点优化会撞上显存 I/O 墙",
+            "dLLM 可自给自足地充当 drafter+verifier，自投机同样适用于扩散式生成"
+          ],
+          "experiments": [
+            "GSM8K 上较 Elastic-Cache 加速 5.1 倍",
+            "HumanEval 上加速 11.0 倍",
+            "数学推理与代码生成基准上速度与显存效率全面超过现有 SOTA dLLM 加速方法"
+          ],
+          "significance": "把 dLLM 推理加速的主战场从算力转向显存 I/O，给出可落地的免训练方案",
+          "arxivUrl": "https://arxiv.org/abs/2609.26796",
+          "pdfUrl": "https://arxiv.org/pdf/2609.26796.pdf",
+          "index": 2,
+          "takeaway": "dLLM 推理慢的根子在显存 I/O：融合 cache kernel + 自投机一揽子解决，免训练",
+          "keyExperiment": "GSM8K/HumanEval 上分别取得 5.1 倍/11.0 倍加速，全面超越最强基线 Elastic-Cache"
+        },
+        {
+          "title": "Fast Recovery for LLM Serving via Decoupled Device Memory Lifetime in Dynamo",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-21",
+          "authors": "Schwinn Saereesitthipitak, Mohammed Abdulwahhab, Hannah Zhang, Dan Feigin, Neelay Shah, Maksim Khadkevich, Itay Neeman, Vikram Sharma Mailthody, Wen-mei W. Hwu",
+          "institutions": "NVIDIA",
+          "abstract": "LLM 推理副本横跨紧耦合 GPU 集群连续服务数周，软硬件故障不可避免，单个 worker 故障即可拖垮整个副本；即便有权重与编译产物缓存，引擎重新初始化也要数分钟，生产系统被迫超配容量来掩盖这一窗口。论文主张恢复的主要成本是\"就绪服务容量的丢失\"而非请求进度，因此恢复应保留已初始化的引擎状态而非重建。对 18 周 Dynamo 集群故障数据的分析显示，多数故障是\"设备保活型\"：引擎进程挂掉而 GPU 及其驻留分配完好。核心洞察是独立引擎进程可共享同一份 GPU 驻留状态、同时保持各自可变执行状态私有。GPU Memory Service（GMS）把设备显存所有权与引擎进程解耦，使引擎无需拷贝即可共享并重新挂载幸存分配；权重只读共享避免重载；同卡上常驻的第二个已初始化运行时把恢复简化为一次\"晋升\"。四个模型在 vLLM/SGLang 上，故障副本 7 秒内恢复，较热重启快 13-29 倍，每 GPU 固定 4-8 GiB 开销且与模型大小无关；回放生产故障 trace 估计可挽回 79% 因恢复损失的 GPU-hours。",
+          "contributions": [
+            "基于 18 周生产故障数据发现\"设备保活型\"故障占主导，把恢复问题重新定义为保留就绪容量",
+            "设计 GPU Memory Service，将显存所有权与引擎进程生命周期解耦，支持跨进程零拷贝共享与重挂载",
+            "Shadow Engine 常驻 + 只读权重共享，把故障恢复降为一次晋升"
+          ],
+          "conclusions": [
+            "恢复成本的主项是引擎重新初始化，而非请求进度丢失",
+            "在不重建模型状态的前提下，7 秒级恢复可在生产集群收回约 79% 的恢复期 GPU 损失"
+          ],
+          "experiments": [
+            "4 个模型在 vLLM 与 SGLang 上 7 秒内完成恢复，较热重启快 13-29 倍",
+            "每 GPU 固定 4-8 GiB 额外显存，与模型规模无关",
+            "回放 18 周生产故障 trace，估计可挽回 79% 因恢复损失的 GPU-hours"
+          ],
+          "significance": "为生产级 LLM 服务高可用提供了\"保留状态而非重建状态\"的新范式",
+          "arxivUrl": "https://arxiv.org/abs/2609.25451",
+          "pdfUrl": "https://arxiv.org/pdf/2609.25451.pdf",
+          "index": 3,
+          "takeaway": "别重建引擎，把显存里的就绪状态挂回来就行——7 秒恢复、开销与模型大小无关",
+          "keyExperiment": "四模型在 vLLM/SGLang 上恢复 <7 秒（热重启的 1/13-1/29），生产 trace 回放可挽回 79% GPU-hours"
+        },
+        {
+          "title": "SARA: SLO-Aware Resource Allocation for Disaggregated Agentic LLM Services",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.PF",
+          "date": "2026-09-22",
+          "authors": "Shicong Liu, Xianghao Yu, Zhen Gao, Jun Zhang",
+          "institutions": "香港科技大学",
+          "abstract": "LLM 正推动云边基础设施上多模态与 agentic 服务兴起，长上下文工作负载给推理时延带来严峻挑战。现有分片（disaggregated）LLM 服务系统多依赖硬件 profiling、配置枚举或启发式调度，对成本高效资源分配的解析指导有限。论文提出 SARA：面向分片 agentic LLM 服务的 SLO 感知资源分配框架，在部署成本约束与一组分位数 SLO 约束下最大化 goodput。借助排队论，将 prefill、KV cache 传输、decode 三阶段分别建模为 M/G/k 队列、M/G/1 队列与广义生灭过程；分析揭示 prefill 主要受计算容量限制、decode 主要受 HBM 限制。由此推导出轻尾/重尾负载下各阶段服务指标的尾部行为，把负载、模型架构、硬件参数显式映射为各阶段 SLO 约束与最小资源需求，并给出成本预算下最大化 goodput 的分配方法。仿真与硬件实验显示 SLO 预测平均误差低于 5%，同成本下 goodput 平均提升 26.6%。",
+          "contributions": [
+            "用排队论将 prefill/KV 传输/decode 三阶段分别建模，给出可解析的 SLO 尾部行为刻画",
+            "揭示分片服务中 prefill 受计算容量、decode 受 HBM 的双重瓶颈分工规律",
+            "把负载、模型、硬件参数显式映射为 SLO 约束与最小资源配置，再据此最大化成本约束下的 goodput"
+          ],
+          "conclusions": [
+            "解析式建模可替代配置枚举，直接给出满足分位数 SLO 的最低资源配置",
+            "同部署成本下，解析驱动的资源分配显著优于现有启发式基线"
+          ],
+          "experiments": [
+            "各阶段 SLO 预测平均误差低于 5%",
+            "同部署成本下 goodput 平均提升 26.6%",
+            "仿真与真实硬件结果相互印证"
+          ],
+          "significance": "为分片 agentic LLM 服务补上了从排队论到资源配置的解析桥梁",
+          "arxivUrl": "https://arxiv.org/abs/2609.26763",
+          "pdfUrl": "https://arxiv.org/pdf/2609.26763.pdf",
+          "index": 4,
+          "takeaway": "prefill 卡算力、decode 卡 HBM——用排队论把 SLO 算清楚再配资源，goodput +26.6%",
+          "keyExperiment": "SLO 预测平均误差 <5%，同部署成本下 goodput 平均提升 26.6%"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Beyond Repeated Sampling: Learning Search Policies for LLM Reasoning",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-22",
+          "authors": "Ismail Labiad, Matthieu Kowalski, Marc Schoenauer, Rémi Munos, Julia Kempe",
+          "institutions": "Meta FAIR, INRIA, 纽约大学",
+          "abstract": "LLM 靠堆 test-time 算力攻坚硬推理问题，但主流策略仍是朴素重复采样：独立抽很多解，指望蒙对一次。这种采样只靠局部解码噪声探索，倾向产出大量近似重复而非真正不同的思路。作者提出在语义层面引导探索：先采样问题相关的概念、提示或策略，再以其为条件生成答案；并进一步把概念生成做成可训练组件——用强化学习优化一个小型概念生成器，使其概念最大化下游冻结大模型的成功率。在困难数学推理问题上，训练后的概念生成器在同额度答案生成预算下显著超过朴素重复采样的 pass@k，胜过更大未调优模型给出的概念，并能迁移到从未训练过的答案生成器（包括不同家族的模型）。小模型由此可被训练成大模型可复用的搜索策略。",
+          "contributions": [
+            "把 test-time 探索从\"解码噪声\"升级到\"语义层概念先导\"的新范式",
+            "用 RL 训练小型概念生成器，以冻结大模型的下游成功率为奖励",
+            "验证跨模型迁移：概念策略可复用于不同家族的答案生成器"
+          ],
+          "conclusions": [
+            "重复采样的低效源于探索停留在局部解码噪声，语义层引导可显著提升多样性",
+            "小模型经 RL 训练后可成为大模型通用的搜索策略，且无需改动大模型本身"
+          ],
+          "experiments": [
+            "同答案生成预算下 pass@k 大幅超过朴素重复采样",
+            "超过用更大未调优模型生成概念的效果",
+            "迁移到未见过的答案生成器（含不同模型家族）仍然有效"
+          ],
+          "significance": "为 test-time compute 提供了\"可训练、可复用、可迁移\"的搜索策略新解法",
+          "arxivUrl": "https://arxiv.org/abs/2609.26704",
+          "pdfUrl": "https://arxiv.org/pdf/2609.26704.pdf",
+          "index": 5,
+          "takeaway": "与其让大模型瞎撒网，不如训个小模型先出点子——RL 概念生成器跨模型即插即用",
+          "keyExperiment": "同预算下 pass@k 全面超越 repeated sampling，且概念策略可跨模型家族迁移复用"
+        },
+        {
+          "title": "Diffusion Drafts, AR Verifies: Accelerating Document OCR with Self-Speculative Decoding",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-22",
+          "authors": "Dohyun Kim, Sungjun Han, Hyungguk Kim, Yusik Kim, Jamin Shin, Paul Hongsuck Seo, Hongjoon Ahn",
+          "institutions": "高丽大学",
+          "abstract": "自回归 OCR 视觉语言模型把文档图像转成文本与结构化标记，但每个 token 串行解码一步，速度受限。OCR 输出强锚定于输入图像，扩散式并行生成有天然优势；但一步扩散并行预测多个 token 时彼此信息不可见，直接提交容易出错。论文提出 GravityOCR：参数共享的 AR-block-扩散模型，联合训练并行草稿与因果 AR 验证两条路径，提交前先验证，使模型每轮提交多个 token 而无需独立 drafter 网络。因果 AR 路径还支持带序列/结构级 OCR 奖励的 GRPO 训练，绕开扩散轨迹似然估计，直接更新共享草稿参数。OmniDocBench v1.6 上 AR 路径 GRPO 把 Overall 分从 94.92 提升到 95.16 且不损失扩散草稿效率，最终模型接近原 GLM-OCR 的 95.48；SGLang 部署中平均每前向提交 9.7 个 token，区域裁剪仅解码取得 3.94 倍加速，整页端到端 1.32 倍。",
+          "contributions": [
+            "参数共享的 AR-block-扩散统一架构：同一模型既做并行草稿又做因果验证，免独立 drafter",
+            "利用因果 AR 路径绕开扩散轨迹似然估计，让 GRPO 序列/结构奖励直接优化共享参数",
+            "验证先行提交，每前向平均提交 9.7 个 token，精度与速度兼得"
+          ],
+          "conclusions": [
+            "OCR 的强图像锚定性使\"扩散草稿 + AR 验证\"的自投机范式成为速度与精度的甜点",
+            "GRPO 走因果路径即可训练扩散草稿能力，无需复杂的似然近似"
+          ],
+          "experiments": [
+            "OmniDocBench v1.6 Overall 94.92→95.16（GRPO），最终 95.16 vs 原 GLM-OCR 95.48",
+            "SGLang 部署平均每前向提交 9.7 个 token",
+            "区域裁剪仅解码 3.94 倍加速，整页端到端 1.32 倍"
+          ],
+          "significance": "证明自投机范式可无缝嫁接到扩散-AR 混合 OCR 模型，工程上即刻可用",
+          "arxivUrl": "https://arxiv.org/abs/2609.26638",
+          "pdfUrl": "https://arxiv.org/pdf/2609.26638.pdf",
+          "index": 6,
+          "takeaway": "扩散出草稿、AR 来把关，一份模型两用，OCR 解码提速近 4 倍",
+          "keyExperiment": "SGLang 上每前向平均提交 9.7 个 token，区域裁剪解码 3.94 倍加速且精度不降"
+        },
+        {
+          "title": "Rollout Efficiency in Reinforcement Learning for Reasoning Large Language Models: A Taxonomy and Future Directions",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-21",
+          "authors": "Niloofar Gholipour, Marcos Assuncao, Gursimran Singh, Timothy Yu, Rajkumar Buyya, Julien Gascon-Samson, Zhenan Fan, Yong Zhang, Xiaojie Xu, Yaqiang Yao, Xiaolong Bai",
+          "institutions": "墨尔本大学, UBC",
+          "abstract": "面向推理的强化学习让 LLM 能解数学、代码等多步任务，但也把大块训练成本转移到 rollout 阶段（为策略更新生成轨迹）。高效的 rollout 机制对降低成本、同时保持训练数据的新鲜度、一致性与统计有效性至关重要。本综述对推理 RL rollout 效率的近期研究给出系统性分类，从机制与瓶颈两个视角组织现有方法；基于该分类，分析各技术家族如何应对不同的 rollout 低效来源，考察组合使用的机会与潜在冲突，指出效率收益在评测与报告上的缺口，并讨论开放挑战与未来方向。",
+          "contributions": [
+            "给出推理 RL rollout 效率的系统性双视角分类（机制 × 瓶颈）",
+            "分析各技术家族组合使用时的机会与潜在冲突",
+            "盘点效率评测与报告口径的缺口，指出未来研究方向"
+          ],
+          "conclusions": [
+            "rollout 已成为推理 RL 的成本主项，必须与训练侧优化同等对待",
+            "单一技术只解决特定瓶颈，组合设计需警惕相互冲突"
+          ],
+          "experiments": [
+            "系统梳理近年 rollout 优化工作并按机制/瓶颈双维度归类",
+            "识别出评测口径不一致导致效率声明难以横向比较的问题"
+          ],
+          "significance": "为推理 RL 系统的 rollout 优化提供了一张按瓶颈对号入座的地图",
+          "arxivUrl": "https://arxiv.org/abs/2609.25463",
+          "pdfUrl": "https://arxiv.org/pdf/2609.25463.pdf",
+          "index": 7,
+          "takeaway": "推理 RL 真正烧钱的是 rollout——这篇综述按瓶颈给各技术家族分好了类",
+          "keyExperiment": "跨机制与瓶颈双维度对 rollout 优化方法建立系统分类，并指出技术组合的冲突点"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "Co-Fabric: Breaking Host-Domain Boundaries for Unified xPU Interconnection",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-22",
+          "authors": "Zhen Peng, Jiaming Huang, Chaofan Chen, Zhao Zhang, An Wu, Baoyang Liu, Xinglong Wang, Tanlong Ci, Jinfeng Li, Xueke Duan, Hao Wang, Xi Chen, Shunshun Zhang, Zhiyuan Su, Zhu Cao, Zhichong Dou, Shaohua Wu, Lu Jing, Yue Yuan",
+          "institutions": "中国研究团队",
+          "abstract": "大模型参数已超出单 xPU 容量，分散于跨主机域的多 xPU 之间，xPU 间通信主导系统效率。现有 scale-up 互连存在不足：基于以太网的 RoCE 引入特定消息语义与协议栈开销，依赖碎片化的每主机寻址；传统主机内 fabric 局限于单一主机域，缺乏跨主机统一寻址。论文提出 Co-Fabric：突破主机域边界的总线型互连，为 scale-up 超级节点提供统一 xPU 互连。三项贡献：精简四层协议栈实现纳秒级处理时延且原生可靠；基于包头内嵌端口标识符的跨域扩展与 P2P 路由机制；基于影子设备自动枚举的统一地址空间。在 64 xPU 3D-Mesh 系统上，节点间通信时延降低超 50%，带宽较 RoCE 提升 2-5 倍，DeepSeek R1 推理加速 30%-80%；互连自身的成本与功耗最多分别降低 80% 与 5%。",
+          "contributions": [
+            "打破主机域边界的总线型 scale-up 互连，实现跨主机 xPU 统一寻址",
+            "精简四层协议栈：纳秒级处理时延 + 原生可靠性",
+            "包头内嵌端口标识符的 P2P 路由 + 影子设备自动枚举的统一地址空间"
+          ],
+          "conclusions": [
+            "以太网协议栈的消息语义与处理开销是 scale-up 互连的沉重税负，总线化可大幅回收",
+            "跨域统一寻址 + 端口路由足以支撑 64 xPU 级超级节点"
+          ],
+          "experiments": [
+            "64 xPU 3D-Mesh 上节点间通信时延降低超 50%",
+            "带宽较 RoCE 提升 2-5 倍，DeepSeek R1 推理加速 30%-80%",
+            "互连成本/功耗最多降低 80%/5%"
+          ],
+          "significance": "展示了绕开以太网做超节点互连在时延、带宽、成本上的全面收益",
+          "arxivUrl": "https://arxiv.org/abs/2609.25560",
+          "pdfUrl": "https://arxiv.org/pdf/2609.25560.pdf",
+          "index": 8,
+          "takeaway": "总线架构跨出主机域：64 xPU 超级节点统一寻址，时延 -50%、带宽 2-5 倍",
+          "keyExperiment": "64 xPU 3D-Mesh：节点间时延降 50%+，带宽较 RoCE 提升 2-5 倍，R1 推理加速 30%-80%"
+        },
+        {
+          "title": "SPECTRA: Adaptive Execution of Speculative Decoding on a Runtime-Reconfigurable Tiled Architecture",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-09-21",
+          "authors": "Gabriele Tombesi, William Baisi, Je Yang, Elisavet Lydia Alvanaki, Kevin Lee, Michael Lippe, Biruk Seyoum, Luca P. Carloni",
+          "institutions": "哥伦比亚大学",
+          "abstract": "边缘设备上的 LLM 推理受算力与内存双重约束，自回归解码低效。投机解码用小 draft 模型产 token、大目标模型批量并行验证来缓解瓶颈；但验证的算术强度随投机长度与接受率变化，处于解码 GEMV（访存受限）与 prefill GEMM（算力受限）之间的运行时依赖中间态。论文提出 SPECTRA：运行时可重构 tile 架构，在投机解码全流水线上保持高利用率。tile 内计算引擎在 GEMM 脉动执行与 GEMV 向量通道执行间切换；tile 间通过选择 tile 数量、核划分与通信模式动态调整并行度；两级重构均以 per-kernel 粒度进行。在 20-tile FPGA 原型上跨 Pythia、SmolLM2、GPT-2 系列评测：tile 级重构带来最高 2.09 倍加速，系统级自适应性再获 1.25 倍收益。",
+          "contributions": [
+            "识别投机解码验证处于 GEMV 与 GEMM 之间的运行时依赖中间态，固定架构必然失配",
+            "tile 级脉动/向量双模执行 + 系统级并行度自适应，均按 kernel 粒度运行时切换",
+            "20-tile FPGA 原型验证方案跨多个模型家族的有效性"
+          ],
+          "conclusions": [
+            "投机解码加速器必须同时覆盖 GEMV 与 GEMM 两种执行域才能吃满利用率",
+            "运行时重构（而非编译期固定）是边缘 LLM 加速器的正确抽象"
+          ],
+          "experiments": [
+            "20-tile FPGA 原型上 tile 级重构最高 2.09 倍加速",
+            "系统级自适应再增 1.25 倍收益",
+            "跨 Pythia/SmolLM2/GPT-2 三个模型家族验证有效"
+          ],
+          "significance": "为边缘端投机解码硬件指出了\"运行时可重构\"这条设计路线",
+          "arxivUrl": "https://arxiv.org/abs/2609.24847",
+          "pdfUrl": "https://arxiv.org/pdf/2609.24847.pdf",
+          "index": 9,
+          "takeaway": "验证强度介于 GEMV/GEMM 之间，硬件得会变形——双模 tile + 运行时重构",
+          "keyExperiment": "20-tile FPGA 原型：tile 级重构 2.09 倍 + 系统级自适应 1.25 倍叠加加速"
+        }
+      ]
+    }
+  ]
+}
