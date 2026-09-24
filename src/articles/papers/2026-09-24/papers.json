@@ -1,0 +1,341 @@
+{
+  "date": "2026-09-24",
+  "title": "2026-09-24 论文精选",
+  "lede": "今日关注：GPU 系统的弹性与容错成为主线——P/D 边界租约化、GPU 显存互借、逐层自适应 checkpoint、RL 权重传输库，加上 KV 驱逐新信号与 CXL-SSD 存储协同，GPU 通信/调度优化方向密集上新。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 431
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Crossflow: Prefill-Decode Elasticity for Agentic LLM Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-24",
+          "authors": "Yi Xu, Ehsan K. Ardestani, Wenyin Fu, Martin Schatz, Krishna Malladi, Zhan Shu, Adnan Aziz, Shobhit Kanaujia, Ajit Mathews, Chunqiang Tang",
+          "institutions": "Amazon Web Services (AWS)",
+          "abstract": "Prefill-decode（P/D）分离通过两阶段专精化与隔离提升服务效率，但其收益建立在静态池划分之上，而相位需求并非静态：作者在大规模 LLM 集群实测未缓存输入与输出 token 之比在分钟尺度峰谷比高达 4.7 倍，公开 agentic 负载一天内小时级比值中位跨度达 24.5 倍，而重新指派副本需时数十分钟；按 95 分位为每池定容会闲置多达 17% 的集群容量，定容低于分位则把失衡转化为排队与吞吐损失。Crossflow 让 P/D 边界在不改变节点角色的前提下弹性化：每个解码节点发布短生命周期、可撤销的租约，限定其本地预填充的算力、KV 容量、传输工作量与预计输出。在公开与内部 trace 上，Crossflow 较静态 P/D 几何平均提升 token 吞吐 16.2%-17.4%，高载下最高提升 43.4%，并在全部评估点降低平均 TTFT。",
+          "contributions": [
+            "实证刻画大规模 LLM 集群中预填充/解码负载比的剧烈时变：分钟级峰谷比达 4.7 倍，agentic 流量一天内小时比值中位跨度 24.5 倍。",
+            "提出租约式弹性机制：解码节点发布短生命周期、可撤销租约，限定本地预填充的算力、KV 容量与迁移工作量，无需改变节点角色即可移动 P/D 边界。",
+            "在公开与内部 trace 上验证：几何平均吞吐较静态 P/D 提升 16.2%-17.4%，高载最高 +43.4%，平均 TTFT 全点下降。"
+          ],
+          "conclusions": [
+            "静态 P/D 划分在 agentic 流量下要么闲置大量容量要么排队损失吞吐，边界弹性化是必要方向。",
+            "租约机制在不侵入节点角色的前提下即可实现边界弹性，工程代价低、收益显著。"
+          ],
+          "experiments": [
+            "几何平均 token 吞吐较静态 P/D 提升 16.2%-17.4%。",
+            "高负载场景吞吐最高提升 43.4%。",
+            "按 95 分位静态定容最多浪费 17% 集群容量；Crossflow 在全部评估点降低平均 TTFT。"
+          ],
+          "significance": "把 P/D 分离从静态配比推向按需弹性，是 agentic 时代推理集群扩容的务实一招。",
+          "takeaway": "用可撤销租约让解码节点闲时顺带做预填充，P/D 集群吞吐 +16%-17%、高载 +43%。",
+          "keyExperiment": "公开与内部 trace 重放：Crossflow 较静态 P/D 几何平均吞吐 +16.2%-17.4%，高载 +43.4%，平均 TTFT 全点下降。",
+          "arxivUrl": "https://arxiv.org/abs/2609.27085",
+          "pdfUrl": "https://arxiv.org/pdf/2609.27085.pdf",
+          "index": 1
+        },
+        {
+          "title": "EMA: Elastic and Performance Transparent Memory Across GPUs",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-24",
+          "authors": "Yi Xu, Tian Xia, Ion Stoica",
+          "institutions": "UC Berkeley",
+          "abstract": "多 GPU 服务器是现代数据中心的标准构件，靠高带宽互联聚合容量；但 LLM 推理等负载的显存需求高度动态，常出现一张 GPU 本地显存耗尽而其余 GPU 闲置的错配。EMA 提出让服务器内 GPU 互相借用与回收显存、组成弹性容量池的共享系统，并为借入与出借双方提供性能透明：对借入方，预取隐藏远端访问代价，使远端与本地内存在应用眼中性能无异；对出借方，被借资源可按需即时回收，性能保证不低于静态分区下限。该设计聚焦显存，但同一原则可自然扩展到其他 GPU 资源。评估显示 EMA 将单用户吞吐最高提升 52%，达到按 2 倍容量配置系统的 96% 吞吐，且延迟与静态本地基线相当。",
+          "contributions": [
+            "提出 GPU 间显存互借/回收的弹性池抽象，解决单卡显存耗尽而邻居闲置的容量错配。",
+            "双向性能透明设计：借入方预取隐藏远端访问，出借方资源可按需回收，性能下限不低于静态分区。",
+            "机制聚焦显存但可自然推广到其他 GPU 资源的弹性共享。"
+          ],
+          "conclusions": [
+            "弹性显存池能在不牺牲延迟的前提下大幅提升多 GPU 服务器的容量利用。",
+            "借入与出借双方的性能透明是跨 GPU 资源共享真正可落地的关键。"
+          ],
+          "experiments": [
+            "单用户吞吐最高提升 52%。",
+            "达到按 2 倍容量配置系统的 96% 吞吐。",
+            "延迟与静态本地基线相当。"
+          ],
+          "significance": "用池化共享替代静态分区，为多 GPU 服务器上的动态负载提供开箱即用的容量弹性。",
+          "takeaway": "服务器内 GPU 显存互借 + 双向性能透明：吞吐 +52%，等效 2 倍容量的 96%。",
+          "keyExperiment": "EMA 以 96% 的吞吐达到 2 倍容量静态系统的水平，单用户吞吐最高 +52% 且延迟不变。",
+          "arxivUrl": "https://arxiv.org/abs/2609.27040",
+          "pdfUrl": "https://arxiv.org/pdf/2609.27040.pdf",
+          "index": 2
+        },
+        {
+          "title": "LayerCheck: Adaptive Layer-wise Checkpointing for Large Language Model Post-training",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-24",
+          "authors": "Minqiu Sun, Xin Huang, Luanzheng Guo, Nathan R. Tallent, Kento Sato, Dong Dai",
+          "institutions": "Pacific Northwest National Laboratory (PNNL)",
+          "abstract": "LLM 训练成本高企使 checkpoint 容错成为刚需，而传统方案在 checkpoint 频率（I/O 开销）与计算重建（恢复时间）之间进退两难。作者观察到 LLM 训练动力学的独特性质：权重更新在 transformer 各层间非均匀分布，意味着每次全量落盘并不必要。LayerCheck 据此提出逐层自适应 checkpoint 框架，只持久化更新量超过阈值的层，把逐层写盘摊开在时间轴上，消除周期性 I/O 突刺；恢复时聚合各层最近持久化版本及匹配的优化器状态，重建混合时间戳的复合模型状态。在标准 Adam 假设下该设计引入有界陈旧扰动，实测重启后损失与无故障轨迹偏差至多 0.54%。多模型多数据集实验表明恢复后的收敛与精度保持原轨迹，同时 checkpoint 总量最高缩减 22.6 倍、端到端训练时间最高缩短 1.31 倍。",
+          "contributions": [
+            "利用 LLM 训练中层间权重更新非均匀分布的特性，提出只保存超阈值层的逐层自适应 checkpoint。",
+            "逐层写盘摊开消除 I/O 突刺；恢复时按层聚合最近版本构建复合状态，理论上有界陈旧项、实测重启损失偏差至多 0.54%。",
+            "多开源 LLM 多数据集验证恢复后收敛与精度无损。"
+          ],
+          "conclusions": [
+            "全量等周期 checkpoint 对 LLM 训练过度保守，层粒度自适应即可兼顾容错与开销。",
+            "受控陈旧在 Adam 假设下理论有界，实践中不损伤收敛。"
+          ],
+          "experiments": [
+            "checkpoint 总大小最高缩减 22.6 倍。",
+            "端到端训练时间较 SOTA 最高缩短 1.31 倍。",
+            "重启后损失与无故障轨迹偏差至多 0.54%，收敛与精度保持。"
+          ],
+          "significance": "把容错从全量快照细粒度化到层，是训练基础设施降本的重要一步。",
+          "takeaway": "只存更新超阈值的层：checkpoint 体积 -22.6 倍、训练提速 1.31 倍、恢复后损失偏差 <0.6%。",
+          "keyExperiment": "多个开源 LLM 上实现 22.6 倍 checkpoint 缩减与 1.31 倍端到端提速，恢复后收敛不变。",
+          "arxivUrl": "https://arxiv.org/abs/2609.27193",
+          "pdfUrl": "https://arxiv.org/pdf/2609.27193.pdf",
+          "index": 3
+        },
+        {
+          "title": "WeightBridge: An Efficient Weight Transfer Library for Reinforcement Learning",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-24",
+          "authors": "Xuanlin Jiang, Samuel Hsia, Michael Kuchnik, Zachary DeVito, Minlan Yu, Carole-Jean Wu",
+          "institutions": "Harvard University, Arizona State University, Meta",
+          "abstract": "在面向 LLM 的强化学习系统中，把训练器更新后的参数传播给 rollout 生成器的权重传输正成为重要性能瓶颈。核心挑战在于现代 RL 负载的 trainer 与 rollout 两侧并行布局和同步需求高度多样：现有方案在部分配置下高效，在另一些配置下性能糟糕甚至缺乏支持。WeightBridge 是一个面向多样配置的高效权重传输库：先自动提取训练器与 rollout 权重布局之间的对应关系，再规划并执行无冗余、负载均衡的传输，并以小巧通用的 API 协调多种同步模式下的 worker。在横跨不同模型、并行布局与同步模式的配置矩阵中，WeightBridge 相比 SOTA 开源 RL 框架平均降低 GPU 停顿最多 42 倍，并在所有设置下保持高性能；一个编码 agent 无需人工指导即可把它集成进两个不同 RL 框架，验证了 API 的通用性与易用性。",
+          "contributions": [
+            "自动提取 trainer 与 rollout 权重布局的对应关系，免去逐配置人工适配。",
+            "规划并执行无冗余、负载均衡的权重传输，统一支持多种同步模式。",
+            "小巧通用 API，跨配置矩阵实测平均 GPU 停顿最多降低 42 倍。"
+          ],
+          "conclusions": [
+            "权重传输是 RL 系统被低估的瓶颈，需要布局感知的系统化方案。",
+            "通用小 API + 自动布局映射即可覆盖多样的现代 RL 栈。"
+          ],
+          "experiments": [
+            "平均 GPU 停顿时间较 SOTA 开源 RL 框架最多降低 42 倍。",
+            "横跨不同模型、并行布局与同步模式的所有设置下均保持高性能。",
+            "编码 agent 无人工指导成功集成进两个不同 RL 框架。"
+          ],
+          "significance": "把 RL 训练循环里训练器到推理器的参数同步做成标准化通信层，直接缩短 rollout 停摆时间。",
+          "takeaway": "自动布局映射 + 无冗余传输：RL 权重同步的 GPU 停顿最多 -42 倍。",
+          "keyExperiment": "跨模型与并行布局配置矩阵：平均 GPU 停顿时间较 SOTA 开源 RL 框架最多降低 42 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2609.25442",
+          "pdfUrl": "https://arxiv.org/pdf/2609.25442.pdf",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "DeltaS: Reading the Gated Linear Attention State for KV Cache Eviction in Streaming Video",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CV",
+          "date": "2026-09-24",
+          "authors": "Taeyoun Kwon, Seungjin Kim, Hyeonyu Kim, Moon Hwan Kim",
+          "institutions": "机构未标注",
+          "abstract": "视频-语言模型越来越多采用线性注意力与全注意力交叠的混合架构：线性注意力的循环状态大小固定，全注意力的 KV cache 却随视频流持续增长，在有界显存下必须驱逐。流式场景的难点是问题尚未到来就得决定保留什么——驱逐必须与查询无关。现有方法从 KV cache 自身提取位置、注意力或键值分数，基于注意力的分数还需要代理查询或额外计算。作者利用门控 delta 线性注意力的状态按“输入与状态可检索内容之残差”更新的特性：状态在一个帧块上的变化量恰好反映该块带来的新信息。DeltaS 据此提出免训练、查询无关的方法，保留归一化状态漂移更大的视频块。在预算与保留策略固定的对照下，该信号优于位置、注意力与键值基线；仅以前向 1.9% 的开销，在六个长视频基准上平均超越最强查询无关有界记忆基线 2.1 分、最长基准上超越 5.6 分，表明混合架构的两套记忆可以协同工作。",
+          "contributions": [
+            "发现门控 delta 线性注意力的状态更新残差可作为“新信息量”的免费信号，提出状态漂移驱逐准则。",
+            "免训练、查询无关的流式 KV 驱逐方法，信号开销仅占前向 1.9%。",
+            "提出混合架构中线性注意力状态与全注意力 KV 协同分工的设计原则。"
+          ],
+          "conclusions": [
+            "与查询无关的流式驱逐无需代理查询即可显著优于位置/注意力/键值基线。",
+            "混合架构的两套记忆天然互补，应当联合设计而非各自为政。"
+          ],
+          "experiments": [
+            "六个长视频基准上平均超越最强查询无关有界记忆基线 2.1 分。",
+            "最长基准上超越 5.6 分。",
+            "状态漂移信号计算仅占前向 1.9%。"
+          ],
+          "significance": "给流式视频模型的 KV 预算管理提供了一个近乎免费的保留准则。",
+          "takeaway": "线性注意力状态漂移 = 新信息免费探测器：流式视频 KV 驱逐平均 +2.1 分、开销 1.9%。",
+          "keyExperiment": "六个长视频基准上状态漂移信号平均超越最强查询无关基线 2.1 分，最长基准 +5.6 分，开销仅 1.9% 前向。",
+          "arxivUrl": "https://arxiv.org/abs/2609.27470",
+          "pdfUrl": "https://arxiv.org/pdf/2609.27470.pdf",
+          "index": 5
+        },
+        {
+          "title": "StateComp: Learning When to Compress History in Long Horizon Agents",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-24",
+          "authors": "Mingxuan Wang, Hongyue Chen, Yinglong Guo, Fei Luo, Chao Ning, Bo Wang, Guorun Yao, Yanbiao Ma, Jungong Han",
+          "institutions": "机构未标注",
+          "abstract": "长程 agent 在执行中持续累积交互历史，而过去交互的重要性随 agent 状态演化而变：过早压缩可能删除未来仍需要的信息，过度保守的保留则带来可观的上下文开销。现有上下文管理大多按固定窗口、周期调度或当前相关性来压缩，回避了更根本的问题——一条历史交互何时才能被安全替换？StateComp 提出状态条件压缩框架，依据当前 agent 状态判断历史可否安全压缩：通过两阶段标注构造 KEEP 与 READY 监督，在冻结语言模型的隐表征上训练类别不平衡感知的路由器；有界状态表征降低评估长历史的成本；相邻 READY 交互合并为连续区段，执行时替换为紧凑摘要。在 WorkBuddyBench 上，StateComp 将 agent 与摘要 token 总量减少 52.27% 且保持任务性能，表征提取加速 12.67 倍。",
+          "contributions": [
+            "把上下文管理的问题从“压缩什么”推进到“何时可安全压缩”。",
+            "两阶段标注构造 KEEP/READY 监督，在冻结模型隐表征上训练不平衡感知路由器。",
+            "有界状态表征 + 相邻 READY 区段化摘要，降低长历史的评估与执行开销。"
+          ],
+          "conclusions": [
+            "压缩时机与 agent 状态强相关，固定窗口/周期策略次优。",
+            "状态条件路由可在不掉点的前提下砍掉约一半 token 开销。"
+          ],
+          "experiments": [
+            "WorkBuddyBench 上 agent 与摘要 token 总量减少 52.27%，任务性能保持。",
+            "表征提取加速 12.67 倍。"
+          ],
+          "significance": "为长程 agent 的上下文经济性提供了“何时压”的可学习判据。",
+          "takeaway": "学习“何时安全压缩”：长程 agent token -52%、表征提取加速 12.67 倍且不掉点。",
+          "keyExperiment": "WorkBuddyBench：总 token 减少 52.27%、任务性能保持、表征提取加速 12.67 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2609.27298",
+          "pdfUrl": "https://arxiv.org/pdf/2609.27298.pdf",
+          "index": 6
+        },
+        {
+          "title": "Do We Need Complex Topology Control? Distinct-Peer Random Routing Improves Cost-Efficiency in Sparse Multi-Agent Debate",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-24",
+          "authors": "Boxuan Wang, Zhuoyun Li, Xiaowei Huang, Yi Dong",
+          "institutions": "University of Liverpool",
+          "abstract": "多智能体辩论（MAD）通过迭代同伴交互提升 LLM 推理准确率，通信拓扑因此成为焦点，催生了学习型、自适应或动态重配置等日益复杂的机制；而已有研究表明，简单得多的稀疏通信已能在低得多的成本下取得有竞争力的表现。本文追问：为改善集体推理而引入复杂拓扑控制是否真的必要？作者发现一个极简的“不重复随机路由”策略——让每个 agent 每轮与两个新采样的不同对手辩论——就构成惊人强的基线，并持续改善稀疏 MAD 的准确率-成本权衡。在此基础上进一步研究辩论停止策略，证明轻量停止判据可在保持竞争力准确率的同时大幅降低推理成本。作者据此建议：学习型拓扑自适应等复杂机制应先与强简单路由和停止基线对照，才有理由为其额外复杂度买单。",
+          "contributions": [
+            "提出“不重复随机路由”作为稀疏 MAD 的强基线：每轮与两个新采样的不同对手辩论。",
+            "系统论证复杂拓扑控制的增量价值需要先过简单基线这一关。",
+            "轻量级辩论停止策略进一步改善准确率-成本权衡。"
+          ],
+          "conclusions": [
+            "简单随机路由即可持续改善稀疏 MAD 的准确率-成本曲线。",
+            "新拓扑机制应强制对照强简单路由与停止基线，再谈复杂度是否值得。"
+          ],
+          "experiments": [
+            "不重复随机路由持续改善稀疏 MAD 的准确率-成本权衡。",
+            "轻量停止策略在保持竞争力准确率的同时大幅降低推理成本。"
+          ],
+          "significance": "给多智能体推理的复杂度通胀敲警钟：先跑简单基线再谈创新。",
+          "takeaway": "每轮换两个新对手的随机路由即是最强稀疏 MAD 基线，复杂拓扑需自证其值。",
+          "keyExperiment": "简单随机路由在准确率-成本权衡上持续优于学习型拓扑控制，轻量停止进一步降本。",
+          "arxivUrl": "https://arxiv.org/abs/2609.27150",
+          "pdfUrl": "https://arxiv.org/pdf/2609.27150.pdf",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "KITE: KV-Invariant Transformer Expansion for Efficient Agentic LLM Scaling",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-24",
+          "authors": "Zhiheng Hu, Yixun Wei, Jian Zhou, Yizhuang Zhou, Ji Li, Xing Chen, Yang Li, Bojun Wang, Yibo Zhu, Xiangyu Zhang, Daxin Jiang",
+          "institutions": "ByteDance Seed",
+          "abstract": "扩大语言模型不只关乎最终质量：架构选择决定了训练、prompt 处理与解码各阶段达到同等质量的算力开销。理想架构应同时压低上述成本，并保证更大的模型确实优于更小的基线。KITE 提出 KV 不变 Transformer 扩展范式：模型从小尺寸 upcycling 训练到大尺寸以节省训练成本，同时把新增参数放在不影响注意力 KV 的区域——推理时预填充仅依赖模型的小尺寸部分即可生成 KV，从而节省推理开销。具体实例 Step Scale Transformer（SST）是双塔解码器：一塔生成 KV，另一塔读取 KV。在可比累计训练算力下，67B MoE、每解码 token 激活 2.15B 主体参数的 SST，训练损失低于激活 1.48B 与 2.02B 主体参数的 47B/63B MoE Transformer，估计推理成本分别降低 6.7% 与 31.6%。",
+          "contributions": [
+            "提出 KV 不变扩展范式：新增参数不触碰 KV，预填充只需小模型侧前向，训练与推理成本同降。",
+            "实例化 SST 双塔解码器：一塔生成 KV、另一塔读取 KV。",
+            "可比训练算力下更大模型既降训练损失又降估计推理成本。"
+          ],
+          "conclusions": [
+            "upcycling 与推理成本节省可以兼得，关键在新增参数的 KV 隔离。",
+            "KV 生成与消费的解耦为 MoE 扩展提供了新的架构维度。"
+          ],
+          "experiments": [
+            "67B MoE（每 token 激活 2.15B 主体参数）训练损失低于 47B（1.48B 激活）与 63B（2.02B 激活）MoE Transformer。",
+            "估计推理成本分别降低 6.7% 与 31.6%。"
+          ],
+          "significance": "把“模型变大”与“推理变贵”解耦，为 agentic 时代的低成本扩展给出架构级方案。",
+          "takeaway": "新增参数不碰 KV：预填充只跑小模型侧，同质量下估计推理成本 -6.7%~-31.6%。",
+          "keyExperiment": "SST 67B/2.15B 激活在可比训练算力下损失低于 47B/63B MoE，估计推理成本 -6.7%/-31.6%。",
+          "arxivUrl": "https://arxiv.org/abs/2609.27294",
+          "pdfUrl": "https://arxiv.org/pdf/2609.27294.pdf",
+          "index": 8
+        },
+        {
+          "title": "Bridging LLM Serving and CXL-SSDs with Chunk-Aware KV Cache Management",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-09-24",
+          "authors": "Hyunsun Chung, Taewan Noh, Minji Kim, Joo-Young Hwang, Hong-Yeon Kim, Youngjae Kim",
+          "institutions": "Samsung Electronics, Sookmyung Women’s University",
+          "abstract": "NAND 闪存有扩展 LLM 前缀缓存的容量，但块 I/O 路径带来 CPU 缓存争用、DRAM 暂存与 NAND 延迟。表征实验显示即使以 DRAM 为介质这些接口开销依然存在；然而出乎意料，字节寻址的原生 CXL-SSD 仍比本地 DRAM 慢约 3 倍、不快于 NVMe SSD，通用预取几乎无益。LM-CXD 把 KV 块变为设备可见的 I/O 单元，向服务引擎暴露 NAND 到 DRAM 的搬运进度，设备 DRAM 兼作 GPU 可访问缓冲；再把请求调度与窗口预取协同，逐层 KV 搬运与 GPU 计算流水化以隐藏 NAND 延迟。在五个 LLM 上，LM-CXD 平均 TTFT 较原生 CXL-SSD 在计算异步预取下最多降 2.6 倍、逐层预取下最多降 4.03 倍，平均进入本地 DRAM 的 1.5 倍以内。",
+          "contributions": [
+            "定位块 I/O 接口开销才是 NAND 侧前缀缓存的真瓶颈，并实证原生 CXL-SSD 远未达标。",
+            "LM-CXD 把 KV 块变成设备可见 I/O 单元，服务引擎与设备协同放置与搬运。",
+            "窗口预取 + 逐层 KV 搬运与 GPU 计算流水化，在有限设备 DRAM 下隐藏 NAND 延迟。"
+          ],
+          "conclusions": [
+            "存储侧 KV 扩容必须软硬协同：引擎知道哪些块将被消费，设备才有优化空间。",
+            "协同设计后 CXL-SSD 可以逼近本地 DRAM 的服务体验。"
+          ],
+          "experiments": [
+            "五个 LLM 上平均 TTFT 较原生 CXL-SSD 最多降 2.6 倍（计算异步预取）。",
+            "逐层预取下最多降 4.03 倍。",
+            "平均 TTFT 进入本地 DRAM 的 1.5 倍以内。"
+          ],
+          "significance": "给 KV cache 的存储级扩容画出软硬协同路线图，是 CXL 落地 LLM 推理的代表性工作。",
+          "takeaway": "让 SSD 看得见 KV 块语义：CXL-SSD 前缀缓存 TTFT 最多 -4 倍、逼近 DRAM。",
+          "keyExperiment": "五个 LLM：逐层预取使平均 TTFT 较原生 CXL-SSD 最多降 4.03 倍，平均在本地 DRAM 1.5 倍内。",
+          "arxivUrl": "https://arxiv.org/abs/2609.26828",
+          "pdfUrl": "https://arxiv.org/pdf/2609.26828.pdf",
+          "index": 9
+        },
+        {
+          "title": "DHSched: Stateless Control for Stateful Real-Time Avatar Serving",
+          "score": 3.5,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-24",
+          "authors": "Xin Wang, Haitong Zhang, Xianghong Li, Shumin Lin, Xianzheng Song, Lin Wang, Zhenyu Xu",
+          "institutions": "机构未标注",
+          "abstract": "实时数字人服务运行长生命周期、GPU 支撑的会话，把文本流持续转成语音、动作与 RTC 媒体；弹性运维反复在 Worker 间重指派会话。有状态控制器靠保留每会话权威串行化所有权，却把状态压到控制面自身的扩缩容与故障转移路径上。DHSched 改用无状态对等 Dispatch 副本：会话所有权外置为 (WorkerID, epoch) 代际，Dispatch 条件提交，Infer-Controller 在放行推进状态的输入前认领并复核同一代际，过时运行时即使存活也失去执行权；恢复沿同一代际路径推进。该系统已在生产栈运行：达 49,987 路并发直播会话；单日 9,927 次会话迁移无双主冲突或容量超发；生产峰值 CreateLive P99 98.3 毫秒、PushText P99 16.5 毫秒；10 万次随机化所有权运行中三个对照协议均现陈旧执行，DHSched 零双主、零陈旧放行。",
+          "contributions": [
+            "把长持有状态会话的所有权外置为 (WorkerID, epoch) 代际，控制面彻底无状态化。",
+            "Dispatch 条件提交 + Infer-Controller 认领复核的两段式协议，杜绝双主与陈旧执行。",
+            "生产栈大规模验证：近 5 万并发、单日近万次迁移零冲突。"
+          ],
+          "conclusions": [
+            "有状态控制面是弹性系统的软肋，所有权外置可同时保住弹性与正确性。",
+            "代际协议是长会话 GPU 服务可复用的容错原语。"
+          ],
+          "experiments": [
+            "生产环境 49,987 路并发直播会话；单日 9,927 次会话迁移零双主冲突。",
+            "生产峰值 CreateLive P99 98.3 毫秒、PushText P99 16.5 毫秒。",
+            "10 万次随机化所有权运行中三个对照协议均现陈旧执行，DHSched 零违规。"
+          ],
+          "significance": "展示了大规模实时 GPU 会话服务的控制面正确性工程，协议可直接迁移到其他长会话系统。",
+          "takeaway": "(WorkerID, epoch) 代际所有权：近 5 万并发数字人会话弹性迁移零双主。",
+          "keyExperiment": "10 万次随机化所有权运行：对照协议均出现陈旧执行，DHSched 零双主/零陈旧；生产峰值 CreateLive P99 98.3 毫秒。",
+          "arxivUrl": "https://arxiv.org/abs/2609.26363",
+          "pdfUrl": "https://arxiv.org/pdf/2609.26363.pdf",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
