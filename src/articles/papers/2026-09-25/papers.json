@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-25",
+  "title": "2026-09-25 论文精选",
+  "lede": "今日五分类均为全新 Friday 批次（512 篇候选、与历史 470 个 ID 零重叠）：前缀缓存淘汰在真实 trace 上被证明“复杂策略不如 LRU”、共享 GPU 上的 kernel agent 用区域独占把基准吞吐拉到 3.4 倍，共同指向同一件事——LLM 系统的性能瓶颈已从算法搬到了缓存与调度这类基础设施细节上。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 512
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "When Fancy Eviction Fails: Rethinking Cache Replacement For LLM Prefix Reuse",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-25",
+          "authors": "Yiyu Liu, Minlan Yu, Juncheng Yang",
+          "institutions": "Harvard University",
+          "abstract": "长时运行的 LLM 应用会反复发送不断增长的上下文，前缀缓存因此成为降低 prefill 成本的关键，但其在 agent 类负载下的真实行为仍缺乏理解。本文分析两家公司的生产 trace，并在 HBM 受限与大内存池两种设置下评测 14 种淘汰算法。结果显示：尽管与 Belady 最优仍有很大差距，面向传统缓存设计的复杂策略相对 LRU 几乎没有收益。原因是结构性的——前缀复用主要由活跃会话的规则节奏驱动，使“最近性”异常具有预测力。前缀缓存也带来新挑战：会话足迹呈重尾分布，且随序列长度增长的注意力计算让未命中代价剧烈变化。作者提出 compute-savings ratio 与两个离线 oracle 量化这些效应，并给出管理建议：以最近性为基础，针对一次性前缀做快速降级、对昂贵未命中做算力感知的部分淘汰、并按容量选择淘汰粒度。",
+          "contributions": [
+            "基于两家公司的生产 trace 评测 14 种淘汰算法，发现复杂策略相对 LRU 几乎无收益，并归因于前缀复用由会话节奏驱动、最近性具有结构性预测力。",
+            "提出 compute-savings ratio 与两个离线 oracle，把“未命中代价随序列长度变化”这一算力维度纳入缓存评价体系。",
+            "给出可落地的组合设计：保留最近性 + 一次性前缀快速降级 + 算力感知的部分淘汰 + 随容量调整的淘汰粒度。"
+          ],
+          "conclusions": [
+            "前缀缓存的淘汰问题无法沿用传统缓存结论，正确的目标函数是算力节省而非命中率。",
+            "作者将开源 trace 与模拟器，为后续前缀缓存研究提供可复现基础。"
+          ],
+          "experiments": [
+            "在生产 trace 上对比 14 种淘汰算法，HBM 受限与大内存池两种设置下复杂策略相对 LRU 的收益都很有限。",
+            "前缀复用高度依赖活跃会话的规则节奏，使 LRU 的最近性信号在该负载下表现异常好，与 Belady 的差距另有来源。",
+            "会话足迹为重尾分布，未命中代价随序列长度显著变化，构成前缀缓存特有的新难点。"
+          ],
+          "significance": "把 LLM 前缀缓存的管理目标从“提高命中率”重定义为“节省算力”，并给出可直接落地的策略组合。",
+          "takeaway": "前缀缓存不必迷信花哨淘汰算法——LRU 的最近性仍是最强基线，真正的新增量在算力感知。",
+          "keyExperiment": "14 种淘汰算法在生产 trace 上比较：复杂策略相对 LRU 收益甚微，瓶颈在未命中算力代价的剧烈差异。",
+          "arxivUrl": "https://arxiv.org/abs/2609.28870",
+          "pdfUrl": "https://arxiv.org/pdf/2609.28870.pdf",
+          "index": 1
+        },
+        {
+          "title": "Cross-Model Autoscaling for Shared LLM Serving",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-25",
+          "authors": "Xin Zhang, Xianyan Xie, Zhen He, Xijin Yin, Xingtong Lin, Bangbo Liang, Zequn Cheng, Peihao Huang, Guo Chen",
+          "institutions": "机构未标注",
+          "abstract": "多模型 LLM 服务正走向共享 MaaS 集群：共置模型在固定 GPU 预算下互相竞争，各自需求随时间变化且须满足延迟 SLO。现有 LLM 自动扩缩器基本是单模型本地的——信号只暴露本地运行时活动或滞后的延迟结果，扩容决策也不直接决定共享容量如何分配。本文提出 Token-service-share Rebalancing Engine（TRE），一个面向热切换多模型 LLM 服务的控制平面。TRE 引入 Token Service Share（TSS）：一个经校准、按需求归一化的信号，估计每个活跃或排队请求的有效服务量，让异构模型与不同 SLO 等级的健康度可比较。以 TSS 为指导，TRE 在固定 GPU 预算下协调有界的容量迁移：把快速抢救与再平衡分开，并按服务赤字把活跃副本增量迁给最缺服务的模型。TRE 实现在 Kubernetes 热切换服务栈上，无需修改推理调度器。",
+          "contributions": [
+            "提出 Token Service Share（TSS）信号：按需求归一化的有效 token 服务量，使异构模型与不同 SLO 等级的健康度可比较。",
+            "设计 TRE 控制平面：在固定 GPU 预算下做有界的接收方—捐赠方容量迁移，区分快速抢救与慢速再平衡。",
+            "在 Kubernetes 热切换栈上实现且不改推理调度器，验证跨模型容量仲裁优于单模型反应式扩缩。"
+          ],
+          "conclusions": [
+            "热切换多模型服务的有效扩缩不仅需要快速副本执行，还需要校准的服务赤字信号与跨模型协调仲裁。",
+            "TRE 在压力探针与生产对话/代码 trace 上都稳定降低尾延迟，说明信号设计比执行速度更关键。"
+          ],
+          "experiments": [
+            "在 7 条 LLM 服务 trace 上，P95 端到端延迟降低 11.9%–79.0%，P99 降低 12.5%–72.6%，对比对象是同一热切换运行时上的 KV cache 反应式扩缩器。",
+            "生产派生的对话与代码 trace 上，P95/P99 分别降低 50.8%/63.7% 与 79.0%/72.6%。",
+            "实现在基于 Kubernetes 的热切换服务栈上，全程未修改推理调度器。"
+          ],
+          "significance": "把多模型共享集群的扩缩问题从“本地副本数”提升为“跨模型容量仲裁”。",
+          "takeaway": "共享 GPU 集群扩缩的关键不是更快的副本动作，而是可跨模型比较的服务赤字信号。",
+          "keyExperiment": "7 条服务 trace 上 P95 延迟降低 11.9%–79.0%，生产对话 trace 上 P99 降低 72.6%。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29160",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29160.pdf",
+          "index": 2
+        },
+        {
+          "title": "Where Does the Energy Go? Profiling LLM Agent Inference on Blackwell GPUs",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-25",
+          "authors": "Qi Luo, Kunlin Li, Ziwen Wang, Yun Chen",
+          "institutions": "机构未标注",
+          "abstract": "会反复推理、规划并调用工具的 LLM agent，其负载画像与单次推理截然不同，能耗在部件与阶段间的分布也仍不清楚。本文做全栈能耗剖析：在 2 张 NVIDIA RTX PRO 6000 Blackwell GPU 上综合使用 NVML GPU 计数器、Intel RAPL CPU/DRAM 计数器与 IPMI 系统级传感器，用 Qwen3.8-27B 剖析三类代表性负载，并比较数学推理的思考开关。测量显示：只看 GPU 遥测会漏掉 41%–45% 的系统能耗，其余来自非 GPU 部件。在本设置下，串行 agent 负载每输出 token 的系统能耗是饱和服务的 63 倍，原因是不做批处理、上下文跨轮增长以及工具调用造成的空闲。延长思考使每题 token 数增加 21%–75%，但同一数据集内每 token 能耗差异不足 1%，说明能耗增长由输出量而非每 token 效率变化驱动。",
+          "contributions": [
+            "用 NVML + RAPL + IPMI 三源同时观测部件级功耗与阶段级执行，给出 agent 推理的全栈能耗分解。",
+            "量化“只看 GPU”的系统性盲区：GPU 遥测遗漏 41%–45% 的系统能耗。",
+            "区分“每 token 效率”与“输出量”两类效应，指出思考模式延长带来的能耗增长源于输出量而非每 token 能效变化。"
+          ],
+          "conclusions": [
+            "串行 agent 负载的系统能耗远高于饱和服务，缺口来自缺批处理、上下文增长与工具空闲，而非单纯算力差异。",
+            "上下文管理（如摘要与选择性检索）是降低 agent 部署能耗的直接抓手。"
+          ],
+          "experiments": [
+            "2 张 RTX PRO 6000 Blackwell + Qwen3.8-27B 上，GPU-only 遥测漏掉 41%–45% 的系统能耗。",
+            "串行 agent 负载每输出 token 的系统能耗为饱和服务的 63 倍；连续批处理把系统级能效提升 3.2 倍（1→16 req/s）。",
+            "延长思考使每题 token 增加 21%–75%，但同数据集内每 token 能耗差小于 1%；带宽受限推理负载在 400–600 W 功耗上限下吞吐不变，降到 300 W 才骤降。"
+          ],
+          "significance": "首次系统拆解 agent 推理的能耗去向，证明 GPU 单点遥测不足以为 agent 部署做能效决策。",
+          "takeaway": "agent 推理费电不在单 token，而在没有批处理与上下文无限增长——GPU 功耗表也只看得到一半。",
+          "keyExperiment": "串行 agent 每输出 token 系统能耗为饱和服务的 63 倍，而 GPU 遥测漏掉 41%–45% 的系统能耗。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29707",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29707.pdf",
+          "index": 3
+        },
+        {
+          "title": "Paging the Experts: A Reproducible Characterization of Flash-Backed MoE Inference on iPhone",
+          "score": 3.8,
+          "channel": "AI Infra",
+          "category": "cs.PF",
+          "date": "2026-09-25",
+          "authors": "Musa Shams",
+          "institutions": "机构未标注",
+          "abstract": "稀疏激活降低了 MoE 的计算量，却不能免除存储全部专家的需求。本文提出 Routide：一个 Swift/MLX 运行时，把专家权重留在 iPhone 存储中、内存中只放按字节预算的子集，从而执行一个公开的 Qwen3.6-35B-A3B 量化检查点的文本路径，并刻画缓存策略敏感性、数值比较边界与测量极限。在 5 组 128-token 负载上，固定路由回放配合 512 MiB LRU 缓存的需求命中率为 0.00%，同预算下带种子的随机淘汰为 18.80%，576 MiB LRU 则为 38.58%——所谓“容量悬崖”其实是策略与负载的交互结果，而非普适的内存硬门槛。同运行时 Mac 对照在淘汰与异步预取下保持生成序列一致，含 2560 次精确 token 比对与 10334 次投机加载；而常驻 Python 与录制的手机序列在 5 个用例上全都不一致。",
+          "contributions": [
+            "给出一个可复现的 iPhone 端 flash-backed MoE 推理运行时（Swift/MLX）与公开检查点的端侧执行路径。",
+            "通过 512/576 MiB 缓存与不同淘汰策略的对照，证明“容量悬崖”是策略与负载交互而非普适内存门槛。",
+            "以 2560 次精确 token 比对界定数值等价边界，并保留热停事件、负向计时比较等失败证据。"
+          ],
+          "conclusions": [
+            "端侧 MoE 在字节预算受限下可行，但可行性的含义取决于缓存策略与负载形态。",
+            "常驻实现与端侧实现难以宣称数值等价，部署声明必须披露这一限制。"
+          ],
+          "experiments": [
+            "5 组 128-token 负载上，512 MiB LRU 需求命中率 0.00%、同预算种子随机淘汰 18.80%、576 MiB LRU 38.58%。",
+            "Mac 同运行时对照在淘汰与异步预取下保持序列一致，含 2560 次精确 token 比对与 10334 次投机加载。",
+            "两套 iOS 27 内存协议观测到采样进程足迹峰值 1.87–2.32 GiB（短提示）与 2.39–2.73 GiB（较长提示）。"
+          ],
+          "significance": "把“手机能跑 35B MoE”从口号变成有限定条件的可复现工程刻画。",
+          "takeaway": "端侧 MoE 的瓶颈不是显存门槛而是缓存策略：同预算换淘汰算法，命中率能从 0% 变成 38%。",
+          "keyExperiment": "512 MiB LRU 命中率 0.00% vs 576 MiB LRU 38.58%，证明所谓容量悬崖实为策略/负载交互。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29032",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29032.pdf",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Back to the Definition: Estimating Step-Level Advantages via Trajectory Graphs for Agentic Reinforcement Learning",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-25",
+          "authors": "Xincheng Yao, Haobo Fu, Weiming Liu, Chongyang Zhang",
+          "institutions": "Shanghai Jiao Tong University",
+          "abstract": "GRPO 及其变体已成为训练推理与 agentic LLM 的主流范式，其组归一化优势估计在响应级可靠，但到步骤级会出现系统性偏差：粗粒度的轨迹级优势难以准确反映单步贡献——失败轨迹里同样可能含有价值的步骤。回到 RL 的基础定义可以发现，GRPO 在单轮任务上的成功，源于其优势估计忠实于基本定义：从同一状态采样多个动作的平均回报构成可信的状态价值估计。把这种忠实估计推广到步骤级，原则上需要对每个中间状态采样多个动作，代价过高。为此作者提出 GRAFT（基于图的忠实步骤级信用分配）：把所有 rollout 轨迹嫁接成一张轨迹图，在图上用 Bellman 迭代恢复节点状态价值，再按节点价值差为每条边分配信用。理论上该步骤级优势估计忠实于 RL 的基本优势定义；进一步提出的 Graph GAE 把 GAE 扩展到轨迹图上，以降低状态价值估计偏差的影响。",
+          "contributions": [
+            "指出 GRPO 组归一化优势在步骤级的系统性偏差来源，并回溯到 RL 基本定义给出解释。",
+            "提出 GRAFT：把 rollout 轨迹嫁接为轨迹图，用 Bellman 迭代恢复节点状态价值、按价值差分配边级信用，无需从每个中间状态重新采样。",
+            "提出 Graph GAE，把 GAE 扩展到轨迹图以抑制状态价值估计偏差。"
+          ],
+          "conclusions": [
+            "步骤级优势估计可以既忠实于 RL 的基本定义，又保持可承受的采样成本。",
+            "在多轮 agentic 基准上，GRAFT 相对 GRPO 与近期 agentic RL 算法都取得稳定增益。"
+          ],
+          "experiments": [
+            "在多种多轮 agentic 基准上相对 GRPO 取得一致提升，并优于近期 agentic RL 算法。",
+            "轨迹图 + Bellman 迭代在无额外状态级采样的前提下恢复节点状态价值，把信用分配到边级。",
+            "Graph GAE 进一步降低状态价值估计偏差带来的影响。"
+          ],
+          "significance": "把 agentic RL 的信用分配从“轨迹级广播”推进到有理论依据的步骤级分配。",
+          "takeaway": "失败轨迹里也有值得学的步骤——把轨迹拼成图再跑 Bellman，就能给出忠实的步骤级优势。",
+          "keyExperiment": "多轮 agentic 基准上 GRAFT 一致优于 GRPO，且无需从每个中间状态额外采样。",
+          "arxivUrl": "https://arxiv.org/abs/2609.28963",
+          "pdfUrl": "https://arxiv.org/pdf/2609.28963.pdf",
+          "index": 5
+        },
+        {
+          "title": "MILO: Efficient Many-shot In-Context Learning with Block-wise Low-rank Compression",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-25",
+          "authors": "Youpeng Zhao, Tian Tan, Liqian Peng, Jun Wang, Alec Go",
+          "institutions": "机构未标注",
+          "abstract": "many-shot 上下文学习让 LLM 通过上千条示例适配复杂任务，但也把推理效率瓶颈转移到 KV cache 显存：KV cache 随上下文线性增长，在线服务与端侧部署都难以承受。本文提出 MILO，一个利用 many-shot 上下文固有低秩冗余的压缩框架：在块粒度上压缩 KV cache，每个块包含多条示例；针对不同块之间上下文密度的异质性，按信息熵动态分配秩预算，在保留关键块保真度的同时更激进地压缩冗余块。在 Qwen2.5 系列模型上的实验显示，KV cache 显存最多降低 50%，吞吐提升 1.8 倍，而分类与推理基准上的性能下降可忽略，显著优于既有基线。方法的关键在于把“压缩粒度”与“冗余分布”对齐：块级结构天然匹配 many-shot 示例的重复性，熵驱动预算则避免了统一秩分配对信息密集块的伤害。",
+          "contributions": [
+            "提出块粒度低秩 KV cache 压缩，把压缩单元对齐到 many-shot 示例块，利用上下文的低秩冗余。",
+            "设计基于信息熵的动态秩预算分配，对信息密集块保真、对冗余块激进压缩。",
+            "在 Qwen2.5 系列上以可忽略的精度损失换取最多 50% KV cache 降幅与 1.8 倍吞吐。"
+          ],
+          "conclusions": [
+            "many-shot ICL 的效率瓶颈可以主要在 KV cache 侧解决，而不必改动注意力或模型结构。",
+            "块级结构 + 熵驱动秩分配优于统一压缩基线，说明压缩预算需要与冗余分布联合设计。"
+          ],
+          "experiments": [
+            "在 Qwen2.5 模型上 KV cache 显存最多降低 50%。",
+            "吞吐提升最高 1.8 倍，分类与推理基准上的性能下降可忽略。",
+            "结果显著优于既有 KV cache 压缩基线。"
+          ],
+          "significance": "为 many-shot ICL 给出一个只动 KV cache 的高性价比压缩方案，兼顾在线服务与端侧部署。",
+          "takeaway": "many-shot 上下文的冗余是块级的——按块压缩、按熵分预算，显存降一半而精度不掉。",
+          "keyExperiment": "Qwen2.5 上 KV cache 显存最多降 50%、吞吐提升 1.8 倍，精度损失可忽略。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29913",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29913.pdf",
+          "index": 6
+        },
+        {
+          "title": "SLCA-GRPO: Resolving Cross-Segment Credit Misattribution in Tool-Calling RL",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-25",
+          "authors": "Yan Zhan, Shaobo Liu, Qiunan Liu, Yuanjun Shi, Siqi Xu, WeiYi Hou, Xiang Xu, Zekang Li, Weizhou Pan, Jiahong Yan",
+          "institutions": "机构未标注",
+          "abstract": "工具调用 agent 会产出异质输出：结构化的工具调用与面向用户的自然语言总结交错出现。这种异质性在标准 on-policy RL 中构成结构性失效——GRPO 之类算法把同质化的轨迹级标量优势不加区分地广播到所有 token，总结生成带来的梯度噪声因此泄漏进工具决策 token，造成跨段信用错配与脆弱的优化。本文提出 SLCA-GRPO，核心是段锁定信用分配（SLCA）。作者先构建 Schema-Guided LLM Simulator，作为无需真实 API 的可扩展训练基础设施；SLCA 在同一组 rollout 内按结构段解耦优势估计，无需从中间状态额外采样。配合分层奖励（HierR），SLCA 把执行优势路由给工具 token、把偏好优势路由给总结 token，在每次策略更新中消除优势污染的通道。在 7B 基座上，SLCA-GRPO 收敛更快。",
+          "contributions": [
+            "定位工具调用 RL 中“总结段梯度噪声污染工具决策 token”这一跨段信用错配通道。",
+            "提出 SLCA：在单组 rollout 内按结构段解耦优势估计，配合分层奖励把执行优势与偏好优势分别路由。",
+            "构建 Schema-Guided LLM Simulator，使探索不依赖真实 API 且训练更稳定。"
+          ],
+          "conclusions": [
+            "工具调用 RL 的优化脆弱性主要来自优势污染，而非奖励信号本身不足。",
+            "在同等训练预算下，段级信用分配能同时提升准确率并降低工具冗余与成本。"
+          ],
+          "experiments": [
+            "7B 基座上优于 GRPO、ToolPO 与 RLTR：域内评测 +2.53 pp，BFCL +1.36 pp，τ²-Bench +9.15 pp。",
+            "收敛速度快于标准 GRPO，同时工具调用冗余与成本下降。",
+            "Simulator 支撑的训练流程不依赖真实 API 调用即可完成可扩展探索。"
+          ],
+          "significance": "把工具调用 agent 的 RL 训练从“整条轨迹一个分数”推进到按结构段分配信用。",
+          "takeaway": "工具调用 RL 别把总结段的噪声也算到工具决策头上——按段锁定信用，τ²-Bench 直接涨 9 个点。",
+          "keyExperiment": "7B 基座上域内 +2.53 pp、BFCL +1.36 pp、τ²-Bench +9.15 pp，训练预算与 GRPO 相同。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29050",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29050.pdf",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "KernelOPT: Dispatch-Aware Agentic Search for GPU Kernel Optimization",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-25",
+          "authors": "Aheli Poddar, Sanskar Prasad, Arindam Samanta, Subha Chakraborty, Vishal Goyal, Rohit Singh Rathaur",
+          "institutions": "机构未标注",
+          "abstract": "深度学习训练与推理性能高度依赖 GPU kernel 效率。PyTorch Inductor 等编译器能从高层模型代码自动生成 kernel，但常大幅落后于专家手写实现。近期 LLM 辅助的 kernel 优化器能缩小单核差距，却把编译后的模型当作黑盒：只优化独立 kernel、不尊重编译器决策，也不做端到端验证。本文提出 KernelOPT，把编译后模型视为结构化产物的多智能体系统：保留厂商库调用（cuBLAS、cuDNN），只用五个 profiling 引导的 LLM agent 优化生成的 Triton 子核；四道门验证级联在优化过程中筛选候选，并对重新拼接的模型做端到端验证。在 250 道 KernelBench 题目上，相对编译器基线的几何平均加速为 1.40×（Level 1）、1.15×（Level 2）与 1.07×（Level 3）。",
+          "contributions": [
+            "把编译后模型视为结构化产物：保留 cuBLAS/cuDNN 等厂商库调用，只针对生成的 Triton 子核优化，避免破坏编译器决策。",
+            "设计五 agent 的 profiling 引导搜索流程与四道门验证级联（静态、多种子正确性、模型级 float64 回退、性能门控）。",
+            "提供失败即回退编译器基线的安全语义，并对重新拼接的模型做端到端验证，而非只验单核。"
+          ],
+          "conclusions": [
+            "把 LLM kernel 优化从“孤立优化单核”升级为“尊重编译器结构的模型级优化”，才可能端到端加速。",
+            "四道门验证级联使自动化 kernel 搜索在正确性上可控，无可信候选时退回基线。"
+          ],
+          "experiments": [
+            "在 250 道 KernelBench 题目上相对编译器基线的几何平均加速：Level 1 1.40×（51/100）、Level 2 1.15×（31/100）、Level 3 1.07×（12/50）。",
+            "系统接受 torch.compile、独立 Triton kernel 与 Helion kernel 三类输入。",
+            "验证级联对重新拼接后的模型做端到端验证，未通过的候选被丢弃并回退基线。"
+          ],
+          "significance": "给出把 LLM agent 安全用于生产 kernel 优化的工程范式：只动编译产物、四道门兜底。",
+          "takeaway": "kernel 自动优化别碰 cuBLAS/cuDNN——只改 Triton 子核，再加四道验证门，端到端才敢用。",
+          "keyExperiment": "250 道 KernelBench 上几何平均加速 1.40×（Level 1）/1.15×（Level 2）/1.07×（Level 3）。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30059",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30059.pdf",
+          "index": 8
+        },
+        {
+          "title": "KREX: Concurrent Kernel Benchmarking on Shared GPUs via Region-Granular Exclusivity",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-25",
+          "authors": "Tianyu Feng, Haoxuan Yu, Tianyuan Wu, Lingyun Yang, Daocheng Ying, Yuxiao Wang, Ruibo Fan, Yinghao Yu, Guodong Yang, Liping Zhang, Wei Wang",
+          "institutions": "HKUST, Alibaba Cloud",
+          "abstract": "LLM agent 靠反复组合候选 kernel 并在真实 GPU 上测量耗时来自动优化 GPU kernel。现有系统为保证测量保真度，会把整张 GPU 保留给整个 agent 会话或整条基准测试命令，利用率很低——真正需要独占 GPU 的执行只占命令的一小部分。共享 GPU 能回收这些空闲容量，却会引入竞争、损害测量保真度，进而误导 agent 的搜索方向。本文提出 KREX：一个支持区域粒度独占的并发 kernel agent 基准测试运行时。agent 可标注基准命令中涉及时序敏感操作的关键区域，运行时在标注区域内强制独占、区域外允许并发，从而在保持测量保真度的同时提高吞吐。为保证区域内独占，KREX 会阻止新的竞争提交并排空在途工作，再冻结兄弟进程、隔离 CPU 核；为最大化区域外并发，KREX 在常驻 context 进程中复用 GPU context。",
+          "contributions": [
+            "提出区域粒度独占概念：让 agent 标注时序敏感区间，只在区间内独占 GPU，其余时间允许并发。",
+            "给出区域内独占的实现机制（阻塞新提交、排空在途工作、冻结兄弟进程、隔离 CPU 核），同时保护 GPU 执行与驱动测量的宿主线程。",
+            "用常驻 context 进程复用 GPU context，规避重复的节点级串行 context 创建，最大化区域外并发。"
+          ],
+          "conclusions": [
+            "kernel agent 的 GPU 利用率瓶颈来自“整命令独占”的粗粒度策略，而非测量本身必须独占。",
+            "区域粒度独占可以在吞吐与计时保真度之间同时取优。"
+          ],
+          "experiments": [
+            "相比命令粒度独占基线，KREX 基准吞吐最高达 3.4 倍。",
+            "p95 计时膨胀可忽略：kernel 长于 10 ms 为 0.30%、长于 1 ms 为 1.58%、长于 0.1 ms 为 3.90%。",
+            "在 NVIDIA 与 AMD GPU 上均完成评测。"
+          ],
+          "significance": "为“共享 GPU 上跑自动化 kernel 搜索”给出兼顾利用率与计时可信度的运行时方案。",
+          "takeaway": "kernel 基准测试不必独占整张卡——只在计时敏感区间独占，吞吐能涨到 3.4 倍而 p95 误差不到 4%。",
+          "keyExperiment": "相比命令粒度独占基线吞吐最高 3.4×，p95 计时膨胀 0.30%/1.58%/3.90%（>10ms/>1ms/>0.1ms）。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30057",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30057.pdf",
+          "index": 9
+        },
+        {
+          "title": "MeshHeal: Two-Timescale Self-Healing for Gray Failures in Decentralized LLM Agent Networks",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-09-25",
+          "authors": "Keru Chen, Sen Lin, Yingbin Liang, Nathaniel D. Bastian, Shaofeng Zou",
+          "institutions": "Ohio State University, University at Buffalo",
+          "abstract": "去中心化 LLM 多智能体系统通过局部交互协作，但某个 agent 可能仍能响应、任务解决质量却持续退化。这类“灰故障”要求在证据尚不足以改变未来路由之前先保护当前任务，同时允许恢复后的 agent 重新加入。本文提出 MeshHeal：一个完全去中心化的自愈框架，在两个时间尺度上耦合能力匹配的同侪评审。快尺度上，自适应层级把不确定或低分输出从单评审者评估升级为委员会审议，必要时在使用前纠正；慢尺度上，任务与能力条件下的同侪相对检测器聚合分数，区分持续退化与普通输出波动，触发强制委员会评审，并最终把退化 agent 排除出常规路由；恢复探针提供新证据以便重新纳入。为忠实评估路由，作者提出 Model-Backed MAS Evaluation，把能力分配绑定到执行模型上——仅靠提示词式能力分配会掩盖路由错误。",
+          "contributions": [
+            "定义并针对“灰故障”（agent 可响应但质量持续退化）设计去中心化自愈框架 MeshHeal。",
+            "双时间尺度耦合：快尺度自适应评审层级保护当前任务，慢尺度同侪相对检测器决定路由排除与恢复纳入。",
+            "提出 Model-Backed MAS Evaluation，把能力分配绑定到真实执行模型，暴露仅靠提示词分配时被掩盖的路由错误。"
+          ],
+          "conclusions": [
+            "保护当前任务与调整未来路由需要不同时间尺度的证据，混为一谈会顾此失彼。",
+            "在错峰退化与恢复场景下，MeshHeal 能把退化 agent 隔离并在恢复后重新纳入常规路由。"
+          ],
+          "experiments": [
+            "在 BBH、MATH、MMLU-Pro 上，MeshHeal 退化期准确率 0.839、每任务 51k 模型 token，对比最强基线 Symphony 的 0.807、115k token。",
+            "在错峰退化与恢复场景下隔离退化 agent，恢复前不参与常规任务执行。",
+            "Model-Backed MAS Evaluation 显示仅凭提示词式能力分配会隐藏路由错误。"
+          ],
+          "significance": "把多智能体系统的容错从“节点宕机”扩展到更难察觉的“能力持续退化”。",
+          "takeaway": "agent 网格里的隐形故障不是掉线而是变笨——用双时间尺度同侪评审，精度更高而 token 省一半。",
+          "keyExperiment": "BBH/MATH/MMLU-Pro 退化期准确率 0.839（51k token/任务）vs Symphony 0.807（115k token/任务）。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29015",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29015.pdf",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
