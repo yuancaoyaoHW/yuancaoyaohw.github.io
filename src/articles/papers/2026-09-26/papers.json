@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-26",
+  "title": "2026-09-26 论文精选",
+  "lede": "今日主线是把推理成本压下来：循环 Transformer 的 KV 冗余、按任务定制的稀疏剪枝、视频扩散的分步异构路由，叠加递归 AI 主导的 GPU kernel/RTL 模型开发；模型侧则是自博弈零数据预训练与开源后训练全配方。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 502
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "5 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "5 篇推荐",
+      "papers": [
+        {
+          "title": "FlashLoop: Fast and Memory-Efficient Looped Transformers via Lazy Updates",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-25",
+          "authors": "Wanqi Yang, Shiwei Liu",
+          "institutions": "University of Aberdeen",
+          "abstract": "循环 Transformer 通过反复复用同一组 Transformer 块，以参数高效的方式增加计算深度，但其相对常规 Transformer 的实际优势一直存在争议：每多循环一次就要多跑一遍前向并缓存一套新的 KV 状态，推理 FLOPs 与 KV cache 显存随循环深度持续增长，在大循环次数与长上下文下尤为严重，使参数效率无法转化为推理效率。作者发现循环引入的额外计算与存储大部分是冗余的：随着递归推进，状态变化越来越集中到少量 token 上；注意力输出的差异由一小组稀疏且稳定的 key 列主导；相邻循环之间的 KV 残差也逐步变得适合低位量化。基于这三点观察，论文提出 FlashLoop——一个免训练的推理框架，通过 token 稀疏更新、稀疏注意力与 KV 残差量化来削减跨循环冗余。",
+          "contributions": [
+            "发现循环 Transformer 中跨循环的冗余结构：状态变化向少量 token 集中、注意力差异由稀疏稳定的 key 列主导、KV 残差可低位量化。",
+            "提出 FlashLoop：免训练推理框架，组合 token 稀疏更新、稀疏注意力与 KV 残差量化，直接复用在已有权重上。",
+            "在多个 Looped Transformer 模型上实现无损精度下的端到端推理加速与 KV cache 显存压缩。"
+          ],
+          "conclusions": [
+            "循环带来的计算与存储冗余可以被利用而不损失精度，使 Looped Transformer 的“参数高效”真正落到推理效率上。",
+            "该框架免训练、与具体循环模型解耦，可作为 Looped Transformer 部署的通用加速层。"
+          ],
+          "experiments": [
+            "在多个 Looped Transformer 模型上保持精度无损，端到端推理加速最高达 1.64 倍。",
+            "KV cache 显存占用最高降低 6 倍，在大循环次数与长上下文场景收益最明显。",
+            "三项冗余观察（token 稀疏、稀疏注意力列、KV 残差量化）分别独立验证，逐项叠加得到最终增益。"
+          ],
+          "significance": "把循环 Transformer 的推理开销从“随循环深度线性增长”压到接近常数，为该类参数高效架构的实际部署清除了最大障碍。",
+          "takeaway": "循环 Transformer 的跨循环计算与 KV 缓存大部分是冗余的，免训练稀疏化即可换来 1.64× 加速与 6× 显存压缩。",
+          "keyExperiment": "无损精度下端到端加速 1.64 倍，KV cache 显存最多减少 6 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29812",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29812.pdf",
+          "index": 1
+        },
+        {
+          "title": "Task-Aware Spectral Pruning: A Mixture-of-Masks Framework for Efficient LLM Inference",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-25",
+          "authors": "Ibne Farabi Shihab, Fariya Afrin, Sanjeda Akter, Anuj Sharma",
+          "institutions": "Iowa State University",
+          "abstract": "静态剪枝会给所有 prompt 施加同一种稀疏结构，然而推理、检索、生成、写代码与翻译所依赖的模型部件并不相同。论文提出任务感知谱剪枝（TASP），一个后训练框架：先用模块级谱描述子对标实测的任务级消融效应完成标定，在构造稀疏掩码时闭合分组查询注意力（GQA）与 SwiGLU 的依赖关系，之后为每个用户轮次路由到一个已编译的掩码，并在整个 prefill 与解码过程中保持不变。一个模块不相交的试点环节先判断谱信号是否具有信息量，再决定是否执行完整标定：在用到的 Llama-3-8B 与 Llama-3-70B 检查点上试点通过，而 Qwen2.5-1.5B 被拒绝，说明该方法的适用性依模型而定、并非普适。",
+          "contributions": [
+            "提出 TASP：按任务标定的谱剪枝框架，用模块级谱描述子对齐实测消融效应，生成任务专属稀疏掩码。",
+            "在掩码构造中显式闭合 GQA 与 SwiGLU 的结构依赖，并按轮次路由到固定掩码，保证 prefill 与解码阶段一致。",
+            "引入模块不相交的试点判据，事先判断谱信号是否有效，并给出明确的适用/不适用模型范围。"
+          ],
+          "conclusions": [
+            "任务级稀疏可以显著降低激活 FLOPs 而几乎不损性能，但收益与适用性受模型结构影响，不能假设普适。",
+            "把基础设施与工程约束（编译后的掩码、部署匹配的 INT8/BF16 运行时）纳入设计，是稀疏推理真正落地的前提。"
+          ],
+          "experiments": [
+            "在 43% 激活 FLOPs 削减下，Llama-3-70B 基准测试保留 97.7±0.2% 的稠密 BF16 得分。",
+            "单张 A100 80GB 上，INT8 权重/BF16 计算的部署匹配运行时相对稠密 BF16 保留 97.3±0.2%，解码延迟从 45.2±0.4 ms/token 降到 31.3±0.4 ms/token，加速 1.44 倍。",
+            "论文附上 136 GPU 小时的标定审计，并通过因子消融、模块不相交测试与路由破坏实验划定收益来源。"
+          ],
+          "significance": "把“按任务定制稀疏结构”做成可标定、可审计的推理优化流程，并诚实给出适用边界（小模型可能不适用）。",
+          "takeaway": "按任务标定的谱剪枝可在 43% 激活 FLOPs 削减下保住 97% 以上精度，A100 上解码延迟降 1.44 倍。",
+          "keyExperiment": "Llama-3-70B 在 A100 上 INT8/BF16 部署运行时解码延迟 45.2→31.3 ms/token（1.44×），保留 97.3% 精度。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29499",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29499.pdf",
+          "index": 2
+        },
+        {
+          "title": "Accelerating Video Diffusion via Training-Free Trajectory Routing",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CV",
+          "date": "2026-09-25",
+          "authors": "Mustafa Munir, Huy Vu, Shreyas Misra, Rohit Jena, Sajad Norouzi, Ali Taghibakhshi, Anis Ahmad, Anjul Patney, Pavlo Molchanov, Nima Tajbakhsh",
+          "institutions": "NVIDIA",
+          "abstract": "视频扩散计算代价高昂：需要在大量去噪步上反复执行一个很大的模型，即便经过步蒸馏，每一步仍要付出一次昂贵的模型评估。论文提出 TRACK（TRajectory-Aware Capacity routing via top-K selection），一种异构去噪策略：在选定步上于相互兼容的大、小模型之间切换，从而降低平均单步成本。切换位置来自标定：先用大模型 rollout 一条参考轨迹，每一步同时收集小模型的预测，并与大模型预测比较得到相对分歧分数——两个模型接收相同的 latent、时间步、条件与引导输入。把该信号在标定集上聚合，得到跨去噪步的分歧分数图谱，据此确定切换策略：质量敏感的步继续使用大模型，分歧低的步路由给模型。推理时每一步只执行被选中的模型，无需重训练，不改架构或调度器，也不需要在线上同时评估双模型。",
+          "contributions": [
+            "提出 TRACK：基于轨迹分歧标定的异构去噪路由，在兼容的大/小模型之间按步切换。",
+            "设计相对分歧分数：同一 latent 与条件下比较多模型预测，聚合成跨步的分歧图谱以确定切换策略。",
+            "完全免训练、免改架构与调度器，推理时每步只执行单一模型，可直接叠加在现有蒸馏/加速栈上。"
+          ],
+          "conclusions": [
+            "扩散推理的步间容量需求差异很大，把“贵的容量”只花在质量敏感步上，可以在基本不损质量的前提下显著省算力。",
+            "标定一次即可离线固定策略，无需在线双模型评估，工程上易于集成到既有视频生成管线。"
+          ],
+          "experiments": [
+            "在 Wan 2.1 上取得 1.95 倍加速，Cosmos 3 上 2.04–2.73 倍，TurboDiffusion 上 2.69 倍，FastVideo 上 2.17 倍。",
+            "聚合质量与基线相当，切换策略不需重训练即可跨模型族迁移。",
+            "标定只需参考轨迹一次 rollout 与逐步小模型比较，额外成本远低于在线搜索方案。"
+          ],
+          "significance": "给出一种即插即用的视频扩散推理加速方案，把异构模型路由从“训练期蒸馏”变成“离线标定 + 推理切换”。",
+          "takeaway": "按去噪步的模型分歧做路由，在四套视频扩散模型上换来 1.95–2.73× 加速且质量基本不变。",
+          "keyExperiment": "Wan 2.1 加速 1.95×、Cosmos 3 最高 2.73×、TurboDiffusion 2.69×，聚合质量与稠密基线相当。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30096",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30096.pdf",
+          "index": 3
+        },
+        {
+          "title": "Concurrent Split Learning Through Stable Client Clustering",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-25",
+          "authors": "Mohammad Kohankhaki, Valentin Rentschler, Anke Schmeink",
+          "institutions": "RWTH Aachen University",
+          "abstract": "固定的全局批量限制了分布式训练中单个步骤能有多少客户端贡献样本。论文研究在不提高单负载批量的前提下利用更多服务器 worker 的办法：全局聚类并行分离学习（GCPSL）把客户端分配到固定簇，为每个簇并发执行一个带全局采样的并行分离学习（GPSL）负载，并周期性融合客户端侧与服务器侧的模型分段。在 256 个逻辑客户端的模拟中，把客户端群体切分到更多并发负载上能提升直接数据参与度，但簇过小会带来精度代价。在一个四张 H100 的实现上，标签感知的 GCPSL 在三次匹配运行中以 6.13±0.15 分钟达到 85% 的 CIFAR-10 验证精度，而把同样的负载串行执行需要 19.09±0.45 分钟。在四卡配额内，规模均衡与随机固定归属的达标平均用时接近（5.70 与 5.66 分钟），规模均衡把直接参与度提高 3.25 个百分点。",
+          "contributions": [
+            "提出 GCPSL：把客户端划入固定簇、并发执行多个 GPSL 负载并周期性融合模型分段的分布式训练方案。",
+            "在不增大单负载全局批量的前提下，通过并发负载提高客户端数据参与度，避免单纯扩大批量带来的收敛问题。",
+            "给出并发度、簇规模、归属信息与精度/参与度之间的实测权衡，并在四卡 H100 上验证。"
+          ],
+          "conclusions": [
+            "用“更多并发负载”替代“更大批量”，可以在同等硬件上把分布式训练墙钟时间压缩到三分之一左右。",
+            "簇规模过小会损失精度，规模均衡的固定归属在吞吐与参与度上优于随机归属。"
+          ],
+          "experiments": [
+            "四张 H100 上标签感知 GCPSL 以 6.13±0.15 分钟达到 85% CIFAR-10 验证精度，同负载串行为 19.09±0.45 分钟。",
+            "256 逻辑客户端模拟显示，切分到更多并发负载可提升直接数据参与度，但簇过小精度下降。",
+            "四卡内规模均衡与随机固定归属达标平均用时接近（5.70 与 5.66 分钟），规模均衡使直接参与度提高 3.25 个百分点。"
+          ],
+          "significance": "为多卡/多 worker 分布式训练给出“并发度而非批量”的调度思路，并用 H100 实测量化了收益与边界。",
+          "takeaway": "把客户端分簇并并发跑多份分离学习负载，四卡 H100 上把达标时间从 19.1 分钟压到 6.1 分钟。",
+          "keyExperiment": "4×H100 上 GCPSL 达 85% CIFAR-10 精度用时 6.13 分钟，串行基线 19.09 分钟。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29395",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29395.pdf",
+          "index": 4
+        },
+        {
+          "title": "iCoder-27B: Recursive AI-Led Development of Frontier Industrial Coding Model",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-09-25",
+          "authors": "Cheng Yang, Jiayang Lyu, Shangyuan Liu, Guibin Zhang, Jiong Lin, Xinlei Yu, Junchi Yan, Shuicheng Yan, Weinan E, Linfeng Zhang, Qibing Ren",
+          "institutions": "机构未标注",
+          "abstract": "递归 AI——让 AI 越来越完整地参与构建和改进 AI——是 AI for AI 的圣杯。虽然在小模型、有界任务和固定时间预算下递归自发展已经可行，但要开发出一个可发布、具备前沿竞争力的模型仍困难得多。本文追问：人类的参与可以少到什么程度，仍足以让一个智能体开发出前沿模型？作者把人类输入压缩成一个高密度、低频率的接口：专家把目标、阶段脚手架、权限边界与操作规程编码为可复用的研究技能，智能体则实例化这些先验、选择实验、诊断结果并修正训练策略。在工业编码这一高难领域，智能体演化数据并协调 SFT、在线自蒸馏与可验证奖励强化学习，最终产出 iCoder——一个面向 RTL 设计与 GPU kernel 优化的 27B 模型。",
+          "contributions": [
+            "提出以“研究技能”为接口的递归 AI 开发范式：人类只定义目标、脚手架、权限与规程，智能体自主选择实验、诊断并修正训练策略。",
+            "在工业编码领域让智能体演化数据并协调 SFT、在线自蒸馏与可验证奖励 RL，产出 27B 的 iCoder 模型。",
+            "在 RTL 设计与 GPU kernel 优化等硬核任务上系统评测，并展示更少 token 下的迭代优化能力。"
+          ],
+          "conclusions": [
+            "把人类输入高度压缩到低频接口后，智能体仍能完成前沿级模型的端到端开发，说明递归自我改进已进入工程可行区间。",
+            "在可验证、有明确指标的任务（RTL、GPU kernel）上，AI 主导的迭代优化收益最直接。"
+          ],
+          "experiments": [
+            "七个基准中 iCoder 在 RTLLM 上领先，超过 GPT-5.5 与 Claude-Opus-4.8。",
+            "在 CVDP 与 KernelBench L2 上排名第二，比 GPT-5.5 高 16 分。",
+            "在 TritonBench 上与 Claude-Opus-4.8 并列最佳；案例研究显示以显著更少的 token 完成可比的迭代 RTL 与 GPU kernel 优化。"
+          ],
+          "significance": "给出了一条“AI 主导开发前沿工业模型”的工程路径，并用外部基准说明其已能与闭源前沿模型正面竞争。",
+          "takeaway": "人类只提供研究技能与权限边界，智能体自主完成数据演化与 SFT/自蒸馏/RL 编排，训出的 27B iCoder 在 RTLLM 上超过 GPT-5.5。",
+          "keyExperiment": "iCoder-27B 在 RTLLM 上超过 GPT-5.5 与 Claude-Opus-4.8，KernelBench L2 比 GPT-5.5 高 16 分。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29626",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29626.pdf",
+          "index": 5
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Rufus-Air: An Open LLM Post-Training Recipe",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-25",
+          "authors": "Chia-Yuan Chang, Renyuan Cheng, Rui Feng, Xiaotian Han, Yuan He, Hongye Jin, Linwei Li, Shiyang Li, Fenglin Liu, Xin Liu, Priyanka Nigam, Haoyang Wen, Zhenghao Xu, Zhuocheng Xu, Bing Yin, Qingyu Yin, Chao Zhang, Rongzhi Zhang, Zhihan Zhang, Zixuan Zhang, Tuo Zhao",
+          "institutions": "Amazon, Georgia Institute of Technology",
+          "abstract": "Rufus-Air 是一套开放、可复现的后训练配方，基座为 GLM-4.5-Air-Base（106B-A12B），由八个阶段串行组成：SFT、推理 RL、编码 RL、指令遵循 RL、通用 Agent、编码 Agent、搜索 Agent、RLHF。论文完整记录了复现所需的训练数据、奖励设计、基础设施、阶段顺序与各阶段结果。各阶段从基础能力推进到高级能力，也从硬性、可验证的奖励逐步过渡到更软的评委式信号。训练建立在开源组件与公开数据之上，大部分数据按原样使用，没有新的人工标注，也没有自建的蒸馏教师。论文的主要发现是：（1）多样、高质量的 SFT 奠定了能力下限；（2）难度过滤把 RL prompt 保持在有效的学习区间内；（3）奖励可靠性给出了阶段排序的实用原则；（4）基础设施与工程选择本身就是配方的一部分，而不只是实现细节。",
+          "contributions": [
+            "公开发布一套八阶段串行的 LLM 后训练配方（SFT→推理 RL→编码 RL→指令遵循 RL→通用/编码/搜索 Agent→RLHF），并给出复现所需的全部细节。",
+            "总结四条可迁移结论：SFT 决定能力下限、难度过滤守住 RL 有效区间、奖励可靠性决定阶段排序、基础设施属于配方本身。",
+            "在没有新人工标注与自建蒸馏教师的前提下，仅用开源组件与公开数据完成训练。"
+          ],
+          "conclusions": [
+            "后训练的可复现性更多取决于阶段编排与奖励设计，而不是未公开的数据配方。",
+            "按奖励可靠性从硬到软排序阶段，是兼顾能力上限与稳定性的实用原则。"
+          ],
+          "experiments": [
+            "在 GLM-4.5-Air-Base（106B-A12B）上完整跑通八阶段，结果优于官方 GLM-4.5-Air 后训练版本。",
+            "与同规模开源模型相比具备竞争力，且训练只使用公开数据与开源组件。",
+            "逐阶段报告了各阶段的能力变化，论证阶段顺序而非单点技巧带来收益。"
+          ],
+          "significance": "为开源社区提供了一份可直接照着做的百亿级 MoE 后训练工程手册，把“基础设施也是配方”这一经验显式写进方法论。",
+          "takeaway": "八阶段串行后训练配方全部公开，仅用公开数据即在 106B-A12B 上超过官方的 GLM-4.5-Air 后训练版本。",
+          "keyExperiment": "在 GLM-4.5-Air-Base 上跑通八阶段后训练，效果优于官方后训练版并与同规模开源模型竞争。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29421",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29421.pdf",
+          "index": 6
+        },
+        {
+          "title": "Self-Play Pretraining with Zero Data",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-25",
+          "authors": "Aditya Cowsik, Kfir Dolev, Michael Y. Li, G. Bruno De Luca, Nourya Cohen, Noah D. Goodman, Yoav Levine",
+          "institutions": "Stanford University, Hebrew University of Jerusalem",
+          "abstract": "语言模型的进步一直由在更多数据上扩展预训练所驱动，但训练数据在很大程度上仍是替模型手工策划的。更通用的预训练方式应让模型自己学会生成最有利于自身改进的数据，从而提供一个实际上无上限的训练数据来源——瓶颈从人类知识转为算力。论文提出“零数据自博弈预训练”，作为实现该愿景的概念验证。该流程把合成数据生成视为对全部可计算结构空间的搜索，灵感来自 Solomonoff 归纳：从随机初始化出发，两个模型协同学习——生成器提出由通用图灵机解释、产生字节序列的程序，学习器则自回归地预测这些字节序列；学习器用标准交叉熵训练，生成器用强化学习训练，目标是产出处于学习器能力前沿的序列，从而形成自适应课程。通用图灵机提供了覆盖全部可计算数据生成过程的搜索空间，几乎不施加领域结构。",
+          "contributions": [
+            "提出“零数据自博弈预训练”：把合成数据生成建模为对所有可计算结构的搜索，不需要任何自然语料。",
+            "构建生成器—学习器协同训练机制：学习器用交叉熵，生成器用 RL 专门产出位于学习器能力前沿的序列，形成自适应课程。",
+            "以通用图灵机作为程序解释器，避免引入领域特定的数据结构假设。"
+          ],
+          "conclusions": [
+            "自博弈可以从零数据出发持续产生有训练价值的样本，为“算力换数据”的预训练范式提供初步实证。",
+            "在自然数据上的零样本表现是否随自博弈算力可预测地提升，是检验迁移能力的关键判据。"
+          ],
+          "experiments": [
+            "生成器与学习器均未接触任何自然数据，评测在自然数据上做零样本迁移测试。",
+            "实验检验零样本性能是否随自博弈计算量呈可预测的提升趋势。",
+            "以通用图灵机解释程序生成的字节序列，避免依赖领域特定的数据先验。"
+          ],
+          "significance": "把预训练数据来源从人类语料扩展到“模型自己搜索出的可计算结构”，是通往算力驱动型自改进预训练的一条明确路径。",
+          "takeaway": "让生成器与学习器自博弈搜索可计算结构，在完全不使用自然数据的条件下训练语言模型并测试零样本迁移。",
+          "keyExperiment": "双方都不见自然数据，检验自然数据上的零样本性能是否随自博弈算力呈可预测提升。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30063",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30063.pdf",
+          "index": 7
+        },
+        {
+          "title": "Learning to Discover Interesting Mathematics",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-25",
+          "authors": "Niket Patel, Ahmad Rammal, Amaury Hayat, Remi Munos, Julia Kempe",
+          "institutions": "Google DeepMind, New York University, École des Ponts",
+          "abstract": "近期大语言模型已能解决包括许多悬置数十年之久的数学问题，这为以空前规模扩展数学知识打开了大门。但即便模型能够不断猜想并证明定理，这些新知识是否“有趣”、是否有用仍是未解问题。论文把定理的内在有趣度定义为证明长度与命题长度之比，并证明该指标与定理下游效用的外在校度量强相关。作者识别出“给定前提集合下证明的难度”是计算这些指标的一个有用基元，并训练了一个 27B 模型，其预测证明难度的准确率超过前沿通用模型。以该指标为目标做优化，能得到一个产出更有趣定理的模型，同时把与 Mathlib 的大幅或完全重叠从 91.9% 降到 30.6%，说明生成了更多分布外的数学。论文展示了该系统能够产生候选定理、从中选出最有趣的、并迭代地扩展一个自增长数学库。",
+          "contributions": [
+            "把定理的“内在有趣度”形式化为证明长度与命题长度之比，并证明它与下游效用的外在校度量强相关。",
+            "识别“给定前提下的证明难度”这一基元，训练 27B 模型以超过前沿通用模型的准确率预测证明难度。",
+            "以有趣度为目标优化生成模型，显著降低与 Mathlib 的重叠并支持自扩展数学库的迭代构建。"
+          ],
+          "conclusions": [
+            "有趣度可以被量化并用于筛选猜想，为自动生成有科学价值的数学提供可操作的信号。",
+            "优化该指标会同时降低与现有库的重叠，说明指标能引导模型探索分布外的数学结构。"
+          ],
+          "experiments": [
+            "以有趣度为目标优化后，与 Mathlib 的大幅或完全重叠从 91.9% 降至 30.6%。",
+            "训练的 27B 难度预测模型在证明难度预测上比前沿通用模型更准。",
+            "系统可以生成候选定理、选出最有趣者并迭代扩展自增长数学库。"
+          ],
+          "significance": "把“什么数学值得做”变成可计算的排序信号，是让机器参与数学发现而非仅做证明的关键一步。",
+          "takeaway": "用“证明长度/命题长度”作为有趣的量化指标，与 Mathlib 的重叠从 91.9% 降到 30.6%。",
+          "keyExperiment": "按有趣度优化后，生成定理与 Mathlib 的重叠由 91.9% 降至 30.6%。",
+          "arxivUrl": "https://arxiv.org/abs/2609.28603",
+          "pdfUrl": "https://arxiv.org/pdf/2609.28603.pdf",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "An Exploratory Ablation of a Small MLA--SSM Hybrid Language Model",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-25",
+          "authors": "Christos Koutsiaris",
+          "institutions": "机构未标注",
+          "abstract": "本文报告一项探索性、单随机种子的消融实验，对象是 TALH——一个仅解码器语言模型，并行走多头潜在注意力（MLA）与一条自定义的循环状态空间（SSM）分支。五个变体的每 token 估计激活参数为 1.17 亿至 2.17 亿，均在 FineWeb 采样子集上从零训练相同的优化步数与 token 量。在该设定下，去掉 SSM 分支带来的验证困惑度退化最大（仅 MLA 为 PPL 315），而去掉 MLA 的影响小得多（仅 SSM 为 PPL 239）。稠密 FFN 混合取得 PPL 231，被测的 top-2 三值 MoE 混合为 240，但后者峰值训练显存多占 3.87 GB。作者还保留了一个初步的 Apple M3 计时观察：仅 MLA 在 512–2048 的 prompt 长度区间首 token 时延曲线最平坦，但稠密 Transformer 绝对速度更快。",
+          "contributions": [
+            "给出 TALH 的完整消融：并行 MLA 与自定义循环 SSM 分支在 1.17–2.17 亿激活参数区间逐项拆解。",
+            "量化了各分支的贡献差异：移除 SSM 的困惑度退化远大于移除 MLA。",
+            "对比稠密 FFN 与 top-2 三值 MoE 混合的精度与训练显存，并附初步 Apple M3 首 token 时延曲线。"
+          ],
+          "conclusions": [
+            "在该小规模设定下 SSM 分支比 MLA 更难被替代，而 MoE 混合的显存优势与精度代价需要一起权衡。",
+            "结果受单种子、参数不匹配与评测流可能重叠等限制，只支持实现层面的假设，而非关于 MLA/SSM/MoE 的一般结论。"
+          ],
+          "experiments": [
+            "仅 MLA 变体验证困惑度 315，仅 SSM 变体 239，说明移除 SSM 退化更严重。",
+            "稠密 FFN 混合 PPL 231，top-2 三值 MoE 混合 PPL 240，后者峰值训练显存多 3.87 GB。",
+            "Apple M3 上仅 MLA 实现在 512–2048 prompt 长度区间首 token 时延曲线最平坦，但稠密 Transformer 绝对速度更快。"
+          ],
+          "significance": "用一份诚实标注局限性的小模型消融，给 MLA/SSM/MoE 混合架构的设计取舍提供了可复现的参照点。",
+          "takeaway": "小模型消融显示 SSM 分支比 MLA 更难移除，且三值 MoE 混合在当前实现下反而不如稠密 FFN 划算。",
+          "keyExperiment": "仅 MLA 的 PPL 315、仅 SSM 239、稠密 FFN 混合 231、top-2 三值 MoE 240（显存多 3.87 GB）。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29618",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29618.pdf",
+          "index": 9
+        },
+        {
+          "title": "Your Transformer Can Hold Two Thoughts at Once: Evidence of Linear Superposition in LLMs",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-09-25",
+          "authors": "Pavel Tikhonov, Anton Korznikov, Matvey Mikhalchuk, Nikita Dragunov, Temurbek Rahmatullaev, Polina Druzhinina, Anton Razzhigaev, Ivan Oseledets, Elena Tutubalina",
+          "institutions": "Skoltech, AIRI, Kazan Federal University",
+          "abstract": "尽管大语言模型依赖高度非线性的组件，本文证明它们表现出一种基础性的线性：当来自不同文本流的输入被线性组合时，模型的输出是各自 next-token 分布的叠加。作者将这一现象称为“叠加线性假设”，并提供证据表明叠加是 Transformer 架构的内在属性，而不是训练带来的涌现结果——事实上它随着预训练推进而减弱。不过作者也证明，通过轻量微调可以显著恢复这种线性，明显缩小预测的 next-token 分布与各个单独分布均值之间的差距。最后，论文提出一种引导式解码过程来解耦叠加的输出，使得一次前向传播就能同时生成两条连贯的续写。",
+          "contributions": [
+            "提出并验证“叠加线性假设”：线性组合的输入对应 next-token 分布的叠加，且这是架构固有性质。",
+            "发现该线性随预训练推进而减弱，但可通过轻量微调显著恢复。",
+            "提出引导式解码过程解耦叠加输出，实现单次前向传播生成两条连贯续写。"
+          ],
+          "conclusions": [
+            "Transformer 的线性叠加特性为并行多流生成提供了原理依据，而不必依赖多次前向传播。",
+            "线性程度可被微调调节，意味着这一性质在工程上可以主动增强而非只能被动观察。"
+          ],
+          "experiments": [
+            "验证线性组合输入下的输出等于各单独 next-token 分布的叠加。",
+            "实验显示叠加性随预训练推进而减弱，经轻量微调后显著恢复（与分布均值的差异明显缩小）。",
+            "引导式解码在单次前向传播中同时生成两条连贯续写。"
+          ],
+          "significance": "把“一次前向生成多条输出”从工程技巧提升为架构性质，为并行解码与多假设生成开出新路径。",
+          "takeaway": "Transformer 对线性组合输入呈叠加响应，且线性可被微调恢复，可利用引导解码一次前向生成两条续写。",
+          "keyExperiment": "轻量微调显著恢复叠加线性，引导解码实现单次前向同时生成两条连贯续写。",
+          "arxivUrl": "https://arxiv.org/abs/2609.29845",
+          "pdfUrl": "https://arxiv.org/pdf/2609.29845.pdf",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
