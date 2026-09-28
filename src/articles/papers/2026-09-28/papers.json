@@ -1,0 +1,355 @@
+{
+  "date": "2026-09-28",
+  "title": "2026-09-28 论文精选",
+  "lede": "今日主题仍是长上下文推理的显存与调度瓶颈：KV 缓存被系统性判定为新的 memory wall，agent 服务、多模态 EPD 流水线与 agentic RL 环境基础设施成为优化主战场，模型压缩侧则有 MoE 专家剪枝、PTQ 梯度补偿与对数线性稀疏注意力三条新线索。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 422
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "6 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "2 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "6 篇推荐",
+      "papers": [
+        {
+          "title": "The KV Cache Is the New Memory Wall",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-28",
+          "authors": "Tejinder Singh",
+          "institutions": "机构未标注",
+          "abstract": "长上下文自回归 LLM 推理的真实瓶颈是显存带宽而非算力，且随序列变长，受限资源从模型权重转向 KV 缓存：Llama-3-70B 在 BF16 下权重占 140GB，已超出单卡 80GB HBM，而一条 128k token 序列还要额外占据 42GB。压缩、驱逐、分页、共享与卸载等技术层出不穷，但各论文的工作负载、硬件与质量指标不一致，无法横向比较。本文用统一分析框架梳理该领域：推导算术强度随上下文长度衰减的闭式解，并按 H100、B200、MI300X 的硬件拓扑（含每 die 带宽划分）给出 KV 流量超过权重流量的交叉上下文长度；把文献划分为量化、token 驱逐、KV 分页、前缀缓存、异构分层五类，在同一协议下每类实测一种代表方法。核心结论是三区间结构：交叉点之前权重流量主导，KV 压缩几乎无加速；越过之后 KV 流量主导，各方法以质量换带宽并逼近 roofline 上界。",
+          "contributions": [
+            "提出严格区分“推导结论”与“原文报告结论”的统一评测协议，使跨硬件的 KV 缓存方法首次可比",
+            "推导算术强度随上下文长度衰减的闭式解，并按 H100/B200/MI300X 的带宽拓扑算出 KV 流量反超权重流量的交叉长度",
+            "将文献归为量化、token 驱逐、KV 分页、前缀缓存、异构分层五类，在 128k 上下文、同一协议下各评测一种代表方法",
+            "归纳三区间规律，给出按硬件、上下文长度与质量预算选择压缩域的设计准则"
+          ],
+          "conclusions": [
+            "KV 压缩收益取决于是否越过硬件的交叉长度：未越界时权重流量主导、压缩收益可忽略，越界后逼近 roofline 才有可观加速",
+            "分页与前缀共享无损，但解决的是容量而非带宽；量化与驱逐直接降带宽，代价是 4-bit 以下质量退化加速、驱逐在位置敏感任务上退化不连续",
+            "异构分层把 HBM 带宽墙转化为受 PCIe/NVLink 约束的互连问题"
+          ],
+          "experiments": [
+            "以 Llama-3-70B BF16 量化容量矛盾：权重 140GB 超过单卡 80GB HBM，单条 128k token 序列追加 42GB KV 缓存",
+            "按 H100、B200、MI300X 三种硬件拓扑给出每 die 带宽划分与 KV/权重流量交叉长度（以上下文长度参数化）",
+            "在 128k 上下文、同一协议下对五类域各评测一种代表方法，给出质量-带宽折中随上下文长度的变化"
+          ],
+          "significance": "把长期“各说各话”的 KV 缓存优化统一成可跨硬件、跨方法比较的三区间理论框架，为长上下文推理系统选型提供依据。",
+          "takeaway": "KV 缓存已取代权重成为长上下文推理的带宽瓶颈，是否越过硬件的交叉长度决定压缩手段有没有收益。",
+          "keyExperiment": "对 H100/B200/MI300X 推导 KV 流量反超权重流量的交叉上下文长度，并说明交叉点之下 KV 压缩几乎无加速。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30854",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30854.pdf",
+          "index": 1
+        },
+        {
+          "title": "ActKV: Efficient LLM Agents through Action-Guided KV Cache Management",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.OS",
+          "date": "2026-09-28",
+          "authors": "Zihan Wang, Cheng Tang, Lei Gong, Chao Wang, Wenqi Lou, Teng Wang, Xuehai Zhou",
+          "institutions": "机构未标注",
+          "abstract": "Agent 式 LLM 推理在“观察—推理—动作”的迭代循环中不断累积 KV 缓存，带来巨大显存开销并限制服务吞吐；现有压缩方法只看整体输出质量，忽略了动作在推动任务进展上的不对称重要性。作者提出 ActKV，首个面向 agentic 推理的 KV 压缩框架，把压缩准则定义为“对动作生成的贡献”，优先保证动作质量。它包含三部分：(i) 动作导向的 KV 驱逐，利用动作访问模式的稳定性保留对后续动作关键的条目；(ii) 置信度驱动的自适应预算分配，用模型自身置信度适配变化中的动作关键显存需求；(iii) 页感知压缩管理，把压缩抽象为三种原语并配套定制 kernel 以获得实际吞吐收益。在长轨迹任务上，ActKV 仅用 FullKV 峰值 KV 显存的 25.98% 即保留其平均 98.53% 的准确率，token 吞吐与任务吞吐分别是 FullKV 的 3.97 倍和 3.58 倍。",
+          "contributions": [
+            "首个面向 agentic LLM 推理的 KV 压缩框架，把压缩权重从“输出质量”改为“对动作生成的贡献”",
+            "动作导向驱逐策略利用稳定的动作访问模式，在压缩下维持任务推进的可靠性",
+            "置信度驱动的自适应预算分配，随动作关键显存需求动态调整压缩预算",
+            "页感知压缩管理把压缩规范为三种原语并提供定制 kernel，把显存节省落地为真实吞吐收益"
+          ],
+          "conclusions": [
+            "以动作贡献为准的压缩准则可在极端压缩下保持任务成功率，而非只优化整体输出相似度",
+            "自适应预算与页感知实现结合，才能把省下的显存转化为实际吞吐提升"
+          ],
+          "experiments": [
+            "长轨迹 agent 任务上仅用 FullKV 峰值 KV 显存的 25.98%，保留其平均 98.53% 的准确率",
+            "token 吞吐达 FullKV 的 3.97×，任务吞吐达 3.58×",
+            "与既有 KV 压缩方法相比取得该场景最优表现"
+          ],
+          "significance": "为 agent 场景的 KV 缓存管理提出“按动作价值分配显存”的新准则，同时守住任务成功率与服务吞吐。",
+          "takeaway": "Agent 推理的 KV 压缩应只保对动作关键的条目，能在 1/4 显存下维持 98.5% 的准确率。",
+          "keyExperiment": "仅用 FullKV 峰值 KV 显存的 25.98% 保留其 98.53% 准确率，token/任务吞吐分别提升 3.97×/3.58×。",
+          "arxivUrl": "https://arxiv.org/abs/2609.31395",
+          "pdfUrl": "https://arxiv.org/pdf/2609.31395.pdf",
+          "index": 2
+        },
+        {
+          "title": "EAServe: Encode-Aware Disaggregated Serving for Multimodal Large Language Models",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-28",
+          "authors": "Kunxiong Zhu, Zhihao Shu, Hangyu Zheng, Minghai Qin, Miao Yin, Gagan Agrawal, Wei Niu",
+          "institutions": "University of Oklahoma, University of Texas at Arlington, University of Georgia（据作者公开单位）",
+          "abstract": "文本 LLM 服务已普遍拆分 Prefill 与 Decode 到不同 GPU 池，但多模态 LLM 多出 Encode 阶段，构成 Encode-Prefill-Decode（EPD）三段流水线：每个请求必须先过 Encode，而 Encode GPU 即使在高负载下也严重闲置并饿死下游 worker。EAServe 把 Encode 重新定位为整条流水线的控制点，统一“何时放行下游、prefill 在哪、GPU 如何共享”三个维度：运行时做负载自适应微批、向共驻 prefill worker 的限速部分卸载与动态 SM 划分；配置层用逐阶段容量画像剪掉不平衡分配，再用 TPE 贝叶斯优化精修 GPU 分配、encode 批大小与卸载比。在图像、视频、音频三类 MLLM 上，同等 SLO 下 goodput 比 NVIDIA Dynamo 高至 4.3×、比 vLLM 高至 1.7×。",
+          "contributions": [
+            "指出 MLLM 服务的三阶段 EPD 流水线存在结构性资源失衡：Encode 低利用率反过来饿死下游",
+            "把 Encode 重新定位为流水线控制点，统一“何时放行、何处 prefill、如何共享 GPU”三个维度",
+            "运行时提供负载自适应微批、限速部分卸载与动态 SM 划分，实现可预测的共驻执行",
+            "配置层 HAS 用逐阶段容量画像剪枝加 TPE 贝叶斯优化，在联合空间快速逼近近最优配置"
+          ],
+          "conclusions": [
+            "以 Encode 为控制点可显著缓解 EPD 流水线的资源失衡并提升整体 goodput",
+            "先剪枝后贝叶斯优化，比基线搜索更快达到近最优配置"
+          ],
+          "experiments": [
+            "图像、视频、音频三类 MLLM 上，相同 SLO 约束下 goodput 比 NVIDIA Dynamo 高至 4.3×、比 vLLM 高至 1.7×",
+            "EPD 各阶段 GPU 利用率比基线更均衡且更高",
+            "配置搜索比基线方法更快收敛到近最优配置"
+          ],
+          "significance": "给多模态服务补上了“第三阶段” Encode 的资源调度缺口，把 EPD 流水线当作整体来分配 GPU。",
+          "takeaway": "MLLM 服务应把 Encode 当作流水线控制点而非独立服务，goodput 可提升至 4.3×。",
+          "keyExperiment": "在图像/视频/音频三类 MLLM 上，相同 SLO 下 goodput 比 NVIDIA Dynamo 高至 4.3×、比 vLLM 高至 1.7×。",
+          "arxivUrl": "https://arxiv.org/abs/2609.31551",
+          "pdfUrl": "https://arxiv.org/pdf/2609.31551.pdf",
+          "index": 3
+        },
+        {
+          "title": "DynBranch: Speculative Subgraph Reuse for Dynamic Agentic LLM Serving",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-28",
+          "authors": "Junyi Shen, Noppanat Wadlom, Zhengyuan Su, Yao Lu",
+          "institutions": "机构未标注",
+          "abstract": "Agentic LLM 工作流在运行时才决定执行路径：下游计算或许可预测、或许此前已算过，但在模型或用户解决分支之前无法启动，作者把这种串行化称为“分支解析屏障”。单纯缓存无法掩盖它，因为标识可复用结果的 key 在分支解析前根本未知。DynBranch 的思路是让未解析的分支提前变得可寻址：其稳定坐标允许候选子图在分支解析期间并行执行，已完成的子图结果还能跨后续请求复用；两级控制器只在预期收益高于负载代价时准入这些工作。DynBranch 位于模型 API 边界，无需改动 agent harness 或模型执行引擎。在 Qwen3-32B + 4×H200 的四类 agentic 负载上，平均延迟相比各负载最强的既有系统最多下降 32%，相比无复用下界下降 46–66%，同时保持工作流结果不变；该收益在其它骨干模型家族以及 Qwen3-8B/RTX 4090 消费级部署上同样成立。",
+          "contributions": [
+            "提出并刻画“分支解析屏障”：agentic 工作流的下游计算被尚未解析的分支串行化，缓存无法掩盖",
+            "DynBranch 用未解析分支的稳定坐标让候选子图在解析期间提前执行，并跨请求复用已完成子图",
+            "两级控制器按预期收益与负载价格准入投机工作，避免无效抢占",
+            "位于模型 API 边界，对 agent harness 与推理引擎零改动即可部署"
+          ],
+          "conclusions": [
+            "投机式子图复用能有效压缩 agentic 服务的分支解析延迟，且不改变工作流结果",
+            "收益跨骨干模型家族与消费级显卡成立，方法具备通用性与可移植性"
+          ],
+          "experiments": [
+            "Qwen3-32B + 4×H200、四类 agentic 负载：平均延迟相比各负载最强基线最多降 32%",
+            "相比无复用下界延迟下降 46–66%",
+            "在 Qwen3-8B / RTX 4090 消费级部署上收益依旧成立"
+          ],
+          "significance": "把 agent 服务里被分支阻塞的算力重新利用起来，且不改动上游 harness，是可直接落地的推理侧优化。",
+          "takeaway": "让未解析分支提前可寻址，agentic 服务平均延迟最多降 32%，且不改变工作流结果。",
+          "keyExperiment": "Qwen3-32B 4×H200 上平均延迟较最强基线降 32%、较无复用下界降 46–66%。",
+          "arxivUrl": "https://arxiv.org/abs/2609.31047",
+          "pdfUrl": "https://arxiv.org/pdf/2609.31047.pdf",
+          "index": 4
+        },
+        {
+          "title": "Communication-Aware Model Distributed Inference via Latent Representation Compression",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-28",
+          "authors": "Peyman Gholami, Theodoros-Thirimachos Davarakis, Teng Li, Miquel Sirera Perelló, Salil Reddy, Ayberk Yarkın Yıldız, Anish Arora, Atilla Eryilmaz, Stratis Ioannidis, Chengzhang Li, Hulya Seferoglu, Ness Shroff",
+          "institutions": "Ohio State University, University of Illinois Chicago（据作者公开单位）",
+          "abstract": "论文研究资源受限边缘资源上分布式模型推理的优化，核心是控制中间隐表示的压缩程度，在满足严格 QoS 吞吐目标的前提下权衡模型精度与通信开销。在已知信道状态信息（CSI）的场景下，作者给出单任务闭式最优解，并把多任务问题化为每链路注水式（water-filling）策略的凸优化；对于信道不可预测的环境，进一步提出只依赖因果信道估计的随机对偶下降算法，用 Lyapunov 分析证明其严格满足长期时延约束且最优性差距有界。该框架为动态、资源受限的分布式流水线 AI 任务提供了可扩展的性能最大化方案，并用仿真与真实边缘设备实验验证了有效性。",
+          "contributions": [
+            "把分布式推理的精度-通信权衡形式化为隐表示压缩率的联合优化问题",
+            "已知 CSI 时给出单任务闭式解，并把多任务问题化简为每链路注水策略的凸优化程序",
+            "提出仅依赖因果信道估计的随机对偶下降算法，应对不可预测的无线环境",
+            "用 Lyapunov 分析证明长期时延约束严格满足、最优性差距有界"
+          ],
+          "conclusions": [
+            "按链路自适应压缩中间隐表示，可在满足 QoS 的前提下最大化有效吞吐",
+            "仅用因果估计的在线算法能同时守住长期时延约束并保持有界的最优性差距"
+          ],
+          "experiments": [
+            "已知 CSI 场景下与基线对比，验证注水式分配在精度-通信折中上更优",
+            "随机对偶下降算法在不可预测信道下满足长期时延约束",
+            "真实边缘设备实验验证框架的可行性与鲁棒性"
+          ],
+          "significance": "给流水线式分布式推理的通信开销控制提供了带理论保证的“压缩多少”答案。",
+          "takeaway": "中间隐表示的压缩率应按链路信道自适应选择，用注水式分配换取精度-通信最优折中。",
+          "keyExperiment": "推导出多任务问题的每链路注水式凸优化解，并在真实边缘设备上验证长期时延约束成立。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30413",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30413.pdf",
+          "index": 5
+        },
+        {
+          "title": "WeEnv: The Environment for Agentic Reinforcement Learning at WeChat",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-28",
+          "authors": "Yang Yu, Jing Lei, Shaoxun Zeng, Xinyu Gao, Jindi Shi, Ci Lei, Junjie Zhang",
+          "institutions": "Tencent WeChat（论文明确部署于微信 agentic RL）",
+          "abstract": "Agentic RL 与传统 RL 的关键差异在于每个任务都要在复杂环境（虚拟机或容器）内执行，作者发现这带来沉重的“环境税”：迭代时间中很大一部分花在环境而非学习本身，根源是缺少覆盖全生命周期的环境管理方案。微信提出的 WeEnv 覆盖打包、初始化与供给三个阶段：把组件打包为可独立发布的层组，初始化时组合，从而更新一个组件只需重新发布一个小层组而非所有包含它的产物；为加速初始化，环境瞬时启动、内容按需拉取；执行期间按观测到的使用量弹性调整每个环境的 CPU 与内存配额。相比 E2B、Docker 与 AgentENV，WeEnv 把初始化时间缩短 5.6–14.2 倍，并把初始化占迭代时间的比例从最高 53.4% 压到 9.1%，已部署在微信的 agentic RL 生产中。",
+          "contributions": [
+            "量化 agentic RL 的“环境税”：环境管理占迭代时间最高 53.4%，根因是缺少全生命周期方案",
+            "用可独立发布的层组实现组件级增量发布，更新一个组件无需重建全部包含它的产物",
+            "环境瞬时启动加内容按需拉取，大幅压缩环境初始化时间",
+            "执行期按观测用量弹性伸缩每个环境的 CPU/内存配额以匹配变化的需求"
+          ],
+          "conclusions": [
+            "全生命周期环境管理能把环境税从迭代时间的主要成分压到约 9%，直接提升 RL 迭代效率",
+            "该方案已在生产规模的 agentic RL 集群中验证可部署，而非仅停留在原型"
+          ],
+          "experiments": [
+            "环境初始化时间相比 E2B、Docker、AgentENV 缩短 5.6–14.2×",
+            "初始化占迭代时间的比例从最高 53.4% 降至 9.1%",
+            "已在微信的 agentic RL 生产环境中部署运行"
+          ],
+          "significance": "把 agentic RL 的训练瓶颈从算法侧拉回环境基础设施侧，并给出经过生产验证的解法。",
+          "takeaway": "Agentic RL 的瓶颈常是环境初始化而非学习本身，WeEnv 把环境税压到 9.1%。",
+          "keyExperiment": "初始化时间比 E2B/Docker/AgentENV 快 5.6–14.2×，初始化占迭代时间比例由 53.4% 降至 9.1%。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30766",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30766.pdf",
+          "index": 6
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "RAZOR: Pruning Replaceable Experts in LLMs",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-28",
+          "authors": "Mingyang Song, Mao Zheng",
+          "institutions": "机构未标注",
+          "abstract": "MoE 模型每个 token 只激活少数专家，却要存下整个专家池，专家剪枝可降低存储负担；在固定剪枝预算下，目标是尽量保持原模型的输出分布。但专家的使用率或贡献幅度本身并不决定删除损害——关键是存活计算能否替代其功能。作者提出免训练的 RAZOR，用“共识残差”（专家输出相对原始加权混合的偏差）衡量功能可替代性：在固定层输入处的精确单删恒等式考虑存活者重新归一化与路由器补位，给出可跨校准 token 聚合的局部分数，无需梯度或恢复训练即可按预算剪枝。在 GLM-4.7-Flash、Qwen3.6-35B-A3B、DeepSeek-V4-Flash-0731 与 Hy3 上按 25%/50% 移除专家，RAZOR 在全部 8 个设置中取得评测方法里最高的九任务宏平均；在两个可对齐 REAP 基准的骨干上超出 REAP 2.12–5.59 分，并在全部 36 组配对任务比较中取胜。",
+          "contributions": [
+            "指出专家的使用率或贡献幅度不能决定删除损害，关键判据是存活计算的“功能可替代性”",
+            "提出以共识残差（专家输出偏离原始加权混合的程度）为核心的免训练评分方法",
+            "给出固定层输入处的精确单删恒等式，正确计入存活者重新归一化与路由器补位，无需梯度与恢复训练",
+            "跨校准 token 聚合局部分数，支持给定预算下的一次性剪枝"
+          ],
+          "conclusions": [
+            "功能可替代性比使用率更能预测剪枝损害，RAZOR 在全部 8 个模型-预算设置中均为最优",
+            "任务保留与预测保真度并不能保证生成稳定性：Qwen3.6-35B-A3B 的响应在多样性、格式与终止行为上仍出现变化"
+          ],
+          "experiments": [
+            "GLM-4.7-Flash、Qwen3.6-35B-A3B、DeepSeek-V4-Flash-0731、Hy3 四种骨干 × 25%/50% 移除，8 个设置九任务宏平均全部第一",
+            "与 REAP 对齐的两个骨干上高出 2.12–5.59 分，36 组配对任务比较全胜",
+            "在 4 组对齐设置中反向 KL 均低于 REAP"
+          ],
+          "significance": "把 MoE 专家剪枝的判据从“谁被用得多”改为“谁可以被替代”，免训练即可按预算剪枝并保持输出分布。",
+          "takeaway": "专家该不该删取决于存活计算能否替代它，RAZOR 免训练剪枝在 8 个设置中全胜 REAP。",
+          "keyExperiment": "四种骨干 × 25%/50% 剪枝共 8 个设置九任务宏平均全部第一，对 REAP 领先 2.12–5.59 分、36 组配对任务全胜。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30465",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30465.pdf",
+          "index": 7
+        },
+        {
+          "title": "G$^2$PTQ: Improving LLM Post-Training Quantization with Generalized Gradient Compensation",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-09-28",
+          "authors": "Ruikang Liu, Haoli Bai, Yuxuan Sun, Qian Zhang, Wenzheng Cai, Yanqi Hao, Feiyu Wang, Weidong Zhong, Zhuang Wang, Tong Yang, Xiangsheng Zhou",
+          "institutions": "Huawei Noah's Ark Lab 等（据作者公开单位）",
+          "abstract": "训练后量化（PTQ）是降低 LLM 显存与计算开销的常用手段，GPTQ 系列已成事实标准，但存在两类互补缺陷：局部逐层目标缺少全局监督，而带全局目标的方法往往在开始时固定 Hessian 估计并忽略一阶梯度，导致指导信息随量化推进而陈旧。论文提出 G²PTQ，一个在全局监督、块级优化目标下同时利用一阶与二阶信息的统一 PTQ 框架：在量化每个 Transformer 块之前刷新梯度与 Hessian 估计，避免既有全局方法的陈旧问题；为稳定精确的一阶补偿，引入信赖域缩放机制动态约束梯度步长以防权重更新爆炸；并给出块级 Hessian 近似与精确梯度补偿的高效实现。在多种模型家族与比特宽度上，G²PTQ 与全精度模型的对齐更好，优于现有最优基线，代码已开源。",
+          "contributions": [
+            "指出 GPTQ 类方法的两类缺陷：逐层目标缺全局监督、全局目标固定 Hessian 且忽略一阶梯度导致指导陈旧",
+            "在全局监督的块级目标下同时利用一阶与二阶信息，量化每个 Transformer 块前刷新梯度与 Hessian",
+            "提出信赖域缩放机制动态限制梯度步长，稳定精确的一阶补偿",
+            "给出块级 Hessian 近似与精确梯度补偿的高效实现并开源代码"
+          ],
+          "conclusions": [
+            "刷新梯度与 Hessian 能消除既有全局量化方法的指导陈旧问题，使量化模型与全精度模型对齐更好",
+            "一阶补偿必须配合信赖域缩放才稳定可用，否则权重更新会爆炸"
+          ],
+          "experiments": [
+            "多种模型家族与比特宽度上均优于现有最优基线，与全精度模型对齐更好",
+            "消融显示梯度/Hessian 刷新与信赖域缩放各自带来增益",
+            "提供高效块级实现并开源代码"
+          ],
+          "significance": "把 PTQ 的“全局监督”与“一阶梯度补偿”结合成可稳定训练的块级框架，量化误差进一步收敛。",
+          "takeaway": "量化前刷新梯度与 Hessian、并用信赖域限制一阶步长，是提升 PTQ 对齐度的关键。",
+          "keyExperiment": "在多种模型家族与比特宽度上全面优于 SOTA 基线，且开源高效块级实现。",
+          "arxivUrl": "https://arxiv.org/abs/2609.31009",
+          "pdfUrl": "https://arxiv.org/pdf/2609.31009.pdf",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "Block Sparse Attention with Log-Linear Complexity",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-28",
+          "authors": "Bohao Tang, Zhen Qin, Yuqi Pan, Zheng Li, Pengfei Liu",
+          "institutions": "机构未标注",
+          "abstract": "把语言模型扩展到长上下文受限于自注意力的二次复杂度。块稀疏注意力是高效替代方案，但“选哪些块保留”本身成为瓶颈：常规块选择需要对所有 query-block 对打分，复杂度依旧是序列长度的二次。论文提出 PISA，用金字塔式 Top-K 选择把整体复杂度降到 O(N log N)：先通过池化构建由粗到细的 key 层级（共 O(log N) 层），从最粗层开始，每层只在有限候选集上做 LogSumExp 打分以选出进入下一细层级的候选，直至最细层。作者还实现了面向训练与推理的硬件感知 Triton kernel，把层级路由与 LogSumExp 打分融合，无需物化完整 query-key 打分矩阵。语言建模任务上，方法在常识推理等基准与基线性能相当，在检索类任务上表现更好。",
+          "contributions": [
+            "指出现有块稀疏注意力的块选择仍需对所有 query-block 对打分，复杂度依旧二次",
+            "提出金字塔 Top-K 选择：由粗到细的 key 层级配合逐层 LogSumExp 打分，整体复杂度 O(N log N)",
+            "实现融合层级路由与 LogSumExp 打分的硬件感知 Triton kernel，无需物化 query-key 打分矩阵",
+            "在训练与推理两个阶段均可用，并在常识推理与检索任务上验证"
+          ],
+          "conclusions": [
+            "分层渐进筛选把块选择成本从二次降到对数线性，同时保持建模质量",
+            "不物化完整打分矩阵的融合 kernel 使方法可同时用于训练与推理，而非仅做推理期近似"
+          ],
+          "experiments": [
+            "语言建模基准（常识推理）上与基线性能相当",
+            "检索类任务上优于基线，显示稀疏块选择对检索型长上下文更友好",
+            "复杂度由 O(N²) 降至 O(N log N)，并由 Triton kernel 实现落地"
+          ],
+          "significance": "把长上下文注意力的成本从“注意力本身”进一步压到“块选择”这一步，让块稀疏真正具备对数线性扩展性。",
+          "takeaway": "块稀疏注意力的瓶颈在选块，金字塔 Top-K 把选块降到 O(N log N) 并用 Triton 融合落地。",
+          "keyExperiment": "整体复杂度从二次降到 O(N log N)，常识推理持平基线而检索任务更好。",
+          "arxivUrl": "https://arxiv.org/abs/2609.31093",
+          "pdfUrl": "https://arxiv.org/pdf/2609.31093.pdf",
+          "index": 9
+        },
+        {
+          "title": "Job Class Thermal Intent Aware Liquid Cooling Allocation for AI Data Centers",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-28",
+          "authors": "Krishna Chaitanya Sunkara",
+          "institutions": "机构未标注",
+          "abstract": "GPU 密集的 AI 数据中心必须依靠液冷，因为风冷已无法在该功率密度下排热；但冷却回路对即将运行的负载一无所知，只能等传感器发现温度攀升后才加大流量，这一滞后可达 30–50 秒。作者提出 Job-Class Thermal Intent（JCTI）：调度器本就知道任务即将到来及其类别，JCTI 把这些信息直接喂给冷却控制器，使其在热量出现之前预先调节冷却液。作者从 MLPerf GPU 功耗轨迹中提取各类任务的散热特征，并用 Alibaba 集群数据校准到达模式。在 120 组配对蒙特卡洛试验中，相比 PI 控制器，热违规减少 56.4%、累积超调削减 60.2%。随着 AI 数据中心迈向吉瓦级电网负载，热感知调度可降低功率突变冲击并改善电网侧负载预测——JCTI 把长期各自为政的冷却与调度两套系统接了起来。",
+          "contributions": [
+            "指出冷却回路对即将运行的任务类别“盲视”，存在 30–50 秒的反应滞后窗口",
+            "提出 JCTI：把调度器已知的任务类别及其散热特征作为前馈信号送给冷却控制器，提前调节冷却液",
+            "从 MLPerf GPU 功耗轨迹提取各任务类散热签名，并用 Alibaba 集群数据校准到达模式",
+            "用 120 组配对蒙特卡洛试验评估，并讨论吉瓦级数据中心下与电网负载预测的耦合"
+          ],
+          "conclusions": [
+            "调度侧的热意图前馈能显著减少热违规与累积超调，弥补冷却回路的固有滞后",
+            "冷却与调度长期割裂，打通两者对电网侧负载预测与需求平滑同样有价值"
+          ],
+          "experiments": [
+            "120 组配对蒙特卡洛试验：热违规比 PI 回路减少 56.4%，累积超调削减 60.2%",
+            "任务类散热签名来自 MLPerf GPU 功耗轨迹，到达模式用 Alibaba 集群数据校准",
+            "对照基线为数据中心常用的 PI 控制回路"
+          ],
+          "significance": "揭示冷却系统与调度器之间的信息鸿沟，并给出前馈式热感知调度的量化收益。",
+          "takeaway": "让调度器把任务类别提前告诉冷却系统，可把数据中心热违规减少一半以上。",
+          "keyExperiment": "120 组配对蒙特卡洛试验中热违规减少 56.4%、累积超调削减 60.2%（对照 PI 回路）。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30785",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30785.pdf",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
