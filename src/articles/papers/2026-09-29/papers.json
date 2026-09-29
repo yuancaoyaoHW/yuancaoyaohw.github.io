@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-29",
+  "title": "2026-09-29 论文精选",
+  "lede": "今日主线是“让长上下文与变长负载更便宜”：KV 缓存的按层有界恢复与淘汰打分、亿级用户行为的统一压缩、端侧三层推理路由与多轴 ragged 张量抽象，配合推理数据自造与调度侧的预训练+离线适配。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 412
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "CacheReforge: Bounded Recovery for Stale KV Caches under Evolving Adapters",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-28",
+          "authors": "Yuhang Cao, Yanzhou Mu, Chunrong Fang, Zhenyu Chen",
+          "institutions": "南京大学",
+          "abstract": "大模型依赖 KV 缓存减少长上下文与交互场景中的重复 prefill，但当轻量适配器（如持续 LoRA 更新）不断演进时，缓存里的状态属于旧版本，直接复用会让输出偏离当前的适配器行为，而把受影响后缀整段重算代价又太高。作者要回答的是：怎样用最小的重算量恢复“当前适配器”的行为。现有系统只跟踪 token、上下文或稳定的适配器身份，既不表示跨适配器版本的缓存，也不区分依赖深度与行为恢复所需的重算范围。CacheReforge 把陈旧 KV 缓存表示为逐层混合版本对象，结合逐层适配器锚点、标定敏感度、累积漂移与可执行重启边界，在直接复用、有界重算与整段后缀恢复之间选择，并以累积尾部影响刻画何时有界恢复仍能保持当前模型行为。",
+          "contributions": [
+            "把陈旧 KV 缓存显式建模为逐层“混合版本”对象，而不是当成整体失效的一坨缓存。",
+            "区分依赖深度与功能重算视界，用逐层适配器锚点、标定敏感度与累积漂移决定每层是直接复用、有界重算还是整段恢复。",
+            "用累积尾部影响给出“有界恢复仍保持当前模型行为”的判据，并落到可执行的重启边界上。"
+          ],
+          "conclusions": [
+            "只要按版本与敏感度做有界重算，就能以很小的重算量把输出拉回当前适配器行为，没必要整段重算。",
+            "陈旧复用造成的失真是可度量、可局部修复的，KV 缓存的主要收益可以在适配器演进场景下保留下来。"
+          ],
+          "experiments": [
+            "在 Qwen2.5-1.5B 与 Qwen2.5-7B 上配合持续 LoRA 更新、16K 的 HotpotQA 与 2WikiMQA 负载：相对直接复用陈旧缓存，平均 KL 散度下降 92.4%。",
+            "达成上述效果只需重算 5.44% 的层。",
+            "缓存维护时间相比整段全新 prefill 减少 93.2%。"
+          ],
+          "significance": "让“适配器持续迭代”的生产环境不再在缓存复用与输出保真之间二选一。",
+          "takeaway": "把陈旧 KV 缓存当逐层混合版本对象，只重算必要的那几层就能恢复当前适配器行为。",
+          "keyExperiment": "仅重算 5.44% 的层，平均 KL 散度比陈旧复用降低 92.4%，维护时间比全量 prefill 少 93.2%。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30884",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30884.pdf",
+          "index": 1
+        },
+        {
+          "title": "Beyond Mean Attention: Diversity-Aware, Layer-Wise Scoring for KV Cache Eviction",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-09-28",
+          "authors": "Tianfang Xie, Wei Zhu",
+          "institutions": "机构未标注",
+          "abstract": "SnapKV、PyramidKV 等 KV 缓存淘汰方法只用小观测窗口内的平均注意力给 token 打分排序。本文研究一个统一评分：注意力均值加上窗口内查询间的注意力离散度，再减去与已选 token 的冗余度。冗余项系数取负时，该评分等价于最大边际相关性（MMR）式的“相关性—多样性”权衡，而且不需要额外前向计算。作者进一步检验这种权衡是否应随层深变化，比较固定全局系数与三段式、二次型系数曲线，并只在开发集上用 sinh 重参数化搜索这些深度曲线。为避免把调参噪声误读成层间结构，他们把所有被接受的搜索状态重放到留出测试集上复核。",
+          "contributions": [
+            "提出统一的逐 token 淘汰评分，把注意力离散度与冗余惩罚并入平均注意力基线，且零额外前向开销。",
+            "系统检验深度相关系数是否存在真实结构，用 sinh 重参数化只搜索深度曲线以控制搜索空间。",
+            "用“重放所有被接受搜索状态到留出测试集”的方式，区分真实层间结构与调参噪声。"
+          ],
+          "conclusions": [
+            "单个全局多样性常数就能在多数数据集上稳定带来增益，收益主要来自冗余惩罚项。",
+            "大多数数据集上找不到可检测的层间结构；只有段落检索任务存在显著的中层符号翻转，即中层反而应奖励相似性。"
+          ],
+          "experiments": [
+            "Mistral-7B、每层 64 条预算、全部 16 个英文 LongBench 数据集：13 个数据集提升，宏平均 +1.1。",
+            "预算降到 32 时增益仍在，升到 128 时收窄。",
+            "段落检索任务上中层符号翻转在预算 64 时比基线 +9.6；不重新调参直接迁移到预算 128 时，比全局常数高 13.2。"
+          ],
+          "significance": "把 KV 淘汰从“只看平均注意力”推进到带多样性惩罚、且验证过层间结构的打分设计。",
+          "takeaway": "给淘汰评分加一项冗余惩罚成本极低，但收益要按任务验证——层间结构只在段落检索上真实存在。",
+          "keyExperiment": "16 个 LongBench 数据集上 13 个提升（宏平均 +1.1）；段落检索任务中层符号翻转带来 +9.6。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30738",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30738.pdf",
+          "index": 2
+        },
+        {
+          "title": "KuaFu: Compressing Long User Behavior into Understanding at Billion Scale",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.IR",
+          "date": "2026-09-28",
+          "authors": "Jiahao Hui, Lin Zhu, Yishen Hu, Jingdong Shu, Zetai Jiang 等",
+          "institutions": "腾讯（Tencent）",
+          "abstract": "对话式 agent、生成式推荐与个性化广告都依赖同一件事：从原始行为中理解每个用户。工业界普遍按任务切分，为每个任务从全量历史里抽相关子序列再训专用模型，这在生产上撞到两个瓶颈：一是即使过滤后单任务序列仍极长，内容兴趣摘要要读数百条 item，序列化成文本可达数万 token；二是画像需例行刷新，每周十亿用户、聚合约 100K QPM，固定 GPU 预算下形成硬吞吐下限。压缩因此成为必需，但截断或粗粒度压缩会静默扭曲画像，产生捏造、遗漏、日期错配、逻辑断裂四类幻觉，而压缩表示本身无法直接评估，只能在下游指标上表现为弥散式退化。KuaFu 以“单条行为 item”为最小单元，用两轴投影器把每条 item 压到 2-4 个 token、宽度 128-256，配合四阶段保真训练与分层中间评估。",
+          "contributions": [
+            "以行为 item 为最小压缩单元的两轴投影器：单条行为压到 2-4 个 token（长度约 10 倍、宽度约 20 倍，缓存从 10KB 降到 0.5KB）。",
+            "四阶段保真导向训练加分层中间评估，直接评估压缩表示本身，绕开只能在业务指标上看弥散退化的困境。",
+            "归纳捏造、遗漏、日期错配、逻辑断裂四类压缩幻觉，作为压缩器设计的显式约束。"
+          ],
+          "conclusions": [
+            "压缩后的表示能在保真前提下替代未压缩的单任务生产模型，同时大幅提升吞吐。",
+            "统一压缩层比“每个任务各训一个专用模型”更省资源，也更容易评估与迭代。"
+          ],
+          "experiments": [
+            "四个生产画像任务在五项头条指标上全部持平或超过未压缩的单任务生产模型，单 GPU 吞吐提升 37%-350%，共节省 190 张 GPU。",
+            "同压缩率下几乎全面优于既有压缩器，域外 MRQA 最多高 17.7 EM；RecBench 上 4B 模型比 8B 版本高 1.90 分。",
+            "已在腾讯广告与推荐平台运行十个月，整体 GMV 提升 1.37%。"
+          ],
+          "significance": "把“用户画像压缩”从按任务截断的工程惯例，做成可评估、可复用的统一压缩层。",
+          "takeaway": "用 2-4 个 token 表示一条行为，就能在保真前提下省下百张级 GPU 并提升推荐 GMV。",
+          "keyExperiment": "线上部署十个月：单 GPU 吞吐提升 37%-350%，节省 190 张 GPU，整体 GMV +1.37%。",
+          "arxivUrl": "https://arxiv.org/abs/2609.31045",
+          "pdfUrl": "https://arxiv.org/pdf/2609.31045.pdf",
+          "index": 3
+        },
+        {
+          "title": "Quantizing Looped Transformers: Feedback Exposure and Calibration Blindness",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-28",
+          "authors": "Nux Li",
+          "institutions": "机构未标注",
+          "abstract": "循环（looped）Transformer 在多次迭代中复用同一批权重，低比特量化因此格外有吸引力，但标准后训练量化在它上面有两种不同的失效模式。作者在 Huginn-3.5B 上发现，逐通道 INT4 主要在非残差的循环入口适配器处失效，而量化残差主干反而伤害小得多。他们把“量化层扰动循环状态却没有恒等通路、误差被后续步反馈回来”的现象称为反馈暴露，并在线性滤波器与 Mamba 状态空间模型上验证它在 Transformer 之外同样存在。分组 INT4 还暴露第二类失效——标定盲区：单步 GPTQ 基线只用第 0 步激活构建 Hessian，导致循环后期才用到的输入方向几乎没有权重。",
+          "contributions": [
+            "提出“反馈暴露”：量化误差经无恒等通路的循环入口进入状态，并被后续循环步放大，该现象跨线性滤波器与 Mamba 同样成立。",
+            "提出“标定盲区”：单步构建 Hessian 的 GPTQ 只覆盖第 0 步激活，系统性低估循环后期才激活的输入方向。",
+            "给出累积 Hessian 的 GPTQ 变体，同时针对“误差从哪进入循环”与“标定看到哪些状态”两个问题。"
+          ],
+          "conclusions": [
+            "循环模型的量化必须分开回答两件事：误差在何处进入循环、标定覆盖了哪些循环状态。",
+            "笼统地说“低比特伤害循环模型”无法指导实践，瓶颈位置与标定覆盖范围才决定成败。"
+          ],
+          "experiments": [
+            "七个循环架构共九个 checkpoint：单步 GPTQ 在其中五个 checkpoint 的主任务指标上还不如最朴素的四舍五入（RTN）。",
+            "累积循环步 Hessian 的 GPTQ 在全部九个 checkpoint 上同时优于单步 GPTQ 与 RTN，并在 Huginn 上恢复到 bf16 级精度。",
+            "Huginn-3.5B 上逐通道 INT4 的伤害集中在循环入口适配器，量化残差主干的代价显著更小。"
+          ],
+          "significance": "为循环/复用权重的模型给出可操作的 PTQ 诊断：先定位误差入口，再修标定的时间覆盖。",
+          "takeaway": "循环模型做 INT4 先别怪“低比特”，瓶颈常在无恒等通路的循环入口与只看第 0 步的标定。",
+          "keyExperiment": "九个 checkpoint 上单步 GPTQ 有五个不如 RTN；累积 Hessian 的 GPTQ 在九个上全部超过两者。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30820",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30820.pdf",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Self-Play Search Distillation for Large Language Model Reasoning",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-28",
+          "authors": "Lorenzo Molfetta, Wai-Chung Kwan, Giacomo Frisoni, Luca Ragazzi, Gianluca Moro, Pavlos Vougiouklis, Jeff Z. Pan, Pasquale Minervini",
+          "institutions": "爱丁堡大学（University of Edinburgh）",
+          "abstract": "提升大模型推理能力需要高质量数据，这类数据要能暴露困难决策、竞争性选项及其后果；而数据稀缺的根因是合成数据质量偏低、人工标注成本高。作者提出自博弈搜索蒸馏（SPSD）：让在棋类游戏上训练的类 MuZero 网络自博弈，用可执行环境把“搜索”转成结构化的推理问题。在每个状态上，专家会给出一个首选决策、若干合理备选、对手的合理应手以及价值估计。把这些自博弈搜索记录转成超人类的思维链后，就可以用“环境接地”的监督信号训练语言模型。尽管只用自博弈搜索记录训练，该方法仍能迁移到未见过的数学任务上。",
+          "contributions": [
+            "用可执行博弈环境把自博弈搜索记录转成结构化推理数据，监督信号天然带环境接地与后果信息。",
+            "每个状态同时提供首选决策、合理备选、对手应手与价值估计，从单次搜索里榨出密集决策信号。",
+            "给出仅靠棋类自博弈数据即可向数学推理迁移的免标注数据生产路径。"
+          ],
+          "conclusions": [
+            "自博弈搜索能把“难决策+竞争性选项+后果”写进思维链，比一般合成数据更适合教推理。",
+            "可执行环境是高质量合成数据的关键放大器，无须人工标注即可获得超人类水平的监督。"
+          ],
+          "experiments": [
+            "Qwen3-4B-Base 上，六个数学基准的平均分从 24.1 提升到 36.6。",
+            "同模型在留出棋类游戏上的胜率从 15% 提升到 45%。",
+            "训练数据只来自棋类自博弈搜索记录，却对未见过的数学任务产生迁移收益。"
+          ],
+          "significance": "给出一条免人工标注、由可执行环境自造高质量推理数据的通用配方。",
+          "takeaway": "把棋类自博弈的搜索记录写成思维链，就能用零人工标注的数据换来跨域推理提升。",
+          "keyExperiment": "Qwen3-4B-Base 六个数学基准均值 24.1→36.6，留出棋类胜率 15%→45%。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30936",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30936.pdf",
+          "index": 5
+        },
+        {
+          "title": "PORL: Pretrained Offline Reinforcement Learning for the Job Shop Scheduling Problem",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-28",
+          "authors": "Mateo Toro Diz, Jonathan Hoss, Noah Klarmann",
+          "institutions": "机构未标注",
+          "abstract": "作业车间调度问题（JSSP）是工业优化里的基础组合优化问题。本文提出预训练离线强化学习（PORL）：先用仿真做在线预训练，再在产线自有数据上离线微调。在线交互式 RL 能探索通用调度策略，但依赖仿真环境，容易踩到“仿真到现实”的落差；离线 RL 不与环境交互、直接学历史数据，性能却高度受数据集质量与覆盖度影响。PORL 把两者接起来：先通过在线交互学出通用调度策略，再离线适配到目标分布，并引入基于 KL 散度的策略约束，限制微调时偏离预训练策略的幅度。",
+          "contributions": [
+            "把“仿真在线预训练 + 产线数据离线微调”作为两阶段范式组合起来，兼顾探索能力与真实分布。",
+            "引入 KL 散度的策略约束，给离线微调加上“不许跑太远”的安全边界。",
+            "在含分布漂移的 JSSP 实例上，同时对比启发式、含噪专家与随机行为策略三类数据集。"
+          ],
+          "conclusions": [
+            "预训练策略再做离线适配，比纯离线 RL 与通用调度基线的一致更低最优性间隙。",
+            "离线数据质量越差，PORL 相对纯离线 RL 的优势越大，说明它降低了对数据质量与覆盖度的敏感度。"
+          ],
+          "experiments": [
+            "在带分布漂移的 JSSP 实例上，PORL 的最优性间隙持续低于独立离线 RL 与各项通用调度基线。",
+            "数据集由启发式、含噪专家、随机行为策略生成时，PORL 全部取得更低最优性间隙。",
+            "数据质量下降时 PORL 的优势扩大，体现对离线数据质量的鲁棒性。"
+          ],
+          "significance": "为“不能在线试错”的工业调度场景提供了一条先仿真预训练、再离线安全适配的落地路线。",
+          "takeaway": "先用仿真学通用调度策略、再用 KL 约束离线贴合产线数据，比纯离线 RL 更稳、对差数据更鲁棒。",
+          "keyExperiment": "在含分布漂移的 JSSP 上最优性间隙持续低于独立离线 RL，且离线数据越差优势越大。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30948",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30948.pdf",
+          "index": 6
+        },
+        {
+          "title": "Compress What You See, Not What You Say: Anchored Context Distillation for Latent-Observation Software Engineering Agents",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-28",
+          "authors": "Zhensheng Zou, Guoqing Wang, Dan Hao",
+          "institutions": "北京大学（Peking University）",
+          "abstract": "工具观测占据了软件工程 Agent 的绝大部分上下文，长交互历史因而昂贵。现有上下文压缩方法可能丢掉后续动作需要的信息，而把 Agent 适配到软 token 表示又可能破坏原有行为。为在压缩的同时保住“动作关键信息”与 Agent 行为，作者把 LOHA（Latent Observations, Hard Actions）上下文布局与锚定上下文蒸馏（ACD）结合：LOHA 把较早的工具观测压成软 token，同时保留 Agent 自己的回合与最近 K 条观测的原文，使历史可压缩访问、近期内容可精确访问；ACD 则把基座模型在全文输入下的预测蒸馏到潜表示视图，并让行为锚定在同样的纯文本输入上，从而在“能读潜表示”的同时限制行为漂移。",
+          "contributions": [
+            "LOHA 布局：历史工具观测压成软 token，Agent 自身回合与最近 K 条观测保持原文，兼顾压缩与精确引用。",
+            "锚定上下文蒸馏 ACD：把全文预测蒸馏给潜表示视图，同时用纯文本输入锁定行为，抑制适配带来的漂移。",
+            "在 SWE-bench Verified 与 32K 上下文限制下同时评估解析率、上下文占用与单卡并发吞吐。"
+          ],
+          "conclusions": [
+            "把“看到的观测”压掉、把“说过的话”留全，可以在损失可控的前提下大幅缩短每轮上下文。",
+            "潜表示适配不必以行为漂移为代价，关键是把蒸馏目标锚定在基座模型自身的纯文本行为上。"
+          ],
+          "experiments": [
+            "SWE-bench Verified 上 K=3：Qwen3-4B 每次调用上下文减少 43%，SWE-Master-4B-RL 减少 57%。",
+            "对应解析率为 12.1% 与 21.8%，未压缩基座为 14.5% 与 27.5%；单轮近因扫描在 K=8 时回升到 14.4% 与 23.0%。",
+            "32K token 限制下的 199 实例子集：Qwen3（K=3）解析 21.1%，而同样适配的全文 Agent 仅 11.1%；单卡并发下实例吞吐为全文 Agent 的 1.9 倍。"
+          ],
+          "significance": "证明 SE Agent 的上下文压缩可以在“少看观测”的同时不牺牲动作正确性与部署效率。",
+          "takeaway": "压缩工具观测、保留 Agent 自己的动作原文，再用行为锚定蒸馏，可以省一半上下文还提升单卡吞吐。",
+          "keyExperiment": "K=3 降低 43%-57% 上下文；32K 限制下解析率 21.1% 对全文 Agent 的 11.1%，吞吐 1.9 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2609.31430",
+          "pdfUrl": "https://arxiv.org/pdf/2609.31430.pdf",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Predictive Rolling-Horizon Optimization for Commitment-Aware Model-Parallel Inference under Spatio-Temporal Edge Dynamics",
+          "score": 3.5,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-28",
+          "authors": "Minghui Liwang, Chenxi Xu, Wei Gong, Li Li, Wenbo Zhu, Xinlei Yi, Yuhan Su, Xianbin Wang",
+          "institutions": "机构未标注",
+          "abstract": "在动态边缘系统上做模型并行推理，调度决策不能只看瞬时资源，还要考虑未来的资源争抢与可靠的服务承诺。现有边缘推理方案大多以当前或短期系统状态优化性能指标，没有把“当前分配”与“未来能否兑现承诺”显式耦合起来。作者提出 PROMISE：一个在时空边缘动态下做“承诺感知”模型并行推理的预测式滚动时域框架。它联合刻画随机任务到达、移动性引起的通信波动、隐私感知的模型切分以及负载相关的边缘算力；并引入内生服务决策“承诺完成时间（CCT）”，把服务映射与 CCT 判定联合建模，在兑现承诺与服务收益之间取舍。为处理跨时隙耦合，PROMISE 在自适应时域上预测未来任务到达与计算负载，嵌入确定性等价的状态推演，用进度感知的代理模型评估当前阶段可行映射。",
+          "contributions": [
+            "把“承诺完成时间”作为内生决策变量，与服务映射联合优化，而不是事后统计 SLA。",
+            "用自适应时域的确定性等价推演把未来任务到达与负载嵌入当前决策，只提交第一阶段决策并滚动重优化。",
+            "在统一模型里同时处理随机任务生成、移动性通信波动、隐私感知模型切分与负载相关边缘算力。"
+          ],
+          "conclusions": [
+            "把未来承诺兑现显式耦合进当前调度，比只看瞬时状态的边缘推理调度更稳健。",
+            "滚动时域 + 只提交首阶段决策的重优化方式，能在系统规模与负载动态变化下保持可用性。"
+          ],
+          "experiments": [
+            "在多种系统规模与负载动态下的数值实验显示调度性能稳健，跨负载强度均可保持承诺兑现与服务收益的平衡。",
+            "基于 Raspberry Pi 的实测验证了模型并行边缘推理的工程可行性与关键系统特征。",
+            "框架每轮只提交第一阶段决策、随后用新观测状态重复滚动优化，实现了对时空动态的在线适应。"
+          ],
+          "significance": "把边缘模型并行推理从“看当下”推进到“看承诺兑现”的滚动时域调度。",
+          "takeaway": "边缘推理调度要把未来的承诺兑现算进来，并用滚动时域只固化首阶段决策。",
+          "keyExperiment": "跨系统规模与负载动态的数值实验 + Raspberry Pi 实机验证模型并行边缘推理可行。",
+          "arxivUrl": "https://arxiv.org/abs/2609.31018",
+          "pdfUrl": "https://arxiv.org/pdf/2609.31018.pdf",
+          "index": 8
+        },
+        {
+          "title": "HybridInfer: Thermal-Aware Reinforcement-Learning Tier Routing for On-Device, Edge, and Cloud LLM Inference",
+          "score": 3.5,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-28",
+          "authors": "Simran Koul",
+          "institutions": "机构未标注",
+          "abstract": "端侧小模型推理能保住数据本地、离线可用且没有按次成本，因此只要能力够用就优先选端侧。但它受热约束限制，而作者发现这个约束比“变慢”更尖锐：在旗舰骁龙设备上持续端侧生成会让 GPU 推理运行时失稳，连续几次查询后崩溃或静默卡死。故障根因在现行工具链——移动 GPU 上的 OpenCL kernel 编译与长 prompt prefill——即便设备是凉的也会复现，长生成时最严重。跨端侧、边缘与云的多层路由可以缓解压力，但现有路由器对温度不敏感，且多在仿真或非移动硬件上评估。作者提出 HybridInfer：用手机热余量与查询复杂度估计作为状态，用离线训练的 Q-learning 策略在端侧 Llama 3.2 3B、边缘 Llama 3.1 8B（带检索）与云 GPT-4o 三层间选择，奖励在质量与延迟、成本、热惩罚之间权衡，并额外给端侧执行“本地性加分”。",
+          "contributions": [
+            "揭示移动 GPU 上持续生成的失稳根因：OpenCL kernel 编译与长 prompt prefill，冷却状态下同样复现。",
+            "用热余量与查询复杂度作为状态、离线 Q-learning 做三层路由，在质量/延迟/成本之外显式加温度惩罚。",
+            "指出本地性加分是温度感知路由的前提：去掉它，最优策略会把每一次查询都推给云端。"
+          ],
+          "conclusions": [
+            "端侧优先不是免费的：热约束会先以可靠性故障而非单纯变慢的形式出现，必须由路由策略处理。",
+            "真实硬件上的分层路由赢在延迟、可靠性与覆盖率，而不是单纯的单查询质量。"
+          ],
+          "experiments": [
+            "真实 Android 设备 210 条 prompt 基准上，学习到的路由器质量显著高于两个手调启发式（配对 Wilcoxon，p<0.02），且是所有自适应方案中成本最低的。",
+            "始终走端侧的条件在可服务查询上与路由质量相当，但慢 3 到 6 倍，并在长查询上失败。",
+            "去掉本地性加分后，学到的策略会把所有查询卸载到云端，说明该奖励项是温度感知路由成立的前提。"
+          ],
+          "significance": "首次用真实手机热余量在能力不同的推理层之间做路由，并给出移动端稳定性的具体故障根因。",
+          "takeaway": "手机端持续生成会因热与工具链问题崩掉，出路是用热余量驱动的分层路由而不是硬扛。",
+          "keyExperiment": "210 条真实 prompt：质量显著优于两种手调启发式（p<0.02），成本最低；全端侧慢 3-6 倍且长查询失败。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30270",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30270.pdf",
+          "index": 9
+        },
+        {
+          "title": "DanLing NestedTensor: Composable Multi-Ragged Tensors for Deep Learning",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-09-28",
+          "authors": "Zhiyuan Chen",
+          "institutions": "机构未标注",
+          "abstract": "变长输入在深度学习中很常见，而稠密批处理会按最大长度分配一块共享外壳，把算力浪费在 padding 上；当多个轴都变长时代价成倍放大——显式的成对状态要分配与批大小乘最大长度平方成正比的位置，而不是各样本长度平方之和。打包（packing）能消除这种浪费，但要把打包后的算子组合起来，仍需知道扁平缓冲区不再暴露的逻辑轴与样本边界。作者提出 DanLing NestedTensor：一个把多轴变长结构变成张量自身属性的 PyTorch 张量抽象。打包后的值自带张量化的分区信息与逻辑维序，因此广播会创建变长轴、特征变换会保留变长轴、归约会消耗变长轴；同一套表示能贯穿自动求导以及 eager 与编译执行。",
+          "contributions": [
+            "把多轴变长结构做成张量自身的属性，打包值携带张量化分区与逻辑维序，调用点不必再手工管理偏移。",
+            "广播、特征变换与归约在变长轴上保持语义一致，且同一表示贯穿 autograd、eager 与编译执行。",
+            "让由受支持算子搭起的模型代码自动获得高效的变长计算，无需在每个调用点做打包/解包。"
+          ],
+          "conclusions": [
+            "把 ragged 结构提升为张量语义，可以在不牺牲可组合性的前提下消除 padding 浪费。",
+            "多轴变长（不只是序列长度）带来的内存与算力放大最值得治理，收益随变长程度上升。"
+          ],
+          "experiments": [
+            "A100 上，相对同模式 padding 方案，四种 BERT 规模下几何平均加速 eager 2.74 倍、编译 3.39 倍；四类 FCN 骨干 eager 加速 1.97 倍。",
+            "四层 Pairformer 风格负载用原生 PyTorch kernel 比 padding 参照快 2.40-4.32 倍，覆盖各方形长度区间。",
+            "高变长批上峰值显存从 38.08 GiB 降到 5.41 GiB。"
+          ],
+          "significance": "用张量语义解决变长批处理的 padding 浪费，并把收益推进到多轴 ragged 场景。",
+          "takeaway": "把 ragged 结构做成张量属性，多轴变长负载可拿到 2-4 倍加速与数倍显存下降。",
+          "keyExperiment": "A100 上 BERT 类负载编译模式 3.39 倍加速；高变长批峰值显存 38.08→5.41 GiB。",
+          "arxivUrl": "https://arxiv.org/abs/2609.30379",
+          "pdfUrl": "https://arxiv.org/pdf/2609.30379.pdf",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
