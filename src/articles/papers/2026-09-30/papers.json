@@ -1,0 +1,344 @@
+{
+  "date": "2026-09-30",
+  "title": "2026-09-30 论文精选",
+  "lede": "今日主线是「通信与调度的共用货币」：从 PCIe 集群的 All-to-All 路径规划、生产级动态上下文并行的负载均衡，到 MoE prefill 的异步专家执行与智能体服务的 SLO 打包调度，多数工作都在把等待与不均衡转化为有效计算。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 1864
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "VarioPath: Workload-Aware All-to-All Communication for PCIe GPU Clusters",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-29",
+          "authors": "Yao Fei, Jin Fang, Size Zheng, Gongming Zhao, Hongli Xu, Jiacheng Zhu, Zhijing Xin",
+          "institutions": "University of Science and Technology of China (部分作者)",
+          "abstract": "AlltoAllv 是分布式大模型（尤其 MoE）推理的核心通信原语；PCIe GPU 集群因缺少 NVLink 之类的专用 scale-up 互连，节点内与节点间流量都要穿过 PCIe 层级，并发传输会争抢链路带宽，再叠加流量倾斜与动态需求，使高效 AlltoAllv 调度十分困难，而现有方案要么不适配 PCIe 拓扑，要么调度合成开销过大。本文提出 VarioPath：离线拓扑分析器把无争用的传输模式记录为 AlltoAllv「通道」，并利用拓扑对称性构建紧凑目录以加速搜索；在线调度器把每次调用的通信需求分解到一串通道上，适应快速变化且倾斜的流量，同时保持极低的规划开销。在四个平台（最多 256 张 GPU）上 AlltoAllv 平均比 FAST 快 5.88 倍、比 DeepEP 快 1.72 倍，端到端把 Qwen3 推理延迟最多降低 27.2%。",
+          "contributions": [
+            "把拓扑感知的离线分析与需求感知的在线调度结合，用「无争用通道 + 紧凑目录」把 AlltoAllv 规划从昂贵的整体合成降为低开销的通道分解。",
+            "在线调度器能随流量倾斜与需求波动实时重排传输路径，同时显式建模 PCIe 层级内的链路争用。",
+            "面向无专用互连的 PCIe GPU 集群，填补了现有多数 AlltoAllv 方案偏向 NVLink/InfiniBand 拓扑的空白。"
+          ],
+          "conclusions": [
+            "PCIe 集群的 AlltoAllv 瓶颈是链路争用而非单纯带宽，拓扑对称性可以被压缩成可搜索的小目录。",
+            "低规划开销是实用前提：调度本身必须比它省下的通信时间便宜得多。"
+          ],
+          "experiments": [
+            "四个平台（最多 256 GPU）上 AlltoAllv 平均加速 5.88x vs FAST、1.72x vs DeepEP。",
+            "端到端 Qwen3 推理延迟最多降低 27.2%，Wan2.1 视频生成延迟降低 6.1%。",
+            "在 256 卡规模仍保持收益，说明方案可随集群规模扩展。"
+          ],
+          "significance": "为成本敏感的 PCIe GPU 集群提供了可落地的 AlltoAllv 调度方案，直接改善 MoE 推理的通信瓶颈。",
+          "arxivUrl": "https://arxiv.org/abs/2609.34340",
+          "pdfUrl": "https://arxiv.org/pdf/2609.34340.pdf",
+          "takeaway": "PCIe 集群上 AlltoAllv 用通道分解调度，比 FAST 快 5.88 倍、比 DeepEP 快 1.72 倍。",
+          "keyExperiment": "256 卡 PCIe 集群 AlltoAllv 平均加速 5.88x（vs FAST）/1.72x（vs DeepEP）",
+          "index": 1
+        },
+        {
+          "title": "PackServe: SLO-Aware Request Scheduling for Agentic LLM Serving at Scale",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-29",
+          "authors": "Zhiyuan Tan, Dejiang Zhu, Jingzhe Jiang, Yihao Zheng, Yang Tian, Tao Wang, Minchen Yu",
+          "institutions": "机构未标注",
+          "abstract": "请求调度是大规模智能体 LLM 集群服务的关键挑战：调度器既要保住长共享前缀的 KV cache 复用，又要满足 token 级延迟 SLO，还要压低 GPU 资源占用。现有调度器难以兼顾——请求合并会牺牲缓存局部性、加剧 prefill 与 decode 干扰，反而同时损害 SLO 达成率与资源效率。本文提出 PackServe：用紧凑的白盒模型预测 prefill/decode 干扰下的延迟，据此把请求打包到更少的服务实例上，在满足 SLO 的前提下用延迟余量换取单实例吞吐。在 64 张 NVIDIA H20 上，PackServe 在 30ms 与 50ms TPOT 目标下比最优基线分别少用 16.8% 和 24.6% 的 GPU 小时数；该调度器已部署到超过 1000 张 GPU 的生产集群，相比原生产调度器降低 34.7% 的资源占用。",
+          "contributions": [
+            "把「保缓存复用」「守 token 级 SLO」「省 GPU 资源」放进同一个打包目标，用干扰感知的延迟预测驱动实例级合并。",
+            "提出白盒延迟模型刻画 prefill/decode 干扰，使调度决策可解释、开销低。",
+            "在 64 卡实验与 1000+ 卡生产集群两级验证，是少数同时给出实验与生产数据的智能体服务调度工作。"
+          ],
+          "conclusions": [
+            "延迟余量本身是可交易资源：牺牲部分余量换取更高单实例吞吐可以显著降低总 GPU 成本。",
+            "面向智能体负载的调度必须以 KV cache 复用为中心，而不能只做请求级负载均衡。"
+          ],
+          "experiments": [
+            "64 张 H20 上，30ms/50ms TPOT 目标下比 SOTA 少用 16.8%/24.6% GPU 小时数。",
+            "生产集群（1000+ GPU）上资源占用相比原调度器降低 34.7%。",
+            "两类延迟目标下均达成 SLO，说明节省来自更好的打包而非放宽时延。"
+          ],
+          "significance": "给出智能体 LLM 服务在大规模生产环境下降本的可复制路径，资源节约幅度达三成量级。",
+          "arxivUrl": "https://arxiv.org/abs/2609.33224",
+          "pdfUrl": "https://arxiv.org/pdf/2609.33224.pdf",
+          "takeaway": "用延迟预测把请求打包到更少实例，生产集群 GPU 占用降低 34.7%。",
+          "keyExperiment": "生产集群 1000+ GPU 上资源占用降低 34.7%，64 卡实验节省 16.8%–24.6% GPU 小时",
+          "index": 2
+        },
+        {
+          "title": "HyDra: Demystifying and Taming Dynamic Context Parallelism at Production Scale",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-29",
+          "authors": "Zihao Fan, Yunzhuo Liu, Bo Jiang, Changgang Zheng, Lin Zheng, Ray Ying, Key Zhang",
+          "institutions": "Shanghai Jiao Tong University (部分作者)",
+          "abstract": "长上下文训练中序列长度跨越多个数量级，动态上下文并行（DCP）为每条序列单独分配 CP 度。现有 DCP 系统要么无法扩展，要么在主流模型上表现很差，生产规模下 Megatron-Core（Mcore）DCP 几乎是唯一选择；但它按显存大小确定度数，而注意力计算随长度二次增长，于是相同 token 量下算力并不相等——在某生产 256K 上下文、超过 11K 张 GPU 的训练任务中，各 rank 微批耗时最多相差 5 倍，造成 46% 流水线气泡与 13% 数据并行气泡。本文提出 HyDra：负载驱动的 DCP 系统，调度器把每个 rank 拉向同一负载目标，均衡后又使该目标具有闭式解，并用惰性堆而非全池扫描放置序列；其 CP 引擎在外层浅环中嵌套内层 Ulysses 组，使更大度数同时降低计算与通信。",
+          "contributions": [
+            "用「负载目标 + 闭式解 + 惰性堆」把 DCP 的序列放置与度数选择变成可扩展的在线调度。",
+            "设计嵌套 CP 引擎（外层 ring、内层 Ulysses），让高于显存所需的度数反而同时降低计算与通信。",
+            "首次系统刻画生产规模（>11K GPU、256K 上下文）下 Mcore DCP 的负载偏差与气泡来源。"
+          ],
+          "conclusions": [
+            "按显存而非计算量决定 CP 度数是 DCP 效率损失的主因，负载均衡必须显式建模注意力的二次增长。",
+            "双层 CP 结构让「更大并行度」与「更低单卡计算量」不再冲突。"
+          ],
+          "experiments": [
+            "512 卡测试台：32K 上下文吞吐平均 1.18x、256K 达 2.48x（对比 Mcore DCP）。",
+            "2048 卡生产任务：流水线气泡从 36% 降到 14%，调度时间缩短 2.3 倍。",
+            "生产吞吐提升 1.10–1.43x（均值 1.25x vs Mcore DCP），相对静态 CP 提升 1.33–1.90x。"
+          ],
+          "significance": "把长上下文训练的并行度调度从显存约束转向负载均衡，在生产规模上取得两位数吞吐提升。",
+          "arxivUrl": "https://arxiv.org/abs/2609.34318",
+          "pdfUrl": "https://arxiv.org/pdf/2609.34318.pdf",
+          "takeaway": "按计算而非显存定 CP 度：生产训练流水线气泡 36%→14%，吞吐提升 1.25 倍。",
+          "keyExperiment": "2048 卡生产任务流水线气泡 36%→14%，吞吐提升 1.10–1.43x",
+          "index": 3
+        },
+        {
+          "title": "TopoEP: Topology-Aware Load Balancing for Expert-Parallel MoE Training",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-29",
+          "authors": "Jiacheng Zhu, Xie Zhao, Gongming Zhao, Hongli Xu, Yao Fei, Jin Fang",
+          "institutions": "University of Science and Technology of China (部分作者)",
+          "abstract": "大规模专家并行 MoE 训练中，动态路由造成严重负载不均，托管热点专家的 GPU 变成长尾，拖长整个专家并行阶段。现有 EPLB 方案通常在 CPU 上规划负载均衡，带来设备-主机数据传输与跨 rank 同步，使逐层逐微批调度开销高昂；其规划模型也忽视现代集群的分层通信代价。本文提出 TopoEP：GPU 原生、拓扑感知的负载均衡系统，在每个 MoE 层与微批上把当前路由结果直接转换为热点专家复制与 token 重路由决策，并在无数据相关主机同步的情况下执行，压缩关键路径开销。其确定性 GPU 求解器先做节点间放置、再做节点内精化，使所有 rank 能独立产出逐位一致的方案。在 32 卡 NVIDIA H800 集群上接入 Megatron-LM，三个代表性 MoE 模型端到端训练吞吐提升 6.2%–11.4%。",
+          "contributions": [
+            "把负载均衡规划完全下沉到 GPU：无需主机同步、无需跨 rank 通信即可逐层逐微批重规划。",
+            "规划目标显式包含分层拓扑通信代价（节点间放置 + 节点内精化），而非只看专家热度。",
+            "确定性求解器保证各 rank 独立计算的方案逐位一致，避免额外的一致性通信。"
+          ],
+          "conclusions": [
+            "EPLB 的瓶颈是规划开销与拓扑无关的代价模型，而不只是均衡质量。",
+            "确定性、可复现的分布式规划能同时消除同步开销与实现复杂度。"
+          ],
+          "experiments": [
+            "32 卡 H800 + Megatron-LM：三个 MoE 模型端到端训练吞吐提升 6.2%–11.4%。",
+            "逐层逐微批重规划而不引入数据相关主机同步。",
+            "所有 rank 独立生成的方案逐位一致，无需额外同步通信。"
+          ],
+          "significance": "为大规模 MoE 训练提供低开销、拓扑感知的负载均衡方案，直接提升训练吞吐并减少长尾等待。",
+          "arxivUrl": "https://arxiv.org/abs/2609.35481",
+          "pdfUrl": "https://arxiv.org/pdf/2609.35481.pdf",
+          "takeaway": "GPU 原生拓扑感知 EPLB：32 卡 H800 上 MoE 训练吞吐提升 6.2%–11.4%。",
+          "keyExperiment": "32 卡 H800 三个 MoE 模型端到端吞吐提升 6.2%–11.4%",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SlimWise: Decoupling Expert Pruning Across Prefill and Decode for Efficient MoE Serving",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-29",
+          "authors": "Gunho Park, Kyoungho Jeun, Juntaek Oh, Byeongjun Shin, Baeseong Park, Minsoo Rhu",
+          "institutions": "KAIST, Samsung Electronics (部分作者)",
+          "abstract": "MoE 模型每个 token 只激活少量专家，但批量解码时几乎会触及整个专家池，专家权重流量成为主要瓶颈。专家剪枝能减少这部分流量，可常规做法把计算密集的 prefill 也一起剪掉，白白牺牲模型质量却换不来多少吞吐收益。本文提出 SlimWise：按推理阶段定制专家池——prefill 用完整模型，decode 用剪枝模型，且剪枝模型可直接复用 prefill 生成的 KV cache 而无需转换。在两个 MoE 骨干与三种剪枝准则下，这种免训练的 KV cache 交接大幅缩小了与完整模型的精度差距；作者还发现基准精度会掩盖剪枝引起的生成长度变化，为此引入低成本蒸馏阶段，让解码器从完整模型的 KV cache 继续生成，仅更新少量参数。工作在 vLLM 中实现，同时支持 PD 分离与 PD 同置。",
+          "contributions": [
+            "提出按阶段解耦的剪枝策略：只剪计算受限之外的 decode 专家池，prefill 保留完整模型。",
+            "实现免训练的 KV cache 交接，让剪枝解码器直接复用完整模型 prefill 出的缓存。",
+            "指出基准精度会掩盖生成长度变化，并用只更新少量参数的低成本蒸馏补回残余损失。"
+          ],
+          "conclusions": [
+            "剪枝收益应按推理阶段区分，对 prefill 剪枝是净亏。",
+            "评测剪枝方法时必须同时看生成长度，否则精度数字会误导。"
+          ],
+          "experiments": [
+            "Qwen3.6-35B-A3B 在剪掉 50% 专家时解码吞吐最高提升 1.81 倍，精度损失极小。",
+            "两个 MoE 骨干 × 三种剪枝准则下，免训练 KV cache 交接普遍缩小精度差距。",
+            "在 vLLM 中同时验证 PD 分离与 PD 同置两种服务形态。"
+          ],
+          "significance": "把 MoE 专家剪枝的收益集中到真正受限的解码阶段，给出可直接接入 vLLM 的服务侧优化。",
+          "arxivUrl": "https://arxiv.org/abs/2609.34117",
+          "pdfUrl": "https://arxiv.org/pdf/2609.34117.pdf",
+          "takeaway": "只剪 decode 专家池、prefill 全量：50% 剪枝下解码吞吐提升 1.81 倍。",
+          "keyExperiment": "Qwen3.6-35B-A3B 剪 50% 专家，解码吞吐最高 1.81x，精度损失极小",
+          "index": 5
+        },
+        {
+          "title": "PEARL: Adaptive Prefill-Decode Execution with Elasticity for Agentic Reinforcement Learning",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-29",
+          "authors": "Jiaan Zhu, Wei Gao, Youhui Bai, Zewen Jin, Ju Huang, Siran Yang, Jiamang Wang, Lin Qu, Cheng Li",
+          "institutions": "Alibaba Group, University of Science and Technology of China (部分作者)",
+          "abstract": "多轮 rollout 主导了智能体强化学习的成本。异步执行与弹性 GPU 资源可以加速这一阶段，但当训练 GPU 在两次更新之间空闲时，单纯增加 rollout 副本收益递减。作者观察到资源利用效率还取决于 prefill-decode（PD）配置：同置还是分离、最优 PD 比例都随负载变化，因此资源伸缩与 PD 配置相互依赖，而在瞬时的资源可用窗口内完成配置选择与生效又受重构成本制约。本文提出 PEARL：异步智能体 RL 系统，协同外部资源弹性、空闲训练 GPU 的临时复用与自适应 PD 执行；它维护统一的 GPU-工作进程-角色状态，用运行时画像预测 rollout 批次完成时间，在当前 GPU 预算下选择 PD 模式与比例，并把决策翻译成改动最小的增量迁移计划，配以成本感知的切换与借用策略抑制收益不足的迁移。",
+          "contributions": [
+            "指出资源伸缩与 PD 配置的相互依赖，并把「选配置」与「瞬时窗口内实现配置」统一建模。",
+            "用统一 GPU-工作进程-角色状态 + 增量迁移计划，把重构成本压到可接受范围。",
+            "成本感知的切换与借用策略保证训练 GPU 能及时归还，兼顾 rollout 与训练两侧。"
+          ],
+          "conclusions": [
+            "智能体 RL 的加速不能只靠加副本，PD 配置与资源弹性的联合优化才是关键杠杆。",
+            "弹性调度的核心约束是迁移成本而非理论最优配置。"
+          ],
+          "experiments": [
+            "相对固定资源的 ROLL，吞吐提升 2.17–2.79 倍。",
+            "对比 RLBoost+，Qwen3-8B 吞吐最高提升约 26.9%，Qwen3-30B-A3B 提升 36.3%。",
+            "在多种 LLM 上取得一致收益，说明结论与模型规模无关。"
+          ],
+          "significance": "给出一套把训练空闲算力与 rollout 弹性统一编排的智能体 RL 系统方案，吞吐提升接近 3 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2609.35158",
+          "pdfUrl": "https://arxiv.org/pdf/2609.35158.pdf",
+          "takeaway": "联合调度资源弹性与 PD 配置：相对 ROLL 吞吐提升 2.17–2.79 倍。",
+          "keyExperiment": "相对固定资源 ROLL 吞吐提升 2.17–2.79x",
+          "index": 6
+        },
+        {
+          "title": "KV-streams for Efficient Compaction in Agentic Reinforcement Learning",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-29",
+          "authors": "Emiliano Penaloza, Dane Malenfant, Dheeraj Vattikonda, Roger Creus Castanyer, Siddarth Venkatraman, Abhay Puri, Jonathan Light, Matthew James Sargent, Augustine N. Mavor-Parker, Massimo Caccia, Lucas Caccia, Glen Berseth, Esmeralda S. Whitammer, Alessandro Sordoni, Minseon Kim, Marc-Alexandre Côté, Laurent Charlin, Guillaume Lajoie",
+          "institutions": "Microsoft Research Montreal, Mila / Universite de Montreal (部分作者)",
+          "abstract": "扩展智能体 LLM 的决策视野，瓶颈在于能否把越来越长的上下文轨迹塞进 GPU 显存。上下文压缩（compaction）是最常用的手段，可让给定轨迹的显存占用保持恒定，但多数压缩策略需要反复 prefill 上下文，严重拖慢训练吞吐。本文提出 KV-streams：一种即插即用、兼容任意压缩策略的方法，通过让 KV cache 向前流式传递、而不是每次压缩后清空，显著提升吞吐，且未观察到性能受损的证据。作者用它支撑了三种压缩策略，训练墙钟时间加速 2.6–5 倍。除效率外，他们还发现流式 KV cache 可以充当循环状态，携带早已从上下文中消失的信息；在受控设置下，与既有工作相反，仅靠 RL 就足以让这种行为自发涌现。",
+          "contributions": [
+            "把 KV cache 由「压缩后清空」改为「向前流式传递」，消除反复 prefill 的吞吐瓶颈。",
+            "方法与压缩策略正交，即插即用即可支持三种现有压缩方案。",
+            "发现流式 KV cache 可充当循环状态，且该行为在纯 RL 训练下自发出现。"
+          ],
+          "conclusions": [
+            "上下文压缩的代价主要来自重复 prefill，而非压缩本身。",
+            "保留流式状态不仅省算力，还带来超出上下文的记忆能力。"
+          ],
+          "experiments": [
+            "三种压缩策略下训练墙钟时间加速 2.6–5 倍，未见性能下降。",
+            "无额外训练或架构改动即可接入现有后训练流水线。",
+            "受控实验中仅用 RL 即涌现出利用流式 KV 作为循环状态的行为。"
+          ],
+          "significance": "以极低接入成本同时改善智能体 RL 的训练吞吐与长程记忆能力。",
+          "arxivUrl": "https://arxiv.org/abs/2609.35750",
+          "pdfUrl": "https://arxiv.org/pdf/2609.35750.pdf",
+          "takeaway": "KV cache 流式传递取代反复 prefill：训练加速 2.6–5 倍，并涌现循环记忆。",
+          "keyExperiment": "三种压缩策略下训练墙钟加速 2.6–5x，精度无损",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "MpFA: Hardware-Efficient Train-Free QK4V8 FlashAttention Kernels on Blackwell GPUs",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-29",
+          "authors": "Chencheng Deng, Jianbin Fang, Dezun Dong",
+          "institutions": "National University of Defense Technology (国防科技大学)",
+          "abstract": "长上下文 LLM 推理把 GPU 服务栈推入注意力受限区间，计算与访存都被 softmax-GEMM 流水线主导。NVIDIA Blackwell 上 FP4 Tensor Core 矩阵乘吞吐很高，但作者发现全 FP4 注意力往往无法把它转化为端到端加速，瓶颈是非矩阵乘开销：softmax 后的在线量化、张量内存的数据搬运，以及 softmax 路径上的争用。本文提出 MpFA：免训练的 Blackwell 专用 FlashAttention 内核，采用 QK4PV8 混合精度——QK 用 NVFP4、PV 用 FP8，既保住低位宽 QK 吞吐，又避开 FP4 PV 的转换与缩放开销；为不加重 softmax 负担地恢复精度，它引入秩一平滑补偿，实现为一次额外的 Tensor Core MMA。B200 上 16K–128K 上下文，端到端输出吞吐达 BF16 FA4 的 2.81 倍。",
+          "contributions": [
+            "实测指出全 FP4 注意力的瓶颈在非矩阵乘开销（在线量化、数据搬运、softmax 争用），而非矩阵乘吞吐。",
+            "提出 QK4PV8 混合精度：QK 用 NVFP4、PV 用 FP8，兼顾吞吐并规避 FP4 PV 的转换开销。",
+            "用秩一平滑补偿（一次额外 MMA）恢复精度，并配合细粒度异步流水、张量内存复用与自适应划分。"
+          ],
+          "conclusions": [
+            "低比特注意力的收益取决于能否压住 softmax 路径的周边开销。",
+            "精度补偿可以设计成几乎不占用 softmax 流水线的额外矩阵乘。"
+          ],
+          "experiments": [
+            "B200 上 16K–128K 上下文，prefill 吞吐超过 BF16/FP8 基线。",
+            "端到端输出吞吐达 BF16 FA4 的 2.81 倍（Llama-3.1-8B、Qwen3-14B）。",
+            "五个基准套件、两个模型上，秩一补偿以约 2.0% 内核开销找回 62.5% 的精度损失。"
+          ],
+          "significance": "给出 Blackwell 上无需训练即可落地的高效注意力内核，把 FP4 的理论吞吐真正转化为服务收益。",
+          "arxivUrl": "https://arxiv.org/abs/2609.33135",
+          "pdfUrl": "https://arxiv.org/pdf/2609.33135.pdf",
+          "takeaway": "QK4V8 混合精度免训练内核：B200 端到端吞吐 2.81 倍于 BF16 FA4，2% 开销找回 62.5% 精度。",
+          "keyExperiment": "B200 上端到端输出吞吐为 BF16 FA4 的 2.81x，秩一补偿以 ~2.0% 内核开销找回 62.5% 精度损失",
+          "index": 8
+        },
+        {
+          "title": "CascadeEP: Asynchronous Expert Execution for MoE Prefill under Attention Imbalance",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-29",
+          "authors": "Jin Qin, Tiancheng Hu, Shiyan Wang, Junhao Hu, Zexin Jian, Yuzheng Wang, Haoyu Li, Chunwei Xia, Ying Liu, Pixian Zhan, Di Wang, Zhongzhe Hu, Huimin Cui, Tao Xie, Chenxi Wang",
+          "institutions": "机构未标注",
+          "abstract": "MoE 服务常采用数据+专家并行（DEP）：注意力副本各自处理不同请求批次，路由专家分片在专家并行组内。prefill 阶段各注意力副本完成 dispatch 的时刻不同，而同步 EP 必须等到所有副本的路由输入就绪才开始专家 FFN 计算。请求调度器想在负载均衡与共享前缀 KV cache 复用之间取舍，当持有匹配前缀的副本已经过载时二者冲突，残留的注意力不均衡便无法消除。本文提出 ASYNCEP：面向 MoE prefill 的分布式执行引擎，含三个机制——异步 EP 允许专家计算在其他副本 token 就绪前启动；streamFFN 对已就绪 token 分批，兼顾提前执行与 FFN 计算效率；机会式专家权重预取（OEWF）让较快的副本抓取专家权重、代为执行其他 GPU 上尚未开始的工作。",
+          "contributions": [
+            "异步 EP 打破「等全部副本 dispatch 完成」的同步壁垒，让先就绪的 token 先进入专家计算。",
+            "streamFFN 以分批方式在提前启动与 FFN 计算效率之间取得平衡。",
+            "OEWF 允许空闲副本主动抓取专家权重并代算远端未开始的工作，把不均衡转化为并行机会。"
+          ],
+          "conclusions": [
+            "MoE prefill 的浪费主要来自同步 EP 造成的等待，而非算力不足。",
+            "注意力阶段无法消除的不均衡，可以在专家阶段用异步与代算机制回收。"
+          ],
+          "experiments": [
+            "在 DeepSeek-V4-Flash、DeepSeek-V4-Pro 与 GLM-5.3 上验证。",
+            "p95 首 token 时间（TTFT）最高加速 1.48 倍。",
+            "推理吞吐最高提升 1.17 倍。"
+          ],
+          "significance": "针对 MoE prefill 的注意力不均衡给出系统级解法，把等待时间转化为有效计算。",
+          "arxivUrl": "https://arxiv.org/abs/2609.33252",
+          "pdfUrl": "https://arxiv.org/pdf/2609.33252.pdf",
+          "takeaway": "异步 EP + 代算机制：MoE prefill 的 p95 TTFT 加速 1.48 倍。",
+          "keyExperiment": "DeepSeek-V4 与 GLM-5.3 上 p95 TTFT 最高加速 1.48x，吞吐提升 1.17x",
+          "index": 9
+        },
+        {
+          "title": "TempoKV: Timely Staging of LLM KV Caches for Memory-Semantic Flash",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-29",
+          "authors": "Jay H. Park, Hyungjun Kim, Dong Kim",
+          "institutions": "机构未标注",
+          "abstract": "可复用前缀 KV cache 的规模可能超出 GPU 显存。内存语义闪存层级能以 SSD 提供容量，但快速层容量有限，而且逻辑上的 KV 命中并不等于已经就绪可供 GPU 取用：按需搬移会暴露 SSD 延迟，过早搬移又会在真正取用前长期占用快速层容量。本文提出 TempoKV：一个时间感知的资源承诺层，把「知道会复用」与「取得搬移资源」解耦——先以仅元数据的形式记录可复用 KV 命中，待运行时估计的距取用时间降到存储侧估计的就绪时间时，才请求承诺；这些估计随运行进度与搬移状态自适应更新，承诺仍受可用受保护容量约束。作者在 vLLM 与 LMCache 上、基于 SSD 的 CXL 内存设备实现，不改动请求调度。",
+          "contributions": [
+            "把「复用已知」与「资源承诺」分离，用元数据声明替代提前占用快速层。",
+            "以运行时估计的取用时间与存储就绪时间之差触发承诺，估计随进度自适应。",
+            "在 vLLM 与 LMCache 上以 CXL 内存设备实现，无需修改请求调度即可接入。"
+          ],
+          "conclusions": [
+            "内存语义闪存下，KV 命中的真正成本是快速层容量的占用时间，而非带宽。",
+            "时间感知的承诺时机可以同时避免 SSD 延迟暴露与容量空占。"
+          ],
+          "experiments": [
+            "两个模型、三种前缀缓存比例下，每请求受保护快速层字节-时间降低 63–91%。",
+            "快速层容量从 100 GiB 降到 25 GiB，输出吞吐与 p95 TTFT 几乎不变。",
+            "相比未改动的 LMCache Device-DAX L1 配置，p95 TTFT 最多降低 48.0%，吞吐最高提升 27.8%。"
+          ],
+          "significance": "为 CXL/SSD 分层显存下的 KV cache 复用提供了以时间为维度的资源管理思路，显著降低对快速层容量的依赖。",
+          "arxivUrl": "https://arxiv.org/abs/2609.35065",
+          "pdfUrl": "https://arxiv.org/pdf/2609.35065.pdf",
+          "takeaway": "按「距取用时间」决定何时搬移：受保护快速层占用降低 63–91%，p95 TTFT 降 48%。",
+          "keyExperiment": "每请求受保护快速层字节-时间降低 63–91%，p95 TTFT 最多降低 48.0%",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
