@@ -1,0 +1,341 @@
+{
+  "date": "2026-10-01",
+  "title": "2026-10-01 论文精选",
+  "lede": "今日主线是 GPU 通信与调度：从服务器拓扑与拥塞控制的受控仿真，到集合通信的编排-数据通路解耦、MoE 专家共激活布局、运行时并行布局切换，以及 SSD 级 KV 存储与高并发投机解码的验证优化。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 931
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Joint Effects of GPU Server Topology, Parallelism, and Congestion Control on MoE Inference: A Controlled Simulation Study",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-30",
+          "authors": "Kaikai Yuan, Rui Xi, Yu Liu",
+          "institutions": "浪潮集团 (Inspur Group)",
+          "abstract": "MoE 靠稀疏激活扩展容量，但跨 GPU 推理引入张量并行（TP）集合通信与专家并行（EP）的 dispatch/combine。完成时间还取决于逻辑通信组如何映射到机内互联、GPU-NIC 与跨节点网络。本文用 ASTRA-sim+NS-3 搭建 32 GPU rank 受控实验，覆盖 6 种服务器拓扑、4 种 TP/EP 划分、2 种集合算法与 4 种拥塞控制模式，共 768 次确定性仿真。144 组开启反馈的配置中，暴露通信占平均完成时间 89.9%-95.8%；TP16EP2 完成时间是 TP2EP16 的 3.68-4.35 倍；固定映射下双二叉树比 Ring 慢 28.3%-83.2%；RoCE+DCQCN 比 RoCE+HPCC 慢 23.8%-35.7%。拓扑收益是条件性的：高 TP 度下优势消失，加 GPU 或网卡仅在 rank 映射均衡流量时才有效。",
+          "contributions": [
+            "用 ASTRA-sim+NS-3 建立 32 rank 受控仿真矩阵，把服务器拓扑、TP/EP 划分、集合算法与拥塞控制四类变量解耦，共 768 次确定性实验。",
+            "量化出 MoE 推理中暴露通信占平均完成时间 89.9%-95.8%，说明通信而非算力才是该负载的主瓶颈。",
+            "给出条件性结论：集合算法（DBT 对 Ring）、拥塞控制（HPCC 对 DCQCN）与拓扑的收益都依赖 rank 映射是否均衡流量。"
+          ],
+          "conclusions": [
+            "在评估的工作负载与仿真语义下，服务器拓扑、并行度、集合实现与拥塞控制共同决定暴露通信与完成时间，单点优化难以奏效。",
+            "均匀 32 路分片下最大权重分片约 48.75 GB/rank，所有配置都满足 64 GB 权重驻留门槛，权重容量不构成约束。"
+          ],
+          "experiments": [
+            "TP16EP2 平均完成时间为 TP2EP16 的 3.68-4.35 倍，说明高 TP 度在机内网络上代价高昂。",
+            "固定 rank 映射下 ASTRA-sim 双二叉树比 Ring 多耗 28.3%-83.2% 时间。",
+            "RoCE+DCQCN 比 RoCE+HPCC 慢 23.8%-35.7%，而类 IB 环境下 HPCC 仅比 RoCE HPCC 低约 0.9%。"
+          ],
+          "significance": "把「MoE 推理慢在哪」拆成可复现的仿真变量矩阵，为集群选型与并行策略提供定量依据。",
+          "arxivUrl": "https://arxiv.org/abs/2609.37828",
+          "pdfUrl": "https://arxiv.org/pdf/2609.37828.pdf",
+          "takeaway": "MoE 推理九成时间花在暴露通信上，拓扑与拥塞控制必须和 rank 映射一起调。",
+          "keyExperiment": "144 组开启反馈的配置中，暴露通信占平均完成时间 89.9%-95.8%。",
+          "index": 1
+        },
+        {
+          "title": "Purlin: Separating Orchestration from the Datapath of Collectives",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-30",
+          "authors": "Osayamen Jonathan Aimuyo, Swapnil Gandhi, Christos Kozyrakis",
+          "institutions": "Stanford University, NVIDIA",
+          "abstract": "分布式推理依赖 GPU 集合通信，且必须跟上硬件与负载演化。现有实现常把语义、编排（数据何时何地移动）与数据通路（如何移动）耦合，导致适配新硬件、为应用定制通信都很昂贵。本文提出 Purlin：顶层把集合通信表达为输入布局到输出布局的拷贝或归约声明；中层用共享编排协议 SNAC 自动推导协调逻辑；底层是硬件相关数据通路 Atom，只实现 copy 与 reduce 两个原语。这样既能复用编排又能替换数据通路。作者在 A100、H200、B200 上评估：7 种集合通信延迟最高加速 5.14 倍、带宽最高提升 4.50 倍；集成进 SGLang 后离线服务吞吐与交互性平均提升 1.13 倍（最高 1.37 倍），在线推理交互性平均提升 1.26 倍（最高 2.85 倍，过载时收益最大）。",
+          "contributions": [
+            "提出三层解耦的集合通信框架 Purlin：语义层（布局声明）、编排层 SNAC、数据通路层 Atom。",
+            "Atom 只暴露 copy 与 reduce 两个原语，新硬件机制只需实现这两个原语即可接入全部集合通信。",
+            "在 A100/H200/B200 三代 GPU 上验证跨代可移植性，并集成进 SGLang 证明端到端收益。"
+          ],
+          "conclusions": [
+            "集合通信的语义描述与硬件机制可以独立演进，同时保留针对延迟与吞吐两种场景的专门优化。",
+            "把编排从数据通路中抽出后，定制集合通信与采纳新硬件机制不再是重写整个 kernel 的工作。"
+          ],
+          "experiments": [
+            "7 种集合通信上延迟最高加速 5.14 倍、带宽最高提升 4.50 倍。",
+            "集成 SGLang 后离线服务吞吐与交互性平均提升 1.13 倍、最高 1.37 倍；在线推理交互性平均提升 1.26 倍、最高 2.85 倍（过载下收益最大）。",
+            "扩散图像生成端到端延迟最多降低 1.13 倍。"
+          ],
+          "significance": "为 GPU 集合通信提供可演进的抽象分层，直接关系到 vLLM/SGLang 这类推理引擎的通信底座。",
+          "arxivUrl": "https://arxiv.org/abs/2609.36954",
+          "pdfUrl": "https://arxiv.org/pdf/2609.36954.pdf",
+          "takeaway": "把「何时何地移动」与「如何移动」拆开，集合通信才能跟上硬件换代。",
+          "keyExperiment": "A100/H200/B200 上 7 种集合通信延迟最高加速 5.14 倍，集成 SGLang 后在线推理交互性最高提升 2.85 倍。",
+          "index": 2
+        },
+        {
+          "title": "Efficient Agentic LLM Serving over SSD-based Sparse KV Storage",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-09-30",
+          "authors": "Wenhao He, Ping Zhang, Xiaohe Hu, Chutian Wang, Jinlong Hou, Yuan Cheng, Peng Sun, Fangcheng Fu",
+          "institutions": "上海交通大学, Infrawaves, 上海创智学院",
+          "abstract": "由 LLM 驱动的 agent 会话在模型推理与工具调用间交替，多轮累积出很长历史，既要减少注意力计算，又要保留历史 KV cache 避免重算。前沿开源模型开始用稀疏注意力只选取部分历史，而 SSD 比 CPU DRAM 更便宜。但稀疏 KV 的选择依赖推理中的临时中间值，这会把 SSD 读拉进关键路径；碎片化访问与读写干扰又拖慢读取。本文提出 Janus：面向稀疏注意力 LLM、以 SSD 为中心存 KV 的 agent 服务框架。它聚焦 append prefill，用模型自身的 KV 选择模块在更早的中间值上预测需求（无需额外训练），把预测读与计算重叠，未命中部分在注意力执行前补齐；同时合并相邻读、把散落 KV 页打包为顺序写、读活跃时限制后台写。在 3 个模型与 3 类 agent 轨迹上，首 token 延迟比现有工作好 1.57-3.69 倍，解码效率不降。",
+          "contributions": [
+            "把 SSD 读从推理关键路径移出：用模型自带的 KV 选择模块在更早的中间值上预测稀疏 KV 需求，无需额外训练。",
+            "针对 SSD 特性做访问优化：相邻读合并、散落 KV 页打包为顺序写、读活跃期限制后台写以消除读写干扰。",
+            "预测未命中时在注意力执行前补取，保证模型输出与精确 KV 选择一致。"
+          ],
+          "conclusions": [
+            "在以 SSD 为 KV 主存的 agent 服务场景中，瓶颈不是 SSD 带宽而是「读落在关键路径上」，预测加重叠是有效解法。",
+            "Janus 在显著降低首 token 延迟的同时没有牺牲解码效率。"
+          ],
+          "experiments": [
+            "3 个模型乘 3 类 agent 轨迹上，首 token 延迟提升 1.57-3.69 倍，平均 1.22-1.85 倍。",
+            "通过读合并与顺序写打包缓解 SSD 碎片访问与读写干扰。"
+          ],
+          "significance": "为长历史 agent 会话给出 SSD 级 KV 存储的可行路径，直接降低长上下文服务的内存成本。",
+          "arxivUrl": "https://arxiv.org/abs/2609.36938",
+          "pdfUrl": "https://arxiv.org/pdf/2609.36938.pdf",
+          "takeaway": "用模型自己的选择模块提前预测 KV 需求，SSD 读就能藏进计算里。",
+          "keyExperiment": "3 模型 3 轨迹上首 token 延迟提升 1.57-3.69 倍（平均 1.22-1.85 倍），解码效率不降。",
+          "index": 3
+        },
+        {
+          "title": "Mira: Memory-Efficient MoE Inference Using Adaptive Caching and Predictive Expert Staging",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-09-30",
+          "authors": "Sanjali Yadav, Bahar Asgari",
+          "institutions": "University of Maryland, College Park",
+          "abstract": "MoE 是扩展模型容量的有效架构，对受显存限制的单卡部署尤其有吸引力，但专家参数占据绝大部分内存，token 级路由又动态、不可预测且高度倾斜。已有 offload 与缓存方案本质上是反应式的：必须等 router 输出才能搬运专家，缓存利用率低且在紧 VRAM 预算下无法把传输与计算重叠。本文提出 Mira，一种面向单 GPU 高容量 MoE 推理的算法-系统协同设计：算法层训练轻量逐层预测器，提前两层预测哪些专家将被激活以支持预取；系统层用这些预测驱动 HOT+STAGE 两级 GPU 缓存，借 token 级路由遥测保留高频专家、暂存预测专家；并为专家参数设计定制压缩格式以压低传输开销。实验显示，24GB GPU 上平均吞吐比 MoE-Infinity 快 5.71 倍，首 token 时间最多加速 11.71 倍，beam search 平均加速 3.84 倍。",
+          "contributions": [
+            "把 MoE 专家管理从反应式改为主动式：训练轻量逐层预测器提前两层预测专家激活，支持预取。",
+            "设计 HOT+STAGE 两级 GPU 缓存，由 token 级路由遥测驱动，兼顾高频专家驻留与预测专家暂存。",
+            "为专家参数定制压缩格式（减少元数据、提升打包效率），把量化传输与计算重叠起来。"
+          ],
+          "conclusions": [
+            "在单卡紧显存场景下，专家搬运造成停顿的主要来源是「等 router 输出」，提前预测可显著减少停顿。",
+            "算法层的预测与系统层的缓存、量化必须协同设计，只做任一侧收益有限。"
+          ],
+          "experiments": [
+            "在 24GB GPU 上平均吞吐比 MoE-Infinity 快 5.71 倍；在 48GB GPU 上比 DeepSpeed 快 10.46 倍、比 MoE-Infinity 快 2.86 倍。",
+            "首 token 时间最多加速 11.71 倍，beam search 推理平均加速 3.84 倍。",
+            "下游任务精度接近 FP16 基线。"
+          ],
+          "significance": "让大容量 MoE 能在单卡显存下跑起来，是显存受限推理的重要系统方案。",
+          "arxivUrl": "https://arxiv.org/abs/2609.38090",
+          "pdfUrl": "https://arxiv.org/pdf/2609.38090.pdf",
+          "takeaway": "提前两层预测专家激活，把 offload 从被动等待变成主动预取。",
+          "keyExperiment": "24GB 单卡上平均吞吐较 MoE-Infinity 提升 5.71 倍，首 token 时间最多加速 11.71 倍。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "DScale: Scaling Block-Diffusion Speculative Decoding with Adaptive Verification",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.DC",
+          "date": "2026-09-30",
+          "authors": "Rongjian Chen, Minxian Xu, Zhengxin Fang, Kejiang Ye, Chengzhong Xu",
+          "institutions": "中国科学院深圳先进技术研究院, 中国科学院大学, 澳门大学, Victoria University of Wellington",
+          "abstract": "高并发下，块扩散（block-diffusion）投机解码会遭遇验证填充、候选被拒，以及变长前缀与固定形状计算图不兼容三类问题；统一截断又会牺牲本可接受的 token。本文提出 DScale，保留草稿模型的架构、权重与完整草稿长度，改用独立的 11.2 万参数预测器，无需置信度校准或硬件速度曲线准备。路径感知 tile 降低填充；动态验证长度（DVL）把带分数的前缀打包进一半的原生验证容量；固定地址工作区在验证与接受过程中传递变化的边界并复用已捕获计算图。在 A100-40GB、TP 为 1 下，Qwen3-8B 与 Qwen3-4B 覆盖四个数据集、并发度 8 至 32。相比 DFlash、DSpark、Domino，Qwen3-8B 几何平均吞吐分别提升 43.9%、22.2%、24.4%，Qwen3-4B 提升 48.8%、37.7%、32.0%，延迟同时更低。",
+          "contributions": [
+            "指出高并发块扩散投机解码的三个系统性问题：验证填充、候选拒绝、变长前缀与固定形状图不兼容。",
+            "用 11.2 万参数的独立预测器替代置信度校准与硬件速度曲线准备，实现动态验证长度分配。",
+            "以固定地址工作区配合路径感知 tile，让变化的验证边界复用已捕获计算图，减少填充与重编译。"
+          ],
+          "conclusions": [
+            "在高并发下，投机解码的收益瓶颈已从草稿质量转向验证阶段的形状与调度开销。",
+            "三个机制（路径感知 tile、动态验证长度、固定地址工作区）逐项累积都能提升几何平均吞吐。"
+          ],
+          "experiments": [
+            "Qwen3-8B 几何平均吞吐较 DFlash/DSpark/Domino 分别提升 43.9%/22.2%/24.4%，Qwen3-4B 分别提升 48.8%/37.7%/32.0%。",
+            "GSM8K 上完整解码步耗时较 DFlash 下降 30.8%-52.5%。",
+            "在并发度 8 至 32、A100-40GB、TP 为 1 的条件下均取得更低请求延迟。"
+          ],
+          "significance": "把投机解码的优化重心从「草稿多准」推进到「高并发下验证如何不被填充浪费」。",
+          "arxivUrl": "https://arxiv.org/abs/2609.37532",
+          "pdfUrl": "https://arxiv.org/pdf/2609.37532.pdf",
+          "takeaway": "高并发投机解码的瓶颈在验证填充，动态验证长度让一半算力不再白跑。",
+          "keyExperiment": "Qwen3-8B/4B 几何平均吞吐较 DFlash 提升 43.9%/48.8%，GSM8K 解码步耗时下降 30.8%-52.5%。",
+          "index": 5
+        },
+        {
+          "title": "Replay the Curvature: Accurate and Scalable NVFP4 Quantization for Large Language Model Inference",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-09-30",
+          "authors": "Ruiyi Ding, Jie Li, Kang He, Ziyan Liu, Chengru Song, Yuedong Xu, Yuan Cheng",
+          "institutions": "KlingAI Research, 复旦大学, 上海 AI 孵化与创新中心, University of Science and Technology of China",
+          "abstract": "大模型权重存储与访存流量是推理主要成本，极低位宽表示因而成为关键方向。这类格式用 scale 把浮点值映射到小码本，NVFP4 让每 16 个 E2M1 权重共享一个 E4M3 块 scale。但在 GPTQ 中选定 scale 很难：量化一列会更新其后的列，独立评估一个块会误估最终重建误差。大模型还有第二重挑战：全精度权重、校准激活与二阶状态无法同时驻留单卡，而整层分给设备会让每层求解串行化。本文提出 Schur Replay：复现每个块 scale 引起的 GPTQ 更新，并在计入未量化列补偿后给块误差打分；配套基础设施只保留活跃层常驻，激活在设备、主机与磁盘分层，导出后释放全精度层，并把独立输出行分布到张量并行 rank。在 Qwen3.5-397B-A17B 与 Llama-3.3-70B-Instruct 的七个基准上，相对 BF16 恢复率为 99.35% 与 100.84%。",
+          "contributions": [
+            "提出 Schur Replay 选择算法：复现块 scale 引发的 GPTQ 列更新，在计入未量化列补偿后再给块误差打分。",
+            "设计面向超大模型的量化执行基础设施：只保留活跃层常驻，激活在设备、主机与磁盘分层存放，导出后释放全精度层。",
+            "把独立输出行分布到张量并行 rank，避免整层求解串行化。"
+          ],
+          "conclusions": [
+            "NVFP4 这类细粒度块 scale 格式中，scale 选择必须考虑 GPTQ 的顺序效应，否则块误差会被错误估计。",
+            "算法侧的误差修正与系统侧的显存编排缺一不可，二者结合才能在数百 B 参数模型上做 NVFP4 量化。"
+          ],
+          "experiments": [
+            "七个基准上相对 BF16 的问题加权恢复率为 99.35%（Qwen3.5-397B-A17B）与 100.84%（Llama-3.3-70B-Instruct）。",
+            "397B 模型逐层耗时相比 ModelOpt 降低 15.17 倍、相比 LLM Compressor 降低 23.14 倍。",
+            "每卡内存占用低于两个基线。"
+          ],
+          "significance": "让 NVFP4 在数百 B 参数模型上可用，直接影响 Blackwell 世代的推理成本。",
+          "arxivUrl": "https://arxiv.org/abs/2609.36654",
+          "pdfUrl": "https://arxiv.org/pdf/2609.36654.pdf",
+          "takeaway": "量化块 scale 不能独立评估，先把 GPTQ 的列间补偿算回来，误差才估得准。",
+          "keyExperiment": "397B 模型逐层耗时较 ModelOpt 快 15.17 倍、较 LLM Compressor 快 23.14 倍，七个基准恢复 BF16 的 99.35%。",
+          "index": 6
+        },
+        {
+          "title": "KV-Kaizen: Learning Context-Adaptive Cache Compression Choices",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-09-30",
+          "authors": "Joao Monteiro, Louis Bethune, Anastasiia Filippova, Sonia Laguna, David Grangier, Marco Cuturi",
+          "institutions": "Apple",
+          "abstract": "随着 LLM 上下文变长，KV cache 大小可能超过模型权重所占显存；解码访存受限，成本随 cache 增大而上升，吞吐因此恶化。近期工作通过丢弃最不相关 token 缓解瓶颈，但淘汰存在内在矛盾：一次性的丢弃决策可能在后续被证明有害。本文改而研究不淘汰 token 的压缩路径：学习一个选择器，依据上下文为每层产出配置以逼近整体压缩预算。选择器沿三个维度决策：跨层共享同一份 cache（深度）、以更低比特缓存（精度）、截断低秩潜表示（秩），合称 KV-Kaizen。作者发现单独且均匀地对所有层施加这些干预会限制可达压缩率，而按上下文局部、自适应地组合三者可在保精度的同时大幅省内存。推理时选择器只在 prefill 前运行一次。14B 模型上解码期 cache 缩小 32 倍而精度保持。",
+          "contributions": [
+            "把 KV cache 压缩从「淘汰 token」转向三条不丢内容的轴：跨层共享、降低精度、截断低秩表示。",
+            "用学习到的选择器按上下文为每层自适应组合三种干预以逼近压缩预算；推理时只在 prefill 前运行一次。",
+            "证明自适应组合优于均匀施加，并可与淘汰法叠加使用。"
+          ],
+          "conclusions": [
+            "淘汰是不可逆的信息决策，而深度、精度、秩三个维度的压缩可以在保留全部 token 的前提下换取大幅内存节省。",
+            "「先训练大模型、事后再压缩」在这套方法下被证明可行。"
+          ],
+          "experiments": [
+            "14B 模型上解码期 cache 缩小 32 倍且精度保持。",
+            "从 7B 参数起，4 倍 cache 缩减不带来精度损失；压缩模型比同等 cache 大小的更小未压缩模型更准。",
+            "在指令跟随与推理任务上达到精度对缓存大小的 Pareto 前沿。"
+          ],
+          "significance": "为长上下文服务提供不牺牲信息的 KV 压缩路线，可直接接入现有推理栈。",
+          "arxivUrl": "https://arxiv.org/abs/2609.37988",
+          "pdfUrl": "https://arxiv.org/pdf/2609.37988.pdf",
+          "takeaway": "不丢 token 也能压 KV：按上下文逐层自适应地组合共享、降比特与截断秩。",
+          "keyExperiment": "14B 模型解码期 KV cache 缩小 32 倍而精度保持，7B 起 4 倍压缩零精度损失。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SPLASH: Switching Parallel Layouts of Attention with Seamless Handoff for LLM Serving",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-30",
+          "authors": "Chuan Liu, Shuoming Zhang, Zhicheng Li, Qianqi Sun, Ruiyuan Xu, Qiuchu Yu, Xiyu Shi, Huimin Cui, Jiacheng Zhao",
+          "institutions": "中国科学院计算技术研究所, 中国科学院大学",
+          "abstract": "没有一种注意力并行方式能在所有负载下都服务好大模型：低并发偏好张量并行，大量独立请求偏好数据并行注意力，长提示偏好上下文并行。推理、agent 与 RL rollout 让固定选择失效——一个 batch 开始时是许多短请求，结束时变成少数超长请求，最佳布局在运行中就变了。但现有引擎在启动时固定布局，因为换布局意味着抽干请求并重启 worker。本文提出 SPLASH，能在请求运行中切换布局。关键观察是：现代注意力（KV 头很少甚至没有）把请求的 KV cache 位置与权重分片方式解耦。不同布局只在权重与 cache 归谁所有上不同，而大部分状态本就在下一个布局需要的位置，SPLASH 复用这些状态、后台搬迁其余部分并在 batch 边界交接，切换中位开销低于所在 step 的 0.51%，还暴露出现有引擎所缺的 DOP 布局。",
+          "contributions": [
+            "提出可在请求运行中切换注意力并行布局的服务系统 SPLASH，切换在 batch 边界交接、中位开销低于所在 step 的 0.51%。",
+            "利用现代注意力中「cache 位置」与「权重分片」解耦，提出新布局 DOP，KV 容量比数据并行注意力多 27% 至 60%。",
+            "设计迁移感知调度器，随负载在四种布局间切换最优解。"
+          ],
+          "conclusions": [
+            "布局切换此前不可行，不是状态搬迁代价高，而是引擎把它做成了「抽干加重启」；复用已有状态即可近零成本切换。",
+            "解耦 cache 位置与权重分片本身就能带来第三种有力布局，而不只是便于切换。"
+          ],
+          "experiments": [
+            "B200 上服务 GLM-5.3，端到端吞吐比固定布局提升 1.3 至 1.73 倍。",
+            "布局切换中位开销低于所在 step 的 0.51%。",
+            "DOP 的 KV 容量比数据并行注意力多 27% 至 60%；在 H200（DeepSeek-V3.2）与 DCU（GLM-5.3-Flash）上复现同样的布局区间。"
+          ],
+          "significance": "把并行策略随负载动态变化从部署期决策变成运行时能力，对 agent 与 RL rollout 这类混合负载尤有价值。",
+          "arxivUrl": "https://arxiv.org/abs/2609.37626",
+          "pdfUrl": "https://arxiv.org/pdf/2609.37626.pdf",
+          "takeaway": "注意力布局不必启动即固定：复用已有状态，切换开销可忽略。",
+          "keyExperiment": "B200 加 GLM-5.3 端到端吞吐较固定布局提升 1.3 至 1.73 倍，切换中位开销低于 0.51% 的 step。",
+          "index": 8
+        },
+        {
+          "title": "Cobalt: Leveraging Expert Co-activation for Efficient Distributed MoE Training",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-30",
+          "authors": "Junkang Zhou, Xinyi Liu, Fangcheng Fu",
+          "institutions": "浙江大学, 北京大学, 上海交通大学",
+          "abstract": "MoE 已成为扩展大模型的主流路线，它在近乎恒定算力下扩展模型容量。训练大规模 MoE 依赖专家并行（EP）：把专家副本分布到各 GPU 并通过 all-to-all 交换 token。EP 效率常受两个瓶颈制约：跨节点 token 传输受限于节点间带宽，专家负载倾斜又导致各 GPU 计算不均衡。已有工作基于单专家工作量统计缓解，却忽略了专家之间可以共享通信。本文给出实证观察：许多专家对会被同一个 token 频繁共同激活。基于此提出 Cobalt：两阶段专家布局规划器随共激活模式与负载演化自适应调整，周期性把频繁共激活的专家共置同一节点以减少跨节点通信，并按步做节点内微调平衡负载；再用通信感知的任务分配把 token 路由到更少远端节点。在 32 张 B200 上加速 1.53 至 2.41 倍，跨节点 token 流量降低 75.74% 至 99.26%。",
+          "contributions": [
+            "实证发现单个 token 会频繁共同激活成对的专家（expert co-activation），这一结构此前被基于单专家统计的方法忽略。",
+            "设计两阶段专家布局规划器：周期性共置高频共激活专家以削减跨节点通信，逐步做节点内调整以平衡负载。",
+            "提出通信感知的 token 任务分配，依据当前布局把 token 路由到更少的远端节点。"
+          ],
+          "conclusions": [
+            "EP 的两个瓶颈（跨节点带宽与专家负载倾斜）可以通过「谁和谁常被一起用到」这一结构同时缓解。",
+            "布局需随训练过程中共激活模式的演化动态调整，静态布局无法持续获益。"
+          ],
+          "experiments": [
+            "32 张 B200 上相比现有 MoE 训练框架加速 1.53 至 2.41 倍（平均 1.28 至 1.89 倍）。",
+            "跨节点 token 流量降低 75.74% 至 99.26%。"
+          ],
+          "significance": "给大规模 MoE 训练的 all-to-all 通信开销提供数据驱动的布局解法，收益直接体现在 GPU 利用率上。",
+          "arxivUrl": "https://arxiv.org/abs/2609.36959",
+          "pdfUrl": "https://arxiv.org/pdf/2609.36959.pdf",
+          "takeaway": "按「专家共激活」而不是「单专家负载」来排布专家，跨节点流量能砍掉七成以上。",
+          "keyExperiment": "32 张 B200 上训练加速 1.53 至 2.41 倍，跨节点 token 流量降低 75.74% 至 99.26%。",
+          "index": 9
+        },
+        {
+          "title": "Reshaping Rollout Workloads for Asynchronous RL Post-Training on Heterogeneous Accelerators",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-09-30",
+          "authors": "Jiahui Li, Hao Nie, Yibo Zhu, Pengjin Xie, Yu Zhou, Xiaolong Zheng, Liang Liu, Huadong Ma",
+          "institutions": "北京邮电大学, StepFun",
+          "abstract": "RL 后训练越来越依赖长时程、多轮 rollout。当任务超出单集群规模时，跨集群拼装的 rollout 池引入硬件异构性。调度要同时服务两个诉求：硬件侧需要高聚合解码吞吐，每条轨迹则希望尽快完成。矛盾来自自回归解码的访存受限特性——大活跃 batch 能摊薄权重读取以换取高吞吐，却让每条轨迹分到的带宽更少、完成更慢。因此调度目标变成按硬件做角色特化：高带宽加速器适合长上下文，高性价比加速器能维持大 batch。但负载演化让特化难以持续，动态重分配又存在循环依赖。本文提出 CadenceRL，用结构化负载重塑绕开该依赖：Pacing 用更短轨迹替代长上下文轨迹以维持大活跃 batch；陈旧度累积时 Concentration 把长上下文尾部集中到高亲和 worker；Late-bound KV 准备在目标确定前暂存好累积前缀。解码吞吐最多提升 48%，P95 轨迹延迟最多降低 64%。",
+          "contributions": [
+            "把异构 rollout 池的调度目标表述为「按硬件特性做角色特化」，并指出动态重分配存在循环依赖。",
+            "提出结构化负载重塑而非逐次收益估计：Pacing 用短轨迹替代长上下文轨迹以维持大活跃 batch。",
+            "Concentration 把残余长上下文尾部集中到高带宽 worker，Late-bound KV 准备在目标确定前完成前缀暂存。"
+          ],
+          "conclusions": [
+            "在访存受限的解码场景中，吞吐与单条轨迹延迟的张力只能靠「让不同硬件做不同事」化解，而非优化单一调度目标。",
+            "绕开循环依赖的可行路径是改变负载结构，而不是精确估计每次搬迁的收益。"
+          ],
+          "experiments": [
+            "异构 rollout 池上解码吞吐最多提升 48%，P95 轨迹延迟最多降低 64%。",
+            "增加高带宽加速器降低尾延迟、增加高性价比加速器提升吞吐，且无需手工路由配置。"
+          ],
+          "significance": "为跨集群异构加速器上的 RL 后训练 rollout 提供不依赖手工配置的调度方案。",
+          "arxivUrl": "https://arxiv.org/abs/2609.36899",
+          "pdfUrl": "https://arxiv.org/pdf/2609.36899.pdf",
+          "takeaway": "异构 rollout 池上，与其精确估计搬迁收益，不如先改变负载结构。",
+          "keyExperiment": "解码吞吐最多提升 48%，P95 轨迹延迟最多降低 64%。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
