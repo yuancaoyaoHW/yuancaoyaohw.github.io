@@ -1,0 +1,343 @@
+{
+  "date": "2026-10-02",
+  "title": "2026-10-02 论文精选",
+  "lede": "今日主题是「把通信与调度从瓶颈里拿回来」：PCIe 消费级多卡上的 MoE 专家并行通信、异构集群的 MoE 自动并行，以及 HBF 扩容量后的缓存感知调度，构成本期最硬的一条线；其余推荐覆盖共享 KV cache 的来源契约、混合精度注意力、确定性推理的验证、量化训练与低精度推理链路的精度回收。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 769
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Efficient Expert-Parallel Communication on PCIe-Connected Consumer GPUs",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-01",
+          "authors": "Jaehwan Lee, Sangmin Lee, Chaewon Kim, Junsik Shin, Jaejin Lee",
+          "institutions": "Seoul National University",
+          "abstract": "专家并行（EP）是把大规模 MoE 模型分散到多张 GPU 上的主流做法，但每个 MoE 层都需要跨 GPU 通信，而且随着每 token 激活的专家数增加，通信在推理时间中的占比持续上升。这一问题在 PCIe 互联的消费级 GPU 上尤其严重：所有 GPU 间数据传输都必须经过 CPU 内存。现有面向 MoE 的专用通信库默认存在 GPU 直连通路，基本忽略了消费级平台，因此多数框架只能退回 NCCL，而 NCCL 经 CPU 中转的方式会产生冗余 PCIe 传输，并与专家计算争抢 GPU 资源，导致重叠不充分。本文提出 ThunderEP：去掉传统 ring 算法的中继跳，改用 DMA 引擎搬运数据以避开计算资源竞争，并通过降低 CPU 内存中完成标志的轮询开销来压缩同步延迟。该设计已集成进 vLLM。",
+          "contributions": [
+            "针对 PCIe 消费级 GPU 的 EP 通信设计 ThunderEP：去除 ring 中继跳、用 DMA 引擎搬运、压缩完成标志轮询开销。",
+            "把设计集成进 vLLM，在三个主流 MoE 模型上评估，覆盖 RTX 4090 与 RTX 5090 两套 PCIe 系统。",
+            "dispatch 与 combine 相对 NCCL 平均分别加速 2.00× 与 1.53×，端到端相对最先进 MoE 推理框架最高 1.66×。"
+          ],
+          "conclusions": [
+            "NCCL 的 CPU 中转式通信是消费级 PCIe 平台上的主要瓶颈，绕开中继与资源竞争可显著提速；",
+            "省下计算资源争抢后，通信与专家计算的重叠程度明显提升，端到端收益大于单次通信收益。"
+          ],
+          "experiments": [
+            "在两套 PCIe 系统（RTX 4090、RTX 5090）与三个 MoE 模型上，dispatch 平均 2.00×、combine 平均 1.53× 于 NCCL；",
+            "端到端推理相对最先进 MoE 框架最高 1.66× 加速；",
+            "所有实验均在实际的 vLLM 集成环境中完成。"
+          ],
+          "significance": "把「GPU 直连假设」从 EP 通信设计中拿掉，让消费级多卡也能高效跑大 MoE 推理。",
+          "arxivUrl": "https://arxiv.org/abs/2609.40093",
+          "pdfUrl": "https://arxiv.org/pdf/2609.40093.pdf",
+          "takeaway": "消费级 PCIe 多卡上，MoE 专家并行的通信要绕开 CPU 中转与计算资源争抢，才能拿到 1.5-2× 的加速。",
+          "keyExperiment": "dispatch/combine 平均加速 2.00×/1.53×，端到端最高 1.66×。",
+          "index": 1
+        },
+        {
+          "title": "HAPMoE: Heterogeneity-Aware Automatic Parallelism Planning for Mixture-of-Experts Models Training",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-01",
+          "authors": "Mengyuan Fan, Peizhuang Cong, Zixiao Huang, Si Xu, Tong Qiao, Yanghao Li, Jing Yang, Tong Yang, Quanlu Zhang, Yu Wang",
+          "institutions": "Peking University, Infinigence AI, Tsinghua University",
+          "abstract": "随着模型规模增长，分布式训练不可避免，自动并行能以较低代价搜索出高效并行策略，但该问题的难度由模型复杂度与集群结构共同决定。MoE 已成为主流架构，同时加速器硬件快速迭代使集群异构成为常态，两者叠加给自动并行带来新的挑战：已有方法通常只针对 MoE 架构、或只针对异构集群，无法推广到两种挑战并存的场景。为此作者提出 HAPMoE——面向 MoE 训练的异构感知自动并行规划器：它构建轻量的 MoE 感知代价模型，在六维并行空间中高效搜索，产出的并行方案可直接部署到 Megatron-LM 上。实验显示 HAPMoE 在异构集群上把端到端训练吞吐最高提升 3.2×，其非均匀流水线切分额外带来最高 78% 的收益，剪枝增强的动态规划算法在 1 分钟内完成搜索。",
+          "contributions": [
+            "提出 MoE 感知的轻量代价模型，并设计可覆盖 MoE 与异构集群共存场景的六维并行空间搜索。",
+            "支持非均匀流水线切分，使流水线划分适配异构加速器配比。",
+            "剪枝增强的动态规划在 1 分钟内完成搜索，方案可直接部署到 Megatron-LM。"
+          ],
+          "conclusions": [
+            "同时处理 MoE 结构复杂性与集群异构性，可带来最高 3.2× 的端到端训练吞吐提升；",
+            "非均匀流水线切分是收益的重要来源（最高额外 +78%），且搜索效率满足实际使用需求。"
+          ],
+          "experiments": [
+            "异构集群上端到端训练吞吐相对基线最高提升 3.2×；",
+            "非均匀流水线切分额外贡献最高 78% 增益；",
+            "剪枝增强动态规划在 1 分钟内完成并行方案搜索。"
+          ],
+          "significance": "把自动并行从「只处理 MoE」或「只处理异构」推进到两者同时成立的真实集群场景。",
+          "arxivUrl": "https://arxiv.org/abs/2609.39350",
+          "pdfUrl": "https://arxiv.org/pdf/2609.39350.pdf",
+          "takeaway": "MoE 训练自动并行的真正难点是模型结构复杂性与集群异构性叠加，HAPMoE 用六维搜索 + 非均匀流水线切分解决。",
+          "keyExperiment": "训练吞吐最高 3.2×，非均匀流水线切分额外 +78%，搜索 1 分钟内完成。",
+          "index": 2
+        },
+        {
+          "title": "Characterizing High Bandwidth Flash for LLM Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-01",
+          "authors": "Zack Yu, Chloe Wong, Coleman Hooper, Minjae Lee, Wonjun Kang, Youngjin Cho, Michael W. Mahoney, Yakun Sophia Shao, Kurt Keutzer, Amir Gholami",
+          "institutions": "UC Berkeley, FuriosaAI",
+          "abstract": "LLM 服务需要大量内存来存放模型权重与 KV cache，随着模型变大、上下文变长，内存容量与带宽日益成为服务性能瓶颈；agent 类工作负载在持续增长的上下文上反复交互，进一步放大这一压力，使 KV 状态的保留与复用变得关键。高带宽闪存（HBF）可以扩展加速器内存容量，但访问开销与写入寿命限制让使用方式变得复杂。作者系统评估 HBF 用于高吞吐 agent 服务时的系统设计与调度选择，提出 HBM-HBF-主机三级存储体系以及带缓冲的缓存感知调度，并用 trace 驱动模拟分析其对性能、能耗与 HBF 写入寿命的影响。在所评估的工作负载上，最快的 HBF 增强系统相对纯 HBM 系统把完成时间缩短 36.1-87.0%，建模能耗节省最高 55.8%（但部分轻负载上 HBF 反而增加能耗）；带缓冲的缓存感知调度把估计的 HBF 写入寿命从 4.77 年延长到 14.82 年。",
+          "contributions": [
+            "给出 HBF 用于 LLM/agent 服务的系统级刻画，提出 HBM-HBF-主机三级存储体系。",
+            "提出带缓冲的缓存感知调度，协调数据放置与调度以同时改善性能和写入寿命。",
+            "用 trace 驱动模拟量化性能、能耗与 HBF 寿命之间的权衡，并指出 HBF 的适用边界。"
+          ],
+          "conclusions": [
+            "额外容量只有在数据放置与调度协同设计时才能转化为服务性能与能效收益；",
+            "写入寿命是 HBF 落地的硬约束，调度策略可直接把它从数年量级延长到十余年。"
+          ],
+          "experiments": [
+            "最快的 HBF 增强配置把完成时间缩短 36.1-87.0%（相对纯 HBM 系统）；",
+            "建模能耗节省最高 55.8%，但轻负载上 HBF 会增加能耗；",
+            "带缓冲的缓存感知调度把估计写入寿命从 4.77 年延长至 14.82 年。"
+          ],
+          "significance": "把闪存容量层引入 LLM 服务时，性能、能耗与写入寿命必须一起设计，而调度是关键杠杆。",
+          "arxivUrl": "https://arxiv.org/abs/2609.39131",
+          "pdfUrl": "https://arxiv.org/pdf/2609.39131.pdf",
+          "takeaway": "HBF 扩容量能把完成时间缩短 36-87%，但收益依赖缓存感知调度，且写入寿命必须靠调度从 4.77 年拉到 14.82 年。",
+          "keyExperiment": "最快配置完成时间缩短 36.1-87.0%，调度把 HBF 写入寿命从 4.77 年延长到 14.82 年。",
+          "index": 3
+        },
+        {
+          "title": "Preserving Provenance in Shared KV Caches for LLM Serving",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-01",
+          "authors": "Wei Song, Yuxin Cao, Xi Zheng, Leo Zhang, Xiao Cheng",
+          "institutions": "Macquarie University, National University of Singapore",
+          "abstract": "生产级 LLM 服务栈通常把推理引擎的本地前缀缓存与共享 KV cache 层组合使用。本地缓存会按 adapter、权重配置与共享域区分请求，共享层却可能只用 token 内容与粗粒度模型元数据作为键，该边界抹掉来源信息，使相同 token 在不兼容的计算或共享上下文下碰撞。作者把这一组合缺陷称为 provenance-blind reuse：对三个 vLLM connector 的源码审计确认键信息存在结构性缺失；运行时实验在 vLLM 与两个 SGLang 版本、7 个家族 12 个模型、160 多种配置上复现，跨 adapter 碰撞把准确率从 0.94 降到 0.64，KV 表示不兼容时推理准确率归零，缺少 salt 时可通过时序实现 93% 的 prompt 识别。作者把缺失的保证形式化为 KV provenance contract，并给出规范描述符与差分检查器。",
+          "contributions": [
+            "首次系统研究共享 KV cache 的 provenance-blind reuse：源码审计确认结构性缺失，运行时实验复现碰撞。",
+            "把缺失保证形式化为 KV provenance contract：共享键必须在声明维度注册表上对计算与共享来源单射，且身份跨 worker 稳定。",
+            "提出 canonical descriptor 与差分检查器（检测改 KV 状态却不改键的维度），落地到 vLLM 与 SGLang 0.5.20 三条缓存路径。"
+          ],
+          "conclusions": [
+            "共享 KV 复用的键设计是正确性与安全性的必要条件，而不是实现细节；",
+            "任何具备稳定身份的维度都可以在没有 connector 特化逻辑的前提下加入键。"
+          ],
+          "experiments": [
+            "三个 vLLM connector 的源码审计确认键信息结构性缺失；",
+            "12 个模型、7 个家族、0.5B-32B、160+ 配置中复现：跨 adapter 碰撞使准确率 0.94 降至 0.64；",
+            "KV 表示不兼容使推理准确率归零，缺 salt 时 93% 的 prompt 可经时序被识别。"
+          ],
+          "significance": "把 KV cache 跨请求复用的键语义提升为可形式化、可检查的契约，避免复用换来正确性与隐私上的双重损失。",
+          "arxivUrl": "https://arxiv.org/abs/2609.38706",
+          "pdfUrl": "https://arxiv.org/pdf/2609.38706.pdf",
+          "takeaway": "共享 KV cache 只按 token 内容做键会丢来源信息，跨 adapter 复用能把准确率从 0.94 打到 0.64，必须引入 provenance 契约。",
+          "keyExperiment": "跨 adapter 碰撞使准确率 0.94→0.64，KV 表示不兼容时准确率归零，缺 salt 时 93% prompt 可通过时序识别。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "QATFactory: A Versatile, Deployment-Aligned Framework for Quantization-aware Training and Distillation of LLMs",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-01",
+          "authors": "Weili Xu, Jisen Li, Yuqing Jian, Chenxi Li, Zhizhou Sha, Yifan Yu, Qingyang Wu, Chenfeng Xu, Zhongzhu Zhou, Tianyi Zhang, Ben Athiwaratkun",
+          "institutions": "Together AI, University of Illinois Urbana-Champaign, The University of Texas at Austin",
+          "abstract": "LLM 推理正加速转向低精度以兑现硬件加速器吞吐，但激进的训练后量化（PTQ）会损害模型质量。作者提出 QATFactory：一个开源框架，支持面向部署对齐的量化感知蒸馏（QAD）与量化感知强化学习（QARL）。它用 BF16 矩阵乘模拟部署量化，使模型能在无原生格式支持的硬件（如缺少 FP4 Tensor Core 的 H100）上完成 NVFP4 训练。框架支持 NVFP4、MXFP4 与 llama.cpp 的 Q4_K 格式，覆盖稠密与 MoE 模型、全参数与 LoRA 训练，导出的 checkpoint 可直接进入 vLLM 与 llama.cpp，无需额外有损转换。作者在 8B 到 230B 模型上实验，QAD 一致优于强 PTQ 基线：Qwen3.5-9B 上 NVFP4 平均基准准确率 68.9%、MXFP4 66.0%，优于最佳 PTQ 的 65.4% 与 56.4%。",
+          "contributions": [
+            "提出部署对齐的 QAD/QARL 框架：BF16 计算中模拟部署量化，从而在没有原生 FP4 硬件的 GPU 上完成 NVFP4 训练。",
+            "统一支持 NVFP4/MXFP4/Q4_K 格式、稠密与 MoE 模型、全参数与 LoRA 训练，checkpoint 可直接导出到 vLLM 与 llama.cpp。",
+            "在 8B-230B 参数规模上系统实验，并在生产推理引擎中评测导出模型的部署质量。"
+          ],
+          "conclusions": [
+            "量化感知蒸馏在多种格式与模型上稳定优于强 PTQ 基线，说明训练期对齐比纯事后量化的精度更高；",
+            "两种 FP4 格式虽然部署时都量化权重与激活，但对训练对齐的需求并不相同。"
+          ],
+          "experiments": [
+            "Qwen3.5-9B 上 QAD 平均基准准确率 NVFP4 68.9%、MXFP4 66.0%，对比最佳 PTQ 的 65.4% 与 56.4%；",
+            "实验覆盖 8B 到 230B 参数规模，导出的 checkpoint 在 vLLM/llama.cpp 中评估；",
+            "在缺少 FP4 张量核心的 H100 上完成 NVFP4 训练，无需额外有损转换步骤。"
+          ],
+          "significance": "把量化训练从「需要目标格式硬件」的约束中解开，让低精度部署链路的精度-效率权衡更可控。",
+          "arxivUrl": "https://arxiv.org/abs/2609.39223",
+          "pdfUrl": "https://arxiv.org/pdf/2609.39223.pdf",
+          "takeaway": "QATFactory 用 BF16 模拟部署量化，在没有 FP4 硬件的 H100 上也能做 NVFP4 量化感知蒸馏，Qwen3.5-9B 上比最佳 PTQ 高 3.5 个点。",
+          "keyExperiment": "Qwen3.5-9B：NVFP4 68.9%、MXFP4 66.0%，均高于最佳 PTQ 的 65.4%/56.4%。",
+          "index": 5
+        },
+        {
+          "title": "DEdit: Iterative Draft Editing for Speculative Decoding",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-01",
+          "authors": "Longxuan Yu, Bingsen Chen, Peng Shi, Dongkyu Lee, Yi Xiang, Hideo Kobayashi, Sheng Zhang, Shuaichen Chang, Xing Niu, Zhuoyan Xu, Greg Ver Steeg, Jiarong Jiang",
+          "institutions": "Amazon Web Services, University of California, Riverside",
+          "abstract": "投机解码通过轻量 drafter 提议 token、目标模型并行验证来加速自回归 LLM。基于扩散的 drafter 一次提出多个 token 以降低草稿延迟，但这些 token 是独立预测的：一个早期错误就会让前缀验证丢弃整段草稿，即使其中包含有用的后续预测。作者提出 DEdit——一个扩散 drafter，既能用常规并行 unmask 起草，也能通过 token-to-token 预测迭代编辑草稿，让后续预测成为修复早期错误的双向上下文，从而延长被接受的前缀。为教会模型在修复错误的同时保留正确预测，作者提出 ProposalMix：训练时按首轮置信度把草稿预测与真值 token 混合。在 Qwen3-4B 与 Qwen3-8B 的七个基准上，DEdit 取得最高的宏平均 token 接受率与加速，贪心解码下分别达到 5.72× 与 5.97×。",
+          "contributions": [
+            "提出 DEdit：可迭代编辑草稿的扩散 drafter，用后续 token 的双向上下文修复早期错误并延长接受前缀。",
+            "提出 ProposalMix 训练方案，按首轮置信度混合草稿预测与真值 token，使模型学会修复错误而不破坏正确预测。",
+            "在七个基准与两种模型规模上取得被评估 drafter 中最高的 token 接受率与端到端加速。"
+          ],
+          "conclusions": [
+            "接受率随编辑轮数与草稿窗口增大而提升，说明并行草稿的错误是可被后续上下文修复的；",
+            "ProposalMix 把会缩短接受前缀的有害编辑减少一半，把编辑器限制为 causal attention 则会降低接受率。"
+          ],
+          "experiments": [
+            "Qwen3-4B 与 Qwen3-8B 贪心解码下宏平均加速分别为 5.72× 与 5.97×（七个基准）；",
+            "ProposalMix 使有害编辑减半；",
+            "更多编辑轮数与更大草稿窗口带来更高接受率。"
+          ],
+          "significance": "把扩散式草稿从「一次成形」改为「可迭代修订」，直接针对前缀验证丢稿这一核心损失来源。",
+          "arxivUrl": "https://arxiv.org/abs/2609.38510",
+          "pdfUrl": "https://arxiv.org/pdf/2609.38510.pdf",
+          "takeaway": "扩散 drafter 的早期错误导致整段草稿被丢弃，DEdit 通过迭代编辑草稿把 Qwen3 上的宏平均加速推到 5.72-5.97×。",
+          "keyExperiment": "Qwen3-4B/8B 贪心解码宏平均加速 5.72×/5.97×，ProposalMix 把有害编辑减少一半。",
+          "index": 6
+        },
+        {
+          "title": "RATIO: Reasoning Analysis and Token-level Inference Optimization for Quantized Reasoning Models",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-01",
+          "authors": "Chengzhu Bao, Xianglong Yan, Tianao Zhang, Jiaqi Chen, Shaoqiu Zhang, Yulun Zhang",
+          "institutions": "Shanghai Jiao Tong University",
+          "abstract": "训练后量化（PTQ）已广泛用于降低 LLM 的内存占用与推理成本，但近期研究发现，把它用于推理模型时不仅会损害推理性能，还会加剧「过度思考」——产生更长的推理轨迹，从而抵消低精度推理本应带来的效率收益。现有方法多依赖复杂的优化流程；较新的轻量推理策略则使用预定义的过度思考标记，跨量化模型的适应性有限。为此作者提出 RATIO：识别模型特有的过度思考 token，并为每个 token 分配定制惩罚。RATIO 首先用量化感知推理行为分析（QRBA），通过比较全精度与量化模型之间的差异来定位过度思考 token；随后用 token 特定惩罚判定（TSPD），借助全精度指导推导逐 token 惩罚，无需额外训练。大量实验显示 RATIO 在准确率-效率权衡上优于现有 token 级干预：相比量化基线最高提升 9.8 个点准确率，并把思维链长度最多缩短 51.3%。",
+          "contributions": [
+            "指出 PTQ 在推理模型上会加剧过度思考、拉长理由链，从而抵消量化带来的效率收益。",
+            "提出 QRBA：通过全精度与量化模型的输出差异，定位模型特有的过度思考 token。",
+            "提出 TSPD：借助全精度指导推导逐 token 惩罚，无需额外训练，跨模型自适应。"
+          ],
+          "conclusions": [
+            "逐 token 定制惩罚比预定义标记更能适应不同的量化模型；",
+            "RATIO 能同时提升准确率与压缩理由链长度，改善量化的准确率-效率权衡。"
+          ],
+          "experiments": [
+            "相比量化基线最高提升 9.8 个点准确率；",
+            "思维链长度最多缩短 51.3%；",
+            "在准确率-效率权衡上优于现有 token 级干预方法。"
+          ],
+          "significance": "量化推理模型的主要代价不只是精度下降，还有被放大 的过度思考，推理期 token 级干预可以同时解决两者。",
+          "arxivUrl": "https://arxiv.org/abs/2609.39801",
+          "pdfUrl": "https://arxiv.org/pdf/2609.39801.pdf",
+          "takeaway": "量化会让推理模型「想得更多」，RATIO 定位模型特有的过度思考 token 并施加定制惩罚，准确率 +9.8 点、CoT 长度 -51.3%。",
+          "keyExperiment": "相比量化基线最高 +9.8 点准确率，CoT 长度最多缩短 51.3%。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "LampAttention: Look-Ahead Mixed-Precision FlashAttention for Dedicated Accelerators",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-01",
+          "authors": "Stanislav Budzinskiy, Marian Gloser, Tolunay Yilmaz, Ying Hong Tham, Yuanyi Lin, Wenyi Fang, Fan Wu, Philipp Petersen",
+          "institutions": "University of Vienna, Huawei",
+          "abstract": "大多数 attention logits 可以用低精度计算而不损害数值稳定性，但现有 attention kernel 并没有利用这一现象。作者提出一种硬件-算法协同设计的混合精度 FlashAttention：在 8 位格式下累加 key-query 乘积并计算其指数，然后自适应地识别敏感子块，改用 16 位重新计算。文章同时给出了能够高效执行这一流水线的专用加速器规格。基于 Qwen3 与 Gemma 3 的模拟实验表明，只要把少量子块重新路由到高精度，就足以恢复基线模型性能。",
+          "contributions": [
+            "观察到 attention logits 大多可在低精度下计算但 kernel 未加利用，据此提出混合精度 FlashAttention。",
+            "设计 8 位累加 key-query 乘积与指数计算、再对敏感子块做 16 位重算的流水线。",
+            "给出专用加速器规格（look-ahead 重算），形成完整的硬件-算法协同设计。"
+          ],
+          "conclusions": [
+            "只有少数敏感子块需要高精度，把它们选择性重算即可恢复基线精度，混合精度注意力在实践中可行；",
+            "该结论为专用加速器的精度配置提供了依据。"
+          ],
+          "experiments": [
+            "在 Qwen3 与 Gemma 3 上做模拟实验；",
+            "把选择性少数子块重新路由至 16 位即可恢复基线模型性能。"
+          ],
+          "significance": "为注意力 kernel 与加速器设计指出「低精度为主 + 选择性高精度重算」的路线。",
+          "arxivUrl": "https://arxiv.org/abs/2609.39361",
+          "pdfUrl": "https://arxiv.org/pdf/2609.39361.pdf",
+          "takeaway": "注意力 logits 大多能用 8 位算，只有少量敏感子块需要 16 位重算，LampAttention 把这条流水线做成了专用加速器规格。",
+          "keyExperiment": "Qwen3/Gemma 3 模拟实验：只把少量子块重路由到高精度即可恢复基线性能。",
+          "index": 8
+        },
+        {
+          "title": "Vosti: Specifying, Implementing, and Verifying Deterministic LLM Inference",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-01",
+          "authors": "Jianxing Qin, Alexander Du, Danfeng Zhang, Matthew Lentz, Danyang Zhuo",
+          "institutions": "Duke University",
+          "abstract": "确定性 LLM 推理要求：批组成、prompt 分块、prefill/decode 执行与 KV cache 复用不应改变输出。vLLM batch-invariant 与 SGLang deterministic 模式以此为目标，却缺乏系统级规格。作者把它形式化为「同 prompt、同采样状态在不同执行下应产生逐位相同 logits」，并发现现有模式在部分执行变化下仍会失败。作者为此提出 Vosti 引擎：kernel 选择不依赖运行时状态、缓存 KV 绑定逻辑前缀，证明在引擎/GPU kernel 边界分解为 Verus 归纳证明（调度与分页 KV 前缀共享保持 logits）与 Triton 分析（kernel 跨 batch、query 长度与分页布局输出一致）。Vosti 在全部执行变化下逐位一致，decode 密集性能与 vLLM batch-invariant 相当。",
+          "contributions": [
+            "把确定性 LLM 推理形式化为系统级规格：固定模型与配置下，同 prompt 同初始采样状态应产生逐位相同的 logits。",
+            "实测揭示 vLLM batch-invariant 与 SGLang deterministic 模式在部分执行变化下仍产生不同 logits。",
+            "实现 Vosti 引擎：kernel 选择与运行时状态解耦、KV 绑定逻辑前缀，并用 Verus 归纳证明 + Triton 分析器完成分层验证。"
+          ],
+          "conclusions": [
+            "生产系统的「确定性模式」缺少规格与证明，实测存在偏差，需要形式化保证；",
+            "Vosti 在提供更强的、可验证的确定性保证的同时，decode 密集负载性能与 vLLM batch-invariant 相当。"
+          ],
+          "experiments": [
+            "对 vLLM batch-invariant 与 SGLang deterministic 的测试发现：部分执行变化下 logits 不同；",
+            "Vosti 在全部测试的执行变化下产生逐位相同的 logits；",
+            "decode 密集负载下性能与 vLLM batch-invariant 模式相当。"
+          ],
+          "significance": "把「确定性推理」从工程模式升级为可形式化验证的规格，为分布式推理的可复现性提供基础。",
+          "arxivUrl": "https://arxiv.org/abs/2609.38981",
+          "pdfUrl": "https://arxiv.org/pdf/2609.38981.pdf",
+          "takeaway": "已有确定性推理模式实测仍会产生不同 logits，Vosti 用 Verus 证明 + Triton 分析把逐位一致变成可验证保证。",
+          "keyExperiment": "vLLM/SGLang 的确定性模式在部分执行变化下 logits 不同；Vosti 全部逐位一致且性能与 vLLM batch-invariant 相当。",
+          "index": 9
+        },
+        {
+          "title": "Cascadia: A Control-Plane-Free Alternative to Hyperconverged AI Infrastructure",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-01",
+          "authors": "Matias Parij, Pawan Paudel, Tate Berenbaum, Muthaiah Venkatachalam",
+          "institutions": "Not Community Labs Inc., Intel Corporation",
+          "abstract": "作者提出 Cascadia：在一批商用 Intel AI PC 集群上用其 CPU、集显与 NPU 资源服务大语言模型。每个节点内嵌 ingress、调度与执行，推理请求不需要专用的路由控制平面。节点用 CA 签发的 ed25519 证书加入 libp2p QUIC mesh，gossip 广播签名能力信息、在直连对等流上交换实时负载，并把 OpenAI 兼容请求路由到合格节点；运维方运行的证书机构在推理路径之外处理准入与集群管理。三种服务模式共用同一接口：单节点整模型执行、负载均衡副本，以及借助姊妹论文机制的流水线分片链。可选的 KV cache 迁移能在路由变化后复用兼容的会话前缀，未命中时冷重算；签名响应回执与哈希链日志支持溯源与审计。三节点 Phi-3.5-mini NPU 测试台在十个并发请求下达到单节点配置 3.10× 的响应吞吐，四节点部署记录到 4.06× 吞吐。",
+          "contributions": [
+            "提出无控制平面的去中心化 LLM 服务系统：每节点内嵌 ingress/调度/执行，节点经 libp2p QUIC mesh 与 ed25519 准入证书自组织。",
+            "三种服务模式（单节点整模型、负载均衡副本、流水线分片链）共用接口，支持 KV cache 迁移与冷重算。",
+            "签名响应回执与哈希链日志提供溯源审计，并与 IBM/Nutanix/VMware/HPE 平台做多维度对比。"
+          ],
+          "conclusions": [
+            "商品化 AIPC 集群在没有专用路由控制平面的条件下也能获得横向扩展的服务吞吐；",
+            "把准入与集群管理移出推理路径，有利于运维与信任管理。"
+          ],
+          "experiments": [
+            "三节点 Phi-3.5-mini NPU 测试台在十个并发请求下达到单节点配置 3.10× 的响应吞吐；",
+            "四节点部署记录到直接单节点服务 4.06× 的吞吐；",
+            "与 IBM、Nutanix、VMware、HPE 平台在部署足迹、硬件要求、调度、扩展、许可与信任等维度对比。"
+          ],
+          "significance": "用去中心化对等网络替代超融合 AI 基础设施的控制平面，为商品化异构 AI PC 集群提供可扩展的服务路径。",
+          "arxivUrl": "https://arxiv.org/abs/2609.38697",
+          "pdfUrl": "https://arxiv.org/pdf/2609.38697.pdf",
+          "takeaway": "Cascadia 把调度与入口下沉到每个 Intel AI PC 节点，靠 libp2p mesh 自组织服务 LLM，四节点部署拿到 4.06× 单节点吞吐。",
+          "keyExperiment": "三节点 NPU 测试台 10 并发下 3.10× 于单节点；四节点部署 4.06× 于直接单节点服务。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
