@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-03",
+  "title": "2026-10-03 论文精选",
+  "lede": "今日主线是「把通信与调度的成本算清楚」：GPU 发起通信被逐层拆到 GPU–NIC 边界、MoE megakernel 用运行时专家复制对抗路由偏斜、显存受限设备上的专家驻留与卸载调度，以及不重载 checkpoint 的原地故障恢复；算法侧覆盖编码 agent 的检索式投机解码、免训练 KV 剪枝与扩散 LLM 的代价曲面调度；架构侧落到 MPI 计算/内存受限 kernel 的相互作用、FP4 预训练的格式融合与 GPU 密集型 CI 的测试剪枝。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 770
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "GPU-Initiated Communication: Dissecting Down to the Bone",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-02",
+          "authors": "Javid Baydamirli, Ismayil Ismayilov, Kaan Oktay, Didem Unat",
+          "institutions": "Koç University, fal",
+          "abstract": "GPU 发起通信让 GPU 线程把 RDMA 操作直接投递给网卡，是 NVSHMEM、NCCL GIN 与 DeepEP 的底层机制。但其性能特征少有公开文档，库对比无法区分「硬件机制成本」与「库封装开销」。本文在 GPU–NIC 边界做拆解：讲清 GPU 侧网络路径的四个环节——队列放置、工作请求构造、doorbell 排序与完成语义；再给出 mini-gda 与 mini-proxy 两个最小传输，覆盖 GPU 直接提交与 CPU 代理提交两条路径，并与 NVSHMEM、NCCL GIN、DeepEP 等库在四代 NVIDIA 平台上对照测量。最小 GPU 路径发出一次操作仅 0.7μs、完成 4.0μs；各库因队列管理、内存序与完成域管理额外引入最多 4.6μs 发出时间；调优良好的 CPU 代理空载时可追平 GPU 路径，代价是占用一个专用核。",
+          "contributions": [
+            "首次系统拆解 GPU–NIC 提交路径的队列放置、工作请求构造、doorbell 顺序与完成语义，给出可把硬件机制开销与库开销分离的评测方法。",
+            "开源 mini-gda 与 mini-proxy 两个最小传输，在 H100/H200/B200/GB200 四代平台上与 NVSHMEM IBGDA、NCCL GIN、DeepEP、UCCL-EP、MSCCL++、fabric-lib 交叉测量。",
+            "量化队列共享、连接规模与 SM 占用对通信的影响，指出 doorbell 批处理与队列并行是打满带宽上限的必要条件及其资源代价。"
+          ],
+          "conclusions": [
+            "提交路径本身不能预测通信性能：通信代码即使不被使用也会降低 GPU block 驻留；与 bulk 流量共享队列会把延迟抬高 1–3 个数量级。",
+            "库在最小路径之上的开销可达数倍，优化重点应落在队列管理与完成域，而不是单次投递的延迟。"
+          ],
+          "experiments": [
+            "最小 GPU 路径发出一次操作 0.7μs、完成 4.0μs，库实现最多额外增加 4.6μs 发出时间；",
+            "与 bulk 流量共享队列使延迟上升 1–3 个数量级；约 3000 活跃连接时 all-to-all 的 NIC 消息率损失 59%；",
+            "InfiniBand 平台上限 260 M msg/s，需要 doorbell 批处理与队列并行才能达到，两者都伴随资源代价。"
+          ],
+          "significance": "把 GPU 发起通信的成本逐项归因到硬件与库两侧，为 MoE 通信栈的性能诊断提供了可复用的标尺。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01380",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01380.pdf",
+          "index": 1,
+          "takeaway": "GPU 发起通信的瓶颈常出在库的队列与完成域管理，而非投递本身；共享队列与 SM 占用会吃掉全部收益。",
+          "keyExperiment": "最小路径发出 0.7μs、完成 4.0μs，库实现最多额外引入 4.6μs；与 bulk 共享队列使延迟上升 1–3 个数量级。"
+        },
+        {
+          "title": "MegaFlux: Skew-Resilient MoE Megakernels via Pipelined Expert Replication",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-02",
+          "authors": "Jianzhu Yao, Siva Kumar Sastry Hari, Vignesh Balaji, Sana Damani, Insu Jang, Pramod Viswanath, Christos Kozyrakis",
+          "institutions": "NVIDIA, Princeton University",
+          "abstract": "MoE megakernel 把专家并行通信与计算融进单个 kernel，但专家位置固定时路由偏斜会造成 GPU 忙闲不均：过载 GPU 决定层延迟，其余 GPU 空转。复制热点专家能把工作搬到空闲 GPU，但副本要先取到专家权重，训练时其权重梯度还要回到专家属主处归约。MegaFlux 把专家复制变成运行时决策，并把复制引入的通信流水化：片上规划器在每 GPU 副本预算下联合选择副本位置与 tile 对齐的 token 块分配；前向与反向 megakernel 都实现流水化复制，副本在权重到达时即开始计算，反向把副本梯度归约与专家计算重叠。在 8 张 B200、每方向 147 组配置中，前向与反向相对固定放置分别取得 1.45× 与 1.28× 几何平均加速；集成进 vLLM 后 DeepSeek-V4-Pro prefill 端到端中位加速 1.13–1.26×。",
+          "contributions": [
+            "把专家复制变成运行时决策：片上规划器在每 GPU 副本预算下联合选择副本位置与 tile 对齐的 token 块分配，且不改变路由器输出。",
+            "设计前向与反向的流水化复制 megakernel：副本权重到达即开始计算，反向把副本梯度归约与专家计算重叠。",
+            "扩展 TensorRT-LLM 的 CuTeDSL MegaMoE 前向 kernel 并新增反向 MoE megakernel，在 8×B200 与 vLLM 集成环境中验证。"
+          ],
+          "conclusions": [
+            "路由偏斜造成的 straggler 可以用运行时专家复制显著缓解，前提是把复制引入的通信流水化而不是串行执行。",
+            "流水化是收益的主要来源：单独执行复制相关的传输与归约会吃掉复制本身带来的大部分收益。"
+          ],
+          "experiments": [
+            "8×B200、每方向 147 组配置下，前向 1.45×、反向 1.28× 几何平均加速，最高 2.14× 与 2.64×；",
+            "流水化隐藏前向 56–76% 的副本权重传输成本、反向 91–100% 的权重传输与梯度归约成本；",
+            "集成进 vLLM 后 DeepSeek-V4-Pro prefill 端到端中位加速 1.13–1.26×。"
+          ],
+          "significance": "把 MoE 的负载偏斜问题从「静态专家放置」推进到「运行时副本调度 + 通信流水线」，并落到工业级 kernel 与 serving 栈里。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00671",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00671.pdf",
+          "index": 2,
+          "takeaway": "MoE megakernel 的墙钟时间由最忙的 GPU 决定，用流水化的运行时专家复制填平偏斜才能拿到实际加速。",
+          "keyExperiment": "8×B200 上前向 1.45×、反向 1.28× 几何平均加速（峰值 2.14×/2.64×），vLLM 端到端中位 1.13–1.26×。"
+        },
+        {
+          "title": "MoE-CORE: Coordinated Expert Offloading and Residency for Memory-Constrained MoE Inference",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-02",
+          "authors": "Ke Yang, Yongji Gao, Xushi Li, Kui Luo, Sicheng Zhang, Tianming Zhou, Keyi Liu, Shufang Lu, Aoxuan Chen, Jie Meng, Jingchun Gao, Dan Li, et al.",
+          "institutions": "Shanghai Jiao Tong University, Huawei",
+          "abstract": "稀疏专家激活降低了 MoE 的计算量，但专家权重本身可能超出设备显存；把专家卸载到主机内存能让小显存设备跑起 MoE 推理，代价是 host-to-device 传输暴露在推理路径上。MoE-CORE 面向显存受限场景协调专家卸载与驻留：prefill 阶段用交替缓冲把完整专家层分级装入；decode 阶段组合非均匀的逐层缓存容量、领域先验初始化、路由历史感知的替换策略与跨层预取。DeepSeek-V4-Flash-W4A8 上五个负载平均 TPOT 38.0–44.8 ms，而同场景 vLLM Prefetch 配置为 1268.9–1269.1 ms；GLM-5.2-W4A8C8 上分别为 206.6–220.5 ms 与 5941.5 ms。在 84GB NPU 显存上限下，配合近似专家替换与深度 2 的多 token 预测可把 TPOT 压到 21.5 ms。",
+          "contributions": [
+            "提出 MoE-CORE：在显存受限设备上协调专家卸载与驻留，prefill 用交替缓冲分级装载完整专家层，decode 用多策略缓存管理。",
+            "组合非均匀逐层容量、领域先验初始化、路由历史感知替换与跨层预取，并提供可选的分数替换路径处理低分未命中。",
+            "在 DeepSeek-V4-Flash 与 GLM-5.2 两代 MoE 模型、各五个负载上取得相对 vLLM Prefetch 一个数量级以上的 TPOT 优势。"
+          ],
+          "conclusions": [
+            "当设备显存成为硬约束时，把专家驻留与传输调度联合优化，比单纯依赖预取更有效；",
+            "近似专家替换与多 token 预测能在精度损失可控的前提下进一步压低 TPOT。"
+          ],
+          "experiments": [
+            "DeepSeek-V4-Flash-W4A8 平均 TPOT 38.0–44.8 ms，对比 vLLM Prefetch 的 1268.9–1269.1 ms；",
+            "GLM-5.2-W4A8C8 上为 206.6–220.5 ms，对比 5941.5 ms；",
+            "84GB NPU 显存上限下，DeepSeek GSM8K 最佳配置配合近似替换与深度 2 MTP 达到 21.5 ms TPOT。"
+          ],
+          "significance": "说明在消费级/边缘显存约束下，MoE 推理的可行性主要取决于专家驻留与传输调度，而非算力本身。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01950",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01950.pdf",
+          "index": 3,
+          "takeaway": "显存受限设备跑 MoE 的关键是把「谁驻留、何时搬」做成逐层策略，而不是让 host-to-device 传输裸奔在推理路径上。",
+          "keyExperiment": "DeepSeek-V4-Flash 上 TPOT 38.0–44.8 ms vs vLLM Prefetch 的 1268.9–1269.1 ms，提升超过一个数量级。"
+        },
+        {
+          "title": "Leto: Fast In-Place Recovery for LLM Training on Surviving Hardware",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-02",
+          "authors": "Geon-Woo Kim, Joon Ha Kim, Daehyeok Kim",
+          "institutions": "The University of Texas at Austin",
+          "abstract": "可继续工作的硬件故障会打断 LLM 训练，但这类故障允许在同一批硬件上恢复，无需重启、维修或更换。现有恢复系统仍然要重载 checkpoint、重算丢失进度并重建进程状态，让本可以继续训练的 GPU 空转。Leto 是一个利用存活硬件做原地恢复的容错训练系统，核心洞察是：恢复训练所需的状态可以保留或预先准备在活跃训练进程之外、同时仍留在同一硬件上。Leto 保留工作模型状态与可复用的进程状态，并在影子训练器里预初始化其余状态；作者设计了两层纠删保护与 chunk 级事务更新，保证被保留的模型状态可恢复且一致，并在活跃训练需要显存时回收影子状态。在 6 卡与 72 卡 A100 集群上，Leto 的恢复速度是最佳 checkpoint 基线的 3.6–6.5 倍，有效训练时间最多提升 13.7 个百分点；大规模仿真显示在 131,072 卡集群上可维持 95% 以上的有效训练时间。",
+          "contributions": [
+            "提出 Leto：利用存活硬件做原地恢复的容错训练系统，把恢复所需状态保留或预置在活跃训练进程之外但仍驻留同一硬件。",
+            "设计两层纠删保护与 chunk 级事务更新，保证保留状态的可恢复性与一致性，并支持在显存紧张时回收影子状态。",
+            "在 6 卡与 72 卡 A100 实测以及 131,072 卡仿真上验证恢复速度与有效训练时间的收益。"
+          ],
+          "conclusions": [
+            "对可在原地恢复的硬件故障，把状态预置在影子训练器里可以避免 checkpoint 重载与进度重算；",
+            "纠删保护与事务更新让常驻状态在故障下仍然安全，是原地恢复可行的前提。"
+          ],
+          "experiments": [
+            "6 卡与 72 卡 A100 集群上，恢复速度是最佳 checkpoint 基线的 3.6–6.5 倍；",
+            "有效训练时间最多提升 13.7 个百分点；",
+            "131,072 卡规模仿真显示有效训练时间超过 95%。"
+          ],
+          "significance": "把容错训练的代价从「重放丢失进度」压到「原地接续」，在大规模训练的有效算力利用率上给出可观收益。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00687",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00687.pdf",
+          "index": 4,
+          "takeaway": "针对可原地恢复的硬件故障，把状态留在设备侧并用影子训练器预置，比 checkpoint 重载快数倍。",
+          "keyExperiment": "6/72 卡 A100 上恢复速度达最佳 checkpoint 基线的 3.6–6.5 倍，有效训练时间最多提升 13.7 个百分点。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "AgSpec: Pushing the Limits of Retrieval-Based Speculative Decoding in Coding Agent Pipelines",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-02",
+          "authors": "Sumin Lee, Sukmin Cho, Suengjae Lim, Youngjin Kwon",
+          "institutions": "KAIST",
+          "abstract": "基于检索的投机解码通过复制已有文本的续写来起草 token，天然适合会反复重现代码、日志与历史尝试的编码 agent。但现有方法在 agent 流水线里不够用：可复用文本有相当一部分不在它们的语料里；草稿长度也没有考虑接受长度会随 agent 与轮次变化。AgSpec 补齐检索式草稿在编码 agent 流水线中缺失的语料与草稿长度策略：它从会话、工作区与全局三类语料检索，保留当前会话轨迹并按 agent 的输出格式索引已打开文件；用离线剖析出的上限约束每个 agent 的草稿长度，并依据验证反馈在线调整。在两个仓库级多 agent 编码基准上，AgSpec 在多数设置下优于五种检索式草稿器与 EAGLE-3，batch size 1 时把生成吞吐相对自回归解码提升至 4.37×、batch size 16 时提升至 4.76×，并在无仓库、无多 agent 流水线的基准上依然有效。",
+          "contributions": [
+            "为编码 agent 流水线补上检索式投机解码缺失的语料层：会话、工作区、全局三类检索，并按 agent 输出格式索引已打开文件。",
+            "提出草稿长度策略：离线剖析得到上限，再依据验证反馈在线自适应，适配不同 agent 与轮次漂移。",
+            "在两个仓库级多 agent 编码基准上优于五种检索式草稿器与 EAGLE-3，吞吐最高提升至 4.37×（bs=1）与 4.76×（bs=16）。"
+          ],
+          "conclusions": [
+            "在 agent 场景里，检索式投机的上限取决于语料覆盖与格式一致性，而不只是检索算法本身；",
+            "草稿长度需要按 agent 与轮次自适应，固定长度会浪费验证预算或错失接受机会。"
+          ],
+          "experiments": [
+            "batch size 1 时生成吞吐相对自回归解码提升至 4.37×，batch size 16 时提升至 4.76×；",
+            "在多数评估设置下优于五种检索式草稿器与 EAGLE-3；",
+            "在无仓库、无多 agent 流水线的基准上仍保持有效，说明收益可泛化到更广的编码 agent。"
+          ],
+          "significance": "把「编码 agent 会重复输出」这一应用特性直接转成投机解码的草稿源，为 agent 推理提速提供了低成本的工程路径。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01108",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01108.pdf",
+          "index": 5,
+          "takeaway": "编码 agent 反复重现代码与日志，把这些历史文本按 agent 输出格式索引成检索语料，就能把投机解码吞吐推高到 4× 以上。",
+          "keyExperiment": "两个仓库级多 agent 编码基准上吞吐最高 4.37×（bs=1）、4.76×（bs=16），优于五种检索式草稿器与 EAGLE-3。"
+        },
+        {
+          "title": "EchoPress: Query-Agnostic KV Cache Pruning via Virtual Context Reconstruction",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Jiawei Lin, Saibo Geng, Thomas Bourgeat",
+          "institutions": "EPFL",
+          "abstract": "KV cache 剪枝通过淘汰不重要的键值对来降低长上下文推理的显存占用。KVzip 用上下文重建来估计重要性——让模型逐块复述上下文——压缩质量很好，代价是额外的前向计算；用学习式近似可以降低成本，但需要针对模型训练。本文先分析 KVzip 判定重要缓存信息的机理，指出其重建分数可以用 prefill 阶段已经算出的信息来近似，由此提出 EchoPress：一种免训练方法，用标准 prefill 的 query 与 key 近似重建注意力，并且对每个请求只重建第一个 chunk 来校准其余上下文的重要性分数。在 LongBench 与 RULER、Qwen3-8B 与 Llama-3.1-8B-Instruct 上，EchoPress 在 50%–90% 的淘汰率区间内与 KVzip 任务精度持平，同时把压缩开销降低 1.7–19.6 倍，总 prefill 时间最多降低 2.9 倍。",
+          "contributions": [
+            "剖析 KVzip 重建式重要性判定的机理，说明其分数可由 prefill 阶段已计算的信息近似。",
+            "提出免训练的 EchoPress：用标准 prefill 的 query 与 key 近似重建注意力，仅重建首个 chunk 即可校准其余上下文的重要性。",
+            "在 LongBench 与 RULER、两个 8B 模型、50%–90% 淘汰率下与 KVzip 精度持平，压缩开销降低 1.7–19.6 倍。"
+          ],
+          "conclusions": [
+            "重建式重要性估计所需的绝大部分信息在 prefill 阶段已经存在，无需额外前向传播；",
+            "免训练近似让 KV 剪枝的部署成本大幅下降，同时保住压缩质量。"
+          ],
+          "experiments": [
+            "LongBench 与 RULER、Qwen3-8B 与 Llama-3.1-8B-Instruct 上，50%–90% 淘汰率区间任务精度与 KVzip 持平；",
+            "压缩开销降低 1.7–19.6 倍；",
+            "总 prefill 时间最多降低 2.9 倍。"
+          ],
+          "significance": "把「重建式重要性」从需要额外前向的探针变成 prefill 的副产品，让高质量 KV 剪枝真正具备上线可行性。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00412",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00412.pdf",
+          "index": 6,
+          "takeaway": "KV 剪枝的重要性分数不必额外算——prefill 已经算过，只重建第一个 chunk 就能校准全局重要性。",
+          "keyExperiment": "50%–90% 淘汰率下精度追平 KVzip，压缩开销降低 1.7–19.6 倍，prefill 时间最多降低 2.9 倍。"
+        },
+        {
+          "title": "Denoising Surface: Modeling and Predicting Inference Cost for Diffusion LLM Serving",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Haoyu Zheng, Fangcheng Fu, Binhang Yuan, Yongqiang Zhang, Liang Deng, Hao Wang, Yuanyuan Zhu, Xiao Yan, Jiawei Jiang",
+          "institutions": "HKUST, Wuhan University, Central China Normal University, Damen Database",
+          "abstract": "扩散大语言模型正从研究走向真实 serving，而请求调度与资源分配依赖对单请求推理代价的准确估计。常见代价代理在扩散 LLM 上失效：输出长度忽略了单次前向可以解掩多个 token，去噪步数忽略了各步成本的异质性。块自回归生成机制在「输出块 × 块内去噪步」两维上形成执行结构，标量代理却把它压扁成一个数。基于此提出 Denoising Workload Surface：把二维块-步结构保留为概率曲面，用来加权异质的逐步成本；再设计由粗到精的训练方案，让仅依赖 prompt 的轻量预测器准确预测该曲面。预测器仅需单 CPU 核即可运行，不与 serving 模型争抢 GPU；它还解耦了请求相关行为与部署相关成本，可跨硬件迁移而无需重训。真实 serving 实验中，代价预测误差相对标量预测器最多降低 2.50 倍，其引导的最短作业优先调度把在线聊天端到端延迟最多降低 1.92 倍。",
+          "contributions": [
+            "指出标量代价代理在扩散 LLM 上丢失了块-步二维执行结构，提出 Denoising Workload Surface 概率曲面来刻画代价。",
+            "设计由粗到精的训练方案，使仅依赖 prompt 的轻量预测器可在单 CPU 核上预测该曲面，避免与 serving 模型争抢 GPU。",
+            "把曲面用于 DWS 引导的最短作业优先调度，在真实 serving 环境中验证预测精度与端到端延迟收益。"
+          ],
+          "conclusions": [
+            "扩散 LLM 的请求调度需要保留二维执行结构的代价模型，标量代理不足以支撑请求管理；",
+            "把请求相关行为与部署相关成本解耦，使代价预测器可跨硬件迁移，降低部署成本。"
+          ],
+          "experiments": [
+            "真实 serving 实验中代价预测误差相对标量预测器最多降低 2.50 倍；",
+            "曲面引导的最短作业优先调度把在线聊天端到端延迟最多降低 1.92 倍；",
+            "预测器仅需单 CPU 核即可运行，不占用 serving GPU。"
+          ],
+          "significance": "为扩散 LLM 服务补齐了「代价可预测」这一调度前提，是扩散解码从 demo 走向可调度服务的关键一环。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00499",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00499.pdf",
+          "index": 7,
+          "takeaway": "扩散 LLM 的一次前向可解掩多个 token，代价必须用「块 × 步」二维曲面建模，标量代理会算错。",
+          "keyExperiment": "代价预测误差最多降低 2.50 倍，引导调度使在线聊天端到端延迟最多降低 1.92 倍。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Exploiting the Interplay of Compute- and Memory-Bound kernels in MPI Applications",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-02",
+          "authors": "Ayesha Afzal, Krishna Manda, Georg Hager",
+          "institutions": "NHR@FAU (Erlangen), University of Bonn",
+          "abstract": "并行程序常按同步、锁步方式设计，把通信停顿视为性能危害。但在通信很少、没有频繁同步点、且在计算受限与内存受限执行之间交替的应用中，一次 MPI 通信停顿反而是对内存带宽争用的意外缓解。作者用一个并行光流求解器演示这一点：它把计算受限的光线追踪 kernel 与内存受限的光流求解 kernel 组合，进程间通信几乎可以忽略；程序通过去同步与计算、内存密集阶段之间的自动重叠获得可观加速，说明自然去同步是一种架构感知的优化。当同一 ccNUMA 域上并发执行内存受限阶段的进程数接近带宽饱和点时，加速达到最优。作者还给出一个反例：用 MPI 异步进度降低通信开销反而显著劣化性能，因为它允许太多 rank 同时争抢内存带宽。为在更受控的条件下研究该动力学，作者开发了可调的双 kernel 微基准，显示需要显著的应用或系统噪声（自然或人为注入）才能实现完全去同步，并用带宽感知的模型化模拟器验证了结果。",
+          "contributions": [
+            "用并行光流求解器证明 MPI 通信停顿可作为内存带宽争用的缓解，自然去同步是一种架构感知的优化。",
+            "定位最优去同步程度：同一 ccNUMA 域内并发执行内存受限阶段的进程数接近带宽饱和点时加速最优。",
+            "给出 MPI 异步进度反而劣化性能的反例，并开发可调双 kernel 微基准与带宽感知模拟器验证机理。"
+          ],
+          "conclusions": [
+            "通信停顿并非总是危害，在计算与内存受限交替的负载里它可能提升吞吐，优化目标应是控制争抢程度而非消除通信；",
+            "完全去同步需要足够的应用或系统噪声，因此这类收益依赖运行时环境的自然抖动。"
+          ],
+          "experiments": [
+            "并行光流求解器通过去同步与计算/内存阶段自动重叠获得可观加速；",
+            "同一 ccNUMA 域内并发执行内存受限阶段的进程数接近带宽饱和点时加速最优；",
+            "使用 MPI 异步进度降低通信开销反而显著劣化性能；微基准显示需显著噪声才能完全去同步，结果被带宽感知模拟器复现。"
+          ],
+          "significance": "把「通信停顿是坏事」这一隐含假设摆到台面上，给出何时该主动去同步的架构级判据。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01587",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01587.pdf",
+          "index": 8,
+          "takeaway": "在计算受限与内存受限 kernel 交替的负载里，通信停顿反而缓解带宽争用；异步进度用错地方会火上浇油。",
+          "keyExperiment": "去同步在 ccNUMA 域内内存受限阶段并发数接近带宽饱和点时加速最优；MPI 异步进度降低通信开销反而显著劣化性能。"
+        },
+        {
+          "title": "Format-Aware Fusion for Fast FP4 Pretraining",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Robert Hu",
+          "institutions": "机构未标注",
+          "abstract": "FP4 张量核心能加速矩阵乘，但 scale 计算、操作数打包、layout 构造与保存反向状态可能把收益吃光。本文提出 format-aware fusion：把量化生产者与其 scale 域、消费者 layout 协同设计，覆盖 mxfp、全局 nvfp 与线程块局部 nvfp。作者用 Llama-3 家族 8B 训练到 1600 亿 token：同加速器对照中，bfloat16 18.8K、Transformer Engine nvfp 27.6K、最快的自研路径 37.9K tokens/s/GPU；mxfp 配方配合行梯度随机舍入与固定符号 32 值 Hadamard 预条件达 37.2K tokens/s/GPU（bfloat16 FLOP 利用率的 86.3%），损失终点高 2.11%。下游排名与损失排名不一致，FP4 结果取决于 scale 契约、操作数与执行路径。",
+          "contributions": [
+            "提出 format-aware fusion：把量化生产者与它的 scale 域、消费者 layout 协同设计，覆盖 mxfp、全局 nvfp 与线程块局部 nvfp。",
+            "用 Llama-3 家族 8B 训练到 1600 亿 token，给出同一加速器上 bfloat16、Transformer Engine nvfp 与自研路径的 tokens/s 与损失对照。",
+            "指出下游任务排名与训练损失排名不一致，FP4 的效果由 scale 契约、操作数与执行路径共同决定。"
+          ],
+          "conclusions": [
+            "FP4 预训练的收益取决于是否把 scale 计算与 layout 构造一起融进计算路径，只盯矩阵乘峰值会高估收益；",
+            "训练损失与下游表现并不同向，选择 FP4 配方需要以下游指标为准。"
+          ],
+          "experiments": [
+            "同一加速器对照：bfloat16 18.8K、Transformer Engine nvfp 27.6K、最快自研路径 37.9K tokens/s/GPU；",
+            "mxfp 配方配合行梯度随机舍入与固定符号 32 值 Hadamard 预条件达到 37.2K tokens/s/GPU、86.3% 的 bf16 FLOP 利用率，损失终点高 2.11%；",
+            "Transformer Engine 配方保留四个最终 bfloat16 block 时 27.1K tokens/s/GPU，损失终点仅高 0.87%。"
+          ],
+          "significance": "给出 FP4 预训练的端到端账本：真正决定收益的是 scale 与 layout 的融合方式，而不是低位宽本身。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00053",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00053.pdf",
+          "index": 9,
+          "takeaway": "FP4 预训练要么把 scale 与 layout 融进计算路径，要么被它们吃光收益；损失更低不等于下游更好。",
+          "keyExperiment": "最快自研路径 37.9K tokens/s/GPU（bf16 为 18.8K），mxfp 配方 37.2K 时损失终点仅高 2.11%。"
+        },
+        {
+          "title": "FastCI: Efficient GPU-Intensive CI for LLM Training Frameworks",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Tianshuo Qiao, Naiqian Zheng, Xiaopeng Liu, Shuguang Wang, Diandian Gu, Xuanzhe Liu, Xin Jin",
+          "institutions": "ByteDance",
+          "abstract": "LLM 的规模与复杂度持续增长，其训练框架也在快速迭代，因此持续集成对维护框架质量与稳定性至关重要。但与传统软件不同，LLM 训练框架的 CI 依赖 GPU 密集型测试，通常包含完整的模型训练或评估，CI 本身于是成为快速迭代的新瓶颈。本文提出 FastCI：利用运行时证据挑选受影响的测试，并把在等价上下文中执行改动代码的测试剪掉；再对高风险测试排序以更早暴露潜在失败，并沿各测试目标验证范围之外的维度优化测试负载。在作者自研 LLM 训练框架的 CI 负载上，FastCI 相比当前部署的 CI 流水线把 CI 延迟降低 77.5%、GPU 资源使用降低 63.9%，同时把被修改代码的覆盖率保持率提升 3.2%。FastCI 已集成进字节跳动的 LLM 训练框架 CI 流水线。",
+          "contributions": [
+            "提出 FastCI：用运行时证据选择受影响的测试，并剪除在等价上下文中执行改动代码的测试。",
+            "对高风险测试优先排序以更早暴露失败，并沿每个测试验证范围之外的维度优化测试负载。",
+            "在自研 LLM 训练框架的 CI 负载上把 CI 延迟降低 77.5%、GPU 使用降低 63.9%，修改代码覆盖率保持率提升 3.2%，并已在字节跳动落地。"
+          ],
+          "conclusions": [
+            "GPU 密集型 CI 可以靠证据驱动的测试选择与剪枝大幅压缩，而不必牺牲对改动代码的覆盖；",
+            "把测试按风险排序并对负载做维度级优化，能在同等资源下更早暴露失败。"
+          ],
+          "experiments": [
+            "CI 延迟降低 77.5%；",
+            "GPU 资源使用降低 63.9%；",
+            "修改代码覆盖率保持率提升 3.2%，且 FastCI 已集成进字节跳动的 LLM 训练框架 CI 流水线。"
+          ],
+          "significance": "把「训练框架自身的工程效率」纳入基础设施优化视野：GPU 不只是用来训练，也在被 CI 消耗。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01967",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01967.pdf",
+          "index": 10,
+          "takeaway": "训练框架的 GPU 密集型 CI 可以用运行时证据做测试选择与剪枝，把延迟压掉 77.5% 而不牺牲改动覆盖率。",
+          "keyExperiment": "CI 延迟降低 77.5%、GPU 资源使用降低 63.9%，改动代码覆盖率保持率还提升 3.2%。"
+        }
+      ]
+    }
+  ]
+}
