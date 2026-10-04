@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-04",
+  "title": "2026-10-04 论文精选",
+  "lede": "今日主线是 MoE 与 agent 服务的系统级优化：位级残差卸载、版本化执行、图划分稀疏注意力，把内存墙与随时可被打断的执行都变成可控的工程问题。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 760
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "RapidMoE: Exploiting Cross-Asymmetry via Adaptive Residual Offloading for Large-Scale MoE Inference",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-02",
+          "authors": "Wenxun Wang, Likai Ma, Zongle Huang, Chen Tang, Yongpan Liu",
+          "institutions": "Tsinghua University (BNRist)",
+          "abstract": "混合专家（MoE）模型的规模化部署面临算法需求与异构硬件特性之间的错配：现有 CPU-GPU 混合推理系统要么因频繁把专家加载到 GPU 而受制于 PCIe 带宽，要么过度依赖 CPU 计算，导致资源利用率低、延迟预算被突破。本文提出并利用“交叉不对称性”（Cross-Asymmetry）——MoE 路由的工作负载偏斜与异构硬件的性能差异之间存在结构性对齐。基于此，作者设计了残差卸载系统 RapidMoE，通过残差切分框架把卸载粒度从专家级细化到位级，并在三个维度展开：数据表示上实现紧凑且解耦的存储；路由策略上把计算划分为与硬件能力匹配的双路径；执行并行上在各设备间调度平衡的存储—计算负载。系统还引入统一多级重要性仲裁机制，在运行时自适应调整关键专家集合，保证精度—延迟的帕累托前沿。实验显示，相比最先进的卸载系统，RapidMoE 最高取得 3.5 倍解码加速与 2.1 倍预填充加速。",
+          "contributions": [
+            "提出“交叉不对称性”视角，指出 MoE 路由的负载偏斜可与 CPU/GPU 硬件能力差异结构对齐，从根本上打破算法—硬件错配。",
+            "设计残差切分框架，把专家级卸载细化为位级卸载，统一数据表示、双路径路由与跨设备执行并行三个维度。",
+            "提出统一多级重要性仲裁，在运行时动态调整关键专家集合，维持精度—延迟帕累托前沿。"
+          ],
+          "conclusions": [
+            "位级残差卸载能在 PCIe 带宽受限的异构平台上显著提升 MoE 推理性能，同时保持精度。",
+            "卸载粒度细化与运行时专家集仲裁是缓解 CPU-GPU 混合推理瓶颈的关键手段。"
+          ],
+          "experiments": [
+            "相比最先进的卸载系统，解码阶段最高加速 3.5 倍。",
+            "预填充阶段最高加速 2.1 倍。",
+            "在参数规模扩展时仍能避免固定延迟预算被突破且保持资源利用率。"
+          ],
+          "significance": "把 MoE 卸载粒度从专家级压到位级，是异构平台上突破 PCIe 带宽瓶颈的一条新路径。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01265",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01265.pdf",
+          "index": 1,
+          "takeaway": "位级残差卸载让 MoE 解码比 SOTA 卸载系统快 3.5 倍。",
+          "keyExperiment": "最高 3.5× 解码加速、2.1× 预填充加速。"
+        },
+        {
+          "title": "Serving a Revisable World: Versioned Execution for Interruptible Agents",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-02",
+          "authors": "Yanxin Zhang, Rahul Sharma, Nitin Vegesna, Zheyu Fu, Chang Liu, Trivikram Krishnamurthy",
+          "institutions": "NVIDIA",
+          "abstract": "LLM agent 在用户改指令、工具失败或计划变更时需要修订正在执行的任务。当前服务系统把“修订”实现为中止旧请求并提交替代请求，但旧执行已缓冲的输出与未完成工作必须停止影响应用，而它已完成的 KV 状态对后继请求仍可能有价值；分开处理这两件事会让过期效果仍可发布，并迫使后继请求重建本可继承的有效状态。本文提出 Retire，一套围绕“版本化执行”重构的服务控制平面：请求拥有调度与内存资源，执行版本拥有“权威”，即发布输出或为当前执行安装状态的许可。Retire 先撤销过期工作，再界定其剩余执行范围，并认证后继可继承的完整前缀；后继从该状态继续运行，被隔离的旧资源异步回收。作者在 vLLM 中跨输出发布、GPU 执行、KV 交接、分层恢复与分布式多租户服务等路径实现，正确性实验验证了当前版本输出与有效状态继承。",
+          "contributions": [
+            "提出“版本化执行”抽象：请求拥有调度与内存资源，执行版本拥有发布输出的“权威”，把失效与保留统一到一次版本切换中。",
+            "Retire 先撤销过期工作、界定其剩余执行范围，再认证后继版本可继承的完整前缀，避免后继重建有效状态。",
+            "在 vLLM 的输出发布、GPU 执行、KV 交接、分层恢复、分布式多租户服务全路径落地实现。"
+          ],
+          "conclusions": [
+            "把“中止—重启”改造成协调式交接，能快速停止过期工作同时为后继保留有用工作。",
+            "撤销与继承结合是降低交互式 agent 修订开销的关键机制。"
+          ],
+          "experiments": [
+            "受控配对实验中，“修订→后继”的首 token 延迟中位数下降 17.1%。",
+            "回放录制的编码 agent 中断到达序列：未产生任何过期输出，且所有最终版本在反复修订中持续推进。",
+            "正确性实验在输出发布、GPU 执行、KV 交接、分层恢复与多租户服务等路径上验证了当前版本输出与状态继承。"
+          ],
+          "significance": "对可被随时打断的 agent，把服务语义从“中止—重启”升级为“版本化交接”。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01160",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01160.pdf",
+          "index": 2,
+          "takeaway": "在 vLLM 上实现版本化执行，把 agent 修订的后继首 token 延迟中位数降低 17.1%。",
+          "keyExperiment": "修订到后继的 TTFT 中位数下降 17.1%，且回放中断序列不产生任何过期输出。"
+        },
+        {
+          "title": "CommunityKV: Efficient Long-Context Decoding via Graph Partitioning",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Joe McKenna, Anastasios Alexandridis, Nathan Susanj, Jing Liu",
+          "institutions": "Amazon AGI",
+          "abstract": "把 Transformer 扩展到长上下文受制于自注意力的二次开销与 KV 缓存的线性内存搬运增长。稀疏注意力通过只检索相关 token 缓解压力，但现有方法要么需要大规模训练，要么在免训练场景依赖语义粗糙的启发式或代价高昂、难以在解码中高效更新的聚类。本文提出 CommunityKV，把稀疏注意力建模为社区发现问题：它用标准预填充阶段已经算出的注意力分数构建 token 图并划分社区，从而检索语义一致的 token 组。作者给出一条局部更新规则，新生成的 token 可在常数时间内被分配到社区，使流式解码全程都能稀疏检索而无需全局重新划分。在 Qwen3 与 Llama-3.1 上三个长上下文基准的评测显示，按每个查询头建图时端到端生成吞吐可达稠密注意力的 1.25 倍，采用查询组图聚合时最高 1.71 倍且精度相当。",
+          "contributions": [
+            "把免训练稀疏注意力重述为社区发现问题，直接复用预填充阶段已算出的 QK^T 分数构图，不引入额外聚类开销。",
+            "提出常数时间的局部更新规则，新 token 在流式解码中即时归入社区，避免全局重新划分。",
+            "在 Qwen3 与 Llama-3.1 上三个长上下文基准验证，无需训练即可提升吞吐。"
+          ],
+          "conclusions": [
+            "图划分式检索在长上下文解码中能同时兼顾语义一致性与更新效率，优于聚类类方法。",
+            "逐头建图与查询组聚合可提供不同档位的吞吐—精度权衡。"
+          ],
+          "experiments": [
+            "单查询头建图：端到端生成吞吐最高为稠密注意力的 1.25 倍。",
+            "查询组图聚合：最高 1.71 倍，精度与稠密注意力相当。",
+            "在 Qwen3、Llama-3.1 与三个长上下文基准上完成评测。"
+          ],
+          "significance": "免训练稀疏注意力可以用一次图划分换来长上下文解码的稳定加速。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00418",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00418.pdf",
+          "index": 3,
+          "takeaway": "按查询头建图拿到 1.25× 吞吐，查询组聚合最高 1.71×。",
+          "keyExperiment": "查询组图聚合下端到端生成吞吐达到稠密注意力的 1.71 倍且精度相当。"
+        },
+        {
+          "title": "Fast Polynomial Transcendentals for LLMs",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Robert Hu",
+          "institutions": "机构未标注",
+          "abstract": "不同代 GPU 对矩阵、特殊函数与内存流水线的扩展速率并不一致，kernel 瓶颈随硬件代际迁移，FlashAttention-4 在 Blackwell 上暴露的正是这种失衡。本文检验短多项式程序能否加速 LLM 中其他 SFU 运算。作者先在隔离的 FP16 扫描中对比原生 PyTorch 求值与打包融合乘加（FMA）程序，覆盖 L2 与 HBM 工作集；再在四个 GB200 集成任务中用 3~4 次 bfloat16 多项式替换原生 sigmoid、tanh 与 SiLU，包括稠密 SiLU、tanh 软封顶注意力、sigmoid 注意力与路由专家 SwiGLU。隔离路径在 L2 提升 1.19–2.19 倍、HBM 提升 1.00–1.70 倍，完整训练步吞吐最高提升 8.0%，约 1000 亿 token 视界下训练损失差异在 −0.107 到 +0.079 之间。",
+          "contributions": [
+            "指出 GPU 流水线扩展速率失衡会让 kernel 瓶颈不断迁移，并以 Blackwell 上 FlashAttention-4 的情况为例说明。",
+            "用 3~4 次多项式配合解析对称性、目标格式舍入与打包 FMA，替换 sigmoid/tanh/SiLU 等 SFU 运算。",
+            "把替换嵌入四个真实训练任务（稠密 SiLU、tanh 软封顶注意力、sigmoid 注意力、路由专家 SwiGLU），并做同检查点消融与配对预训练对照。"
+          ],
+          "conclusions": [
+            "多项式近似在隔离算子上可获稳定加速，并在完整训练步上转化为可观吞吐收益。",
+            "在约 1000 亿 token 的训练视野内，该替换基本不改变模型行为。"
+          ],
+          "experiments": [
+            "隔离路径扫描：L2 常驻提升 1.19–2.19 倍，HBM 常驻提升 1.00–1.70 倍。",
+            "整训练步吞吐：稠密 SiLU 提升 2.7%，tanh 软封顶注意力 2.9%，路由专家 SwiGLU 8.0%。",
+            "sigmoid 注意力替换使整段注意力前向提升 7.4%、完整 GPU step 提升 0.3%；约 1000 亿 token 时训练损失差异为 −0.107~+0.079。"
+          ],
+          "significance": "在 SFU 成为瓶颈的 GPU 代际上，短多项式替换是最廉价的一类 kernel 优化。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00049",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00049.pdf",
+          "index": 4,
+          "takeaway": "路由专家 SwiGLU 换用 BF16 短多项式后整训练步吞吐提升 8.0%。",
+          "keyExperiment": "隔离路径最高 2.19×（L2），整训练步最高 +8.0%，损失差异仅 −0.107~+0.079。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "DRelay: Global Draft Context for Prefix-Aware Parallel Speculative Decoding Repair",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-02",
+          "authors": "Zhuoyu Wang, Junnan Huang, Xinyu Chen",
+          "institutions": "HKUST (Guangzhou)",
+          "abstract": "并行草稿降低了投机解码的草稿开销，但其收益仍受限于被接受前缀的长度：即使正确 token 就在候选池里，一次早期选择错误也会让后续预测全部作废。本文提出 DRelay，在目标模型验证之前，利用整个草稿块的全局信息对候选选择做前缀感知的选择性修复。其决策依据是候选之间的相关性以及已选路径：全局读取器为每个候选跨位置提取预测信息，因果选择器再把全局读取得到的候选级信息与前面位置已选 token 结合，判断当前位置的原生选择是否与全局证据和已选前缀一致，进而决定保留或替换该 token，从而修复早期错误、延长可接受前缀。作者联合训练草稿主干与选择器，把候选支撑学习与修复目标结合，并按每个块位置对连续接受前缀的潜在贡献加权修复损失。在 H800 上的八个基准中，DRelay 持续优于 DFlash、Domino 与 DSpark。",
+          "contributions": [
+            "提出 DRelay，在验证前用整个草稿块的全局信息对候选选择做前缀感知的选择性修复。",
+            "由全局读取器跨位置提取候选相关性，因果选择器结合已选前缀判定保留或替换，修复早期选择错误。",
+            "联合训练草稿主干与选择器，并按各位置对连续接受前缀的贡献加权修复损失。"
+          ],
+          "conclusions": [
+            "修复早期选择错误能显著延长接受前缀，从而同时提升平均接受长度与端到端解码性能。",
+            "在真实服务引擎下该修复机制可与主流并行草稿方法叠加。"
+          ],
+          "experiments": [
+            "H800 上八个基准的平均接受长度与端到端解码性能均优于 DFlash、Domino、DSpark。",
+            "SGLang 服务下相对 DFlash 的端到端加速提升 14.7%–16.8%。",
+            "相对 Domino 提升 8.7%–9.3%，相对 DSpark 提升 8.1%–9.3%。"
+          ],
+          "significance": "投机解码的瓶颈正在从草稿开销转向“接受前缀长度”，修复早期错选是最直接的杠杆。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01439",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01439.pdf",
+          "index": 5,
+          "takeaway": "在 SGLang 下相对 DFlash 等并行草稿方案再提速 8.1%–16.8%。",
+          "keyExperiment": "H800 八个基准全面超越 DFlash/Domino/DSpark，SGLang 服务端提速最高 16.8%。"
+        },
+        {
+          "title": "CAST: Cost-Aware Speculative Trees from One-Pass Block Drafters",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-02",
+          "authors": "Jungseob Lee, Sugyeong Eo",
+          "institutions": "Korea University, Yonsei University (Mirae)",
+          "abstract": "投机解码通过廉价地草拟未来 token、再由目标模型并行验证来加速大模型推理。块状草稿器可在一次前向中为整块未来 token 打分，但标准解码只验证其中得分最高的那条链，把其余已经打好分的候选全部丢弃。由于这些候选已经完成打分，多验证几个只增加目标模型计算、不增加草稿开销。本文提出 CAST（Cost-Aware Speculative Trees），把这些候选打包成树并在一次目标模型前向中验证，不改动目标模型、草稿器权重与解码规则。为了决定树该多宽，CAST 只在“下一个候选带来的期望收益超过它增加的验证时间”时继续加宽，因此树宽可依据一次延迟测量自动适配具体部署，而无需扫描各种宽度。作者在五个领域、三代 GPU、两个模型族上评测，并在贪心与采样解码下证明目标输出分布不变。",
+          "contributions": [
+            "发现块状草稿器已为整块候选打分，标准解码却丢弃多数候选；多验证它们只需目标模型计算，不增加草稿成本。",
+            "CAST 把候选打包成树并在单次目标前向中验证，无需改动目标模型、草稿权重与解码规则。",
+            "用期望收益与验证时间的比较在线决定树宽，并证明贪心与采样解码下输出分布不变。"
+          ],
+          "conclusions": [
+            "树宽应由部署的验证代价决定，而不是全凭经验固定。",
+            "在有损验证代价跳变的硬件上，自适应树宽的收益远高于固定宽度。"
+          ],
+          "experiments": [
+            "覆盖五个领域、三代 GPU、两个模型族，八个设置全部快于标准链，最高提速 43%。",
+            "验证代价在 kernel 边界跳变的场景：固定 128 token 树仅快 2%，预测宽度树快 20%。",
+            "理论上证明贪心与采样解码下目标输出分布不发生改变。"
+          ],
+          "significance": "把块草稿器“已付费”的候选真正用起来，并用延迟测量自动定树宽。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00321",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00321.pdf",
+          "index": 6,
+          "takeaway": "预测宽度下八个设置全部优于标准链，最高 43% 加速。",
+          "keyExperiment": "kernel 边界处固定 128 token 树只快 2%，预测宽度树快 20%。"
+        },
+        {
+          "title": "TopK-Guided: Adaptive, Budget-Aware Activation Sparsity for Efficient LLM Inference",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-02",
+          "authors": "Mukund Agarwalla, Chih-Jen Lin",
+          "institutions": "MBZUAI, National Taiwan University",
+          "abstract": "激活稀疏通过把不重要的激活置零以跳过相应计算来加速大模型推理，但现有免训练方法各有取舍：TEAL 等阈值方法能按 token 自适应稀疏度，却无法严格控制实际稀疏率；WINA 等 TopK 方法能保证固定稀疏率，却对所有 token 使用同一预算。此外两类方法都在所有 Transformer 块上使用同一预算，忽视了块间敏感度差异。本文提出 TopK-Guided，同时解决这两点：它把有界的 token 级稀疏自适应与感知敏感度的块级预算分配结合起来。在 Llama-2 与 Llama-3 上，TopK-Guided 在困惑度与下游准确率上一致优于 TEAL 与 WINA，同时保持与 WINA 基本相同的稀疏相关投影计算量，高稀疏率下收益最大；消融实验显示两个组件提供互补增益。",
+          "contributions": [
+            "指出现有免训练激活稀疏方法的两个缺口：无法同时控制自适应性与实际稀疏率，且忽略块间敏感度差异。",
+            "提出 TopK-Guided，把有界 token 级稀疏自适应与敏感度感知的块级预算分配结合。",
+            "消融验证两个组件相互互补，且高稀疏率下收益最大。"
+          ],
+          "conclusions": [
+            "在同一算力预算下，token 与块两个层级的稀疏调度都能带来一致性增益。",
+            "该方法是免训练后处理，易叠加到已有推理引擎。"
+          ],
+          "experiments": [
+            "Llama-2 与 Llama-3 上困惑度与下游准确率一致优于 TEAL 与 WINA。",
+            "稀疏相关投影计算量与 WINA 基本持平，高稀疏率下提升最大。",
+            "消融实验确认 token 级自适应与块级预算分配各自有效并互补。"
+          ],
+          "significance": "把稀疏预算同时下放到 token 与块两个尺度，是免训练推理加速的低成本增量。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01763",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01763.pdf",
+          "index": 7,
+          "takeaway": "在 Llama-2/3 上一致优于 TEAL 与 WINA，且不增加投影计算。",
+          "keyExperiment": "与 WINA 同等投影计算量下，困惑度与下游准确率全面领先。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "MoRA: MoE Pruning via Router Bias Learning and Expert Approximation",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Yushuai Sun, Zikun Zhou, Lin Gao, Jun Yu, Wenjie Pei",
+          "institutions": "Harbin Institute of Technology (Shenzhen)",
+          "abstract": "混合专家（MoE）模型只激活少量专家即可扩展参数，但仍需把完整专家池载入内存才能部署。结构化专家剪枝能通过删除专家降低显存占用，然而现有方法要么使用与模型性能不够对齐的排序准则，要么依赖代价高昂的子集搜索，而且普遍忽视保留专家之间的路由行为冗余。本文提出 MoRA，为每个专家引入可学习路由偏置，通过最小化语言建模损失与路由多样性正则项优化偏置：锐化后的路由分布可识别对性能关键的专家，同时鼓励选出路由偏好多样的专家。作者还引入专家近似机制作为剪枝后增强，用保留专家通过仿射变换逼近被剪专家的输出，进一步提升剪枝后模型表现。在 Qwen3-30B-A3B、DeepSeek-V2-Lite 与 Moonlight-16B-A3B 上各层移除 25% 与 50% 路由专家，九个零样本基准全面优于最先进剪枝算法。",
+          "contributions": [
+            "提出可学习路由偏置，用语言建模损失加路由多样性正则联合优化，锐化路由分布以识别关键专家。",
+            "引入专家近似机制作为剪枝后增强，用保留专家经仿射变换逼近被剪专家输出。",
+            "在三种 MoE 架构上按 25%/50% 比例剪枝，九个零样本基准超越最先进方法。"
+          ],
+          "conclusions": [
+            "路由行为冗余是既有专家剪枝方法忽视的重要维度，显式建模它可显著改善剪枝效果。",
+            "剪枝后仿射近似能以极小代价回收被剪专家贡献。"
+          ],
+          "experiments": [
+            "在 Qwen3-30B-A3B、DeepSeek-V2-Lite、Moonlight-16B-A3B 上每层移除 25% 与 50% 路由专家。",
+            "九个零样本基准上全面优于最先进剪枝算法。",
+            "剪枝后仿射近似在不重新训练的前提下进一步提升保留模型性能。"
+          ],
+          "significance": "把路由行为冗余纳入剪枝准则，让 MoE 在内存受限部署下少掉血。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00367",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00367.pdf",
+          "index": 8,
+          "takeaway": "九基准全面超越 SOTA 剪枝，且 25%/50% 两档剪枝率均验证。",
+          "keyExperiment": "每层剪掉 25%–50% 路由专家后，九个零样本基准仍全面优于最先进剪枝方法。"
+        },
+        {
+          "title": "Redundancy Meets Synergy: Dependency-aware Expert Selection for MoE via Submodular Optimization",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Zheng Lin, Shaoke Fang, Yuxin Zhang, Jinfeng Xu, Zihan Fang, Zhe Chen, Wei Ni, Jun Luo, Symeon Chatzinotas",
+          "institutions": "University of Luxembourg, Peking University, Fudan University, UBC, City University of Hong Kong, NTU",
+          "abstract": "混合专家（MoE）模型以稀疏激活扩展容量，但其部署常受显存需求制约，提取紧凑的专家子集是有前景的解法。然而现有专家选择启发式主要依赖 Top-k 排序，孤立地评估单个专家，忽略了 MoE 门控网络引入的专家间复杂依赖。本文提出 DS-MoE，一个理论上有据的专家选择框架，用差分次模（difference-of-submodular）优化重新定义该问题。作者通过分析损失退化的二阶泰勒展开，揭示了专家组合中的“功能二元性”：冗余（专家编码了重叠表征）与协同（专家提供互补的误差抵消）。为在这对矛盾中导航，他们把选择目标形式化为差分次模函数，从数学上解耦冗余削减与协同最大化，并设计了带可证明单调性保证的主化—最小化（MM）算法来高效寻找最优专家子集。实验表明 DS-MoE 能保住不可或缺的专家组合，性能优于最先进基线。",
+          "contributions": [
+            "通过损失退化的二阶泰勒展开揭示专家组合的功能二元性：冗余与协同并存。",
+            "把专家选择形式化为差分次模函数，数学上解耦冗余削减与协同最大化。",
+            "设计带可证明单调性保证的主化—最小化算法，高效求解最优专家子集。"
+          ],
+          "conclusions": [
+            "专家选择必须建模专家间依赖，孤立的 Top-k 排序会丢掉不可替代的协同组合。",
+            "差分次模加 MM 算法为压缩 MoE 提供了兼顾效果与效率的工具。"
+          ],
+          "experiments": [
+            "大量实验显示 DS-MoE 优于最先进基线，能保留关键的专家组合。",
+            "所提 MM 算法具备可证明的单调性保证，求解高效。",
+            "在显存受限的部署场景下验证了紧凑专家子集的可用性。"
+          ],
+          "significance": "MoE 压缩的关键不是挑“最强的专家”，而是挑“互相不冗余、能互相纠错”的专家组合。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00558",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00558.pdf",
+          "index": 9,
+          "takeaway": "把专家选择写成差分次模问题，保住关键协同组合并超越 SOTA。",
+          "keyExperiment": "用二阶泰勒分析揭示冗余/协同二元性，据此选择优于 Top-k 排序。"
+        },
+        {
+          "title": "MWOP: Modality-aware Width-wise Operation Pruning for Efficient MLLMs",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.CV",
+          "date": "2026-10-02",
+          "authors": "Xudong Wang, Hao Wu, Haozhe Hu, Peiran Yin, Xinghao Chen, Yunpu Ma, Wei Zhang, Xiaoyu Shen",
+          "institutions": "Eastern Institute of Technology (Ningbo), Shanghai Jiao Tong University, LMU Munich",
+          "abstract": "多模态大模型在处理长视觉—文本序列时推理成本高昂。已有算子压缩方法利用模态级冗余，但大体把注意力头内计算与共享前馈网络的通道当作统一单元处理，忽略更细粒度的冗余。本文发现：同一个注意力头内不同模态交互路径的冗余不同，同一个 FFN 通道在视觉与文本执行下的冗余也不同。据此作者提出 MWOP（Modality-aware Width-wise Operation Pruning），在每层独立剪枝视觉到视觉（V2V）、文本到视觉（T2V）与文本到文本（T2T）注意力路径，并分别为视觉与文本输入选择 FFN 通道。剪枝由一阶泰勒准则指导，注意力剪枝后重新评估 FFN 重要性，并辅以基于 LoRA 的恢复训练。为把细粒度稀疏转成实际加速，作者还开发了路径稀疏的 Triton 注意力核与精简的视觉侧 FFN 执行；该方法只削减每 token 计算，可与 token 压缩叠加使用。",
+          "contributions": [
+            "发现多模态冗余存在于更细粒度：头内不同模态交互路径、同一 FFN 通道的视觉/文本执行冗余各不相同。",
+            "提出 MWOP，逐层独立剪枝 V2V/T2V/T2T 注意力路径并分别为视觉与文本选择 FFN 通道，用一阶泰勒准则指导。",
+            "配套路径稀疏 Triton 注意力核与精简视觉侧 FFN 执行，把细粒度稀疏落成实际加速，并与 token 压缩互补。"
+          ],
+          "conclusions": [
+            "按模态交互路径而非整头/整通道剪枝，能挖到此前未被利用的冗余。",
+            "算子级压缩与 token 级压缩可同时使用，分别削减每 token 计算与序列长度。"
+          ],
+          "experiments": [
+            "LLaVA-OneVision-7B 上单用 MWOP 获得 1.6 倍预填充加速，12 个基准平均性能保留 99.7%。",
+            "与两种 token 压缩方法结合后，预填充加速分别从 2.0 倍、1.9 倍提升到 2.9 倍、2.7 倍。",
+            "在 Qwen2.5-VL-7B 上验证了跨架构适用性。"
+          ],
+          "significance": "多模态推理加速可以从“模态交互路径”这一此前被平均对待的粒度继续挖冗余。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01434",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01434.pdf",
+          "index": 10,
+          "takeaway": "单用 MWOP 即获 1.6× 预填充加速且保留 99.7% 性能。",
+          "keyExperiment": "LLaVA-OneVision-7B 上 1.6× 预填充加速、12 基准保留 99.7%，叠加 token 压缩后最高 2.9×。"
+        }
+      ]
+    }
+  ]
+}
