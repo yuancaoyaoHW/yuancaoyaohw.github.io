@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-05",
+  "title": "2026-10-05 论文精选",
+  "lede": "今日主线是“把部署成本与推理开销算到细处”：从电费承诺偏差下的服务控制、超低位宽的免 Hadamard 量化，到量化优化失衡、MTP 草稿头后训练与循环 MoE 的深度扩展。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 552
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "ePACT: Energy-Performance-Aware Commitment Tracking for LLM Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-02",
+          "authors": "You Peng, Youhe Jiang, Chen Wang, Binhang Yuan",
+          "institutions": "HKUST, Tsinghua University",
+          "abstract": "降低大模型服务的能耗并不必然降低部署成本：当电价采购对预设用电承诺的偏差（超用或欠用）施加非对称罚金时，单纯优化能效反而可能抬高账单。本文以小时为粒度研究用电承诺，提出“能耗—性能感知的承诺跟踪”问题，目标是在满足请求级服务要求的前提下最小化偏差成本。作者实现两级控制器 ePACT，随请求到达动态调整服务容量与 GPU 时钟：全局规划器依据实测能耗与剩余小时承诺滚动更新区间能耗目标；本地决策器预测候选配置的能耗与完成时间、检查是否错过截止期，再按非对称偏差成本择优，并设有服务优先的兜底策略；粗到细的动作搜索与服务异步并行。在 H20 与 H200 集群的 24 小时 trace 仿真中，ePACT 相对 vLLM 把非对称偏差成本降低 73.8% 与 75.7%，同时保持接近 vLLM 的 SLO 达成率，小时平均绝对偏差仅 2.16% 与 2.31%。",
+          "contributions": [
+            "把“能耗—性能感知承诺跟踪”形式化：在请求级服务约束下最小化小时用电承诺的非对称偏差成本。",
+            "提出两级控制器 ePACT：全局规划器滚动更新能耗目标，本地决策器预测能耗与完成时间并按非对称偏差成本择优，含服务优先兜底。",
+            "设计与服务异步并行的粗到细动作搜索，联合调节服务容量与 GPU 时钟。"
+          ],
+          "conclusions": [
+            "在 H20/H200 的 24 小时 trace 仿真中，ePACT 相对 vLLM 把非对称偏差成本降低 73.8%/75.7%，SLO 达成率与 vLLM 接近。",
+            "小时平均绝对用电偏差仅 2.16%/2.31%，说明贴近承诺目标的同时并未牺牲服务水平。"
+          ],
+          "experiments": [
+            "H20 与 H200 GPU 池的 24 小时全天 trace 仿真：非对称偏差成本较 vLLM 分别下降 73.8% 与 75.7%。",
+            "小时平均绝对偏差 2.16% 与 2.31%，SLO 达成率接近 vLLM。",
+            "单小时对比与控制器消融实验验证了全局规划器、本地决策器各自的贡献。"
+          ],
+          "significance": "把“电费承诺偏差”变成可在线优化的服务控制目标，是 LLM 服务成本治理的一个新维度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01784",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01784.pdf",
+          "takeaway": "服务成本不只由能耗决定：当电费承诺存在非对称罚金时，动态调整容量与 GPU 时钟比单纯降能耗更省钱。",
+          "keyExperiment": "H20 与 H200 的 24 小时 trace 仿真中，非对称偏差成本较 vLLM 降低 73.8% 与 75.7%，小时平均绝对偏差仅 2.16%/2.31%，SLO 达成率接近 vLLM。",
+          "index": 1
+        },
+        {
+          "title": "ITC-MoE: Importance-guided Token-aware Compression for MoE Diffusion Language Models",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-02",
+          "authors": "Lianjun Liu, Shipeng Li, You Huang, Weiqi Yan, Mingte Qiu, Huazhong Liu, Xiaofeng Zhu, Yunshan Zhong",
+          "institutions": "Hainan University, Xiamen University, Zhejiang Normal University",
+          "abstract": "MoE 扩散语言模型兼具灵活并行解码与更大容量，但庞大的专家参数带来高昂计算与存储开销。现有低秩 MoE 压缩多依赖静态分解与固定秩分配，忽略了此类模型的两个特性：跨模态非均匀冗余（输入、输出与专家维度的参数冗余及对秩截断的敏感度各不相同）与 token 级利用率差异（热点与冷门 token 的谱特性、专家激活模式不同）。本文提出 ITC-MoE：其一是重要度引导的自适应 Tucker 压缩，把激活与梯度重要度纳入专家权重变换，跨多个模态联合分解并在固定参数预算下自适应分配秩；其二是 token 感知的补偿与路由，对压缩敏感的热点 token 做轻量低秩补偿，对路由集中的冷门 token 限制候选专家集合。在 SDAR-30B-A3B-Chat-b32 上，30% 压缩预算下 MultiArith 准确率保持 96.33%，端到端最高加速 7.22 倍。",
+          "contributions": [
+            "指出 MoE 扩散语言模型存在“跨模态非均匀冗余”与“token 级利用率差异”两大特性，现有静态低秩压缩未能利用。",
+            "提出重要度引导的自适应 Tucker 压缩（IATC），融合激活与梯度重要度做多模态联合分解，在固定预算下自适应分配秩。",
+            "提出 token 感知补偿与路由（TCR）：热点 token 低秩补偿，冷门 token 收缩候选专家集合。"
+          ],
+          "conclusions": [
+            "按参数冗余与 token 差异联合适配压缩容量与推理执行，可在保持生成质量的同时大幅压低计算与存储成本。",
+            "在 MoE 扩散语言模型上验证了该框架相对静态低秩压缩的有效性。"
+          ],
+          "experiments": [
+            "SDAR-30B-A3B-Chat-b32 在 30% 压缩预算下，MultiArith 准确率保持 96.33%。",
+            "同一设置下端到端最高取得 7.22 倍加速。",
+            "代码已公开。"
+          ],
+          "significance": "为 MoE 扩散语言模型给出了一套面向“冗余结构 + token 分布”的压缩范式。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01296",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01296.pdf",
+          "takeaway": "MoE 扩散模型的冗余在模态与 token 两个维度上都不均匀，压缩策略必须同时按这两条轴自适应。",
+          "keyExperiment": "SDAR-30B-A3B-Chat-b32 上 30% 压缩预算下 MultiArith 保持 96.33% 准确率，端到端最高 7.22 倍加速。",
+          "index": 2
+        },
+        {
+          "title": "XOR-Trellis: Ultra-Low-Complexity Dequantization and Curvature-Aware Hadamard-Free LLM Quantization",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Xiaofan Que, Nir Elkayam, Spandan Pyakurel, Shuokai Pan, Dibakar Gope",
+          "institutions": "Arm, Rochester Institute of Technology",
+          "abstract": "Trellis 编码量化能在超低位宽下压缩大模型权重，且无需指数级码本，但落地有两个瓶颈：反量化吞吐必须足够并行，否则自身即推理瓶颈；以及在不做昂贵不相干变换（如 Hadamard 旋转）时如何保住精度。本文提出两项技术：一是超低复杂度的 trellis 反量化器，用结构化、硬件友好的状态到数值映射（约 14 个异或门加一个固定 4×4 FP4 查表）保留多样的重建选择；二是把离散 trellis 路径优化改写成曲率感知目标，在原始坐标空间刻画敏感度。二者结合实现免 Hadamard 的高质量低位宽量化与廉价高并行重建：Llama-3.2-1B 的 WikiText-2/C4 困惑度 30.04/36.35→23.04/28.86、零样本准确率 46.74%→51.43%；Llama-3.1-70B 困惑度 6.11/7.90→5.62/7.58、准确率 77.37%→78.43%。",
+          "contributions": [
+            "设计超低复杂度 trellis 反量化器，把状态到数值映射压缩为约 14 个异或门与一个固定 4×4 FP4 查表。",
+            "提出曲率感知的离散 trellis 路径优化目标，在原始坐标空间直接刻画模型敏感度，摆脱 Hadamard 不相干变换。",
+            "两者结合使超低位宽量化既可高并行重建，又无需昂贵旋转预处理。"
+          ],
+          "conclusions": [
+            "免 Hadamard 的 XOR-Trellis 在多个模型上保持稳定精度，并可与对角 D 加权、能量排序等搜索目标叠加继续提升。",
+            "反量化映射大幅简化后，重建不再成为部署瓶颈。"
+          ],
+          "experiments": [
+            "Llama-3.2-1B-Instruct：WT2/C4 困惑度由 30.04/36.35 降至 23.04/28.86，零样本平均准确率 46.74% 升至 51.43%。",
+            "Llama-3.1-70B-Instruct：困惑度由 6.11/7.90 降至 5.62/7.58，平均准确率由 77.37% 升至 78.43%。",
+            "Qwen3-8B：困惑度 11.57/15.34 降至 10.25/14.19，平均准确率 63.07% 升至 67.75%；Mistral-7B 达 5.67/8.37 与 67.95%。"
+          ],
+          "significance": "把 trellis 量化的反量化成本压到十余个异或门，并在不做 Hadamard 的前提下保住精度，是低位宽部署的一步实用推进。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00432",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00432.pdf",
+          "takeaway": "超低位宽量化的瓶颈不只是比特数，还有反量化吞吐与旋转预处理开销——XOR-Trellis 用极简硬件映射和曲率感知搜索同时绕开两者。",
+          "keyExperiment": "免 Hadamard 下 Llama-3.2-1B 的 WT2/C4 困惑度由 30.04/36.35 降到 23.04/28.86、准确率升到 51.43%；Llama-3.1-70B 困惑度降到 5.62/7.58。",
+          "index": 3
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "The Devil Is in the Reconstruction Loss Scale: Rethinking Optimization in LLM Quantization",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-02",
+          "authors": "Chao Li, Shigeng Wang, Anbang Yao",
+          "institutions": "Intel Labs China",
+          "abstract": "基于学习的训练后量化通常按 transformer 块逐单元顺序量化，并以均方误差（MSE）作为重建损失，但其诱导的优化行为鲜有研究。本文系统考察从第一个量化单元到最后一个单元的优化演化，在多种 PTQ 方法、模型族、规模、架构、量化设置与任务上一致发现“优化失衡”：各阶段重建损失的量级相差悬殊，最大可超过最小值的 10000 倍，进而在 MSE 下产生高度不均的梯度量级与参数更新强度。作者把这种跨阶段损失量级跨度称为“重建损失尺度”，并提出原则：各阶段优化强度应与损失尺度解耦。理论上证明，在样本、通道、token 与元素层级定义的均方根误差（RMSE）变体通过隐式梯度归一化天然实现该原则。以 RMSE 直接替换 MSE 即可显著获益：Qwen3.5-27B 在 W2A16 下困惑度由 37.51 降至 22.20，下游准确率由 60.45% 提升到 70.96%，额外开销仅约 ±3%。",
+          "contributions": [
+            "实证揭示学习式 PTQ 的“优化失衡”：跨阶段重建损失量级差距可超 10000 倍，导致梯度与更新强度严重不均。",
+            "提出“重建损失尺度”概念与设计原则——优化强度应与损失尺度解耦，并证明 RMSE 各层级变体通过隐式梯度归一化实现该原则。",
+            "给出可直接替换 MSE 的 RMSE 方案，几乎零额外开销。"
+          ],
+          "conclusions": [
+            "MSE 的问题不在损失形式本身，而在于它把巨大的跨阶段损失尺度翻译成不均的梯度强度。",
+            "RMSE 作为即插即用替代能一致提升量化质量，且运行与显存开销基本不变。"
+          ],
+          "experiments": [
+            "Qwen3.5-27B W2A16：RMSE 把困惑度由 37.51 降到 22.20，下游准确率由 60.45% 升到 70.96%。",
+            "跨阶段重建损失量级差距实测超过 10000 倍，对应输出空间梯度量级差距超过 100 倍。",
+            "运行时开销对照：LLaMA2-7B/Qwen3.5-9B 在 W4A16、W4A4 下 RMSE 与 MSE 的耗时差在 -1.19% 至 +2.82% 之间。"
+          ],
+          "significance": "把“损失尺度”这一被忽视的量推到台前，用一行替换换来显著的量化质量提升。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00983",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00983.pdf",
+          "takeaway": "学习式 PTQ 的瓶颈可能只是损失尺度失衡：把 MSE 换成 RMSE，Qwen3.5-27B 困惑度从 37.51 掉到 22.20、准确率升到 70.96%。",
+          "keyExperiment": "Qwen3.5-27B 在 W2A16 下改用 RMSE 后困惑度由 37.51 降至 22.20、下游准确率由 60.45% 升至 70.96%，开销变化在 ±3% 内。",
+          "index": 4
+        },
+        {
+          "title": "Match the Distribution, Not the Compute: Post-Training Multi-Token Prediction Heads",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Prachi Badarayani, Aidan Jay, Chenghui Zhou, Dayquan Julienne, Yuan Gao, Tianwei Chen, George Zerveas, Ishmam Zabir, Xiren Zhou, Chris Quirk, Xia Song",
+          "institutions": "Microsoft",
+          "abstract": "多 token 预测（MTP）让模型一次前向草拟多个 token，再经检验步骤保证输出分布与主干一致，从而提升自回归生成吞吐。现有开源 MTP 方案都在数万亿 token 的预训练中与主干联合训练预测头，把草稿器质量绑定在预训练阶段。本文追问：对冻结的推理模型做一次轻量后训练，是否足以达到同样的期望加速？在冻结的 Qwen3-8B 上加装 K=3 的链式 MTP 头，仅用约 25 亿 token 的目标模型思维链数据做普通交叉熵后训练，即可在数学、代码与知识基准上达到或超过联合训练的 MiMo-7B，而 MTP 训练 token 量少 3 到 4 个数量级。作者进一步提出链式感知的草稿检验松弛规则，允许相对主干分布的有限漂移，使期望加速再提升 12%-16% 且不损失任务精度；并给出自适应控制器，在推理时动态决定启用多少个 MTP 头。",
+          "contributions": [
+            "证明冻结推理模型只需轻量后训练即可获得高效 MTP 草稿头，训练 token 量比联合预训练少 3-4 个数量级。",
+            "提出链式感知的草稿检验松弛，允许有界分布漂移，在保持任务精度的同时提升期望加速。",
+            "提出自适应控制器，按推理时情况动态选择启用的 MTP 头数量。"
+          ],
+          "conclusions": [
+            "MTP 草稿器质量不必在预训练阶段决定，后训练即可匹配甚至超过联合训练基线。",
+            "松弛检验规则与动态头数控制能在不牺牲精度的前提下进一步兑现加速。"
+          ],
+          "experiments": [
+            "冻结 Qwen3-8B + K=3 链式 MTP 头，约 25 亿 token 后训练即在数学/代码/知识基准上达到或超过 MiMo-7B。",
+            "MTP 训练 token 用量比 MiMo-7B 联合预训练基线少 10^3-10^4 倍。",
+            "链式感知检验松弛使各基准期望加速再提升 12%-16%；自适应控制器挽回固定最大草稿长度造成的 11%-14% 加速损失。"
+          ],
+          "significance": "把 MTP 从“预训练专属”变成“后训练可加装”，显著降低了推理加速的获取门槛。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00888",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00888.pdf",
+          "takeaway": "MTP 草稿头不必在预训练阶段联合训练：对冻结模型做 25 亿 token 后训练即可匹配 MiMo-7B，token 用量少 3-4 个数量级。",
+          "keyExperiment": "约 25 亿 token 后训练即可在数学/代码/知识基准上比肩 MiMo-7B，且松弛检验带来 12%-16% 额外期望加速。",
+          "index": 5
+        },
+        {
+          "title": "Selection-Based Structured Reasoning: Toward Efficient Multimodal Search Agents",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Feiyu Gavin Zhu, Xiaoyu Zhu, Jiqi Yang, Rui Yang, Arnab Kumar Mondal, Yancheng Wang, Xinke Deng, Jean Oh, Reid Simmons, Joerg Liebelt, Xiang Kong, Zhongyu Jiang",
+          "institutions": "Apple, Carnegie Mellon University",
+          "abstract": "多模态 agent 常在每次行动前生成自由形式的推理；对小模型而言，有限容量会产出冗长却无助于行动生成的推理，同时带来可观推理开销。本文提出基于选择的结构化推理（SSR），把推理从开放式生成改写为选择：将反复出现的高层推理预先写成可复用的自然语言候选，每一轮模型依据当前上下文从候选中挑选，且不需要额外任务头。由于候选是预先给定的推理轨迹，可以并行打分：用 teacher forcing 预填充，在同一共享上下文的 KV cache 内、跨候选并发计算 token 似然。作者在七个多模态搜索基准上用 2B 与 4B 模型评测，在多种强化学习目标与监督微调设置下，SSR 在不牺牲任务表现的前提下带来显著效率收益：平均成功率与同规模领先搜索 agent 相当，而单轮推理时延降低超过 90%，每问题的总模型推理时延降低 28%-54%。",
+          "contributions": [
+            "把多模态 agent 的推理从开放式生成改写为对预定义候选轨迹的“选择”，无需额外任务头。",
+            "利用候选预定义的优势实现并行打分：在共享上下文的 KV cache 内并发计算各候选 token 似然。",
+            "在七个多模态搜索基准、2B/4B 模型与多种 RL/监督微调设置下给出系统评测。"
+          ],
+          "conclusions": [
+            "结构化选择式推理能在小模型上保持任务成功率的同时大幅压缩推理时延。",
+            "共享 KV cache 的并行候选打分是把“选择式推理”落到工程实现的关键。"
+          ],
+          "experiments": [
+            "七个多模态搜索基准上，平均成功率与同规模领先搜索 agent 相当。",
+            "单轮推理时延降低超过 90%。",
+            "每问题总模型推理时延降低 28%-54%。"
+          ],
+          "significance": "给多模态搜索 agent 提供了一条“用选择代替生成”的降本路径。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01892",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01892.pdf",
+          "takeaway": "把推理改成从预定义候选里选择，可并行打分：多模态搜索 agent 单轮时延降低逾 90%、每问总时延降低 28%-54%。",
+          "keyExperiment": "七个基准上平均成功率与同规模领先 agent 相当，同时单轮推理时延降低超 90%、总时延降低 28%-54%。",
+          "index": 6
+        },
+        {
+          "title": "Does Scaling Reinforcement Learning Really Require More Training?",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Bangji Yang, Jiajun Fan, Hongba Ma, Ruihan Guo, Ge Liu",
+          "institutions": "University of Illinois Urbana-Champaign, Tsinghua University",
+          "abstract": "扩展推理能力通常靠在强化学习或推理阶段投入更多算力。本文指出，一段已完成的强化学习训练历史本身就能产出比其优化器访问过的检查点更强的策略，作者称之为“策略空间扩展”：在不延长训练、也不增加单次查询推理算力的前提下，扩大固定训练历史可部署的策略集合。其方法 SURGE 取同一次 RL 运行中的两个检查点——高准确率锚点与能生成更短回答的竞争捐赠者——把二者都表示为相对共享初始化的变化量，再对锚点更新做谱分解：保留其主要成分并融入捐赠者的互补成分；在给定锚点更新保留比例的目标下，直接由权重确定分块大小而无需试探候选策略。在两个 1.5B 数学推理历史（DeepSeek、Nemotron）与一个 7B 代码历史（OLMo）上，SURGE 同时优于两个输入检查点且推理 token 更少，增益超过观测到的训练曲线。",
+          "contributions": [
+            "提出“策略空间扩展”视角：已完成的 RL 训练历史是可复用的扩展资源，不必以最优检查点为终点。",
+            "设计 SURGE：以谱分解融合锚点与捐赠者检查点的权重变化量，无需额外训练或测试候选策略即可确定分块大小。",
+            "在数学与代码推理任务上验证融合策略同时超过两个输入检查点且更省推理 token。"
+          ],
+          "conclusions": [
+            "同一段 RL 历史中的多个检查点携带互补能力，谱融合可以把它们兑现为部署端更强的单一策略。",
+            "该增益并非仅来自权重位移或回答变短，几何对照实验支持 RL 更新结构本身的作用。"
+          ],
+          "experiments": [
+            "DeepSeek 1.5B 数学历史：AIME24 达 54.17%，高于实测原生上限 50.83%。",
+            "OLMo 7B 代码历史：HumanEval+ 达 83.7%，高于 82.8%。",
+            "融合策略在优于两个输入检查点的同时使用更少的推理 token，增益超过观测到的训练曲线。"
+          ],
+          "significance": "把“训练历史”重估为可复用资产，为不加算力地提升推理能力提供了一条新路径。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01133",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01133.pdf",
+          "takeaway": "不用多训一轮：把同一次 RL 运行的两个检查点做谱融合，AIME24 从 50.83% 提到 54.17%。",
+          "keyExperiment": "DeepSeek 1.5B 的 AIME24 由实测上限 50.83% 提升到 54.17%，OLMo 7B 的 HumanEval+ 由 82.8% 提升到 83.7%，且推理 token 更少。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Looping Beyond Twice: A Scalable Recipe for Looped Mixture-of-Experts",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-02",
+          "authors": "Di He, Pengxiang Li, Da Chang, Qingyan Meng, Lu Yin, Shiwei Liu",
+          "institutions": "机构未标注",
+          "abstract": "循环 Transformer 通过重复应用共享的 Transformer 块引入“循环深度”这一新扩展维度，在不增加参数量的前提下提升有效深度。但在 FLOPs 对齐的比较下，循环对大规模 MoE 大模型的收益并不明确：额外迭代的增益很快衰减甚至转为退化，因此已有工作通常止步于两次循环。本文识别出扩展循环 MoE 的两个障碍：一是循环继承并放大“深度诅咒”，隐藏状态方差随迭代累积增长，破坏深层递归稳定性并导致表示漂移；二是专家选择坍缩，路由器在多次循环中反复选中同一批专家，使额外迭代只增加计算而不增加计算多样性。作者据此提出 LOOM，原则是每次循环都贡献新计算同时保持递归状态稳定：缩放残差更新以约束方差增长、每轮重新注入输入嵌入来稳定递归，并用每轮独立路由器与携带早期输出的循环残差增加多样性。100M 至 1.7B 模型实验显示可稳定扩展到 9-12 次循环。",
+          "contributions": [
+            "指出循环 MoE 难以扩展到两次以上的两个根因：隐藏状态方差随迭代增长导致递归不稳，以及路由器在循环间反复选中同一批专家造成计算多样性缺失。",
+            "提出 LOOM：缩放残差更新并每轮重注入输入嵌入以稳定递归，用每轮独立路由器与循环残差增加计算多样性。",
+            "在 100M-1.7B 规模上给出可稳定扩展到 9-12 次循环的配方。"
+          ],
+          "conclusions": [
+            "循环深度只有在同时控制状态漂移与专家多样性时才能继续换来收益，否则额外 FLOPs 很快失去意义。",
+            "LOOM 在等 FLOP 与不等 FLOP 两种设定下都能超过非循环基线。"
+          ],
+          "experiments": [
+            "近似等 FLOP 下 700M 模型在 5 次循环最优：困惑度由 18.36 降至 16.54，零样本平均准确率由 38.84% 升至 39.53%。",
+            "不做 FLOP 对齐时，1.7B 模型在 60B token 上 9 次循环达峰：困惑度由 9.62 降至 7.77，准确率由 42.4% 升至 47.7%。",
+            "100M-1.7B 模型均观察到稳定扩展至 9-12 次循环，代码已公开。"
+          ],
+          "significance": "把循环深度从“最多两次”推进到 9-12 次，为 MoE 大模型打开了一条不增参数的扩展轴。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01153",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01153.pdf",
+          "takeaway": "循环 MoE 的真正瓶颈是状态漂移与专家选择坍缩；LOOM 同时治这两点，1.7B 模型 9 次循环把困惑度从 9.62 降到 7.77。",
+          "keyExperiment": "1.7B 模型 9 次循环把困惑度由 9.62 降至 7.77、零样本准确率由 42.4% 提升到 47.7%。",
+          "index": 8
+        },
+        {
+          "title": "Sequential Functional Structured Tucker Compression for Large Language Model Attentions",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-02",
+          "authors": "Jiangfeng Chen, Xinyu Wang, Tianshuo Yan, Hanwei Wu, Xiao-Wen Chang, Yang Zhang, Lei Ding",
+          "institutions": "University of Manitoba, McGill University, The University of Hong Kong, McMaster University",
+          "abstract": "大模型注意力模块的训练后压缩常被建模为相互独立的矩阵近似，忽略了注意力各投影之间的共享结构，以及先前压缩带来的表示漂移。本文提出 FTC，一个顺序结构化压缩框架：在固定存储预算下，联合利用注意力原生的 Q/K/V 头结构，并让每一步近似适配“当前已被压缩”的模型；输出投影单独处理，以应对注意力后表示的改变。该方法不需要微调或基于梯度的恢复。在七个 6B 至 32B 的 decoder-only 模型上，FTC 在所有测试保留率下都取得最低的 WikiText-2 困惑度，且压缩越激进优势越大：保留率 0.2 时，FTC 在五个现代 GQA 模型上把困惑度控制在稠密模型的 1.21-1.83 倍，相对最强基线降低 39%-88%；保留率 0.4 时 32B 模型仍保留 98.7% 的稠密平均性能与 84.7% 的 GSM8K 准确率。",
+          "contributions": [
+            "提出顺序结构化压缩框架 FTC，联合利用 Q/K/V 头结构，并让压缩逐步适配当前已压缩模型以缓解表示漂移。",
+            "把输出投影与 QKV 分开处理，匹配注意力后表示的变化；全程无需微调或梯度恢复。",
+            "在 6B-32B 七个 decoder-only 模型上系统对比，压缩越激进相对优势越大。"
+          ],
+          "conclusions": [
+            "注意力的压缩不该是把各投影独立近似再拼起来：顺序化地在“已压缩模型”上做联合结构化分解，才能保住下游能力。",
+            "无需微调即可在 20% 保留率下把困惑度控制在稠密模型的 1.21-1.83 倍，具备实际部署价值。"
+          ],
+          "experiments": [
+            "保留率 0.2 时 FTC 在五个现代 GQA 模型上取得最低困惑度，为稠密模型的 1.21-1.83 倍，较最强基线降低 39%-88%。",
+            "Qwen3-32B 在保留率 0.2 下困惑度 9.22（稠密的 1.21 倍），最强基线为 15.23（低 39.5%）。",
+            "保留率 0.4 时 Qwen3-32B 保留 98.7% 的稠密平均性能与 84.7% 的 GSM8K 准确率；7-8B 模型单次压缩在 A100-40GB 上耗时 16-39 分钟。"
+          ],
+          "significance": "为注意力模块给出了免微调的强压缩基线，并在 32B 规模上验证了可扩展性。",
+          "arxivUrl": "https://arxiv.org/abs/2610.00717",
+          "pdfUrl": "https://arxiv.org/pdf/2610.00717.pdf",
+          "takeaway": "注意力压缩应顺序化地联合利用 Q/K/V 头结构：保留率 20% 下困惑度仅为稠密模型的 1.21-1.83 倍，且完全无需微调。",
+          "keyExperiment": "保留率 0.2 时困惑度较最强基线降低 39%-88%；32B 模型在保留率 0.4 下仍保住 98.7% 平均性能与 84.7% 的 GSM8K 准确率。",
+          "index": 9
+        },
+        {
+          "title": "Cross-Lingual Alignment for Decoder-Only Models using MoE Routers",
+          "score": 3.5,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-02",
+          "authors": "Lucas Bandarkar, Clark Peng, Ahmed Haj Ahmed, Aditi Khandelwal, Nanyun Peng",
+          "institutions": "University of California, Los Angeles, Haverford College, Mila - Quebec AI Institute / McGill University",
+          "abstract": "跨语言对比学习一直是多语言编码器训练的核心组件，但 decoder-only 大模型因各语言分词不一致，无法直接在隐藏状态上施加对齐损失。已有研究显示，即便在大模型中，更高的跨语言表示对齐也有助于跨语言迁移。本文提出在现代 LLM 的架构约束下重新设计跨语言对比学习：不再对隐藏状态加辅助对齐损失，而是改用 MoE 路由器输出来做对齐目标——路由器输出更适合在大量 token 上池化，从而在序列级别获得更可靠的跨语言比较。在四个开源 MoE 模型上的受控持续预训练实验表明，加入该路由损失不仅对齐了底层的跨语言隐藏表示，还在多语言评测套件上改善了多语言性能，而更新的参数比例不足 0.1%，说明这是一种轻量的对齐手段。",
+          "contributions": [
+            "指出 decoder-only 模型因分词不一致无法直接对齐隐藏状态，转而把 MoE 路由器输出作为跨语言对齐目标。",
+            "利用路由器输出易于跨 token 池化的性质，在序列级别获得更可靠的跨语言比较。",
+            "在四个开源 MoE 模型上做受控持续预训练，验证路由损失同时改善表示对齐与多语言性能。"
+          ],
+          "conclusions": [
+            "路由输出是一个此前未被利用的跨语言对齐接口，只更新不足 0.1% 的参数即可生效。",
+            "该损失在改善多语言指标的同时也间接对齐了底层隐藏表示。"
+          ],
+          "experiments": [
+            "在四个开源 MoE 模型的持续预训练中，路由损失提升了多语言评测套件的成绩。",
+            "更新的参数比例不足 0.1%，部分设置下偶尔匹配甚至超过单语言基线。",
+            "受控实验显示路由损失同时对齐了底层的跨语言隐藏表示。"
+          ],
+          "significance": "为 decoder-only 多语言模型提供了一个极低成本的对齐接口。",
+          "arxivUrl": "https://arxiv.org/abs/2610.01921",
+          "pdfUrl": "https://arxiv.org/pdf/2610.01921.pdf",
+          "takeaway": "不用碰隐藏状态：把 MoE 路由器输出当对齐目标，更新不到 0.1% 参数即可改善多语言性能。",
+          "keyExperiment": "四个开源 MoE 模型的持续预训练中，仅更新不足 0.1% 参数即提升多语言评测表现，并同时对齐了底层隐藏表示。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
