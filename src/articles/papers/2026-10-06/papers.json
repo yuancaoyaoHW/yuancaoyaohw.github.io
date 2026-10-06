@@ -1,0 +1,343 @@
+{
+  "date": "2026-10-06",
+  "title": "2026-10-06 论文精选",
+  "lede": "今日主线是 MoE 服务与专家并行通信的调度优化：从 AFD 架构里的专家迁移、Rail 级流量整形，到智能体 RL 与编码智能体的准入调度，再补上 1 比特 KV cache 与权重卸载解码两篇算法工作。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 557
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "AFORE: Attention-FFN Disaggregation with Overlapped Reconfiguration of Experts",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-05",
+          "authors": "Wenshuang Li, Youhe Jiang, You Peng, Jiawei Jiang, Binhang Yuan",
+          "institutions": "HKUST, Wuhan University",
+          "abstract": "MoE 模型服务同时受三重压力：专家参数巨大、按输入激活、负载动态变化。专家并行把专家计算分散到多卡，注意力-FFN 解耦（AFD）又把注意力与前馈拆成独立工作池；但朴素 AFD 会让专家负载不均更致命——FFN 一旦成为独立流水级，过载专家会直接拖慢该级、拉低端到端吞吐。AFORE 是一个面向 AFD 的及时专家重配置系统：它利用 AFD 在执行前就暴露下一批微批的专家-词元分布，按近未来需求而非滞后历史画像决定放置；再利用 AFD 的流水窗口，把目标微批的专家迁移与前面在飞微批的计算重叠起来。系统把重配置建模为微批感知调度问题，用迁移感知调度器决定何时迁移、迁移哪些专家，并实现轻量需求预取与基于 NVLink 的卡间专家迁移来压低重配置开销。",
+          "contributions": [
+            "指出 AFD 架构下专家负载不均的新形态：FFN 成为独立流水级后过载专家直接决定端到端性能，并把它建模为微批感知的专家重配置调度问题。",
+            "利用 AFD 暴露的近未来专家-词元分布做前瞻放置，替代滞后的历史画像。",
+            "用流水窗口隐藏专家迁移，配合需求预取与 NVLink 卡间迁移，把重配置开销压到可忽略。"
+          ],
+          "conclusions": [
+            "在 AFD 场景下，把专家迁移藏进流水线窗口可完全隐藏迁移延迟。",
+            "专家放置必须面向近未来需求决策，静态放置与滞后画像都会显著损失吞吐。"
+          ],
+          "experiments": [
+            "110B 参数 MoE、四类动态负载：输出吞吐比最强基线提升 10.1-17.6%，P95 词元间延迟降低 7.1-9.5%。",
+            "相比静态放置：吞吐平均提升 29.8%，P95 词元间延迟平均降低 18.2%。",
+            "迁移剖面显示 AFD 的流水重叠可以完全隐藏专家迁移延迟。"
+          ],
+          "significance": "给 AFD 架构补上了“专家放哪、何时搬”的调度缺环，让解耦式 MoE 服务真正吃到流水线红利。",
+          "arxivUrl": "https://arxiv.org/abs/2610.03203",
+          "pdfUrl": "https://arxiv.org/pdf/2610.03203.pdf",
+          "index": 1,
+          "takeaway": "在 AFD 里，专家迁移不是纯开销，而是可以藏进流水线窗口的调度自由度。",
+          "keyExperiment": "110B MoE 上吞吐比最强基线高 10.1-17.6%，比静态放置平均高 29.8%"
+        },
+        {
+          "title": "RailWave: Adaptive Spatial and Temporal Scheduling for Expert-Parallel Communication",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-05",
+          "authors": "Chutian Wang, Wenhao He, Jingmin Zhu, Qingyu Yin, Heng Xu, Xiuyu Li",
+          "institutions": "Sun Yat-sen University, Southeast University, Monash University, National University of Singapore, Shenzhen University of Advanced Technology, Renmin University of China",
+          "abstract": "不规则 All-to-All 通信是专家并行 MoE 的主要瓶颈：即便专家路由与放置都已固定，并行网络中 Rail 利用不均与 incast 仍会压低通信性能。RailWave 是构建在 DeepEP 之上的相位自适应通信层，在路由层之下做空间与时间两维的流量整形。其中 RailBalance 只用源端本地信息就把源侧流量重新分布到可用 Rail 上；一套可复用、由拓扑导出的置换调度限制每个接收者的并发发送者数量，并且无需为每个通信相位重建依赖需求的调度表。系统再用一个轻量标定选择器，按照各相位的流量特征与离线画像挑选执行路径。",
+          "contributions": [
+            "定位出专家并行 All-to-All 中 Rail 利用不均与 incast 这两个位于路由层之下的瓶颈。",
+            "RailBalance 仅凭源端本地信息重分布流量，避免依赖全局需求信息。",
+            "提出拓扑导出的可复用置换调度，按接收者限制并发发送者，免去逐相位重建开销。"
+          ],
+          "conclusions": [
+            "在路由层之下做流量整形即可显著提升专家并行通信效率。",
+            "按相位流量特征切换执行路径，优于单一固定策略。"
+          ],
+          "experiments": [
+            "基于 GLM-4.5-Air（106B）训练导出的通信负载，H800 上相对 Native 最高 5.84 倍加速。",
+            "H20 上相对 Native 最高 4.36 倍加速。",
+            "代码已随论文开源。"
+          ],
+          "significance": "把 MoE 通信优化从“改路由、改放置”下沉到网络流量整形层，且与 DeepEP 生态兼容。",
+          "arxivUrl": "https://arxiv.org/abs/2610.03415",
+          "pdfUrl": "https://arxiv.org/pdf/2610.03415.pdf",
+          "index": 2,
+          "takeaway": "即使路由与放置固定，Rail 与接收者并发度上仍有大把通信余量可挖。",
+          "keyExperiment": "GLM-4.5-Air 训练通信负载上 H800 最高 5.84 倍、H20 最高 4.36 倍加速"
+        },
+        {
+          "title": "VenusRL: A Fully Disaggregated Agentic RL System with Priority Scheduling and Scalable Interaction",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-05",
+          "authors": "Mingjun Zhang, Yucheng Li, Menghao Zhang, Shuyong Zhu, Ping Zhang, Xiaohe Hu 等",
+          "institutions": "Institute of Computing Technology (CAS), Beihang University, Infrawaves, Shanghai Innovation Institute",
+          "abstract": "智能体强化学习（agentic RL）通过 LLM 智能体与外部工具环境的多轮交互来训练模型，其多轮特性暴露了两个系统级瓶颈。其一，端到端吞吐被最慢轨迹卡住，而只优化单卡利用率会把 rollout 进度摊薄到众多样本组上，反而推迟“凑够可解锁下一步训练的样本组”的时刻。其二，工具沙箱按声明的内存上限静态超配，大量物理内存被闲置，而同一 prompt 启动的沙箱之间还重复持有几乎相同的状态。VenusRL 是一个全解耦的 agentic RL 系统：优先级感知的动作调度器用长度预测启发式识别最可能解锁下一步训练的样本组，并在批准入、KV Cache 常驻、跨 worker 请求编排三处把它们提前；环境资源管理器则结合内存感知准入阈值与按模板键的页共享池，用写保护页表别名与写时复制，在保持严格内存隔离的前提下提高单节点沙箱密度。",
+          "contributions": [
+            "指出 agentic RL 的吞吐瓶颈是“最慢轨迹”与沙箱静态超配，而非单卡利用率。",
+            "优先级感知调度器跨批准入、KV 常驻、跨 worker 编排三处优先推进可解锁训练步的样本组。",
+            "模板键页共享池配合写保护页表别名与写时复制，在严格隔离下大幅提高沙箱密度。"
+          ],
+          "conclusions": [
+            "面向“解锁训练步”的调度比面向单卡利用率的调度更有效。",
+            "沙箱内存可通过页共享机制大量回收，而不牺牲隔离性。"
+          ],
+          "experiments": [
+            "代表性 agentic RL 负载上端到端训练最高 4.24 倍加速。",
+            "环境成本最高降低 89%。"
+          ],
+          "significance": "把 agentic RL 的优化目标从单卡利用率改成训练步解锁时间，是系统层面的重新定位。",
+          "arxivUrl": "https://arxiv.org/abs/2610.03286",
+          "pdfUrl": "https://arxiv.org/pdf/2610.03286.pdf",
+          "index": 3,
+          "takeaway": "agentic RL 该优化“最慢轨迹何时结束”，而不是“每张卡多忙”。",
+          "keyExperiment": "端到端训练最高 4.24 倍加速，环境成本最高降低 89%"
+        },
+        {
+          "title": "Coda: Exploiting Admission Flexibility for Coding-Agent Serving",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-05",
+          "authors": "Youhe Jiang, Fangcheng Fu, Binhang Yuan, Krishna Malladi, Ehsan K. Ardestani, Zhan Shu, Adnan Aziz, Yi Xu",
+          "institutions": "University of Cambridge, Shanghai Jiao Tong University, HKUST, Meta",
+          "abstract": "编码智能体在模型推理与工具调用之间反复切换，形成长生命周期会话：既留下可复用的 KV 状态，也有大量异步恢复的请求。但在共享服务系统中，请求“逻辑上就绪”并不等于能被高效准入。作者通过轨迹分析与轨迹驱动重放发现两处错配：可复用 KV 状态散落在不同存储层级，状态准备的计算成本差异很大；而上下文长度异质的请求放在一起解码效率低下。Coda 的核心洞察是：利用准入阶段的灵活性，就能在保住请求进度的同时提升服务性能。它用一个就绪感知准入层实现两个机制——分层老化的状态准入利用准入顺序上的有界弹性提升准入效率；兼容性感知的执行准入利用单次模型迭代内注意力分组的弹性，降低混合上下文干扰、提高共享解码效率。多 worker 场景下另设一层路由，按 KV 状态常驻位置、worker 负载与请求-上下文长度兼容性来摆放请求。",
+          "contributions": [
+            "用真实轨迹揭示编码智能体服务的两处错配：KV 状态准备成本不均，与异质上下文混批解码低效。",
+            "提出就绪感知准入层，把准入顺序与注意力分组的灵活性当作可优化资源。",
+            "多 worker 路由层同时考虑 KV 常驻位置、worker 负载与上下文长度兼容性。"
+          ],
+          "conclusions": [
+            "逻辑就绪不等于高效准入，准入顺序与执行分组是相当可观的性能空间。",
+            "在保持单个请求进度的前提下提升整体吞吐是可行的。"
+          ],
+          "experiments": [
+            "单 worker 与多 worker 实验中，输出 token 吞吐平均提升 20.3%，峰值 29.3%。",
+            "SLO 合规吞吐平均提升 70.5%，峰值 140.2%。",
+            "对比对象包括最先进的编码智能体服务系统与 vLLM。"
+          ],
+          "significance": "把 agent 服务中的“准入”从排队问题升级为可与 KV 复用、注意力分组联合优化的调度问题。",
+          "arxivUrl": "https://arxiv.org/abs/2610.03088",
+          "pdfUrl": "https://arxiv.org/pdf/2610.03088.pdf",
+          "index": 4,
+          "takeaway": "编码智能体的服务瓶颈常落在准入与分组，而不只在算力与显存。",
+          "keyExperiment": "SLO 合规吞吐平均提升 70.5%，峰值 140.2%"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Tailoring the Quantization Space for 1-Bit KV Cache Compression",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-05",
+          "authors": "Minsoo Cheong, Donghyun Son, Sungjoo Yoo",
+          "institutions": "Seoul National University",
+          "abstract": "KV cache 已经成为长上下文 LLM 推理的主要显存瓶颈，向量量化（VQ）是激进的压缩路线，但现有方法在 1 比特区制下严重退化：此时每个码本要用有限个质心表示更多通道，码本容量越发吃紧。TaSQ 的做法是重新裁剪量化的目标空间：用查询引导的通道加权、跨头归一化与协方差感知的通道分组，让量化误差更贴合缓存激活的误差敏感度与统计结构。这些变换与 RoPE 兼容，并且可以合并进投影权重与码本，因此保留了传统 VQ 的查表结构、几乎不增加服务开销。在通用任务、长链式思维推理与长上下文检索基准上，TaSQ 一致优于现有低比特 KV cache 向量量化基线，同时保持推理稳定性。",
+          "contributions": [
+            "指出 1 比特区制下码本容量被通道数摊薄，是 VQ 压缩退化的根因。",
+            "用查询引导通道加权、跨头归一化与协方差感知分组重塑量化目标空间。",
+            "变换与 RoPE 兼容且可折叠进投影权重与码本，保持零额外查表开销。"
+          ],
+          "conclusions": [
+            "在 1 比特压缩下，重排量化空间比堆更强的编码器更有效。",
+            "极低比特 KV cache 仍能保持长链式推理的稳定性。"
+          ],
+          "experiments": [
+            "在单张 RTX 6000 Ada 上，SGLang 实现支持最多 14 倍更大的批大小。",
+            "峰值吞吐达到 BF16 基线的 1.87 倍。",
+            "在通用、长 CoT 推理与长上下文检索基准上一致优于低比特 VQ 基线。"
+          ],
+          "significance": "把“1 比特 KV cache 不可用”推进到“可服务”，且不引入额外运行时开销。",
+          "arxivUrl": "https://arxiv.org/abs/2610.03027",
+          "pdfUrl": "https://arxiv.org/pdf/2610.03027.pdf",
+          "index": 5,
+          "takeaway": "1 比特 KV cache 的关键不在编码器更强，而在把量化空间对齐到误差敏感度。",
+          "keyExperiment": "SGLang 实现支持最多 14 倍批大小，峰值吞吐 1.87 倍于 BF16"
+        },
+        {
+          "title": "Activation Sparsity with Weight Approximation for Faster LLM Decoding on Offloaded Weights",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-05",
+          "authors": "JuneHyung Kim, Sankeerth Durvasula, Nandita Vijaykumar",
+          "institutions": "LG Electronics, University of Toronto",
+          "abstract": "在显存装不下权重的消费级 GPU 上部署 LLM，解码要反复把卸载到系统内存或闪存的权重搬回 GPU，而搬运带宽远低于本地显存访问，推理因此慢得不可接受。激活稀疏能通过跳过低激活相关权重的传输来减少搬运，但随着省略比例上升模型质量会急剧下滑，说明小幅值激活所对应的权重整体上对质量影响很敏感。SpAx 的核心思路是把“是否读取某个权重”的二值选择改成三选一：完整保留、用压缩表示近似、或彻底跳过。它跳过激活最接近零的权重，对小幅值激活读取近似权重，对最大幅值激活读取原始权重——小幅值激活天然会衰减近似权重引入的误差，而压缩表示又只需搬运更少字节。",
+          "contributions": [
+            "指出激活稀疏的性能-质量拐点源于小幅值激活对应权重被整体丢弃。",
+            "提出“保留/近似/跳过”三态权重读取策略，替代二值跳过。",
+            "利用激活幅值对近似误差的天然衰减，把压缩误差与选择性跳过统一起来。"
+          ],
+          "conclusions": [
+            "三态策略明显拓宽了激活稀疏可用的压缩区间。",
+            "误差衰减来自激活幅值本身，无需额外训练即可利用。"
+          ],
+          "experiments": [
+            "权重卸载到 CPU 内存时，16 比特权重下解码平均加速 3.86 倍（最高 5.57 倍）。",
+            "4 比特权重下平均 2.06 倍（最高 2.74 倍），WikiText-2 困惑度上升不超过 10%。",
+            "权重卸载到闪存时，平均加速 3.31 倍（最高 4.81 倍）与 1.54 倍（最高 2.03 倍）。"
+          ],
+          "significance": "让消费级 GPU 搭配低带宽存储在跑大模型解码时，从“勉强能跑”走向“可用”。",
+          "arxivUrl": "https://arxiv.org/abs/2610.02598",
+          "pdfUrl": "https://arxiv.org/pdf/2610.02598.pdf",
+          "index": 6,
+          "takeaway": "权重读取不是读或不读，而可以按激活幅值分成三档取舍。",
+          "keyExperiment": "16 比特权重卸载到 CPU 内存时解码平均加速 3.86 倍、最高 5.57 倍"
+        },
+        {
+          "title": "Jumping the Line: Exploiting Length Predictions in LLM Scheduling",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-05",
+          "authors": "Yuyang Dai, Rana Shahout, Mahmood Sharif",
+          "institutions": "Tel Aviv University",
+          "abstract": "调度已成为降低 LLM 服务完成时间的关键：最短作业优先（SJF）之类策略偏好短请求，但输出长度在生成前未知，实际调度器只能依赖预测长度。JIL 是针对基于预测的 LLM 调度器的攻击：它操纵调度信号，使请求拿到更高优先级、缩短自身完成时间。以 TRAIL 为案例，JIL 优化一段对抗后缀，使轻量输出长度探针低估请求长度。作者在两个数据集、四个 LLM、多种请求画像与部署配置上评估。JIL 把预测输出长度最多压低 83.4%，端到端服务实验中对抗请求平均最多快 1.53 倍完成。预测长度的下降幅度远大于实际输出长度的变化，暴露出调度器估计与请求真实规模之间的错配。不同模型与任务上的回答可用性差异明显，说明调度优势与回答质量之间存在权衡；作者也评估了调度器侧防御，发现把长度预测分成粗粒度区间可削弱 JIL 的调度优势并减少对良性请求的延迟。",
+          "contributions": [
+            "首次把基于长度预测的 LLM 调度器视为攻击面，提出 JIL 攻击。",
+            "用对抗后缀使轻量长度探针系统性低估请求长度，从而抢占调度优先级。",
+            "揭示预测值与真实规模的错配，并给出粗粒度区间分组的防御。"
+          ],
+          "conclusions": [
+            "基于预测的调度信号可以被操纵，且预测误差远大于真实长度变化。",
+            "把长度预测分组为粗粒度区间能削弱攻击优势，代价可控。"
+          ],
+          "experiments": [
+            "预测输出长度最多降低 83.4%。",
+            "端到端服务实验中对抗请求平均最多快 1.53 倍完成。",
+            "覆盖 2 个数据集、4 个 LLM 与多种请求画像和部署配置。"
+          ],
+          "significance": "提醒“预测驱动调度”在带来吞吐收益的同时，也引入了可被对抗利用的操控面。",
+          "arxivUrl": "https://arxiv.org/abs/2610.03430",
+          "pdfUrl": "https://arxiv.org/pdf/2610.03430.pdf",
+          "index": 7,
+          "takeaway": "长度预测一旦进入调度决策，它就同时成了一个可被优化的攻击信号。",
+          "keyExperiment": "预测长度最多被压低 83.4%，对抗请求最多快 1.53 倍完成"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Hardware-Native Joint Sparse-Quantization for Trillion-Scale Mixture-of-Experts",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-05",
+          "authors": "Kwanhee Lee, Namhoon Lee, Dan Alistarh",
+          "institutions": "POSTECH, ISTA",
+          "abstract": "MoE 让前沿语言模型得以扩展到万亿参数，但巨大的显存占用与显存带宽限制了两者的落地。现代加速器提供稀疏张量核（SpTC），可通过低精度半结构化稀疏同时减少权重存储并提高吞吐，但用于 MoE 仍有两道障碍：模型质量显著退化，以及缺少分组稀疏 GEMM 原语。本文提出端到端软硬件协同设计框架，把专家权重压成“硬件原生”的低精度稀疏表示，并在 SpTC 上加速执行。算法侧用连续重参数化放松离散的半结构化支撑选择，在路由加权重构目标下与量化权重做可微联合优化，并支持可扩展的专家并行压缩；系统侧实现面向 SpTC 低精度稀疏 MoE 推理的定制分组稀疏 GEMM 内核。",
+          "contributions": [
+            "用连续重参数化把离散支撑选择变成可微优化，与量化权重联合训练。",
+            "支持专家并行下的可扩展压缩，兼顾万亿参数规模。",
+            "定制分组稀疏 GEMM 内核，让低精度稀疏 MoE 真正跑在 SpTC 上。"
+          ],
+          "conclusions": [
+            "稀疏与量化联合优化可以同时缓解质量退化与硬件不可用。",
+            "缺少内核支持是 SpTC 用于 MoE 的主要障碍，算法与系统工程必须同时推进。"
+          ],
+          "experiments": [
+            "30B 到 1T 参数 MoE 上，联合稀疏量化精度比此前最优方法最高提升 4.35 个百分点。",
+            "保留原模型 96.09% 的性能。",
+            "NVIDIA B200 上内核最高 1.65 倍于厂商基线，服务吞吐提升 1.18 倍，端到端延迟最高降低 4.03 倍。"
+          ],
+          "significance": "给出在 SpTC 上部署万亿 MoE 的完整软硬件路径，把稀疏量化从算法指标推进到可用吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2610.02241",
+          "pdfUrl": "https://arxiv.org/pdf/2610.02241.pdf",
+          "index": 8,
+          "takeaway": "低精度稀疏要落到 MoE，算法与分组稀疏内核必须一起改。",
+          "keyExperiment": "B200 上内核 1.65 倍于厂商基线，端到端延迟最高降低 4.03 倍"
+        },
+        {
+          "title": "Cross-Facility LLM Pre-training on HPC: Elastic Aggregation, Data Leasing, and Queue-Aware Placement",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-05",
+          "authors": "Zare Palanciyan, Thomas van Osch, Douwe van der Wal, Olivera Kotevska, Tim Kok",
+          "institutions": "SURF, CSC, Oak Ridge National Laboratory",
+          "abstract": "学术算力高度碎片化：配额按设施发放，各设施的加速器与软件栈不同、独立调度作业、既不共享网络也不共享文件系统。本文把这类配额池化，横跨两大洲、最远相距 7400 公里的三台超算预训练同一个语言模型：Snellius（NVIDIA H100）、LUMI 与 Frontier（均为 AMD MI250X）。系统由三部分构成：DiLoCo 式双环训练配合“弹性、按词元加权的 Nesterov 外层步”，使零个、一个或多个在线站点都属于正常状态；DARL 数据租约协议用心跳维持租约，保证同一 epoch 内样本既不被训练两次，也不会因崩溃、迟到加入与工作窃取而丢失；以及由非特权 sbatch --test-only 探针驱动的队列感知放置。",
+          "contributions": [
+            "把碎片化学术配额池化为一次预训练运行，跨越 3 台异构超算与 2 大洲。",
+            "提出弹性、按词元加权的 Nesterov 外层步，使站点数任意变化都成为正常状态。",
+            "DARL 心跳数据租约保证数据既不重复也不丢失，容忍崩溃与迟到加入。"
+          ],
+          "conclusions": [
+            "跨站点预训练的价值在于“可运行”而非“更快”：它把碎片配额变成了一次训练。",
+            "每轮通信开销与本地步数无关，本地步数越大通信占比越低。"
+          ],
+          "experiments": [
+            "Qwen3-0.6B 在 C4 上训练 20000 步，三站点留出困惑度 34.7，集中式基线为 28.2。",
+            "每轮开销（权重交换与检查点）约 110 秒，占比从 H=100 时的 32% 降到 H=1000 的 5.7%、H=2000 的 3.1%。",
+            "23.8 小时三站点运行中发生 4 次站点退出，仅 1.2% 已授数据块被回收，无重复无丢失；队列感知放置把达标时间缩短 18-43%。"
+          ],
+          "significance": "为算力碎片化环境给出可运行的分布式训练范式，并诚实交代了与集中式基线的质量差距。",
+          "arxivUrl": "https://arxiv.org/abs/2610.03457",
+          "pdfUrl": "https://arxiv.org/pdf/2610.03457.pdf",
+          "index": 9,
+          "takeaway": "碎片化算力的出路是弹性聚合与数据租约，而不是追求训练速度。",
+          "keyExperiment": "三站点 20000 步困惑度 34.7（集中式 28.2），队列感知放置缩短达标时间 18-43%"
+        },
+        {
+          "title": "Beaver: Elastic GPU Sharing between ML and Latency-Critical vRAN Workloads",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-05",
+          "authors": "Yuncheng Yao, Zhenzhou Qi, Junyao Zheng, Chung-Hsuan Tung, Danyang Zhuo, Tingjun Chen",
+          "institutions": "Duke University",
+          "abstract": "在 AI-RAN 的“AI-and-RAN”愿景中，虚拟化无线接入网（vRAN）与 AI 服务要共置在共享 GPU 上。这种共享天然不对称：vRAN 是延迟关键负载，机器学习负载则是追求吞吐的尽力而为同租户。Beaver 是一个同时管理算力与显存的 GPU 共享系统，在保护 vRAN 严格处理截止期的前提下提高 ML 侧吞吐。它按每个时隙的调度工作量确定 vRAN 的 SM 分配规模，以时隙为粒度重划分 SM 配额，并重写编译后的 ML 内核，使 ML 负载在 vRAN 的显存关键阶段主动让出 HBM 带宽。",
+          "contributions": [
+            "提出非对称共享假设：延迟关键的 vRAN 与吞吐导向的 ML 服务共置同一 GPU。",
+            "按每个时隙的调度工作量确定 SM 规模，并以时隙为粒度动态重划分算力配额。",
+            "重写 ML 内核，使其在 vRAN 的显存关键阶段主动让出 HBM 带宽。"
+          ],
+          "conclusions": [
+            "保护硬实时截止期与保留大部分 ML 吞吐是可以同时做到的。",
+            "该方案可跨 GPU 代际泛化。"
+          ],
+          "experiments": [
+            "H200 上把 vRAN 的 p99.9 延迟守在 1.5 ms 上行截止期之内，同时保留 Llama-3.3-70B 服务吞吐的 74%。",
+            "真实蜂窝轨迹重放下未观察到截止期 miss，并守住了 375 微秒的下行截止期。",
+            "可泛化到 A100、GB10、GH200 等 GPU。"
+          ],
+          "significance": "给出了 AI-RAN 共置的可行共享机制，说明硬实时与高吞吐并非只能二选一。",
+          "arxivUrl": "https://arxiv.org/abs/2610.02522",
+          "pdfUrl": "https://arxiv.org/pdf/2610.02522.pdf",
+          "index": 10,
+          "takeaway": "把截止期异质的负载共置 GPU，需要按时隙重划分算力并主动让出带宽。",
+          "keyExperiment": "H200 上守住 1.5 ms p99.9 截止期，同时保留 74% 的 Llama-3.3-70B 服务吞吐"
+        }
+      ]
+    }
+  ]
+}
