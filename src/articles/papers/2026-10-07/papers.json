@@ -1,0 +1,339 @@
+{
+  "date": "2026-10-07",
+  "title": "2026-10-07 论文精选",
+  "lede": "今日聚焦多卡推理的通信-计算权衡与显存/调度的细粒度优化：从 TP/PP/混合并行的解析选型，到秒级回收微调占用显存的 GPU 共享系统。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 1107
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Characterizing Parallelism Strategies in LLM Inference: Fundamental Compute-Communication Trade-offs",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-06",
+          "authors": "Javad Mirzaei, Jeebak Mitra",
+          "institutions": "Dell Technologies",
+          "abstract": "论文指出 LLM 推理已成为 AI 系统的主导负载，而当前最强模型超出单卡算力与显存，必须用张量并行(TP)、流水线并行(PP)或混合并行(HB)跨 GPU 部署，但选型缺乏解析依据。作者提出统一的解析框架，把端到端时延分解为计算、GPU 间通信与流水线气泡三部分，并推导出 TP 集合通信、PP 点对点通信与流水线利用率的解析模型，将它们表示为硬件、模型与负载特征的函数。模型进一步刻画 prefill 与 decode 两阶段执行行为的差异，解释了为何 PP 型配置更适合计算密集的 prefill，而 TP 型配置通过消除流水线气泡降低 decode 时延。在多 GPU 平台上的实验验证了模型，并确认了并行策略间根本性的计算-通信权衡。该框架可用于并行策略选择、容量规划与后续服务系统优化。",
+          "contributions": [
+            "提出统一解析框架，把分布式 LLM 推理端到端时延分解为计算、GPU 间通信与流水线气泡三项",
+            "推导 TP 集合通信、PP 点对点通信与流水线利用率的解析模型，显式刻画其与硬件、模型、负载的关系",
+            "揭示 prefill 与 decode 的阶段差异，解释 PP 适配 prefill、TP 降低 decode 时延的机理"
+          ],
+          "conclusions": [
+            "多 GPU 实测验证了解析模型，并确认不同并行策略间存在根本性的计算-通信权衡",
+            "框架为并行策略选择、容量规划与未来的服务系统优化提供实用指导"
+          ],
+          "experiments": [
+            "在现代 LLM 与多 GPU 平台上验证解析模型，实测趋势与模型预测一致",
+            "实验确认 PP 型配置在计算密集的 prefill 阶段更优，TP 型配置通过消除流水线气泡降低 decode 时延",
+            "论文属解析建模工作，未报告具体加速倍率，实验主要用于验证计算-通信权衡的定性结论"
+          ],
+          "significance": "为多卡 LLM 推理的并行策略选择提供了可解析的决策依据，把经验调优转为基于计算-通信权衡的定量推理",
+          "arxivUrl": "https://arxiv.org/abs/2610.05305",
+          "pdfUrl": "https://arxiv.org/pdf/2610.05305.pdf",
+          "index": 1,
+          "takeaway": "用统一解析模型把 LLM 推理时延拆成计算、通信与气泡，给出 TP/PP/混合并行的选型依据",
+          "keyExperiment": "多 GPU 平台实测验证解析模型，确认 PP 利 prefill、TP 降 decode 时延的计算-通信权衡"
+        },
+        {
+          "title": "MOLT: A Fine-Grained GPU Memory Sharing System for LLM Serving with Opportunistic Fine-Tuning",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-06",
+          "authors": "Jaehoon Yang, Yongbeom Kim, Hojoon Kim, Seung Yul Lee, Jae W. Lee",
+          "institutions": "Seoul National University",
+          "abstract": "LLM 服务的副本数随负载扩展，但副本内部仍有大量闲置显存：新增副本需数分钟，而副本所需显存在数秒内就会变化，扩缩容也无法回收，因为最小回收粒度是整个副本。把参数高效微调(PEFT)与推理共置可利用这部分显存，但推理须能在等待显存的请求突破时延 SLO 前以秒级速度收回。现有共置系统要么让微调显存常驻，要么以整条训练样本的粗粒度回收，且每次回收都会丢弃正在进行的微调步。作者提出 MOLT：细粒度显存共享系统，允许推理回收运行中微调步为反向传播保存的单个激活值，该步继续执行并在反向时重算这些激活；且只回收在 CPU-GPU 异步与张量并行下已无在飞 GPU 工作可访问的显存。在 H100 SXM 与 B200 上对四个 24B–70B 部署的 trace 驱动负载中，MOLT 使推理 SLO 达成率保持 99.7% 以上，微调工作量达丢弃式共享的 1.9–3.3 倍。",
+          "contributions": [
+            "提出细粒度显存回收机制，让推理回收微调步已保存的单个激活，微调步继续执行并在反向传播时重算被回收的激活",
+            "在 CPU-GPU 异步执行与张量并行条件下保证只回收已无在飞 GPU 工作可访问的显存，兼顾正确性与安全",
+            "无需整副本扩缩容即可把副本内闲置显存变现，实现 PEFT 与推理的共置"
+          ],
+          "conclusions": [
+            "细粒度回收优于丢弃式回收：同等 SLO 约束下能完成更多微调工作量",
+            "闲置显存的秒级可回收性使推理与微调共置在延迟敏感场景下可行"
+          ],
+          "experiments": [
+            "在 H100 SXM 与 B200 上测试四个 24B–70B 部署，trace 驱动负载下推理 SLO 达成率始终不低于 99.7%",
+            "相比丢弃式显存共享，MOLT 完成 1.9–3.3 倍的微调工作量"
+          ],
+          "significance": "把扩缩容粒度无法利用的副本内闲置显存变成可秒级回收的资源，为推理与微调共置提供细粒度安全回收方案",
+          "arxivUrl": "https://arxiv.org/abs/2610.05748",
+          "pdfUrl": "https://arxiv.org/pdf/2610.05748.pdf",
+          "index": 2,
+          "takeaway": "以单个激活为粒度回收显存，让推理在不违约 SLO 的前提下复用微调占用的显存",
+          "keyExperiment": "H100/B200 上四个 24B–70B 部署 SLO 达成率不低于 99.7%，微调吞吐为丢弃式共享的 1.9–3.3 倍"
+        },
+        {
+          "title": "CommuteProp: Decoupled Training for Communication Bound Split LLM Fine-Tuning",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-06",
+          "authors": "Ding Chen, Haochen Luo, Chen Liu",
+          "institutions": "City University of Hong Kong",
+          "abstract": "拆分学习(split learning)是隐私保护 LLM 微调的有前景范式，但顺序的通信-计算瓶颈严重阻碍落地：常规同步流水线中客户端要等待服务端梯度而空转，训练效率低下。作者提出 CommuteProp，一种异步拆分学习算法，把训练解耦为两个并发阶段：跨块的前向-反向与块内的权重更新。通过让计算与通信重叠，它把边际周期时间从所有阶段时延之和降为占主导的计算瓶颈。论文给出严格的异步误差与收敛性分析，并基于该分析推导出 NS 预条件子方法，以进一步抑制陈旧性(staleness)带来的噪声。大量实验表明，该算法在保持与同步方法相当精度的同时取得显著吞吐收益；它还是即插即用模块，不仅能兼容、还能增强现有隐私增强方法。",
+          "contributions": [
+            "提出异步拆分学习算法 CommuteProp，把训练解耦为跨块前向-反向与块内权重更新两个并发阶段",
+            "让计算与通信重叠，把边际周期时间从各阶段时延之和降为占主导的计算瓶颈",
+            "给出严格的异步误差与收敛分析，并据此推导 NS 预条件子以抑制陈旧性噪声"
+          ],
+          "conclusions": [
+            "CommuteProp 在保持与同步方法相当精度的同时显著提升吞吐",
+            "作为即插即用模块，它可兼容并增强既有的隐私增强方法"
+          ],
+          "experiments": [
+            "综合实验显示训练吞吐显著提升，精度与同步基线相当",
+            "与现有隐私增强方法组合时仍能保持并提升效果（论文未给出统一倍率数字）"
+          ],
+          "significance": "用通信-计算重叠与理论保证把拆分学习从顺序等待中解放出来，提升隐私保护微调的实际可用性",
+          "arxivUrl": "https://arxiv.org/abs/2610.05105",
+          "pdfUrl": "https://arxiv.org/pdf/2610.05105.pdf",
+          "index": 3,
+          "takeaway": "用异步两阶段解耦把拆分学习的周期时间压到计算瓶颈，同时保持同步级精度",
+          "keyExperiment": "吞吐显著提升且精度与同步方法相当，并可增强现有隐私增强方法"
+        },
+        {
+          "title": "Serve Now or Improve Later? Scheduling Self-Evolution in Online Agent Systems",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-06",
+          "authors": "Yangbo Wei, Junhong Qian, Zhen Huang, Zhenyu Su, Qifan Wang, Shaoqiang Lu, Rumin Zhang, Chen Wu, Lei He",
+          "institutions": "Shanghai Jiao Tong University, Eastern Institute of Technology, University of Science and Technology of China, Ningbo Institute of Digital Twin",
+          "abstract": "在线 agent 可通过构建可复用的工具、指导或模型状态改善未来服务，但这项工作要与其他请求争夺同一批 GPU。用空闲算力做自演化面临一个根本约束：收益只在产物发布并被使用后到来，而暂停演化又会让容量因等待显存释放与运行时恢复而空转；因此值得完成的投入也可能值得推迟。作者提出 LearnSched，一个状态感知调度器，把能力的复用窗口与算力的及时回收纳入统一的投资模型。LearnSched 将候选进度、检查点开销与当前恢复路径纳入动作价值，用单步反事实 rollout 对照完全计价的窗口策略选择推进、检查点或等待。作者用独立 A100 组件测量刻画交接(handoff)成本，并在 1920 个配对场景中评估动作选择。结果显示：冷恢复代价高昂时，等待更长执行窗口可通过避免交接提升净价值；在实测的温恢复场景中强窗口策略已能达同等价值。保留可恢复状态能缩短容量归还时间，减少对复杂演化调度的依赖。",
+          "contributions": [
+            "形式化“现在服务还是稍后改进”的调度问题，把能力复用窗口与算力及时回收放进统一投资模型",
+            "提出状态感知调度器 LearnSched，把候选进度、检查点开销与恢复路径纳入动作价值，用单步反事实 rollout 决策",
+            "用独立 A100 组件测量刻画交接成本，并在 1920 个配对场景中系统评估动作选择"
+          ],
+          "conclusions": [
+            "冷恢复昂贵时，等待更长执行窗口以避免交接可提升净价值；温恢复场景下强窗口策略已足够",
+            "保留可恢复状态能缩短容量归还时间，降低对复杂演化调度的需求"
+          ],
+          "experiments": [
+            "在 1920 个配对有限模型场景中评估动作选择",
+            "基于独立 A100 组件测量刻画了不同恢复路径下的交接成本"
+          ],
+          "significance": "把空闲算力做自演化还原为一个可计价的调度投资问题，给出何时该服务、何时该改进的判据",
+          "arxivUrl": "https://arxiv.org/abs/2610.06212",
+          "pdfUrl": "https://arxiv.org/pdf/2610.06212.pdf",
+          "index": 4,
+          "takeaway": "自演化收益滞后于投入，LearnSched 用恢复成本加权的投资模型决定推进、检查点还是等待",
+          "keyExperiment": "1920 个配对场景评估加 A100 实测交接成本：冷恢复贵时应等待，温恢复下强窗口策略已够"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SharpDraft: Accelerating Long-Context Speculative Decoding with Cardinality-Aware Query Scaling",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-06",
+          "authors": "Jeonghoon Park, Seongwoon Jo, Jongwon Lee, Taesik Gong",
+          "institutions": "UNIST",
+          "abstract": "投机解码通过并行验证多个草稿 token 降低长链推理成本，但其加速比会随上下文变长、草稿接受率下降而衰减。作者聚焦“注意力质量稀释”：当 softmax 在更多可见 Key 上归一化时，最高分 Key 上的质量会下降。为此提出 SharpDraft：一种免训练方法，用基数感知(cardinality-aware)的 Query 缩放抵销该效应。方法在显式假设下给出精确 top-k 质量校正与闭式固定斜率近似。在 AIME-26、GPQA-Diamond 与 LongGenBench Diary 上，SharpDraft 用于 DFlash、PARD 与 EAGLE 3.1 时相对仅目标模型自回归解码取得 2.59–3.19 倍几何平均端到端加速。与 DFlash 结合时其端到端加速超过全参数与 LoRA 在线自适应，且峰值 GPU 显存与未修改草稿模型持平。",
+          "contributions": [
+            "识别长上下文投机解码加速衰减的根因——注意力质量稀释，并给出显式假设下的精确 top-k 质量校正推导",
+            "提出免训练的基数感知 Query 缩放方法 SharpDraft，用闭式固定斜率近似避免在线自适应的额外开销",
+            "方法与 DFlash、PARD、EAGLE 3.1 等主流草稿模型即插即用，且不增加峰值显存"
+          ],
+          "conclusions": [
+            "免训练的查询缩放可恢复长上下文下的投机加速，效果优于全参数与 LoRA 在线自适应",
+            "加速收益在长上下文与高稀释场景下最明显，且不牺牲显存"
+          ],
+          "experiments": [
+            "AIME-26、GPQA-Diamond、LongGenBench Diary 上取得 2.59–3.19 倍的几何平均端到端加速",
+            "结合 DFlash 时端到端速度超过全参数与 LoRA 在线自适应方法",
+            "峰值分配 GPU 显存与未修改的草稿模型持平"
+          ],
+          "significance": "把长上下文投机解码的衰减归因于注意力质量稀释，用一个免训练的缩放修正换来稳定加速",
+          "arxivUrl": "https://arxiv.org/abs/2610.05106",
+          "pdfUrl": "https://arxiv.org/pdf/2610.05106.pdf",
+          "index": 5,
+          "takeaway": "基数感知的 Query 缩放修掉长上下文的注意力质量稀释，免训练拿到 2.59–3.19 倍加速",
+          "keyExperiment": "三个长推理基准上 2.59–3.19 倍端到端加速，优于在线自适应且不增显存"
+        },
+        {
+          "title": "MOIRA: Mass-Oriented Indexing with Ragged Attention for Long-Context Decoding",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-06",
+          "authors": "Dich Nhat Minh Nguyen, Tran Dang Duong Nguyen",
+          "institutions": "机构未标注",
+          "abstract": "长上下文解码受内存带宽限制：每个输出 token 都要读每层 KV，稀疏解码只读部分 KV 以降成本。作者发现同一 query 所需页数在 KV head、层与步间差异很大：固定预算按最苛情形设定并需逐负载调参，自适应预算更灵活但需额外选择开销或训练。而 FA3/FlashInfer 为行长相近场景设计，面对长度不一的页列表会填充或负载不均。为此作者提出 MOIRA——vLLM 中免训练的稀疏解码路径，预算按 KV head 与层自适应：覆盖率规则保留质量达比例 γ 的最小页集合，新 kernel“自规划注意力”让线程块自行推导工作量，使解码步留在 CUDA graph 内。H200 上 RULER 128k，γ=0.99 时读约 30% 页即匹配稠密精度，TPOT 比稠密 FA3 降 2.2–2.5 倍；γ=0.98 时降 2.7 倍且仍在稠密噪声内；高负载吞吐最高 +51%。",
+          "contributions": [
+            "观察到稀疏解码所需页数随 KV head、层与步大幅变化，指出现有固定与自适应预算方案各自的代价",
+            "提出免训练的 MOIRA，用覆盖率规则按 KV head 与层自适应保留最少页集合",
+            "设计自规划注意力 kernel，让线程块自行推导工作量，把整个解码步留在 CUDA graph 内"
+          ],
+          "conclusions": [
+            "按 head 与层自适应的预算配合 CUDA graph 内的 kernel，能同时获得稀疏的灵活性与速度",
+            "在匹配稠密精度的前提下大幅减少实际读取的页数"
+          ],
+          "experiments": [
+            "H200 上 RULER 128k 上下文：γ=0.99 时精度与稠密持平，仅读取约 30% 页，TPOT 相比稠密 FA3 降低 2.2–2.5 倍",
+            "γ=0.98 时 TPOT 降低 2.7 倍且精度仍在稠密噪声范围内",
+            "高服务负载下吞吐最高提升 51%"
+          ],
+          "significance": "把预算按 head/层自适应与留在 CUDA graph 内结合，使稀疏解码在长上下文服务中真正可用",
+          "arxivUrl": "https://arxiv.org/abs/2610.04313",
+          "pdfUrl": "https://arxiv.org/pdf/2610.04313.pdf",
+          "index": 6,
+          "takeaway": "逐 KV head/层自适应页预算加自规划 kernel，128k 下读 30% 页仍保精度、TPOT 降 2.2–2.7 倍",
+          "keyExperiment": "H200 RULER 128k：γ=0.99 读约 30% 页、精度持平、TPOT 降 2.2–2.5 倍；高负载吞吐 +51%"
+        },
+        {
+          "title": "LoGRA: Scaling LLM Reinforcement Learning with Low-Rank Gradient Sketches",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-06",
+          "authors": "Shaokun Zhang, Yifan Zhang, Jian Hu, Yueying Li, Hao Zhang, Binfeng Xu, Jan Kautz, Yi Dong",
+          "institutions": "NVIDIA",
+          "abstract": "强化学习大幅提升了大模型能力，但其显存需求仍阻碍更广泛应用。作者提出 LoGRA，一种 RL 后训练方法，通过把有用的学习信号保存在低秩梯度草图(sketch)中来降低显存。这些紧凑表示既支撑模型更新，也支持高效的策略同步。为防止过大的更新破坏学习，作者在梯度压缩之外加入“预测 KL 步长控制”：在应用每步更新前估计策略变化并据此调整更新幅度。在推理类任务上，LoGRA 把平均训练显存最多降低 45.7% 而不牺牲性能；它还能在单台八卡节点上稳定训练 270 亿参数模型超过 1100 步，而稠密 Adam 在该场景会显存耗尽，使此前因显存不可行的 RL 训练成为可能。代码已开源在 Molt 库中。",
+          "contributions": [
+            "提出 LoGRA，用低秩梯度草图保存学习信号，同时支撑模型更新与高效策略同步，降低 RL 后训练显存",
+            "引入预测 KL 步长控制，在应用更新前估计策略变化并调整幅度，防止过大的压缩更新破坏学习",
+            "在单台八卡节点上实现 270 亿参数模型超过 1100 步的稳定 RL 训练"
+          ],
+          "conclusions": [
+            "低秩梯度草图可在不牺牲性能的前提下把 RL 训练平均显存最多降低 45.7%",
+            "显存节省使此前不可行的 27B 规模 RL 训练变得可行"
+          ],
+          "experiments": [
+            "推理类任务上平均训练显存最多降低 45.7%，性能不下降",
+            "单台八卡节点上稳定训练 27B 模型超过 1100 步，而稠密 Adam 会显存耗尽"
+          ],
+          "significance": "用低秩梯度草图加步长控制把 RL 后训练的显存门槛显著拉低，让大模型 RL 在有限卡数下可行",
+          "arxivUrl": "https://arxiv.org/abs/2610.06647",
+          "pdfUrl": "https://arxiv.org/pdf/2610.06647.pdf",
+          "index": 7,
+          "takeaway": "低秩梯度草图压缩 RL 训练显存最多 45.7%，八卡单机即可稳定训练 27B 模型 1100 步以上",
+          "keyExperiment": "显存最多降 45.7% 且性能不降；八卡单机训练 27B 超 1100 步，稠密 Adam 会 OOM"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SyclKittens: A Tile Programming Model for Programmers and Coding Agents on Intel GPUs",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-06",
+          "authors": "Yehong Jiang, Sheng Chen, Fangwen Fu, Yen-Kuang Chen, Xinmin Tian, Stuart H. Sul, Simran Arora",
+          "institutions": "Massachusetts Institute of Technology, Intel Corporation, Stanford University, California Institute of Technology",
+          "abstract": "新 AI 加速器总先于跑得快的 kernel 出现，跑满性能需数据搬运等架构专属经验。编码 agent 已能自行编写、编译与调优 kernel，但产出取决于接口：接口可只暴露机器原始能力，也可把已知有效的硬件利用方法编码进去。作者在 Intel GPU 上用三种编码模型、三个 kernel 做受控实验：仅给原始 SYCL 加执行反馈时，最强的 Opus 4.8 写出的单卡 GEMM 只达 oneDNN 的 57.5%；改用作者提出的 SyclKittens（面向 Intel GPU 的硬件感知 tile 编程模型，把矩阵引擎布局、L1 预取与 GPU stack 间 fabric 通信等有效方法编码进接口）后达到 82.1%，说明被编码的方法能把硬件能力转化为性能。精化后的套件在 GEMM 形状上几何平均约达 oneDNN 的 96%，单卡 Llama-3.1-8B 推理快 1.59 倍。",
+          "contributions": [
+            "用受控实验量化接口对编码 agent 生成 kernel 性能的影响：原始 SYCL 下最强模型仅达 oneDNN 的 57.5%",
+            "提出硬件感知 tile 编程模型 SyclKittens，把矩阵引擎布局、L1 预取与 stack 间 fabric 通信等已知有效方法编码进接口",
+            "给出可编程的负载专属策略，让工程师与 agent 共同精化调度并构建 kernel 套件"
+          ],
+          "conclusions": [
+            "编码进接口的已知有效方法能把硬件能力转化为性能，同一 agent 下从 oneDNN 的 57.5% 提升到 82.1%",
+            "联合精化的 kernel 套件几何平均可达 oneDNN 的约 96%"
+          ],
+          "experiments": [
+            "原始 SYCL 下 Opus 4.8 单卡 GEMM 仅达 oneDNN 的 57.5%；使用 SyclKittens 达 82.1%",
+            "精化后的 kernel 套件在 GEMM 形状上几何平均约达 oneDNN 的 96%",
+            "单卡 Llama-3.1-8B 推理比基线快 1.59 倍，比 Intel oneCCL 匹配多卡 decode 路径快最多 2.91 倍"
+          ],
+          "significance": "证明给 agent 的接口决定其产出，把硬件专属 kernel 经验固化进编程模型对非主流加速器尤其关键",
+          "arxivUrl": "https://arxiv.org/abs/2610.04277",
+          "pdfUrl": "https://arxiv.org/pdf/2610.04277.pdf",
+          "index": 8,
+          "takeaway": "把矩阵引擎布局、预取与 fabric 通信编码进 tile 模型，agent 写 kernel 从 oneDNN 的 57.5% 升到 82.1%",
+          "keyExperiment": "同 agent 同预算下 GEMM 达 oneDNN 的 82.1%（原始 SYCL 仅 57.5%），Llama-3.1-8B 单卡快 1.59 倍"
+        },
+        {
+          "title": "Beyond Masked Sparsity: SNACK Enables Truly Sparse Neural Networks on GPU",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-06",
+          "authors": "Jafar Badour, Maurice van Keulen, Elena Mocanu",
+          "institutions": "University of Twente",
+          "abstract": "深度网络参数持续增长推高 GPU 训练推理成本。稀疏网络与动态稀疏训练(DST)有望降本，但多数实现依赖稠密张量上的二值掩码，几乎回收不到理论的计算、显存或能耗收益。作者提出 SNACK，一个真正稀疏的 GPU 层，只存储与计算非零连接，并提供在稀疏范式下重构连接与反向传播的 PyTorch API；其 SNACK-COO 是自定义 COO 格式 SpMM CUDA kernel，映射针对大模型训练与单流推理的“小批量、高稀疏度”区间调优。95% 稀疏度下 kernel 比带掩码的稠密基线(Dense+Mask)快最多 7 倍。90% 稀疏度下单层训练相对 Dense+Mask 与全稠密层加速 8 倍与 3.7 倍、推理加速 4 倍与 2 倍，显存比稠密少 72%；端到端把 GPT-2 峰值训练显存降最多 40%，99% 稀疏度下图式推理延迟低 4.8 倍。",
+          "contributions": [
+            "提出真正稀疏的 GPU 层 SNACK，只存储与计算非零连接，并提供在稀疏范式下重构连接与反向传播的 PyTorch API",
+            "设计 SNACK-COO 自定义 COO 格式 SpMM CUDA kernel，其批到 SM 的映射针对小批量、高稀疏度场景调优",
+            "在 kernel、单层与端到端三个层面系统量化稀疏带来的计算、显存与能耗收益"
+          ],
+          "conclusions": [
+            "相比带掩码的稠密实现，真正稀疏的存储与计算能实际回收理论收益的大部分",
+            "收益随稀疏度提升而放大，在 90%–99% 稀疏度区间尤为显著"
+          ],
+          "experiments": [
+            "95% 稀疏度下 kernel 比 Dense+Mask 快最多 7 倍，与 cuSPARSE、Sputnik、FlashSparse 相当",
+            "90% 稀疏度下单层训练加速 8 倍与 3.7 倍、推理加速 4 倍与 2 倍，显存比稠密少 72%",
+            "端到端把 GPT-2 峰值训练显存降低最多 40%，99% 稀疏度下图式推理延迟降低 4.8 倍"
+          ],
+          "significance": "用真正稀疏的数据结构与专用 SpMM kernel，把掩码稀疏纸面上的收益变成可测的显存、速度与能耗节省",
+          "arxivUrl": "https://arxiv.org/abs/2610.04093",
+          "pdfUrl": "https://arxiv.org/pdf/2610.04093.pdf",
+          "index": 9,
+          "takeaway": "只存算非零连接的 SNACK 把掩码稀疏的理论收益兑现：训练显存降 40%、图式推理延迟降 4.8 倍",
+          "keyExperiment": "95% 稀疏 kernel 快 7 倍；GPT-2 峰值训练显存最多降 40%，图式推理延迟降 4.8 倍"
+        },
+        {
+          "title": "HiNa-MoE: High-Performance, Non-Intrusive MoE Inference on CPUs with Matrix Engines",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-06",
+          "authors": "Weiling Yang, Junwen Zhang, Dezun Dong, Jianbin Fang, Enda Yu, Zhe Bai, Xiaopeng Deng",
+          "institutions": "National University of Defense Technology",
+          "abstract": "MoE 推理越来越多地部署于本地与私有化环境，专家参数常超出 GPU 显存容量。在延迟敏感、低并发场景下，反复把专家权重从 CPU 内存搬到 GPU 代价过高，于是被路由专家的 FFN 落在多路 CPU 的关键路径上。现有 CPU 加速方案常带侵入性的硬件或拓扑要求（如 AMX 专属权重布局、手工 NUMA 放置），让与标准卸载流水线的集成变复杂。作者提出 HiNa-MoE——面向 Intel AMX 的 CPU 端 MoE 推理非侵入式算子库：它用优化微内核利用 AMX，同时让专家权重保持标准布局，把轻量布局变换融合进 token gather 与 store；并把 decode 阶段的矩阵-向量操作转成小规模矩阵-矩阵执行以吃满 AMX。多个 MoE 模型上，其 FFN kernel 最多加速 3.37 倍，端到端推理最多加速 2.09 倍，且与现有框架即插即用。",
+          "contributions": [
+            "提出非侵入式 CPU MoE 推理算子库 HiNa-MoE，用优化微内核利用 Intel AMX，同时保持专家权重的标准布局",
+            "在简单页交织策略下做 NUMA 感知任务划分，不修改框架分配器即可获得多路扩展性",
+            "把 decode 阶段的矩阵-向量操作转化为小规模矩阵-矩阵执行，以充分利用 AMX"
+          ],
+          "conclusions": [
+            "非侵入式设计使其与现有 CPU-GPU 卸载流水线即插即用，避免 AMX 专属布局与手工 NUMA 放置的可移植性问题",
+            "在保持标准权重布局的前提下仍能取得显著的 AMX 加速"
+          ],
+          "experiments": [
+            "多个 MoE 模型上 FFN kernel 最多加速 3.37 倍",
+            "端到端推理最多加速 2.09 倍，且与现有框架即插即用"
+          ],
+          "significance": "在不要求框架侵入式适配的前提下，把多路 CPU 的 AMX 算力用于被路由专家的 FFN，缓解显存不足场景下的关键路径开销",
+          "arxivUrl": "https://arxiv.org/abs/2610.05123",
+          "pdfUrl": "https://arxiv.org/pdf/2610.05123.pdf",
+          "index": 10,
+          "takeaway": "非侵入式 AMX 算子库让 CPU 上的 MoE 专家 FFN 快 3.37 倍、端到端快 2.09 倍",
+          "keyExperiment": "MoE FFN kernel 最多加速 3.37 倍，端到端最多 2.09 倍，且不改动框架"
+        }
+      ]
+    }
+  ]
+}
