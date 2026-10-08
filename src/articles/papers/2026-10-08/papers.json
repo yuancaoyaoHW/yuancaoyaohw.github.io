@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-08",
+  "title": "2026-10-08 论文精选",
+  "lede": "今日主题：把「通信与调度」放回系统设计中心——从 TMA 卸载集合通信、M2N 权重重分布原语，到 P/D 解耦的原地弹性与闪存寿命感知的 KV 分层。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 670
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "FluidPD: In-Place Elasticity for SLO-Aware Prefill-Decode Disaggregated LLM Serving",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-07",
+          "authors": "Kartik Ramesh, Kaidi Fu, Zihan Zheng, Jiahuan Yu, Fabio Oliveira, Carlos Costa, Minjia Zhang",
+          "institutions": "University of Illinois Urbana-Champaign, IBM Research",
+          "abstract": "预填充-解码（P/D）解耦把执行模式与 SLO 目标迥异的两阶段分开，已成为 LLM 服务主流架构。但现有系统多固定 prefill/decode worker 比例，遇到短时突发或需求比持续漂移即很快失配，即使别处有空闲容量也会 SLO 违规，而自动扩缩容反应慢、还需空闲 GPU。本文提出 FluidPD：具备 SLO 感知原地弹性的 P/D 解耦服务系统。FluidToken 把解码侧余量用于卸载有界的一部分 prefill 计算，应对瞬时失衡；FluidRole 在原地重分配运行中的 worker 角色，避免模型重载与引擎重启，应对持续失衡。两者由轻量压力指标驱动，在违规出现前暴露两侧资源压力。在 Azure 生产 trace 上相比静态 SGLang 最高提升 94.6 个百分点 SLO 达成率，且无需增加 worker。",
+          "contributions": [
+            "提出 FluidPD，首个为 P/D 解耦服务提供 SLO 感知原地弹性的系统，不增加 GPU 供给即可应对阶段失衡。",
+            "FluidToken：当解码侧存在余量时，把有界部分 prefill 计算卸载到解码 worker，解决短时间尺度的瞬时失衡。",
+            "FluidRole：在运行中原地把 worker 在 prefill/decode 角色间重分配，避开模型重载与引擎重启；并用轻量压力指标提前暴露两侧资源压力。"
+          ],
+          "conclusions": [
+            "阶段失衡是 P/D 解耦服务的核心痛点，原地弹性比扩容式自动伸缩反应更快、成本更低。",
+            "在 Azure 生产 trace 上，FluidPD 相对静态 SGLang 的 SLO 达成率最高提升 94.6 个百分点。"
+          ],
+          "experiments": [
+            "在 Azure 生产 trace 负载上，整体 SLO 达成率相比静态 SGLang 最高提升 94.6 个百分点。",
+            "上述收益在不新增任何 worker 的前提下取得，验证原地弹性可替代扩容。",
+            "两个机制分别覆盖瞬时不均衡与持续不均衡两类失衡场景。"
+          ],
+          "significance": "把 P/D 解耦的弹性从「加机器」推进到「原地改角色」，为推理集群省下真实 GPU 供给。",
+          "arxivUrl": "https://arxiv.org/abs/2610.06917",
+          "pdfUrl": "https://arxiv.org/pdf/2610.06917.pdf",
+          "index": 1,
+          "takeaway": "不改供给、只在原地搬 prefill 与改 worker 角色，就把 SLO 达成率拉高 94.6pp。",
+          "keyExperiment": "Azure 生产 trace 上相对静态 SGLang 的 SLO 达成率最高 +94.6pp，且未增加 worker。"
+        },
+        {
+          "title": "Lachesis: Lifetime-Aware KV Cache Placement for Agent Serving across HBM and High-Bandwidth Flash",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AR",
+          "date": "2026-10-07",
+          "authors": "Jaehoon Yang, Jeongmin Lee, Haneul Park, Seung Yul Lee, Nam Sung Kim, Jae W. Lee",
+          "institutions": "Seoul National University, KAIST, University of Illinois",
+          "abstract": "LLM 服务负载正日益被 agentic 工作负载主导：agent 跨请求累积上下文形成 KV cache，占用可观显存。高带宽闪存（HBF）容量大一个数量级、读带宽接近 HBM，但写入寿命有限是关键瓶颈。本文的洞见是 KV cache 应按生命周期在 HBM 与 HBF 间分层：短生命周期数据留在 HBM 吸收一次 agent run 的主要写入，减少送往 HBF 的量。该生命周期由编排 agent 的 harness 决定，分时间、结构、worker 间三个维度。据此提出 Lachesis：harness 与推理引擎之间的生命周期感知放置层，写入时按生命周期把 segment 放入 HBM 或 HBF，不再读取即释放块。trace 驱动模拟中，相比 HBM-first 放置把 HBF 寿命延长 1.19-3.13 倍（3.3-12.2 设备年）；满载 7×24 下仍超五年质保。",
+          "contributions": [
+            "指出 agentic 服务中 KV cache 的生命周期由 agent harness 决定，并识别出时间、结构、worker 间三个生命周期分化维度。",
+            "提出 Lachesis：加在 agent harness 与推理引擎之间的放置层，写入时按生命周期把 segment 放到 HBM 或 HBF，并及早释放块。",
+            "用 HBF 的写入寿命而非纯容量作为一等约束，把「分层」从性能问题变成软硬件寿命问题。"
+          ],
+          "conclusions": [
+            "按生命周期分层的 KV cache 放置能显著缓解 HBF 的写入寿命瓶颈，让 HBF 在 agentic 服务中变得可用。",
+            "满载 7×24 运行下，多 agent trace 上的 HBF 仍可超出五年质保寿命。"
+          ],
+          "experiments": [
+            "trace 驱动模拟中，Lachesis 相比 HBM-first 放置把 HBF 寿命延长 1.19-3.13 倍，达 3.3-12.2 设备年。",
+            "在紧 SLO 所允许的满载 7×24 运行下，多 agent trace 上 HBF 仍超出五年质保。",
+            "在 agentic 多 agent trace 上，把短生命周期的 KV segment 留在 HBM，可吸收整轮 agent run 的主要写入，减少送往 HBF 的写量。"
+          ],
+          "significance": "把 KV cache 分层从「省显存」重写成「省闪存写入寿命」，是 agentic 时代存储层设计的现实约束。",
+          "arxivUrl": "https://arxiv.org/abs/2610.08378",
+          "pdfUrl": "https://arxiv.org/pdf/2610.08378.pdf",
+          "index": 2,
+          "takeaway": "按生命周期把 KV cache 分到 HBM/HBF，闪存寿命从 1 年量级拉到 3.3-12.2 设备年。",
+          "keyExperiment": "相比 HBM-first 放置，HBF 寿命延长 1.19-3.13 倍，达 3.3-12.2 设备年；满载 7×24 下仍超五年质保。"
+        },
+        {
+          "title": "Memory-Efficient Expert Routing for Distributed MoE Training",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-07",
+          "authors": "Arnab Kanti Tarafder, Jaume Guasch-Martí, Gokcen Kestor, Jie Ren",
+          "institutions": "William & Mary, Barcelona Supercomputing Center",
+          "abstract": "MoE 向数百专家与更高 top-k 路由扩展时，分布式训练的内存效率成为关键瓶颈：峰值内存由 MoE 块而非注意力主导，dispatch 流水线中每个中间缓冲都被 top-k 路由单独放大，而标准 all-to-all dispatcher 需一次性构造完整 top-k 展开缓冲。本文提出 RelayMoE：环形（ring-based）MoE 执行模型，在专家权重或 token 沿环流动时就地计算，免去完整 top-k 展开缓冲，并按通信量在专家/token 路由间选择、重叠传输与计算。环结构还支持省内存的反向重计算：每跳重建专家中间结果、算出梯度即释放。省下的内存可换更长序列、更大 batch 或更多注意力激活。在 30B-57B 生产 MoE 上：单层相较 Megatron-LM 平均加速 2 倍；同显存预算下全模型吞吐最高 2.02 倍，可训练序列长度上限最高 2.85 倍。",
+          "contributions": [
+            "提出环形 MoE 执行模型 RelayMoE，在权重或 token 沿环流动时就地计算，免去全量 top-k 展开的 dispatch 缓冲。",
+            "按通信量在专家路由与 token 路由之间自适应选择，并把传输与计算重叠。",
+            "环结构使反向也可跳过完整展开：逐跳重建专家中间结果、算梯度即释放，把省下的内存换成更长序列或更大 batch。"
+          ],
+          "conclusions": [
+            "MoE 训练的峰值内存瓶颈在 dispatch 缓冲而非注意力，环形执行可在不牺牲吞吐的前提下显著降低峰值内存。",
+            "省下的内存可直接转化为更长的可训练序列长度与更高的训练吞吐。"
+          ],
+          "experiments": [
+            "单层 MoE 实验中相较 Megatron-LM 平均加速 2 倍。",
+            "相同 GPU 内存预算下，全模型训练吞吐最高提升 2.02 倍。",
+            "可训练序列长度上限最高提升 2.85 倍。"
+          ],
+          "significance": "把 MoE 训练的「内存-吞吐」权衡从加卡转向通信组织方式，直接服务大模型分布式训练。",
+          "arxivUrl": "https://arxiv.org/abs/2610.07333",
+          "pdfUrl": "https://arxiv.org/pdf/2610.07333.pdf",
+          "index": 3,
+          "takeaway": "用环形执行替代一次性 top-k 展开，吞吐 2.02x、序列长度上限 2.85x。",
+          "keyExperiment": "相同显存预算下全模型训练吞吐最高 2.02x，最长可训练序列提高 2.85x（30B-57B 生产 MoE）。"
+        },
+        {
+          "title": "TRANSIT: Transparent Scale-in for Multi-Node LLM Training",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-07",
+          "authors": "Hyungyo Kim, Nicholas Satchanov, Hrishi Shah, Gaohan Ye, Jiaqi Lou, Robert Walkup, Shweta Salaria, I-Hsin Chung, Hubertus Franke, Seetharami Seelam, Apoorve Mohan, Nam Sung Kim",
+          "institutions": "University of Illinois Urbana-Champaign, IBM Research",
+          "abstract": "TRANSIT 是一个面向多节点模型训练的透明缩容（scale-in）框架：在更少 GPU 上训练时，把 CPU DRAM 透明地当作 GPU 显存的扩展，从而维持训练效率。它通过用户态 interposition 层实现，不需要改动应用、训练框架、集群调度器、设备驱动或操作系统；并借助零拷贝数据通路加速 CPU 与 GPU 之间的传输。作者在最多 64 张 NVIDIA H100、多种并行配置、RoCE 网络的稠密与 MoE 模型上评估，结果显示 TRANSIT 能够：①每 GPU 吞吐比 TorchTitan、ZeRO-Offload、ZeRO-Infinity 分别高 68%、59%、42%；②用少 50% 的 GPU 训练，仍保持基线 90% 以上的每 GPU 吞吐；③每节点网络流量最高降低 33%；④在通信受限场景下把每 GPU 吞吐最高提升 35%。",
+          "contributions": [
+            "提出 TRANSIT：用户态 interposition 层，把 CPU DRAM 透明扩展为 GPU 显存，应用/框架/调度器/驱动/OS 全部不改。",
+            "设计零拷贝 CPU-GPU 数据通路，让 offload 路径上的搬运开销显著低于框架自带 offloading。",
+            "把「显存不够」这一硬约束转成可调的缩容维度：用更少 GPU、更少网络流量完成同等训练。"
+          ],
+          "conclusions": [
+            "透明 offload 可以在真实多节点、多并行配置下超过框架自带 offloading 方案。",
+            "缩容一半 GPU 仍能保住 90% 以上的每 GPU 吞吐，说明显存而非算力常是扩容的真实驱动因素。"
+          ],
+          "experiments": [
+            "相比 TorchTitan / ZeRO-Offload / ZeRO-Infinity，每 GPU 吞吐分别高 68% / 59% / 42%。",
+            "GPU 数量减半时仍保持基线 90% 以上的每 GPU 吞吐。",
+            "每节点网络流量最高降低 33%，通信受限场景下每 GPU 吞吐最高提升 35%（最多 64 卡 H100 + RoCE）。"
+          ],
+          "significance": "为「小集群也能训大模型」提供不改软件的透明路径，对训练集群成本和通信受限场景都有直接价值。",
+          "arxivUrl": "https://arxiv.org/abs/2610.07593",
+          "pdfUrl": "https://arxiv.org/pdf/2610.07593.pdf",
+          "index": 4,
+          "takeaway": "不改任何软件栈，用 CPU DRAM 扩显存，GPU 减半仍保 90% 吞吐。",
+          "keyExperiment": "相比 ZeRO-Infinity/TorchTitan 每 GPU 吞吐高 42%/68%，GPU 减半保持 >90% 吞吐。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "AttSVD: Prompt-Adaptive Low-Rank KV Cache Compression via Attention-Guided SVD",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-07",
+          "authors": "Sara Abdali, Jongwoo Ko, Pashmina Cameron",
+          "institutions": "Microsoft Applied Sciences Group",
+          "abstract": "自回归 transformer 的 KV cache 随上下文线性增长，长上下文下主导显存。多数免训练方案逐出低重要性 token，是沿序列轴的不可逆选择。本文反其道而行：保留全部 token，改在特征轴上更省地存储。作者提出 AttSVD——可解释的低秩压缩，其基底由每个 prompt 自身的注意力几何导出：在线的逐 prompt 截断 SVD，只保留注意力真正读取的方向，按保留秩成比例削减每头持久 KV 内存。针对短/长生成给出累积式与流式两种解码期缓存策略，并加入两项自适应改进：逐矩阵能量规则分别为 logit 空间与注意力质量定尺寸；注意力感知的基底截断只在注意力真正读取处截断，同时保住 logit 与输出。在多个模型、agentic benchmark 与完整 LongBench 上，AttSVD 用最多 50% 的 KV cache 内存保持与稠密缓存相当的表现。",
+          "contributions": [
+            "把 KV cache 压缩从序列轴的 token 逐出改为特征轴的低秩存储，保留全部 token、避免不可逆丢弃。",
+            "提出逐 prompt 在线的注意力引导截断 SVD 基底，并按矩阵能量规则分别给 logit 空间与注意力质量定尺寸。",
+            "给出累积式与流式两种解码期缓存策略，并顺带输出每头有效秩等可解释信息。"
+          ],
+          "conclusions": [
+            "在不逐出 token 的前提下即可把 KV 占用压到一半，说明大量 KV 维度对注意力读取是冗余的。",
+            "压缩可同时保住注意力 logit 与输出，在长上下文与 agentic 负载上不掉点。"
+          ],
+          "experiments": [
+            "在完整 LongBench 套件上，AttSVD 用最多 50% 的 KV cache 内存保持与稠密缓存相当的表现。",
+            "在 agentic benchmark 上同样与稠密缓存持平。",
+            "跨多个模型验证，压缩率按每头保留秩成比例缩放。"
+          ],
+          "significance": "给长上下文推理提供一条与 eviction 正交的压缩路线，可直接叠加在现有服务系统上。",
+          "arxivUrl": "https://arxiv.org/abs/2610.06927",
+          "pdfUrl": "https://arxiv.org/pdf/2610.06927.pdf",
+          "index": 5,
+          "takeaway": "不扔 token、改压特征：50% KV 内存换同等精度。",
+          "keyExperiment": "LongBench 全量 + agentic benchmark 上用最多 50% KV cache 内存持平稠密缓存。"
+        },
+        {
+          "title": "TRACE: Rollout-Guided Quantization-Aware Training for FP4 Reinforcement Learning of MoE Language Models",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-07",
+          "authors": "Xin Wang, Hao Yu, Zhengyang Zhuge, Bochao Mao, Zheng Li, Junda Feng, Yuyan Luo, Yi Zhang, Yizhong Cao, Mi Zhang, Dayiheng Liu, Jianwei Zhang",
+          "institutions": "Alibaba, Ohio State University",
+          "abstract": "对 LLM 做 RL 后训练时 rollout 生成开销可观，人们希望用低精度 rollout。但现有 FP4 RL 方法分别在训练与 rollout 路径上独立优化量化精度，没有直接缩小两条路径的差异。本文提出 TRACE：面向 MoE 语言模型 RL 训练的 FP4 量化框架，用 rollout 侧的量化结果指导训练侧的 FP4 舍入决策，直接降低两条路径差异；并用量化信息缓存选择性保留深层尾数与 scale，压低其存储与通信开销。在四个大规模 MoE 语言模型、覆盖推理/代码/长程 RL 任务的评测中：TRACE 支持同时对 FP4 权重/激活与 FP4 KV-cache 做 rollout，RL 表现与 BF16 rollout 相当，rollout 最高加速 5.4 倍，最终 FP4 性能明显优于对 BF16 策略的事后 FP4 量化。",
+          "contributions": [
+            "指出 FP4 RL 的症结是训练与 rollout 两条量化路径不一致，而非各自量化误差本身。",
+            "提出 rollout 引导的量化感知训练：用 rollout 侧量化结果指导训练侧 FP4 舍入，直接压低 train-rollout 差异。",
+            "设计量化信息缓存，只从深层选择性保留尾数与 scale，控制 rollout 引导的存储与通信开销。"
+          ],
+          "conclusions": [
+            "同时对齐训练与 rollout 的 FP4 路径后，低精度 rollout 可以不掉 RL 效果。",
+            "相比对 BF16 策略做事后量化，训练期对齐得到的 FP4 策略质量明显更高。"
+          ],
+          "experiments": [
+            "支持 FP4 权重/激活与 FP4 KV-cache rollout，RL 表现与 BF16 rollout 相当。",
+            "rollout 阶段最高加速 5.4 倍。",
+            "在四个大规模 MoE 语言模型、推理/代码/长程 RL 任务上均优于事后 FP4 量化。"
+          ],
+          "significance": "让 RL 后训练阶段的 rollout 直接跑在 FP4 上，是当前「训练也要省」趋势里少见的端到端对齐方案。",
+          "arxivUrl": "https://arxiv.org/abs/2610.07767",
+          "pdfUrl": "https://arxiv.org/pdf/2610.07767.pdf",
+          "index": 6,
+          "takeaway": "训练与 rollout 的 FP4 舍入对齐，rollout 提速 5.4x 且 RL 效果不降。",
+          "keyExperiment": "四个大规模 MoE 上 rollout 最高 5.4x 加速，RL 表现与 BF16 相当。"
+        },
+        {
+          "title": "Agentic AutoRAG: RAG Pipeline Optimization through Reasoning-Driven Agents",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-07",
+          "authors": "Lasse B. Strand, Robert Jakob, Kevin O'Sullivan, Markus Kreft",
+          "institutions": "ETH Zurich",
+          "abstract": "RAG 把 LLM 锚定到外部知识，但配置一条流水线是昂贵的超参优化问题：chunk、embedding、rerank 与生成相互纠缠。现有优化器（贪心到贝叶斯）把每次试验压缩成聚合分数，不建模失败出在检索还是生成，尽管检索到的 chunk 已提供证据。本文提出 Agentic AutoRAG：带检索-生成失败归因的多目标 RAG 超参优化 LLM-agent。它在语料冻结的考卷上为配置打分；每次试验后 Diagnoser 归因失败，Proposer 依模型排行与定价知识库选下一个配置，在准确率与成本间勾勒 Pareto 前沿。三个多跳 QA 基准上其 LLM-judge 准确率高于所有对比基线，前 10 次试验即达到或超过基线 30 次试验的水平；真实医疗语料成本感知模式下中位准确率 77%（最强基线 71.5%），每查询成本约 58%，以约 22% 成本达到 71.5%。",
+          "contributions": [
+            "把 RAG 调参从「黑盒打分搜索」改为带失败归因的推理式优化：Diagnoser 区分检索失败与生成失败。",
+            "Proposer 依据模型排行与定价知识库选择下一个配置，直接在多目标（准确率 vs 成本）上勾勒 Pareto 前沿。",
+            "在三个多跳 QA 基准与真实医疗语料上验证收敛速度与成本效率优势。"
+          ],
+          "conclusions": [
+            "给优化器提供失败归因比单纯提升搜索预算更有效，前 10 次试验即可追平基线 30 次试验。",
+            "成本感知模式可在显著降低成本的同时保持或超过基线准确率。"
+          ],
+          "experiments": [
+            "三个多跳 QA 基准上 LLM-judge 准确率高于所有对比基线。",
+            "前 10 次试验即达到或超过统计基线完整 30 次试验的 judge 准确率。",
+            "真实医疗语料成本感知模式：中位准确率 77% vs 最强基线 71.5%，成本约 58%；以约 22% 成本达到 71.5%。"
+          ],
+          "significance": "把 RAG 运维工程化：让 agent 自己诊断该调检索还是调生成，并直接给出成本-准确率 Pareto 选择。",
+          "arxivUrl": "https://arxiv.org/abs/2610.08452",
+          "pdfUrl": "https://arxiv.org/pdf/2610.08452.pdf",
+          "index": 7,
+          "takeaway": "RAG 调参交给会归因的 agent：10 次试验追平基线 30 次，成本降到 22%。",
+          "keyExperiment": "医疗语料上 77% vs 基线 71.5% 准确率、成本 58%；22% 成本即追平 71.5%。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "T-CCL: Resource Efficient and Performant Collective Communication using Tensor Memory Accelerator",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-07",
+          "authors": "Keyvan Dadashzadeh, Yuehong Zhou, Minyu Cui, Miquel Pericas",
+          "institutions": "Chalmers University of Technology, University of Gothenburg, Linnaeus University",
+          "abstract": "大型 transformer 依赖多 GPU 执行，需要频繁的 GPU 间集合通信。现有通信库靠大量 GPU 线程换高带宽或低延迟，SM 占用很大，通信与计算并发时会挤占其它 GPU 工作的资源。本文提出 T-CCL：基于张量内存加速器（TMA）的片内通信库，把搬运与归约都卸载到 TMA，每个集合通信组织成流水化异步 TMA 序列，在保持带宽的同时减少 SM 资源。在 AllReduce/AllGather/ReduceScatter 上：不受限资源时相对 NCCL 最高 2.4 倍，资源受限预算下最高 3.42 倍，占用 SM 不多于 NCCL。GEMM-collective 重叠下把后端换成 T-CCL，平均算子级加速从双卡 1.12 倍升到 1.25 倍、四卡 1.04 倍升到 1.14 倍；集成进 vLLM 端到端吞吐最高提升 1.31 倍。",
+          "contributions": [
+            "提出 T-CCL：把数据搬运与归约全部卸载到 TMA，用流水化异步 TMA 操作序列实现集合通信。",
+            "在保持带宽的同时把 SM 侧占用压到不高于 NCCL，从而给并发的 GEMM 留出更多资源。",
+            "把「SM 占用」提升为集合通信的一等指标，并给出与计算重叠、接入 vLLM 的端到端收益。"
+          ],
+          "conclusions": [
+            "集合通信的优化目标应从单纯带宽/延迟扩展到 SM 资源占用，重叠场景下后者决定实际收益。",
+            "TMA 卸载路线在受限资源预算下优势更大，说明它在真实共置环境中比微基准更有价值。"
+          ],
+          "experiments": [
+            "AllReduce/AllGather/ReduceScatter 上相对 NCCL 最高 2.4x（资源不受限）、最高 3.42x（资源受限预算）。",
+            "GEMM-collective 重叠下平均算子级加速从 1.12x→1.25x（2 卡）、1.04x→1.14x（4 卡）。",
+            "集成进 vLLM 后端后端到端推理吞吐相比自动后端调度最高提升 1.31x，所有 batch size 均占优。"
+          ],
+          "significance": "给「通信与计算抢 SM」这一长期痛点提供硬件卸载解法，并已在 vLLM 上验证端到端收益。",
+          "arxivUrl": "https://arxiv.org/abs/2610.07098",
+          "pdfUrl": "https://arxiv.org/pdf/2610.07098.pdf",
+          "index": 8,
+          "takeaway": "用 TMA 卸载搬运与归约，省下 SM 反而让集合通信最高快 3.42x。",
+          "keyExperiment": "相对 NCCL 最高 2.4x（不受限）/3.42x（资源受限）；vLLM 端到端吞吐最高 1.31x。"
+        },
+        {
+          "title": "NCCL M2N: A Layout- and Topology-Aware Collective for Distributed Tensor Resharding",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-07",
+          "authors": "Kaushik Kandadi, Youngeun Kwon, Sreeram Potluri, Ching-Hsiang Chu, Ke Wen, Pouya Kousha, Sangkug Lym, Nitin Nitin, Manjunath Gorentla Venkata",
+          "institutions": "NVIDIA Corporation",
+          "abstract": "RL 训练与 rollout 常用不同张量布局，权重需跨进程组 resharding，而标准集合通信无法直接表达这种 M-to-N 重分布：扁平直发重复流量，gather-then-broadcast 集中注入，256 GPU 的 DeepSeek-V3 上这对 all-gather 加 broadcast 占 RL 步骤时间 29.4%。本文提出 NCCL M2N：布局与拓扑感知的 resharding 原语；分层路由均衡源贡献、域间只转一份、域内本地复制并与网络重叠，避免按副本数放大的出口流量。在最多 256 张 GB200 的 NVL72 集群上：FFN-MoE 单层传输比扁平直发快 7.9 倍（9.8 ms 对 77.3 ms）；DeepSeek-V3 NeMo-RL 中权重同步 5.78 s 降到 2.77 s（2.09 倍），步骤时间降低 12.7%。",
+          "contributions": [
+            "把 M-to-N 张量重分布识别为一类标准集合通信无法直接表达的缺失原语，并给出布局与拓扑感知的形式化。",
+            "设计分层路由：源贡献均衡到目的 rank、NVLink 域间只转发一份、域内本地复制，并与网络传输重叠，避免副本放大出口流量。",
+            "给出聚合数据移动模型刻画两阶段极限，并在 256 卡 GB200 真实集群上验证。"
+          ],
+          "conclusions": [
+            "RL 场景下权重重分布已是可观的步骤时间占比（DeepSeek-V3 上 29.4%），专有原语收益显著。",
+            "拓扑感知的分层路由能在不牺牲正确性的前提下把网络流量从根源上压下去。"
+          ],
+          "experiments": [
+            "单 FFN-MoE 层传输相对扁平直发最高 7.9x 加速（9.8 ms vs 77.3 ms）。",
+            "256 GPU DeepSeek-V3 NeMo-RL 实验：权重同步时间 5.78 s → 2.77 s（2.09x）。",
+            "同一实验中 RL 步骤时间降低 12.7%（256 张 GB200、NVL72 + NDR InfiniBand）。"
+          ],
+          "significance": "直接命中 RL 后训练中的权重同步瓶颈，是 GPU 通信/调度方向少见的端到端集群级成果。",
+          "arxivUrl": "https://arxiv.org/abs/2610.07516",
+          "pdfUrl": "https://arxiv.org/pdf/2610.07516.pdf",
+          "index": 9,
+          "takeaway": "为 M-to-N 权重重分布造新原语：DeepSeek-V3 权重同步 2.09x、步骤时间 -12.7%。",
+          "keyExperiment": "256 卡 GB200 上 DeepSeek-V3 权重同步 5.78 s→2.77 s（2.09x），步骤时间降低 12.7%。"
+        },
+        {
+          "title": "Mosaic: GPU Sharing with Latency Guarantees through Kernel-Level Interference Prediction",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-07",
+          "authors": "Foteini Strati, Ethan Graham, Leo Stephan, Paul Elvinger, Ana Klimovic",
+          "institutions": "ETH Zurich, University of Oxford, Wayve",
+          "abstract": "GPU 在 AI 负载下需求旺盛却常被显著低利用，推动工作负载共置，但共置的干扰会拖慢延迟敏感任务。现有方案要么用启发式调度（依赖粗粒度指标、忽略重要干扰来源），要么用预测器（常依赖模拟器特定或同样粗粒度的指标）。然而 GPU 干扰来自线程块放置、存储层次竞争与 SM 内资源竞争等多个机制。本文提出 Mosaic：显式建模这些机制的 kernel 级干扰预测器，组合解析模型与轻量学习模型，在四种 GPU 架构上把预测误差相对先前预测器最多降低一个数量级。作者把 Mosaic 集成进调度器 MosaicSched，做在线 kernel 准入控制，并在整卡共置与 SM 分区之间选择，以在满足延迟 SLO 前提下最大化 best-effort 吞吐；所有工作负载上 p99 延迟都保持在目标 SLO 之下或非常接近。",
+          "contributions": [
+            "把 GPU 干扰拆解为线程块放置、存储层次竞争与 SM 内资源竞争三类机制，并分别用解析与轻量学习模型建模。",
+            "提出 kernel 级干扰预测器 Mosaic，在四种 GPU 架构上把预测误差相对先前预测器最多降低一个数量级。",
+            "构建 MosaicSched：在线 kernel 准入控制 + 整卡共置与 SM 分区之间的选择，在 SLO 内最大化 best-effort 吞吐。"
+          ],
+          "conclusions": [
+            "只有显式建模干扰机制，共置调度才能在守住延迟 SLO 的同时提升 GPU 利用率。",
+            "干扰预测精度提升一个数量级，直接转化为调度器在 p99 延迟上的可控性。"
+          ],
+          "experiments": [
+            "在四种 GPU 架构上，预测误差相对先前预测器最多降低一个数量级。",
+            "集成后的 MosaicSched 在所有工作负载上把 p99 延迟保持在目标 SLO 之下或非常接近。",
+            "调度器在线完成 kernel 准入控制，并在整卡共置与 SM 分区两种模式间动态切换。"
+          ],
+          "significance": "为「GPU 共置提利用率」补齐了延迟保证这一环，是集群调度与 kernel 建模的交叉成果。",
+          "arxivUrl": "https://arxiv.org/abs/2610.07504",
+          "pdfUrl": "https://arxiv.org/pdf/2610.07504.pdf",
+          "index": 10,
+          "takeaway": "kernel 级干扰预测误差降一个数量级，共置也能守住 p99 SLO。",
+          "keyExperiment": "四种 GPU 架构上预测误差最多降低一个数量级；MosaicSched 全负载下 p99 守住目标 SLO。"
+        }
+      ]
+    }
+  ]
+}
