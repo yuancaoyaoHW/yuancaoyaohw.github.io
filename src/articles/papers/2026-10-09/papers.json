@@ -1,0 +1,340 @@
+{
+  "date": "2026-10-09",
+  "title": "2026-10-09 论文精选",
+  "lede": "今日主题：把多模态服务、MoE 通信与 KV 压缩串成一条基础设施主线——vLLM-Omni 统一异构生成器、CoMoE 让主机当路由中枢、Expert Coupling 直面 45–60% 的 all-to-all，再把 Dual-QK 的 2-bit KV 与 SPIN 的索引器开销优化接上。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 602
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "5 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "5 篇推荐",
+      "papers": [
+        {
+          "title": "vLLM-Omni Technical Report: A Unified Serving Runtime for Omni-Modality Generation",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-08",
+          "authors": "vLLM-Omni Team",
+          "institutions": "vLLM 社区（vllm-project）",
+          "abstract": "交互式智能系统正从纯文本聊天扩展到语音、图像、视频、动作等输出，模型的执行模式差异极大：多阶段自回归 omni/TTS 流水线、迭代式扩散或流匹配生成器，以及跨步携带状态的世界模型与机器人循环。于是服务不再是一条文本解码循环，而是带跨阶段传输、流式输出与会话型交互的异构多阶段工作流。现有推理栈要么为自回归 LLM 深化调度与 KV 管理，要么为扩散栈优化去噪与并行生成，缺少覆盖语音、像素、动作等独立生成器的统一控制面，生产部署常退化为跨异构运行时的手工拼接。本文提出 vLLM-Omni：用单一编排器把每个工作负载组织为多阶段流水线，负责请求准入、跨阶段推进与流式输出解复用；专用引擎与阶段副本提供算力，连接器在数据面搬运大负载，会话型控制支持长时双工、世界模型与机器人负载。报告详述阶段级 KV 路径、副本池、多硬件平台与效率栈，并提供 OpenAI 兼容与 OpenPI 两套 API。",
+          "contributions": [
+            "提出统一的 omni-modality 服务运行时 vLLM-Omni，用单一编排器把自回归、扩散、世界模型、机器人等异构生成负载统一为多阶段流水线",
+            "设计阶段级 KV 路径、副本池与数据面连接器，把跨阶段大负载传输与流式输出解复用从各专用引擎中解耦出来",
+            "提供 OpenAI 兼容与 OpenPI 两套 API，覆盖 omni/TTS/图像视频/世界模型/机器人/双工六类负载，并支持多硬件平台"
+          ],
+          "conclusions": [
+            "异构多模态生成无法用单一文本解码循环来服务，必须统一为可编排的多阶段工作流",
+            "阶段级 KV 与副本池抽象能在保留各引擎专用优化的前提下共享同一个控制面"
+          ],
+          "experiments": [
+            "在 H100 上运行多模态 nightly CI（TTS 与 MiniCPM-o 跑在 H200），评测重点为 Qwen3-Omni",
+            "统一支持 omni/TTS/图像视频/世界模型/机器人/双工 6 类工作负载，对外提供 2 套 API（OpenAI 兼容与 OpenPI）",
+            "公开仓库 github.com/vllm-project/vllm-omni 随报告发布"
+          ],
+          "significance": "首次把语音、图像、视频、动作生成统一进一个开源 LLM 服务运行时，为多模态推理基础设施树立了可复用的编排范式。",
+          "arxivUrl": "https://arxiv.org/abs/2610.09307",
+          "pdfUrl": "https://arxiv.org/pdf/2610.09307.pdf",
+          "takeaway": "多模态推理不再是单一解码循环，vLLM-Omni 用「单一编排器 + 阶段副本 + 数据面连接器」把异构生成器统一进一套服务栈。",
+          "keyExperiment": "在 H100/H200 上以 Qwen3-Omni、TTS、MiniCPM-o 为主的 nightly CI 中打通 omni/TTS/图像视频/世界模型/机器人/双工六类负载。",
+          "index": 1
+        },
+        {
+          "title": "Democratizing MoE inference on commodity GPUs with CoMoE",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-08",
+          "authors": "Ruwen Fan, Yuezhi Zu, Junru Li, Qingda Hu, Xinjun (Jimmy) Yang, Jiwu Shu, Youyou Lu",
+          "institutions": "清华大学, 阿里云",
+          "abstract": "MoE 部署高度依赖专家并行，由此产生密集的 GPU 间通信，使先进推理系统必须依赖数据中心 GPU 的 NVLink 等高速 P2P 互联来承载海量 token 路由。消费级 GPU 算力接近而成本低得多，但其 PCIe 带宽受限、互联需经主机中转且不支持 P2P，会带来严重通信瓶颈。本文提出 CoMoE，利用这一特殊通信拓扑把主机提升为主动路由中枢，从根本上削减通信量、消除全局同步停顿：token dispatch 采用 host-backed token multicast，把共享 token 只写主机一次，消除出站冗余；token combine 采用基于主机暂存缓冲的细粒度 token 级聚合，取代刚性全局同步并缓解长尾者效应。在 RTX 5090 上，CoMoE 把推理吞吐最高提升 1.46×，接近支持 NVLink 的 A800，而硬件成本仅为其 23.4%。",
+          "contributions": [
+            "指出消费级 GPU 无 P2P、带宽受限的互联拓扑并非只能被动接受，可反过来把主机当作主动路由中枢",
+            "设计 host-backed token multicast（dispatch）与基于主机暂存缓冲的细粒度 token 级聚合（combine），分别消除出站冗余与全局同步停顿",
+            "在 RTX 5090 上以 23.4% 的硬件成本达到接近 A800 的效率"
+          ],
+          "conclusions": [
+            "NVLink 并非 MoE 推理的必要条件；针对 PCIe/host-mediated 拓扑设计的通信方案可以补上带宽差距",
+            "把全局同步替换为 token 级细粒度聚合还能顺带缓解专家负载不均带来的长尾者效应"
+          ],
+          "experiments": [
+            "RTX 5090 上推理吞吐最高提升 1.46×，接近 NVLink 互连的 A800",
+            "整套方案的硬件成本仅为 A800 方案的 23.4%"
+          ],
+          "significance": "用「主机当路由中枢」的逆向设计，把 MoE 推理从 NVLink 数据中心下放到消费级 GPU。",
+          "arxivUrl": "https://arxiv.org/abs/2610.09424",
+          "pdfUrl": "https://arxiv.org/pdf/2610.09424.pdf",
+          "takeaway": "消费级 GPU 上 MoE 推理的真正瓶颈是 host-mediated 互联，CoMoE 把主机升格为路由中枢，1.46× 吞吐、23.4% 成本逼近 A800。",
+          "keyExperiment": "RTX 5090 上吞吐最高 1.46×，成本仅为 NVLink A800 方案的 23.4%。",
+          "index": 2
+        },
+        {
+          "title": "Fast and Memory Efficient Offload Training Framework with Hybrid XPU Computation",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-08",
+          "authors": "Zhiyi Yao, Zuning Liang, Yuedong Xu, Jin Zhao, Jessie Hui Wang, Tong Li",
+          "institutions": "复旦大学",
+          "abstract": "模型规模持续增长使训练时 GPU 显存捉襟见肘。ZeRO-Offload 把优化器状态搬到 CPU 内存并用 CPU 更新参数，但存在 GPU 利用率低、通信与计算重叠不佳、卸载策略不灵活等缺陷。本文利用 GPU 的 Direct Host Access 能力——可直接计算存放于 CPU 内存中的数据——构建 on-GPU 与 DHA 混合执行，并提出 MemFerry，由执行调度器与影子模型组成：调度器挑选适合 DHA 计算的参数层、同时把其余参数搬入 GPU 显存以缩短前向，再把 DHA 参数加载回 GPU 以减少反向时间；影子模型为分散在 GPU/CPU 的参数分区提供统一内存抽象。进一步给出带动态规划的 GO-MemFerry 把梯度经 DHA 卸载到 CPU；并扩展出 ScaleUp-MemFerry，利用加速器互联的闲置带宽、以自适应多路径传输协助主机到加速器的数据搬运。",
+          "contributions": [
+            "把 GPU 的 Direct Host Access 特性当作调度原语，构造 on-GPU 与 DHA 混合执行的训练框架 MemFerry",
+            "用执行调度器 + 影子模型统一管理分散在 GPU/CPU 的参数分区，并以动态规划把梯度也经 DHA 卸载",
+            "ScaleUp-MemFerry 复用加速器互联的闲置带宽，通过自适应多路径传输加速主机到加速器搬运"
+          ],
+          "conclusions": [
+            "在显存受限场景下，关键不是「少算」而是把参数放在能直接计算的位置，DHA 让 CPU 内存成为可执行存储",
+            "同一套抽象可从单卡扩展到 Scale-up 域，且能利用原本闲置的互联带宽"
+          ],
+          "experiments": [
+            "单 GPU 上训练最高快 1.68×，可比 ZeRO-Offload 多训练 1.52× 大的模型",
+            "扩展到 8 GPU 数据并行时训练速度至少提升 28.1%",
+            "在华为 CloudMatrix384（最多 8 NPU）上端到端迭代时间比 DeepSpeed 最多降低 20.7%"
+          ],
+          "significance": "把「GPU 直接算主机内存」的硬件特性变成可调度资源，让单卡也能训更大的模型。",
+          "arxivUrl": "https://arxiv.org/abs/2610.09657",
+          "pdfUrl": "https://arxiv.org/pdf/2610.09657.pdf",
+          "takeaway": "MemFerry 用 DHA 把 CPU 内存变成可计算存储，单卡训练快 1.68×、可训练模型大 1.52×，并延伸到 CloudMatrix384 的 Scale-up 域。",
+          "keyExperiment": "单 GPU 训练最高 1.68× 加速、模型容量 1.52×；CloudMatrix384 上迭代时间较 DeepSpeed 最多降 20.7%。",
+          "index": 3
+        },
+        {
+          "title": "SPIN: Shadow Predictive Indexer for Sparse Attention",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-08",
+          "authors": "Yao Fu, Cyrus Chang, Ritchie Zhao, Bryce Long, Yueying Li, Mahdi Kamani, Samkit Jain, Rahul Raman, Tara Safavi, Shreya Gupta, Parsa Ashrafi Fashi, Minseok Lee, Julien Demouth, Bita Darvish Rouhani",
+          "institutions": "NVIDIA",
+          "abstract": "基于 indexer 的稀疏注意力只把固定少量重要 token 送入核注意力，从而降低注意力开销，但 indexer 本身在每个解码步仍需对整个 KV cache 打分，随着上下文变长，这一打分开销成为主要瓶颈。本文提出 SPIN（Shadow Predictive Indexer），用轻量、基于历史的预测来定位重要 KV 块，避免每步为全量 KV cache 打分。SPIN 把 KV 块与投机解码当作一等设计考量，而不是事后补丁。在大量长上下文与 agentic 基准的评测中，SPIN 在保持任务质量的前提下实现 30–40% 稀疏度；在端到端 vLLM 服务中，输出吞吐最高提升 14.9%，token 间延迟中位数最多降低 13.2%。",
+          "contributions": [
+            "指出稀疏注意力的下一个瓶颈是 indexer 自身的全量 KV 打分，而非核注意力本身",
+            "提出基于历史的轻量预测索引器 SPIN，用「影子」预测替代每步全量打分",
+            "把 KV 块管理与投机解码作为一等公民纳入设计，保证与现有解码优化兼容"
+          ],
+          "conclusions": [
+            "上下文越长，indexer 打分开销占比越高，因此优化索引器比继续优化核注意力更有边际收益",
+            "历史预测足以在 30–40% 稀疏度下保持任务质量，说明重要 KV 块具有很强的时序可预测性"
+          ],
+          "experiments": [
+            "长上下文与 agentic 基准上保持任务质量的同时达到 30–40% 稀疏度",
+            "端到端 vLLM 服务中输出吞吐最高提升 14.9%，token 间延迟中位数最多降低 13.2%"
+          ],
+          "significance": "把稀疏注意力的优化重心从核注意力挪到索引器，用历史预测绕开每步全量打分。",
+          "arxivUrl": "https://arxiv.org/abs/2610.09025",
+          "pdfUrl": "https://arxiv.org/pdf/2610.09025.pdf",
+          "takeaway": "SPIN 识别出稀疏注意力的真瓶颈是 indexer 的全量打分，用历史预测实现 30–40% 稀疏度，vLLM 吞吐 +14.9%。",
+          "keyExperiment": "vLLM 端到端输出吞吐最高 +14.9%、token 间延迟中位数 -13.2%，稀疏度 30–40% 下任务质量保持。",
+          "index": 4
+        },
+        {
+          "title": "Dual-QK: Sharp Queries and Flat Keys for Prunable 2-bit KV Caches",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-08",
+          "authors": "Sunjoo Whang, Jungjun Oh, Minsung Kim, Dongho Seo, Jisu Shin, Gregory Kielian, Hoi-Jun Yoo, Sangjin Kim",
+          "institutions": "KAIST, GIST, Google Research",
+          "abstract": "长输入与长生成放大了 KV cache 的存储与访问开销。低位量化降低存储与访存，查询通道剪枝还能进一步减少 key cache 读取。基于旋转的量化把 key 离群值的能量分散到各通道，但为保持计算不变性必须对 query 施加相同正交变换，这又会把 query 能量打散，削弱「少量大分量保留、大量小分量剪枝」的分离度。本文提出 Dual-QK，用成对的非正交 query/key 变换化解该矛盾：基于校准统计把部分 key 白化与 query 对齐基结合，既平衡 key 尺度以支持 INT2 量化，又集中 query 能量以支持动态通道剪枝。实验在 40% query 通道稀疏度下多数任务优于 OSCAR，128K 上下文实现 6.8× KV cache 压缩与约 8.3× 的 KV 读取量削减，SGLang 解码吞吐最高达未剪枝 BF16 的 3.75×。",
+          "contributions": [
+            "指出旋转量化在「保持 query-key 计算不变性」与「保持可剪枝性」之间存在结构性冲突",
+            "提出成对的非正交 query/key 变换：部分 key 白化 + query 对齐基，同时满足 INT2 量化的尺度平衡与通道剪枝的能量集中",
+            "引入 channel-0 保护与 bucket-relative RoPE，把低比特精度维持到长上下文"
+          ],
+          "conclusions": [
+            "量化的可剪枝性与变换不变性可以解耦处理，不必用同一个正交变换同时承担两个目标",
+            "极低位 KV 压缩在长上下文检索任务上不必以明显掉点为代价"
+          ],
+          "experiments": [
+            "四个模型、五个生成基准与长上下文检索任务上，40% query 通道稀疏度下多数任务优于 OSCAR",
+            "128K 上下文下提供 6.8× KV cache 压缩、估计 8.3× 的 KV 读取量削减",
+            "SGLang 实现下解码吞吐最高达未剪枝 BF16 的 3.75×"
+          ],
+          "significance": "揭示旋转量化「保不变性」与「保可剪枝性」的冲突，并用非正交双变换同时满足。",
+          "arxivUrl": "https://arxiv.org/abs/2610.09827",
+          "pdfUrl": "https://arxiv.org/pdf/2610.09827.pdf",
+          "takeaway": "Dual-QK 用非正交 query/key 双变换同时拿下 INT2 量化与通道剪枝，128K 下 6.8× 压缩、SGLang 解码吞吐 3.75×。",
+          "keyExperiment": "128K 上下文 6.8× KV cache 压缩、8.3× KV 读取削减，SGLang 解码吞吐最高 3.75×。",
+          "index": 5
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Decoupling Exploration from Optimization in RLVR",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-08",
+          "authors": "Saif Punjwani, Micah Goldblum",
+          "institutions": "哥伦比亚大学",
+          "abstract": "现代语言模型在已训练好的检查点上做可验证奖励强化学习（RLVR），其重要承诺之一是发现新的推理策略。但在实践中，为 RLVR 加入强新颖性激励收效有限，还会损害模型质量——因为可验证奖励只监督模型知识与行为的狭窄切片，这类退化很难恢复。本文把探索与优化解耦，提出 Exploration-Distillation（ExpDis）：先训练一个或多个带新颖性奖励的 explorer 策略，对其轨迹按正确性与质量过滤，再蒸馏到独立的 student 策略中，student 不带新颖性奖励训练；上述过程多轮交替进行，从而允许激进地放大探索而不损害 student。在七个数学推理基准与两个模型家族上，ExpDis 在同等墙钟预算下优于 DAPO，并观察到更好的 pass@k 扩展性。",
+          "contributions": [
+            "诊断出「新颖性激励损害模型质量」的根因：可验证奖励的监督面过窄，探索带来的退化无法被 reward 纠正",
+            "提出 ExpDis，把探索者与学习者拆成两个策略：explorer 带新颖性奖励、student 不带，中间以正确性与质量过滤加蒸馏衔接",
+            "给出多轮交替的探索—蒸馏训练流程，使探索强度可以大幅提升而不波及最终策略"
+          ],
+          "conclusions": [
+            "探索与优化耦合是 RLVR 掉点的主因；解耦后可以用更激进的新颖性奖励换取更丰富的推理策略",
+            "pass@k 扩展性改善说明该方法提升的是解的正确解多样性，而非单点精度"
+          ],
+          "experiments": [
+            "在七个数学推理基准、两个模型家族上，同等墙钟预算下优于 DAPO",
+            "观测到更好的 pass@k 扩展趋势，表明生成更有多样性的正确解"
+          ],
+          "significance": "给「RLVR 加探索反而掉点」提供了一个简单解法——让探索者和学习者分家。",
+          "arxivUrl": "https://arxiv.org/abs/2610.10536",
+          "pdfUrl": "https://arxiv.org/pdf/2610.10536.pdf",
+          "takeaway": "ExpDis 把 RLVR 的探索者与学习者解耦（explorer 加新颖性奖励、student 不加），七基准上同等预算超 DAPO 且 pass@k 更好。",
+          "keyExperiment": "七个数学推理基准、两个模型家族，同等墙钟预算下优于 DAPO，pass@k 扩展性更好。",
+          "index": 6
+        },
+        {
+          "title": "YANchor-4B: Effective Long-Horizon Reasoning in O(N) Time with O(1) Memory",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-08",
+          "authors": "Huishan Ji, Hua Xu, Weiming Zhang, Qirui Ye",
+          "institutions": "Rocore Matrix",
+          "abstract": "长程推理要求在可控生成成本下访问早期信息：全历史注意力带来持续增长的存储与计算，循环压缩又会丢失精确细节。本文提出 YANchor-4B，一种通用循环模型，把关键记忆保留为「锚点」（ANchors）供后续推理检索，在 O(N) 生成时间与 O(1) 记忆之外，通过多维记忆机制实现有效的长程推理。在困难数学题上，AIME 2024–2026 平均 pass@1 达 82.93%，HMMT 为 63.64%，显著优于同类线性时间、常数状态模型（包括规模更大的模型）。在 H100 上，其批式长生成吞吐比 Transformer 与混合基线高出数倍。数十个基准上的评测进一步显示其通用能力优势。",
+          "contributions": [
+            "提出 YANchor-4B：把关键记忆显式保留为可检索的「锚点」，在常数状态循环模型上实现有效长程推理",
+            "设计多维记忆机制，兼顾 O(N) 时间与 O(1) 记忆的生成成本约束与早期信息的精确访问",
+            "在数学、代码、科学等数十个基准上给出与更大规模基线对比的通用能力刻画"
+          ],
+          "conclusions": [
+            "常数状态并不等于必须丢细节，把关键记忆作为锚点显式保留即可在长程推理上逼近前沿模型",
+            "线性时间、常数记忆的模型在批式长生成上具备显著的吞吐优势"
+          ],
+          "experiments": [
+            "困难数学上 AIME 2024–2026 平均 pass@1 达 82.93%，HMMT 达 63.64%",
+            "在 H100 上批式长生成吞吐比 Transformer 与混合基线高出数倍",
+            "评测覆盖数十个基准，涵盖数学（AIME/HMMT）、代码（HumanEval/MBPP/LiveCodeBench v6）与科学（GPQA-Diamond/ARC）"
+          ],
+          "significance": "在常数状态循环模型上做到接近前沿的长程推理，同时把批式长生成吞吐拉开数倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.10118",
+          "pdfUrl": "https://arxiv.org/pdf/2610.10118.pdf",
+          "takeaway": "YANchor-4B 用「锚点记忆」在 O(N) 时间/O(1) 记忆下取得 AIME 82.93%、HMMT 63.64%，H100 批式长生成吞吐数倍于 Transformer。",
+          "keyExperiment": "AIME 2024–2026 平均 pass@1 82.93%、HMMT 63.64%，H100 批式长生成吞吐数倍于 Transformer 与混合基线。",
+          "index": 7
+        },
+        {
+          "title": "SkillForge: Co-Evolving Skills and Agents via Dynamic Skill Lifecycles",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-08",
+          "authors": "Yuyao Ge, Yiwei Wang, Yuchen He, Baolong Bi, Lingrui Mei, Jiayu Yao, Lizhe Chen, Shenghua Liu",
+          "institutions": "中科院计算所, University of California",
+          "abstract": "记忆增强强化学习能提升 LLM agent 解决复杂长程任务的能力，技能是其中一种记忆形式，把指令与适用条件配对。但若随策略改进不加区分地保留所有技能，过时或有毒的条目会累积并误导 agent。本文提出 SkillForge，一种 agentic RL 方法，通过「试用—活跃—稳定—退役」的适应度驱动技能生命周期来编译并演化技能库，使技能与模型在训练中共同演化：RL 前的评估阶段先用基座模型自身的 rollout 预退役低适应度技能，得到过滤后的技能库用于监督微调；随后进入强化学习，每轮迭代中持续做选择性退役、稳定化与 LLM 引导的变异。多个交互式 agent 基准上，SkillForge 取得最高总成功率，相对最强基线最多提升 7.8%，同时全程保持技能库紧凑。",
+          "contributions": [
+            "提出适应度驱动的技能生命周期（试用/活跃/稳定/退役），把技能库当作需要淘汰机制的资产而非只增不减的记忆",
+            "用基座模型自身 rollout 做 RL 前的预退役过滤，得到干净技能库再进入 SFT 与 RL",
+            "RL 迭代中持续做选择性退役、稳定化与 LLM 引导变异，实现技能与策略共同演化"
+          ],
+          "conclusions": [
+            "记忆增强 agent 的瓶颈不在技能数量而在技能质量，退役机制与新增机制同等重要",
+            "技能库全程保持紧凑也能取得更高成功率，说明淘汰并不损失能力覆盖"
+          ],
+          "experiments": [
+            "多个交互式 agent 基准上取得最高总成功率，相对最强基线最多提升 7.8%",
+            "训练全程技能库保持紧凑，未出现条目无界膨胀",
+            "发布 SkillFurnace 数据集：5k+ 条标注记录，含退役过滤的 SFT 轨迹、带适应度的技能库与人工标注的失败类别"
+          ],
+          "significance": "把 LLM agent 的技能库当作有生命周期的资产来管理，而非只增不减的记忆堆。",
+          "arxivUrl": "https://arxiv.org/abs/2610.09832",
+          "pdfUrl": "https://arxiv.org/pdf/2610.09832.pdf",
+          "takeaway": "SkillForge 用「试用—活跃—稳定—退役」的适应度生命周期管理技能库，交互式 agent 基准总成功率最多 +7.8%，技能库保持紧凑。",
+          "keyExperiment": "多个交互式 agent 基准最高总成功率，相对最强基线最多提升 7.8%，并发布 5k+ 条的 SkillFurnace 数据集。",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "Expert Coupling in MoE Pretraining: Reducing All-to-All Overhead with Correlated Placement and Token Shuffling",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-08",
+          "authors": "Radha Gulhane, Quentin Anthony, Beren Millidge",
+          "institutions": "Zyphra",
+          "abstract": "MoE 层把 Transformer 的 FFN 换成 E 个专家，每个 token 路由到其中 k 个。专家并行下专家分布于各 GPU，每个 MoE 层前向与反向都要跑 all-to-all 集合通信来派发并合并 token；8 卡 AMD MI300X 上，它占训练步 45%（EP32/top-2）至 60%（top-6）。本文发现预训练早期路由器已学会相关地分配 token：一层内 0.8% 的专家对被 42% 的 token 同时选中，且某层所选专家能预测下一层所选。据此提出相关专家放置——把常被同时选中的专家放在同一 GPU，配每 token 每 GPU 只发一次的派发器，最多消除 58% 派发行；以及 token 洗牌——借 attention 后 reduce-scatter 空档把 token 迁往预测持有其下一层专家的 GPU，使本机服务占比 12.5%→59%。",
+          "contributions": [
+            "量化了 MoE 专家并行中 all-to-all 的真实代价：MI300X 单节点 8 卡上占训练步 45%（top-2）至 60%（top-6）",
+            "发现预训练早期路由器已具备同层内与跨层的专家选择相关性，可作为放置与调度的先验",
+            "提出相关专家放置 + 去重派发器（最多消除 58% 派发行）与 token 洗牌（本机服务占比 12.5%→59%）两种互补方法"
+          ],
+          "conclusions": [
+            "路由相关性是训练早期就存在的稳定结构，因此可以在不改变模型路由决策的前提下优化通信",
+            "通信优化应与并行策略协同设计：token 洗牌正是借用 attention 后 reduce-scatter 的空档完成位置重排"
+          ],
+          "experiments": [
+            "在 Megatron-LM 中，EP 度 8–64、top-2 与 top-6 路由下 all-to-all 时间降低 1.16–2.63×",
+            "端到端训练步时最高降低 1.41×，且不改变模型的路由决策与专家参数",
+            "单节点内把由本机 GPU 服务的 token–专家分配占比从 12.5% 提升到 59%"
+          ],
+          "significance": "用「路由器早就学会了相关性」这一观察，把 MoE 训练中最贵的 all-to-all 从 45–60% 的占比压下来。",
+          "arxivUrl": "https://arxiv.org/abs/2610.09372",
+          "pdfUrl": "https://arxiv.org/pdf/2610.09372.pdf",
+          "takeaway": "Expert Coupling 利用路由器的同层/跨层相关性做专家放置与 token 洗牌，all-to-all 时间降 1.16–2.63×、端到端步时最多 -1.41×。",
+          "keyExperiment": "MI300X 单节点 EP32/top-2 下 all-to-all 占步时 45%；两方法使 all-to-all 降 1.16–2.63×、端到端步时最多降 1.41×。",
+          "index": 9
+        },
+        {
+          "title": "Hardware-aware Calibrated Clustered Attention for Efficient Visual Geometric Transformers",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CV",
+          "date": "2026-10-08",
+          "authors": "Weitian Wang, Shubham Rai, Cecilia De La Parra, Akash Kumar",
+          "institutions": "Robert Bosch GmbH, 波鸿鲁尔大学",
+          "abstract": "Visual Geometry Grounded Transformer（VGGT）首次在单次前向中联合推断相机位姿、深度与稠密几何，但其联合推理机制需要极长序列的全局注意力层，造成显著延迟瓶颈。本文提出 blockwise clustered attention（BC attention）来加速 VGGT 的全局注意力层：把聚类限制在与硬件友好的邻域块内，既降低 query 聚类的计算开销，又减少片上与片外内存之间的昂贵数据搬运，使方法可扩展到长序列并在 GPU 上带来实际延迟收益。此外提出哈希超平面校准与基于阈值的误差补偿，以低开销降低聚类误差——这也是现有多数 clustered attention 的瓶颈。GPU 实验表明，校准后的 BC attention 把全局注意力层加速 2.10–2.63×、整个骨干加速 1.77–2.35×，大场景精度损失可忽略。",
+          "contributions": [
+            "提出 blockwise clustered attention，把聚类限制在硬件友好的邻域块内，同时降低聚类计算与片上/片外数据搬运",
+            "用哈希超平面校准与基于阈值的误差补偿以低开销压低聚类误差，缓解 clustered attention 的精度瓶颈",
+            "在 VGGT 这一联合推断位姿/深度/几何的视觉几何 Transformer 上验证端到端延迟收益"
+          ],
+          "conclusions": [
+            "把聚类范围限制在块内是同时省下计算与内存搬运的少数「顺带」优化之一",
+            "聚类误差可以用低开销校准与补偿压住，无需放弃聚类带来的效率收益"
+          ],
+          "experiments": [
+            "GPU 实验：校准后 BC attention 使全局注意力层加速 2.10–2.63×、整个骨干加速 1.77–2.35×，大场景精度损失约 1%",
+            "允许 <5% 精度损失时，全局注意力层延迟改善 2.26–2.87×、骨干改善 1.90–2.55×"
+          ],
+          "significance": "把「聚类限制在硬件友好邻域块」这一改动同时省下聚类计算与内存搬运，是少量改动换大收益的典型。",
+          "arxivUrl": "https://arxiv.org/abs/2610.09274",
+          "pdfUrl": "https://arxiv.org/pdf/2610.09274.pdf",
+          "takeaway": "BC attention 把聚类限制在硬件友好的邻域块内，VGGT 全局注意力层加速 2.10–2.63×、骨干 1.77–2.35×，精度损失约 1%。",
+          "keyExperiment": "GPU 上全局注意力层加速 2.10–2.63×、骨干 1.77–2.35×，大场景精度损失约 1%。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
