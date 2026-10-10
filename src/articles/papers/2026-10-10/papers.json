@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-10",
+  "title": "2026-10-10 论文精选",
+  "lede": "今日 10 篇聚焦推理系统的三处瓶颈：MoE 服务的通信失衡、稀疏注意力 prefill 的重复读取与 KV 缓存的比特分配，另附小米 MiMo-V2.6 的 RL 规模化报告与三篇自我进化/联邦 RL 工作。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 404
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Zepp: Accelerating Distributed MoE Serving under Relaxed Balance Constraints",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-09",
+          "authors": "Chang Chen, Andrew Yang, Tiancheng Chen, Jiangfei Duan, Xinwei Qiang, Zhongkai Yu, Xiang Fang, Yufei Ding",
+          "institutions": "UC San Diego, Stanford University, ETH Zürich, NVIDIA",
+          "abstract": "随着 MoE 模型规模扩大，服务越来越依赖跨设备的专家并行（EP），而专家负载倾斜会让计算、通信与显存同时失衡，负载均衡因此成为分布式 MoE 服务的核心优化目标。作者观察到“均衡并不免费”：为平衡某一维度引入的操作本身可能昂贵甚至不均衡，于是把均衡从优化目标降级为约束，直接优化真正的瓶颈——通信。Zepp 在 GPU 与网卡（NIC）两类物理资源的简化均衡约束下，沿放置、路由、执行三层逐步优化节点间通信：先放置专家副本降低 token 通信，再通过切分与合并原语重塑通信流，最后切分并调度专家计算以掩盖通信；每次迭代还联合协调计算、token 通信与专家权重搬运，以适应动态负载。",
+          "contributions": [
+            "把“负载均衡”从优化目标改写为物理资源（GPU/NIC）上的约束，直接优化瓶颈通信，避免为均衡而引入更贵的操作。",
+            "沿专家放置、通信路由、执行调度三层递进优化节点间通信，并用切分/合并原语在 NIC 约束下重塑通信流。",
+            "每轮迭代联合协调计算、token 通信与专家权重搬运，使系统适配动态、倾斜的专家工作负载。"
+          ],
+          "conclusions": [
+            "在失衡工作负载下，追求单维度均衡反而次优；把均衡作为约束、把通信作为目标能取得更高效的执行。",
+            "联合调度计算与权重搬运是适应动态负载的关键，静态均衡策略无法覆盖专家热度的时间变化。"
+          ],
+          "experiments": [
+            "与 7 个最先进 MoE 服务系统对比，MoE 层最高加速 6.68 倍。",
+            "相对最快的对比基线取得 1.86 倍的几何平均加速。",
+            "在多组专家倾斜负载下保持领先，说明收益来自通信优化而非单纯均衡。"
+          ],
+          "significance": "用“均衡即约束”的视角重新定义了分布式 MoE 服务的优化问题，并给出端到端可落地的通信-计算联合调度方案。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11158",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11158.pdf",
+          "index": 1,
+          "takeaway": "把均衡降级为约束、把通信当作目标，MoE 服务因此拿到 6.68 倍层加速。",
+          "keyExperiment": "相对 7 个 SOTA 基线，MoE 层最高 6.68 倍加速、几何平均 1.86 倍。"
+        },
+        {
+          "title": "PageWeaver: KV-Guided Query Unions for Sparse Attention",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-09",
+          "authors": "Zhiyuan Li, Zihan Li, Zefang Yuan, Lei Wang, Hao Wang",
+          "institutions": "机构未标注",
+          "abstract": "动态稀疏注意力限制了每个查询选取的 KV 页，但支撑集小并不等于 GPU 上工作量高效。查询联合（query union）能共享页加载并填充 Tensor Core tile，其代价取决于哪些查询被分到同一组。PageWeaver 提出一种执行设计：利用选中页的亲和性组装查询分组，同时保留每个查询的原始支撑集与完整输出所有权；有界的 GPU 搜索产生查询 ID，ID 感知的双 CTA kernel 直接消费这些 ID，无需物化重排后的 Q 张量或跨页部分输出。文中还给出直接的 KV 页联合实现作为对照设计研究，用于拆解非局部复用与归约代价。",
+          "contributions": [
+            "用选中 KV 页的亲和性对查询分组，在不改变每个查询支撑集与输出归属的前提下共享页加载。",
+            "以有界 GPU 搜索产出查询 ID、由 ID 感知双 CTA kernel 消费，避免物化重排 Q 张量与跨页部分输出。",
+            "给出直接 KV 页联合的对照实现，把“执行分组复用”的收益与在线利用它的完整代价区分开。"
+          ],
+          "conclusions": [
+            "查询分组的收益高度依赖分组质量与在线重组成本，需与硬件原生 kernel 强度共同权衡。",
+            "在更强原生 kernel 与新硬件上，准备开销可能吃掉分组复用的收益，这是工程上必须正视的边界。"
+          ],
+          "experiments": [
+            "在 H200 上、FP8 KV 全流程、Union8 实现对六个抓取场景取得 1.70 倍几何平均完整调用加速（对比所测 FlashInfer 路径）。",
+            "在线重组在五个 64K 上下文场景再降 3.26–7.66% 延迟，但 32K/64K 中位增益仅 0.47–0.73%，8K 出现回退。",
+            "整模型 prefill 吞吐比所测原生路径高 7.88–14.36%。"
+          ],
+          "significance": "把稀疏注意力的优化单位从“单查询支撑集”推进到“查询执行分组”，为 GPU 上的页级复用给出可度量的工程设计。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11201",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11201.pdf",
+          "index": 2,
+          "takeaway": "稀疏注意力的瓶颈不在支撑集大小，而在查询怎么分组才能真的省下页加载。",
+          "keyExperiment": "H200 上对 FlashInfer 取得 1.70 倍几何平均完整调用加速。"
+        },
+        {
+          "title": "TokenRouter: Efficient Serving System for Token-Level LLM Routing",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-10-09",
+          "authors": "Tianyu Fu, Tengxuan Liu, Ruoxi Wang, Yixin Dong, Yi Ge, Yichen You, Yu Wang",
+          "institutions": "Tsinghua University, Carnegie Mellon University",
+          "abstract": "LLM 路由把推理负载分发到不同模型，从而推进服务的成本-质量帕累托前沿。会话级或查询级的粗粒度路由已在生产系统广泛使用，但近期算法工作表明，token 级细粒度路由能带来显著的效率与质量收益——然而现有系统建立在“单 LLM”假设之上，面对 token 级路由会出现严重的步调失同步与频繁的批次准入延迟，且给开发者带来很高的实现复杂度。TokenRouter 提出“请求为中心的编程、模型为中心的执行”：开发者从单个请求视角描述路由逻辑，运行时为每个 LLM 启动子服务器并异步派发请求；每个子服务器使用延迟批处理调度器，其最优超参数由系统的数学吞吐模型推导得到。",
+          "contributions": [
+            "提出请求为中心编程、模型为中心执行的路由服务抽象，把 token 级路由的实现复杂度从开发者侧移走。",
+            "为每个 LLM 启动独立子服务器并异步派发，消除单模型假设下的步调失同步与批次准入延迟。",
+            "用系统吞吐数学模型推导延迟批处理调度器的最优超参数，使调度参数不再靠经验调参。"
+          ],
+          "conclusions": [
+            "把 token 级路由从算法想法变成可服务的系统，需要重做批调度而非在单模型调度器上打补丁。",
+            "以吞吐模型指导超参数选择，可以在不同路由算法与模型组合间保持稳定收益。"
+          ],
+          "experiments": [
+            "在多种路由算法、工作负载与模型对下，解码吞吐比现有系统高 2.01–64.15 倍。",
+            "收益在模型对差异较大时依然稳定，说明与具体路由算法解耦。",
+            "代码已开源，便于复现与二次开发。"
+          ],
+          "significance": "为细粒度 token 级路由给出了第一个面向效率的服务系统，把算法侧的收益真正兑现为吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12242",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12242.pdf",
+          "index": 3,
+          "takeaway": "token 级路由的瓶颈在批调度，重做调度器后解码吞吐提升 2–64 倍。",
+          "keyExperiment": "解码吞吐较现有系统提升 2.01–64.15 倍。"
+        },
+        {
+          "title": "Read What Matters: Query-Adaptive Quantization for KV Caches",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-09",
+          "authors": "Siddharth Bhandari, Lucas Gretta, Krishna Balasubramanian, Shiva Kasiviswanathan",
+          "institutions": "Amazon, University of California, Berkeley",
+          "abstract": "KV 缓存条目在写入时其未来查询尚不可知，但每个解码查询需要高精度的位置并不相同，这一存储-读取错配造成浪费。ReadKV 为每个 key/value 存一个渐进式编码，其前缀支持不同的重建精度；对每个查询，它先用查询分配 key 的通道前缀、由重建出的 key 计算注意力，再依据该注意力分配 value 的 token 前缀，而存储内容保持不变。每个阶段都在固定预算下优化标定过的失真目标，作者证明了在渐进收益递减下可达精确分配，并把目标与注意力输出误差联系起来；同时构造了一个有限维注意力族，证明在同等读取预算下，查询相关的读取严格优于任何查询无关的读取器。",
+          "contributions": [
+            "把 KV 缓存精度问题拆成“保留比特预算”与“每次查询读取比特预算”，用渐进式编码同时满足两者，且不修改已存条目。",
+            "提出两阶段查询自适应分配：先按查询分配 key 通道前缀，再依注意力结果分配 value token 前缀，并在固定预算下证明最优分配。",
+            "构造有限维注意力族，从理论上证明查询相关读取优于任意查询无关读取器（即使对端编码器解码器不受限）。"
+          ],
+          "conclusions": [
+            "长上下文解码的真正成本是每步搬运的缓存字节而非权重，多留比特、少读比特是更划算的取舍。",
+            "查询自适应读取在同等读取预算下严格优于静态方案，是 KV 量化的重要方向。"
+          ],
+          "experiments": [
+            "在六个基模型上，从 8 比特缓存平均只读 4 比特，C4 困惑度上升不超过 0.66%。",
+            "仅使用 16 比特缓存约四分之一的逻辑读取量与一半的保留容量，且始终比同读取预算下“存 4 比特全读 4 比特”更准。",
+            "在 NVIDIA A10G 的实验负载（8K token、batch 为 1、单层）下，读取受限的八比特 ReadKV 比所测 TurboQuant 编解码器延迟低 39%。"
+          ],
+          "significance": "把 KV 量化从“存多少比特”推进到“每步该读多少比特”，为长上下文解码指出一条被忽视的优化轴。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11245",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11245.pdf",
+          "index": 4,
+          "takeaway": "缓存该多留、每步少读：查询自适应读取比静态量化又准又快。",
+          "keyExperiment": "平均读 4 比特时困惑度仅升 0.66%，A10G 上比 TurboQuant 延迟低 39%。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "MiMo-V2.6: Scaling Reinforcement Learning Towards Self-Improvement",
+          "score": 4.7,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-09",
+          "authors": "Xiaomi LLM-Core Team",
+          "institutions": "Xiaomi",
+          "abstract": "强化学习是推动大基础模型走向自我提升的核心训练范式。本报告介绍 MiMo-V2.6 系列——一个全模态模型家族，通过扩大 RL 算力推进模型智能前沿。在 RL 之前，团队先在广覆盖的多模态语料上做中训练，为后续探索留出空间，并在预训练好的混合 SWA 架构上搭好支撑规模放大的基础设施。RL 算力沿三个维度扩展：更大的批次与更高吞吐（异步训练，每步消耗 1,568 个样本、2.7–3.7B token，上下文长度最高 1M）；更多样复杂的环境（覆盖代码、通用、视觉与网络域，并混合多种 agent harness）；以及更多评分器算力（groupwise agentic grading，为长程任务提供更准确的奖励信号）。",
+          "contributions": [
+            "沿批次规模、环境多样性、评分器算力三个维度系统放大 RL 计算，并给出全模态 MiMo-V2.6 系列的完整训练配方。",
+            "为混合任务 agentic RL 搭建基础设施：统一轨迹表示、高并发多框架 rollout、控制面与数据面解耦、训练-推理一致性。",
+            "大规模训练下冻结 MoE 路由器并建立多层防御对抗奖励黑客（reward hacking），保持训练稳定。"
+          ],
+          "conclusions": [
+            "扩大 RL 算力（而非只扩预训练）是当前推进模型智能与自我提升的有效路径。",
+            "环境多样性与评分器算力是长程 agentic 任务的关键，仅有更大批次不足以驱动改进。"
+          ],
+          "experiments": [
+            "异步训练每步消耗 1,568 个样本、2.7–3.7B token，上下文长度最高 1M。",
+            "覆盖代码、通用、视觉与网络四类环境，配合多种 agent harness 的混合任务 RL。",
+            "groupwise agentic grading 引导模型给出更短、更省 token 的解，长程任务奖励更准确。"
+          ],
+          "significance": "一次把 RL 算力推到前沿的全模态训练报告，并开源训练动态、RL 环境与框架，是研究规模化 RL 与自我提升的可复现基线。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11959",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11959.pdf",
+          "index": 5,
+          "takeaway": "把 RL 算力当作新的扩展轴：1568 样本/步、1M 上下文、多环境 + 多评分器。",
+          "keyExperiment": "单步 RL 消耗 1,568 个样本与 2.7–3.7B token，上下文最高 1M。"
+        },
+        {
+          "title": "SynCo: Data Synthesis Co-Training for Self-Evolving LLMs via Multi-Agent Reinforcement Learning",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-09",
+          "authors": "Wei Yang, Shawn Li, Yuehan Qin, Yawei Wang, Mingxi Wang, Shixuan Li, Tiankai Yang, Jiate Li, Jesse Thomason, Xuezhe Ma, Yue Zhao",
+          "institutions": "University of Southern California, The George Washington University, Georgia Institute of Technology",
+          "abstract": "自进化 LLM agent 有望通过持续交互与学习自主提升，减少对手工监督的依赖。但要让这一前景成立，不仅 agent 要更新，其训练经验也要随能力变化而演化；多数现有流水线依赖静态数据集或单独更新的合成模型，结果是原先有用的任务变得过于简单、过难的任务又提供不了信息，能力与训练经验之间的错配限制了持续自我提升。SynCo 提出基于多智能体强化学习的合成数据协同训练框架，联合优化两个独立参数化的 agent：Synthesizer 依据 Reasoner 不断演进的能力状态构造训练任务，Reasoner 则从生成的经验中学习。每个合成任务引出多个 Reasoner rollout，其结果同时为两个 agent 提供互补奖励——正确性反馈改进 Reasoner，任务质量、答案可靠性与结果可教性指导 Synthesizer。",
+          "contributions": [
+            "把“训练数据生成”与“解题能力”作为两个可独立参数化的 agent 联合优化，让训练分布随能力同步演化。",
+            "设计一组互补奖励：正确性反馈给 Reasoner，任务质量、答案可靠性与结果可教性（outcome-grounded teachability）给 Synthesizer。",
+            "把两个 agent 的更新回灌进后续合成轮次，形成任务求解策略与训练分布共同演化的闭环。"
+          ],
+          "conclusions": [
+            "自进化的瓶颈不在 agent 本身，而在训练经验能否跟上能力变化；协同演化能避免“题目过期”问题。",
+            "仅靠正确答案奖励不足以教好数据合成器，需要引入任务可教性这类面向学习效果的奖励。"
+          ],
+          "experiments": [
+            "在八个数学推理基准上全面优于多种已有合成数据方法与受控基线。",
+            "总体性能最强，且大部分增益来自模型此前未解决的问题。",
+            "协同训练使合成任务难度随能力自动上移，避免静态数据集的收益饱和。"
+          ],
+          "significance": "把数据合成做成与求解能力共同进化的多智能体博弈，为“自我进化”提供了可度量的训练框架。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11345",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11345.pdf",
+          "index": 6,
+          "takeaway": "让出题者和解题者一起进化：题目难度自动跟上模型能力。",
+          "keyExperiment": "八个数学推理基准上总体最优，增益主要来自此前未解出的题。"
+        },
+        {
+          "title": "Fed-GRPO: Reward-Signal-Driven Federated Group Relative Policy Optimization",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-09",
+          "authors": "Pengxin Guo, Shuang Zeng, Zonggen Li, Weiying Zheng, Mengting Liu, Liangqiong Qu",
+          "institutions": "The University of Hong Kong, Sun Yat-sen University",
+          "abstract": "LLM 经强化学习微调后展现出强推理能力，其中 GRPO 尤为常用；但现有 GRPO 方法假设可以集中访问训练数据，这在隐私或监管约束下并不成立。Fed-GRPO 提出联邦 GRPO 训练框架，在不共享原始数据的前提下协同训练推理能力，并利用 GRPO 训练中自然产生的奖励统计量作为零成本信号来指导聚合、本地训练与通信。它包含三个由奖励信号驱动的机制：按奖励标准差给客户端加权聚合，优先学习信号更强的客户端；基于本地-全局奖励差距重新加权各 prompt 的目标，把每个客户端引向其相对薄弱处；以及根据每个客户端更新的信息量自适应分配带宽的稀疏通信。",
+          "contributions": [
+            "用 GRPO 训练过程中天然产生的奖励统计量作为零成本信号，统一指导聚合权重、本地目标与通信分配。",
+            "提出信号加权聚合与全局奖励校准，让联邦训练关注学习信号强的客户端并补齐各端相对短板。",
+            "设计自适应稀疏通信，按更新的信息量分配带宽，在紧带宽下做有损但优雅降级的取舍。"
+          ],
+          "conclusions": [
+            "联邦推理训练不必以牺牲性能为代价，奖励信号足以替代额外的通信来指导聚合。",
+            "通信开销可以按信息量压缩一到两个数量级，精度只有温和退化。"
+          ],
+          "experiments": [
+            "在数学推理任务上取得所有联邦方法中的最佳性能，明显优于 FedAvg，并逼近集中式训练。",
+            "无损地把通信量降低 32 倍，在紧带宽预算下最高支持 621 倍压缩且精度仅温和退化。",
+            "代码已开源。"
+          ],
+          "significance": "把 GRPO 的奖励统计量变成联邦学习的免费通信信号，使隐私约束下的推理 RL 首次逼近集中训练。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11502",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11502.pdf",
+          "index": 7,
+          "takeaway": "奖励统计量本身就是免费的聚合信号：通信降 32 倍、精度近集中式。",
+          "keyExperiment": "通信量无损降 32 倍，紧带宽下最高 621 倍压缩。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "QUILT: Rethinking Sparse-Attention Prefill through Shared Query Execution",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-09",
+          "authors": "Zhenduo Zhao, Qihui Zhou, Mingcong Song, Zhiyi Chen, Chuangguan Ye, Fengfan Hou, Zequn Gong, Jing Li, Hongjie Si, Guoping Long",
+          "institutions": "Huawei Technologies",
+          "abstract": "稀疏注意力降低了长上下文注意力的代价，但现有 kernel 通常独立处理每个查询，反复加载并反量化查询间共享的 KV 条目。作者观察到相邻查询选中的 KV 条目存在大量重叠，从而带来跨查询复用机会。QUILT 是一种工作负载感知的稀疏注意力执行机制：联合处理相邻查询并复用共享 KV 条目，以减少冗余内存流量与计算。它提出 Shift-and-Compare Set Decomposition（SCSD），把不规则集合运算转化为适合现代加速器的规则数据并行原语，并与注意力计算流水化以掩盖开销；级联共享在多粒度层次上捕获复用；tile 感知执行策略在共享粒度与硬件 tile 利用率之间取得平衡，并选择性剔除低重要性的查询特有尾部以消除利用不足的 tile。",
+          "contributions": [
+            "发现相邻查询在稀疏注意力中选中的 KV 条目高度重叠，把跨查询复用确立为 prefill 的一等优化对象。",
+            "提出 SCSD，将不规则集合运算规约成规则数据并行原语，并与注意力计算流水化隐藏其开销。",
+            "级联共享 + tile 感知执行 + 尾部裁剪，在共享粒度与硬件 tile 利用率之间做显式权衡。"
+          ],
+          "conclusions": [
+            "稀疏注意力的 kernel 设计应从“逐查询独立”转向“查询间共享”，冗余 KV 流量是可观的优化空间。",
+            "把不规则集合运算规则化，是让共享机制在现代加速器上真正跑快的前提。"
+          ],
+          "experiments": [
+            "在 LongBench 上、GLM-5.3 与 DeepSeek-3.2、张量并行与序列并行下，平均 kernel 延迟最多降低 55.1%。",
+            "处理过的 KV 数据量最多减少 55.9%。",
+            "首 token 延迟（TTFT）最多降低 36.8%，而精度下降可忽略。"
+          ],
+          "significance": "把稀疏注意力 prefill 的优化目标从单查询支撑集转向跨查询共享，用规则化的集合运算换来近半的 KV 流量削减。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11134",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11134.pdf",
+          "index": 8,
+          "takeaway": "相邻查询其实在看同一批 KV：共享之后延迟降 55%、TTFT 降 36.8%。",
+          "keyExperiment": "LongBench 上 kernel 延迟最多降 55.1%、TTFT 最多降 36.8%，精度几乎无损。"
+        },
+        {
+          "title": "Scaling to Tens of Thousands of Test-Time Iterations with Loop-Native Attention Residuals",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-10-09",
+          "authors": "Pengxiang Li, Dilxat Muhtar, Di He, Guinan Su, Lu Yin, Shiwei Liu",
+          "institutions": "机构未标注",
+          "abstract": "本文主张：循环 Transformer（looped Transformer）需要属于自己的残差连接，才能在迭代次数增长时避免性能退化。作者观察到增加循环迭代会降低推理准确率：有噪声的状态更新会覆盖正确的中间推导，甚至把已完成的解法撤销，使后续迭代只能从已经退化的表示中抢救信息——即一旦早前循环因长程传播出现错误，后面的循环很难纠正。为此提出 InfiLoop，一种循环原生（loop-native）残差连接，学习该保留哪些历史计算、以及从每次新更新中接受多少分量。InfiLoop 结合基于内容的加权与可学习的时间衰减，维护循环状态的滚动摘要，并用精确的流式递推让持久聚合记忆在循环数增长时保持常数。",
+          "contributions": [
+            "指出循环 Transformer 缺少适配自身迭代结构的残差连接，是深度循环下推理准确率退化的根因。",
+            "提出 InfiLoop：内容加权 + 可学习时间衰减的循环原生残差，维护循环状态的滚动摘要并抑制不可靠更新。",
+            "用精确的流式递推把持久聚合记忆保持为常数，使测试时循环可以扩展到上万次而显存不增。"
+          ],
+          "conclusions": [
+            "循环深度本身应当转化为推理能力，但前提是残差连接要能守住中间正确状态。",
+            "常数内存的流式聚合让“测试时多循环几万次”在工程上可行。"
+          ],
+          "experiments": [
+            "一个仅 7M 参数的 InfiLoop 模型在 Sudoku-Extreme 上达到 97.9% 精确准确率，优于已有递归架构。",
+            "在 ARC-AGI-2 上取得 13.6% 的 pass@2。",
+            "在 Sudoku-Extreme 上测试时循环超过 20,000 个有效步数后性能仍继续提升。"
+          ],
+          "significance": "把残差连接的形态与循环计算的语义对齐，使测试时算力可以直接兑换为推理能力。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11570",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11570.pdf",
+          "index": 9,
+          "takeaway": "循环 Transformer 需要自己的残差：7M 参数模型在 Sudoku-Extreme 上刷到 97.9%。",
+          "keyExperiment": "7M 参数模型 Sudoku-Extreme 97.9% 精确准确率，循环超 2 万步仍持续变好。"
+        },
+        {
+          "title": "VFold: Symmetry-Aware Cross-Layer Value Cache Compression",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-09",
+          "authors": "Neha Verma, Sungwon Kim, Kenton Murray, Kevin Duh",
+          "institutions": "George Mason University, Johns Hopkins University",
+          "abstract": "缓存键值（KV）状态能加速 LLM 解码，但在长上下文中该缓存会主导显存占用。一种思路是利用层间缓存相似性来压缩这部分内存，但多数现有方法需要改动 LLM 架构，并在解码时引入可观开销。本文提出一种对称性感知的 value 缓存合并策略，在不造成有害性能退化、也不引入架构改动的前提下降低缓存内存；并且它可以与已有缓存压缩技术叠加——与高压缩率量化或 key 缓存剪枝组合时，能达到任一方法单独都达不到的压缩比，而额外开销极小。文章指出 value 缓存中存在大量未被利用的冗余容量，为显存受限下扩展上下文窗口给出了一条简单而有效的方向。",
+          "contributions": [
+            "提出对称性感知的 value 缓存跨层合并，压缩显存且不修改模型架构、不增加解码期结构开销。",
+            "证明该方法与高比例量化、key 缓存剪枝正交，可组合使用达到单一方法无法企及的压缩比。",
+            "揭示 value 缓存层面存在大量未被利用的冗余，是长上下文显存优化的新空间。"
+          ],
+          "conclusions": [
+            "层间 value 相似性是一个被低估的免费压缩来源，且无需改架构即可利用。",
+            "缓存压缩手段应当组合使用：value 合并与量化/剪枝叠加后收益更大。"
+          ],
+          "experiments": [
+            "跨层 value 合并后性能退化保持在可接受范围，未出现有害的质量下降。",
+            "与高比例量化叠加可进一步提升压缩率，额外开销极小。",
+            "与 key 缓存剪枝组合时达到两种方法单独都达不到的压缩比。"
+          ],
+          "significance": "给出一种零架构改动、可与现有 KV 压缩正交叠加的 value 缓存压缩策略，为显存受限的长上下文部署留出余量。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12338",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12338.pdf",
+          "index": 10,
+          "takeaway": "层间 value 缓存有大量冗余：合并即可压缩，还能与量化、key 剪枝叠加。",
+          "keyExperiment": "与量化/key 剪枝正交叠加，达到单一方法都达不到的压缩比。"
+        }
+      ]
+    }
+  ]
+}
