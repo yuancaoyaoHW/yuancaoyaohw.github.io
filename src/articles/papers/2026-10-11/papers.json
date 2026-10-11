@@ -1,0 +1,337 @@
+{
+  "date": "2026-10-11",
+  "title": "2026-10-11 论文精选",
+  "lede": "周五批次剩余池里挑出的 10 篇：主线是「缓存、低比特与调度如何省下推理与训练的显存与时延」——KV 复用、解码侧剪枝、投机解码验证各占一席，MoE 从路由坍塌、路由可解释到专家预算弹性三面修补，架构侧给出循环视觉编码器、原始视频中期训练与扩散语言模型加速器。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 616
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "RaReCache: Bridging the Gap in Cross-Model KV Cache Reuse via Rank disagreement-based Selective Recomputation",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-09",
+          "authors": "Sreetama Sarkar, Saptarshi Mitra, Sitao Huang, Souvik Kundu, Peter A. Beerel",
+          "institutions": "University of Southern California, University of California, Irvine, Intel Labs",
+          "abstract": "跨模型复用 KV 缓存时，缓存里存的是源模型特有的表示：用户中途切换模型、或级联把难题升级到更大模型，都会迫使接收方把整个上下文重新 prefill 一遍。已有闭式线性映射能在同族模型间迁移 KV，但模型规模差距拉大后迁移精度明显下降。本文指出这些迁移失败集中在少数信息密集 token 上，并提出 rank 分歧度量：用映射后 KV 在标定数据弱支持方向上的能量给每个 token 打分，据此只对关键位置做选择性重算。在 Qwen3-0.6B→14B（23 倍参数差）上只重算 30% 位置即可保留 95–99% 的目标精度，Llama3-8B→70B（8.8 倍）重算 40% 保留 96.5%，prefill 最高提速 3.04 倍。",
+          "contributions": [
+            "指出跨模型 KV 迁移的精度损失并非均匀分布，而是集中在少数信息密集 token 上，为选择性重算提供了依据。",
+            "提出 rank 分歧分数：以映射后 KV 在标定数据弱支持方向上的能量衡量 token 关键程度，无需训练即可打分。",
+            "给出 RaReCache 框架，让大模型只重算关键位置就能从小模型预填的缓存中解码，并配套在线服务调度。"
+          ],
+          "conclusions": [
+            "重算比例与模型规模差基本解耦：23 倍参数差只需重算 30%、8.8 倍差只需 40%，即可保住 95% 以上目标精度。",
+            "单卡在线服务下吞吐达到目标模型自 prefill 的 1.8 倍，饱和负载下首 token 时延的中位数与 P99 分别降低 5.0 倍和 6.4 倍。"
+          ],
+          "experiments": [
+            "Qwen3-0.6B→14B：只重算 30% 位置，保留目标模型 95–99% 的精度，prefill 提速最高 3.04 倍。",
+            "Llama3-8B→70B：重算 40% 位置，保留 96.5% 的目标精度。",
+            "在线服务：单卡吞吐 1.8 倍于目标模型自 prefill，饱和负载下首 token 时延中位数/P99 降低 5.0/6.4 倍。"
+          ],
+          "significance": "为「小模型替大模型 prefill」的级联服务范式补上了精度可恢复的关键一环。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11358",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11358.pdf",
+          "index": 1,
+          "takeaway": "跨模型 KV 迁移的误差只集中在少数信息密集 token，重算 30% 就能恢复 95% 以上精度。",
+          "keyExperiment": "Qwen3-0.6B→14B（23 倍参数差）仅重算 30% 位置即保留 95–99% 目标精度，prefill 最高提速 3.04 倍。"
+        },
+        {
+          "title": "SparseDecoding: Decoding-Aware Pruning for Accurate and Efficient LLM Inference",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-09",
+          "authors": "Qitong Wang, Xinwei Niu, Mingluo Su, Shanwei Zhao, Shiai Zhu, Huan Wang",
+          "institutions": "Westlake University, Ant Group",
+          "abstract": "解码阶段访存受限，逐层免训练剪枝通过减少从显存读出的非零参数来降延迟；但这类 Hessian 剪枝通常用预先收集的自然文本序列计算 Hessian，而解码时输入的是模型自己生成的 token，两者分布不一致，导致剪枝后生成阶段的激活分布偏移、精度受损。与此同时，多数能带来真实加速的方法只针对稀疏矩阵乘（SpMM），对解码阶段真正主导的稀疏矩阵向量乘（SpMV）支持不足。本文提出 SparseDecoding：算法上用稠密模型自回归生成（排除 prefill）时收集的逐层激活构造标定矩阵，让剪枝目标对齐解码激活；系统上实现带位掩码索引与固定步长遍历的 N:M 稀疏 SpMV kernel。在 Llama-3.1-8B、Llama-3.3-70B、Qwen3-14B/32B 的长文本生成基准上稳定优于固定文本标定，A100 上端到端解码最高提速 1.48 倍。",
+          "contributions": [
+            "发现 Hessian 剪枝的标定序列与解码时自生成序列存在分布偏移，是剪枝模型精度下降的直接原因。",
+            "改用稠密生成阶段（排除 prefill）收集的逐层激活构造标定矩阵，把剪枝目标对齐到解码分布。",
+            "实现带位掩码索引与固定步长遍历的 N:M 稀疏 SpMV kernel，补上解码阶段真正主导的算子加速。"
+          ],
+          "conclusions": [
+            "解码感知的标定比固定文本标定在长文本生成上更稳，且全程无需训练。",
+            "端到端收益来自剪枝目标与 SpMV kernel 的联合设计，而非单一环节。"
+          ],
+          "experiments": [
+            "Llama-3.1-8B、Llama-3.3-70B 与 Qwen3-14B/32B 上，长文本生成基准一致优于固定文本标定基线。",
+            "A100 GPU 上端到端解码最高提速 1.48 倍。"
+          ],
+          "significance": "提醒剪枝的标定分布必须与部署时的解码分布一致，并给出 SpMV 侧可落地的实现。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12327",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12327.pdf",
+          "index": 2,
+          "takeaway": "剪枝该用解码阶段的自生成激活做标定，再配 N:M 稀疏 SpMV kernel 才能拿到 1.48 倍真实解码加速。",
+          "keyExperiment": "在 A100 上对 Llama-3.1-8B/3.3-70B 与 Qwen3-14B/32B 取得最高 1.48 倍端到端解码加速。"
+        },
+        {
+          "title": "Where Draft Trees Lose Target Mass: Exit-Guided Speculative Decoding",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-09",
+          "authors": "Shijing Hu, Xuancheng Ren, Zhihui Lu, Pan Zhou",
+          "institutions": "Fudan University, Singapore Management University",
+          "abstract": "树式投机解码把草稿 token 组织成受预算约束的树，一次目标模型前向即可验证多条候选续写，但树是按草稿侧分数构造、价值却由目标模型决定，存在草稿—目标不匹配。本文用 target-flow 视角回答两个问题：树固定时更好的验证器能否提高接受量，以及目标反馈如何改进树本身。作者推导出 exit 律，证明「1 加目标覆盖度」是任意精确路径验证器期望输出块长度的紧上界，所有最优验证器共享同一律，据此得到 Tree Exit Verification（TEV）——只需一次 exit 决策加一次 bonus token 决策的层级并行精确验证流程；该律指出的缺失目标概率可作节点级反馈训练草稿树（ExitTrain）。对话、代码与数学推理实验显示：ExitTrain 使平均输出块长度提升 13%，TEV 使验证阶段延迟降低 15%，端到端比 DDTree 快 14%。",
+          "contributions": [
+            "用 target-flow 视角给出 exit 律与目标覆盖度，证明其是任意精确验证器输出块长度的紧上界。",
+            "提出 TEV：一次 exit 决策加一次 bonus token 决策的层级并行精确验证流程。",
+            "用 exit 律指出的缺失目标概率做节点级反馈，训练推理期草稿树（ExitTrain）。"
+          ],
+          "conclusions": [
+            "提高接受率靠更好的草稿树，降低延迟靠更直接的验证，两条路径必须分开优化。",
+            "固定树下 TEV 已达最优验证器族的上界，验证侧几乎没有进一步空间。"
+          ],
+          "experiments": [
+            "对话、代码与数学推理任务上，ExitTrain 使平均输出块长度提升 13%。",
+            "TEV 使验证阶段延迟降低 15%，端到端比 DDTree 提速 14%。"
+          ],
+          "significance": "把投机解码的「树质量」与「验证开销」拆成两个可独立优化的目标，并给出理论界的可执行形式。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11750",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11750.pdf",
+          "index": 3,
+          "takeaway": "固定草稿树下验证器已到上界，真正的收益来自用目标反馈训练更好的草稿树。",
+          "keyExperiment": "ExitTrain 使平均输出块长度提升 13%，配合 TEV 端到端比 DDTree 提速 14%。"
+        },
+        {
+          "title": "Rounding in Preconditioner Space: Redesigning 4-bit AdamW Optimizer-State Quantization",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-09",
+          "authors": "Hanyang Li, Shao Tang, Daniel Thomas Braithwaite, Gregory Dexter, Leonardo Neves, Aman Gupta, Hiroto Udagawa, Abhishek Shivanna, Daniel Silva, Rohan Ramanath",
+          "institutions": "University of California, Berkeley, Nubank",
+          "abstract": "量化 AdamW 的优化器状态能降低常驻显存，但量化误差会沿一阶、二阶矩递推传播，扰动后续的自适应更新。本文从「取整空间」重新设计 4-bit 优化器状态量化：对二阶矩在零点附近量化格的局部分析表明，小的状态均值误差并不意味着下一步预条件子误差小；一维二次构造进一步显示，状态空间取整与预条件子空间取整会带来定性不同的优化动态。据此提出 ZIP-SR：二阶矩码本保留零值，并在预条件子空间计算随机取整概率；互补方案 ZE-EDEN 用排除零的码本并重缩放二阶矩块，缓解正量化地板造成的预条件子畸变。两者一阶矩都用 4-bit NF4，并在训练最后 10% 对 LM head 的一阶矩做定向随机取整。在 130M 到 2.7B 的 GPT/Llama 风格预训练中，两种方案在每个规模上都缩小了与 32-bit AdamW 的验证损失差距，最大缩小 70%。",
+          "contributions": [
+            "指出二阶矩的小状态误差不蕴含小预条件子误差，说明「在哪个空间取整」才是 4-bit 优化器状态量化的关键。",
+            "提出 ZIP-SR：二阶矩码本保留零值，并在预条件子空间计算随机取整概率。",
+            "给出互补方案 ZE-EDEN：排除零的码本加量化块重缩放，抑制预条件子畸变。"
+          ],
+          "conclusions": [
+            "取整空间的选择比单纯压低状态量化误差更重要。",
+            "配合 LM head 一阶矩的定向随机取整，全参数监督微调下也能贴近 32-bit AdamW。"
+          ],
+          "experiments": [
+            "130M 到 2.7B 的 GPT/Llama 风格预训练中，两种方案在每个规模上都缩小与 32-bit AdamW 的验证损失差距，最大缩小 70%。",
+            "全参数监督微调中验证损失低于 TorchAO 4-bit AdamW，下游任务表现接近 32-bit 基线。"
+          ],
+          "significance": "把 4-bit 优化器状态量化从「压低误差」推进到「选对取整坐标」，直接省下训练常驻显存。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12444",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12444.pdf",
+          "index": 4,
+          "takeaway": "4-bit 优化器状态该在预条件子空间取整，而不是在状态空间里一味追求更小的量化误差。",
+          "keyExperiment": "130M–2.7B 预训练中把与 32-bit AdamW 的验证损失差距最多缩小 70%。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "DivMoE: Fine-Grained MoE Upcycling via Cross-Domain Expert Composition",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-09",
+          "authors": "Yuxuan Lou, Kai Yang, Geng Zhang, Yong Liu, Yang You",
+          "institutions": "National University of Singapore, Shanghai Jiao Tong University",
+          "abstract": "MoE 是扩展大模型的主流结构，细粒度专家收益明显，但从零训练代价高昂，稀疏 upcycling（把稠密模型升级成 MoE）更省算力。本文发现细粒度 upcycling 存在结构性病态：当细粒度专家都派生自同一个源模型时，朴素路由会坍塌，下游精度掉到接近随机——在 Qwen3-1.7B 上，Drop-Upcycling 的细粒度变体在 15 个基准上只有 23.2% 平均精度，与从零训练 22.2% 相当，而同一方法的粗粒度变体可达 50.2%。为此提出 DivMoE：用经过领域自适应持续预训练的稠密模型初始化领域特化专家，并引入多样性约束路由这一硬约束，保证每个 token 激活的专家来自不同领域组。在两个基座、15 个基准上稳定超过六个 upcycling 基线；监督微调后，12B 的 DivMoE 与 16B 的 Moonlight-MoE 达到相同的 64.5% 平均精度。",
+          "contributions": [
+            "识别细粒度 upcycling 的结构性病态：单一源模型派生专家会导致路由坍塌，精度掉到接近随机。",
+            "提出领域特化专家初始化：从经过领域自适应持续预训练的稠密模型派生细粒度专家。",
+            "提出多样性约束路由，用硬结构约束保证同一 token 激活的专家来自不同领域组。"
+          ],
+          "conclusions": [
+            "细粒度 upcycling 的失败源于路由结构而非专家容量，结构约束可以修复。",
+            "更小的 DivMoE 能用更少参数匹敌更大的现有 MoE。"
+          ],
+          "experiments": [
+            "Qwen3-1.7B 上 DivMoE 平均精度 55.6%，超过最强基线 51.6%，并在每个基准上优于稠密基座。",
+            "监督微调后 12B DivMoE 达到 64.5% 平均精度，匹敌 16B 的 Moonlight-MoE，比受控的 NVIDIA-Upcycling 基线高 6.1 个百分点。"
+          ],
+          "significance": "给「稠密模型升级成细粒度 MoE」这条省算力路线补上了路由坍塌这一关键失效点。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11317",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11317.pdf",
+          "index": 5,
+          "takeaway": "细粒度 upcycling 会因路由坍塌退化到随机水平，靠跨领域专家组合与多样性约束路由可以修复。",
+          "keyExperiment": "监督微调后的 12B DivMoE 以 64.5% 平均精度匹敌 16B 的 Moonlight-MoE。"
+        },
+        {
+          "title": "Sparse Attention Is Matrix Approximation, Not Choosing from a Bag of Values",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-09",
+          "authors": "Fang Wan, Xufeng Liu, Fan Li, Yi Liu",
+          "institutions": "Stony Brook University, Duke University",
+          "abstract": "稀疏注意力通过只保留少量 query-key 交互来近似完整注意力矩阵，从而突破序列长度带来的二次复杂度。但现有方法大多停留在「保留注意力矩阵中大数值或高权重区域」，把注意力矩阵当成一堆可以随意挑选的数值。本文指出这在数学上是错误的：注意力矩阵是以结构化矩阵的形式与 value 向量相乘来决定输出的，各项之间存在联合作用，因此稀疏注意力的正确形式是矩阵近似，而不是从一堆数值里挑最大的。基于这一视角，作者提出 Matrix Approximation Sparse Attention（MASA），用闭式分数替代原始注意力质量排序，直接度量每个稀疏单元能降低多少矩阵乘积的近似误差。MASA 是理论驱动的插件式修正，可以加进现有稀疏注意力框架，不改变其稀疏 kernel 与稀疏预算。跨多个稀疏注意力方法、多个基准与多种 LLM 基座的实验显示一致的精度提升。",
+          "contributions": [
+            "指出把稀疏注意力理解为「挑选最大注意力数值」在数学上是错的，应按矩阵近似误差来选择稀疏单元。",
+            "给出衡量每个稀疏单元对矩阵乘积近似误差贡献的闭式分数。",
+            "把 MASA 做成插件式修正，不改现有稀疏 kernel 与稀疏预算即可接入。"
+          ],
+          "conclusions": [
+            "稀疏注意力的选择准则应由矩阵近似误差主导，而非注意力质量排序。",
+            "在同样的稀疏预算下，只替换排序准则就能稳定涨点。"
+          ],
+          "experiments": [
+            "作为插件接入多个现有稀疏注意力方法、多个基准与多种 LLM 基座，一致取得精度提升。",
+            "MASA 不改变原有稀疏 kernel 与稀疏预算，收益不依赖额外的工程改造。"
+          ],
+          "significance": "把稀疏注意力从经验式挑数改成目标明确的矩阵近似问题。",
+          "arxivUrl": "https://arxiv.org/abs/2610.10871",
+          "pdfUrl": "https://arxiv.org/pdf/2610.10871.pdf",
+          "index": 6,
+          "takeaway": "稀疏注意力应按矩阵近似误差选单元，而不是挑注意力数值最大的位置。",
+          "keyExperiment": "作为不改 kernel、不改预算的插件，MASA 在多个稀疏注意力方法与基座上一致提升精度。"
+        },
+        {
+          "title": "When Should Agents Think? Adaptive Reasoning via Cross-Turn Estimation",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-09",
+          "authors": "Yiruo Cheng, Shen Huang, Xiaoshuai Song, Jiejun Tan, Guanting Dong, Pengjun Xie, Ji-Rong Wen, Zhicheng Dou",
+          "institutions": "Renmin University of China, Alibaba Group",
+          "abstract": "基于 LLM 的 agent 会在交互轨迹的每一轮动作前做推理，但推理并非每轮都必要——前面已经产生的推理可能继续支撑后续动作。难点在于不再依赖昂贵的生成式验证，判断已有推理何时仍然够用、何时需要新一轮推理。本文发现：去掉额外推理后，后续参考动作的似然下降幅度与其能否在已有推理下恢复密切相关，因而可作为跨轮动作支撑度的轻量信号。基于该观察提出 Reasoning Adaptation through Cross-Turn Estimation（RACE），用一个似然引导的渐进推理覆盖检测过程（LoGiC）逐步找出删除后对当前及后续参考动作影响有限的推理轮次，并把得到的删除信号同时用于监督微调与 agentic 强化学习，让策略自己学会何时推理、何时直接行动。在四个代表性 agent 基准上，RACE 大幅降低推理开销，同时保持或提升任务表现。",
+          "contributions": [
+            "发现去掉推理后参考动作似然下降的幅度，可作为跨轮动作支撑度的轻量代理信号。",
+            "提出 LoGiC：渐进式检测哪些推理轮次删除后对当前与后续动作影响有限。",
+            "把删除信号同时用于监督微调与 agentic 强化学习，训练 agent 自主决定何时推理。"
+          ],
+          "conclusions": [
+            "推理冗余在 agent 轨迹中普遍存在，跨轮估计可以在不做生成式验证的前提下定位它。",
+            "自适应推理可以在显著降低推理成本的同时不牺牲甚至提升任务表现。"
+          ],
+          "experiments": [
+            "四个代表性 agent 基准上大幅降低推理开销，同时保持或提升任务成功率。",
+            "验证了似然下降信号与动作可恢复性之间的一致性，说明该信号无需生成式验证即可用。"
+          ],
+          "significance": "把「每轮都思考」变成可学习的选择，直接砍掉长轨迹 agent 的推理开销。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12061",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12061.pdf",
+          "index": 7,
+          "takeaway": "用动作似然下降幅度就能判断已有推理够不够，不必再跑生成式验证。",
+          "keyExperiment": "在四个代表性 agent 基准上大幅降低推理开销，任务表现保持或提升。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "One Block, Multiple Depths: Recurrent Vision Transformers with Depth-Programmed Experts",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CV",
+          "date": "2026-10-09",
+          "authors": "Adrian Bulat, Yassine Ouali, Georgios Tzimiropoulos",
+          "institutions": "Samsung AI Cambridge, Technical University of Iasi, Queen Mary University of London",
+          "abstract": "本文证明单个 Transformer block 反复复用，就能在相近推理 FLOPs 下匹配全深度视觉编码器的精度，而且不需要中间特征蒸馏。reViT 通过把每个循环深度上的 FFN 表示为一小撮共享专家库的凸组合来恢复深度特定的变换，并由一个连续的归一化深度坐标来编程这一混合，形成一条可在 FFN 参数空间中重采样的轨迹。作者在监督式 ImageNet-1k 训练与 DINOv2 蒸馏两种设置下评估，受控对比显示：在单个 FFN 的预算下，权重空间合并优于 token 派发与输出混合两种替代方案。从头训练的 reViT-B/16 在约少 70% 存储参数的情况下达到 DeiT III 的精度；用 8 专家蒸馏的模型仅靠教师输出特征就保留了 DINOv2 教师几乎全部线性探测精度，并可迁移到分类、分割与深度预测。弹性深度训练还让同一个 checkpoint 在多个深度上工作。",
+          "contributions": [
+            "用单个循环 Transformer block 匹配全深度编码器精度，且不需要中间特征蒸馏。",
+            "把每个循环深度的 FFN 表示为共享专家库的凸组合，用归一化深度坐标编程，形成可重采样轨迹。",
+            "受控对比证明在单 FFN 预算下权重空间合并优于 token 派发与输出混合。"
+          ],
+          "conclusions": [
+            "深度方向的容量可以用少量可重采样的 FFN 组合替代，部署时还能物化成普通稠密图。",
+            "弹性深度训练让一个 checkpoint 覆盖多个推理深度。"
+          ],
+          "experiments": [
+            "从头训练的 reViT-B/16 达到 DeiT III 精度，存储参数约少 70%。",
+            "8 专家蒸馏模型保留 DINOv2 教师几乎全部线性探测精度，并迁移到分类、分割与深度预测任务。",
+            "弹性深度训练使单个 checkpoint 在多个测试深度上可用。"
+          ],
+          "significance": "把「深度」这一维度变成可重采样的参数空间，为视觉编码器省下大量存储。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12448",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12448.pdf",
+          "index": 8,
+          "takeaway": "一个循环 block 加深度编程的 FFN 专家混合，就能以少 70% 参数的代价达到全深度编码器精度。",
+          "keyExperiment": "reViT-B/16 达到 DeiT III 精度，存储参数减少约 70%。"
+        },
+        {
+          "title": "Mid-Training Language Models on Raw Video",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.CV",
+          "date": "2026-10-09",
+          "authors": "Jaedong Hwang, Xiaoqian Shen, Ernie Chang, Changsheng Zhao, Chong Zhou, Saksham Suri, Qi Qian, Zechun Liu, Lemeng Wu, Qinsi Wang, Raghuraman Krishnamoorthi, Wei Wen",
+          "institutions": "Meta AI",
+          "abstract": "多模态大模型主要从图文对或带标注视频中学习，原始网络视频很少被用来继续训练已有语言模型。本文研究没有任何字幕、也没有文本损失的原始视频能否作为语言模型的中期训练数据：把帧编码成连续视觉 token，让语言模型学习预测下一个视觉 token。作者用 YT-Temporal-1B 的原始片段对 Qwen3-1.7B 做中期训练，然后对中期训练过的模型与未中期训练的模型施加完全相同的图文指令微调，使两者只在中期训练上有差别。结果中期训练模型在四个视频基准上平均高 2.9 分，在十个图像基准上平均高 5.1 分，覆盖感知、文档与图表任务；尽管中期训练不含任何文本，文本能力仍被保持（14 个文本基准平均 48.9 对 48.0）。训练过程分析显示图像与视频收益在 30% 训练进度内出现并随后平台化，波动小于 0.5 分；预测字幕不如预测下一视觉 token，说明无需自动字幕这类昂贵且有噪的监督。",
+          "contributions": [
+            "验证无字幕的原始视频可作为语言模型的中期训练数据，只用下一视觉 token 预测这一自监督目标。",
+            "用严格对照（两份模型仅中期训练不同）分离出中期训练的净收益。",
+            "比较字幕预测与下一视觉 token 预测，说明无需自动字幕这类昂贵且带噪的监督。"
+          ],
+          "conclusions": [
+            "视觉能力可以在不牺牲文本能力的前提下注入，且收益在训练早期即出现并平台化。",
+            "纯自监督的视频中期训练在效果上优于依赖自动字幕的替代方案。"
+          ],
+          "experiments": [
+            "四个视频基准平均提升 2.9 分，十个图像基准平均提升 5.1 分。",
+            "14 个文本基准平均 48.9，未中期训练基线 48.0，文本能力未受损。",
+            "收益在 30% 训练进度内出现，其后波动小于 0.5 分。"
+          ],
+          "significance": "为「用海量无标注视频提升多模态能力」提供了一条成本更低的训练配方。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11019",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11019.pdf",
+          "index": 9,
+          "takeaway": "无字幕原始视频做中期训练，图像基准 +5.1 分、视频基准 +2.9 分，文本能力不降。",
+          "keyExperiment": "Qwen3-1.7B 用 YT-Temporal-1B 原始片段中期训练后，十个图像基准平均 +5.1 分、四个视频基准 +2.9 分。"
+        },
+        {
+          "title": "DynaTE: Accelerating Diffusion LLMs via Dynamic Token Execution",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-09",
+          "authors": "Minghan Jiang, Jiayi Wang, Shuaiting Li, Haibin Shen, Kejie Huang",
+          "institutions": "Zhejiang University",
+          "abstract": "扩散语言模型（dLLM）用双向并行精修缓解了自回归的串行解码瓶颈，但迭代精修与为串行解码优化的 AR 加速器不匹配，离散 token 生成也与面向连续去噪的 DiT 加速器不同。已有加速器让所有 token 并行执行，忽视 token 精修价值的差异。本文提出软硬件协同架构 DynaTE：一是自适应 token 执行，跳过低价值 token 计算，并用维度可重构 PE 阵列保持高利用率；二是用 FLDD 在当次迭代内精修少量局部依赖 token 以减少迭代次数，并用 Merge-Split-Merge 数据流隐藏串行开销；三是流式词表引擎，交织处理 LM head 的 token 流以适配不规则输出。在两个代表性 dLLM 上，DynaTE 相对最新 dLLM 加速器取得 2.05–2.78 倍加速、2.99–3.93 倍能效提升，相对 Jetson AGX Orin 提速 2.55 倍。",
+          "contributions": [
+            "提出自适应 token 执行，跳过低价值 token 计算，并用维度可重构 PE 阵列应对活跃 token 模式变化。",
+            "用 FLDD 利用动态 token 依赖，在迭代内精修局部依赖 token 以减少去噪迭代，并用 Merge-Split-Merge 数据流隐藏串行开销。",
+            "设计流式词表引擎，交织处理 LM head 的多个 token 流以适配不规则输出。"
+          ],
+          "conclusions": [
+            "dLLM 的并行精修需要专用加速器，而非复用 AR 或 DiT 的数据流。",
+            "token 精修价值不均是主要优化空间，软硬件协同可同时拿到速度与能效。"
+          ],
+          "experiments": [
+            "相对最新 dLLM 加速器取得 2.05–2.78 倍加速与 2.99–3.93 倍能效提升。",
+            "相对 Jetson AGX Orin 提速 2.55 倍，能效提升 6.07 倍。"
+          ],
+          "significance": "为扩散语言模型补上了与其并行精修模式匹配的加速器设计。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11284",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11284.pdf",
+          "index": 10,
+          "takeaway": "dLLM 各 token 的精修价值差异很大，跳过低价值 token 并动态精修依赖 token 可拿 2.78 倍加速。",
+          "keyExperiment": "相对最新 dLLM 加速器实现 2.05–2.78 倍加速与最高 3.93 倍能效提升。"
+        }
+      ]
+    }
+  ]
+}
