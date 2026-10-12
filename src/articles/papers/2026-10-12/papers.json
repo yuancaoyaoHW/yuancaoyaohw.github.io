@@ -1,0 +1,314 @@
+{
+  "date": "2026-10-12",
+  "title": "2026-10-12 论文精选",
+  "lede": "周一新批次尚未公告（arXiv 仍停在 10-09 周五批），本期从该批剩余池里挑出 9 篇：KV 缓存该留哪一条、低比特量化该在什么空间取整、GPU 上 FP8 模拟 fp64 的成本上限，以及投机解码的加速比其实可以被输入攻击掉。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 606
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Real Long-Term Memory for AI: A 50-Million-Token Window That Is Faster and Cheaper Than Recompute",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-10-09",
+          "authors": "Sietse Schelpe",
+          "institutions": "Corbenic AI",
+          "abstract": "大模型只能用落在上下文窗口里的文本，而且每次请求都要重算 prompt 的 KV 状态。本文测试了一个记忆层 galahad-kv：把每约 16000 token 的 KV 状态加密写入本地 NVMe 磁盘，之后再逐字节加载回来而不重算。作者在单张 NVIDIA H100 上用 vLLM 服务 Gemma 4 12B 与 31B，跑了 5000 万 token 的真实公开文本：所有探测块（100/100，深度 0–5000 万 token）都从加密存储原样加载、零重算；加载一块比重算快 2.8–4.3 倍、GPU 能耗低 8.8–12.3 倍，显存占用在整条流上保持平稳。对于几百万 token 之前埋入的事实，12B 答对 82/100、31B 答对 98/100。局限明确：这是对已存状态的分块复用而非更宽的注意力窗口，一次只加载一块，写内存是一次性开销，且需要数 TB 本地 NVMe。",
+          "contributions": [
+            "提出并公开 galahad-kv：把块级 KV 状态加密落到本地 NVMe，加载时逐字节还原、完全不重算 prefill。",
+            "在 5000 万 token 规模上验证：显存占用不随流长度增长，加载比重算快 2.8–4.3 倍、能耗低 8.8–12.3 倍。",
+            "给出抵抗长上下文基准造假的测试协议与单卡复现路径（公开软件加免费许可）。"
+          ],
+          "conclusions": [
+            "KV 状态外置到磁盘可以在单卡上支撑 5000 万 token 的记忆，事实召回率随模型规模提升（12B 82%、31B 98%）。",
+            "代价是把重算换成从磁盘读回状态、一字节不差地复用；它不是更宽的注意力窗口。"
+          ],
+          "experiments": [
+            "100/100 探测块（深度 0–5000 万 token）从加密存储原样加载，Gemma 4 12B/31B 均零重算。",
+            "加载一块比重算快 2.8–4.3 倍、GPU 能耗低 8.8–12.3 倍；整条 5000 万 token 流上显存平坦。",
+            "数百万 token 前埋入的事实：12B 答对 82/100，31B 答对 98/100，均无编造答案。"
+          ],
+          "significance": "把长上下文从更宽的窗口转为可寻址的持久化 KV 存储，给单卡长记忆一条可复现的工程路径。",
+          "arxivUrl": "https://arxiv.org/abs/2610.10845",
+          "pdfUrl": "https://arxiv.org/pdf/2610.10845.pdf",
+          "takeaway": "长上下文的另一条路：KV 状态加密落盘、按块寻址读回，比重算便宜一个数量级。",
+          "keyExperiment": "5000 万 token 流上 100/100 块零重算加载，加载快 2.8–4.3 倍、能耗低 8.8–12.3 倍，12B/31B 事实召回 82%/98%。",
+          "index": 1
+        },
+        {
+          "title": "Rehearse Everything, Remember Nothing: Attic-KV Rehearses What Will Be Read",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-10-09",
+          "authors": "Zhiyun Shi",
+          "institutions": "Nanyang Technological University",
+          "abstract": "很多 KV 缓存是在还不知道要问什么之前就被压缩的：用于检索的文档、跨请求共享的 prompt 前缀、长对话的记忆。主流做法用排练给 KV 条目打分，即让模型重读上下文、保留它关注到的条目，并假设排练得越完整记得越牢。本文证明在紧预算下这个假设会反噬：3% 保留率时整段重读在 RULER 上只保住 96.5 分中的 31.5 分，在 LongBench 自然文本任务上甚至不如完全不做排练的方法。原因在于缓存只会记住它排练过的内容：重读把预算摊到整段上下文，答案自身的条目几乎靠运气存活。由此提出两条原则——排练将要被读到的内容、排练多少就有多少——并实现为免训练的 Attic-KV：让模型用引用上下文的问答对自测，再配内容自适应的锚点 token。只改排练方式，就能在三种不同打分口径的宿主上同时提升效果。",
+          "contributions": [
+            "指出排练即重读在紧预算下失效：3% 保留率时整段重读在 RULER 上只剩 31.5 分（满分 96.5）。",
+            "提出两条原则并用免训练方法 Attic-KV 落地：引用上下文的问答自测加内容自适应锚点 token。",
+            "方法可即插即用：接到基于梯度的 KVgrad 与训练式 RestoreKV+ 上分别再涨最多 17.1 与 28.1 分。"
+          ],
+          "conclusions": [
+            "缓存该留的是会被读到的条目，而不是被重读扫过的条目；预算越紧这一差别越大。",
+            "免训练的排练改造可叠加在已有 KV 压缩方法之上，不依赖额外训练。"
+          ],
+          "experiments": [
+            "RULER 与 LongBench 自然文本共 8 个设置中，Attic 均为最优的免训练方法。",
+            "接入 KVgrad 与 RestoreKV+ 后分别提升最多 17.1 与 28.1 分。",
+            "3% 保留率下相对整段重读领先 41.9 分，且压缩速度比重读整段更快。"
+          ],
+          "significance": "把 KV 压缩的评判标准从扫过多少上下文改成留下会被读到的条目，并给出免训练的落地方式。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12133",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12133.pdf",
+          "takeaway": "KV 缓存别整段重读：让它用引用上下文的问答自测，留下的才是真会被读到的条目。",
+          "keyExperiment": "3% 保留率下 RULER 由 31.5 分变为领先整段重读 41.9 分，并让 KVgrad / RestoreKV+ 再涨 17.1 / 28.1 分。",
+          "index": 2
+        },
+        {
+          "title": "Bridging KV-Cache Quantization and Linear Attention: From Theory to Pretrained Weight Migration",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-09",
+          "authors": "Kaicheng Xiao, Liran Dong, Haotian Li, Guoliang Xing",
+          "institutions": "The Chinese University of Hong Kong",
+          "abstract": "KV 缓存量化与线性注意力是应对 Transformer 存储与计算开销的两条代表路线：前者把每个 KV 条目压成离散码但保留全部条目，后者把多份历史 KV 递归聚合成固定大小的连续状态但会引入干扰。二者能否统一到同一机制里？本文指出 RAM-Net 正是这座桥：它用对离散地址空间的软分配来决定每个地址所对应槽位的递归更新，从而同时具备逐条压缩与多条目聚合。在受限构造下作者证明，软地址分配把硬量化匹配扩展为可分读写的重叠，局部逼近全注意力的相似度并支持递归聚合；该联系还带来一条新的权重迁移路径，通过软量化中间构造把预训练 Transformer 迁移为 RAM-Net。在 0.3B 至 7B 的九个预训练模型上，RAM-Net 每模型仅用 5 亿 token 预算，就在六项常识与知识任务上平均恢复了教师相对随机猜测准确率增益的 87.1%。",
+          "contributions": [
+            "指认 RAM-Net 是 KV 量化（逐条离散压缩）与线性注意力（多条目递归聚合）之间的统一机制。",
+            "证明软地址分配把硬量化匹配扩展为可分读写的重叠，局部逼近全注意力相似度。",
+            "给出经软量化中间构造的 Transformer→RAM-Net 权重迁移路径，在 0.3B–7B 九个模型上验证。"
+          ],
+          "conclusions": [
+            "逐 KV 压缩与多 KV 聚合可以在同一套地址-槽位读写机制里实现，干扰由软分配缓解。",
+            "预训练权重可迁移而不必重训：5 亿 token 预算即恢复教师 87.1% 的准确率增益。"
+          ],
+          "experiments": [
+            "九个 0.3B–7B 预训练 Transformer，在六项常识与知识任务上平均恢复教师增益的 87.1%。",
+            "每个模型仅用 500M token 预算完成权重迁移训练。",
+            "理论上给出软分配对全注意力相似度的局部逼近与可分读写重叠的证明。"
+          ],
+          "significance": "为把 KV 压到多小提供了统一视角：与其在离散量化误差上死磕，不如当成地址-槽位上的读写聚合问题。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11214",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11214.pdf",
+          "takeaway": "KV 量化与线性注意力其实是同一地址-槽位读写机制的两端，预训练权重可以直接迁移过去。",
+          "keyExperiment": "0.3B–7B 九个模型、每模型 5 亿 token，恢复教师相对随机基线增益的 87.1%。",
+          "index": 3
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Smoothing the Top-k Exposure Boundary for Sparse Mixture-of-Experts",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-09",
+          "authors": "Yunkai Chai, Tong Zhu, Xiaoye Qu, Xuyang Hu, Guanjie Chen, Qipeng Guo, Yu Cheng",
+          "institutions": "Shanghai AI Laboratory, Shanghai Jiao Tong University, Nanyang Technological University",
+          "abstract": "稀疏 MoE 以每 token 固定算力换取参数容量，但传统训练把 top-k 写死，使连续的路线分布变成刚性阶跃：分数稍有波动，竞争力接近的专家就被硬分进全监督与零反馈两个区域，形成脆弱边界。本文提出 Elastic Expert Routing：从一个以 k 为中心的局部离散分布中随机采样被激活的专家预算，多次迭代后把陡峭阈值软化成渐进概率分布。由于采样邻域对称，该方法的期望算力与确定性训练一致，推理预算也保持不变。实验覆盖监督微调与从零预训练：微调时在 OLMoE-1B-7B 与 Qwen3-30B-A3B 上把下游宏平均分别提升 0.84 与 2.02 分；从零预训练时在多项下游任务上平均超过静态 top-k 基线 1.6 分。",
+          "contributions": [
+            "把 top-k 的硬阈值改成局部离散分布上的随机采样，软化全监督与零反馈之间的分界。",
+            "证明对称采样邻域使期望算力与确定性训练一致，推理预算不变。",
+            "在监督微调与从零预训练两种设定下都优于静态 top-k。"
+          ],
+          "conclusions": [
+            "路由的精度损失主要来自硬阈值而非专家容量：让待选专家以一定概率进入监督即可修复。",
+            "改进不增加期望计算量，因此可以无成本替换现成的 top-k 训练流程。"
+          ],
+          "experiments": [
+            "微调提升：OLMoE-1B-7B +0.84 分、Qwen3-30B-A3B +2.02 分（下游宏平均）。",
+            "从零预训练平均超过静态 top-k 基线 1.6 分。",
+            "期望算力与静态 top-k 一致，推理时预算不变。"
+          ],
+          "significance": "给出几乎零成本的 MoE 训练改动：把 top-k 的硬边界换成分布采样，同时保住推理算力预算。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11575",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11575.pdf",
+          "takeaway": "MoE 的 top-k 不该是硬阶跃：以 k 为中心随机采样专家预算，期望算力不变但下游涨分。",
+          "keyExperiment": "Qwen3-30B-A3B 微调 +2.02 分、OLMoE-1B-7B +0.84 分，从零预训练平均 +1.6 分。",
+          "index": 4
+        },
+        {
+          "title": "When Lower Reconstruction Loss Hurts: Distributionally Robust Refinement for Low-Bit LLM Quantization",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-09",
+          "authors": "Yanlong Zhao, Xiaoyuan Cheng, Huihang Liu, Baihua He, Xinyu Zhang, Harrison Bo Hua Zhu, Wenlong Chen, Li Zeng, Zhuo Sun",
+          "institutions": "University of Science and Technology of China, University College London, Shanghai University of Finance and Economics, AMSS Chinese Academy of Sciences, University of Copenhagen, Imperial College London, Shenzhen Research Institute of Big Data",
+          "abstract": "仅权重的训练后量化（PTQ）高度依赖最小化重建损失来在低精度下保住模型质量。本文指出：这类损失偏好的权重未必带来更好的下游表现，甚至在同一批校准数据上，更低的重建损失也会让模型变差。分析表明，当输入激活分布发生偏移时，校准数据上重建损失更低的权重可能反而损失更高。基于此提出分布鲁棒量化（DRQ）：在一个受约束的输入激活分布集合上最小化最坏情况重建损失。DRQ 只在既有量化网格内调整代表量化权重的整数码，量化参数与推理算子都不变。实验显示 DRQ 能改进 AWQ、GPTQ、ParoQuant 等六种代表性 PTQ 方法的结果，在稠密与 MoE 大模型上均有效。",
+          "contributions": [
+            "指出重建损失最小化与下游性能可以脱钩：校准集上更低的重建损失甚至会让模型变差。",
+            "用激活分布偏移解释该现象，并提出在受约束激活分布集合上最小化最坏情况重建损失的 DRQ。",
+            "DRQ 只改整数码、不动量化参数与算子，因此零推理开销，可叠加在已有 PTQ 方法上。"
+          ],
+          "conclusions": [
+            "低比特量化的目标应从拟合校准集改为对激活分布偏移鲁棒。",
+            "作为后处理细化，DRQ 可以普遍提升现有仅权重 PTQ 方法，且不引入额外推理成本。"
+          ],
+          "experiments": [
+            "改进六种代表性 PTQ 方法，其中包含 AWQ、GPTQ 与 ParoQuant。",
+            "在稠密与 MoE 大语言模型上均取得下游任务增益。",
+            "仅调整整数码，量化参数与推理算子保持不变，零额外推理开销。"
+          ],
+          "significance": "把量化误差的目标函数从校准集重建损失换成分布鲁棒形式，给出一条零开销的通用后处理。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11226",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11226.pdf",
+          "takeaway": "重建损失最低的量化权重不一定最好：改成对激活分布偏移最坏情况鲁棒，六种 PTQ 都能涨。",
+          "keyExperiment": "同一校准数据上更低重建损失反而更差；DRQ 以零推理开销改进 AWQ/GPTQ/ParoQuant 等六种方法。",
+          "index": 5
+        },
+        {
+          "title": "Speedbumps: Rejection Attacks on Speculative Decoding",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CR",
+          "date": "2026-10-09",
+          "authors": "Adam Y. J. Jones, Yu Yuan, Sergio Maffeis",
+          "institutions": "Imperial College London",
+          "abstract": "投机解码通过在目标模型的单次前向里验证多个草稿 token 来降低 LLM 推理成本，收益大小取决于草稿模型对目标分布的逼近程度。本文研究投机拒绝攻击（SRA）：一类让草稿与目标模型更频繁不一致的攻击，它使每个草稿周期被接受的 token 变少，于是每生成一个 token 需要更多次目标模型前向，拖慢受害者推理并抬高成本。作者给出两种攻击，通过在攻击者可控的内容后追加对抗后缀来劣化受害者的投机解码，优化目标分别是草稿前缀的期望接受长度（按目标模型给出的接受概率估计，Speedbump-P）与草稿与目标分布的重叠度（Speedbump-D）。某些情形下攻击会把投机解码拖到比自回归解码还慢，同时改变输出质量；加正则化可恢复质量，但会牺牲大半攻击效果。",
+          "contributions": [
+            "提出投机拒绝攻击：用对抗后缀放大草稿与目标的分歧，使每个草稿周期接受的 token 变少、推理变慢。",
+            "给出两种优化目标不同的攻击：按接受概率估计的 Speedbump-P 与按分布重叠度估计的 Speedbump-D。",
+            "验证采样下的有效性与跨模型迁移能力：P 跨草稿模型、D 跨共享草稿的目标模型。"
+          ],
+          "conclusions": [
+            "草稿与目标的交互是一个现实攻击面：攻击者无需破坏输出正确性，就能显著抬高受害者的推理成本。",
+            "正则化能保住输出质量，但攻击者必须在效果与隐蔽性之间取舍。"
+          ],
+          "experiments": [
+            "部分情形下投机解码被拖慢到低于自回归解码的速度。",
+            "对抗后缀在采样下仍然有效，并可跨草稿模型或跨目标模型迁移。",
+            "加正则化后输出质量恢复，但大部分降速效果丢失。"
+          ],
+          "significance": "把投机解码的效率收益视为可被输入操纵的安全边界，提示服务侧对接受率异常做监控。",
+          "arxivUrl": "https://arxiv.org/abs/2610.10929",
+          "pdfUrl": "https://arxiv.org/pdf/2610.10929.pdf",
+          "takeaway": "投机解码的加速比是可被攻击的：一个对抗后缀就能让草稿频频被拒，推到比自回归还慢。",
+          "keyExperiment": "对抗后缀使部分场景下投机解码慢于自回归解码，且在采样下有效、可跨草稿或目标模型迁移。",
+          "index": 6
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "The Missing Fourth Term for the Emulation Tensor Memory Equilibrium (TME) Model: The Residue Deconstruction Cost",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-09",
+          "authors": "Harun Bayraktar, John Gunnels, Peter Caday",
+          "institutions": "NVIDIA Corporation",
+          "abstract": "FP8 is All You Need (Part 1) 提出的张量-内存均衡（TME）模型，把 Ozaki Scheme II 模拟 fp64 的执行时间算作张量核项与 HBM 流量项的最大值，再加每输出的重建项。本文指出它漏掉了每输入的解构成本：每个流入的 fp64 操作数都必须在 SIMT 流水线上被缩放、取整并对 r 个模数分别求余，之后矩阵乘才能发射。作者补上这一第四项，用 cuBLAS 模拟路径标定其常数，并导出闭式运算强度阈值 OI*，低于该阈值时无论张量核吞吐多高，模拟都无法追平原生 fp64。在 B300 上该阈值约 0.56 FLOP/B。结果是原论文声称要加速的 GEMV、SpMV、低批量 GEMV 等访存受限内核只能跑到原生性能的 0.3–0.9 倍，七点模板从声称的 3.1 倍降到 1.8 倍；稠密 GEMM 不受影响。预计算并存储余数只是把同一成本转移到带宽项。",
+          "contributions": [
+            "指出 TME 模型漏掉每输入的解构成本（缩放、取整、取模都发生在 SIMT 流水线上），补上第四项并用 cuBLAS 路径标定常数。",
+            "导出闭式运算强度阈值 OI*，在 B300 上约 0.56 FLOP/B：低于它，模拟必然追不平原生 fp64。",
+            "修正原论文结论：访存受限内核仅 0.3–0.9 倍，七点模板 1.8 倍而非 3.1 倍，稠密 GEMM 不受影响。"
+          ],
+          "conclusions": [
+            "FP8 张量核模拟 fp64 的适用边界由解构开销而非张量核吞吐决定，访存受限内核不该走这条路。",
+            "预计算余数只是把成本从算力项搬到带宽项，并不改变瓶颈性质。"
+          ],
+          "experiments": [
+            "B300 上运算强度阈值 OI* 约 0.56 FLOP/B。",
+            "GEMV、SpMV、低批量 GEMV 只能达到原生 fp64 的 0.3–0.9 倍；七点模板 1.8 倍（原论文称 3.1 倍）。",
+            "稠密 GEMM 的结论与原论文一致，不受该修正影响。"
+          ],
+          "significance": "给出一个可判定的硬件成本界：先看运算强度是否超过 OI*，再决定要不要用 FP8 模拟 fp64。",
+          "arxivUrl": "https://arxiv.org/abs/2610.10924",
+          "pdfUrl": "https://arxiv.org/pdf/2610.10924.pdf",
+          "takeaway": "FP8 模拟 fp64 有硬门槛：运算强度低于 0.56 FLOP/B（B300）时，解构开销注定追不平原生。",
+          "keyExperiment": "B300 上 OI* 约 0.56 FLOP/B；访存受限内核仅 0.3–0.9 倍，七点模板 1.8 倍而非所称 3.1 倍。",
+          "index": 7
+        },
+        {
+          "title": "Deflating the Hessian: Rank-4 W4A4 Quantization for Multimodal Diffusion Transformers",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-09",
+          "authors": "Shiwen Wang, Pengxiang Zhao, Xiaoming Yuan",
+          "institutions": "The University of Hong Kong, Huawei Technologies",
+          "abstract": "扩散 Transformer 中，低秩分支可把每个权重拆成低比特残差与高精度低秩分量，缓解 4 比特权重-激活（W4A4）PTQ 的损失。已有低秩 PTQ 方法要么把低秩补偿与残差量化分开优化、往往需要更高秩，要么依赖二阶权重更新却没有显式建模 4 比特下尤为严重的激活量化误差。本文把低秩辅助的 W4A4 PTQ 建成耦合校准问题，由联合目标导出求解器：消去输出侧低秩因子后得到放气 Hessian，只为低秩分量尚未吸收的残差误差定价；并加激活噪声代理项压制激活量化误差。在五个扩散骨干上，rank-4 方法在 PSNR/LPIPS 上稳定优于 rank-4 SVDQuant，并在 SANA-1.6B、FLUX.1-schnell、FLUX.1-dev 上以八分之一的秩超过 rank-32 SVDQuant；在 Qwen3-8B 上把 MMLU 从 61.50% 提到 68.17%。",
+          "contributions": [
+            "把低秩辅助的 W4A4 PTQ 写成耦合校准问题，联合优化低秩补偿与残差量化，而非分步处理。",
+            "提出放气 Hessian，让二阶信息只为低秩分量未吸收的残差误差定价，并引入激活噪声代理项。",
+            "rank-4 即可超过 rank-32 SVDQuant，量化速度最高快 6.25 倍。"
+          ],
+          "conclusions": [
+            "低秩与残差量化必须联合求解，分开优化会迫使秩数上升。",
+            "把激活量化误差显式建模，是在 4 比特下继续压低秩数的前提。"
+          ],
+          "experiments": [
+            "五个扩散骨干上，rank-4 方法在 PSNR 与 LPIPS 上稳定优于 rank-4 SVDQuant。",
+            "在 SANA-1.6B、FLUX.1-schnell、FLUX.1-dev 上以八分之一的秩超过 rank-32 SVDQuant，量化最快快 6.25 倍。",
+            "Qwen3-8B 上 MMLU 从 61.50% 提升到 68.17%（对比 rank-32 SVDQuant）。"
+          ],
+          "significance": "说明 4 比特量化的瓶颈不只在权重重建：显式处理激活量化误差后，很小的秩就能拿到更好结果。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11315",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11315.pdf",
+          "takeaway": "低秩补偿和残差量化必须一起解：放气 Hessian 让 rank-4 打赢 rank-32，量化还快六倍。",
+          "keyExperiment": "rank-4 超过 rank-32 SVDQuant（秩小 8 倍、量化快 6.25 倍），Qwen3-8B MMLU 由 61.50% 升到 68.17%。",
+          "index": 8
+        },
+        {
+          "title": "DEX: Digit-Level Early Exit for Energy-Efficient MSDF Neural Network Inference",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-09",
+          "authors": "Yousef Sadegheih, Dorit Merhof, Muhammad Usman",
+          "institutions": "University of Regensburg",
+          "abstract": "U-Net 做脑肿瘤分割需要数十亿次乘加运算，因此硬件要在固定精度与静态压缩之外，按输出动态削减计算。最高有效位优先（MSDF）算术能在结果算完之前暴露前导数字，从而支持依输出决定是否继续。本文提出面向量化 U-Net 分割的 MSDF 加速器：两级分组处理单元支持有符号 INT8 操作数与流内偏置累加，并有四种直接作用于输出数字流的运行时机制，分别是 ReLU 层的精确定位负值检测、分割头的精确仅符号判定、校准后的低位数字跳过，以及校准后的剪枝。两种近似机制离线按精度约束选取，运行时只需轻量控制，且不修改已存权重。在 nnU-Net 训练的残差 U-Net 上处理 BraTS，这些机制合计把数字周期减少 38.38%，73 例留出集平均 Dice 为 80.58%（浮点模型 81.20%）；仅精确机制即可减少 18.79% 的周期且不改变量化输出。",
+          "contributions": [
+            "设计支持有符号 INT8 与流内偏置累加的两级分组 MSDF 处理单元，把提前退出做在输出数字流上。",
+            "提出四种运行时机制：精确定位负值检测、精确仅符号判定，以及按精度约束离线校准的低位跳过与剪枝。",
+            "近似机制离线选取、运行时不修改权重，只增加轻量控制逻辑。"
+          ],
+          "conclusions": [
+            "在 MSDF 数据流上做数字级提前退出，能用很小的精度代价换取可观的周期下降（38.38%）。",
+            "纯精确机制也能省下 18.79% 的周期且输出不变，说明提前退出本身不必然带来精度损失。"
+          ],
+          "experiments": [
+            "BraTS 上数字周期减少 38.38%，73 例留出集平均 Dice 80.58%（浮点 81.20%）。",
+            "仅精确机制减少 18.79% 周期，且量化输出不变。",
+            "45nm 综合：500MHz、0.858mm2、每张 192x192 补丁 0.726mJ；八输出共享激活投递的投影加速器 16.6ms、1.67mJ 每补丁。"
+          ],
+          "significance": "把按输出动态省算力落到数字级数据流上，为分割类密集卷积网络给出可综合的面积与能耗账本。",
+          "arxivUrl": "https://arxiv.org/abs/2610.11748",
+          "pdfUrl": "https://arxiv.org/pdf/2610.11748.pdf",
+          "takeaway": "MSDF 数据流能在数字级提前退出：省 38% 周期只掉 0.6 个 Dice 点，纯精确机制也省 18.79%。",
+          "keyExperiment": "BraTS 数字周期 -38.38%、Dice 80.58% 对浮点 81.20%；纯精确机制 -18.79% 且输出不变。",
+          "index": 9
+        }
+      ]
+    }
+  ]
+}
