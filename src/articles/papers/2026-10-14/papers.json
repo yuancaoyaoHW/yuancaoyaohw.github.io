@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-14",
+  "title": "2026-10-14 论文精选",
+  "lede": "周一 10-12 批次的剩余池里挑出 10 篇：主线是「把显存与调度都用在刀刃上」——KV 复用从前缀走向段级、注意力屏蔽与视频 KV 走进编译与跨层预测，另有循环语言模型的单循环精度税、MoE 容量分配与跨区训练调度。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 454
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "KV-Repurpose: A Testbed for Evaluating Non-Prefix KV-Cache Reuse",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-10-12",
+          "authors": "Taiga Ikeda, Daisuke Miyashita, Jun Deguchi",
+          "institutions": "Kioxia Corporation",
+          "abstract": "大模型服务中的 KV 缓存复用通常只覆盖精确的提示前缀，当同一篇检索文档出现在不同的系统提示、对话历史或动态元数据之后时便无法复用。作者提出 KV-Repurpose：一个基于 vLLM 的开源系统与测试床，用于开发和评估超越精确前缀的按段 KV 缓存复用，整合了缓存感知的段调度、提示构造、容量管理、负载生成与运行时监控。在长上下文基准上，朴素的段复用对单文档问答与摘要几乎不损失输出质量，但在跨文档推理上暴露明显局限：在 20% 请求共享固定前缀的 Zipf 型 RAG 负载下，30GB 容量下 token 级缓存命中率达 63.9%，而前缀缓存只有 3.3%，即使把容量给到 1TB 也仅 17.9%，因而带来更低的首 token 时延。",
+          "contributions": [
+            "提出运行在 vLLM 之上的开源系统 KV-Repurpose，把段级非前缀复用所需的缓存感知调度、提示构造、容量管理与负载生成整合为可复现的评测测试床。",
+            "划清非前缀复用的收益边界：单文档问答与摘要的输出质量基本保持，跨文档推理则明显退化。",
+            "在同容量、同负载下给出命中率对照：段级复用 63.9% 对比前缀缓存 3.3%。"
+          ],
+          "conclusions": [
+            "段级复用能把检索增强场景中重复出现的文档价值真正兑现，但必须按任务类型设界，跨文档推理不适合无差别复用。",
+            "前缀缓存的命中率受工作负载结构硬性限制，单纯堆容量（1TB）也无法弥补。"
+          ],
+          "experiments": [
+            "30GB 缓存容量、20% 请求共享固定前缀的 Zipf 负载下，token 级命中率 63.9%，前缀缓存仅 3.3%。",
+            "前缀缓存把容量加到 1TB，命中率也只到 17.9%。",
+            "长上下文基准上，朴素段复用的单文档问答与摘要质量基本无损，命中率提升直接转化为更低的 TTFT。"
+          ],
+          "significance": "把 KV 复用的讨论从「更长的前缀」推进到「可调度的段」，并给出可复现的评测基线。",
+          "takeaway": "KV 复用不必绑定前缀：段级调度让重复文档的命中率从 3.3% 提升到 63.9%。",
+          "keyExperiment": "同一 Zipf RAG 负载与 30GB 容量下，token 级命中率 63.9% 对比前缀缓存的 3.3%（1TB 容量下后者仅 17.9%）。",
+          "arxivUrl": "https://arxiv.org/abs/2610.13060",
+          "pdfUrl": "https://arxiv.org/pdf/2610.13060.pdf",
+          "index": 1
+        },
+        {
+          "title": "CompileMask: Bridging the Gap Between Expressiveness and Efficiency in Attention Masking",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-12",
+          "authors": "Hongzheng Li, Jiacheng Wan, Zhaolong Xing, Zhida Jiang, Yuanhang Yang, Junhua Shu 等",
+          "institutions": "北京邮电大学、京东、北京大学",
+          "abstract": "现代注意力负载需要多样的屏蔽模式，而这些模式的边界往往依赖运行时元数据，高效注意力内核却原生只支持少数几种固定模式。已有的自定义屏蔽方案都卡在表达力与效率的取舍上：谓词法灵活，但要付出大量预处理与执行开销；区间法执行高效，却受预设区间数量限制。CompileMask 用编译的思路弥合这道裂缝：离线阶段分析可见性规则并生成模式专用的预处理内核；同时提出基于区域的 DSL MaskSpec 让用户描述规则。在线阶段，生成的内核读取批次元数据并产出紧凑的执行描述符，注意力内核只需把元素下标与预计算的端点比较即可判定可见性，因此既保留了表达力又维持了内核级效率。相比现有最优方法最高取得 3.8 倍加速。",
+          "contributions": [
+            "提出把注意力屏蔽「编译化」的路线：离线分析可见性规则，生成模式专用的预处理内核，把在线开销压到下标比较级别。",
+            "设计区域式 DSL MaskSpec，让用户以声明方式表达任意运行时相关的屏蔽规则。",
+            "在线阶段用紧凑执行描述符连接内核与元数据，最高比现有最优方法快 3.8 倍。"
+          ],
+          "conclusions": [
+            "自定义屏蔽不必在表达力与效率之间二选一，把规则分析搬到离线编译期即可同时拿到两者。",
+            "运行时元数据驱动的屏蔽模式可以走编译路径，这为可变注意力模式的内核实现提供了通用做法。"
+          ],
+          "experiments": [
+            "与当前最优的自定义屏蔽方法相比，CompileMask 最高获得 3.8 倍加速。",
+            "在线阶段只产出紧凑执行描述符，内核按元素下标与预计算端点比较判定可见性，避免谓词式预处理开销。",
+            "离线生成模式专用预处理内核，在线路径不再受区间表示法的预设区间数限制。"
+          ],
+          "significance": "让「任意屏蔽模式」与「高效注意力内核」不再互斥，为可变注意力模式给出编译级解法。",
+          "takeaway": "把注意力屏蔽规则编译成模式专用内核，兼顾任意表达力与内核级效率，最高 3.8 倍加速。",
+          "keyExperiment": "相比当前最优方法（谓词法/区间法）最高取得 3.8 倍加速。",
+          "arxivUrl": "https://arxiv.org/abs/2610.13474",
+          "pdfUrl": "https://arxiv.org/pdf/2610.13474.pdf",
+          "index": 2
+        },
+        {
+          "title": "GPU-resident Execution for Timing-predictable Sensor Processing Systems",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-12",
+          "authors": "Soham Sinha, Rahul Choudhury, Shekhar Dwivedi, Gregory Lee, Gigon Bae, Anisha Goel 等",
+          "institutions": "NVIDIA",
+          "abstract": "实时嵌入式系统越来越多地把高带宽传感器流的 GPU 加速处理放进闭环回路，但 CPU 仍是每一次迭代的主调度者：读取传感器输入、提交 CUDA 工作、等待完成、再触发执行。这条宿主中介路径把闭环端到端时延暴露给 I/O 中断、宿主调度决策和 CUDA API 开销，即使采用 GPU 内存 RDMA、CPU 核隔离等常见手段也无法消除。作者提出 GPU-resident Execution：让 I/O 与 GPU 执行同处一个长期驻留设备端的循环，传感器输入直接抵达 GPU 内存、触发 GPU 侧处理，并直达 GPU 可见的输出端点，无需宿主唤醒。在工业级 1080p、60Hz 的相机到显示应用中，光子到显示抖动从 4.83ms 降到 0.66ms（7.3 倍），软件处理抖动从 1.70ms 降到 0.01ms（170 倍）。",
+          "contributions": [
+            "提出 GPU-resident Execution 执行模型：I/O 与计算同处设备端长驻循环，移除宿主唤醒这一时延抖动来源。",
+            "在 NVIDIA Holoscan C++ 框架中实现并提供构建 GPU 常驻应用的参考组件。",
+            "在推理、宿主争用、多循环与流式相机等负载上系统评估，给出抖动量化结果。"
+          ],
+          "conclusions": [
+            "闭环实时性的主要敌人是宿主中介路径，把整条链路搬进 GPU 常驻循环可获得数量级的抖动收敛。",
+            "已有的 GPU 内存 RDMA 与核隔离只是缓解，无法替代执行模型层面的改动。"
+          ],
+          "experiments": [
+            "工业级 1080p/60Hz 相机到显示应用中，光子到显示抖动由 4.83ms 降至 0.66ms，改善 7.3 倍。",
+            "同一应用的软件处理抖动由 1.70ms 降至 0.01ms，改善 170 倍。",
+            "在推理、宿主争用、多循环与流式相机负载上验证了模型对宿主侧干扰的鲁棒性。"
+          ],
+          "significance": "为 GPU 闭环实时系统提供「设备常驻」执行范式，把抖动来源从调度与 API 开销中剥离。",
+          "takeaway": "把 I/O 与计算都留在 GPU 常驻循环里，闭环抖动降到十分之一量级。",
+          "keyExperiment": "相机到显示链路的光子到显示抖动 4.83ms → 0.66ms（7.3 倍），软件处理抖动 1.70ms → 0.01ms（170 倍）。",
+          "arxivUrl": "https://arxiv.org/abs/2610.13809",
+          "pdfUrl": "https://arxiv.org/pdf/2610.13809.pdf",
+          "index": 3
+        },
+        {
+          "title": "CORAL-KV: Compact Cross-Layer Prediction and Residual Coding for Autoregressive Video KV Caches",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.CV",
+          "date": "2026-10-12",
+          "authors": "Albert Ge, Akash Haridas, Utkarsh Saxena, Ruijing Yang, Ian Colbert, Frederic Sala 等",
+          "institutions": "AMD、威斯康星大学麦迪逊分校",
+          "abstract": "自回归视频扩散模型的注意力 KV 缓存不断增长，显存成为长视频生成的关键瓶颈。近期基于聚类的量化把相似向量分组后再量化残差，但当后续帧回看被压缩的历史时，微小重建误差会随视频变长而累积。作者发现视频模型的缓存状态之间存在很强的跨层依赖，据此提出 Coral-KV：用每一层的缓存状态预测后续层的 key 与 value，只对预测残差做量化；预测器构造成紧凑的「块对角加低秩」形式，块对角建模头内通道关系，全局低秩项建模头间依赖，既能跨视频复用，也能针对当前视频轻量重拟合。在 HY-WorldPlay 与 MAGI-1 上，可复用配置相比 QVG-4 分别提升 PSNR 0.32dB 与 4.95dB，缓存显存减少 48% 与 37%；视频自适应配置在 MAGI-1 上相比 QVG-Pro 提升 3.77dB、显存减少 33.7%，且在更长生成中保持更高保真度、减少时间不连续。",
+          "contributions": [
+            "发现视频扩散模型 KV 缓存存在强跨层依赖，把层间预测作为压缩的新维度。",
+            "提出块对角加低秩的紧凑跨层预测器，并区分「跨视频复用」与「按视频重拟合」两种保真度档位。",
+            "在 HY-WorldPlay 与 MAGI-1 上验证 PSNR 与显存的双重收益，且不牺牲生成时延。"
+          ],
+          "conclusions": [
+            "利用层间冗余能在同样显存下获得更高保真度，抑制长视频生成中的误差累积。",
+            "缓存压缩的收益可以按使用场景在「一次校准、长期复用」与「按视频轻量适配」之间滑动。"
+          ],
+          "experiments": [
+            "可复用配置相比 QVG-4 在 HY-WorldPlay 与 MAGI-1 上 PSNR 分别提升 0.32dB 与 4.95dB，缓存显存减少 48% 与 37%。",
+            "视频自适应配置在 MAGI-1 上相比 QVG-Pro PSNR 提升 3.77dB，显存减少 33.7%。",
+            "在更长视频生成中保持更高重建保真度并减少时间不连续，生成时延相当。"
+          ],
+          "significance": "把 KV 压缩的着力点从层内聚类扩展到层间预测，为长视频生成争取显存与保真度的双重余量。",
+          "takeaway": "用跨层预测+残差编码压缩视频 KV 缓存，最省 48% 显存同时 PSNR 不降。",
+          "keyExperiment": "MAGI-1 上相比 QVG-4 PSNR 提升 4.95dB 且显存减少 37%；自适应配置再提升 3.77dB。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12514",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12514.pdf",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Contextual Correction of Parallel Drafts for Speculative Decoding",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-12",
+          "authors": "Roy Eisenstadt, Harel Lidar, Tal Gonen, Omer Luxembourg, Itamar Zimerman, Lior Wolf 等",
+          "institutions": "特拉维夫大学、本-古里安大学",
+          "abstract": "投机解码用轻量草稿模型提出多个 token，再由目标模型并行验证，以加速大模型推理；基于扩散的草稿器尤其有吸引力：预测能力强且能并行给出未来多个位置，避开自回归顺序开销。但并行本身要付出代价：同一草稿块内的 token 是在看不到前序草稿 token 实际取值的情况下预测的，块内依赖被抹掉。作者提出 DCOCO（DFlash 上下文校正器）：一个轻量机制，在保持并行草稿的同时还原这些依赖——它不直接采纳每个位置的 top 预测，而是保留多个候选 token，并并行评估相邻草稿位置之间的上下文相容性，从而以极低的附加成本做出上下文感知的选择。在四个验证器主干、十个基准上，DCOCO 在所有评估配置中都取得最高平均吞吐，覆盖贪心与随机解码、含扩展推理与不含推理；相比普通解码最高 6.6 倍加速。在并发服务下（4 至 32 并发请求）比最强对手高 6% 至 23%。",
+          "contributions": [
+            "定位并行草稿的结构性缺陷：块内 token 之间缺乏依赖，导致候选质量受损。",
+            "提出 DCOCO：保留多候选并并行评估相邻位置的上下文相容性，以低成本还原块内依赖。",
+            "在四个验证器主干、十个基准上覆盖贪心/随机、含推理/不含推理的全部配置，验证吞吐优势。"
+          ],
+          "conclusions": [
+            "并行草稿的损失可以通过并行校正而非串行回退来弥补，这一点在并发服务下尤其关键。",
+            "顺序校正器在负载升高时会退化到未校正水平，说明其收益依赖宽松的计算余量。"
+          ],
+          "experiments": [
+            "四个验证器主干、十个基准上，所有配置中平均吞吐最高，相比普通解码最高 6.6 倍加速。",
+            "4 至 32 并发请求下比最强对手高 6% 至 23%。",
+            "其他顺序校正器在相同并发负载下跌破未校正 DFlash 的水平，DCOCO 保持优势。"
+          ],
+          "significance": "说明保住草稿块内依赖是投机解码继续提速的关键，且必须以并行方式实现才能在服务端兑现。",
+          "takeaway": "并行草稿丢掉的块内依赖，可以用轻量并行校正找回来，服务端并发下也稳定提速。",
+          "keyExperiment": "十个基准、四种主干上均最高平均吞吐，最高 6.6 倍加速；32 并发下领先最强对手 6%-23%。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12570",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12570.pdf",
+          "index": 5
+        },
+        {
+          "title": "Rollout-Time Intervention: Unlocking Agentic Reinforcement Learning Beyond Policy Limits",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-12",
+          "authors": "Xi Chen, Ruixue Ding, Zhigaoyuan Wang, Fanrui Zhang, Qiang Zhang, Boli Chen 等",
+          "institutions": "阿里巴巴（Token Hub、高德）、香港科技大学（广州）",
+          "abstract": "强化学习已成为提升大模型 agent 推理、规划与工具使用能力的关键范式，但现有 agent RL 方法受制于在策略推理瓶颈：当任务超出模型当前能力边界时，有效轨迹极度稀疏，训练常常直接崩溃。作者提出 Rollout-Time Intervention（RTI）：在 rollout 阶段利用奖励侧证据（即评测规则）把错误轨迹改写成成功轨迹，从而为策略几乎无法独立完成的任务提供有效学习信号。虽然干预轨迹本质上属于离策略数据，但作者发现只要过滤掉分布偏移过大的轨迹，它们就能有效指导策略优化。在五个基准上的大量实验表明，RTI 稳定优于 RL 基线，使后训练策略逼近更强的当代大模型水平；更重要的是，它让策略超越了原有的能力边界，而不是在原有边界内做更充分的采样。",
+          "contributions": [
+            "指出 agent RL 的核心瓶颈是能力边界之外有效轨迹的极度稀疏，而非优化目标设计。",
+            "提出 RTI：用奖励侧证据在 rollout 时把错误轨迹改写为成功轨迹，为稀疏任务提供学习信号。",
+            "给出离策略数据的可用条件——过滤分布偏移过大的轨迹后，干预轨迹可有效指导策略优化。"
+          ],
+          "conclusions": [
+            "训练数据的「可解性」比「在策略性」更关键，允许介入式构造轨迹能突破策略自身探索上限。",
+            "干预轨迹需要经过分布偏移过滤，否则离策略偏差会吞噬收益。"
+          ],
+          "experiments": [
+            "在五个基准上稳定优于 RL 基线。",
+            "后训练后的策略性能逼近更强的当代大模型。",
+            "策略最终超越其原始能力边界，而不仅是提高边界内任务的通过率。"
+          ],
+          "significance": "为能力边界之外的 agent 训练提供了一条数据构造路径，把「难到学不动」转化为可训练信号。",
+          "takeaway": "在 rollout 阶段用评测规则把失败轨迹改写为成功轨迹，让 RL 能学会策略原本做不到的任务。",
+          "keyExperiment": "五个基准上稳定优于 RL 基线，后训练策略逼近更强当代模型并突破原能力边界。",
+          "arxivUrl": "https://arxiv.org/abs/2610.13438",
+          "pdfUrl": "https://arxiv.org/pdf/2610.13438.pdf",
+          "index": 6
+        },
+        {
+          "title": "Overcoming Data Imbalances with Expert Selection Biases",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-12",
+          "authors": "Ayush K. Tarun, Clara Meister, Antoine Bosselut",
+          "institutions": "EPFL",
+          "abstract": "MoE 已成为前沿大模型的标准架构，每个 Transformer 块中的多个并行专家理论上能按领域、语言、模态等类别形成分工；但当数据在各类别间不均衡时，少数类别会挤在很少一部分专家上、或低效地分散开来，可用容量被实质压缩。作者证明：类别条件下的专家选择偏置可以把不同类别的 token 优先路由到专门的专家池——只按输入类别施加偏置，就能诱导出「软」的类别对齐分工，既推动各类别走向不同的专家子集，又保留有用的跨类别共享。更重要的是，它能把专家容量过量分配给那些原本因数据稀缺而吃亏的类别。在最高 10.6B 参数的模型上，跨模态、低资源语言与代码均观察到性能提升，最小与最大模型规模下的增益分别相当于多分配 18.5% 与 2.7% 的基线训练 token，而推理仍保持标准 MoE 形式。",
+          "contributions": [
+            "证明类别条件下的专家选择偏置可诱导软性类别分工，把不同类别引向不同专家子集。",
+            "给出对数据稀缺类别过度分配专家容量的直接手段，把容量从「平均」改为「按需」。",
+            "在跨模态、低资源语言与代码上以最大 10.6B 模型验证增益，且不改变推理时的 MoE 结构。"
+          ],
+          "conclusions": [
+            "专家分配不均的问题可以用推理无成本的偏置项缓解，无需改架构或重训路由器。",
+            "数据不均衡造成的容量挤压是可测量的损失，其量级可折算为额外的训练 token 预算。"
+          ],
+          "experiments": [
+            "在跨模态、低资源语言与代码任务上均观察到性能提升。",
+            "最小模型规模下的增益相当于多分配 18.5% 的基线训练 token，最大规模（10.6B）下相当于 2.7%。",
+            "推理阶段保持标准 MoE 形式，不引入额外开销。"
+          ],
+          "significance": "把 MoE 的容量分配当作可调节旋钮，为数据不均衡场景提供低成本的补偿机制。",
+          "takeaway": "只需按类别给专家选择加偏置，就能把容量补给低资源类别，最大 10.6B 模型上仍有效。",
+          "keyExperiment": "最小规模增益相当于多 18.5% 训练 token，10.6B 规模相当于 2.7%，推理开销不变。",
+          "arxivUrl": "https://arxiv.org/abs/2610.13370",
+          "pdfUrl": "https://arxiv.org/pdf/2610.13370.pdf",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Kronecker Product Attention: Memory-Efficient KV Compression via Structured Factorization",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-12",
+          "authors": "Bahareh Nikpour, Hossein Rajabzadeh, Maryam Dialameh, Vahid Partovi Nia, Parsa Omidi",
+          "institutions": "华为（Noah's Ark Lab）、滑铁卢大学",
+          "abstract": "自回归生成越来越受制于 KV 缓存显存——随序列长度、批大小与模型深度线性增长。已有的 MQA、GQA、MLA 与张量积注意力（TPA）各带权衡：牺牲表达力、需要额外位置编码，或强加低秩结构。作者提出 Kronecker 积注意力（KPA）：把 key/value 激活表示为若干紧凑的、依赖 token 的矩阵因子之 Kronecker 积之和。KPA 严格推广 TPA：秩一外积分解是其退化情形，非退化因子可表达更丰富的块结构。作者给出与 Kronecker 表示匹配的结构化旋转嵌入算子，只旋转紧凑因子即保持 RoPE 相对位置性质，无需 MLA 那种解耦 RoPE 分支。在四个模型规模、九个基准、相同训练条件下，KPA 匹配或超过 TPA、MHA、MQA、GQA 与 MLA，同时实现最高 10 倍 KV 压缩；Kronecker 头切分是可调超参数，不改架构即可选择压缩与精度的折中。",
+          "contributions": [
+            "提出 KPA，把 key/value 表示为紧凑因子之 Kronecker 积的和，严格推广张量积注意力并支持更丰富的块结构。",
+            "设计与 Kronecker 表示匹配的结构化旋转嵌入，只旋转紧凑因子即可保住 RoPE 的相对位置性质，省掉解耦 RoPE 分支。",
+            "把 Kronecker 头切分做成可调超参数，使压缩率与精度的折中可在设计期选择。"
+          ],
+          "conclusions": [
+            "更一般的结构化分解能在不牺牲表达力的情况下拿到约一个数量级的 KV 显存压缩。",
+            "位置编码可以与压缩表示共同设计，避免额外分支带来的复杂度。"
+          ],
+          "experiments": [
+            "四个模型规模、九个下游基准、相同训练条件下匹配或超过 TPA、MHA、MQA、GQA 与 MLA。",
+            "最高实现 10 倍 KV 缓存压缩。",
+            "Kronecker 头切分作为超参数，可连续调节压缩率与精度。"
+          ],
+          "significance": "给出一种既保留表达力又无需额外位置编码分支的 KV 压缩注意力形式。",
+          "takeaway": "用 Kronecker 积分解 key/value，在同等训练条件下做到最高 10 倍 KV 压缩且不牺牲精度。",
+          "keyExperiment": "四个模型规模、九个基准上匹配或超越 MQA/GQA/MLA/TPA，KV 缓存最高压缩 10 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12657",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12657.pdf",
+          "index": 8
+        },
+        {
+          "title": "One Model to Loop Them All: Elastic Latent Recurrence for Language Models",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-12",
+          "authors": "Faisal Ladhak, Shantanu Acharya, Santiago Akle Serano, Simeng Sun, Boris Ginsburg, Krishna C Puvvada",
+          "institutions": "NVIDIA",
+          "abstract": "潜在循环语言模型重复使用同一组层，因此单个检查点可以通过改变循环次数在推理算力与精度之间取舍；但在单次循环时它们通常明显落后于同等规模的非循环模型，这层「单循环税」让在意时延的人宁可另训一个非循环模型。作者提出弹性潜在循环（ELR）训练配方以消除这笔税：单循环下服务成本与同规模非循环模型相同、同样数据训练后精度相当，之后每多一次循环就用更多算力换更高精度。三点设计是关键：带学习步长的门控状态更新、在一次优化器更新内混合不同循环次数、以及让每一次前向以循环序号与预算为条件。混合深度可以放到预训练后期引入以限制训练成本，配合零初始化的条件项，该晚期方案比从头混合深度训练损失更低。在 MoE 模型中复用首次循环的专家路由可把混合深度更新耗时降低 11.7% 且精度无可见变化；推理时只保留最后一次循环的注意力 KV，可把 KV 显存压回单循环水平。",
+          "contributions": [
+            "提出 ELR 训练配方，消除循环语言模型在单循环时的精度税，使一个检查点可连续在算力与精度间滑动。",
+            "三项设计（门控状态更新、优化步内混合循环数、按循环序号与预算做条件）分别保住单循环精度并降低后续循环损失。",
+            "在 MoE 中复用首次循环的专家路由、推理时只保留末次循环 KV，把混合深度训练与推理显存的开销压回单循环量级。"
+          ],
+          "conclusions": [
+            "循环架构不必用单循环下的精度换取推理时的算力弹性，两者可以同时拿到。",
+            "训练期的循环次数混合与推理期的 KV 保留策略，是让弹性不付出额外代价的两个支点。"
+          ],
+          "experiments": [
+            "4B 稠密与 30B-A3B MoE 混合模型上，ELR 单循环在十任务平均上分别低于与高于匹配基线 0.52 与 1.04 个百分点，四次循环再多 7.25 与 4.75 个百分点。",
+            "MoE 中复用首次循环专家路由，混合深度更新耗时降低 11.7%，精度无可见变化。",
+            "后训练得到单个检查点 Koi-4B：单循环估计 18 分（匹配 Qwen3.5-4B），四循环 29 分。"
+          ],
+          "significance": "把「一个检查点、多个算力档位」从口号做成不损失单循环精度的可训练配方。",
+          "takeaway": "消除循环模型的单循环精度税，一个检查点即可在算力与精度间弹性滑动。",
+          "keyExperiment": "Koi-4B 单循环估计 18 分（匹配 Qwen3.5-4B）、四循环 29 分；四次循环在 30B-A3B 上再加 4.75 分。",
+          "arxivUrl": "https://arxiv.org/abs/2610.12582",
+          "pdfUrl": "https://arxiv.org/pdf/2610.12582.pdf",
+          "index": 9
+        },
+        {
+          "title": "Capturing Electrical Windows Through Reconfigurable Optical Networks: Transfer-aware Scheduling of Multi-Region AI Data Centers",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-12",
+          "authors": "Xi Tong, Zijian Li, Xiaoyi Fan, Cong Zhang, Ershun Du, Qin Wang",
+          "institutions": "香港理工大学、复旦大学、清华大学",
+          "abstract": "AI 数据中心可以通过迁移训练负载来响应区域电价与可再生能源的可用性，从而提供时空负载灵活性；但忽略传输时间的调度会高估迁移收益，而把传输时间算进去又可能让训练错过可再生富余或低电价窗口。本文提出一个算力—电力—网络协同的传输感知调度框架，联合决策训练放置、检查点传输与光路交换（OCS）配置，以提升本地可再生能源消纳并压低购电成本。框架先用估计传输时延的紧凑算力—电力主问题生成候选调度，再排布光路、在共享链路容量约束下校验检查点能否按时送达，并用更新后的时延估计修正不可行方案；它整合了日前规划、事件触发的日内更新与实时调度。在五个 AI 数据中心的算例中（完成工作量与网络资源相同），相比静态光路运行，实时购电成本降低 12.50%，本地可再生能源利用率提升 2.724 个百分点；消融显示，当电价与绿电窗口在站点间移动、且网络瓶颈阻碍检查点及时送达时，OCS 收益最明显。",
+          "contributions": [
+            "指出传输盲区会让迁移收益被高估或让训练错过电价窗口，提出算力—电力—网络协同的传输感知调度框架。",
+            "用主问题生成候选调度、再排布光路并在共享链路容量下校验检查点送达，形成可修正的闭环。",
+            "整合日前规划、事件触发日内更新与实时调度三层时间尺度。"
+          ],
+          "conclusions": [
+            "跨区迁移的收益必须在检查点传输时延与链路容量约束下核算，否则调度结论会失真。",
+            "光路交换在电价与可再生窗口跨站点移动、且网络存在瓶颈时价值最大。"
+          ],
+          "experiments": [
+            "五个 AI 数据中心的算例中，实时购电成本相比静态光路运行降低 12.50%。",
+            "本地可再生能源利用率提升 2.724 个百分点，且完成工作量与网络资源相当。",
+            "敏感性与消融分析显示，OCS 收益在可再生富余或低电价窗口跨站点移动、网络瓶颈阻碍检查点及时送达时最显著。"
+          ],
+          "significance": "把电价与可再生能源的时间窗真正兑现为训练调度的收益，前提是把检查点传输算进决策。",
+          "takeaway": "跨区迁移训练负载前先算检查点传输，购电成本降 12.5%、本地绿电利用率提升 2.7 个百分点。",
+          "keyExperiment": "五个 AI 数据中心算例中实时购电成本降低 12.50%，本地可再生能源利用率提升 2.724 个百分点。",
+          "arxivUrl": "https://arxiv.org/abs/2610.13061",
+          "pdfUrl": "https://arxiv.org/pdf/2610.13061.pdf",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
