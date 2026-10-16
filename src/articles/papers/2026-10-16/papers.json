@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-16",
+  "title": "2026-10-16 论文精选",
+  "lede": "今日主题：分布式训练配置的自动投影与调优、显存受限 GPU 上的多模型 agent 服务调度，以及长上下文解码的 KV 复用与稀疏注意力优化。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 579
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Beyond the Trial-and-Error Loop: Hybrid Projection and Automated Tuning for Distributed Training",
+          "score": 4.7,
+          "category": "cs.AI",
+          "date": "2026-10-15",
+          "authors": "Anshu Raina, Peyman Razaghi, Yuankai Chen, Cheng Yao, Yao Fu, Vidushi Goyal, Devang Patel, Wen Xie, Zhenyu Gu, Emad Barsoum",
+          "institutions": "AMD (Advanced Micro Devices, Inc.)",
+          "abstract": "在数百块 GPU 上配置分布式 LLM 训练，必须联合优化张量、流水线、专家、上下文与数据五种并行策略，以及微批大小、重计算、分片与通信重叠等参数，这是一个组合爆炸的空间，显存合法性甚至可能只差一个字节的激活值记账。今天团队只能靠昂贵的多机试错来摸索，大量 GPU 小时被烧在崩溃和次优配方上。作者提出 Primus Projection，用两个耦合组件闭合这一循环：混合投影引擎“能测的就测、测不了的就模拟”，单卡微基准即可刻画计算算子与相关通信，而“子节点降规模实测再解析放大”的工作流把超范围集合通信、FSDP 重叠与完整流水线调度还原到多机目标；纯模拟模式则完全在 CPU 上运行，支持流片前规划。Primus Tuning Agent 把投影引擎当作秒级评分 oracle，驱动对配置空间的智能搜索。",
+          "contributions": [
+            "提出混合投影引擎：单卡微基准 + 降规模实测再解析放大，可把多机训练吞吐与显存合法性投影到目标规模，并支持完全 CPU 的纯模拟模式",
+            "设计 Primus Tuning Agent：以投影为秒级评分器，确定性种子规划器扫描单轴，LLM 调查循环提出规划器覆盖不到的跨轴组合，解析显存预筛在花掉 GPU 时间前剔除非法候选",
+            "在 Llama 3.1 稠密与 Mixtral 8x22B MoE、跨两代 GPU 上验证，并在 DeepSeek V3 671B/1024 卡与 Qwen3-235B-A22B/256 卡的生产规模上确认投影保真度"
+          ],
+          "conclusions": [
+            "全部投影与实测多机吞吐的偏差保持在约 10% 以内，说明“实测加解析放大”足以替代多机试错",
+            "配置搜索可压缩到单机半小时量级，并能发现超过已发表参考配方的吞吐配置，调优过程不再依赖昂贵崩溃试错"
+          ],
+          "experiments": [
+            "生产规模上 DeepSeek V3 671B 在 1024 块 GPU 的投影误差为 4.7%，Qwen3-235B-A22B 在 256 块 GPU 上误差 1.9%",
+            "Llama 3.1（稠密）与 Mixtral 8x22B（MoE）跨两代 GPU 的全部投影与实测多机吞吐偏差约在 10% 以内",
+            "Mixtral 8x22B 案例中，调优 agent 在同规模下比已发表的 4 节点 BF16 参考配置吞吐提升 27%，探索成本仅为单机不足 30 分钟"
+          ],
+          "significance": "把分布式训练的并行配置从“多机试错”变成可在单机甚至 CPU 上秒级评估的搜索问题，直接省下大量 GPU 小时。",
+          "arxivUrl": "https://arxiv.org/abs/2610.19423",
+          "pdfUrl": "https://arxiv.org/pdf/2610.19423.pdf",
+          "takeaway": "单卡微基准加解析放大就能把多机训练吞吐投影到 10% 以内误差，配置搜索从此不必真上多机。",
+          "keyExperiment": "DeepSeek V3 671B 在 1024 GPU 上投影误差仅 4.7%，Mixtral 8x22B 上 30 分钟内找到比已发表 4 节点 BF16 参考高 27% 吞吐的配置。",
+          "channel": "AI Infra",
+          "index": 1
+        },
+        {
+          "title": "Scaling LLM Inference via Parallelism: Throughput-Latency Trade-off",
+          "score": 4.3,
+          "category": "cs.DC",
+          "date": "2026-10-15",
+          "authors": "Javad Mirzaei, Jeebak Mitra",
+          "institutions": "Dell Technologies (Office of CTO, Canada)",
+          "abstract": "LLM 服务系统必须在延迟与吞吐之间取得平衡，同时高效利用分布式 GPU 资源。难点在于推理由两个本质不同的阶段组成：prefill 决定首 token 时延（TTFT），decode 决定 token 间延迟（ITL）；张量并行（TP）、流水线并行（PP）及其混合配置在人们关心的两个延迟维度上呈现出不同权衡，因此最优并行配置高度依赖负载特征、延迟要求与上下文长度。尽管分布式推理已被广泛采用，业界对“在给定负载与服务级目标（SLO）下应如何选择并行配置”仍缺乏系统理解。本文为此建立一套系统化框架，从吞吐-延迟权衡、SLO 感知服务与长上下文可扩展性三个角度刻画 LLM 推理并行，并给出可操作的选择准则。",
+          "contributions": [
+            "提出“并行操作区”概念：通过构造 TTFT-ITL 可行集与 Pareto 前沿，跨不同负载组成揭示配置从 TP 主导到 PP 主导的系统性转变",
+            "用 goodput 形式化 SLO 感知的并行配置选择，把延迟要求与服务容量纳入同一决策框架",
+            "系统分析上下文长度对并行配置相对优势的影响，指出长上下文区间 PP 主导配置的可扩展性更优"
+          ],
+          "conclusions": [
+            "严格的 TTFT 要求偏向 PP 主导配置，而放宽延迟约束后最优解逐步移向 TP 主导、服务容量更高的配置",
+            "上下文长度增加会从根本上改变并行配置的相对优势，长上下文场景中 PP 主导配置的 SLO 达成表现更有利"
+          ],
+          "experiments": [
+            "构造 TTFT-ITL 可行集与 Pareto 前沿，跨多种负载组成显示随负载趋向 prefill 密集，配置系统性从 TP 主导转向 PP 主导",
+            "goodput 分析显示严格 TTFT 约束下 PP 主导配置最优，而延迟约束放松后 TP 主导配置的服务容量更高",
+            "长上下文区间中 PP 主导配置展现出更好的可扩展性与 SLO 达成率，说明长上下文会翻转并行配置排序"
+          ],
+          "significance": "给分布式推理集群一份可操作的并行配置选择准则：按 TTFT/ITL 预算与上下文长度定 TP/PP，而不是凭经验拍脑袋。",
+          "arxivUrl": "https://arxiv.org/abs/2610.19405",
+          "pdfUrl": "https://arxiv.org/pdf/2610.19405.pdf",
+          "takeaway": "用 TTFT-ITL 可行集把 TP/PP 选择从经验变成 Pareto 前沿上的显式决策：prefill 越重越偏 PP，约束越松越偏 TP。",
+          "keyExperiment": "goodput 分析表明严格 TTFT 要求下 PP 主导配置最优，放宽约束后 TP 主导配置容量更高，长上下文则再度偏向 PP。",
+          "channel": "AI Infra",
+          "index": 2
+        },
+        {
+          "title": "JointServe: Serving Multi-Model Agents on Memory-Constrained GPUs",
+          "score": 4.5,
+          "category": "cs.DC",
+          "date": "2026-10-15",
+          "authors": "Daijin Hu",
+          "institutions": "Beihang University",
+          "abstract": "LLM agent 正从“单模型调用工具”演进为编排多个专家模型的规划器，而这些专家的能力存在于彼此独立的权重中。这一转变打破了当今服务系统的一个隐含假设：模型工作集总能装进 GPU 显存。在私有化与边缘部署常见的显存受限 GPU 上，朴素的全模型换入换出会把权重传输与计算串行化，而且没有 host 侧 KV 恢复时，每次切换都会丢弃会话状态。作者提出 JointServe，把权重分片与 KV 块统一视为竞争同一显存预算的驻留对象，并利用 agent 负载的三个结构特性——有向调用、带间隙执行、双状态驻留——在模型被真正调用之前就做好准备：从调用方自身输出流解析出的意图信号在生成过程中触发预取，部分 k* 驻留把模型切换降级为增量层迁移，抢占式传输调度器则以保底带宽份额保护活跃会话的 KV。一个 carve-out 控制步会随负载变化动态调整权重与 KV 的分配比例。",
+          "contributions": [
+            "把权重分片与 KV 块统一抽象为竞争同一显存预算的驻留对象，正面处理“模型工作集装不进显存”的多模型 agent 服务场景",
+            "利用 agent 负载的有向调用、带间隙执行与双状态驻留三个结构特性：意图信号驱动预取、部分 k* 驻留把切换变为增量层迁移、抢占式调度为活跃会话 KV 保留保底带宽",
+            "提出 carve-out 控制步，随工作负载变化动态重分配权重/KV 预算，避免静态切分在负载漂移下失配"
+          ],
+          "conclusions": [
+            "在显存受限 GPU 上，多模型 agent 服务的关键不是换入换出速度，而是让传输与计算重叠、并保住活跃会话的 KV 状态",
+            "在极端压力下全模型换入换出基线全部无法完成会话，JointServe 仍可稳定运行，说明驻留对象统一管理是可行路线"
+          ],
+          "experiments": [
+            "会话完成时间相对最强的全模型换入换出基线降低 21.7%",
+            "在每种全模型换入换出基线都无法完成的崩溃区间仍保持可用，差距达 46 倍",
+            "回放 SWE-bench、tau-bench 与 OSWorld 轨迹时，会话完成时间最多降低 49%，SLO 达成率从 2.8%–24.5% 提升到 76.8%–100%"
+          ],
+          "significance": "为边缘/私有化部署的多模型 agent 提供了一套把权重与 KV 放在同一显存预算下统一调度的服务方案。",
+          "arxivUrl": "https://arxiv.org/abs/2610.19822",
+          "pdfUrl": "https://arxiv.org/pdf/2610.19822.pdf",
+          "takeaway": "多模型 agent 服务把权重分片与 KV 块统一当驻留对象调度：比最强全模型换入换出基线快 21.7%，SLO 达成率最高提到 100%。",
+          "keyExperiment": "在基线全部崩溃的极端压力区间仍能完成会话（46 倍差距），回放 SWE-bench/tau-bench/OSWorld 时 SLO 达成率从 2.8–24.5% 提升至 76.8–100%。",
+          "channel": "AI Infra",
+          "index": 3
+        },
+        {
+          "title": "CacheSmith: Accurate RAG Serving under Latency SLOs with Adaptive KV Reuse",
+          "score": 4.4,
+          "category": "cs.AR",
+          "date": "2026-10-15",
+          "authors": "Xinyue Ma, Damin Lee, Aashaka Shah, Myeongjae Jeon",
+          "institutions": "POSTECH, Microsoft Research",
+          "abstract": "RAG prefill 的上下文缓存通过复用已检索片段的预计算 KV 状态降低延迟，但会漏掉完整 prefill 在拼接输入上算出的跨片段注意力。此前的选择性重算方案能补回这部分精度，却强制使用静态、一刀切的配置，无法应对请求异构或动态延迟预算。本文提出 CacheSmith：把选择性重算分解为 WarmUp、Probe、Patch 三阶段工作流，可在服务时动态配置，覆盖很宽的代价—精度权衡。服务时，一个 SLO 感知调度器在逐层 prefill 过程中组批以缓解请求间干扰，预算感知规划器则在批内分配重算阶段，最大化同时满足生成质量与延迟目标的请求数。两个组件都在离线剖析得到的代价—精度带上做快速、无求解器的决策，因而开销可忽略。",
+          "contributions": [
+            "把 RAG prefill 的选择性重算重构为 WarmUp、Probe、Patch 三阶段工作流，使配置可在服务时按预算动态调整而非静态一刀切",
+            "提出 SLO 感知调度器：在逐层 prefill 中组批以抑制请求间干扰，避免长请求拖累批内其他请求的质量门控延迟",
+            "预算感知规划器在批内分配重算阶段，用剖析得到的代价—精度带做无求解器决策，最大化质量与延迟双重达标请求数"
+          ],
+          "conclusions": [
+            "上下文缓存丢掉的跨片段注意力必须通过选择性重算补回，动态三阶段配置比静态方案更能适应请求异构与预算波动",
+            "把调度与重算规划解耦为两个基于剖析带的快速决策，可以在不引入求解器开销的前提下显著提升质量门控 SLO 达成率"
+          ],
+          "experiments": [
+            "在四类基准、不同到达率与突发水平下，质量门控 SLO 达成率相对四个当前最优基线最高提升 27.5%",
+            "配置在服务时可动态调整，覆盖从低重算到高重算的宽代价—精度区间，而静态方案在请求异构时明显失效",
+            "调度器与规划器均基于离线剖析的代价—精度带做免求解器决策，额外开销可忽略"
+          ],
+          "significance": "把 RAG 服务的 KV 复用从静态配置推向 SLO 驱动的动态权衡，直接提升单位延迟预算下的可用请求数。",
+          "arxivUrl": "https://arxiv.org/abs/2610.18925",
+          "pdfUrl": "https://arxiv.org/pdf/2610.18925.pdf",
+          "takeaway": "RAG prefill 的选择性重算拆成 WarmUp/Probe/Patch 三阶段动态配置，质量门控 SLO 达成率比四个 SOTA 基线最高提升 27.5%。",
+          "keyExperiment": "四类基准、不同到达率与突发度下质量门控 SLO 达成率最高提升 27.5%，且调度与规划决策免求解器、开销可忽略。",
+          "channel": "AI Infra",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "PN-Mix: Pair-Norm Guided Mixed-Precision Key Cache Quantization for Efficient Long-Output LLM Inference",
+          "score": 4.3,
+          "category": "cs.LG",
+          "date": "2026-10-15",
+          "authors": "Gil Jae Song, Sungjoo Yoo",
+          "institutions": "Seoul National University",
+          "abstract": "长输出推理在大模型上饱受 KV cache 显存与带宽瓶颈之苦。KV cache 量化能缓解这一压力，但低位量化（如 2-bit）会严重损害模型精度。近期混合精度 key cache 量化方法通过给重要 key 通道分配更高位宽来缓解退化，然而它们仅用 key 自身统计量来估计通道显著度，忽略了查询侧的作用。作者在 RoPE 通道对层面开展注意力 logit 扰动分析，证明 query-key 对范数乘积较大的通道对，其量化误差对 logit 变化的贡献显著更大。基于这一洞察，作者提出 PN-Mix：一种面向 RoPE 解码器-only LLM 的混合精度 key cache 量化方法，只在 prefill 阶段识别一次显著通道对，之后整个解码过程复用该划分，不再产生额外开销。",
+          "contributions": [
+            "通过 RoPE 通道对级别的注意力 logit 扰动分析，指出量化误差的 logit 影响由 query-key 对范数乘积决定，仅看 key 统计量不足以定位显著通道",
+            "提出 PN-Mix 混合精度 key cache 量化：按通道对显著度分配位宽，显著通道对在 prefill 阶段一次性识别并在解码中复用",
+            "在更低位宽下取得优于更宽位宽基线的平均准确率，并给出位宽-Pareto 退化曲线"
+          ],
+          "conclusions": [
+            "key cache 量化的关键粒度是 RoPE 通道对而非单通道，且显著度必须结合 query 侧信息才能准确排序",
+            "在 2.25 bit 以下的极低位宽区间，PN-Mix 的退化曲线明显比既有混合精度方法更平缓"
+          ],
+          "experiments": [
+            "在推理、代码生成与 AIME 基准上，PN-Mix 以 2.26 bit 平均位宽取得与既有混合精度方法（2.32–2.39 bit）相当或更好的平均准确率",
+            "Pareto 扫描中 PN-Mix 可平滑退化到 1.5 bit，而对比基线在 2.25 bit 以下出现更陡的性能下降",
+            "显著通道对只在 prefill 阶段识别一次并在整个解码过程中复用，几乎不引入额外运行时开销"
+          ],
+          "significance": "把 KV cache 量化粒度下沉到 RoPE 通道对并引入 query 侧信息，在更低比特下保住长输出推理精度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.19605",
+          "pdfUrl": "https://arxiv.org/pdf/2610.19605.pdf",
+          "takeaway": "量化误差的 logit 影响由 query-key 对范数乘积决定，据此分配的 2.26 bit key cache 可胜过 2.32–2.39 bit 基线。",
+          "keyExperiment": "推理/代码/AIME 基准上 2.26 bit 达到与 2.32–2.39 bit 基线相当或更优的平均准确率，并可平滑退化到 1.5 bit。",
+          "channel": "Algorithms",
+          "index": 5
+        },
+        {
+          "title": "TreeSpark: Learning to Draft the Trees You Verify for Speculative Decoding",
+          "score": 4.4,
+          "category": "cs.CL",
+          "date": "2026-10-15",
+          "authors": "Jihao Zhao, Qianyu Jiang, Shuaishuai Zu, Pengfei Li, Guanghuan Fang, Ben Feng, Biao Qin, Zhibin Wang, Baochuan Yang",
+          "institutions": "Renmin University of China, Nanjing University, Huawei Technologies",
+          "abstract": "DFlash、DSpark 等并行草稿器降低了提议延迟，但早期失配限制了每个块能被接受的比例。保留备选会引入父状态与候选选择，而“以参考为条件”的训练无法直接监督这些结构。作者提出 TreeSpark，一套统一的训练与推理框架，扩展半自回归的 DSpark 架构：用一次主干前向构造父条件候选树，并在训练中回放其扩展、剪枝与预算打包过程。Survival 负对数似然按参考链导出的路径质量为保留边加权，带上限的覆盖 hinge 则在局部选择边界附近提升目标模型真正看重的备选地位；两个目标都复用参考链上的目标分布，不需要额外的 target 前向，因此训练代价可控。",
+          "contributions": [
+            "提出 TreeSpark 统一训练与推理框架：一次主干前向构造父条件候选树，并在训练时回放扩展、剪枝与预算打包全过程",
+            "设计 Survival 负对数似然与带上限覆盖 hinge 两个监督目标，分别按路径质量为保留边加权、在局部选择边界附近提升关键备选",
+            "两个目标复用参考链上的目标分布、无需额外 target 前向，把树状草稿的监督成本控制在可接受范围"
+          ],
+          "conclusions": [
+            "把“草稿树”的训练与验证过程对齐，可以显著提高每个块的接受比例，而不只是降低提议延迟",
+            "在不改变注意力容量与推理策略的前提下，仅替换监督目标即可继续带来接受长度与吞吐收益"
+          ],
+          "experiments": [
+            "在 Qwen3-4B 与 Qwen3-8B 上，对 9 个通用基准与 6 个写作域做贪心解码，平均接受长度比 DSpark 提升 23.4%–31.6%",
+            "同一设置下平均单请求吞吐提升 15.1%–25.0%，批量 Qwen3-4B 吞吐提升 12.6%–17.2%",
+            "在固定注意力容量与推理策略下，新监督使 Qwen3-4B 平均接受长度再提升约 6.4%，系统吞吐提升 4.2%–5.0%"
+          ],
+          "significance": "把投机解码的“草稿树”直接纳入训练目标，一次前向产出的候选树因而能被更充分验证。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20175",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20175.pdf",
+          "takeaway": "让草稿器在训练中就回放树的扩展与剪枝，平均接受长度比 DSpark 提升 23.4%–31.6%、单请求吞吐提升 15.1%–25.0%。",
+          "keyExperiment": "Qwen3-4B/8B 的 9 个通用基准与 6 个写作域上平均接受长度 +23.4%–31.6%，单请求吞吐 +15.1%–25.0%，批量吞吐 +12.6%–17.2%。",
+          "channel": "Algorithms",
+          "index": 6
+        },
+        {
+          "title": "Joint Subspace Sparse Attention for Efficient Long-Context Decoding",
+          "score": 4.6,
+          "category": "cs.CL",
+          "date": "2026-10-15",
+          "authors": "Jiwon Song, Yoongon Kim, Jae-Joon Kim",
+          "institutions": "Seoul National University",
+          "abstract": "稀疏注意力能削减长上下文解码中占主导的 KV cache 流量，但实用方法大多在粗粒度上操作。token 级选择控制更细，却面临两个挑战：低维打分可能丢失精确排序所需的 query-key 结构；而聚集分散的被选 token 又会抵消由此获得的延迟收益。作者提出 Joint Subspace Sparse Attention（JSSA）同时解决这两个问题。在选择质量上，JSSA 通过最小化 token 分数保持误差来学习共享的低维 query-key 子空间，并为该非凸目标给出可处理的边际上界，存在闭式谱解；实验显示直接精修精确目标并无可测收益。在执行效率上，作者实现了一个免聚集的 token 级索引注意力 kernel，可在标准 GQA KV cache 布局下支持每个 KV head 各自不同的选择集合，从而把稀疏收益真正落到 GPU 上。",
+          "contributions": [
+            "提出 JSSA：学习共享低维 query-key 子空间以最小化 token 分数保持误差，并给出可处理边际上界与闭式谱解",
+            "实现免聚集的 token 级索引注意力 kernel，在标准 GQA KV cache 布局下支持每个 KV head 独立的选择集合",
+            "在标准 GQA、混合滑窗/全局注意力与 MLA 三类模型上验证通用性，避免架构相关的失效与生成长度膨胀"
+          ],
+          "conclusions": [
+            "token 级稀疏注意力的瓶颈同时在选择质量与 kernel 执行效率两侧，必须联合设计才能真正转化为解码吞吐收益",
+            "免聚集的索引 kernel 加共享子空间打分，使稀疏注意力在多种注意力架构上都能稳定逼近 full-KV 精度"
+          ],
+          "experiments": [
+            "在 NVIDIA B200 上、128K 上下文时，JSSA 解码吞吐最高达到 full-KV 注意力的 6.43 倍",
+            "在标准 GQA、混合滑窗/全局注意力与 MLA 模型上均稳定接近 full-KV 精度，同时避免竞品的生成长度膨胀与架构相关失效",
+            "无需训练即可达到与模型原生 DSA 相当的推理准确率，并在 700B 规模大模型上保持其 96%–99% 的解码吞吐"
+          ],
+          "significance": "把 token 级稀疏注意力的选择质量与 kernel 效率一起解决，让长上下文解码拿到实打实的吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2610.19026",
+          "pdfUrl": "https://arxiv.org/pdf/2610.19026.pdf",
+          "takeaway": "共享 query-key 子空间打分加免聚集索引 kernel，128K 上下文下解码吞吐达 full-KV 的 6.43 倍且精度基本不降。",
+          "keyExperiment": "NVIDIA B200 上 128K 上下文解码吞吐最高为 full-KV 的 6.43 倍；700B 规模模型上仍达原生 DSA 解码吞吐的 96–99%。",
+          "channel": "Algorithms",
+          "index": 7
+        },
+        {
+          "title": "ReaDy: Recurrent States as Dynamic Context for Speculative Drafting in Hybrid Linear Attention Large Language Models",
+          "score": 4.3,
+          "category": "cs.CL",
+          "date": "2026-10-15",
+          "authors": "Bohan Sun, Zunhai Su, Xialie Zhuang, Jianjin Li, Ngai Wong, Chuan-Wei Kuo",
+          "institutions": "StartLux, University of Chinese Academy of Sciences, The University of Hong Kong",
+          "abstract": "基于特征的草稿器依赖目标模型隐状态，但这些特征的上下文侧重未必对齐后续草稿位置真正的需要。混合线性注意力（HLA）模型维护紧凑的循环状态并累积历史关联，恰好为投机解码提供了一类高效的补充上下文来源。作者提出 ReaDy，据其所述是首个在草稿阶段显式利用 HLA 循环状态做位置特定上下文检索的投机解码方法：为每个草稿位置配备一个可学习查询，直接从目标模型已提交的循环状态中检索补充上下文，再由轻量状态读取器通过残差更新注入草稿表示，同时用低秩状态读取与融合算子把额外计算与 I/O 开销压到很低。ReaDy 构建在 DSpark 的并行主干与序列预测头上，采用轻量两阶段适配策略，并通过消融考察读取器容量、状态来源与残差插入位置的影响。",
+          "contributions": [
+            "提出 ReaDy：首个利用混合线性注意力模型的循环状态为草稿位置做上下文检索的投机解码方法",
+            "为每个草稿位置设计可学习查询 + 轻量状态读取器，通过残差更新注入补充上下文，并用低秩读取与融合算子控制开销",
+            "在 DSpark 并行主干上给出轻量两阶段适配策略，并系统消融读取器容量、状态来源与残差插入位置"
+          ],
+          "conclusions": [
+            "HLA 模型累积的循环状态是一种被此前草稿器忽略的高效上下文来源，可用于给不同草稿位置提供差异化上下文",
+            "在不改动目标模型的前提下，仅靠状态检索加残差注入即可稳定提升接受长度与吞吐"
+          ],
+          "experiments": [
+            "在数学、代码生成与对话共 7 个基准上，单张 NVIDIA B200 搭配 Qwen3.8-27B 平均取得 3.16 倍相对自回归的解码加速",
+            "在每个基准上都优于 DSpark，平均吞吐提升 7.97%、平均接受长度提升 8.50%",
+            "低秩状态读取与融合算子使额外计算与 I/O 开销保持很低，两阶段适配即可接入既有并行主干"
+          ],
+          "significance": "把线性注意力模型的循环状态变成草稿器的上下文来源，在 HLA 架构上额外拿到一成吞吐与接受长度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20503",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20503.pdf",
+          "takeaway": "循环状态检索为每个草稿位置提供差异化上下文：Qwen3.8-27B 单卡上平均 3.16 倍加速，全部基准优于 DSpark。",
+          "keyExperiment": "7 个数学/代码/对话基准上平均 3.16 倍解码加速（相对自回归），吞吐 +7.97%、接受长度 +8.50%，全面优于 DSpark。",
+          "channel": "Algorithms",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "Understanding NVIDIA Grace-Blackwell Unified Memory Through Placement-Controlled Microbenchmarks",
+          "score": 4.4,
+          "category": "cs.DC",
+          "date": "2026-10-15",
+          "authors": "Nathan Graddon, Aaron Jarmusch, Sunita Chandrasekaran",
+          "institutions": "University of Delaware",
+          "abstract": "NVIDIA Grace–Blackwell 系统在编程层面把 CPU–GPU 内存越来越统一，但可统一寻址并不意味着内存系统是同质的。GB200 上的一个 CUDA managed 分配可能来自 GPU 本地 HBM、经 host/系统内存访问、按需迁移、被预取、在 GPU 访问后被复用，或在容量压力下被驱逐再重载。问题在于：这些状态共享同一个编程接口，却走完全不同的硬件路径与运行时机制，所以任何单一的“Unified Memory 带宽”数字都是误导性的。本文给出一项受放置控制的微基准研究，把本地 HBM 访问、host 内存访问、显式搬移、managed 首次触碰、预取、复用、访问模式敏感性、超配与 CPU–GPU 交接逐一分离，并用测量校准的模型总结计算、访问、迁移、驱逐、同步与交接开销，在 GB200 上展开、GH200 与 GB10 作对照。",
+          "contributions": [
+            "提出受放置控制的微基准方法学，把 CUDA Unified Memory 的各种状态（本地 HBM、host 内存、迁移、预取、复用、驱逐、交接）逐一分离测量",
+            "给出测量校准的代价模型，覆盖计算、访问、迁移、驱逐、同步与 CPU–GPU 交接六类开销",
+            "在 GB200 上以 GH200 为 Grace–Hopper 基线、GB10/DGX Spark 为验证平台，形成跨三代平台的统一观察"
+          ],
+          "conclusions": [
+            "统一寻址不等于统一性能：只有显式区分放置位置与访问历史，Unified Memory 的性能才可被正确理解与预测",
+            "容量边界是性能断崖的关键变量，超配后预取与复用的带宽收益会大幅衰减"
+          ],
+          "experiments": [
+            "GB200 上 1 GB 的 STREAM 式 triad 从本地 HBM 达到 3963 GB/s，而经 host-mapped CPU/系统内存仅 304 GB/s",
+            "256 MB 流式 kernel 中，冷启动的 CPU 初始化 managed 内存仅 14.1 GB/s，而 managed 预取与复用分别达到 4606 GB/s 与 4504 GB/s",
+            "在容量边界以下预取/复用维持 4.6 TB/s 以上，但在 CUDA 可见内存的 125% 时分别降到 968 GB/s 与 1214 GB/s"
+          ],
+          "significance": "给 Grace–Blackwell 统一内存一份可复现的放置级性能地图，避免用单一带宽数字做架构与调度决策。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20354",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20354.pdf",
+          "takeaway": "统一内存性能必须按“放置位置 + 访问历史 + 容量压力”三分量解读：GB200 本地 HBM 3963 GB/s，host-mapped 仅 304 GB/s。",
+          "keyExperiment": "GB200 上 1 GB triad 本地 HBM 3963 GB/s 对 host-mapped 304 GB/s；容量超配到 125% 时预取/复用带宽从 4.6 TB/s 跌至 968/1214 GB/s。",
+          "channel": "Architecture",
+          "index": 9
+        },
+        {
+          "title": "Spectral-MoE: Heterogeneous Per-Layer Expert Utilization in Dense-to-MoE Conversion",
+          "score": 4.0,
+          "category": "cs.LG",
+          "date": "2026-10-15",
+          "authors": "Zachary Broveak, Christian Kubicka, Thierry Tambe",
+          "institutions": "Stanford University",
+          "abstract": "大模型在推理时的显存与算力开销都相当可观，稠密到 MoE 的转换正是为削减算术开销而提出的模型优化技术：把预训练 FFN 的神经元划分为若干专家，并为每个 token 只选择其中一部分。现有主流方法分两类——解析式方法用启发式快速产出转换后模型，学习式方法通过梯度优化慢得多地得到模型——但两者都把每一层的活跃专家数（即“利用率”）固定为同一个值。本文提出 Spectral-MoE，让利用率预算在层间异构分配，其命名来自“把稠密 FFN 分离成专家”与“把一束光分离成光谱”的类比。Spectral-MoE 包含两种做法：静态做法使用一个跨 token 共享的逐层标量，动态做法则为每个 token 生成调度。",
+          "contributions": [
+            "指出稠密到 MoE 转换中“所有层共用同一活跃专家数”是被忽视的约束，提出逐层异构利用率分配这一新优化轴",
+            "给出静态（跨 token 共享逐层标量）与动态（逐 token 调度）两种利用率分配器，可叠加在解析式与学习式最新方法之上",
+            "在 Llama-2-7B、Llama-3-8B、Qwen2.5-7B 上验证分配器相对均匀利用率的稳定性收益"
+          ],
+          "conclusions": [
+            "逐层专家利用率是可独立调节的优化维度，异构分配能同时改善困惑度与下游任务准确率",
+            "动态逐 token 调度在相同 FFN 利用率下稳定优于静态与均匀方案，且可即插即用于既有转换流程"
+          ],
+          "experiments": [
+            "在 25% FFN 利用率下，动态分配相对均匀分配把 WikiText-2 困惑度分别降低 1.04、2.96、2.71（学习式基座，Llama-2-7B/Llama-3-8B/Qwen2.5-7B）",
+            "在解析式基座上，上述三模型的困惑度降幅分别为 2.45、6.26、2.17",
+            "学习式基座下，动态分配在 12.5%、25%、50% 三档 FFN 利用率上使六任务平均准确率相对均匀分配提升 1.5、4.2、3.6 个百分点"
+          ],
+          "significance": "为稠密到 MoE 的转换补上“逐层多少专家才合适”这一缺失维度，在不改结构的前提下吃下免费的精度提升。",
+          "arxivUrl": "https://arxiv.org/abs/2610.19232",
+          "pdfUrl": "https://arxiv.org/pdf/2610.19232.pdf",
+          "takeaway": "逐层异构分配专家利用率是稠密到 MoE 转换中被忽略的优化轴：25% 利用率下困惑度最多降 6.26 点。",
+          "keyExperiment": "25% FFN 利用率下动态分配把 WikiText-2 困惑度降低 1.04/2.96/2.71（学习式基座，Llama-2-7B/Llama-3-8B/Qwen2.5-7B），六任务准确率最多 +4.2 个百分点。",
+          "channel": "Architecture",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
