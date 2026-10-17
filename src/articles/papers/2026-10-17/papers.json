@@ -1,0 +1,354 @@
+{
+  "date": "2026-10-17",
+  "title": "2026-10-17 论文精选",
+  "lede": "今日主线是「基础设施的经济学」：远程 KV 缓存要算清带宽阈值才不亏，异构流水的 makespan 有了闭式界，Meta 用模型-硬件协同把 AMD 拉进大规模训练；此外轨迹级投机、2 bit MLA 与固定状态数的线性注意力都在拆推理成本的分子。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 577
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "When the KV Cache Is Slower Than the GPU: Scaling Remote KV Tiers for Context-Parallel Prefill",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "Distributed, Parallel, and Cluster Computing (cs.DC)",
+          "categoryCode": "cs.DC",
+          "date": "2026-10-16",
+          "authors": "Muhammad Ibrahim",
+          "institutions": "Multiverse Computing",
+          "abstract": "复用 KV 缓存是长上下文服务降低 prefill 成本的手段。在 8×B300 节点上部署 FP8 MoE 模型 GLM-5.3（MLA 注意力、prefill 上下文并行 PCP8），启用远程层（LMCache + Valkey）后中位首 token 延迟不变，但 16k token 的 p99 从 3.96 秒升到 17.3 秒。日志回放显示同步加载把高命中流量变成不稳定队列：p99 83.32 秒而 GPU 仅 7% 忙碌。两项代价模型给出判据：层带宽须超过 B*=sR（本配置 2.53 GB/s），且每次命中约 0.33 秒固定开销，使短于约 17k token 的提示在任何带宽下都不如重算。据此作者按 PCP rank 分片 MLA KV 存储并给出不会使集合通信失步的加载协议，按 rank 分区远程层使 GET 带宽提升 6.3 倍至 10.76 GB/s，并加入异步加载。",
+          "contributions": [
+            "给出两项代价模型：命中收益取决于层带宽是否超过 B*=sR，并存在每次命中约 0.33 秒的固定引擎开销，由此推出约 17k token 的「不如重算」阈值。",
+            "按 PCP rank 分片 MLA KV 存储，证明既有的 min-over-ranks 查询返回最长缓存前缀，并设计永不让集合通信失步的加载协议。",
+            "按 rank 分区远程层（每 rank 一个服务实例、互不协调）把 GET 带宽提升 6.3 倍，并加入异步加载与三个客户端缺陷修复。"
+          ],
+          "conclusions": [
+            "远程 KV 层不是免费午餐：提示短于约 17k token 或带宽低于 2.53 GB/s 时，命中比重算更慢。",
+            "同步加载会把高命中流量放大成排队灾难（p99 83 秒而 GPU 空闲），异步化与分片是把它变成净收益的前提。"
+          ],
+          "experiments": [
+            "启用远程层后 16k token 请求 p99 由 3.96 秒恶化到 17.3 秒，中位数不变——问题只在尾延迟。",
+            "命中率极高（98.5% token 来自远程层）的流上，p99 由 83.32 秒降到 0.67 秒；分片存储使 prefill 吞吐 +14%，叠加内核修复后 +34%。",
+            "单次远程命中实测 0.88 秒，同提示重算仅 0.31 秒，直接证伪「缓存命中一定更快」。"
+          ],
+          "significance": "KV 缓存层的收益由带宽阈值与固定开销共同决定，先算账再开开关。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21500",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21500.pdf",
+          "index": 1,
+          "takeaway": "KV 缓存层的收益由带宽阈值与固定开销共同决定，先算账再开开关。",
+          "keyExperiment": "p99 从 83.32 秒降到 0.67 秒，同时把远程层 GET 带宽从 1.7 GB/s 提到 10.76 GB/s。"
+        },
+        {
+          "title": "Exact Makespan Bounds and the GPipe Homogeneity Bias for Heterogeneous LLM Inference Pipelines",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "Distributed, Parallel, and Cluster Computing (cs.DC)",
+          "categoryCode": "cs.DC",
+          "date": "2026-10-16",
+          "authors": "Zhu Wenbo",
+          "institutions": "Yantai Vocational College of Culture and Tourism",
+          "abstract": "本文给出异构 GPU 集群上 LLM 微批流水的 makespan 精确临界路径刻画，量化经典同质 GPipe 公式的偏差。设 M 为微批数、τ_j 为第 j 段单微批服务时间：纯前向、无通信、无限缓冲下 T(M)=(M-1)τ_max+Στ_j（定理 1）；异步通信（现代 NCCL 服务）下 T(M)=Στ_j+Σd_j+(M-1)τ_max，通信成为纯加性常数（定理 2）；阻塞通信下 T(M)=(M-1)σ_max+Σσ_s，只有某 d_s>τ_max-τ_s 时通信才进入稳态斜率（定理 3）。由此把 GPipe 的高估分解为同质性项 Σ(τ_max-τ_j) 与忽略通信项 Σd_j，并推论：对稳态吞吐，平衡各段计算比压缩通信更关键。部分重叠的真实系统被夹在定理 2、3 之间，作者给出重叠吞吐增益的闭式界。所有结论在十一种配置与 16 万点随机测试上逐点验证，误差小于 10^-9。",
+          "contributions": [
+            "给出三条精确的 makespan 定理，分别覆盖无通信、异步通信与阻塞通信三种流水形态，适用于异构 GPU 集群。",
+            "把经典 GPipe 公式的偏差显式分解为「同质性项」与「忽略通信项」，说明误差从哪来、量级多大。",
+            "推出工程判据：提高稳态吞吐应优先平衡各段计算时间，通信优化只在阻塞或通信极慢时才改变斜率。"
+          ],
+          "conclusions": [
+            "GPipe 的同质假设在高异构集群上会系统性高估或低估 makespan，偏差可解析计算而非只能实测。",
+            "异步通信下通信开销是加性常数，不随微批数增长——这解释了为何 NCCL 重叠让深流水仍能扩展。"
+          ],
+          "experiments": [
+            "十一条配置上理论值与实测逐点吻合，误差小于 10^-9。",
+            "16 万点随机 fuzz 覆盖参数空间，三定理均未被反例击破。",
+            "在 RTX 5090 / 3090 / GTX 1070 混合异构分区上验证，证明结论不依赖同代硬件。"
+          ],
+          "significance": "异构流水的调度该先均衡各段计算，再谈通信优化。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21815",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21815.pdf",
+          "index": 2,
+          "takeaway": "异构流水的调度该先均衡各段计算，再谈通信优化。",
+          "keyExperiment": "三条闭式 makespan 定理在 11 种配置与 16 万点 fuzz 上误差小于 10^-9。"
+        },
+        {
+          "title": "DropKV: Decoupling Residual-Output Perturbation for Near-Optimal KV-Cache Eviction",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "Artificial Intelligence (cs.AI)",
+          "categoryCode": "cs.AI",
+          "date": "2026-10-16",
+          "authors": "Aozhong Zhang, Selcuk Gurses, Yanxia Deng, Naigang Wang, Chi-Chun Liu, Davis Wertheimer, Derrick Liu, Xin Li, Zi Yang, Felix X.-F. Ye, Penghang Yin",
+          "institutions": "University at Albany SUNY, IBM T. J. Watson Research Center, Northwestern University",
+          "abstract": "KV 缓存管理是长上下文推理的瓶颈，缓存随上下文线性增长。已有淘汰方法虽引入 value 表示，却面临根本权衡：最小化输出扰动的优化是 NP 难组合问题，于是只能得到数学上次优的启发式，或难以写成高效 kernel。作者提出 DropKV，把联合淘汰决策解耦为独立的逐 token 打分（残差-输出扰动解耦），绕开组合不可解性，并在可实证检验的锥条件下给出常数因子近似保证。工程上用融合 Triton kernel 实现，不物化完整注意力矩阵。在 RULER 与 LongBench 上，同等缓存预算下持续优于 SOTA 基线，推理延迟为各类淘汰方法中最低，也快于动态缓存基线。作者强调该框架的简洁性正是可 kernel 化的原因：打分只需一次遍历，无需在淘汰决策与注意力计算之间反复迭代。",
+          "contributions": [
+            "把 NP 难的联合淘汰问题解耦为逐 token 独立打分，并在锥条件下证明常数因子近似，理论与可实现性同时成立。",
+            "用融合 Triton kernel 实现打分，避免物化完整注意力矩阵，使近似最优的淘汰策略真正可上线。",
+            "在 RULER 与 LongBench 上以同等缓存预算取得最低延迟与最高精度，全面优于现有淘汰与动态缓存基线。"
+          ],
+          "conclusions": [
+            "KV 淘汰的主要障碍不是启发式不够聪明，而是目标函数不可解且实现不友好；解耦是同时解决两者的关键。",
+            "近似保证加高效 kernel 让「近最优淘汰」从理论概念变成可直接替换现役策略的组件。"
+          ],
+          "experiments": [
+            "打分 kernel 提速 19.8 倍，端到端在匹配批大小下 prefill 提速最高 9.9%。",
+            "RULER 与 LongBench 同预算下精度全面优于 SOTA 淘汰方法。",
+            "推理延迟为所比较的淘汰方法中最低，且快于动态缓存（dynamic cache）基线。"
+          ],
+          "significance": "把 NP 难的淘汰问题解耦成逐 token 打分，再用 Triton 融合 kernel 兑现。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22130",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22130.pdf",
+          "index": 3,
+          "takeaway": "把 NP 难的淘汰问题解耦成逐 token 打分，再用 Triton 融合 kernel 兑现。",
+          "keyExperiment": "打分 kernel 19.8 倍加速，端到端 prefill 最高 +9.9%，同预算精度最优。"
+        },
+        {
+          "title": "RoLaQ: Joint Rotation and Range Calibration for 2-Bit KV Caches in Multi-Head Latent Attention",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "Machine Learning (cs.LG)",
+          "categoryCode": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Shiyu Ji, Peng Ling, Chen Lin, Shupeng Li, Yixuan Wang, Qingfu Zhu, Wanxiang Che",
+          "institutions": "Harbin Institute of Technology, Tsinghua University, Baidu Inc.",
+          "abstract": "多头潜在注意力（MLA）把每个 token 的 KV 内容压进共享 latent，使低比特存储对长上下文推理很有吸引力，但 2 bit 时表示误差会同时扰动注意力匹配与 value 读出，且影响取决于误差方向与重建尺度。作者提出 RoLaQ，一种离线的联合旋转与范围校准方法：在冻结的 key/value 投影所定义的子空间内精化共享旋转，并联合学习量化范围，使阈值与重建增益耦合以控制共享信号的响应；校准由预测匹配与注意力输出监督，模型权重全程冻结。在三个 MLA 模型、六个基准上，无论是否启用 token 保护，RoLaQ 的平均精度都是所比较的 2 bit 方法中最高。工程上在 SGLang 中落地，说明该方法只改量化参数、不改推理图，可直接用于现役 MLA 服务栈。",
+          "contributions": [
+            "指出 MLA 低比特化的误差同时破坏注意力匹配与 value 读出，且两者对误差方向、重建尺度的敏感度不同，需要联合校准。",
+            "提出离线联合旋转 + 范围校准：在冻结投影定义的子空间内精化旋转，并让量化阈值与重建增益相互耦合。",
+            "在三个 MLA 模型六个基准上取得 2 bit 方法最佳平均精度，并在 SGLang 中实现，具备直接部署性。"
+          ],
+          "conclusions": [
+            "MLA 的共享 latent 不能用通用 KV 量化配方处理，必须按子空间结构与读出路径定制校准。",
+            "只调量化参数即可获得 3.96 倍 KV 容量，说明 2 bit MLA 已接近可用而非仅学术可行。"
+          ],
+          "experiments": [
+            "在三个 MLA 模型、六个基准上，2 bit 平均精度为对比方法最高（含 token 保护与否两种情况）。",
+            "DeepSeek-V2-Lite 上 SGLang 实现，同显存预算下 KV 容量为 BF16 的 3.96 倍。",
+            "256K 输入 token 时 decode 吞吐为 BF16 的 2.51 倍。"
+          ],
+          "significance": "2 bit MLA 缓存要靠子空间旋转加范围联合校准，容量 3.96 倍、吞吐 2.51 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20686",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20686.pdf",
+          "index": 4,
+          "takeaway": "2 bit MLA 缓存要靠子空间旋转加范围联合校准，容量 3.96 倍、吞吐 2.51 倍。",
+          "keyExperiment": "DeepSeek-V2-Lite 同显存下 3.96 倍 KV 容量，256K 输入时 2.51 倍 decode 吞吐。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Trajectory-Level Speculation with Semantic Verification for Tool-Using Agents",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "Computation and Language (cs.CL)",
+          "categoryCode": "cs.CL",
+          "date": "2026-10-16",
+          "authors": "Zilin Wang, Yinhong Liu, Chao Chen, Qun Liu, Zhijiang Guo",
+          "institutions": "LARK, HKUST (GZ); Yinwang; University of Cambridge",
+          "abstract": "LLM agent 通过长序列工具调用完成任务，主流设计让单个强模型生成每一步，但很多步骤其实小模型也够用。已有的分工方式仍把强模型当生成者：路由器决定谁处理哪个查询或步骤，投机方法则逐步校验小模型草稿。本文提出 SpecAgent，把强模型从「每步作者」变成「草稿审阅者」：弱模型起草时执行只读工具调用，使每一步都锚定在真实观测上，并在遇到第一个会改变环境的动作时停下；强模型随后用一次 prefill 校验整段草稿，提交它判定语义有效的最长前缀，并修复第一个被拒步骤。由于校验替代了自回归解码，强模型只生成短判决与偶发修复。在 τ²-Bench 上成功率距强模型 1 分以内，内存流量与墙钟时间约减半；AutomationBench 与 VitaBench 上恢复 44-75% 的质量差距；MCP-Atlas 边缘-云部署中闭合 53-75% 差距。",
+          "contributions": [
+            "把 agent 的强-弱模型协作从「逐步校验」提升到「轨迹级草案 + 语义验证」，强模型由生成者转为审阅者。",
+            "让弱模型在起草期执行只读工具调用并在首个写操作前停下，使草案始终 grounded，降低验证难度。",
+            "用一次 prefill 验证整段并提交最长有效前缀，把强模型的自回归解码换成并行 prefill，同时给出边缘-云部署方案。"
+          ],
+          "conclusions": [
+            "强模型不必撰写 agent 的每一步：审阅 grounded 草案即可保留大部分质量，同时显著降低延迟与内存流量。",
+            "轨迹级投机比逐步投机的摊销更好，因为验证可以批量化，而修复只发生在第一个被拒步骤。"
+          ],
+          "experiments": [
+            "τ²-Bench 上成功率距强模型 1 分以内，内存流量与墙钟时间约减半。",
+            "AutomationBench 与 VitaBench 上恢复 44-75% 的质量差距。",
+            "MCP-Atlas 边缘-云部署（三种云模型）闭合 53-75% 差距，强模型生成 token 最多减半。"
+          ],
+          "significance": "让弱模型带工具起草整条轨迹，强模型一次 prefill 审阅——质量近强模型、延迟减半。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21463",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21463.pdf",
+          "index": 5,
+          "takeaway": "让弱模型带工具起草整条轨迹，强模型一次 prefill 审阅——质量近强模型、延迟减半。",
+          "keyExperiment": "τ²-Bench 距强模型 1 分内，墙钟与内存流量约减半；边缘-云部署强模型 token 最多减半。"
+        },
+        {
+          "title": "Long-Context Drafting Does Not Require Long-Context Drafters",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "Machine Learning (cs.LG)",
+          "categoryCode": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Aref Jafari, Vansh Bhatia, Matt Qin, Subhajit Dutta Chowdhury, Ben Lee, Vikram Appia, Ali Ghodsi, Mehdi Rezagholizadeh",
+          "institutions": "机构未标注",
+          "abstract": "投机解码在超长上下文下会失效：若 drafter 要关注整个前缀，它就继承了 target 的上下文相关成本，本该带来的加速先衰减后反转，常见对策是训练长上下文 drafter 或使用 target 内置的多 token 预测头。作者主张这没必要：现用的 drafter 是 target-conditioned 的，读的是 target 在整个前缀上算好的隐状态，远距离上下文无需自己再注意，遗漏部分由验证纠正。因此他们冻结已发布的短上下文 drafter，用两个推理期机制把它用到远超训练长度：限制其可见注意力缓存以固定成本，并把 RoPE 位置重基回训练范围。不改任何权重，唯一可调超参很早就饱和，一套 vLLM 侧配置覆盖 4k 到 200 万 token，短上下文最多损失 0.16 倍加速。三对 target-drafter、五个语料上，加速比平坦保持到 200 万 token。",
+          "contributions": [
+            "论证 target-conditioned drafter 无需自身长上下文注意力即可获取远距离信息，推翻「长上下文必须配长上下文 drafter」的默认假设。",
+            "提出两个纯推理期机制：限制 drafter 可见的注意力缓存以固定每步成本，把 RoPE 位置重基回训练范围以保持分布。",
+            "证明公共索引平移在何种条件下使 drafter 计算完全不变，并把接受率分解为两个可测差距、给出紧界。"
+          ],
+          "conclusions": [
+            "长上下文投机解码的瓶颈是 drafter 的成本随前缀增长，而不是它的能力不足；冻结短上下文 drafter 即可。",
+            "一套配置跨 4k 到 200 万 token，说明该现象是结构性的而非需要逐长度调参。"
+          ],
+          "experiments": [
+            "短上下文下最多损失 0.16 倍加速，其余长度可忽略。",
+            "三对 target-drafter、五个语料上，加速比从 4k 平坦保持到 200 万 token。",
+            "去掉任一机制（缓存界定或 RoPE 重基）增益即消失，验证两者均为必要条件。"
+          ],
+          "significance": "短上下文 drafter 冻结即可用到 200 万 token，两个推理期机制就够。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20865",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20865.pdf",
+          "index": 6,
+          "takeaway": "短上下文 drafter 冻结即可用到 200 万 token，两个推理期机制就够。",
+          "keyExperiment": "一套 vLLM 配置覆盖 4k 至 2M token，加速比不衰减，短上下文仅损失 0.16 倍。"
+        },
+        {
+          "title": "ReFlow: Replay-Driven Decoupling for Efficient RL Post-Training",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "Machine Learning (cs.LG)",
+          "categoryCode": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Yukun Tian, Junwei Su, Haofeng Xu, Lansong Diao, Zhengping Qian, Weibo Zhao, Wenchao Zhou, Ruiting Zhou, Chuan Wu",
+          "institutions": "The University of Hong Kong, USTC, Alibaba Group, Southeast University",
+          "abstract": "强化学习是提升 LLM 推理与 agent 能力的关键范式，但其效率仍是主要瓶颈。现有 RL 系统常用异步执行把 rollout 生成与策略优化重叠，然而轻度策略陈旧只能带来有限收益，激进异步又会损害模型质量，且效率增益递减；LLM RL 与多轮 agent 负载的动态性还让静态资源分配失效。本文提出 ReFlow，一个系统-算法协同设计的 RL 后训练框架。核心洞察是：现有框架每条轨迹只用一次，而近期轨迹的经验回放可以复用样本，从而摊销高昂的 rollout 成本而不引入过度陈旧。为此采用解耦自适应架构：双回放数据环在训练吞吐与优化稳定性之间取平衡，弹性资源池按负载变化动态放置资源，自适应调度器协调生成策略与资源分配。在代表性单轮推理与多轮 agent RL 任务上，训练吞吐相对 SOTA 同步与异步 RL 系统最高提升 2.06 倍。",
+          "contributions": [
+            "指出 RL 后训练的真正瓶颈是 rollout 成本而非优化步数，并提出用近期轨迹经验回放复用样本，绕开异步带来的策略陈旧权衡。",
+            "设计双回放数据环，同时控制样本新鲜度与训练吞吐，使重用不至于破坏优化稳定性。",
+            "用弹性资源池加自适应调度器应对单轮推理与多轮 agent 负载的资源需求漂移，替代静态分配。"
+          ],
+          "conclusions": [
+            "在「同步稳定但慢、异步快但损质量」之外，经验回放是第三条路径：用样本复用而非时间重叠换吞吐。",
+            "RL 训练的资源需求是时变的，弹性放置与调度是系统层不可省略的部分，而非调参细节。"
+          ],
+          "experiments": [
+            "相对 SOTA 同步与异步 RL 系统，训练吞吐最高提升 2.06 倍。",
+            "在单轮推理与多轮 agent RL 任务上均保持相当或更好的模型性能。",
+            "双回放数据环在吞吐与优化稳定性之间取得平衡，避免了激进异步的质量退化。"
+          ],
+          "significance": "用近期轨迹回放复用样本，替代激进异步，RL 后训练吞吐最高 2.06 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21640",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21640.pdf",
+          "index": 7,
+          "takeaway": "用近期轨迹回放复用样本，替代激进异步，RL 后训练吞吐最高 2.06 倍。",
+          "keyExperiment": "训练吞吐最高 2.06 倍于 SOTA 同步/异步 RL 系统，模型性能相当或更好。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Architecting for Hardware Diversity: Meta's End-to-End Co-Design for High-Performance AI Training on AMD GPUs",
+          "score": 4.7,
+          "channel": "Architecture",
+          "category": "Distributed, Parallel, and Cluster Computing (cs.DC)",
+          "categoryCode": "cs.DC",
+          "date": "2026-10-16",
+          "authors": "Haoyu Zhang, Arshad Rahman, Adnan Aziz, Ajith Prabhudev, Amin Farmahini, Ben Rhoads, Benson Ma, Brian Shi, Cen Zhao, CK Luk, Dingming Wu, Emad El-Haraty, Eric Chen, Frank Li, Gary Huang, Gefei Zuo, Haoran Zhang, Hiwot Kassa, Hongyi Zeng, Jack Taylor, Jeremy Hadidjojo, John Donati, Jonathan Sheffield, Julio Machado Silva, Karthik Ganesan, Kent Russell, KR Kishore, Lei Tian, Liu Ke, Muhammad Osama, Peng Chen, Rakesh Hemnani, Ryan Swann, Saleel Kudchadker, Shankar Yanamandram, Shobhit Kanaujia, Shucai Xiao, Srinath Bayareddy, Srinivas Vaidyanathan, Sudharssun Subramanian, Supadchaya Puangpontip, Taylor Robie, Tianhao Huang, Tyler Hart, Viswesh Sankaran, Weijun Jiang, Wenkai Du, Xiaodong Wang, Xiaohu Guo, Yao Rong, Yinbin Ma, Yue Dong, Yuzhen Huang, Yvonne Liu, Zhan Shu, Dan Rabinovitsj, Ajit Mathews, Chunqiang Tang",
+          "institutions": "Meta, AMD",
+          "abstract": "Meta 同时部署 NVIDIA GPU、AMD GPU 与自研 MTIA，但长期积累的 NVIDIA 专用优化使性能难以跨硬件移植。本文以 AMD Instinct MI350X 对比 NVIDIA B200、训练推荐模型为例，给出三条可复用原则。第一，硬件-模型协同设计是必需的：与其直接移植 NVIDIA 上的模型，不如改写模型结构与软件配方以发挥加速器特长（如 MI350X 的 HBM 容量是 B200 的 1.6 倍）。第二，用解析性能模型在多种数据类型与矩阵形状上做零预热的最优 kernel 选择，大幅简化调优。第三，日趋成熟的 agent 工作流降低了从 CUDA 生态移植的门槛，作者将其扩展用于微架构感知的 kernel 优化与自定义 shim 生成。相对直接移植的基线，端到端训练吞吐最高提升 1.5 倍，成果已上游到 PyTorch、Triton 与 ROCm。",
+          "contributions": [
+            "提出硬件-模型协同设计原则：移植的起点应是改写模型结构与软件配方以匹配加速器特长，而非复制 NVIDIA 上的实现。",
+            "用解析性能模型实现零预热的最优 kernel 选择，覆盖多数据类型与矩阵形状，替代昂贵的自动调优。",
+            "把 agent 工作流扩展到微架构感知的 kernel 优化与 shim 自动生成，系统性地降低 CUDA 生态的移植壁垒。"
+          ],
+          "conclusions": [
+            "超大厂的异构 fleet 不是简单采购问题：可移植性要在模型与配方层面重新设计，而非在编译器层打补丁。",
+            "首个 hyperscaler 级别的 AMD 大规模训练生产报告，且改动全部回流 PyTorch/Triton/ROCm，对整个生态有直接复用价值。"
+          ],
+          "experiments": [
+            "相对直接移植的基线，端到端训练吞吐最高提升 1.5 倍。",
+            "利用 MI350X 相对 B200 的 1.6 倍 HBM 容量改写模型结构后，可训练配置在 AMD 上反而更宽。",
+            "优化与 shim 已上游至 PyTorch、Triton、ROCm 三个开源生态，非内部私有实现。"
+          ],
+          "significance": "AMD 大规模训练的关键不是移植 kernel，而是按 HBM 容量重写模型与配方。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22230",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22230.pdf",
+          "index": 8,
+          "takeaway": "AMD 大规模训练的关键不是移植 kernel，而是按 HBM 容量重写模型与配方。",
+          "keyExperiment": "端到端训练吞吐 +1.5 倍，方法是硬件-模型协同设计 + 解析 kernel 选择 + agent 辅助移植。"
+        },
+        {
+          "title": "ETH: Data-Balanced Heterogeneous Pipeline Parallelism for Training Large Models",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "Distributed, Parallel, and Cluster Computing (cs.DC)",
+          "categoryCode": "cs.DC",
+          "date": "2026-10-16",
+          "authors": "Mianjie Yu, Zhongmin Zhao, Zizhao Mo, Jianxiong Liao, Wenxuan Li, Yulin Qiao, Huanle Xu, Wenquan Yang, Yongqiang Yang, Zeren Li, Ruifeng Tang, Chengzhong Xu",
+          "institutions": "University of Macau, Great Bay University, Sun Yat-sen University",
+          "abstract": "现有异构感知训练系统通过给各流水段分配不等数量的层来均衡负载，但这一策略忽视显存约束，且均衡粒度本质上很粗。作者提出异构流水并行 HPP：在异构流水之间做细粒度数据均衡，并用层级负载均衡框架同时优化跨流水与段内均衡。HPP 有两大难题：最优配置搜索开销不可接受，以及非对称 All-Reduce 带来的高通信开销。ETH 系统用块式梯度聚合缓解后者，并用专门优化把配置搜索开销压低。在多个大模型训练配置上，ETH 相对 SOTA 系统取得最高 2 倍训练加速，同时把配置生成开销降低最多 56 倍。这条路线把异构集群的负载均衡从「按层数切分」推进到「按数据切分」，让显存约束与计算不均衡可以同时被处理，而不是靠单一路径的段划分来折中。",
+          "contributions": [
+            "提出 HPP：把异构流水并行的均衡单位从「层」下沉到「数据」，从而同时处理显存约束与细粒度计算不均。",
+            "设计层级负载均衡框架，联合优化跨流水与段内的负载分配，避免两层均衡互相拆台。",
+            "用块式梯度聚合抑制非对称 All-Reduce 开销，并通过专用优化把 HPP 配置搜索从不可接受降到可用。"
+          ],
+          "conclusions": [
+            "按层数切分的异构均衡已到瓶颈：粒度粗且无法表达显存约束，按数据切分是更合适的抽象。",
+            "把搜索开销降低 56 倍后，异构流水配置可以随集群与模型变化在线重算，而不是离线一次性调好。"
+          ],
+          "experiments": [
+            "相对 SOTA 异构训练系统取得最高 2 倍训练加速。",
+            "配置生成开销降低最多 56 倍。",
+            "在大模型训练配置上验证了块式梯度聚合对非对称 All-Reduce 的缓解效果。"
+          ],
+          "significance": "异构流水的均衡单位从层下沉到数据，2 倍加速、配置搜索省 56 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22035",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22035.pdf",
+          "index": 9,
+          "takeaway": "异构流水的均衡单位从层下沉到数据，2 倍加速、配置搜索省 56 倍。",
+          "keyExperiment": "端到端训练加速最高 2 倍，配置生成开销降低 56 倍。"
+        },
+        {
+          "title": "Expanding Attention: A Taylor-Series Route to Linear-Time Transformers with a Fixed Number of Recurrent States",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "Machine Learning (cs.LG)",
+          "categoryCode": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Zicong Huang",
+          "institutions": "机构未标注",
+          "abstract": "作者把注意力的指数核展开为 n 项截断 Taylor 级数，并把每一项因式分解为张量幂内积，使因果历史塌缩为恰好 n 个递归状态；每个 token 只需一次秩一外积更新，状态大小与上下文长度无关。该递推对截断核无损（float64 误差 2.2×10^-16），状态可加性（5.7×10^-14）允许并行扫描 prefill。耗时标度 softmax 为 N^2.28、状态为 N^0.91，交叉点 N≈728，N=8192 时提速 20.8 倍；每 token 解码延迟恒为 7.3 微秒，N=65536 时提速 76 倍。精度随 n 指数提升，但第 m 个状态宽度为 C(d+m-1,m)，成本组合增长（SVD 确认该界），故最优取二阶 n=3，误差 6.5×10^-4，每头 9945 个元素。query/key 归一化是前提，否则辐角超出收敛半径，加项不再有用。",
+          "contributions": [
+            "用 Taylor 展开加张量幂因式分解，把注意力历史压成固定 n 个递归状态，状态大小与上下文长度解耦。",
+            "给出无损性与分块可加性证明，使递归可写成并行扫描，prefill 与 decode 同时受益。",
+            "指出精度与状态宽度之间是组合代价关系，最优解为二阶（n=3），并确认 query/key 归一化是收敛前提。"
+          ],
+          "conclusions": [
+            "线性注意力不必牺牲精确性：对截断核的递推是精确的，误差只来自截断项数 n 的选择。",
+            "固定状态数带来的常数成本由状态宽度决定，因此存在唯一最优点而非「项数越多越好」。"
+          ],
+          "experiments": [
+            "耗时标度 N^2.28（softmax）对 N^0.91（递归状态），交叉点 N≈728，N=8192 时提速 20.8 倍。",
+            "每 token 解码延迟恒为 7.3 微秒，N=65536 时相对 softmax 提速 76 倍。",
+            "n=3 时误差 6.5×10^-4、每头 9945 个元素，为精度与成本的实测最优折中。"
+          ],
+          "significance": "Taylor 展开让注意力历史变成固定几个递归状态，长上下文提速 76 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20637",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20637.pdf",
+          "index": 10,
+          "takeaway": "Taylor 展开让注意力历史变成固定几个递归状态，长上下文提速 76 倍。",
+          "keyExperiment": "N=65536 时 decode 提速 76 倍，递归状态与上下文长度无关且对截断核无损。"
+        }
+      ]
+    }
+  ]
+}
