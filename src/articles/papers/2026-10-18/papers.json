@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-18",
+  "title": "2026-10-18 论文精选",
+  "lede": "今日主线是「把通信和精度当算法参数」：Cyclotron 让处理器间通信图样可编程，DPA-MoE 与 FPoT 把精度变成推理时可调的旋钮，扩散语言模型则用 on-policy 残差把吞吐推到 6.9 倍。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 567
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Cyclotron: A Recurrence Language for Expressing Interprocessor Communication",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-16",
+          "authors": "Shiv Sundram, Akhilesh Balasingam, Nathan Zhang, Kunle Olukotun, Fredrik Kjolstad",
+          "institutions": "Stanford University",
+          "abstract": "多处理器程序里的通信模式（环状归约、广播、脉动交换）通常被写死在库或手写代码里，换一种拓扑就得重写。Cyclotron 让程序员用“递推方程”描述算法，把通信本身写进迭代空间：数据点可以直接与另一个数据点交换值。编译器再根据用户选择的时空映射（哪个维度铺到处理器、哪个走时间）自动生成每个处理器的 send/receive/compute 程序，并保证放置正确。这样同一段算法描述可以展开成最近邻脉动交换、一对多广播、双向分裂环，甚至非对称分段广播等标准分布式线代库不支持的模式。作者在最多 16 个 CPU 节点与 16 块 GPU 上评测分布式矩阵乘、TRSM、Cholesky 及融合 Cholesky-TRSM。",
+          "contributions": [
+            "提出递推方程语言，把“数据点之间直接通信”作为一等公民写进迭代空间，摆脱外部内存访问的限制",
+            "编译器按用户选择的 space-time 映射自动生成逐处理器程序，通信与计算算子放置由编译器保证正确",
+            "用该语言可表达脉动交换、广播、分裂环、非对称分段广播等手工库不支持的通信图样"
+          ],
+          "conclusions": [
+            "对矩阵乘、TRSM、Cholesky、融合算子，性能与 ScaLAPACK、SLATE、cuSolverMp 相当并常胜出",
+            "Cholesky 的最优通信策略随问题规模与硬件架构变化，印证“通信图样应作为算法参数”而非固定选择"
+          ],
+          "experiments": [
+            "在最多 16 个 CPU 节点、16 块 GPU 上与 ScaLAPACK、SLATE、cuSolverMp 对比，Cyclotron 有竞争力且多次更优",
+            "Cholesky 上最佳通信策略随问题规模和架构切换，说明单一固定策略存在损失",
+            "同一份递推描述经不同 space-time 映射即可覆盖 CPU 与 GPU 拓扑，无需重写程序"
+          ],
+          "significance": "把处理器间通信从“库的实现细节”提升为可编程、可搜索的算法维度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20981",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20981.pdf",
+          "takeaway": "同一份递推描述 + 可调 space-time 映射，就能换通信图样而不重写程序。",
+          "keyExperiment": "在 16 CPU 节点/16 GPU 上对比 ScaLAPACK、SLATE、cuSolverMp，性能相当或更优；Cholesky 最优通信策略随规模与架构变化。",
+          "index": 1
+        },
+        {
+          "title": "BitSparse: Compact Activation Storage for ReLU Feed-Forward Networks",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Max Zhu, Bohang Sun, Pietro Lio, Jialin Yu",
+          "institutions": "University of Cambridge, University of Oxford",
+          "abstract": "训练大模型的显存瓶颈常靠激活检查点（重算）或损失性压缩缓解，但两者都要付代价。随着稀疏 ReLU/ReLU² 激活回归，出现了第三条路：直接对激活缓存做无损压缩。BitSparse 是常驻 GPU 的无损压缩格式，压缩与重建由融进 autograd 函数的 Triton kernel 完成，反向传播时精确还原，支持 BF16 与 FP8 激活，可选的符号位打包能把压缩率推到接近理论上限。作者分析了它的压缩率与理论最优的差距，并用预分配缓冲区避免变长张量分配时的主机同步。",
+          "contributions": [
+            "针对稀疏 ReLU/ReLU² 激活提出 GPU 常驻无损压缩格式，压缩与重建由融合进 autograd 的 Triton kernel 完成",
+            "支持 BF16 与 FP8，符号位打包使压缩率逼近理论最优，并给出与理论上限的定量对比",
+            "预分配缓冲区系统消除变长张量分配导致的 host 同步"
+          ],
+          "conclusions": [
+            "在真实训练负载上以极小时间开销换取可观显存节省，优于需要重算的检查点方案",
+            "无损特性使其不改变训练数值结果，可与现有训练栈直接叠加"
+          ],
+          "experiments": [
+            "Modded-NanoGPT 上每 token 显存降低 31%，Nemotron-H 上降低 30%",
+            "实际序列长度下压缩/解压开销不超过 1%",
+            "符号位打包后压缩率接近理论极限，BF16/FP8 两种激活格式均验证"
+          ],
+          "significance": "为稀疏激活训练提供一条“无损省显存”的新维度，不牺牲数值正确性。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22256",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22256.pdf",
+          "takeaway": "ReLU 稀疏激活可直接无损压缩：显存降三成，开销不到 1%。",
+          "keyExperiment": "每 token 显存降 31%（Modded-NanoGPT）/30%（Nemotron-H），实际序列长度下开销 ≤1%。",
+          "index": 2
+        },
+        {
+          "title": "Deep Reinforcement Learning for HPC Job Scheduling: A Statistical Evaluation",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-16",
+          "authors": "Justin M. Cheney, Clement N. Nyirenda",
+          "institutions": "University of the Western Cape",
+          "abstract": "用深度强化学习做 HPC 作业调度已有很多论文，但“打败启发式”并不等于有价值——收益可能全部来自动作掩码（保证不选非法动作）。作者用统一非参数框架系统对比六种 DRL 处理（PPO/A2C/DQN，各带与不带掩码）、三种启发式，并额外加入“带掩码的均匀随机”作为种子配对对照，在两份真实 Slurm 负载（同构与异构）上各跑十个随机种子。结果显示掩码是能否完成评测的前提，而同构负载上没有任何带掩码的 DRL 显著优于随机对照；异构负载上 MaskablePPO 在三个指标上都有改善，但平均等待时间与启发式的差距在 10% 以内。",
+          "contributions": [
+            "在两份真实 Slurm 负载上用十个种子、非参数检验系统对比 6 种 DRL 与 3 种启发式",
+            "引入“带掩码的均匀随机”种子配对对照，把动作掩码带来的收益从学习带来的收益中剥离",
+            "报告训练时间与决策延迟，指出完成评测与真实调度收益是两件事"
+          ],
+          "conclusions": [
+            "同构负载上带掩码的 DRL 相对随机对照无显著收益，说明此前部分“提升”来自掩码合法性",
+            "异构负载上 MaskablePPO 全面改善等待时间与有界减速比，但相对启发式仍在 10% 边际内"
+          ],
+          "experiments": [
+            "异构负载：MaskablePPO 最大有界减速比比 LCFS 低 22%，平均等待时间与三种启发式差距在 10% 以内",
+            "MaskablePPO 在两条负载上平均等待时间排名均为完整处理中第一，但 Nemenyi 检验与 MaskableA2C 无显著差异",
+            "带掩码变体中 MaskablePPO 平均训练时间最短，MaskableDQN 平均决策延迟最低；不带掩码的处理全部被截断"
+          ],
+          "significance": "给“RL 调度优于启发式”这类结论立了一条统计基线，防止把掩码收益误当学习收益。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21008",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21008.pdf",
+          "takeaway": "RL 调度要先跟“带掩码的随机”比：同构负载上多数 DRL 并无显著收益。",
+          "keyExperiment": "异构 Slurm 负载上 MaskablePPO 最大有界减速比比 LCFS 低 22%，但平均等待时间仍与启发式在 10% 以内。",
+          "index": 3
+        },
+        {
+          "title": "DPA-MoE: A Runtime Precision Control Framework for MoE Inference",
+          "score": 3.9,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-10-16",
+          "authors": "Jaeyun Kim, Hoonki Lee, Susie Shin, Hyunmin Kim, Dahyun Lee, Sangyeob Kim",
+          "institutions": "Agency for Defense Development, Yonsei University",
+          "abstract": "MoE 靠路由把每个 token 只送进少量专家来省算力，但被选中的专家仍以固定精度计算。DPA-MoE 让被路由到的专家变成“任意精度”：把专家 FFN 权重编码成前缀可解码的块（SharedScale AnyBCQ），离线剖析每个专家的重建残差，推理时依据实时路由门控分数分配块数。因为是路由后分配，同一份编码检查点无需重训或重新编码，就能在多个有效权重量级下运行，相当于把“精度预算”做成了一个可在推理时动态调节的旋钮。",
+          "contributions": [
+            "把专家 FFN 权重编码为前缀可解码块（SharedScale AnyBCQ），支持按需截断得到任意精度",
+            "离线剖析每专家的重建残差，推理时用实时路由门控分数决定分配多少块",
+            "单份 MoE 检查点在多个有效权重量级下运行，无需重训或重新编码"
+          ],
+          "conclusions": [
+            "在匹配预算下比均匀块分配有更好的 KL 散度与下游准确率",
+            "原型实现中稳态吞吐开销不大，可与现有 MoE 推理栈叠加"
+          ],
+          "experiments": [
+            "在 Qwen3-30B-A3B 与 DeepSeekMoE-16B 上，匹配预算下 KL 散度与下游准确率均优于均匀块分配",
+            "原型系统中稳态吞吐仅有适度开销",
+            "同一检查点覆盖多个有效权重预算，省去按精度重训/重编码的成本"
+          ],
+          "significance": "把 MoE 推理的精度预算从“模型属性”变成“路由时可调的运行时决策”。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21378",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21378.pdf",
+          "takeaway": "被路由到的专家按门控分数分配精度：一份检查点跑多个有效位宽。",
+          "keyExperiment": "Qwen3-30B-A3B 与 DeepSeekMoE-16B 上匹配预算的 KL 与准确率均优于均匀分配。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "On-Policy Residual Learning for Diffusion Language Models",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Yifan Yu, Yuqing Jian, Jisen Li, Yuezhou Hu, Tianyi Zhang, Xiaoxia Wu, Rui-Jie Zhu, Junxiong Wang, Zhongzhu Zhou, Fan Lai, James Zou, Chenfeng Xu",
+          "institutions": "Together AI, University of Illinois Urbana-Champaign, UC Berkeley, Stanford University, UT Austin, UC Santa Cruz",
+          "abstract": "扩散语言模型（DLM）靠“残差上下文”在去噪步之间传递预测分布，从而在速度与质量之间取得更好的折中，但如何训练这种残差机制一直没有配方。作者指出残差学习本质上是 on-policy 的：它必须沿模型自己产生的残差轨迹学习。ORL 因此在线采样模型诱导的轨迹，并引入熵收缩目标，让模型在反复回看自己预测时把分布不断锐化。系统侧，精确的残差监督需要保存并重算大量轨迹相关状态，ORL 用异步残差捕获与传输、专用块扩散注意力、以及打包的负载均衡训练把算法落到工程上，最终在 H100/B200 上给出可用的吞吐。",
+          "contributions": [
+            "指出 DLM 的残差学习本质上是 on-policy 问题，应沿模型自身产生的残差轨迹采样学习",
+            "提出熵收缩目标，让模型在重复访问自己的预测时收敛到更尖锐的分布",
+            "算法与系统协同设计：异步残差捕获/传输、块扩散专用注意力、负载均衡的打包训练"
+          ],
+          "conclusions": [
+            "在从 Qwen3-4B 转换的 4B DLM 上，单请求服务的前沿优于带 EAGLE3/DFlash 的自回归模型",
+            "方法可迁移到已有 DLM：LLaDA-2.1-mini 用约十分之一数据即取得更高 TPF 与吞吐"
+          ],
+          "experiments": [
+            "4B DLM 上每前向 token 数（TPF）最高提升 6.2 倍，配 dlmrt 引擎端到端吞吐约 6.9 倍且质量相当或更好",
+            "单张 H100 单请求下比 DFlash 在同等精度快 1.74 倍，速度-质量前沿优于 EAGLE3 投机解码",
+            "dlmrt + NVFP4 量化：单张 B200 解码 5046 tokens/s，8 张 B200 达 7708 tokens/s，RTX 5090 达 2788 tokens/s"
+          ],
+          "significance": "把扩散语言模型的残差机制从“技巧”变成可训练范式，并给出与自回归解码正面竞争的系统实现。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20687",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20687.pdf",
+          "takeaway": "残差必须沿模型自己的轨迹学：on-policy 残差学习 + 熵收缩，换来 6.9 倍端到端吞吐。",
+          "keyExperiment": "4B DLM 上 TPF 提升 6.2 倍、端到端吞吐约 6.9 倍；单 H100 比 DFlash 同等精度快 1.74 倍，B200 单卡 5046 tokens/s。",
+          "index": 5
+        },
+        {
+          "title": "How to Train Your Little Dragon: Teaching a Small Language Model to Construct and Refine GPU Optimization Scripts",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Annabelle Sujun Tang, Wei Tang, Songyao Jiang, Tianhui Li, Shengzhe Xu, Jiin Woo, Kaan Ozkara, Youngsuk Park, Zhen Jia, Hadi Esmaeilzadeh",
+          "institutions": "University of California, San Diego, Amazon Annapurna Labs",
+          "abstract": "GPU 算子优化本质是一个组合搜索：编译器的各种变换互相影响，必须找到既保正确又提速的组合。作者不让模型直接写 kernel 代码，而是让它生成“优化脚本”——一段可被 TVM MetaSchedule 确定性解码、精确复现编译轨迹的紧凑无损表示，从而天然保持计算语义。数据来自 54116 个工作负载，构造出 108594 条样本：六成教学会从朴素算子生成优化脚本，四成教学会在已有部分优化的基础上继续改进。随后用“正确性 + 实测延迟”的整形奖励做强化学习，只有数值正确的 kernel 才拿延迟奖励。方法落在 8B 模型上。",
+          "contributions": [
+            "让模型生成优化脚本而非 kernel 代码：紧凑无损表示可确定性解码出完整编译轨迹，含变换参数与依赖",
+            "基于 TVM MetaSchedule 在 54116 个工作负载上构造 108594 条“构造 + 改进”两类训练样本",
+            "SFT 后接强化学习，奖励绑定数值正确性与实测延迟，只给正确 kernel 发性能奖金"
+          ],
+          "conclusions": [
+            "8B 小模型在逐次正确率与 kernel 性能上均超过多个前沿大模型，任务专用训练可显著弥补参数规模差距",
+            "强化学习在多数任务上比纯监督微调产出更快的 kernel，说明可验证奖励对编译器搜索特别有效"
+          ],
+          "experiments": [
+            "逐次正确率：构造任务 91.27%，改进任务 92.01%",
+            "RL 相对 SFT 在 88/102 个构造任务、145/170 个改进提示上产出更快的 kernel",
+            "以 8B 参数超过 GPT-6 Astra、Opus 5、Kimi-K3、GLM-5.3 等六个前沿模型的逐次正确率与 kernel 性能"
+          ],
+          "significance": "把 GPU 算子调优变成“可验证奖励 + 小模型专用训练”的闭环，降低对超大模型的依赖。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20980",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20980.pdf",
+          "takeaway": "不写 kernel 改写编译优化脚本，8B 模型靠可验证奖励打赢前沿大模型。",
+          "keyExperiment": "8B 模型逐次正确率 91.27%/92.01%（构造/改进），并在 88/102 与 145/170 任务上产出比 SFT 更快的 kernel。",
+          "index": 6
+        },
+        {
+          "title": "Router Drift Control: Mitigating Off-Policy Degradation in Mixture-of-Experts Reinforcement Learning",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Liangyao Jin, Zhixin Wang, Liming Liu, Mingjun Zhang, Zhengzhou Zhu, Fangcheng Fu, Jinlong Hou, Yuan Cheng, Xiaohe Hu, Ping Zhang, Siyuan Feng",
+          "institutions": "Peking University, Shanghai Innovation Institute, Zhejiang University, Shanghai Jiao Tong University, Infrawaves Inc",
+          "abstract": "强化学习会因训练-推理不一致、小批量更新与异步而变成 off-policy，在 MoE 模型里尤其有害：rollout 与训练的路由决策不一致会导致 router drift。已有做法 R3 在训练时复用 rollout 阶段的专家选择，但作者分析发现路由回放会丢掉“训练路由选了而 rollout 路由没选”的专家贡献，引入梯度偏差。Router Drift Control 改用 rollout 与训练路由之间的不一致程度作为“策略陈旧度”信号，在序列级别直接拒绝高漂移的回复，既避开回放带来的梯度偏差，又保留原生专家选择与对应的学习信号。",
+          "contributions": [
+            "分析出路由回放（R3）虽缓解 off-policy，却因丢失训练路由所选专家的贡献而引入梯度偏差",
+            "用 rollout 与训练路由的分歧度作为策略陈旧度信号，序列级拒绝高漂移回复",
+            "过滤而非回放：保留原生专家选择，避免梯度偏差，且随陈旧度增大收益更大"
+          ],
+          "conclusions": [
+            "异步训练下 RDC 与截断重要性采样叠加，在 AIME 2024/2025 上稳定超过 TIS 与 R3",
+            "方法在策略越陈旧时收益越大，适合大规模异步 RL 后训练"
+          ],
+          "experiments": [
+            "异步训练中 RDC+TIS 的 AIME 2024/2025 平均峰值验证准确率比 TIS 高 5.5 分、比 R3 高 4.5 分",
+            "策略陈旧度越大，RDC 相对 R3 的收益越明显",
+            "在同步与异步两种设置下均有效，异步场景提升幅度更大"
+          ],
+          "significance": "指出 MoE 强化学习里“路由回放”这条主流修补有梯度偏差，给出更干净的序列级过滤方案。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21682",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21682.pdf",
+          "takeaway": "MoE RL 别回放路由，直接按路由分歧剔除高漂移样本，AIME 提升 5.5 分。",
+          "keyExperiment": "异步训练 RDC+TIS 相对 TIS +5.5 分、相对 R3 +4.5 分（AIME 2024/2025 平均峰值准确率）。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Helix: A Unified Programmable Accelerator for Diverse Krylov Subspace Solvers",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-16",
+          "authors": "Wei Chen, Yizhi Yuan, Linghao Song",
+          "institutions": "Yale University",
+          "abstract": "Krylov 子空间方法（CG、GMRES、BiCGStab 等）是稀疏线性系统的核心，但现有 FPGA 加速器通常只支持单一求解器，换算法就得换硬件配置。Helix 先系统性地从多种 Krylov 求解器中抽象出公共计算原语，围绕可编程原语内核搭架构，再用可编程数据通路把这些原语编排起来，从而把硬件实现与求解器特定执行解耦，实现 HBM 复用与零切换延迟；配套 DSL 编译器把不同求解器映射到该架构，并针对每个求解器优化向量运算。原型部署在 Xilinx Alveo U55C 上，编译并执行八种求解器。",
+          "contributions": [
+            "从多种 Krylov 求解器中抽象公共计算原语，用可编程原语内核 + 可编程数据通路搭建统一架构",
+            "硬件与求解器特定执行解耦，支持 HBM 复用与零求解器切换延迟",
+            "提供 DSL 编译器，把不同求解器映射到同一架构并做逐求解器的向量运算优化"
+          ],
+          "conclusions": [
+            "单一 FPGA 设计即可覆盖八种 Krylov 求解器，可编程性开销可忽略",
+            "相对 GPU 以更低带宽和更高能效保持可用吞吐，适合访存受限的 HPC 内核"
+          ],
+          "experiments": [
+            "八种求解器上相对 Xilinx XcgSolver 最高 7.91 倍加速，相对支持 JPCG 的 SOTA 加速器 Callipepla 为 1.16 倍",
+            "达到 NVIDIA RTX PRO 6000 GPU 吞吐的 47.5%-96.9%，同时能效高 2.29-4.66 倍、单位峰值带宽吞吐高 1.89-3.85 倍",
+            "可编程部分带来的执行时间开销仅 0.25%-0.57%，资源开销 4.7% LUT、4.0% FF"
+          ],
+          "significance": "把“一个算法一台加速器”推进到“一族算法一台可编程加速器”。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21096",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21096.pdf",
+          "takeaway": "可编程原语 + DSL 让一块 FPGA 覆盖八种 Krylov 求解器，切换零延迟。",
+          "keyExperiment": "八求解器上对比 XcgSolver 最高 7.91 倍、对比 Callipepla 1.16 倍；能效比 RTX PRO 6000 高 2.29-4.66 倍。",
+          "index": 8
+        },
+        {
+          "title": "HyCo: Hybrid Drafting for Cost-Efficient Mobile-Cloud Speculative Decoding",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-16",
+          "authors": "Hanbin Bae, Heejin Choi, Joohyung Lee, Byoung Jin Choi, Sangjun Park, Hoon-Young Cho",
+          "institutions": "Samsung Research",
+          "abstract": "端云协同的投机解码能省服务端算力，但要在手机 NPU 上用小型语言模型长出很深的草稿树，就得反复跑 NPU。HyCo 把草稿树的“深度”交给服务端模型原生的多 token 预测（MTP）头在端侧执行，把“分支”交给一次 SLM 前向；服务端只返回该头所需的隐状态、输入嵌入与 KV 条目，不再执行自己的串行步骤。为塞进 NPU，作者用低比特量化、受限词表与 1K token 窗口同时容纳两个草稿器，并用 ε 阈值规则松开了对验证器采样分布的严格保持。",
+          "contributions": [
+            "把草稿树的深度分配给服务端模型的原生 MTP 头、在端侧 NPU 执行，分支交给单次 SLM 前向",
+            "服务端只回传 MTP 头所需的隐状态、输入嵌入与 KV 条目，避免执行串行解码步骤",
+            "量化 + 受限词表 + 1K 窗口把双草稿器压进手机 NPU，并用 ε 阈值规则放宽分布严格性"
+          ],
+          "conclusions": [
+            "在真实手机 + 蜂窝网络下显著降低服务端每输出 token 的 GPU 时间，且质量与 Cloud+MTP 无显著差异",
+            "相同接受规则下，混合草稿比纯 SLM 草稿器省更多、投递更快"
+          ],
+          "experiments": [
+            "Galaxy S26 Ultra 经 LTE/5G 单客户端：每输出 token 服务端 GPU 时间比服务端 MTP 自投机降低 38.6%（Spec-Bench）与 29.2%（32K 摘要）",
+            "相同接受规则下比纯 SLM 草稿器多省 9.0 个百分点、投递速度 1.9 倍",
+            "与 Cloud+MTP 的裁判分差 +0.2（95% CI −0.9~+1.3）；不做放宽时精确版仍省 27.7% 与 11.9%"
+          ],
+          "significance": "把端侧 NPU 的闲置算力接进服务端投机解码，降低每 token 的云侧成本。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21436",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21436.pdf",
+          "takeaway": "服务端只出 MTP 头和隐状态、端侧 NPU 长草稿树：每 token GPU 时间降 38.6%。",
+          "keyExperiment": "Galaxy S26 Ultra + 5G 上每输出 token 服务端 GPU 时间降 38.6%（Spec-Bench）/29.2%（32K 摘要）。",
+          "index": 9
+        },
+        {
+          "title": "Fractional Power-of-Two Quantization for Efficient and Effective Multiplier-Free LLM Inference",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Sunghyun Wee, Geunjae Choi, Hyeonjin Kim, Suyoung Kim, Nojun Kwak",
+          "institutions": "Seoul National University, LG Electronics",
+          "abstract": "权重上的 2 的幂（PoT）量化能用移位-加代替乘法，做出无乘法器的 LLM 推理数据通路，但 base-2 网格太粗，低比特时精度掉得厉害。FPoT 改用 base-√2 的“半八度”分数幂网格，用 4 bit 权重仍保持纯整数移位-加数据通路：它把 base-√2 权重网格与均匀整数激活结合，把校准阶段的网格对齐修正吸收进静态逐通道 scale，并用只需一个加法器的 √2 近似，其误差在权重量化时被一并校准吸收，最终处理单元比 4 bit 整数乘法器少很多门。",
+          "contributions": [
+            "提出 base-√2 分数幂网格，在 4 bit 权重下仍保持整数移位-加（无乘法器）数据通路",
+            "校准期网格对齐修正被吸收进静态逐通道 scale，不增加运行时开销",
+            "仅需单加法器的 √2 近似，量化误差在权重校准中被吸收，处理单元门数显著低于 4 bit 乘法器"
+          ],
+          "conclusions": [
+            "相对 PoT 基线大幅恢复精度，同时与均匀整数基线几乎持平，且保持无乘法器实现",
+            "方法框架无关，可与现有 SOTA 训练后量化方法组合"
+          ],
+          "experiments": [
+            "Llama-3-8B 上 W4A4 时零样本常识推理相对 PoT 基线提升 8.72%（相对值）",
+            "相对均匀整数基线仅退化 0.4 个百分点",
+            "在 7 个模型、3 种位宽配置上结论一致，并可叠加现有 PTQ 方法（NeurIPS 2026 接收）"
+          ],
+          "significance": "为无乘法器 LLM 加速器补上了“低比特也不掉点”的量化网格。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21257",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21257.pdf",
+          "takeaway": "把 2 的幂换成 √2 的幂：4 bit 权重、无乘法器，相对 PoT 精度提升 8.72%。",
+          "keyExperiment": "Llama-3-8B W4A4：相对 PoT 提升 8.72%，相对均匀整数基线仅掉 0.4pp，保持移位-加数据通路。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
