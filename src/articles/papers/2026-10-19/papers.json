@@ -1,0 +1,342 @@
+{
+  "date": "2026-10-19",
+  "title": "2026-10-19 论文精选",
+  "lede": "今日主线是「把缓存与传输当成一等资源」：边缘 KV 迁移在传与算之间做配比、稀疏 KV 在选完之后重排位置、长推理把思考压进 pause token，训练侧则用无损压缩与注意力统计抠出显存和延迟。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 557
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "5 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "5 篇推荐",
+      "papers": [
+        {
+          "title": "Efficient KV Cache Migration for Geo-Distributed LLM Inference in Collaborative Edge Computing",
+          "score": 4.3,
+          "category": "cs.DC",
+          "date": "2026-10-16",
+          "authors": "Mingjin Zhang, Jiannong Cao, Tao Wu, Xiangchun Chen, Ne Wang",
+          "institutions": "The Hong Kong Polytechnic University, National University of Defense Technology, Wuhan University",
+          "abstract": "大模型推理高度依赖集中式云 GPU 集群，带宽成本、延迟与隐私问题突出。协作边缘计算把模型分片与对应的 KV cache 分散部署到多个地理分布的异构边缘服务器上联合推理，但边缘节点容易掉线或过载，必须把有状态的 KV cache 迁到其它节点才能维持服务连续。云端常用的跨 GPU 直传与按输入 token 重算这两种手段，在带宽受限、算力紧张的边缘环境都不合用。作者提出 EdgeFlow 混合迁移方案：把 KV 直传与基于激活的重计算并行编排，用本地算力补足带宽缺口，从而压缩迁移时间；再把多节点 KV 迁移建成优化问题，基于改进的线性规划松弛与二分图技巧设计出 2-近似算法。真实分布式 LLM 推理平台的实验显示迁移时间最多降低 45%。",
+          "contributions": [
+            "提出 KV 直传与激活重计算并行的混合迁移方案，按带宽与算力动态配比，用算力换带宽。",
+            "把多节点 KV 迁移形式化为优化问题，基于改进 LP 松弛与二分图给出 2-近似算法，保证解的质量。",
+            "在真实协作边缘分布式推理平台上实现并验证，迁移时间最多降低 45%。"
+          ],
+          "conclusions": [
+            "在带宽受限的边缘环境里，混合传算明显优于纯直传或纯重算的单一路线。",
+            "多节点迁移可归约为带近似的组合优化，节点异构与掉线场景下仍能保持服务连续。"
+          ],
+          "experiments": [
+            "真实分布式 LLM 推理平台上，KV 迁移时间相比基线最多降低 45%。",
+            "实验覆盖多节点协同的边缘部署，验证混合迁移在不同带宽与算力配比下的稳健性。"
+          ],
+          "significance": "把 KV 迁移从带宽够不够的问题，变成传输与重算如何配比的可优化调度问题。",
+          "takeaway": "边缘场景下 KV 迁移的最优解不是全传或全算，而是让传输与重算并行分摊。",
+          "keyExperiment": "真实边缘平台上迁移时间最多降低 45%，且算法具备 2-近似保证。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22172",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22172.pdf",
+          "channel": "AI Infra",
+          "index": 1
+        },
+        {
+          "title": "LCT: Losslessly Compressed Tensors with GPU friendly execution for Training",
+          "score": 4.2,
+          "category": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Max Zhu, Bohang Sun, Pietro Lio, Jialin Yu",
+          "institutions": "University of Cambridge, University of Oxford",
+          "abstract": "无损张量压缩本可以降低训练显存，但训练中张量要被反复读取与写回，编解码开销很容易吃掉压缩收益。LCT 是面向这种反复编码解码场景的 GPU 执行框架：它利用浮点数据的天然冗余来压缩权重、激活与优化器状态，并把带预计算码本的 Huffman 编码实现成高度优化的 GPU kernel，把压缩与解压开销压到训练可接受的水平；论文同时分析了存储成本模型以及数值幅度漂移时压缩率如何变化。实测压缩比最高 1.455 倍；在 162M 参数的 NanoGPT 上显存降低 24.6%，代价是步时增加 7.2%；在 Qwen3-4B 微调中峰值显存最多节省 23.8%，同卡可训练上下文长度提升到 3.5 倍。",
+          "contributions": [
+            "设计面向反复编解码的 GPU Huffman 编码框架，用预计算码本把 kernel 开销降到可用水平。",
+            "给出存储成本与数值幅度漂移下的自适应分析，说明何时该压、压缩比能到多少。",
+            "在预训练与微调两类场景实证显存收益，并把它直接换成更大的训练上下文。"
+          ],
+          "conclusions": [
+            "训练期无损压缩的瓶颈在编解码吞吐，不在压缩算法本身，GPU kernel 优化是关键。",
+            "省下的显存可以换成上下文长度，这是比单纯降低显存占用更有价值的兑换。"
+          ],
+          "experiments": [
+            "162M NanoGPT 上显存降低 24.6%，步时只增加 7.2%。",
+            "Qwen3-4B 微调峰值显存最多省 23.8%，同卡上下文长度扩大 3.5 倍。",
+            "最高压缩比达 1.455 倍，覆盖权重、激活与优化器状态。"
+          ],
+          "significance": "证明无损压缩在训练循环里也能算得过账，为显存换上下文提供了新杠杆。",
+          "takeaway": "把编解码做成 GPU kernel 后，无损压缩的收益可以覆盖它的开销。",
+          "keyExperiment": "Qwen3-4B 微调省 23.8% 峰值显存，同卡上下文长度提升 3.5 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22179",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22179.pdf",
+          "channel": "AI Infra",
+          "index": 2
+        },
+        {
+          "title": "PriorityFEC: Deadline-Aware Streaming FEC for KV-Cache Handoff in Edge Multi-Agent Systems",
+          "score": 3.9,
+          "category": "cs.NI",
+          "date": "2026-10-16",
+          "authors": "Han Shen, Qifu Tyler Sun, Fanyang Meng, Ye Wang, Yongsheng Liang",
+          "institutions": "机构未标注",
+          "abstract": "多 agent 大模型系统越来越多地部署在边缘，agent 之间传递任务上下文时，上游已经处理过的内容往往要在下游重新 prefill，造成大量重复计算。复用已预填的 KV cache 可以省掉这次重算，但必须在接收方开始生成前把 KV 状态经网络送过去。在严格的 TTFT 截止时间与不可靠的边缘链路上，完整传完 KV cache 往往不可行，只能在有限传输预算内优先保护最有价值的部分。PriorityFEC 把模型侧 KV 重要性与传输侧可靠性联合起来：先按效用把高价值 KV 块排到流的前部，构造效用感知的源流；再用带接收端反馈的流式 FEC，在截止时间前调度修复包补齐丢失块。作者在分布式边缘 LLM 服务原型上用 Qwen2.5-7B-Instruct 与 Llama-3.1-8B-Instruct 评测，任务质量优于对比的传输方案，截止时间越紧优势越明显。",
+          "contributions": [
+            "构造效用感知的 KV 源流，把模型侧的 KV 重要性映射到传输块的先后顺序。",
+            "设计基于 ACK 滑窗的反馈自适应流式 FEC，在 TTFT 截止前按反馈调度修复包。",
+            "在边缘 LLM 服务原型上跨两个模型与多个数据集验证，紧截止条件下收益最大。"
+          ],
+          "conclusions": [
+            "KV 复用能否救回冗余 prefill，取决于传输层能否在截止时间内送到关键信息。",
+            "把 KV 效用与传输可靠性放在一起优化，比各自独立设计更有效。"
+          ],
+          "experiments": [
+            "在 Qwen2.5-7B-Instruct 与 Llama-3.1-8B-Instruct 上，任务质量优于对比传输方案。",
+            "TTFT 截止时间收紧时，PriorityFEC 相对基线的优势进一步扩大。"
+          ],
+          "significance": "把 KV cache 交接当成一个有截止时间的流传输问题，而不是一次尽力而为的文件传输。",
+          "takeaway": "边缘 KV 交接先送最值钱的块，再用 FEC 补齐，才算得过 TTFT 这笔账。",
+          "keyExperiment": "严格截止约束下任务质量优于对比传输方案，且时限越紧优势越大。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21390",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21390.pdf",
+          "channel": "AI Infra",
+          "index": 3
+        },
+        {
+          "title": "Compression Does Not End at Selection: Post-Selection Positional Geometry for Sparse KV Caches",
+          "score": 4.0,
+          "category": "cs.CL",
+          "date": "2026-10-16",
+          "authors": "Wanyang Hong, Zhaoning Zhang",
+          "institutions": "National University of Defense Technology",
+          "abstract": "稀疏 KV 压缩只保留部分历史状态来降低长上下文推理成本，但这些状态通常仍沿用全历史的位置坐标。在 RoPE 下，被淘汰 token 留下的位置空洞会继续影响 query 与 key 的匹配，限制保留证据的利用率。作者研究选择之后的位置几何：在固定 selector 产出的 cache 上，考察位置组织如何影响信息利用。为此提出 RoPERelay，给保留的 KV 分配紧凑保序的 RoPE 坐标，通过逆旋转再旋转搬移缓存 key 的相位，并同步当前 query 与后续生成，不需要重新选择、历史重 prefill 或额外缓存预算。跨 2 个模型、6 种稀疏选择器、3 个长期记忆任务的 36 组对比中 32 组提升；Llama-3.1-8B 配 BM25 在 LongMemEval-S 上准确率从 23.6% 升到 35.4%，完整请求耗时只多 1% 到 3%。",
+          "contributions": [
+            "指出选择之后的位置几何是稀疏 KV 压缩中一个独立且被忽略的优化维度。",
+            "提出 RoPERelay，用逆旋转与再旋转重定位 key 相位，零额外缓存、零重新 prefill。",
+            "在 2 模型 6 选择器 3 任务的 36 组对比中系统验证，32 组取得提升。"
+          ],
+          "conclusions": [
+            "内容选对了不等于用得起来，位置坐标的组织方式同样决定稀疏缓存的实际收益。",
+            "位置重排的代价极低，可以叠加在任何现有稀疏选择器之上。"
+          ],
+          "experiments": [
+            "36 组对比中 32 组答案质量提升，覆盖 2 个模型与 6 种稀疏选择器。",
+            "Llama-3.1-8B 配 BM25 在 LongMemEval-S 上准确率 23.6% 提升到 35.4%。",
+            "完整请求的时间开销仅增加约 1% 到 3%。"
+          ],
+          "significance": "给稀疏 KV 压缩补上了选择之后这一环，把位置几何变成可独立调优的维度。",
+          "takeaway": "稀疏 KV 不只该选对内容，还要把保留内容的 RoPE 坐标压实。",
+          "keyExperiment": "LongMemEval-S 上准确率 23.6% 到 35.4%，额外开销仅 1% 到 3%。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21126",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21126.pdf",
+          "channel": "AI Infra",
+          "index": 4
+        },
+        {
+          "title": "FlashAttention with Statistics: Low-Overhead Attention Features for Compact Hallucination Detectors",
+          "score": 3.8,
+          "category": "cs.AI",
+          "date": "2026-10-16",
+          "authors": "Andrei Volodichev, Maksim Savichev, Nikita Sviridov, Artem Yuliy, Dmitry Simakov, Alexey Zaytsev",
+          "institutions": "Applied AI Institute, Risk AI Research Lab",
+          "abstract": "大模型会生成流畅但缺乏上下文支撑的答案。用小而冻结的代理模型同时读上下文与回答，可以在不接触生成模型内部的情况下检测这类幻觉。基于注意力的检测器依赖注意力权重的统计量，但常规做法要显式物化注意力矩阵，显存随序列长度平方增长。作者改为不物化注意力也能算出这些统计量：在 FlashAttention 过程中累加、pass 之后稀疏查表、或对分数再走一遍分块，并按路径把特征分为近乎免费与较贵两类。H100 上 5 个已发表检测器的统计量给 Qwen3-8B 前向增加的延迟，2K token 时为 16%，35K token 时降到 1.4%，每个回答 token 只需 22.5 KiB。三个基准上，4B 冻结 Qwen3 代理的探针在两个基准的 F1 上超过 9 个零样本 4-9B 判官中最强者，12 组基准-代理对中有一半因注意力特征显著提升 F1。",
+          "contributions": [
+            "提出在 FlashAttention 内部累加注意力统计量的三条路径，避免物化二次规模的注意力矩阵。",
+            "按实现代价把注意力特征分为近乎免费与较贵两类，给出可复用的工程划分。",
+            "证明小代理模型加注意力特征的检测器可超过同规模甚至更大的 LLM 判官。"
+          ],
+          "conclusions": [
+            "注意力统计量可以在几乎不增加延迟的前提下拿到，长上下文时开销反而更小。",
+            "让代理模型做探针比让它直接当判官更划算，注意力特征还能再补一截 F1。"
+          ],
+          "experiments": [
+            "H100 上 2K token 时延迟增加 16%，35K token 时仅增加 1.4%。",
+            "每个回答 token 只存 22.5 KiB 的统计量。",
+            "4B 代理在两个基准的 F1 上超过最强零样本 4-9B 判官；12 组对比中 6 组因注意力特征显著提升 F1。"
+          ],
+          "significance": "把注意力特征从昂贵的事后分析变成顺手可得的副产品，让小模型检测器更有竞争力。",
+          "takeaway": "在 FlashAttention 里顺路算统计量，长上下文下几乎零成本。",
+          "keyExperiment": "35K token 时额外延迟仅 1.4%，4B 代理 F1 超过更强 LLM 判官。",
+          "arxivUrl": "https://arxiv.org/abs/2610.21483",
+          "pdfUrl": "https://arxiv.org/pdf/2610.21483.pdf",
+          "channel": "AI Infra",
+          "index": 5
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "AbridgeKV: Compressing Long Reasoning into the KV Cache of Learned Pause Tokens",
+          "score": 4.5,
+          "category": "cs.CL",
+          "date": "2026-10-16",
+          "authors": "Jack Cai, Lijie Yang, Vasilis Kontonis, Dimitris Papailiopoulos, Shivam Garg",
+          "institutions": "Princeton University, Microsoft Research",
+          "abstract": "长链式思维解码是显存受限的：生成 token 的 KV cache 随测试时计算量线性增长。直接逐出缓存条目并不能解决问题，因为模型从未在缺失条目的缓存上训练过，反而会写得更长。作者改为训练模型压缩自己的输出：AbridgeKV 把每个已完成的生成块压进少数几个学到的 pause token 的 KV 条目，这些 token 是带可训练 embedding 的额外输入且不产出输出；块编码完成后原始缓存被释放，后续 token 改为关注 pause token 的 KV。三个关键设计是：pause token 的 KV 位置落在被替换的块内部、缓存预算按各层实测价值分配、以较大的块为单位压缩。在 446 道竞赛题、32K token 生成下，只保留四分之一缓存，准确率与输出长度就与同样训练的全 KV 模型持平；vLLM 中每序列缓存小 3.5 倍，饱和 H100 上完成一题快 3.2 倍。",
+          "contributions": [
+            "提出让模型自己把生成的推理块压缩成 pause token 的 KV，训练与推理一体化。",
+            "给出三个使压缩可行的设计：块内位置编码、按层价值分配预算、大块压缩。",
+            "在 vLLM 中落地，把缓存压缩直接转成吞吐与延迟收益。"
+          ],
+          "conclusions": [
+            "逐出式压缩对长推理失效，必须训练模型适应被压缩的缓存。",
+            "保留四分之一缓存即可维持精度与输出长度，说明推理 KV 冗余极高。"
+          ],
+          "experiments": [
+            "446 道竞赛题、32K token 生成下，保留 1/4 缓存与全 KV 精度持平。",
+            "同样预算下最强已发表逐出方法写得更长，最接近的训练式压缩器掉 10 分。",
+            "vLLM 中每序列缓存小 3.5 倍，饱和 H100 上完成一题快 3.2 倍。"
+          ],
+          "significance": "把长推理的显存瓶颈从缓存管理问题转成可训练的输出压缩问题。",
+          "takeaway": "与其事后逐出，不如训练模型把思考过程压进 pause token 的 KV。",
+          "keyExperiment": "保留 1/4 缓存精度不掉，vLLM 中每序列缓存小 3.5 倍、端到端快 3.2 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20641",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20641.pdf",
+          "channel": "Algorithms",
+          "index": 6
+        },
+        {
+          "title": "TIPS: A Tiny Inference-time Policy for Scaling in Diffusion Language Models",
+          "score": 3.9,
+          "category": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Ya-Shi Zhang, Jian Tang, Pierre-André Noël, Oleksiy Ostapenko",
+          "institutions": "Mila - Quebec AI Institute, ServiceNow AI Research",
+          "abstract": "掩码扩散语言模型在推理时面临一个选择：每一轮去噪之后让哪些位置变得可见。现有很多解码方法要么依赖手工规则，要么要求可见集合单调增长。作者提出 TIPS，一个约 60 万参数的控制器，既学解掩码也学重新掩码，底层语言模型完全冻结。它用感知可见性的置信度特征与一层浅 Transformer 来挑选哪些 token 可见，可见比例由固定调度控制；训练上先做监督预热，再用终局正确性奖励做强化学习。在 LLaDA-8B-Instruct 的 GSM8K 与 MATH-500 上，全画布与两块两个变体在 32 次解码器评估的预算下分别达到 58.46% 与 57.97% 的微平均准确率，比主对比中最强基线高 12.1 与 11.6 个百分点；两个变体都只在 32 次评估预算下训练，换成更高预算时无需重训仍然有竞争力。",
+          "contributions": [
+            "用一个约 60 万参数的轻量控制器学习扩散 LM 的解掩码与重掩码策略。",
+            "引入感知可见性的置信度特征与固定可见比例调度，把策略与预算解耦。",
+            "监督预热加终局奖励强化学习，在冻结主干的前提下提升准确率。"
+          ],
+          "conclusions": [
+            "扩散 LM 的可见性调度值得学习而不是手写，小控制器就够用。",
+            "训练在固定预算上的策略可以外推到更高预算，说明学到的是策略而非特定步数。"
+          ],
+          "experiments": [
+            "LLaDA-8B 上 32 次评估预算时，GSM8K 与 MATH-500 微平均准确率 58.46%。",
+            "两块变体达到 57.97%，比最强基线高 12.1 与 11.6 个百分点。",
+            "更高解码预算下无需重训仍保持竞争力。"
+          ],
+          "significance": "把扩散语言模型的解码顺序变成一个可学习、可迁移的小策略问题。",
+          "takeaway": "60 万参数的小策略就能决定扩散 LM 该先看哪些 token。",
+          "keyExperiment": "32 次评估预算下准确率 58.46%，比最强基线高 12.1 个百分点。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22099",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22099.pdf",
+          "channel": "Algorithms",
+          "index": 7
+        },
+        {
+          "title": "EliteReplay: Preserving Diverse Solutions in RL Post-Training via Quality-Diversity Search",
+          "score": 3.7,
+          "category": "cs.AI",
+          "date": "2026-10-16",
+          "authors": "Hanane Nour Moussa, Doeun Lee, Sachin Kumar",
+          "institutions": "The Ohio State University",
+          "abstract": "强化学习已成为提升大模型在可验证任务上准确率的常用后训练手段，但这种训练会收窄模型能产出的解集合。已有若干方法试图缓解这种行为锐化，但它们优化的指标往往并不反映正确解的多样性。理想情况是模型能给出多个都正确的解，而不只是一个可靠的解。作者提出 EliteReplay：把 GRPO 与一个由质量-多样性搜索构建的精英档案配对。训练前先用冻结的基座模型收集覆盖不同解题路线的解；训练中在 GRPO 之外对这份档案加一个回放损失。结果是后训练模型在提升准确率的同时保住更多基座的解多样性。在多个 text-to-SQL 任务上，EliteReplay 的 pass@128 高于全部基线，产出的不同正确策略最多比最强基线多 77%，并保住了基座模型大部分正确策略；在歧义问题上这种多样性带来实际收益，在 AmbiQT 上同时覆盖两种解读的频率接近最强基线的两倍。",
+          "contributions": [
+            "用质量-多样性搜索预先构建精英档案，显式覆盖不同的正确解题路线。",
+            "把档案回放损失与 GRPO 结合，在提准确率的同时抑制解空间收窄。",
+            "在 text-to-SQL 与歧义问题上分别验证了多样性指标与实际收益。"
+          ],
+          "conclusions": [
+            "RL 后训练的多样性损失可以用离线精英档案回放来补偿。",
+            "多样性不是装饰，在歧义问题上直接转化为覆盖率与准确率。"
+          ],
+          "experiments": [
+            "多个 text-to-SQL 任务上 pass@128 高于全部基线。",
+            "不同正确策略数量最多比最强基线多 77%。",
+            "AmbiQT 上同时覆盖两种解读的频率接近最强基线的两倍。"
+          ],
+          "significance": "给 RL 后训练加了一条保多样性的低成本通路，不牺牲主任务的准确率。",
+          "takeaway": "用质量-多样性档案回放，把被 GRPO 压窄的解空间撑回来。",
+          "keyExperiment": "不同正确策略最多多 77%，歧义问题上双解读覆盖接近基线两倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22290",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22290.pdf",
+          "channel": "Algorithms",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "TurboMamba: Faster Inference, Faster Training, and Better Prediction with Lexical Memory",
+          "score": 3.6,
+          "category": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Hanxin Zhang",
+          "institutions": "University of Pittsburgh",
+          "abstract": "作者提出 TurboMamba：全局 Mamba-3 每完成一个 token 块才运行一次，块内由一个小 Transformer 结合全局上下文与块内已有 token 预测下一个 token。三项轻量增补改善局部预测：直连上一块的最后一个 token、对下一 token 分数做小幅修正、与近期 token 频率做可学习混合。在 FineWeb-Edu 上以参数量可比、训练预算封顶的方式对比十二个小规模实现，基线含 Transformer、Mamba-3、Jamba 与 Zamba。TurboMamba 平均测试 NLL 最低，比 Mamba-3 低 9.4%、比 Jamba 版本低 7.3%、比 Zamba 版本低 18.3%；端到端训练吞吐分别是三者的 2.60、2.81、4.82 倍，32 条序列的批推理延迟分别加速 3.12、3.53、6.21 倍。",
+          "contributions": [
+            "提出块级全局 Mamba 加块内小 Transformer 的混合架构，把长程记忆与局部预测分工。",
+            "加入上一块末 token 直连、分数修正与近期频率混合三项轻量组件。",
+            "在统一参数与训练预算下对十二个实现做完整对照，兼顾损失与吞吐。"
+          ],
+          "conclusions": [
+            "全局状态不必每个 token 都更新，按块更新即可兼顾质量与速度。",
+            "混合架构在训练吞吐上的优势来自块内并行的 Transformer 而非顺序扫描。"
+          ],
+          "experiments": [
+            "平均测试 NLL 比 Mamba-3 低 9.4%，比 Jamba 版本低 7.3%，比 Zamba 版本低 18.3%。",
+            "端到端训练吞吐为 Mamba-3 的 2.60 倍、Zamba 版本的 4.82 倍。",
+            "批推理延迟相对 Mamba-3、Jamba、Zamba 分别加速 3.12、3.53、6.21 倍。"
+          ],
+          "significance": "给出一种块级记忆更新的混合架构，同时改善损失、训练吞吐与推理延迟。",
+          "takeaway": "全局状态按块更新、块内并行预测，可同时拿到更低的损失和更高的吞吐。",
+          "keyExperiment": "训练吞吐 2.60 倍于 Mamba-3，批延迟加速 3.12 倍，NLL 还低 9.4%。",
+          "arxivUrl": "https://arxiv.org/abs/2610.20682",
+          "pdfUrl": "https://arxiv.org/pdf/2610.20682.pdf",
+          "channel": "Architecture",
+          "index": 9
+        },
+        {
+          "title": "ABNAT: Attention-Based Noise-Aware Training for Robust Transformers on Analog Compute-in-Memory Systems",
+          "score": 3.5,
+          "category": "cs.LG",
+          "date": "2026-10-16",
+          "authors": "Wenshuai Yao, Wenyong Zhou, Hanyong Shao, Zhiyuan Ning, Yizhe Chen, Yuannuo Feng, Kechao Tang, Ru Huang",
+          "institutions": "Peking University",
+          "abstract": "Transformer 已成为各类任务的主干，但密集计算与数据搬运带来巨大能耗。模拟存内计算（CIM）是更省能的替代方案，但其固有的硬件非理想性会扰动存储的权重，显著劣化模型性能。现有噪声感知训练通过在训练中注入噪声来提升鲁棒性，却基本忽略了注意力机制在其中的关键作用。作者分析了 CIM 噪声如何重塑 Transformer 的注意力，得到两点观察：干净与含噪注意力图的差异在深层显著放大；常规方法即便注意力走向已明显偏离参考，仍会过度自信。据此提出 ABNAT：让含噪学生模型去保持干净教师模型的逐头注意力路径，而不只是复现答案，无需改硬件、也不增加推理开销；选择性变体进一步降低训练成本。在视觉、语言与多模态 Transformer 上，ABNAT 相对对应噪声感知基线一致提升鲁棒性，噪声导致的精度损失最多挽回 11.28%，注意力偏差最多降低 85.77%。",
+          "contributions": [
+            "分析 CIM 噪声对注意力的影响，指出深层注意力图偏移放大与过度自信两个问题。",
+            "提出以逐头注意力路径为监督目标的噪声感知训练，替代只对齐输出答案的做法。",
+            "给出选择性变体降低训练成本，并在视觉、语言、多模态三类模型上验证。"
+          ],
+          "conclusions": [
+            "模拟存内的鲁棒性瓶颈在注意力路径而不只在输出，监督目标要换。",
+            "不动物理器件、不加推理开销，仅改训练目标就能显著收回精度损失。"
+          ],
+          "experiments": [
+            "视觉、语言、多模态 Transformer 上均优于对应噪声感知基线。",
+            "噪声导致的精度损失最多挽回 11.28%。",
+            "注意力偏差最多降低 85.77%。"
+          ],
+          "significance": "为模拟存内计算的 Transformer 部署提供了一条零推理开销的鲁棒性路线。",
+          "takeaway": "对抗模拟存内的权重噪声，监督注意力路径比监督答案更有效。",
+          "keyExperiment": "精度损失挽回最多 11.28%，注意力偏差降低最多 85.77%。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22065",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22065.pdf",
+          "channel": "Architecture",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
