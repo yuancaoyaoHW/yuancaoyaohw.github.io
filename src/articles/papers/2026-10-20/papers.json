@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-20",
+  "title": "2026-10-20 论文精选",
+  "lede": "今日主线是“显存与通信的编排”：万卡 MoE 训练按批次精确申请显存、生产轨迹揭示 KV 常驻的真实成本，另一端是 CPU-GPU 分流、码本传输与稀疏索引共享把通信和访存压到极限。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 464
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "BaGuaLu-2: Taming Dynamic Memory Fluctuation for Efficient MoE Model Training over 10,000 GPUs",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-19",
+          "authors": "Mingshu Zhai, Minkun Guo, Hongrui Lian, Shuangyu Li, Qi Zhang, Chen Hu, Xiawei Du, Yuyang Jin, Zan Zong, Jidong Zhai",
+          "institutions": "Tsinghua University, Qingcheng.AI",
+          "abstract": "细粒度 MoE 已成为扩展大模型的主流架构，但动态专家负载不均会造成剧烈显存波动，拖垮训练效率。现有系统只能静态分配显存：要么按峰值过度预留、在常态下让大量 GPU 显存闲置，要么预留不足、在负载尖峰时触发 OOM 并被迫回滚。论文提出 BaGuaLu-2，把显存分配从“一次性调参”变成“逐批次连续细粒度控制”：为每个训练批次按需申请精确的激活显存，同时用系统级优化抵消动态管理本身的开销。系统在 12,288 张 GPU 上训练 1,040 亿参数 MoE 模型，持续算力超过 2 EFlops、MFU 达 35%。",
+          "contributions": [
+            "把激活显存分配从静态预留改为逐批次按需申请，直接消除过配与欠配的两难",
+            "设计动态管理开销的系统级补偿机制，使灵活供显存不牺牲训练吞吐",
+            "在万卡级 MoE 训练上验证了方案的扩展性与稳定性"
+          ],
+          "conclusions": [
+            "动态显存管理可以与静态方案持平甚至更快的吞吐，同时显著降低 OOM 风险",
+            "超大规模 MoE 训练的瓶颈正从算力转向“负载驱动的显存编排”"
+          ],
+          "experiments": [
+            "在 12,288 张 GPU 上训练 1,040 亿参数模型，持续算力超过 2 EFlops、MFU 35%",
+            "平均吞吐比 Megatron-Kuai 提升 1.14 倍，比 AdaPipe 提升 1.13 倍",
+            "在负载尖峰场景下避免 OOM 回滚，无需为峰值预留显存"
+          ],
+          "significance": "万卡 MoE 训练把显存管理从静态调参升级为按批次闭环控制，是训练系统走向弹性化的一步。",
+          "arxivUrl": "https://arxiv.org/abs/2610.23064",
+          "pdfUrl": "https://arxiv.org/pdf/2610.23064.pdf",
+          "index": 1,
+          "takeaway": "显存从“预留峰值”改为“按批次精确申请”，万卡训练同时拿到高 MFU 与零 OOM",
+          "keyExperiment": "12,288 GPU 训练 1,040 亿参数 MoE，2 EFlops / 35% MFU，吞吐比 Megatron-Kuai 高 1.14 倍"
+        },
+        {
+          "title": "Understanding KV Residency in Production-Scale Agentic LLM Workloads",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-19",
+          "authors": "Mayank Arya, Agrim Bari, Anjaly Parayil, Yogesh Simmhan, Renee St. Amant, Victor Rühle, Saravan Rajmohan",
+          "institutions": "Microsoft (M365)",
+          "abstract": "智能体类 LLM 应用会把一次用户请求展开成跨模型与工具的多轮调用，上下文随之持续增长。把上下文对应的 KV 状态常驻 GPU，可让后续调用复用而不必重算，但在集群尺度下会吃掉巨量显存。论文基于 Microsoft M365 的四条生产轨迹（Deep Research、企业助手、编码智能体、企业聊天），覆盖 1.21 亿次以上模型调用，刻画了 KV 驻留行为：Deep Research 中 89% 的模型调用由应用层发起，第 30 次调用时中位上下文从约 10K 涨到 68K token，约 80% 的上下文 token 由前缀缓存命中。",
+          "contributions": [
+            "首次用亿级真实调用轨迹量化智能体负载的 KV 常驻特征与显存需求",
+            "提出“空闲上限”这类轻量策略，可在重算率几乎不变的前提下大幅压缩显存上限",
+            "指出预算更紧时仅靠淘汰不足，需要与重算/分层存储协同"
+          ],
+          "conclusions": [
+            "智能体负载的显存压力来自会话长尾，而非平均上下文长度",
+            "按空闲时间淘汰 KV 是性价比最高的第一杠杆，重算代价远低于显存代价"
+          ],
+          "experiments": [
+            "以 Llama-2-70B KV 布局估算，单个 P99 Deep Research 会话就超过 H100 的 80 GB 显存",
+            "全部活跃会话按峰值驻留约需 501.8 TB HBM，而推理只占驻留时间的 5.6%",
+            "设置一小时空闲上限把显存上限降低 3.6 倍，重算上下文占比仅从 4.07% 升到 4.53%"
+          ],
+          "significance": "把“KV 缓存该驻留多久”这一工程直觉，变成了有生产数据支撑的容量规划依据。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22863",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22863.pdf",
+          "index": 2,
+          "takeaway": "生产轨迹证明 5.6% 的推理时间占据全部显存，一小时空闲上限即可砍掉 3.6 倍显存",
+          "keyExperiment": "1.21 亿次调用、501.8 TB 峰值 HBM 估算、空闲上限降 3.6 倍而重算仅 +0.46pp"
+        },
+        {
+          "title": "Efficient CPU-GPU collaborative MoE inference via Adaptive Expert Assignment",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-19",
+          "authors": "Wenhui Lv, Yunming Liao, Hongli Xu, Yang Xu, Junhao Cheng",
+          "institutions": "University of Science and Technology of China",
+          "abstract": "MoE 通过稀疏激活专家降低推理算力，但专家参数总量常超出 GPU 容量，显存受限时只能做专家卸载。现有系统对未命中 GPU 的专家只有两种处理：搬到 GPU 上算，付出高额 PCIe 传输延迟；或留在 CPU 上算，让较慢的 CPU 成为瓶颈。论文提出 Apex，一个 CPU-GPU 协同的 MoE 推理系统，按专家 token 负载差异做自适应指派：把高负载专家传到 GPU、低负载专家留在 CPU，并持续调整指派以平衡“CPU 计算路径”与“GPU 传输加计算路径”，让两条路径尽早同时完成。",
+          "contributions": [
+            "用专家 token 负载作为分流依据，避免“全部搬 GPU”或“全部留 CPU”的极端",
+            "把专家指派建模为双路径延迟平衡问题并在线自适应调整",
+            "在三个主流 MoE 大模型上验证了不同显存预算下的一致性收益"
+          ],
+          "conclusions": [
+            "专家卸载的关键不是传输带宽本身，而是把传输与计算编排成并行的两条流水",
+            "按负载分流比单纯优化 PCIe 拷贝更能提升端到端时延"
+          ],
+          "experiments": [
+            "在三个代表性 MoE 大模型上，prefill 速度最高提升 51.9%",
+            "decode 吞吐最高提升 39.5%（相对最强基线）",
+            "在不同 GPU 显存预算下均保持稳定收益"
+          ],
+          "significance": "为显存受限场景的 MoE 推理给出了“分流而非全搬”的实用工程范式。",
+          "arxivUrl": "https://arxiv.org/abs/2610.23006",
+          "pdfUrl": "https://arxiv.org/pdf/2610.23006.pdf",
+          "index": 3,
+          "takeaway": "按专家 token 负载在 CPU/GPU 间动态分流，prefill 快 51.9%、decode 吞吐高 39.5%",
+          "keyExperiment": "三个 MoE 模型上 prefill +51.9%、decode 吞吐 +39.5%，跨显存预算稳定"
+        },
+        {
+          "title": "FuTransformer: FP8 prefill and INT4 decode for Llama-style inference on Hopper",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-19",
+          "authors": "Wei Wang",
+          "institutions": "机构未标注",
+          "abstract": "prefill 阶段权重跨 token 复用，瓶颈在矩阵乘与激活搬运；单 token decode 复用极少，瓶颈在权重与 KV cache 读取，两者需要完全不同的量化与数据布局策略。论文给出 FUTRANSFORMER：面向 NVIDIA Hopper 的 Llama 风格 Transformer 块 CUDA 实现。它把 GEMM-plus-epilogue 思路用于推理，加入 KV cache 直接落位、把固定 RMSNorm 增益折进权重、按延迟缩放直接写 FP8 输出，并支持免 padding 的 prefill；decode 侧使用 INT4 投影权重与 INT4 KV cache 拷贝，权重与 key 直接按 Tensor Core 片段布局存放以省去整块中间 tile。",
+          "contributions": [
+            "prefill 走 FP8、decode 走 INT4 的非对称量化方案，分别对齐两阶段的带宽/算力瓶颈",
+            "权重与 KV 按 Tensor Core 片段布局直接反量化进 MMA 操作数，免去中间 tile 物化",
+            "用块对角 Hadamard 变换抑制 outlier 通道，降低 cache 量化误差"
+          ],
+          "conclusions": [
+            "按阶段选择位宽比统一低精度更能榨干 Hopper 的有效算力与带宽",
+            "epilogue 融合（归一化折权重、直接写 FP8、直接落 KV）是拉开差距的主要来源"
+          ],
+          "experiments": [
+            "单张 H100 上 prefill 比编译版 PyTorch FP8 快 1.48 倍，达到 1.29 PFLOP/s",
+            "8B 形状 SwiGLU 的 gate/up 投影：BF16 路径比 CODA 快 1.13 倍，FP8 路径比 BF16 CODA 快 2.02-2.18 倍",
+            "8B 与 70B 形状、batch 1-32 下，INT4 decode 比 PyTorch BF16/INT4 中较快者快 1.3-2.4 倍"
+          ],
+          "significance": "一份可复用的 Hopper kernel 工程清单，说明 prefill/decode 分阶段量化能拿到多少真实收益。",
+          "arxivUrl": "https://arxiv.org/abs/2610.23796",
+          "pdfUrl": "https://arxiv.org/pdf/2610.23796.pdf",
+          "index": 4,
+          "takeaway": "prefill FP8 + decode INT4，H100 上 prefill 1.29 PFLOP/s、decode 快 1.3-2.4 倍",
+          "keyExperiment": "H100 单卡 prefill 1.48× 于 PyTorch FP8，INT4 decode 1.3-2.4× 于 PyTorch 最佳基线"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Prism Attention: Proposal-Refined Index Sharing Mechanism for Efficient LLMs Inference",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-19",
+          "authors": "Zhenxu Tian, Kebin Liu, Zhengwu Yang, Yi Su, Qingqing Dang, Yanlin Sha, Kaipeng Deng, Dianhai Yu, Yanjun Ma, Juntao Li, Min Zhang",
+          "institutions": "Soochow University, Baidu Inc.",
+          "abstract": "长上下文解码的瓶颈已从算力转到 KV cache 的访存与注意力计算。token 级稀疏注意力只对一小部分历史 token 计算，但每层都要重算稀疏索引，收益常被索引开销吃掉。常见补救是只在锚点层算索引、跨层共享，但这种静态复用忽略注意力模式的逐层演化，索引逐渐偏离各层最优点，带来明显注意力损失。论文重新审视跨层稀疏性，发现层间显著 token 的漂移高度局部化：各层 top-κ 索引虽有差异，核心高注意力 token 却保持稳定，变化集中在已选区扩张边界附近。",
+          "contributions": [
+            "揭示层间稀疏索引漂移的“局部化”规律，为跨层共享提供可解释依据",
+            "提出由粗到细的提案-精化索引机制，替代僵硬的全盘跨层复用",
+            "在保留层间自适应的同时保住跨层共享的索引复用收益"
+          ],
+          "conclusions": [
+            "跨层索引共享不该是“全盘照搬”，而应是“锚点提案 + 局部精化”",
+            "注意力动态的局部性使低成本精化足以追平逐层独立计算的效果"
+          ],
+          "experiments": [
+            "在推理与长上下文基准上取得主流稀疏注意力方法中的最优性能",
+            "128K 上下文下相对 FlashAttention 端到端解码加速 3.4 倍",
+            "索引开销随上下文增长的劣势被提案-精化机制抵消"
+          ],
+          "significance": "把跨层稀疏索引共享从工程近似提升为有注意力动力学依据的方法。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22985",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22985.pdf",
+          "index": 5,
+          "takeaway": "锚点层提案 + 边界局部精化，128K 上下文解码比 FlashAttention 快 3.4 倍",
+          "keyExperiment": "128K 上下文端到端解码加速 3.4×，推理与长上下文基准均为稀疏注意力 SOTA"
+        },
+        {
+          "title": "DLite: History-free Speculative Decoding for Agentic AI",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-19",
+          "authors": "Jiaming Xu, Hanzhen Wang, Tianlang Zhao, Jiewen Xiao, Chengze Yuan, Jiayi Pan, Yongkang Zhou, Jiancai Ye, Yu Wang, Guohao Dai",
+          "institutions": "Shanghai Jiao Tong University, Shanghai Innovation Institute",
+          "abstract": "投机解码用轻量草稿模型生成候选 token 再由目标模型验证，是大模型推理加速的主流手段。但智能体负载上下文长且持续演化、多轮交互频繁，论文观测到既有草稿模型在此类负载下接受长度最多下降 80%，而维持历史 KV cache 又带来可观的系统开销。作者指出增长的历史上下文是这两个问题的共同根源，并提出 DLite：直接复用目标模型的上下文化隐状态做局部投机预测，不显式维护历史上下文，把一个越来越复杂的建模问题降维成局部简单预测。",
+          "contributions": [
+            "定位“历史上下文增长”是草稿模型退化与系统开销的共同根因",
+            "提出无历史投机解码框架，复用目标模型隐状态做块内局部预测",
+            "用轻量顺序头以低开销恢复块内因果依赖，并配套两阶段训练策略"
+          ],
+          "conclusions": [
+            "智能体场景下投机解码的关键不是更大的草稿模型，而是摆脱历史 KV 依赖",
+            "把长程预测降解为局部预测，可同时改善接受长度与系统开销"
+          ],
+          "experiments": [
+            "在通用、长上下文与智能体负载上取得 2-6 的接受长度",
+            "相对当前最优方法 DSpark 最高提升 70%",
+            "消除了维持历史 KV cache 的系统开销"
+          ],
+          "significance": "为智能体时代的投机解码指了一条“扔掉历史”的路线，直接对准长上下文退化。",
+          "arxivUrl": "https://arxiv.org/abs/2610.23787",
+          "pdfUrl": "https://arxiv.org/pdf/2610.23787.pdf",
+          "index": 6,
+          "takeaway": "不维护历史 KV、复用目标模型隐状态做局部投机，接受长度 2-6、超 DSpark 70%",
+          "keyExperiment": "智能体/长上下文负载上接受长度 2-6，相对 DSpark 最多 +70%"
+        },
+        {
+          "title": "Where Prefill Expert Reduction Hurts MoE Models: A Few Prompt Tokens Carry Most of the Short-Answer F1 Loss",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-19",
+          "authors": "Zhiyuan Wang",
+          "institutions": "Independent Researcher",
+          "abstract": "prefill 阶段让 prompt token 只走更少的路由专家，是降低 MoE 服务成本的简单手段，但这种做法究竟损伤了什么并不清楚。论文在四个 MoE 模型家族上，用 token 级、层内与注意力路径三类干预定位损伤来源。发现专家数减半时，三个家族的 F1 损失主要体现为答案形式：模型仍能找到答案，却不再简短作答。在 Qwen3-30B-A3B 中，损失集中在答案前两个对话模板 token；在 DeepSeek-V2-Lite 中集中在最前 8-32 个 prompt token（指令所在位置）。",
+          "contributions": [
+            "用可解释干预把 MoE prefill 降本的性能损失定位到极少数 token 位置",
+            "区分“找不到答案”与“不按格式作答”两类损失，说明多数损失属后者",
+            "给出把全专家 token 放在任务接口位置的实用放置策略"
+          ],
+          "conclusions": [
+            "MoE prefill 降本的损失高度集中，可通过按位置分配专家预算规避",
+            "恢复 super expert 或 massive activation 只能挽回约四分之一损失，不如保护敏感位置"
+          ],
+          "experiments": [
+            "专家数减半时三个家族 F1 损失主要来自答案形式，模型仍能找到答案",
+            "Qwen3-30B-A3B 的损失由答案前 2 个模板 token 造成，DeepSeek-V2-Lite 由最前 8-32 token 造成",
+            "约 4% token 保持全专家并放在任务接口，F1 距原模型不到 1 分；随机放置则差约 3 分"
+          ],
+          "significance": "为 MoE 推理降本提供了一个“少花钱又少掉点”的位置感知预算分配思路。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22454",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22454.pdf",
+          "index": 7,
+          "takeaway": "prefill 专家减半的损失集中在答案前几个模板 token，约 4% 全专家放对位置即可守住 F1",
+          "keyExperiment": "4% token 全专家放在任务接口处，F1 距原模型 <1 分，随机放置差约 3 分"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "DIFFLET: A Fast Inference Engine for Diffusion Transformer Models on AWS Trainium",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-19",
+          "authors": "Bin Ma, Min Yu, Vijay Kodamalla, Jialin Liu, Dong Li",
+          "institutions": "Amazon Web Services (AWS)",
+          "abstract": "在 AWS Trainium2 上，扩散模型的每个组件都要按固定形状提前编译成程序，而不同模型的 pipeline 不同、请求的 prompt 长度不同、各去噪步的缓存决策也不同，静态编译与动态请求之间存在结构性矛盾。论文提出 Difflet 服务引擎：五条模型 pipeline 共享同一编译后端，联合注意力按注意力头拆分到多个核心执行，由宿主控制器在每一步去噪时决定跑降噪器还是复用上一步输出；设备上的小型探针程序每步只回传一个数作为缓存信号，常驻模型进程让所有程序跨请求保持加载。",
+          "contributions": [
+            "用共享编译后端统一五条扩散 pipeline，摊薄 AOT 编译与形状特化成本",
+            "按注意力头把联合注意力切分到多核，解决长序列注意力编译失败问题",
+            "设备端探针 + 宿主控制器实现去噪步级别的缓存决策与程序常驻"
+          ],
+          "conclusions": [
+            "专用加速器上的服务引擎，核心是把“编译期固定形状”与“运行期可变请求”重新对齐",
+            "把决策信号压缩成设备返回的单个数值，是低开销闭环控制的关键设计"
+          ],
+          "experiments": [
+            "五个图像/视频模型家族上，融合注意力使降噪步加速 1.2-4.3 倍（相对同框架 PyTorch/XLA 注意力）",
+            "32.8k 视觉 token 时，是唯一能编译通过的注意力实现",
+            "五个模型中四个上，常驻服务比每次重载权重的独立运行快 1.5-3.4 倍"
+          ],
+          "significance": "首个系统刻画 Trainium 上扩散 Transformer 服务的编译-形状-缓存三重约束并给出完整解法。",
+          "arxivUrl": "https://arxiv.org/abs/2610.23047",
+          "pdfUrl": "https://arxiv.org/pdf/2610.23047.pdf",
+          "index": 8,
+          "takeaway": "共享编译后端 + 按头切分注意力 + 设备端缓存探针，降噪步快 1.2-4.3 倍",
+          "keyExperiment": "32.8k 视觉 token 下唯一可编译的注意力，常驻服务快 1.5-3.4 倍"
+        },
+        {
+          "title": "Agentic AI for Heterogeneous System Design Across Chip, Scale-Up, and Scale-Out Domains",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-19",
+          "authors": "Murali Emani, Kashyap R Manjusha",
+          "institutions": "Argonne National Laboratory, University of Illinois Urbana-Champaign",
+          "abstract": "现代 AI/HPC 系统的设计空间已扩展到 GPU、数据流处理器、RISC-V 加速器等多种计算架构，HBM/GDDR/SRAM 等多种存储，以及 NVLink、UALink、Infinity Fabric、InfiniBand、Slingshot、Ultra Ethernet 等互连。没有任何单一架构能在 LLM 训练、LLM 服务与 AI 耦合 HPC 负载上同时最优，而组合设计空间大到无法人工遍历。论文提出 ArchAgent：由 LLM 规划器把系统设计分解为芯片、scale-up、scale-out 三个子问题，各由专家智能体处理，并用确定性的解析评估器闭环，确保所有性能估计来自解析模型而非 LLM 生成。",
+          "contributions": [
+            "把异构系统设计分解为芯片/纵向扩展/横向扩展三层，交给层级多智能体求解",
+            "用确定性解析评估器给 LLM 结果兜底，避免“模型编造性能数据”",
+            "在 1 MW 功率预算下搜索混合 AI+HPC 负载的最优异构配置"
+          ],
+          "conclusions": [
+            "LLM 适合做设计空间的搜索者，不适合做性能模型本身，二者必须解耦",
+            "分层分解让智能体只需 18 次评估就超过爬山法 100 次评估的结果"
+          ],
+          "experiments": [
+            "1 MW 功率预算、混合 AI+HPC 负载下，发现的异构设计相对同构 GPU 基线加权几何平均加速 1.93 倍",
+            "ArchAgent 仅需 18 次评估，爬山法需 100 次评估且只达 1.65 倍",
+            "覆盖 NVLink/UALink/InfiniBand/Ultra Ethernet 等互连与多种存储的组合搜索"
+          ],
+          "significance": "把“让 LLM 参与硬件架构建模”落成可行范式：LLM 搜索、解析模型打分。",
+          "arxivUrl": "https://arxiv.org/abs/2610.23724",
+          "pdfUrl": "https://arxiv.org/pdf/2610.23724.pdf",
+          "index": 9,
+          "takeaway": "LLM 智能体分层搜索 + 解析评估器闭环，18 次评估拿到 1.93 倍异构加速",
+          "keyExperiment": "1 MW 预算下异构设计 1.93× 于同构 GPU 基线，评估次数仅 18 次 vs 爬山 100 次"
+        },
+        {
+          "title": "TRACE: Transformer Residual Activation Codebook Encoding for Communication-efficient Distributed Edge Inference",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-19",
+          "authors": "Muhammad Azlan Qazi, Alexandros Iosifidis, Qi Zhang",
+          "institutions": "Aarhus University, Tampere University",
+          "abstract": "把 Transformer 推理切分到多台同址边缘设备时，序列并行分片之间交换激活的通信开销会主导时延，成为根本瓶颈。现有压缩方案能降低通信量，却保留了结构性瓶颈：收到的数据仍要先做 key/value 投影才能开始注意力，计算被串行地排在通信之后。论文提出 TRACE：在每层注意力的后残差处放置向量量化器，并预先计算按码本索引的 key/value 表示；推理时只交换紧凑的码本索引，接收端直接查表恢复 key 与 value，从而把通信与计算重叠起来。",
+          "contributions": [
+            "用后残差向量量化把“交换激活”改造成“交换码本索引”",
+            "预计算码本索引的 KV 表示，使接收端免去下游投影计算，实现通信-计算重叠",
+            "用层次聚类把码本组织成多分辨率结构，无需重训即可运行时调节通信码率"
+          ],
+          "conclusions": [
+            "分布式推理通信优化的关键不是压得更小，而是让接收端不再需要后处理",
+            "多分辨率码本让精度-带宽折中成为运行期旋钮而非训练期约束"
+          ],
+          "experiments": [
+            "ViT-Base（ImageNet-1K/CIFAR-100）与 ViViT-B（UCF-101）上，准确率最高提升 1.89%",
+            "相对最优 VQ 类分布式推理框架端到端加速最高 1.27 倍",
+            "相对未压缩的序列并行推理，通信开销最多降低 22,624 倍"
+          ],
+          "significance": "把分布式 Transformer 推理的通信瓶颈从“压缩率”问题重构为“接收端免计算”问题。",
+          "arxivUrl": "https://arxiv.org/abs/2610.22435",
+          "pdfUrl": "https://arxiv.org/pdf/2610.22435.pdf",
+          "index": 10,
+          "takeaway": "交换码本索引让接收端查表得 KV，通信开销降 22,624 倍、端到端快 1.27 倍",
+          "keyExperiment": "ViT-Base/ViViT-B 上准确率 +1.89%，通信降 22,624×，端到端 1.27×"
+        }
+      ]
+    }
+  ]
+}
