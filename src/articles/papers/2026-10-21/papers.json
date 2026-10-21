@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-21",
+  "title": "2026-10-21 论文精选",
+  "lede": "今日主线是把“看不见”和“算不准”的环节做成可测量、可调度的量：RDMA 通信补上逐操作观测，跨区域 KV 复用有了发现平面，CUDA 图与层末驱逐把形状和时机变成参数；训练侧则把并行配置与能耗一起优化。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 1007
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "SigmaTrace: Library-Agnostic Observability for CPU/GPU-Initiated RDMA Communication",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-20",
+          "authors": "Javid Baydamirli, Didem Unat",
+          "institutions": "Koç University",
+          "abstract": "RDMA 网络是大型集群低延迟高带宽通信的基础，但其可观测性长期缺失：现有工具要么绑定某个通信库，要么只给出聚合统计，看不到逐操作行为。缺口最大的是 GPU 发起网络——kernel 内直接下发的 RDMA 操作对主机侧完全不可见。本文提出 SigmaTrace，一个与通信库无关的 RDMA 剖析框架，在 libibverbs/mlx5dv 这一 InfiniBand 与 RoCE 上所有通信库的共同底层做逐操作追踪，并用低开销内存插桩，在不改源码、不做二进制插桩的前提下首次让 GPU 发起的 RDMA 可观测。主机侧追踪在 128 卡 NCCL AllReduce 上只增加 1.3% 开销，1024 卡 RCCL 上低于 2%，可直接用于生产规模集群。",
+          "contributions": [
+            "把追踪点下沉到 libibverbs/mlx5dv 层，一套工具同时覆盖 CPU 发起与 GPU 发起的 RDMA 通信，摆脱对 NCCL/RCCL 等具体通信库的依赖。",
+            "用低开销内存插桩实现对 kernel 内 RDMA 操作的可观测性，既不需要改源码也不需要二进制插桩，且开销控制在 1.3%–2%。",
+            "在真实多机场景中暴露现有 profiler 完全看不到的结构性问题：persistent kernel 内的 barrier 扩散与跨节点流量偏斜。"
+          ],
+          "conclusions": [
+            "逐操作粒度的 RDMA 剖析可以在 1.3%–2% 的额外开销内落地，具备在生产规模集群长期开启的可能。",
+            "聚合统计型工具会掩盖大规模通信中的结构性不均，通信优化必须先有按操作、按节点维度的可见性。"
+          ],
+          "experiments": [
+            "128 GPU 的 NCCL AllReduce 上主机侧追踪开销 1.3%；1024 GPU 的 RCCL 上开销低于 2%。",
+            "在 persistent-kernel BFS 中暴露 kernel 内 barrier 扩散，这类信息在现有 profiler 中不可见。",
+            "在 Mixture-of-Experts 推理中测出 2.13× 的跨节点流量偏斜。"
+          ],
+          "significance": "为 GPU 发起网络补上了缺失的观测层，使通信瓶颈从“猜”变成可测量。",
+          "takeaway": "在 libibverbs 层做内存插桩，用 1.3% 开销换来 GPU 内 RDMA 操作的逐次可见",
+          "keyExperiment": "128 卡 NCCL AllReduce 开销仅 1.3%，1024 卡 RCCL 低于 2%",
+          "arxivUrl": "https://arxiv.org/abs/2610.24328",
+          "pdfUrl": "https://arxiv.org/pdf/2610.24328.pdf",
+          "index": 1
+        },
+        {
+          "title": "KVCompass: A Discovery Plane for Internet-Scale Prefix Cache Sharing in LLM Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-20",
+          "authors": "Shiyi Ling, Fei Fang, Chen Qian",
+          "institutions": "University of California, Santa Cruz",
+          "abstract": "KV cache 复用是降低大模型推理成本最有效的手段，但收益基本被锁在单个集群内。同一模型跨地域部署时，各区域会重复 prefill 相同热门前缀，白白消耗 GPU 时间并推高首 token 延迟。作者指出，跨区域复用比传统对象查找结构性更难：DHT 类哈希放置中对象位置是键的确定函数，而 KV 由服务请求的 worker 现场创建，持有者集合随请求与驱逐持续变化，因此必须把 KV 身份与放置解耦。KVCompass 用支持变长前缀查找的发现索引，让边缘节点以常数时间本地表读取把请求转发到复用收益、负载与网络距离综合最优的 worker。在 64 worker 地理仿真与跨三大洲 14 机器真实测试床上，P99 TTFT 降低 1.3–14×，P99 端到端延迟最多降 3.7×，吞吐最多提升 4.7×，峰值负载因子距 Oracle 下界 2% 以内。",
+          "contributions": [
+            "指出 KV cache 发现与常规对象查找本质不同：KV 由服务请求的 worker 现场生成、持有者集合随驱逐变化，不能靠哈希放置解决，必须把身份与放置解耦。",
+            "设计面向互联网规模的前缀缓存发现平面，索引支持变长前缀查找，边缘侧读取为常数时间本地表操作。",
+            "把请求转发目标建模为复用收益、当前负载与网络距离的联合优化，并给出可部署的边缘索引同步方案。"
+          ],
+          "conclusions": [
+            "跨区域前缀复用的瓶颈在“找得到”而不只是“传得快”，发现平面与传输层需要分别设计。",
+            "在大规模异构集群中，KV 复用感知的路由可同时改善尾延迟与吞吐，且负载均衡可逼近理论下界。"
+          ],
+          "experiments": [
+            "64 worker 地理分布仿真 + 跨三大洲 14 机器真实测试床：P99 TTFT 比基线低 1.3–14×。",
+            "P99 端到端延迟最多降低 3.7×，吞吐最多提升 4.7×。",
+            "峰值负载因子与 Oracle 下界相差 2% 以内，说明复用带来的聚集没有牺牲均衡。"
+          ],
+          "significance": "把 KV 复用的收益边界从单集群推到互联网规模，并给出了可实现的索引形态。",
+          "takeaway": "KV 复用要先解决“哪个 worker 手里有这份前缀”，发现索引须与放置解耦",
+          "keyExperiment": "跨三大洲 14 机器实测：P99 TTFT 最多降 14×，吞吐最多 4.7×",
+          "arxivUrl": "https://arxiv.org/abs/2610.24179",
+          "pdfUrl": "https://arxiv.org/pdf/2610.24179.pdf",
+          "index": 2
+        },
+        {
+          "title": "PolyGraph: Plan-Buffered CUDA Graphs for Adaptive Speculative Decoding",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-20",
+          "authors": "Junchao Yang",
+          "institutions": "Hunan University",
+          "abstract": "自适应投机解码会在每个解码步改变活跃 batch 大小 B 与 draft 长度 d，而 CUDA Graph 只能重放固定的启动配置。验证宽度 M = B·d 一变，服务系统就只能预捕获大量形状、在服务路径上现场捕获，或统一 padding 到最大 draft，三者都有明确代价。本文提出 PolyGraph 的 plan-buffer 机制：只捕获一张最大网格的图，每次重放前把当前活跃形状写入 GPU 显存，kernel 跳过超出该形状的 tile，图拓扑、显存分配、布局、指针与启动网格全部保持不变，形状更新量仅 28 字节。在单张 H800、按 Qwen2.5-3B 维度构造的 trace 驱动原型上，64 张形状专用图被一张替代，步延迟 P50 与预热基线持平（17.7 对 17.8 ms），服务前的图构建时间从 3915 ms 降到 93 ms。",
+          "contributions": [
+            "提出 plan-buffer 机制，把“形状”从图结构中剥离成 GPU 显存里的一段元数据，使一张最大网格图可服务任意验证宽度。",
+            "为自定义 Triton kernel 实现按形状跳过 tile 的写法，保证固定网格下不做无用计算，从而在自适应投机解码中避免 padding 浪费。",
+            "量化收益来源：与统一 padding 相比，零浪费时差距可忽略，100% 浪费时 P99 才明显下降，说明收益来自消除无效载荷。"
+          ],
+          "conclusions": [
+            "动态形状并非一定要用动态图，把形状作为参数写入显存即可在静态图下获得同等灵活性。",
+            "该方法定位为有界工作形状机制（bounded work-shape），不是完整服务系统，仅在单卡合成 trace 上验证。"
+          ],
+          "experiments": [
+            "64 张形状专用 CUDA Graph 被压缩为 1 张，P50 步延迟 17.7 ms 对基线 17.8 ms，基本无损。",
+            "服务前图构建时间从 3915 ms 降至 93 ms（约 42×）。",
+            "与 MaxPad 相比，padding 浪费 0% 时 P99 几乎相同，浪费 100% 时 P99 降低 18.7%。"
+          ],
+          "significance": "给出了动态 batch 与静态 CUDA Graph 之间的第三条路：固定图 + 可变形状元数据。",
+          "takeaway": "把活跃形状写进显存而非重捕获图，一张最大网格图替代 64 张专用图",
+          "keyExperiment": "图构建 3915→93 ms，P50 延迟持平（17.7 vs 17.8 ms）",
+          "arxivUrl": "https://arxiv.org/abs/2610.23861",
+          "pdfUrl": "https://arxiv.org/pdf/2610.23861.pdf",
+          "index": 3
+        },
+        {
+          "title": "TideKV: Delayed KV Eviction via Layer-Wise Chunked Prefill for Memory-Efficient Long-Context LLM Inference",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-20",
+          "authors": "Yu Wang, Zhu Wang, Ning Hu, Yifan Guo, Xiu Ma, Bin Guo, Zhiwen Yu",
+          "institutions": "Northwestern Polytechnical University",
+          "abstract": "长上下文推理的瓶颈常在 prefill 峰值显存。现有 KV cache 压缩降低了解码显存，但通常要求整段 prompt 先做完 prefill 才能保住全局上下文，构建峰值依旧很高；在线 chunk 级驱逐更早降内存，却在每层还没看到完整 prompt 前就做选择，可能损害 cache 质量。TideKV 提出按层主序的延迟驱逐：在单个 Transformer 层内处理所有 prompt chunk，只保留活跃层的全 prompt KV，层结束时才驱逐。这样既保住全 prompt 感知的选择，又压低激活与临时显存。在 A100 上处理 64K 上下文时构建期瞬时占用降低 83.89%；RTX 4090 上 64K 首 token 时间仅增加 1.06%，并跑通 128K prefill；Jetson 上同样完成 128K，而对照的 prefill 后压缩方案在两平台均显存不足。",
+          "contributions": [
+            "把驱逐时机从 chunk 级推迟到层末，用层主序调度让每层的选择都能看到完整 prompt，同时只保留单层的全 prompt KV。",
+            "在 GPU 上实现 cache 构建架构，兼顾激活显存与临时缓冲，使长上下文 prefill 的瞬时峰值大幅下降。",
+            "在 A100、RTX 4090 与 Jetson 三类平台上验证，覆盖数据中心卡与边缘设备。"
+          ],
+          "conclusions": [
+            "延迟到层末驱逐不牺牲 cache 质量与最终 cache 大小，却显著降低构建期瞬时占用。",
+            "显存受限设备上的长上下文能力瓶颈是构建峰值而非稳态 cache 大小，调度顺序本身就是一种压缩手段。"
+          ],
+          "experiments": [
+            "A100 上 64K 上下文的构建期瞬时占用降低 83.89%。",
+            "RTX 4090 上 64K 的首 token 时间仅增加 1.06%，并支持 128K prefill。",
+            "Jetson 上完成 128K，对照的 prefill 后压缩方法在 RTX 4090 与 Jetson 上均 OOM。"
+          ],
+          "significance": "把“何时驱逐”变成一等设计变量，用调度换显存而不牺牲精度。",
+          "takeaway": "层末才驱逐：按层主序跑完所有 chunk，构建峰值降 83.89%",
+          "keyExperiment": "A100 64K 构建期瞬时占用 -83.89%，4090 上 TTFT 仅 +1.06% 且跑通 128K",
+          "arxivUrl": "https://arxiv.org/abs/2610.24499",
+          "pdfUrl": "https://arxiv.org/pdf/2610.24499.pdf",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "PeekKV: The First Content Token Already Knows Which Heads Matter",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-20",
+          "authors": "Minyoung Go, Yongjun Park",
+          "institutions": "Hanyang University",
+          "abstract": "KV cache 随上下文线性增长，是大模型服务的主要显存瓶颈，按头分配预算的非均匀压缩因此成为主流。但现有方法要么靠离线画像固定重要头，要么用 prefill 阶段的注意力信号挑选，精度在不同负载上波动明显。作者发现根因是同一输入内活跃头在 prefill 与 decode 阶段就会迁移；而在 decode 路径上滤掉格式 token 后，活跃头组成对内容 token 保持稳定。据此提出 PeekKV：prefill 结束后只看一个内容 token，联合得到头组得分与 token 重要性得分，按组得分分配 KV 预算再在预算内保留最高分 token。方法无需离线画像或训练。四个公开基准上多数对比精度最高；Llama-3.1-8B-Instruct 在 RULER 16K 的 10% 预算下保留 95.7% 精度，LongBench 1.5% 预算下保留 95.9%。",
+          "contributions": [
+            "揭示预填充与解码阶段活跃头集合会迁移，这是既有按头压缩方法精度不稳定的根因。",
+            "提出 one-token peek：仅用 prefill 后的单个内容 token 联合估计头组得分与 token 重要性，无需离线画像或训练。",
+            "按头组得分比例分配 KV 预算，再在组内做 token 级 top-k 保留，形成两级的非均匀压缩。"
+          ],
+          "conclusions": [
+            "解码期活跃头对内容 token 稳定、对格式 token 敏感，压缩选择应只看内容 token。",
+            "轻量的运行时探测足以替代离线画像，使按头压缩可以直接泛化到新模型与新负载。"
+          ],
+          "experiments": [
+            "四个公开基准上，超过半数的逐模型对比取得最高精度。",
+            "Llama-3.1-8B-Instruct 在 RULER 16K、10% 预算下保留 95.7% 全 cache 精度。",
+            "同一模型在 LongBench、1.5% 预算下保留 95.9% 精度。"
+          ],
+          "significance": "把 KV 预算分配从离线画像改为一次运行时窥探，泛化性明显更好。",
+          "takeaway": "prefill 后看一个内容 token 就能定各头组的 KV 预算",
+          "keyExperiment": "Llama-3.1-8B 在 10% 显存预算下保留 95.7% 精度（RULER 16K）",
+          "arxivUrl": "https://arxiv.org/abs/2610.23939",
+          "pdfUrl": "https://arxiv.org/pdf/2610.23939.pdf",
+          "index": 5
+        },
+        {
+          "title": "When Does Better Acceptance Pay? A Controlled Study of Speculative Decoding",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-20",
+          "authors": "Yongchao Long, Chunrui Zheng, Yuxuan Zhou, Guangkun Nie, Tian-Chi Ma, Chao Pang, Shuohuan Wang, Yuchen Ding, Xianbin Wen, Dianhai Yu, Junyuan Shang, Yuxi Zhou, Shenda Hong",
+          "institutions": "Tianjin University of Technology, Baidu Inc., Peking University",
+          "abstract": "投机解码的吞吐收益取决于接受长度与执行延迟的权衡：多拿一点接受率，值不值得付出相应代价？本文建立了一套覆盖训练、推理与评测的对照协议，在共享的 target 生成数据上重新测量已发布 checkpoint，并重训六种 drafter 配方，覆盖十个基准与两个 target 模型。结果显示，在对齐训练与推理条件后，已发表对比中看似很大的差距大幅收窄。作者进一步区分两条提升接受率的路径：近乎免费的目标函数与上下文调整，以及昂贵的 token-to-token 条件建模；DCore 作为前者代表，几乎不增加 draft 开销。收益是有条件的：任务不确定性与服务条件同时影响接受率回报、执行成本，以及最优 drafter 与预算的选择。",
+          "contributions": [
+            "提出跨训练、推理与评测的统一对照协议，用同一份 target 生成数据重测已发布 checkpoint 并重训六种 drafter。",
+            "证明已发表对比中的大幅领先很大程度来自训练数据与推理设置不对齐，对齐后差距显著收敛。",
+            "区分两条提升接受率的路线并给出适用条件：免费的目标/上下文调整优于昂贵的 token 级条件建模，但收益依赖任务不确定性与服务条件。"
+          ],
+          "conclusions": [
+            "接受率不是目标，吞吐才是；drafter 选型必须与具体任务不确定性、部署条件一起评估。",
+            "DCore 这类低成本基线在多数设置下已足够强，盲目堆叠 draft 侧算力未必划算。"
+          ],
+          "experiments": [
+            "十个基准、两个 target 模型、六种重训 drafter 配方的统一对照，覆盖训练到评测全链路。",
+            "对齐训练与推理条件后，已发表对比中的大差距大幅收窄。",
+            "DCore 在几乎不增加 draft 开销的情况下成为强基线，收益随任务不确定性变化。"
+          ],
+          "significance": "给投机解码的“接受率竞赛”泼了冷水：条件不对齐的对比会系统性高估收益。",
+          "takeaway": "接受率提升只有在收益超过其执行代价时才转化为吞吐，对比必须先对齐条件",
+          "keyExperiment": "同一数据重训六种 drafter、十个基准：对齐后已发表差距大幅收窄",
+          "arxivUrl": "https://arxiv.org/abs/2610.24993",
+          "pdfUrl": "https://arxiv.org/pdf/2610.24993.pdf",
+          "index": 6
+        },
+        {
+          "title": "TokenGate: Adapting LLMs for Fast and Memory-Efficient Prefill with Learned Token Pruning",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-20",
+          "authors": "Liana Patel, Rishabh Ranjan, Ion Stoica, Matei Zaharia, Carlos Guestrin",
+          "institutions": "Stanford University, UC Berkeley",
+          "abstract": "人类专家读长文档会先略读再精读，而语言模型让所有输入 token 流过每一层，长上下文 prefill 代价高昂。本文提出 TokenGate：一个可即插即用的小组件，让已有模型获得端到端可学习的长输入 token 剪枝能力。为绕开 top-K 不可微的障碍，作者提出 token-gated attention，借鉴 MoE 的思路用 token 重要性得分重加权注意力 logits，使剪枝决策可以端到端训练。在多样任务上，TokenGate 让 TTFT 快 1.4–11.3×、峰值显存低 1.5–3.4×，且精度不降；相比此前最好的 token 剪枝方法，prefill 最快 6.4×、峰值显存低 2×。它原生支持标准 Transformer（如 Qwen3）与混合注意力模型（如 Qwen3.5），适配成本与常规参数高效微调相当。",
+          "contributions": [
+            "提出 TokenGate 组件与 token-gated attention，用重要性得分重加权注意力 logits，把不可微的 top-K 剪枝变成可端到端学习的门控。",
+            "作为 drop-in 模块接入已训练模型，适配开销与参数高效微调相当，同时覆盖标准注意力与混合注意力架构。",
+            "在长上下文 prefill 上同时改善 TTFT 与峰值显存，且不牺牲精度。"
+          ],
+          "conclusions": [
+            "token 级剪枝不必依赖启发式打分，端到端学出的门控在保持精度的同时收益更大。",
+            "把 MoE 式门控思路用于注意力 logits，是在不改变模型主体结构前提下获得稀疏计算的有效路径。"
+          ],
+          "experiments": [
+            "TTFT 提升 1.4–11.3×，峰值显存降低 1.5–3.4×，且无精度损失。",
+            "相比最强的前序 token 剪枝方法，prefill 最快 6.4×、峰值显存低 2×。",
+            "在 Qwen3（标准 Transformer）与 Qwen3.5（混合注意力）上均原生可用。"
+          ],
+          "significance": "让“略读再精读”成为可训练的模型能力，直接打到长上下文 prefill 的成本上。",
+          "takeaway": "用 MoE 式门控把 top-K token 剪枝变可微，TTFT 快 1.4–11.3×",
+          "keyExperiment": "TTFT 1.4–11.3× 加速、峰值显存 1.5–3.4× 下降且精度不降",
+          "arxivUrl": "https://arxiv.org/abs/2610.26754",
+          "pdfUrl": "https://arxiv.org/pdf/2610.26754.pdf",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "GeoTrain: Energy-Aware Automatic Parallelism for Foundation Model Training on Heterogeneous Geo-Distributed Resources",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-20",
+          "authors": "Bui-Khanh Hoang, TianZhang He, Mohammad Goudarzi",
+          "institutions": "Monash University",
+          "abstract": "前沿基础模型训练依赖大规模专用集群与高速互联，这种基础设施昂贵且只有少数机构拥有。用地理分布的闲置 GPU 做去中心化训练是替代路径，但计算、显存、功耗与网络性能高度异构；现有分布式训练系统面向低延迟高速互联设计，且默认用上全部 GPU，在广域环境里慢设备与弱链路会成为瓶颈，只优化吞吐又忽略能耗。GeoTrain 是面向异构地理分布 GPU 的自动并行系统，同时选择 GPU、切分模型层、决定流水线配置，并把能耗纳入优化目标。为在巨大组合空间里高效搜索，它采用带专用遗传算子与局部搜索的改进模因算法。在真实与模拟异构拓扑上的 decoder-only Transformer 实验显示，相比现有最优方法，迭代时间最多降低 61.4%、能耗最多降低 11.7%，并在可验证实例上找到精确最优。",
+          "contributions": [
+            "把 GPU 选择、层切分与流水线配置放进同一个搜索问题，同时以迭代时间与能耗为目标。",
+            "显式建模计算、显存、功耗与网络四类异构约束，避免弱设备与慢链路拖垮整体流水线。",
+            "设计带专用遗传算子与局部搜索的模因算法，在组合爆炸下仍能找到近优甚至精确最优解。"
+          ],
+          "conclusions": [
+            "广域异构训练中“用上全部 GPU”是错误默认，剔除慢设备反而更快。",
+            "时间最优方案常常同时也是能耗更优方案，两者并非总是权衡关系。"
+          ],
+          "experiments": [
+            "相比现有最优方法，迭代时间最多降低 61.4%，能耗最多降低 11.7%。",
+            "在可验证实例上找到精确最优，且 GPU 数量增大时仍可扩展（精确方法已不可行）。",
+            "观察到有利的能耗-时间权衡：部分时间最优方案同时比基线更省能。"
+          ],
+          "significance": "把去中心化训练从“能用”推进到“可自动配置且省电”。",
+          "takeaway": "异构广域训练要联合选卡、切层与流水线，并让能耗进目标函数",
+          "keyExperiment": "迭代时间最多 -61.4%、能耗最多 -11.7%，且可验证实例上达精确最优",
+          "arxivUrl": "https://arxiv.org/abs/2610.26178",
+          "pdfUrl": "https://arxiv.org/pdf/2610.26178.pdf",
+          "index": 8
+        },
+        {
+          "title": "Learning Who Talks to Whom: Role-Aware Communication Topology Scheduling for Efficient LLM Multi-Agent Collaboration",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.MA",
+          "date": "2026-10-20",
+          "authors": "Haibin Li, Wenya Yu, Xuefeng Jiang, Jia Li, Xiao Han, Shuai Su, Wei Wei",
+          "institutions": "Beihang University, Nanyang Technological University, University of Chinese Academy of Sciences",
+          "abstract": "基于大模型的多智能体系统依靠结构化通信拓扑交换信息、协同推理，但“谁在什么时候跟谁说话”的动态调度始终是难题：静态图无法适应解题状态的演化，已有方法又忽视智能体角色的互补性，也没把合成出的图结构显式纳入团队级决策评估，于是推理质量与指数级 token 开销难以平衡。本文提出 ACTS，在集中训练、分散执行的范式下做角色感知的自适应拓扑调度，包含两个注意力模块：角色条件关系注意力根据角色与演化中的执行状态动态选择数量可变的交互伙伴；拓扑注意力混合器把有向通信拓扑显式嵌入团队价值分解，以实现更准确的信用分配。在覆盖代码生成、多步推理、常识与竞赛数学的 9 个基准上，ACTS 平均精度最多提升 6.19 个百分点，同时 token 消耗降低 15% 以上。",
+          "contributions": [
+            "提出角色条件关系注意力，按角色与当前执行状态动态选取数量可变的通信伙伴，摆脱静态通信图。",
+            "提出拓扑注意力混合器，把有向通信拓扑显式嵌入团队价值分解，解决多智能体信用分配问题。",
+            "在 CTDE 范式下统一训练与执行，使拓扑调度策略可学习且部署时无需中心协调。"
+          ],
+          "conclusions": [
+            "通信拓扑本身应当被视为可学习、可调度的对象，而不是人工设定的先验。",
+            "把图结构纳入团队价值评估，是同时提升精度与压缩 token 开销的关键。"
+          ],
+          "experiments": [
+            "9 个基准（代码生成、多步推理、常识、竞赛数学）上一致优于 SOTA 基线。",
+            "平均精度最多提升 6.19 个百分点。",
+            "同时 token 消耗降低 15% 以上。"
+          ],
+          "significance": "把多智能体的通信开销变成可调度变量，兼顾推理质量与 token 成本。",
+          "takeaway": "角色感知的拓扑调度：精度 +6.19pp 同时 token -15%",
+          "keyExperiment": "9 基准平均精度最多 +6.19pp，token 消耗 -15% 以上",
+          "arxivUrl": "https://arxiv.org/abs/2610.25851",
+          "pdfUrl": "https://arxiv.org/pdf/2610.25851.pdf",
+          "index": 9
+        },
+        {
+          "title": "Koi: Evidence-Guided, Self-Calibrating Planning for Multi-Cloud, Heterogeneous LLM Inference Fleets",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-20",
+          "authors": "Mankeerat Sidhu, Gangmuk Lim, Hetarth Chopra, Maximillian Eisenberg, Quan Hao Ng, Aryan Gosaliya, Shu Liu, Luka Govedič, Jiaxin Shan, Hongkuan Zhou, Vikram Sharma Mailthody, P. Brighten Godfrey, Ion Stoica",
+          "institutions": "University of Illinois Urbana-Champaign, UC Berkeley",
+          "abstract": "部署一个大模型，要在云、区域与市场之间确定加速器型号、并行策略、引擎配置与副本数等约 140 个相互纠缠的变量，而最优集群方案还会随工作负载争抢共享容量不断变化。Koi 是面向异构多云集群的自校准规划器：用一个递归语言模型层级提出假设并做部署推理，确定性组件负责预测服务行为、给候选打分与控制放置。它把推理行为表示为固定的因果图，连接决策（加速器、并行度）、运行时中介量（KV cache 压力、通信开销）与结果（延迟、吞吐），每次部署都会强化或削弱特定因果关系，逐步积累成指导后续决策的 playbook。任务级配置再被组合成集群级方案，按服务目标、资源约束、SLO 风险与成本评估。真实异构集群上，Koi 的有效吞吐比最强基线高 1.18×，每 token 成本降低 20%。",
+          "contributions": [
+            "把集群级部署规划表述为约 140 个纠缠变量的组合问题，用递归语言模型层级提出假设、由确定性组件负责预测与打分。",
+            "提出可积累的因果 playbook：决策 → 运行时中介量（KV 压力、通信开销）→ 结果，每次部署都据此校准。",
+            "支持任务级配置向集群级方案的组合与评估，把 SLO 风险与成本纳入统一目标。"
+          ],
+          "conclusions": [
+            "语言模型单独做规划效果有限，必须与确定性预测器、打分器组合才能落地。",
+            "把部署经验沉淀为因果图而非黑箱记忆，是跨集群泛化的关键。"
+          ],
+          "experiments": [
+            "真实异构集群上有效吞吐比最强基线高 1.18×，$/token 降低 20%。",
+            "消融：纯语言模型综合得分 35.3，加确定性工具后 51.6，完整 Koi 达 70.8。",
+            "在跨云、跨区域的异构加速器组合上完成集群级规划与评估。"
+          ],
+          "significance": "把“该买什么卡、怎么并行、部署几副本”这类经验决策变成可自校准的规划系统。",
+          "takeaway": "LLM 提假设 + 确定性工具打分，靠因果 playbook 校准多云推理部署",
+          "keyExperiment": "有效吞吐 1.18× 于最强基线，$/token -20%；消融 35.3→51.6→70.8",
+          "arxivUrl": "https://arxiv.org/abs/2610.24355",
+          "pdfUrl": "https://arxiv.org/pdf/2610.24355.pdf",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
