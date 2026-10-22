@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-22",
+  "title": "2026-10-22 论文精选",
+  "lede": "今日主线是\"把浪费找出来\"：稀疏注意力的 tile 填充率、agent 轨迹的 KV cache、MoE 解码的专家负载偏斜，都是被忽视的结构性浪费。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 571
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "KPage: Cross-Block Page Compaction for Hardware-Efficient Sparse Attention",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-21",
+          "authors": "Junwei Feng, Qiaorui Chen, Chenyu Liang, Zhen Guo, Jingyi Yang, Xiaoling Zhou, Jiahao Zhang, Dongliang Huang, Yiqiao Liao, Chengru Song",
+          "institutions": "KlingAI Research, NVIDIA",
+          "abstract": "稀疏注意力能降低长序列视频 Transformer 的计算量，但三维 token 布局常让被选中的块只被部分占据，浪费物理 tile 容量。作者提出 KPage：一种块稀疏注意力方案，在加载阶段就把有效的 16 行 K/V page 跨逻辑块边界打包进大 tile，不在 HBM 物化压缩张量；同时对 Q 块在 64x256 与 128x128 两种 tile 之间路由，减少 query 侧填充浪费。精确掩码与 page 打包保证前向反向都严格保持原稀疏图。五个代表性负载上前向 kernel 相对 NVIDIA Block-Sparse Attention 取得 1.35x-2.06x 加速，几何均值 1.77x；块完全占满时接近持平（1.03x），而三维部分占据布局上几何均值达 2.29x，物理 QK 对容量从 334.1G 压缩到 177.5G 仍保留 160.6G 有效交互。",
+          "contributions": [
+            "把稀疏注意力的浪费定位到物理 tile 层：三维布局下块部分占据导致 tile 容量浪费，这是纯算法稀疏度指标看不到的损失。",
+            "提出加载期跨块 page 打包：K/V page 直接在载入路径上重排进大 tile，不在 HBM 里生成压缩副本，省掉额外一次读写。",
+            "Q 块在 64x256 与 128x128 之间路由，并保持精确掩码，前向反向都不改变原稀疏图。"
+          ],
+          "conclusions": [
+            "稀疏注意力的性能瓶颈不全在算力，而在物理 tile 的填充率；把打包做进加载路径即可在不改算法的前提下拿到大部分收益。",
+            "块的占据率越高收益越小，说明该方法的收益来源正是\"部分占据\"这一结构性浪费。"
+          ],
+          "experiments": [
+            "五个代表性工作负载上裸前向 kernel 相对 NVIDIA BSA 加速 1.35x-2.06x，几何均值 1.77x。",
+            "三维部分占据布局上几何均值加速 2.29x，块全占满时仅 1.03x。",
+            "在 SSTA/STA/VSA 的八个布局上前向加速 1.13x-4.25x、前向加反向 1.02x-2.71x；SVG2 Wan 14B/720p 配置下比最强精确稀疏基线快 1.49x、比 BSA 快 1.57x。"
+          ],
+          "significance": "把稀疏注意力的 tile 填充率当成一等优化目标，用加载期 page 打包换来近 1.8x 的 kernel 加速。",
+          "arxivUrl": "https://arxiv.org/abs/2610.28096",
+          "pdfUrl": "https://arxiv.org/pdf/2610.28096.pdf",
+          "index": 1,
+          "takeaway": "裸前向 kernel 几何均值 1.77x，部分占据的三维布局上 2.29x。",
+          "keyExperiment": "KPage 在加载阶段跨块打包 16 行 K/V page，裸前向 kernel 几何均值 1.77x"
+        },
+        {
+          "title": "Cache Engineering for Agents",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-10-21",
+          "authors": "Tianyu Fu, Ruoxi Wang, Zihan Min, Zhongqi Ren, Zhihao Li, Tengxuan Liu, Shengxu Mu, Hanling Zhang, Yu Wang",
+          "institutions": "The Chinese University of Hong Kong",
+          "abstract": "LLM agent 要在很长的观察-动作轨迹上工作，轨迹变长后 KV cache 的 I/O 与存储成为主要成本，轨迹还可能超出模型最大上下文，必须控制活跃 cache 的增长。以往用上下文工程修剪或摘要历史，但改动轨迹前缀会使后续缓存状态失效，触发保留上下文的昂贵重预填；为了压低重预填成本而保留过少上下文又伤准确率。本文提出\"缓存工程\"这一新范式：agent 可直接操作自己的活跃 KV cache，而不修改轨迹、也不重预填。具体给出 drop（把选中缓存排除出后续注意力）与 repos（调整保留 key 的位置编码）两类原语。作者指出历史依赖是服务侧的核心难题：相同 token 序列在不同缓存操作序列下会产生不同 cache 状态，前缀匹配不足以正确复用，于是协同设计 AKV 引擎，对外提供无状态接口、内部管理有状态复用/驱逐/恢复。",
+          "contributions": [
+            "提出缓存工程范式：agent 直接对活跃 KV cache 施加 drop / repos 操作，绕过\"改轨迹就失效\"的上下文工程困境。",
+            "指出并形式化历史依赖问题——相同 token 序列在不同操作序列下缓存状态不同，前缀匹配不足以支撑正确复用。",
+            "协同设计 AKV 服务引擎：无状态外部接口 + 内部有状态复用、驱逐与恢复，兼容现有 serving API。"
+          ],
+          "conclusions": [
+            "agent 长轨迹场景下，KV cache 应当成为可编程对象而非被动副产物；把操作下沉到缓存层能同时改善准确率与成本。",
+            "缓存策略本身可被递归自改进，说明这一层的设计空间足够大，值得作为独立优化维度。"
+          ],
+          "experiments": [
+            "工具响应滚动丢弃（rolling-drop）策略相对传统阈值触发摘要，平均 benchmark 分数提高 1.7 分、平均成本降低 27.7%。",
+            "AKV 引擎带来最高 1.2x 输出吞吐与 1.5x 的 P95 请求延迟改善。",
+            "缓存策略的递归自改进在专家手工设计基础上再降 7.1% 成本。"
+          ],
+          "significance": "把 KV cache 从\"被动缓存\"变成 agent 可编程的操作对象，同时拿到准确率与成本双收益。",
+          "arxivUrl": "https://arxiv.org/abs/2610.28577",
+          "pdfUrl": "https://arxiv.org/pdf/2610.28577.pdf",
+          "index": 2,
+          "takeaway": "滚动丢弃策略 +1.7 分准确率、-27.7% 成本，AKV 引擎 1.5x P95 加速。",
+          "keyExperiment": "rolling-drop 策略平均分 +1.7、成本 -27.7%，AKV 最高 1.2x 吞吐"
+        },
+        {
+          "title": "MLIPS: Multi-Layer Indexer Pool Sharing",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-21",
+          "authors": "Samkit Jain, Sai Kishan Pampana, Shlok Agarwal",
+          "institutions": "NVIDIA Corporation",
+          "abstract": "稀疏注意力限制了每个 query 使用的 key 集合，但\"找 key\"这件事本身仍要求每层都做全前缀扫描（如 DeepSeek 类模型的 indexer），成为长上下文解码的隐性开销。作者提出 MLIPS：训练无关的多层 indexer 池共享方法，共享候选搜索但保留各消费层自己的打分与选择。生产者层发布一个比注意力预算 K 更大的 top-M 候选池，后续层从该池中各自选 top-K。在三个稀疏注意力模型族上测量发现：宽池带来的覆盖率远高于各层最终选择之间的重叠率，说明跨层共享候选是合理的。作者在 vLLM 上为 DeepSeek-V4-Flash 实现逐层共享、解码态持久复用与粗粒度生产者，四个长上下文套件上每个生产者配三个消费层，取得 1.14-1.40x 加速与 14.8%-27.4% 的 GPU 能耗下降，准确率变化在 -1.49 到 +0.29 个百分点之间。",
+          "contributions": [
+            "将稀疏注意力的\"检索开销\"从每层独立扫描改为跨层共享候选池，同时不牺牲各层自己的选择权。",
+            "用覆盖率而非选择重叠率解释共享为何有效：宽池覆盖了各层真正需要的 key。",
+            "在 vLLM 中为 DeepSeek-V4-Flash 落地：逐层共享、解码期持久复用、粗粒度生产者三种工程形态。"
+          ],
+          "conclusions": [
+            "共享粒度存在收益-质量权衡：三个消费层以内基本无损，继续放宽共享会带来任务相关的质量下降。",
+            "生产者的 top-G 有界池构造为 prefill 阶段留出了进一步压缩扫描成本的空间，但部署验证仍待完成。"
+          ],
+          "experiments": [
+            "四个长上下文套件上 1.14-1.40x 加速，GPU 能耗降低 14.8%-27.4%。",
+            "准确率变化 -1.49 到 +0.29 个百分点（单次运行）。",
+            "采样 prefill trace 显示被选 KV 位置在 query 组与层之间确有重复，佐证共享工作集的存在。"
+          ],
+          "significance": "在不改模型、不重训练的前提下，把稀疏注意力的索引扫描跨层摊销，同时降能耗。",
+          "arxivUrl": "https://arxiv.org/abs/2610.27438",
+          "pdfUrl": "https://arxiv.org/pdf/2610.27438.pdf",
+          "index": 3,
+          "takeaway": "1.14-1.40x 加速、能耗 -14.8%~27.4%、准确率变化在 -1.49~+0.29pp。",
+          "keyExperiment": "vLLM + DeepSeek-V4-Flash 上 1.14-1.40x 加速、GPU 能耗降 14.8-27.4%"
+        },
+        {
+          "title": "The Token-Energy Law of LLM Decode: Active Bytes and Realized Time Account for Joules per Token",
+          "score": 3.9,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-21",
+          "authors": "Chenxu Niu, Batuhan Sencer, Wei Zhang, Yong Chen",
+          "institutions": "NVIDIA Corporation, Texas Advanced Computing Center, Texas Tech University",
+          "abstract": "要让 LLM 部署能效可优化，必须先讲清模型架构、硬件与服务设置如何决定每输出 token 的能耗。本文提出\"Token-Energy Law\"：一个紧凑可解释的模型，用于刻画稠密、全历史解码下 GPU 板级每 token 能耗。它把 token 能耗归结到两个维度——活跃字节数与实际解码时间。活跃字节数描述每个输出的逻辑字节需求，并把同一次解码迭代内共享的稠密权重与每个请求各自读取更新的私有 KV 历史分开；实际解码时间则是解码总时长除以产出 token 数。两者以统一的仿射形式组合，系数按模型与硬件/运行时配置标定。该形式自然解释了批处理如何摊薄共享权重开销、更长的注意力历史如何抬高私有 KV 需求、吞吐如何决定时间相关成本。实验覆盖 Hopper 与 Blackwell 上的三个 BF16 解码模型（含 Hopper 双卡张量并行）。",
+          "contributions": [
+            "把每 token 能耗拆成\"活跃字节\"与\"实际解码时间\"两个可测维度，前者再分为共享权重字节与私有 KV 字节。",
+            "给出统一仿射形式并逐配置标定系数，使能耗估计可直接用观测到的解码时间与配置参数算出。",
+            "用该定律解释批处理摊薄、长历史 KV 需求上升、吞吐影响时间成本三类现象的定量来源。"
+          ],
+          "conclusions": [
+            "token 级能耗可以用极少的自由度（两个字节坐标 + 时间）在数个百分点误差内预测，说明 decode 能耗主要由内存流量与时间决定。",
+            "该形式可直接用于 serving 参数（批大小、上下文长度、并行度）的能耗-吞吐权衡分析。"
+          ],
+          "experiments": [
+            "覆盖 Hopper 与 Blackwell 上三个 BF16 解码模型，含 Hopper 双卡张量并行配置。",
+            "在固定系数、仅用观测解码时间的情况下，留出条件的平均能耗估计与实测偏差不超过 3.73%。",
+            "模型能复现批处理摊薄共享权重开销、历史长度抬高 KV 字节需求的趋势。"
+          ],
+          "significance": "给 LLM 解码能耗一个可解释的经验定律，让 serving 侧的能效优化有可算的抓手。",
+          "arxivUrl": "https://arxiv.org/abs/2610.28576",
+          "pdfUrl": "https://arxiv.org/pdf/2610.28576.pdf",
+          "index": 4,
+          "takeaway": "两个字节坐标加时间即可预测每 token 能耗，留出条件平均误差 ≤3.73%。",
+          "keyExperiment": "Hopper/Blackwell 三模型上留出条件平均能耗估计误差 ≤3.73%"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "BitMTP: When Multi-Token Prediction Meets Low-Bit Large Language Models",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-21",
+          "authors": "Ning Zhang, Shihao Wang, Jinrui Zhang, Chaodong Xiao, Lei Zhang",
+          "institutions": "The Hong Kong Polytechnic University (PolyU-OPPO 联合创新中心)",
+          "abstract": "在 LLM 高效部署中，超低比特骨干网络降低权重存储、内存流量与线性层执行开销，而多 token 预测（MTP）通过并行预测多个未来 token 减少串行解码步数。两者看似互补，但直接结合并不能在质量可比的前提下加速解码：掩码式草稿缺少下一 token 训练时提供的中间 token 输入，而更宽的计算与因果 KV 更新又会吃掉减少步数带来的收益。作者提出 BitMTP：面向超低比特 LLM 骨干的算法-系统协同设计框架。联合的下一 token 预测与 MTP 目标让单一模型同时具备自回归生成与块因果草稿能力；仅置信度解码、仅投机解码与混合解码提供不同质量-吞吐工作点，无需独立的草稿与验证模型。接受前缀对齐机制保持已提交前缀、已物化的因果 KV 边界与 CUDA Graph 重放状态一致。",
+          "contributions": [
+            "用联合 NTP + MTP 目标让单个超低比特模型同时具备自回归生成与块因果草稿能力，摆脱独立草稿/验证模型。",
+            "提出接受前缀对齐契约：让已提交前缀、物化的因果 KV 边界与 CUDA Graph 重放状态保持一致，从而复用捕获的计算图。",
+            "给出仅置信度、仅投机与混合三种解码工作点，并按宽度选择低比特执行路径。"
+          ],
+          "conclusions": [
+            "低比特与 MTP 的收益叠加不是自动的，必须靠系统层的 KV 边界与图重放一致性来兑现。",
+            "单一模型内完成草稿与验证，避免了跨模型投机解码的部署复杂度与显存开销。"
+          ],
+          "experiments": [
+            "NVIDIA H20 上混合解码在 BitNet b1.58-2B 取得五任务平均 2.2x 加速，在 1.7B-4B Bonsai 模型上 2.1-2.4x。",
+            "RTX 3090 与 Jetson Orin 上五任务平均吞吐最高 2.0x，MBPP+ 上最高 3.3x。",
+            "加速在多种骨干、模型规模与 GPU 类型上均可复现，且任务质量可比。"
+          ],
+          "significance": "把超低比特骨干与多 token 预测在系统层对齐，使两者的加速真正相乘。",
+          "arxivUrl": "https://arxiv.org/abs/2610.28500",
+          "pdfUrl": "https://arxiv.org/pdf/2610.28500.pdf",
+          "index": 5,
+          "takeaway": "H20 上 2.2x（BitNet 2B）/2.1-2.4x（Bonsai），Jetson Orin MBPP+ 3.3x。",
+          "keyExperiment": "H20 五任务平均 2.2x，MBPP+ 最高 3.3x"
+        },
+        {
+          "title": "Stratified Sparse Attention: Reducing the Sparse-to-Dense Gap at Extreme Sparsity",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-21",
+          "authors": "Sahil Joshi, Prithvi Dixit, Aryan Katiyar, Agniva Chowdhury, Joseph E. Gonzalez, Anshumali Shrivastava, Aditya Desai, Kumar Krishna Agrawal",
+          "institutions": "Rice University, UC Berkeley, Stanford University",
+          "abstract": "长上下文 LLM 推理正日益受制于对不断增长的 KV cache 做注意力的成本。稀疏注意力只访问一小部分 cache 来降低成本，但现有方法面临两难：确定性检索能抓住高分 token 却丢掉残余注意力质量，采样能改善覆盖却带来更高方差。混合方法把 top-k 检索与均匀采样结合，在激进稀疏度下仍与稠密注意力有明显差距。本文提出分层稀疏注意力（SSA）：一个把确定性检索与分数引导采样统一起来的框架。SSA 确定性地关注高分 token，同时用代理注意力分数对残余部分采样，并按纳入概率做修正，从而找回检索集之外的注意力质量。top-k、top-p 与 top-k 加采样的混合都是 SSA 的特例。作者在 RULER、LongBench、LOFT 与 AIME 上、跨 3B 到 27B 的五个模型验证。",
+          "contributions": [
+            "把稀疏注意力统一为\"确定性检索 + 分数引导采样 + 纳入概率修正\"的框架，top-k/top-p/混合均成为其特例。",
+            "用代理注意力分数指导残余采样并按纳入概率去偏，回收检索集之外被丢弃的注意力质量。",
+            "配套优化 CUDA kernel，把准确率收益转化为真实的长上下文解码加速。"
+          ],
+          "conclusions": [
+            "激进稀疏度下的稀疏-稠密差距主要来自被丢弃的残余注意力质量，用带修正的采样可以把它找回来。",
+            "准确率收益可落地为实际速度：1M 上下文下相对 FlashInfer 最高 2.96x 解码加速。"
+          ],
+          "experiments": [
+            "RULER-HARD 上 Ministral-3-8B 在 50x 注意力稀疏度下，32K 准确率从 81.8% 提升到 84.2%，128K 从 63.8% 提升到 69.3%。",
+            "分别恢复稠密注意力性能的 94% 与 85%。",
+            "配合优化 CUDA kernel，1M 上下文下相对 FlashInfer 取得最高 2.96x 解码加速。"
+          ],
+          "significance": "在极端稀疏度下把稀疏注意力的质量缺口补回来，且不牺牲速度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.28441",
+          "pdfUrl": "https://arxiv.org/pdf/2610.28441.pdf",
+          "index": 6,
+          "takeaway": "50x 稀疏下 128K 准确率 63.8%→69.3%（恢复稠密 85%），1M 上下文 2.96x 加速。",
+          "keyExperiment": "RULER-HARD 50x 稀疏：32K 81.8%→84.2%，128K 63.8%→69.3%"
+        },
+        {
+          "title": "E8-QAT: Efficient 2-Bit Quantization-Aware Training with Implicit Lattice Codebooks",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-21",
+          "authors": "Xinyu Lei, Hong Huang, Jiebin Zhang, Hongyu Li, Jinlong Song, Decheng Wu, Guanghua Yu, Jianchen Zhu, Sujian Li",
+          "institutions": "Peking University, City University of Hong Kong, Tencent",
+          "abstract": "低比特量化能压缩大模型内存占用，但要同时保住精度与训练效率并不容易：标量量化独立编码每个权重，显式码本的向量量化则在训练中引入昂贵的搜索。本文提出 E8-QAT：一个以 E8 格作为隐式八维码本的 2 比特量化感知训练框架。它通过算术投影对权重组做联合量化，训练前向过程中既不存储也不搜索显式码本。2 比特核心编码加稀疏扩展精确表示被选中的格点，只给核心索引存储增加不到 0.1%。在 Qwen3.6-35B-A3B 上，E8-QAT 在四项任务的平均分上与全精度模型持平；在相同数据、调度与比特宽度下，相对当前最优基线在 IFEval 上提升 2.03%、LiveCodeBench 上提升 1.51%。2 比特表示把峰值显存降低 80%，支持 4 倍大的批。",
+          "contributions": [
+            "用 E8 格构造隐式八维码本：训练时通过算术投影完成联合量化，不需要存储或搜索显式码本。",
+            "设计 2 比特核心编码加稀疏扩展，精确表示格点且仅增加不到 0.1% 的索引存储。",
+            "在 Qwen3.6-35B-A3B 上验证 2 比特 QAT 可追平全精度平均分，并显著降低显存与提升吞吐。"
+          ],
+          "conclusions": [
+            "格点量化把码本搜索变成算术投影，使向量量化的精度优势可以在训练中以接近标量量化的成本获得。",
+            "2 比特不只是省显存：更小的权重视野直接换来更大批与更高解码吞吐。"
+          ],
+          "experiments": [
+            "Qwen3.6-35B-A3B 上四项任务平均分与全精度模型持平。",
+            "同数据/调度/比特宽度下相对 SOTA 基线 IFEval +2.03%、LiveCodeBench +1.51%。",
+            "峰值显存降低 80%、支持 4x 批大小，在各表示的最大可行批下解码吞吐达 BF16 的 1.97x。"
+          ],
+          "significance": "用隐式格点码本把 2 比特 QAT 做成\"零码本开销\"的高精度方案。",
+          "arxivUrl": "https://arxiv.org/abs/2610.27699",
+          "pdfUrl": "https://arxiv.org/pdf/2610.27699.pdf",
+          "index": 7,
+          "takeaway": "Qwen3.6-35B-A3B 追平全精度，显存 -80%，吞吐 1.97x BF16。",
+          "keyExperiment": "峰值显存 -80%、批 4x、解码吞吐 1.97x BF16"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "3D-MoE: Complementarity-Guided Hardware-Software Co-Design for MoE Decode on 3D-Stacked NMP",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-21",
+          "authors": "Yudong Pan, Lian Liu, Shixin Zhao, Yintao He, Kaiyan Chang, Tianhua Han, Chenyang Ai, Haonan Zhu, Mengdi Wang, Yinhe Han, Ying Wang",
+          "institutions": "中科院计算所 SKLP, 中国科学院大学, University of Edinburgh",
+          "abstract": "MoE 已成为扩展 LLM 的主流方式，因为每个 token 只激活少量专家。但 MoE 解码仍高度受内存带宽约束，且专家负载极度偏斜并随时间变化。3D 堆叠 DRAM 的近存计算（NMP）能提供解码所需带宽，但其分块组织让负载均衡变得昂贵：专家并行（EP）保住了局部性却承受热点导致的不均，更分散的策略削弱局部性并抬高 NoC 流量。作者观察到领域特化路由会让不同解码步的专家负载波动相互抵消，称之为\"专家互补性\"。据此提出 3D-MoE 软硬件协同系统：离线一次性的互补性分组与局部性感知映射建立组间粗粒度均衡；组内残余热点由轻量协同内存网络（CMN）处理，把热点专家的权重 tile 从其宿主 DRAM 通道经重构的本地广播路径一次性流给辅助核；再用代价感知的在线重映射应对负载漂移。",
+          "contributions": [
+            "提出\"专家互补性\"这一负载观察：领域特化路由造成的专家负载波动在解码步之间互相抵消，为均衡提供了时间维度上的自由度。",
+            "给出互补性引导的离线分组 + 局部性感知映射，把均衡问题拆成组间粗粒度与组内细粒度两层。",
+            "设计 CMN 协同内存网络与代价感知在线重映射：热点专家权重只流一次并走本地广播，负载漂移时仍能保持均衡。"
+          ],
+          "conclusions": [
+            "在 NMP 的分块结构上，把均衡从静态划分转为\"跨解码步互补 + 热点局部广播\"，可以同时保住局部性与均衡性。",
+            "软硬件协同的代价很小：仅 2.11% 逻辑 die 面积，收益却达数倍量级。"
+          ],
+          "experiments": [
+            "MoE 层相对专家并行（EP）平均加速 4.63x。",
+            "端到端吞吐比最强 NMP 基线高 1.58x-1.86x。",
+            "代价是仅增加 2.11% 的逻辑 die 面积。"
+          ],
+          "significance": "为 NMP 上的 MoE 解码给出软硬件协同的负载均衡范式：用跨步互补替代静态划分。",
+          "arxivUrl": "https://arxiv.org/abs/2610.26991",
+          "pdfUrl": "https://arxiv.org/pdf/2610.26991.pdf",
+          "index": 8,
+          "takeaway": "MoE 层平均 4.63x 加速，端到端吞吐 1.58-1.86x，面积代价 2.11%。",
+          "keyExperiment": "MoE 层平均 4.63x（vs EP），端到端 1.58-1.86x"
+        },
+        {
+          "title": "Emulating DGEMM and ZGEMM with INT8 Matrix Engines on Intel Arc GPUs: Ozaki Scheme II on the Xe2 Architecture",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.MS",
+          "date": "2026-10-21",
+          "authors": "Rostislavs Rostovskis, Aleksandrs Platonenko",
+          "institutions": "Institute of Solid State Physics, University of Latvia",
+          "abstract": "双精度矩阵乘（实数 DGEMM 与复数 ZGEMM）主导稠密线性代数与电子结构代码的运行时间，但在消费级 GPU 上 FP64 吞吐只占低精度矩阵引擎吞吐的一小部分且还在缩小。Ozaki 方案 II 把浮点矩阵乘归约为若干次精确 INT8 乘积加中国剩余定理重建，乘积个数决定精度。本文给出（据作者所知）首个面向 Intel GPU 的 Ozaki II 实现：基于 oneMKL 的 SYCL，全程在设备端执行，暴露完整 BLAS dgemm/zgemm 接口。要在 Xe2（Battlemage）上跑快，需要把 FP64 算术赶出所有 memory-bound kernel、做无分支余数计算、用带安全界证明的 FP32 计算 CRT 商、重建阶段使用 16 位 limb 运算，并绕开厂商 INT8 GEMM 的性能悬崖。",
+          "contributions": [
+            "给出首个 Intel GPU 上的 Ozaki II 实现：SYCL + oneMKL，全设备执行且提供完整 BLAS dgemm/zgemm 接口。",
+            "针对 Xe2 架构给出关键工程：FP64 移出所有 memory-bound 内核、无分支余数、FP32 CRT 商与安全界、16 位 limb 重建。",
+            "给出正确舍入条件、最坏情况误差、阶段拆解、能耗与性能模型，并与 Ozaki 方案 I 对比。"
+          ],
+          "conclusions": [
+            "在缺少 FP64 单元的消费级 GPU 上，用 INT8 张量核模拟双精度可以在保持正确舍入的同时获得一个数量级以上的加速。",
+            "要拿到这个收益，重点不在算法而在工程：任何把 FP64 混进 memory-bound 路径的实现都会吃掉全部收益。"
+          ],
+          "experiments": [
+            "Intel Arc Pro B60（24GB）上模拟 DGEMM 在 N=8192、s=8/12/16 时达 17.3/12.1/9.3 TFLOP/s，最高 21.1 TFLOP/s，是同板原生 FP64 DGEMM 的 12-28x。",
+            "模拟 ZGEMM 最高 27.4 TFLOP/s，N≥4096 且 s=16 时比原生 ZGEMM 快 13.7-17.8x。",
+            "s≥16 时对良缩放输入正确舍入（s=20-24 可覆盖宽指数范围），而原生 DGEMM 仅 2%-13% 元素正确舍入。"
+          ],
+          "significance": "证明消费级 Intel GPU 可以用 INT8 张量核替代 FP64 矩阵乘，且精度不降反升。",
+          "arxivUrl": "https://arxiv.org/abs/2610.26945",
+          "pdfUrl": "https://arxiv.org/pdf/2610.26945.pdf",
+          "index": 9,
+          "takeaway": "DGEMM 最高 21.1 TFLOP/s（12-28x 原生 FP64），ZGEMM 27.4 TFLOP/s（13.7-17.8x）。",
+          "keyExperiment": "Arc Pro B60 上 DGEMM 21.1 TFLOP/s = 12-28x 原生 FP64，ZGEMM 快 13.7-17.8x"
+        },
+        {
+          "title": "Large Flow Language Models",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-21",
+          "authors": "Arnav Chavan, Chanhyuk Lee, Udbhav Bamba, Jaehoon Yoo, Seunghoon Hong, Aditi Raghunathan, Jinwoo Kim",
+          "institutions": "KAIST, Carnegie Mellon University",
+          "abstract": "连续流（flow）语言模型提供了并行生成的路径，并带有离散扩散不具备的控制与加速工具，但如何在十亿参数规模上有效构建仍不明确。本文提出 Lafa：一个数据高效地扩展到 8B 参数的快速流语言模型。Lafa 是块式流模型，前缀使用因果注意力、块内使用双向异步流，这一设计既便于通过适配预训练自回归模型来高效训练，也支持用前缀缓存与块并行解码做快速推理。作者在 0.5B、7B、8B 三档上用不足 30B token 训练，比之前的扩散模型更省数据，并在指令跟随、推理与编码任务上评估：学到的流在质量上匹配或超过自回归模型，且可蒸馏为 flow map 实现一步/少步生成。值得注意的是，流训练通过多 token 预测效应保持甚至提升了预训练 AR 能力，作者据此设计自投机解码——在同一模型内用 AR 验证基于流的草稿。",
+          "contributions": [
+            "提出块式流架构：前缀因果注意力 + 块内双向异步流，使预训练 AR 模型可直接适配为流模型。",
+            "在 0.5B/7B/8B 三档上用不足 30B token 完成训练，给出数据高效的扩展配方。",
+            "发现流训练自带多 token 预测效应，并据此设计单模型自投机解码（flow 草稿 + AR 验证），无需额外草稿模型。"
+          ],
+          "conclusions": [
+            "连续流可以作为语言建模的可扩展基础，其质量与 AR 持平而非以质量换并行度。",
+            "自投机解码让\"并行生成能力\"直接转化为吞吐收益，这是扩散/流类模型相对 AR 的独有杠杆。"
+          ],
+          "experiments": [
+            "0.5B/7B/8B 三档规模，训练数据不足 30B token。",
+            "自投机解码取得与自回归模型可比质量下 2.54x 的吞吐，超过多 token 预测与离散扩散方法。",
+            "学到的流可蒸馏为 flow map，实现一步与少步生成。"
+          ],
+          "significance": "用块式流结构把 AR 预训练模型转成并行生成模型，并靠自投机解码换来 2.54x 吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2610.28559",
+          "pdfUrl": "https://arxiv.org/pdf/2610.28559.pdf",
+          "index": 10,
+          "takeaway": "8B 规模、<30B token 训练，自投机解码 2.54x AR 吞吐且质量可比。",
+          "keyExperiment": "自投机解码 2.54x 吞吐（同等质量），训练 <30B token"
+        }
+      ]
+    }
+  ]
+}
