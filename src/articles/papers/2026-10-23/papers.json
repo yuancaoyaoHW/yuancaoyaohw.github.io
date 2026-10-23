@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-23",
+  "title": "2026-10-23 论文精选",
+  "lede": "今日主线是“为一次数据搬家省钱”：GPU 到 NPU 的 KV 跨架构传输、解耦推理下的 KV 保留策略、跨并行策略的统一逻辑地址，全都围绕同一次搬运；另一半论文在追问哪一档精度/稀疏才真的划算。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 459
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "HAWK: Heterogeneity-Aware KV Cache Transfer for Efficient GPU-NPU Phase-Disaggregated LLM Inference",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.AR",
+          "date": "2026-10-21",
+          "authors": "Junhyeok Park, Jungeun Yoon, Kyungmin Kim, Hunsoon Lee, Shinyoung Ahn, Kangho Kim",
+          "institutions": "Georgia Institute of Technology, Electronics and Telecommunications Research Institute (ETRI)",
+          "abstract": "LLM 推理两阶段的负载特征截然不同：prefill 计算密集、decode 访存密集，因此 GPU 在 prefill 上高效而在 decode 上常被闲置，NPU 反而在 decode 阶段更能吃满算力。作者据此构建 GPU 与 NPU 异构系统，把 prefill 放 GPU、decode 放 NPU。难点在于相位解耦要求把 KV cache 从 GPU 搬到 NPU，而两端通信机制与张量布局都不一致。HAWK 建立 RDMA 直连通路，在 NPU 侧按目标布局分配张量布局感知的 RDMA 缓冲区，使数据从 GPU 连续缓冲区直接写入已对齐的 NPU 缓冲区，搬完即可被消费、无需额外重排。在商用 GPU+NPU 系统上实测，同 SLO 下性能与纯 GPU 系统相差 7.88% 以内，功耗效率最高提升 1.26 倍、成本效率最高提升 1.72 倍。",
+          "contributions": [
+            "指出 GPU/NPU 相位解耦的真实瓶颈不是算力而是 KV cache 跨架构搬运：通信机制与张量布局同时不匹配。",
+            "用 RDMA 直连加 NPU 侧布局感知缓冲区，把布局转换融进搬运过程本身，传输后可直接进入 decode 计算。",
+            "在商用 GPU+NPU 混合系统上完成端到端实现，给出 SLO、功耗效率、成本效率三个维度的对照。"
+          ],
+          "conclusions": [
+            "混合异构推理不必牺牲延迟：同 SLO 约束下与纯 GPU 系统只差 7.88%。",
+            "收益主要体现在功耗与成本效率（1.26x / 1.72x），即异构的价值在每 token 的电费与设备摊销而非峰值吞吐。"
+          ],
+          "experiments": [
+            "在商用 GPU+NPU 系统上，相同 SLO 约束下性能与纯 GPU 系统相差 7.88% 以内。",
+            "功耗效率最高提升 1.26 倍，成本效率最高提升 1.72 倍。",
+            "跨设备张量布局差异在搬运路径内被吸收，传输后的 KV 无需任何额外重排即可直接参与 NPU 上的 decode 注意力计算。"
+          ],
+          "significance": "给“prefill 用 GPU、decode 用 NPU”这条异构路线补上了最缺的一环：可用的跨架构 KV 搬运。",
+          "arxivUrl": "https://arxiv.org/abs/2610.29873",
+          "pdfUrl": "https://arxiv.org/pdf/2610.29873.pdf",
+          "takeaway": "同 SLO 下只比纯 GPU 慢 7.88%，换来 1.26x 功耗效率与 1.72x 成本效率。",
+          "keyExperiment": "商用 GPU+NPU 系统、同 SLO 下性能差距 7.88% 以内，功耗效率 1.26x、成本效率 1.72x。",
+          "index": 1
+        },
+        {
+          "title": "UlaCache: Unified Logical Addressing for Sparse LLM Serving",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-21",
+          "authors": "Isaac Zhu, Alan Cao, Hugh Yin, Rocky Wang, Orion Wang, Hscos Zhang, Jack Li, Jason Zhao",
+          "institutions": "Scitix.AI",
+          "abstract": "长上下文推高了 KV cache 的显存成本。稀疏注意力靠挑选历史 token 降低注意力计算与访存，但被选中的 KV 在后续解码步必须仍然可寻址。UlaCache 用一套横跨 GPU KV 池与可选 CPU 内存的统一逻辑地址空间来管理 KV：稳定的逻辑引用让引擎在分配与选择 KV 时与物理放置解耦，同一套分配与稀疏访问接口同时支持数据并行（DP）与张量并行（TP）注意力。分布式存储时，本地 GPU 缓冲区跨解码步保留已选 KV，只搬运缺失条目；启用 CPU 存储时用并行分桶 LRU（PB-LRU）管理多请求共享的 GPU 池，并行更新新旧元数据并选出淘汰对象，KV 搬完后再更新地址映射。在 CPU/GPU 内存预算对齐、开启投机解码的条件下，H200 上解码吞吐峰值加速 1.16 倍（DP）与 1.70 倍（TP），B300 上为 1.73 倍与 2.51 倍。",
+          "contributions": [
+            "用统一逻辑地址空间把“选哪些 KV”与“KV 放在哪”解耦，同一套接口覆盖 DP 与 TP 两种并行方式。",
+            "本地 GPU 缓冲区跨解码步保留已选 KV，只搬运缺失条目，避免同一份 KV 被反复传输。",
+            "提出并行分桶 LRU（PB-LRU），并行完成 recency 元数据更新与淘汰对象选择，KV 迁移完成后再更新地址映射。"
+          ],
+          "conclusions": [
+            "稀疏注意力省下的算力能否兑现，取决于 KV 的可寻址性；逻辑地址抽象是把两者打通的关键。",
+            "并行度越高收益越大（TP 优于 DP），因为跨卡 KV 缺失传输的代价被摊得更薄。"
+          ],
+          "experiments": [
+            "H200 上开启投机解码、CPU/GPU 内存预算一致时，解码吞吐峰值相对 SOTA 加速 1.16 倍（DP）与 1.70 倍（TP）。",
+            "B300 上同样条件下加速 1.73 倍（DP）与 2.51 倍（TP）。",
+            "PB-LRU 把 recency 更新与淘汰选择并行化，使 CPU 内存扩展时池管理不成为解码串行瓶颈。"
+          ],
+          "significance": "把稀疏注意力的“选中即保留”问题变成地址映射问题，用一层逻辑地址换来跨并行策略的 KV 复用。",
+          "arxivUrl": "https://arxiv.org/abs/2610.29820",
+          "pdfUrl": "https://arxiv.org/pdf/2610.29820.pdf",
+          "takeaway": "B300 上 TP 场景解码吞吐 2.51x，DP 场景 1.73x。",
+          "keyExperiment": "B300 上相对 SOTA 峰值解码吞吐 1.73x（DP）/ 2.51x（TP），H200 上 1.16x / 1.70x。",
+          "index": 2
+        },
+        {
+          "title": "To Keep or Not to Keep: Learning KV Cache Retention in Disaggregated LLM Serving Systems",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-08-10",
+          "authors": "Dong Liu, Yanxuan Yu, Eric Jiang, Shu Wang, Ying Nian Wu",
+          "institutions": "University of California, Los Angeles, Columbia University",
+          "abstract": "解耦式推理把 prefill 与 decode 拆到不同节点池，KV 的计算处与消费处之间隔了一张网络。这打破了经典缓存策略的前提：未命中不再只是本地重算，而是要在 P 节点重算并把 KV 块经网络送到 D 节点；把块准入到全局池也要额外一次传输，所以留错块既浪费内存也浪费带宽。KVLearn 把保留/准入当成显式成本优化：轻量前缀复用预测器（PRP）用结构与时序特征估计复用概率、不改模型权重；成本感知保留分数（CARS）把概率结合重算、传输、存储三类成本转成 keep/admit 决策；自适应阈值控制器（ATC）按命中率与内存压力在线调整准入阈值。在全局解耦拓扑上对文本与多模态负载实测，首 token 时延最高降 56%，节点间 KV 传输量最高减少 53%。",
+          "contributions": [
+            "形式化解耦推理下的 KV 保留问题：准入与淘汰是联合决策，最优阈值随前缀长度变化，LRU/LFU 表达不了。",
+            "PRP 在线学习前缀复用概率（16 维结构与时序特征），无需离线画像，200 次请求后 AUC 即超 0.84。",
+            "CARS 把复用概率与重算/传输/存储成本合成可比的保留价值，ATC 用闭环反馈按命中率与内存压力在线调阈值。"
+          ],
+          "conclusions": [
+            "KV 在哪算、在哪用已不是同一节点，保留策略必须把中间网络当成一等成本。",
+            "多模态前缀是主要受益者：单张 448×448 图像产生 256-576 个视觉 token，重算代价比文本高一个量级。"
+          ],
+          "experiments": [
+            "首 token 时延相对 No-Cache 最高降 56%，相对 LRU-Pool 降 38%，相对 Mooncake 式基线降 33%。",
+            "节点间 KV 传输量相对 LRU-Pool 最高减少 53%。",
+            "MM-Session 上吞吐距 oracle 在 5% 以内（TTFT 38.2 ms，LRU-Pool 54.3 ms，oracle 34.1 ms）。"
+          ],
+          "significance": "指出解耦推理下“留与不留”都是要付网费的策略选择，并把它做成可在线学习的成本优化。",
+          "arxivUrl": "https://arxiv.org/abs/2610.28637",
+          "pdfUrl": "https://arxiv.org/pdf/2610.28637.pdf",
+          "takeaway": "TTFT 较 LRU-Pool 降 38%，跨节点 KV 传输量降 53%。",
+          "keyExperiment": "MM-Session 上 TTFT 38.2 ms，相对 LRU-Pool 54.3 ms 降 30%，距 oracle 34.1 ms 只差约 12%。",
+          "index": 3
+        },
+        {
+          "title": "FlashNext-RL: A System Optimization Study for Long-Horizon Agentic RL of Qwen3.8-Flash-Next",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-20",
+          "authors": "Zhewei Yao, Yuxiong He",
+          "institutions": "Snowflake AI Research",
+          "abstract": "长程 agentic RL 既要高效 rollout 又要能训长序列，而 Qwen3.8-Flash-Next 的显存需求与专属算子让开源实现难以支撑。作者基于 prime-rl 构建模型专用优化框架 FlashNext-RL，用 vLLM 生成 SWE rollout，在单节点 8×B200 上以 BF16 全参训练 48 层模型（前两层与 indexer 等冻结），并优化 host offload、梯度累积与 MoE/稀疏注意力 kernel。非 padding 训练吞吐从 32K 配置下约 395 tokens/s/GPU 升到 131K 配置下 4438 tokens/s/GPU，矩阵乘吞吐从约 20 提到 213 TFLOPs/GPU。系统支撑 1024 条 rollout、131072 token 上下文的在线 SWE RL，第 5-15 步每轮平均 22.4 分钟。",
+          "contributions": [
+            "把 RL 训练优化从“通用框架调参”改为“围绕具体模型架构与显存布局做系统级改造”，给出一份可复用的调优清单。",
+            "通过 host offload、梯度累积与 MoE/稀疏注意力/门控残差 kernel 优化，把 131K 长上下文全参训练压进单节点 8 卡。",
+            "用 8 层小模型做受控累积实验，逐项归因每个优化的贡献，而不是只报最终总吞吐。"
+          ],
+          "conclusions": [
+            "长程 agentic RL 的吞吐瓶颈主要来自长序列显存与模型专属算子的缺失，而非算法本身。",
+            "模型专用优化带来约 11 倍吞吐提升，说明通用 RL 基础设施在新型架构上远未触顶。"
+          ],
+          "experiments": [
+            "非 padding 训练吞吐从约 395 tokens/s/GPU（32K 配置）升到 4438 tokens/s/GPU（131K 配置），约 11 倍。",
+            "硬件矩阵乘吞吐从约 20 升到 213 TFLOPs/GPU（不计注意力组件成本）。",
+            "在线 SWE RL 跑 1024 条 rollout、131K 上下文，第 5-15 步平均每轮 22.4 分钟，熵与 trainer-sampler KL 失配保持有界。"
+          ],
+          "significance": "一份把长上下文 agentic RL 从“跑不动”调到“能连续跑”的完整工程报告，价值在调优路径本身。",
+          "arxivUrl": "https://arxiv.org/abs/2610.28998",
+          "pdfUrl": "https://arxiv.org/pdf/2610.28998.pdf",
+          "takeaway": "131K 上下文下训练吞吐 4438 tokens/s/GPU，是初始配置的约 11 倍。",
+          "keyExperiment": "非 padding 吞吐 395→4438 tokens/s/GPU，矩阵乘吞吐 20→213 TFLOPs/GPU。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "PACE: Periodic and Channel-Aligned Encoding of Four-Bit Recurrent States",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-21",
+          "authors": "Patrick Haller, Filipe Laitenberger, Alan Akbik",
+          "institutions": "Humboldt University of Berlin",
+          "abstract": "线性注意力类模型把上下文压进固定大小的循环状态，推理系统要为每条并发解码序列各存一份，因此降低状态精度能直接换来更高并发。已有状态量化器每生成一个 token 就舍入一次，报告四比特在不加宽位宽或微调的情况下会掉精度。PACE 是事后的四比特状态量化方法：像分块 kernel 在 prefill 阶段每块只舍入一次那样，只在每若干生成 token 后舍入一次状态，中间生成的 token 留在小缓冲区里，舍入频率降低即减少状态中的累积误差。作者还发现门控 delta 状态的大值沿列聚集，于是按列共享量化尺度，并把误差滞留最久的头保留在八比特。在 4B 到 35B 的四个混合模型上，混合四/八比特的 PACE 在三个更大模型上与八比特 DAMP 精度相当，而内存约为其三分之二。",
+          "contributions": [
+            "把“每 token 舍入”改成“每若干 token 舍入一次加小缓冲”，用降低舍入频率换取更低的四比特量化误差。",
+            "发现门控 delta 状态的大值按列聚集，据此用列内共享量化尺度替代统一尺度。",
+            "按头的误差滞留时长分配精度，把少数敏感头保留在八比特，其余压到四比特。"
+          ],
+          "conclusions": [
+            "四比特状态量化的精度损失主要不是位宽不足，而是舍入频率过高。",
+            "按头分配混合精度比全局加宽位宽更省内存，且二者精度相当。"
+          ],
+          "experiments": [
+            "4B-35B 的四个混合模型上，混合四/八比特 PACE 在三个更大模型上与八比特 DAMP 精度相当，内存约为其三分之二。",
+            "全四比特 PACE 在同等内存预算下精度高于 Q-Mamba。",
+            "周期性舍入保留了缓冲带来的解码加速，吞吐未因减少舍入次数而下降。"
+          ],
+          "significance": "把“状态量化”从位宽问题改写成舍入频率问题，用一次缓冲换回四比特的可用性。",
+          "arxivUrl": "https://arxiv.org/abs/2610.29545",
+          "pdfUrl": "https://arxiv.org/pdf/2610.29545.pdf",
+          "takeaway": "混合四/八比特在 4B-35B 模型上与八比特基线同精度，内存降三分之一。",
+          "keyExperiment": "四个混合模型上，混合精度 PACE 与八比特 DAMP 精度相当而内存约 2/3；全四比特优于 Q-Mamba。",
+          "index": 5
+        },
+        {
+          "title": "SPARE: Sparsity Allocation via Routing Entropy for Efficient MoEs",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-21",
+          "authors": "Yifan Yang, Hanling Yi, Dongquan Yang, Feng Lin, Rong Xiao, Aijun Li, Xiaotian Yu",
+          "institutions": "Intellifusion Inc.",
+          "abstract": "MoE 用专家扩容换容量，但显存占用是部署的主要障碍。专家剪枝能减小占用，然而多数方法只关注剪哪些专家，并对每层按同一比例剪。SPARE 提出用路由熵决定每层剪多少：在标定数据上计算 token 归一化 Top-K 门控权重的熵，权重越分散说明去掉一个活跃专家丢掉的信息越少，因此路由更弥散的层可以剪得更狠。作者在随机剪枝下给出扰动界把这一直觉形式化，并用固定 selector 的受控实验证明路由越集中、输出变化越大。在与基线相同的 selector 与预算下，SPARE 在 Mixtral、Qwen3、DeepSeek 上提升平均准确率，高剪枝率下尤其明显：50% 专家剪枝时 Qwen3-30B-A3B 的八任务平均从 57.2% 升到 63.8%。",
+          "contributions": [
+            "指出专家剪枝的关键不只是“剪哪些”而是“每层剪多少”，把层间预算变成一个可计算的分配问题。",
+            "用路由熵（token 在 Top-K 门控权重上的归一化熵）作为层间敏感度代理，训练-free 且与 selector 无关。",
+            "在随机剪枝下给出扰动界，并用固定 selector 的干预实验验证“路由越集中则输出变化越大”的因果链。"
+          ],
+          "conclusions": [
+            "均匀分配剪枝预算是次优的，层间路由集中度差异足以带来 6 个点以上的平均准确率差。",
+            "该方法可与任意 selector 组合，属即插即用的预算分配层。"
+          ],
+          "experiments": [
+            "50% 专家剪枝下，Qwen3-30B-A3B 的八任务平均准确率从 57.2% 提升到 63.8%。",
+            "同比例下 DeepSeek-R1 的数学/代码/科学平均从 80.1 提升到 82.8。",
+            "附录给出跨节点专家并行的通信代价分析：剪枝后 2 节点可压到 1 节点，直接省掉跨节点 EP 流量。"
+          ],
+          "significance": "把 MoE 专家剪枝的预算分配交给路由熵，一个训练-free 的分配层就换来 6 个点以上的准确率。",
+          "arxivUrl": "https://arxiv.org/abs/2610.29662",
+          "pdfUrl": "https://arxiv.org/pdf/2610.29662.pdf",
+          "takeaway": "50% 剪枝下 Qwen3-30B-A3B 八任务平均 57.2%→63.8%。",
+          "keyExperiment": "Qwen3-30B-A3B 50% 专家剪枝八任务平均 57.2→63.8；DeepSeek-R1 80.1→82.8。",
+          "index": 6
+        },
+        {
+          "title": "Is 2:4 Sparsity Still Worth It? Semi-Structured Sparsity versus Quantization in LLM Inference",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-20",
+          "authors": "Xiuyi Qin",
+          "institutions": "独立研究者（San Jose, CA）",
+          "abstract": "从 Ampere 起 NVIDIA tensor core 就支持 2:4 半结构化稀疏，且该模式可与量化叠加。两者组合时实践问题变成：从当前精度出发，是加 2:4 稀疏还是降到下一档精度？作者在等比特（计入稀疏元数据）与等名义 tensor core 档位两种口径下，覆盖 transformer 一层全部六个 GEMM 操作数，在三个 GPU 代际上实测 kernel，并把在线剪枝与量化计入。结论是：只要还有更低精度可选，加 2:4 都是更差的一步——既更不准也更慢，因为 2:4 在硬件强制轴上每组四个丢掉的能量不随位宽下降，而量化误差会随位宽下降。当量化已到硬件支持的最低精度，2:4 仍能让线性层快 1.3-1.7 倍；H100 上重训过的 2:4 模型用 vLLM 以 FP8 部署，prefill 吞吐比稠密 FP8 高 27%。",
+          "contributions": [
+            "把“加稀疏还是降精度”做成等比特与等档位两种口径的对比实验，覆盖一层 transformer 的全部六个 GEMM 操作数。",
+            "给出解释：2:4 丢弃的是组内固定轴上的能量，不随位宽缩小；量化误差随位宽缩小，因此量化应优先。",
+            "明确 2:4 的可用区间：只在量化触底后仍有收益，且质量必须靠重训找回。"
+          ],
+          "conclusions": [
+            "有更低精度可选时优先量化，“先稀疏再量化”的常见顺序是反的。",
+            "稀疏的价值集中在量化地板之上，且推理能力的恢复远慢于困惑度。"
+          ],
+          "experiments": [
+            "量化触及硬件最低精度后，2:4 让线性层提速 1.3-1.7 倍。",
+            "H100 上 FP8 部署的重训 2:4 模型经 vLLM 服务，prefill 吞吐比稠密 FP8 高 27%，GSM8K 准确率持平。",
+            "Blackwell 的稀疏 FP4 采用成对 4:8 模式，损失更大，在给定重训预算内未能恢复。"
+          ],
+          "significance": "把 2:4 稀疏从“默认该开”修正为“量化触底后才值得”，并给出跨三代 GPU 的实测依据。",
+          "arxivUrl": "https://arxiv.org/abs/2610.28947",
+          "pdfUrl": "https://arxiv.org/pdf/2610.28947.pdf",
+          "takeaway": "先量化再加 2:4，顺序反了；量化触底后 2:4 带来 1.3-1.7x 与 27% prefill 提升。",
+          "keyExperiment": "H100 上 FP8+重训 2:4 经 vLLM 服务，prefill 吞吐比稠密 FP8 高 27%，GSM8K 持平。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Reorienting the Vector Axis: Restructuring FlashAttention for Long-Vector Processors",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-21",
+          "authors": "Emmanuel Irabor, Marc Casas",
+          "institutions": "Barcelona Supercomputing Center, Universitat Politècnica de Catalunya",
+          "abstract": "注意力成本随序列长度平方增长，长序列上主导整层耗时。FlashAttention 用分块加在线 softmax 把成本压到可管理，但后续工作几乎都在 GPU 上做。长向量处理器上一个向量寄存器可装 512 个单精度数，向量指令收益正比于寄存器被用满的程度，因此“向量化哪个循环”是一阶决策。作者把 PyTorch 的 CPU FlashAttention kernel 移植到带 2KB 向量寄存器的 RISC-V CPU，发现只达到峰值浮点吞吐的 16.2%：kernel 逐 query 行走 tile，与 V 的乘沿 64 维头维向量化，softmax 的按行最大值与求和是把整个寄存器塌缩成标量的归约，软件指数的多项式系数还与 tile 数据争抢寄存器导致溢出。两项改造合起来在头维 64 时把整 kernel 周期降低 1.84-2.08 倍。",
+          "contributions": [
+            "把向量化轴从“头维”改到“query 维”：转置 score tile 与运行中的输出后，算法与数值不变，但一个参数（每 tile 的 query 数）即可统一匹配机器位宽。",
+            "转置后 softmax 的按行归约消失，原本的跨 lane 归约开销被结构性消除而非优化。",
+            "把 softmax 多项式系数移入标量寄存器消除溢出，softmax 的向量访存指令减少 78.7%。"
+          ],
+          "conclusions": [
+            "在长向量机器上，注意力 kernel 的瓶颈是寄存器利用率与归约，而不是分块策略本身。",
+            "该改造在 CPU 与 FPGA 上排序一致且 FPGA 得分更高，说明收益是结构性的而非某平台特例。"
+          ],
+          "experiments": [
+            "RISC-V 向量 CPU 上原版移植仅达峰值浮点吞吐的 16.2%。",
+            "两项改造合计在头维 64 时把整 kernel 周期降低 1.84-2.08 倍，浮点利用率从 16.2% 升到 29.7%。",
+            "同一设计的 FPGA 上排序相同且得分更高，加速 2.71 倍。"
+          ],
+          "significance": "给“FlashAttention 只属于 GPU”这个默认假设一个反例：换掉向量化轴，长向量 CPU 也能拿到 2 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.29489",
+          "pdfUrl": "https://arxiv.org/pdf/2610.29489.pdf",
+          "takeaway": "重排向量化轴后整 kernel 周期降 1.84-2.08x，浮点利用率 16.2%→29.7%。",
+          "keyExperiment": "头维 64 时整 kernel 周期降 1.84-2.08x，浮点利用率 16.2%→29.7%，FPGA 上 2.71x。",
+          "index": 8
+        },
+        {
+          "title": "Hard and Soft Real-Time DNN Inference Scheduling on Heterogeneous Multi-Accelerator Systems via Reinforcement Learning",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-21",
+          "authors": "Francesco Giulio Blanco, Enrico Russo, Giuseppe Ascia, Davide Patti, Maurizio Palesi",
+          "institutions": "University of Catania",
+          "abstract": "面向异构多加速器系统上同时运行硬实时（HRT）与软实时 QoS 感知 DNN 推理的调度框架：在线强化学习调度器与确定性运行时安全层相结合。RL 调度器通过联合选择子任务优先级与加速器分配动态生成候选调度；运行时认证则在不受学习策略影响的前提下保证所有 HRT 截止期都被满足。为使认证在异构、带优先约束的系统中可行，作者提出基于机器切分（machine-wise cuts）的可调度性保持前缀替换准则：该准则保证运行时生成的调度前缀仍存在可行后续，而不需要对某个可行参考调度做完整的完成时间支配。实验表明框架在保持 HRT 可调度性的同时，改善了 QoS 截止期满足率、客户端级服务质量与加速器利用率。",
+          "contributions": [
+            "把学习型调度器与确定性认证层分离：RL 只负责提出候选，安全性由运行时可调度性判据独立保证。",
+            "提出基于机器切分的可调度性保持前缀替换准则，放宽了传统“完成时间支配”的严格要求，使认证在异构平台上可行。",
+            "联合优化子任务优先级与加速器分配两个维度，同时覆盖 HRT 与软实时 QoS 两类负载。"
+          ],
+          "conclusions": [
+            "学习型调度在实时系统里可用，前提是把安全保证做成与策略无关的运行时认证。",
+            "前缀替换准则的关键是保住“存在可行后续”，而不是逐个任务去支配某个参考调度。"
+          ],
+          "experiments": [
+            "在异构 DNN 加速器平台的全部测试实例上，HRT 截止期无一违约（可调度性保持），QoS 侧为净增益。",
+            "相比 SOTA 调度方法，QoS 感知的截止期满足率、客户端级服务质量与加速器利用率同时改善。",
+            "论文被 RTNS 2026（第 34 届实时网络与系统会议）接收。"
+          ],
+          "significance": "给“RL 调度器能不能上实时系统”这个疑问一个结构性答案：把安全做成策略无关的认证层。",
+          "arxivUrl": "https://arxiv.org/abs/2610.29503",
+          "pdfUrl": "https://arxiv.org/pdf/2610.29503.pdf",
+          "takeaway": "RL 调度 + 运行时认证：HRT 截止期零违约，QoS 与利用率同时提升。",
+          "keyExperiment": "全部测试实例 HRT 截止期零违约，同时 QoS 满足率与加速器利用率优于 SOTA 调度器。",
+          "index": 9
+        },
+        {
+          "title": "TrainBridge: Agentic NPU Training Optimization Guided by GPU Compilation Evidence",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-21",
+          "authors": "Yupeng Chen, Kunxiang Zhao, Xingjian Wang, Yue Zhao, Yijing Wu, Ye Liu, Kai Li, Congliang Chen, Ruoyu Sun",
+          "institutions": "The Chinese University of Hong Kong, Shenzhen, Shenzhen Loop Area Institute, Autokernel",
+          "abstract": "作者研究如何提升 Ascend NPU 上的训练效率。在所考察的 NPU 训练程序里，算子融合等框架级编译优化只被部分应用，留下碎片化计算与可避免的执行开销；profile 引导的调优能解决一部分，但往往需要昂贵的试错。TrainBridge 提出用成熟 GPU 编译栈产出的高度优化执行作为任务相关的参照：从 GPU 训练执行中抽取优化意图，指导 NPU 程序重写，再通过迭代 profiling 精修重写后的程序。在 GPU 到 NPU 的迁移实验中，TrainBridge 在覆盖 LLM 预训练、图像分类、视觉语言训练的四个负载上平均加速 1.7 倍，在 27 个 GPU 实现已高度优化的 Modded-NanoGPT speedrun 记录上平均加速近 2.0 倍。",
+          "contributions": [
+            "把“跨硬件迁移优化”表述为优化意图的抽取与重放，而不是逐条规则或人工调参。",
+            "以 GPU 编译栈的实际执行作为任务特定参照，避免 NPU 侧从零搜索优化空间。",
+            "重写后接迭代 profiling 闭环，把一次性的迁移建议变成可收敛的调优过程。"
+          ],
+          "conclusions": [
+            "成熟生态的优化产物可以作为新硬件的“参考答案”，显著降低跨栈迁移的试错成本。",
+            "在 GPU 侧已被极致优化的 workload 上仍能拿到近 2 倍，说明框架级编译的缺口普遍存在。"
+          ],
+          "experiments": [
+            "覆盖 LLM 预训练、图像分类、视觉语言训练的四个负载上平均加速 1.7 倍。",
+            "27 个 Modded-NanoGPT speedrun 记录上平均加速近 2.0 倍。",
+            "收益主要来自算子融合缺失导致的碎片化计算与执行开销，定位由 profiling 证据驱动而非启发式猜测。"
+          ],
+          "significance": "把 GPU 的编译产物当老师，让 NPU 训练优化从“试错调参”变成“照参考实现重写”。",
+          "arxivUrl": "https://arxiv.org/abs/2610.29171",
+          "pdfUrl": "https://arxiv.org/pdf/2610.29171.pdf",
+          "takeaway": "四个负载平均 1.7x，27 个 Modded-NanoGPT 记录平均近 2.0x。",
+          "keyExperiment": "四负载平均 1.7x；27 个 Modded-NanoGPT speedrun 记录平均近 2.0x。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
