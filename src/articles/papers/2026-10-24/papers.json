@@ -1,0 +1,340 @@
+{
+  "date": "2026-10-24",
+  "title": "2026-10-24 论文精选",
+  "lede": "今日主线：KV cache 继续向存储与路由要空间，NPU 算子自动化与编译栈安全则提醒基础设施仍在补课。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 442
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "uGDS: A User-Space Development Kit for High-Performance GPU Direct Storage",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-23",
+          "authors": "Jing Wei, Guanyi Chen, Qi Chen, Chuyu Zhang, Zheng Zhou, Chutian Wang, Jian Zhang",
+          "institutions": "香港科技大学(广州) ScaleX-IO",
+          "abstract": "uGDS 是一个开源的用户态 GPU 直接存储（GDS）开发库，针对 NVIDIA GDS 的三处结构性缺陷：每条 I/O 请求都要穿内核、流序路径强制全序、用户态引擎闭源不可诊断与调度。其核心设计是主机 CPU 在用户态管理整个 NVMe 命令生命周期，数据经 PCIe P2P DMA 直接搬运而不占 GPU 算力，内核模块仅负责一次性特权初始化；同时把硬件队列在同步与批量流量之间划分，提供 cuFile 兼容的同步、批量与流序 API，并统一支持 NVIDIA CUDA 与 AMD HIP。在 A100 搭配三星 990 PRO 的实测中，批量读带宽达 GDS 的 12.12 倍、批量写带宽 30.69 倍，4KiB 同步写延迟降低 84.1%；接入 LMCache 后首 token 延迟中位数最多降低 62.7%，服务有效吞吐提升 2.63 倍。",
+          "contributions": [
+            "把 GDS 控制路径从内核搬到用户态，内核模块只做一次性特权初始化，消除每请求的内核穿越开销",
+            "按同步与批量流量划分硬件队列，并用 DMA 安全缓冲生命周期约束，把全序退化成批量级排序",
+            "提供 cuFile 兼容的同步、批量、流序 API 并同时支持 CUDA 与 HIP，开源可诊断可定制调度"
+          ],
+          "conclusions": [
+            "用户态控制加工作负载感知调度，足以在批量与流序路径上大幅超越闭源 GDS，同时不牺牲 API 兼容性",
+            "该库可直接替换 KV cache 卸载后端，把存储层 I/O 优化转化为端到端的服务吞吐收益"
+          ],
+          "experiments": [
+            "A100 + 三星 990 PRO：批量读带宽为 GDS 的 12.12 倍、批量写为 30.69 倍（8/4KiB 请求，批量 128）",
+            "4KiB 同步写延迟降低 84.1%（双线程）；单条流序路径维持 5.49 GiB/s，而 GDS 仅保留其同步带宽的 40.8%",
+            "接入 LMCache：TTFT 中位数最多降低 62.7%，服务有效吞吐提升 2.63 倍；AMD 上同步写带宽为 hipFile 的 1.19 倍"
+          ],
+          "significance": "把 GPU 直接存储从闭源黑盒变成可调度的用户态基础设施，为 KV cache 卸载与向量检索重设了 I/O 下限",
+          "arxivUrl": "https://arxiv.org/abs/2610.30868",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30868.pdf",
+          "index": 1,
+          "takeaway": "控制面搬到用户态加队列级隔离，让 SSD-GPU 带宽翻十倍并直接压低首 token 延迟",
+          "keyExperiment": "接入 LMCache 后 KV cache 卸载路径 TTFT 中位数最多降 62.7%、有效吞吐提升 2.63 倍"
+        },
+        {
+          "title": "Gandalf: Flash Shall Not Die! Increasing Flash Storage Lifetime for KV Cache Offloading in LLM Serving",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-23",
+          "authors": "Maharani A. P. Irawan, Kuntai Du, Jiayi Yao, Dongjoo Seo, Yuyang Huang, Haryadi S. Gunawi, Junchen Jiang",
+          "institutions": "芝加哥大学, TensorMesh, 三星半导体",
+          "abstract": "把 KV cache 卸载到 SSD 已成为突破 GPU 与主机内存容量的常规手段，但在多轮对话与 agent 等生产负载下，KV cache 的累计写入量远超 SSD 容量，会把闪存寿命从数年缩短到数月。按历史访问模式门控写入虽能减少写入，却会显著降低缓存命中率——因为不同注意力类型产生的 KV cache 可能拥有相同的历史访问模式，未来访问模式却截然不同。Gandalf 的洞察是：要同时保住寿命与命中率，必须把应用层信息即注意力类型纳入准入决策，优先让全注意力的 KV cache 落盘，而把滑窗、线性等其它注意力类型的 cache 挡在 SSD 之外。评测显示 Gandalf 平均把 SSD 寿命延长 7.3 倍，在多组生产负载轨迹与宽范围硬件容量下对命中率影响可忽略，且设计可扩展到高带宽闪存（HBF）等其它介质。",
+          "contributions": [
+            "首次把 SSD 寿命作为 KV cache 卸载系统的一等设计目标，指出写入量而非容量才是生产负载的真实瓶颈",
+            "提出按注意力类型而非仅历史访问模式做准入，让全注意力 cache 优先落盘，避免寿命与命中率的二选一",
+            "给出可迁移到高带宽闪存等其它闪存介质的寿命感知卸载设计原则"
+          ],
+          "conclusions": [
+            "只看访问模式而不看注意力类型，会同时损失命中率与成本，应用层语义是打破该权衡的关键",
+            "SSD 寿命可以提升近一个数量级而不牺牲缓存命中率，使 KV 卸载的经济性不再被介质磨损吞掉"
+          ],
+          "experiments": [
+            "平均将 SSD 寿命延长 7.3 倍",
+            "在多组生产负载轨迹与宽范围硬件容量配置下，缓存命中率下降可忽略"
+          ],
+          "significance": "把闪存磨损纳入 KV 卸载的准入决策，首次让 KV 卸载在大规模生产负载下经济可持续",
+          "arxivUrl": "https://arxiv.org/abs/2610.30791",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30791.pdf",
+          "index": 2,
+          "takeaway": "按注意力类型做准入，SSD 寿命延长 7.3 倍且不损命中率",
+          "keyExperiment": "平均 SSD 寿命延长 7.3 倍，命中率几乎不变"
+        },
+        {
+          "title": "BeNice! Closing Looping’s Inference-Memory Gap via KV-Sharing",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-23",
+          "authors": "Hayden Prairie, Jacob M. Ryan, Taylor Berg-Kirkpatrick, Daniel Y. Fu",
+          "institutions": "加州大学圣地亚哥分校, Together AI",
+          "abstract": "循环（looped）架构通过把激活反复送过同一组层来提升质量而不增加参数，但推理时每次循环都生成独立 KV cache，显存随循环深度线性增长。已有工作发现某些模型最后一次循环的 KV cache 可与前几次共享而不掉质量（即 KV 可共享性），但机制不明，甚至同构训练的模型也未必具备。本文提出两阶段方法：预训练阶段引入随机深度，诱发收缩性残差动力学，使各次循环的表示收敛到共同极限；后训练阶段提出 BeNice!，把最后一次循环的 KV cache 广播进第一次循环，并训练其产生兼容的残差，从而在匹配标准微调困惑度的同时获得 KV 可共享性。该方法与多潜在注意力、Kimi delta attention 以及 fp8/mxfp8/nvfp4 低精度 KV 缓存互补；低内存长上下文模拟中，缓存命中率最高提升 31.4%、吞吐提升 23.6%、p90 首 token 延迟降低 83.6%。",
+          "contributions": [
+            "定位 KV 可共享性的成因：预训练随机深度诱导的收缩性残差动力学让各次循环收敛到共同表示极限",
+            "提出 BeNice! 后训练法，把末次循环 KV 广播到首次循环并训练残差兼容，困惑度与标准微调持平",
+            "证明 KV 共享与多潜在注意力、Kimi delta attention 及 fp8/mxfp8/nvfp4 量化正交，可以叠加"
+          ],
+          "conclusions": [
+            "KV 可共享性是可训练出来的性质而非模型自带的巧合，随机深度是关键开关",
+            "在同等质量下，循环架构的推理显存占用与长上下文服务成本可被显著压低"
+          ],
+          "experiments": [
+            "共享 KV 后的验证困惑度与标准（不共享）微调持平",
+            "低内存长上下文模拟：缓存命中率最高 +31.4%，吞吐最高 +23.6%，p90 TTFT 降低 83.6%",
+            "与多潜在注意力、Kimi delta attention 及 fp8/mxfp8/nvfp4 KV 量化组合后增益保持"
+          ],
+          "significance": "把循环架构的 KV 显存从线性增长压回常数，为这类模型的路由化部署扫清显存障碍",
+          "arxivUrl": "https://arxiv.org/abs/2610.31633",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31633.pdf",
+          "index": 3,
+          "takeaway": "随机深度加末次循环 KV 广播，让循环模型的 KV 显存不再随循环深度线性增长",
+          "keyExperiment": "缓存命中率 +31.4%、吞吐 +23.6%、p90 TTFT -83.6%"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "RIFT: KV Cache Compression for Draft Models with Complementary Compressibility Training",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-23",
+          "authors": "Dor Tsur, Maor Ashkenazi, Maximilian Golub, Peter Hicks, Yaniv Galron, Talor Abramovich, Yoav Miron, Tiyasa Mitra, Bita Darvish Rouhani, Ran Zilberstein",
+          "institutions": "NVIDIA",
+          "abstract": "投机解码是长输出生成的常用加速手段，但草稿模型的 KV cache 会随输出增长而膨胀，压缩成为必需。以 prefill 信息为中心的 KV 压缩方法在生成过程中会逐渐失配，作者把这一现象称为解码陈旧性（decode staleness），并证明它会显著削弱基于选择的压缩下草稿模型的准确度。RIFT 提出一族在 prefill 信息与近期生成 token 之间取得平衡的选择式 KV 压缩策略：在生成过程中刷新 KV 选择能明显提升草稿质量，代价是额外解码延迟，为此进一步给出自适应刷新策略以减少打分次数。作者还用基于稀疏注意力掩码的可压缩性驱动训练，让草稿模型在压缩 KV 下仍保持质量。配合该训练，Qwen3.5-4B 为 Qwen3.5-122B 起草时，在 32K 输入、4K 输出、8K KV 预算下保留了全缓存接受长度的 98% 以上。",
+          "contributions": [
+            "命名并量化解码陈旧性：只按 prefill 选择的 KV 压缩会随输出变长而失效",
+            "提出在 prefill 与近期 token 间平衡的 RIFT 选择策略，并用自适应刷新削减重复打分开销",
+            "用稀疏注意力掩码做可压缩性驱动训练，使草稿模型天生适配压缩 KV"
+          ],
+          "conclusions": [
+            "长输出投机解码的瓶颈在 KV 选择的时间维度，而非单纯压缩率高低",
+            "可压缩性训练加刷新式选择，能在大幅压缩 KV 的同时几乎不损失接受长度"
+          ],
+          "experiments": [
+            "Qwen3.5-4B 为 Qwen3.5-122B 起草，32K 输入/4K 输出/8K KV 预算下保留 98% 以上全缓存接受长度",
+            "自适应刷新在保持草稿质量的同时显著减少打分计算次数"
+          ],
+          "significance": "把投机解码的 KV 压缩从静态选择推进到时间自适应，为长输出场景的草稿模型给出可用的显存预算",
+          "arxivUrl": "https://arxiv.org/abs/2610.31098",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31098.pdf",
+          "index": 4,
+          "takeaway": "解码过程中 KV 选择会过期，刷新策略让草稿模型在 8K KV 预算下保住 98% 接受长度",
+          "keyExperiment": "8K KV 预算、32K 输入 4K 输出，保留 98% 以上全缓存接受长度"
+        },
+        {
+          "title": "MoEZip: Routing-Aware KV Cache Compression for Sparse Mixture-of-Experts LLMs",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-23",
+          "authors": "Minsang Kim, Seung Jun Baek",
+          "institutions": "高丽大学, SK Telecom",
+          "abstract": "MoE 语言模型用稀疏激活换取容量，但长上下文推理时 KV cache 仍随时序线性增长，成为主要显存瓶颈。现有 KV 压缩方法面向稠密 Transformer，忽略了一个 MoE 特有问题：KV 驱逐会改变答案生成阶段被选中的专家，从而直接损伤生成质量。MoEZip 用路由分布的 Fisher 信息矩阵构造新指标，估计专家路由对扰动的敏感度，并与注意力权重结合，对上下文做路由感知打分；再把面向稠密与稀疏 MoE 的驱逐方法组合成互补打分体系。实验显示在激进压缩下依然稳健：KV 保留率 10% 时，MoEZip 在 LongBench 与 RULER 上平均比最强基线高 24 分与 20 分，相当于 2.3 倍与 4.9 倍的得分提升。",
+          "contributions": [
+            "指出 MoE 场景下 KV 驱逐会改变专家路由，这是稠密模型压缩方法失效的根因",
+            "用路由分布的 Fisher 信息矩阵量化专家路由敏感度，并与注意力权重融合为路由感知打分",
+            "把稠密与稀疏 MoE 的驱逐策略组合成互补打分，可直接替换现有选择式压缩的评分函数"
+          ],
+          "conclusions": [
+            "MoE 的 KV 压缩必须把路由稳定性纳入目标，否则压缩越狠质量掉得越快",
+            "仅 10% 保留率下仍大幅优于最强基线，说明路由感知打分的价值在极端预算下才真正显现"
+          ],
+          "experiments": [
+            "KV 保留率 10%：LongBench 平均 +24 分、RULER 平均 +20 分，对应最强基线的 2.3 倍与 4.9 倍得分",
+            "在多个长上下文基准与不同压缩强度下均优于现有 KV 压缩方法"
+          ],
+          "significance": "把专家路由当作 KV 压缩的一等信号，填补了 MoE 长上下文推理的专用压缩空白",
+          "arxivUrl": "https://arxiv.org/abs/2610.30206",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30206.pdf",
+          "index": 5,
+          "takeaway": "KV 驱逐会改路由，把路由敏感度纳入打分能在 10% 保留率下反超基线数倍",
+          "keyExperiment": "10% KV 保留率下 LongBench +24 分、RULER +20 分"
+        },
+        {
+          "title": "ProQuant: Preserving Expert Quality over Quantity in Ultra-Low-Bit Quantization of Mixture-of-Experts Models",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-23",
+          "authors": "Jiaqi Chen, Xianglong Yan, Chengzhu Bao, Xie Chen, Yulun Zhang",
+          "institutions": "上海交通大学",
+          "abstract": "MoE 大模型用稀疏激活省算力，但参数量带来的存储开销仍在。混合精度训练后量化（PTQ）按组件分配不同比特宽度来压成本，然而在紧张的比特预算下难以保住生成质量。作者识别出两个症结：一是忽略跨层传播时，极低精度下的非线性量化误差被低估；二是直接微调 router 会引起路由漂移，校准收益也难以泛化到下游任务。ProQuant 提出权重仅量化的 MoE 专用框架：Prune-or-Prioritize 把专家剪枝与比特宽度分配联合优化，允许高精度专家替掉严重退化的专家，提高预算利用率；Routing-Consistent RMSNorm Finetune 用数学等价变换调整专家输入表示以补偿量化误差，从而抑制路由漂移。在多种生成任务上 ProQuant 均优于现有方法。",
+          "contributions": [
+            "揭示极低比特下跨层误差传播使非线性量化误差被系统性低估",
+            "PoP 把专家剪枝与比特分配联合优化，用高精度专家替换严重退化的专家，提升比特预算利用率",
+            "RoCo 用数学等价的 RMSNorm 变换补偿量化误差，在不改路由的前提下抑制路由漂移"
+          ],
+          "conclusions": [
+            "MoE 极低比特量化的关键是保住被激活专家的质量，而不是均匀压低所有组件的比特",
+            "只改专家输入表示、不动路由的补偿方式，能在不引入路由漂移的前提下恢复精度"
+          ],
+          "experiments": [
+            "在多种生成任务上优于现有 MoE 混合精度训练后量化方法",
+            "在紧张比特预算下仍保持生成质量，专家剪枝与比特分配联合优化提升了预算利用率"
+          ],
+          "significance": "把 MoE 量化从均匀压比特推进到按专家质量和路由稳定性分配精度，为超大 MoE 的单机部署给出可行路径",
+          "arxivUrl": "https://arxiv.org/abs/2610.30779",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30779.pdf",
+          "index": 6,
+          "takeaway": "专家质量与路由稳定性优先，联合剪枝与比特分配在极低比特下仍保生成质量",
+          "keyExperiment": "多种生成任务上优于现有 MoE 混合精度 PTQ，极低比特预算下保持生成质量"
+        },
+        {
+          "title": "ValuSpec: Plug-and-Play Candidate Valuation before Target Verification for Tree-Based Speculative Decoding",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-23",
+          "authors": "Liang He, SiYuan Ma, Qishi Zhan, Yongqi Fan, Mingyu Cao, Qizhen Lan, Zhaolu Kang, Xilu Wang",
+          "institutions": "同济大学, 南洋理工大学, 腾讯, 萨里大学, 北京大学",
+          "abstract": "树式投机解码通过并行验证多条候选分支来加速大模型推理，但实际服务中相似请求反复产生重叠分支：检索式方法复用历史草稿会让候选树越滚越大，混入大量低质量分支，既降低验证效率又浪费目标模型算力。ValuSpec 在昂贵的目体验证之前先给候选树做估值过滤：用迁移式监督让过滤器对齐目标模型行为，过滤阈值从目标模型在标定集上的贪心轨迹估计得到，无需训练任何参数。目标模型随后在输出一致的贪心规则下验证过滤后的树，因此被接受的 token 与标准自回归解码严格一致。在 HumanEval、GSM8K、Dolly 与 SpecBench 上，检索式树设置下端到端加速最高 2.38 倍；接入 EAGLE-3 动态树框架且不改其建树策略，端到端加速最高 2.78 倍。",
+          "contributions": [
+            "定位检索式投机解码的瓶颈在候选树低质分支膨胀，而非草稿召回不足",
+            "提出免训练的参数估值过滤，阈值由目标模型贪心轨迹标定，用迁移监督对齐目标行为",
+            "在输出一致的贪心规则下验证，保证加速不改变生成结果，且可作为即插即用模块"
+          ],
+          "conclusions": [
+            "先估值再验证能把目标侧算力从无效分支上省下来，加速幅度随候选树冗余度增大",
+            "过滤模块与树构造解耦，可直接叠加到 EAGLE-3 等现有框架"
+          ],
+          "experiments": [
+            "HumanEval、GSM8K、Dolly、SpecBench 检索式树设置：端到端最高 2.38 倍加速",
+            "接入 EAGLE-3 动态树且不改建树策略：端到端最高 2.78 倍加速",
+            "被接受 token 与标准自回归解码严格一致，加速不引入输出偏差"
+          ],
+          "significance": "把投机解码的优化点从造更好的树移到砍掉废分支，给检索增强的草稿复用补上了效率闸门",
+          "arxivUrl": "https://arxiv.org/abs/2610.31338",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31338.pdf",
+          "index": 7,
+          "takeaway": "验证前先估值过滤，检索式树加速最高 2.38 倍，接入 EAGLE-3 达 2.78 倍",
+          "keyExperiment": "检索式树端到端 2.38 倍、EAGLE-3 上 2.78 倍加速，输出与自回归严格一致"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "CANNBot-CAKE: Collaborative Agentic Kernel Evolution for Ascend NPU",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-10-23",
+          "authors": "Deng Pan, Xue-Jian Gao, Junyi Fan, Bin Du, Jiasheng Li, Xinxian Chen, Nok Yan Chang, Xinlin Li, Lingchao Zheng, Jun Li, Yuwei Fan",
+          "institutions": "华为",
+          "abstract": "为 Ascend NPU 手写高性能算子慢、依赖专家且难以自动化；现有 AI agent 虽已在 GPU 算子基准上接近专家水平，生成 AscendC 算子仍明显偏弱，可能源于相关训练数据稀缺。CAKE 是 CANN 原生的可部署自定义算子系统，核心包含自适应多 DSL 路由、生成与进化两种分离模式，以及经审核的知识复用机制（CAKE Book 与自进化 agent）。在 Ascend 950PR 上针对 CANN-Bench v1.1 的 53 个算子，CAKE 在标准集达到 100% 用例通过（1060/1060）、隐藏集 98.28%（4167/4240），总分均值 78.63，平均性能为基线 1.334 倍；进化模式还能在已经正确的算子上继续挖性能：EngramGateFusion 在 20 轮内把累计设备时间压低 46.6%，并把平均 roofline 差距大致减半。",
+          "contributions": [
+            "构建 CANN 原生的算子生成系统，用自适应多 DSL 路由适配不同算子的实现范式",
+            "分离生成与进化两种模式，并用 CAKE Book 做经审核的知识复用，避免重复试错",
+            "在隐藏算子集上验证泛化：98.28% 用例通过率，说明并非过拟合公开基准"
+          ],
+          "conclusions": [
+            "NPU 算子自动化可行，瓶颈主要是训练数据与知识复用机制，而非 agent 能力本身",
+            "先产出正确算子再用进化搜性能，能再拿到相当可观的 roofline 收益"
+          ],
+          "experiments": [
+            "Ascend 950PR / CANN-Bench v1.1 的 53 个算子：标准集 1060/1060（100%）、隐藏集 4167/4240（98.28%）通过",
+            "总分均值 78.63/100，平均性能为基线 1.334 倍",
+            "进化模式：EngramGateFusion 20 轮内累计设备时间降低 46.6%，平均 roofline 差距大致减半"
+          ],
+          "significance": "把 GPU 上的算子 agent 能力成功迁到 Ascend 生态，为国产 NPU 的算子库建设提供可复制的自动化路径",
+          "arxivUrl": "https://arxiv.org/abs/2610.31034",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31034.pdf",
+          "index": 8,
+          "takeaway": "多 DSL 路由加生成与进化分离，让 Ascend 算子自动生成在隐藏集上仍有 98.28% 通过率",
+          "keyExperiment": "隐藏集 4167/4240 通过（98.28%），平均性能为基线 1.334 倍"
+        },
+        {
+          "title": "Amplifying Latency and Cost of LLM Inference via Rowhammer Attack",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CR",
+          "date": "2026-10-23",
+          "authors": "Mrityunjay Shukla, Shubham Roy, Biswabandan Panda",
+          "institutions": "印度理工学院孟买分校",
+          "abstract": "大模型推理依赖 Triton 等 JIT 框架生成的 GPU 算子，而 Triton 经 MLIR/LLVM 管线编译。本文研究能否用 CPU DRAM 上的 Rowhammer 比特翻转，在保持输出正确性的前提下拖慢 GPU 推理。作者提出 LLVMhammer：首个翻转 Triton 编译管线中性能关键优化 pass 的比特位、使其生成功能等价但次优的 GPU 算子的攻击。由于 Triton 缓存编译产物，一次成功的翻转会让后续推理持续变慢；而 Triton 与目标无关的编译阶段被各 GPU 厂商共用，使攻击与厂商无关。在 Qwen2.5-7B、Llama-3.1-8B、Mistral-7B、DeepSeek-7B 与 RTX 4090、AMD RX 7900 XTX 上，攻击使单卡推理延迟上升 4%–16%，并可将 BERTScore 压到 25%。",
+          "contributions": [
+            "首个把 Rowhammer 比特翻转落在编译器优化 pass 上的攻击，产出功能等价但性能退化的 GPU 算子",
+            "利用 Triton 的磁盘内核缓存，把一次成功的翻转转化为持久性的推理变慢",
+            "构建 Karnage 自动定位 Triton 与目标无关管线中的可用翻转位点，攻击跨 GPU 厂商生效"
+          ],
+          "conclusions": [
+            "JIT 编译栈已成为推理成本的新型攻击面，正确性检查完全无法发现这类退化",
+            "编译缓存把单点故障放大成长期运营成本，厂商无关的编译阶段尤其危险"
+          ],
+          "experiments": [
+            "Qwen2.5-7B、Llama-3.1-8B、Mistral-7B、DeepSeek-7B 在 RTX 4090 与 RX 7900 XTX 上：推理延迟上升 4%–16%",
+            "输出层面：BERTScore 最低可降至 25%，且跨厂商 GPU 均可复现",
+            "单卡延迟上升在规模化多卡部署下可换算为可观的年度运营成本增量"
+          ],
+          "significance": "揭示推理栈的编译层是被忽视的安全与成本双重风险点，为算子生成与缓存机制提供了新的威胁模型",
+          "arxivUrl": "https://arxiv.org/abs/2610.30798",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30798.pdf",
+          "index": 9,
+          "takeaway": "一次内存比特翻转就能让 Triton 生成劣质内核并持久拖慢推理 4%–16%",
+          "keyExperiment": "推理延迟上升 4%–16%，BERTScore 最低降至 25%，跨 NVIDIA/AMD 均复现"
+        },
+        {
+          "title": "Evaluating the Applicability of LLM Inference Optimizations on Apple Silicon",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-23",
+          "authors": "Kyrylo Yemets, Andrii Yaroshevych, Victor Muryn, Ostap Khomenko, Pavlo Kryven, Maksym Kmet, Maksym Shamrai, Mariya Hirna",
+          "institutions": "MacPaw AI&Research, 利沃夫理工学院, 乌克兰国家科学院数学研究所",
+          "abstract": "Apple Silicon 是本地大模型推理的主流平台，但几乎所有推理优化都在服务级 NVIDIA GPU 的分批服务负载上设计与验证。本文系统评估四类优化迁到 Apple Silicon 后的收益与决定因素：KV cache 剪枝、投机解码、移植 GPU 算子与训练后量化。实验覆盖四台 Apple 设备，统一采用单请求解码负载，并与 RTX 4090 对齐。结果显示 KV 剪枝在 Apple 上端到端吞吐最高提升 1.75 倍，却在桌面 NVIDIA GPU 上可能反而降速；所有被测投机解码方法在 Apple 上都降吞吐，尽管文献在服务器 GPU 上报告 2–6 倍收益；CUDA 算子设计只能部分迁移，公有 Metal 缺少异步拷贝，batch=1 让多种服务级机制失效，可迁移部分最高带来 1.20 倍解码吞吐。加速比不是技术固有属性，而是技术与运行时、硬件契约、负载模式的联合函数。",
+          "contributions": [
+            "首次系统测量四类主流推理优化在 Apple Silicon 上的真实收益，并给出与 RTX 4090 的对齐对照",
+            "解释迁移失效的硬件原因：公有 Metal 无异步拷贝、batch=1 让服务级机制失去用武之地、统一内存带宽已接近饱和",
+            "提出加速比是技术、运行时、硬件契约与负载四元联合属性的判定框架"
+          ],
+          "conclusions": [
+            "文献加速比不可移植，跨平台复现必须先判断原瓶颈是否仍是新平台的主瓶颈",
+            "本地单请求场景应优先做持久前缀复用与量化，而非投机解码与分组 GEMM 类机制"
+          ],
+          "experiments": [
+            "KV 剪枝在 Apple 上端到端吞吐最高 1.75 倍（4096 上下文/256 输出），RTX 4090 同配置仅 0.98 倍",
+            "所有投机解码方法在 Apple 上端到端吞吐全部下降，M2 Pro 解码吞吐损失 25.2%–69.8%",
+            "Metal 移植：FlashInfer split-KV 在 M4 Pro 达 1.20 倍、M2 上仅 0.97 倍；MoE gather 全机型 1.03–1.23 倍"
+          ],
+          "significance": "给端侧推理优化的可移植性立了硬标尺：脱离瓶颈谈加速比是无效结论",
+          "arxivUrl": "https://arxiv.org/abs/2610.31479",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31479.pdf",
+          "index": 10,
+          "takeaway": "同一优化在 Apple 与服务器 GPU 上收益可正可负，判断依据应是瓶颈是否仍主导",
+          "keyExperiment": "KV 剪枝在 Apple 上 1.75 倍、RTX 4090 上 0.98 倍；投机解码在 Apple 全部降速"
+        }
+      ]
+    }
+  ]
+}
