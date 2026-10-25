@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-25",
+  "title": "2026-10-25 论文精选",
+  "lede": "今日主线是\"把 KV 与显存从静态假设里解放出来\"：一次性挑的视觉 token 要随注意力漂移重选，未读的注意力尾部要用均值代理兜住，逐层嵌入与 n-gram 表能压到百倍量级；另一半论文则在推翻成见——投机解码接受率并不随位置衰减，深度剪枝的最优层随修复方式整体搬家。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 442
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Drift Says When, Budget Says How Much: Rate-Controlled KV Re-selection for Long-Form Multimodal Generation",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-23",
+          "authors": "Bin Hu, Yingbo Xiao",
+          "institutions": "Tsinghua University, The Chinese University of Hong Kong (Shenzhen)",
+          "abstract": "多模态大模型的 KV cache 压缩通常只在 prefill 阶段挑一次视觉 token 并沿用整个生成过程。作者指出这种一次性选择在长文本生成上严重受限：在详细图像描述任务上，即便用未压缩答案的注意力做 oracle 选择，与未压缩输出的 ROUGE-L 一致度也只有 0.44–0.52，因为模型阅读的证据随描述推进而漂移。每当注意力漂出保留集就重选是自然补救，但固定漂移阈值会系统性失效——漂移幅度在样本间不可比，低漂移样本几乎从不刷新，而它们受益最大。作者提出速率控制刷新（RCR）：由漂移决定何时、何地重选，每个样本一个控制器调节刷新频次，配合低秩漂移探测器、候选受限重选与留在 GPU 上的判定。单一设置下，RCR 在六个模型-任务设定中的五个比逐步检索方法 InfiniGen 高 1.6–3.8 ROUGE-L 点，与精确逐步重选的差距在 1.7 点内，探测器显存小 4 倍。",
+          "contributions": [
+            "诊断出多模态 KV 压缩的根本限制：证据位置随生成漂移，一次性 prefill 选择即便用 oracle 也只得 0.44–0.52 ROUGE-L 一致度。",
+            "指出固定漂移阈值失败的原因是漂移幅度跨样本不可比，低漂移样本反而最需要刷新却几乎不触发。",
+            "提出 RCR：漂移决定何时何地重选、每样本速率控制器决定多频繁，并给出低秩探测器与候选受限重选的低开销实现。"
+          ],
+          "conclusions": [
+            "单一超参设置即可跨模型与任务工作，说明\"何时重选\"应由样本内漂移信号自适应决定，而非全局阈值。",
+            "在漂移同质的视频描述任务上 RCR 与 InfiniGen 持平或略优，但在最近测试速率下不再胜过固定阈值，与\"漂移异质才需要速率控制\"的诊断一致。"
+          ],
+          "experiments": [
+            "在五个模型-任务设定上比 InfiniGen 高 1.6–3.8 ROUGE-L 点，第六个无显著差异，与精确逐步重选差距 ≤1.7 点。",
+            "DetailCaps 上漂移驱动的时机在同刷新率下胜过随机时机，甚至以更高刷新率也胜过周期性时机，领先 2.0–5.0 点。",
+            "GPU 常驻漂移探测器显存比基线小 4 倍，每步估计数据搬运量相当；三个模型中的两个上目标级 F1 高于 InfiniGen。"
+          ],
+          "significance": "把 KV 压缩的\"选一次\"范式改成\"按漂移节奏重选\"，并用速率控制解决阈值不可跨样本比较的问题。",
+          "arxivUrl": "https://arxiv.org/abs/2610.31433",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31433.pdf",
+          "index": 1,
+          "takeaway": "KV 保留集应随注意力漂移动态重选，而重选频率要按样本自适应调节。",
+          "keyExperiment": "六个设定中五个胜过 InfiniGen（+1.6–3.8 ROUGE-L），与精确逐步重选差距 ≤1.7 点。"
+        },
+        {
+          "title": "OpenAttention: One Percent Is Enough with Tail Proxies",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-23",
+          "authors": "Hyunwoo Yu, Jongbeom Lee, Hyunbin Kim, Sungjun Park, Jaemin Choi, Jincheol Yang, Seunghun Moon, Bongjoon Hyun, Kyomin Sohn, Kyeongbo Kong, Suk-Ju Kang",
+          "institutions": "Sogang University, Samsung Electronics, Pusan National University",
+          "abstract": "稀疏注意力只读 KV cache 的一小部分，如何对待未读的\"尾部\"是关键难题：直接丢弃会让输出有偏，而先前方法的采样近似在 5% 及以下读取率会失效，因为尾部常藏着选择器漏掉的高权重 token。作者的关键观察是，最简代理——一个把整个尾部折叠成计数感知均值的 token——在实用选择器之后、任何读取率下都比采样误差更低；并给出闭式结果：低读取率下采样几乎使丢弃的权重误差翻倍，而单个代理仍低于它。据此提出 OpenAttention：聚类、ErrorGate 与 top-k 选择后接计数感知均值代理；配套免训练的查询几何聚类与选择器在尊重查询方向下压缩 key。与仅按质心排序的旧方法不同，ErrorGate 按各簇估计权重误差分配精确读取预算。Llama-3.1-8B 在 RULER-32K HARD 上以 1% 读取率保留 99% 稠密精度。",
+          "contributions": [
+            "证明在低读取率下\"采样尾部\"比\"丢弃尾部\"的权重误差几乎翻倍，而单个计数感知均值代理误差更低，并给出闭式分析。",
+            "提出 OpenAttention 流水线：查询几何聚类 + ErrorGate 按估计权重误差分配读取预算 + top-k 选择 + 计数感知均值代理。",
+            "实现免训练的选择器与定制注意力 kernel，使 1% 读取率下解码阶段比稠密注意力快 10 倍。"
+          ],
+          "conclusions": [
+            "尾部不是噪声而是被选择器漏掉的重击 token 的容器，用均值代理兜底比采样更安全。",
+            "读取预算应按簇的估计权重误差分配，而不是按簇质心的相似度排序。"
+          ],
+          "experiments": [
+            "Llama-3.1-8B 在 RULER-32K HARD 上以 1% 读取率保留 99% 稠密注意力精度。",
+            "跨模型、上下文长度与数据集取得 SOTA 精度。",
+            "定制 kernel 在 1% 读取率下把解码注意力阶段相对稠密注意力加速 10 倍。"
+          ],
+          "significance": "把稀疏注意力的\"尾部处理\"从采样启发式变成有误差界保证的代理近似，并做到 1% 读取率不掉精度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.30951",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30951.pdf",
+          "index": 2,
+          "takeaway": "1% 的 KV 读取率足够，前提是未读尾部用一个计数感知均值代理兜住。",
+          "keyExperiment": "RULER-32K HARD 上 1% 读取率保留 99% 稠密精度，解码注意力快 10 倍。"
+        },
+        {
+          "title": "Extreme Compression of Per-Layer Embeddings via Cross-Layer Latent Vector Quantization",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-23",
+          "authors": "Jiacheng Liu, Yaxin Luo, Xiaohan Zhao, Peng Sun, Xinyi Shang, Jiacheng Cui, Yonina C. Eldar, Zhiqiang Shen",
+          "institutions": "Mohamed bin Zayed University of Artificial Intelligence, Westlake University, Zhejiang University, University College London, Weizmann Institute of Science",
+          "abstract": "embedding 容量随算力一同扩张已成趋势，使极高压缩率越来越有价值。作者研究逐层嵌入（PLE）的极限压缩——PLE 占 Gemma 4 E4B 参数量的 35.2%，在这种压缩率下传统量化器只能给每个 token-层向量几个字节的独立码。作者提出 OPTIC（输出路径拟合、token 共享的索引码）：每个 token 只存一个量化码元组，在各层用层特定的仿射解码器还原；码与解码器拟合的目标是 PLE 的输出路径而非被存向量本身。对 BF16 E4B 做约 100 倍 PLE 压缩时，OPTIC 在七个基准上保留 97.8% 的原模型性能，而最强基线乘积量化只有 66.3%；594 倍与 1002 倍压缩分别保留 90.5% 与 84.1%。在官方 W4A16 版本上约 100 倍压缩仍保留 96.9%。推理时 BF16 E4B 显存降低 29.7%，速度最多慢 0.40%。",
+          "contributions": [
+            "把 PLE 压缩重构成\"token 共享码 + 层特定仿射解码器\"，并让拟合目标对准 PLE 的输出路径而不是原始存储向量。",
+            "在约 100 倍压缩下保留 97.8% 性能，远超乘积量化的 66.3%，并给出 594 倍与 1002 倍的退化曲线。",
+            "验证与官方 W4A16 发布兼容（96.9%），推理显存降 29.7% 而速度几乎不变。"
+          ],
+          "conclusions": [
+            "嵌入容量的扩张不必以显存线性增长为代价，跨层共享码元组即可支撑百倍压缩。",
+            "对齐输出路径的拟合目标比对齐存储向量本身更能保住下游性能。"
+          ],
+          "experiments": [
+            "BF16 Gemma 4 E4B 约 100 倍 PLE 压缩：七个基准聚合保留 97.8%，乘积量化仅 66.3%。",
+            "594 倍与 1002 倍压缩分别保留 90.5% 与 84.1%；官方 W4A16 版约 100 倍压缩保留 96.9%。",
+            "推理时显存比未压缩 PLE 低 29.7%（同等 KV cache 大小），速度最多慢 0.40%。"
+          ],
+          "significance": "把占模型三分之一参数量的逐层嵌入压到百分之一量级，同时保住 97% 以上的下游性能。",
+          "arxivUrl": "https://arxiv.org/abs/2610.31309",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31309.pdf",
+          "index": 3,
+          "takeaway": "逐层嵌入可按 token 共享单份码元组，用层特定解码器还原，百倍压缩仍保 97.8% 性能。",
+          "keyExperiment": "约 100 倍 PLE 压缩保留 97.8% 性能（乘积量化 66.3%），推理显存降 29.7%。"
+        },
+        {
+          "title": "Low-Bit N-Gram Embeddings for Language Models",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-10-23",
+          "authors": "Stephen Chung, Wenyu Du",
+          "institutions": "DualverseAI",
+          "abstract": "越来越多开放权重模型引入 n-gram 嵌入表来提升性能，这些表存储短 token 序列的学习表示；但显存开销可观——DeepSeek-V4.1-Flash 就为其 Engram n-gram 记忆分配了 1960 亿参数。作者研究低精度存储能否在保留收益的同时降低开销，并系统比较量化方法与跨表比特分配。在 nanochat、Llama 与 GPT-2 系列从零训练的模型上，4-bit 表节省约 75% 的表显存，同时保留超过 99% 的\"加入这些表\"所带来的验证损失改善；比特更低时性能下降更大，但短暂微调可恢复相当一部分。把省下的显存再投入更大的表，可在显存更少的情况下超过原全精度表的表现。在既有大模型上同样有效：DeepSeek-V4.1-Flash 与 Qwen3.8-Flash-Next 上低精度表节省 47–55% 的表显存，困惑度上升不到 1.2%，下游任务基本保持。",
+          "contributions": [
+            "系统研究 n-gram 嵌入表的低精度存储，比较量化方法与跨表的比特分配策略。",
+            "在从零训练的三族模型上，4-bit 表省约 75% 表显存且保留 99% 以上的验证损失改善；给出降到更低比特后的退化与微调恢复规律。",
+            "在 DeepSeek-V4.1-Flash、Qwen3.8-Flash-Next 等既有大模型上省 47–55% 表显存，困惑度升幅 <1.2%。"
+          ],
+          "conclusions": [
+            "n-gram 表的容量收益与其精度冗余不匹配：4-bit 几乎无损，省下的显存再投回更大的表还能反超全精度。",
+            "低比特造成的损失可由短微调部分找回，说明表精度不是性能瓶颈。"
+          ],
+          "experiments": [
+            "从零训练的 nanochat/Llama/GPT-2 系列：4-bit 表省约 75% 表显存，保留 >99% 的验证损失改善。",
+            "DeepSeek-V4.1-Flash（Engram 部分 196B 参数）与 Qwen3.8-Flash-Next 上省 47–55% 表显存，困惑度上升 <1.2%。",
+            "把节省的显存投入更大的表，可在总显存更少时超过原全精度表的性能。"
+          ],
+          "significance": "为动辄千亿参数的 n-gram 记忆给出即插即用的低比特方案，把显存开销砍半而几乎不掉点。",
+          "arxivUrl": "https://arxiv.org/abs/2610.31646",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31646.pdf",
+          "index": 4,
+          "takeaway": "n-gram 嵌入表存 4-bit 即可省 75% 显存并保留 99% 收益，省下的容量应再投回更大的表。",
+          "keyExperiment": "DeepSeek-V4.1-Flash 与 Qwen3.8-Flash-Next 上省 47–55% 表显存，困惑度升幅 <1.2%。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "When to Follow the Teacher: Advantage-Based On-Policy Distillation",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-23",
+          "authors": "Mahdi Sabbaghi, George Pappas, Hamed Hassani, Adel Javanmard",
+          "institutions": "University of Pennsylvania, University of Southern California",
+          "abstract": "在线策略蒸馏（OPD）从学生自身采样的轨迹上训练，通常优于 SFT 等离线方法；但标准 OPD 让学生在轨迹的每个状态都跟随教师，隐含假设教师指导总是有益。作者区分\"教师偏好什么\"与\"什么真正帮助当前学生成功\"，提出优势加权在线策略蒸馏（AOPD）：用教师动作在学生策略下的反事实优势为其加权，能改善学生期望结果的动作被强化，无益的被降权。直接计算这些优势需要在每个状态尝试替代教师动作并重新 rollout，作者证明 AOPD 目标仅用标准学生 rollout 与其终局奖励即可估计——通过教师重要性权重对学生采样动作给出无偏的优势加权监督，不增加任何额外 rollout 或奖励评估。因此在保留 OPD rollout 效率的同时，把教师监督集中在真正帮到当前学生的动作上。在数学、代码与 MedQA 上，外部教师与自蒸馏两种设定下均优于蒸馏与 RL 基线。",
+          "contributions": [
+            "指出标准 OPD 的隐含假设（教师处处正确）在师生能力差距大时失效，并把问题形式化为教师动作的反事实优势加权。",
+            "证明该目标可只用标准学生 rollout 与终局奖励无偏估计，无需额外 rollout 或奖励评估，保持 OPD 的采样效率。",
+            "在数学、代码与 MedQA 上，外部教师与自蒸馏两种设定下均超过蒸馏与 RL 基线。"
+          ],
+          "conclusions": [
+            "教师指导应按\"是否提升学生期望结果\"加权，而不是按\"教师是否偏好\"加权。",
+            "优势加权可以用重要性权重从现成 rollout 里估出来，无需额外的反事实采样成本。"
+          ],
+          "experiments": [
+            "在数学、代码与 MedQA 三类任务上，外部教师与自蒸馏设定均优于蒸馏与 RL 基线。",
+            "估计器仅使用标准学生 rollout 与终局奖励，未引入额外 rollout 或奖励模型调用。",
+            "相同 rollout 预算下优于标准 OPD，说明收益来自监督加权而非更多采样。"
+          ],
+          "significance": "给在线策略蒸馏补上\"该不该听老师的\"这一层判断，且不增加任何采样成本。",
+          "arxivUrl": "https://arxiv.org/abs/2610.31563",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31563.pdf",
+          "index": 5,
+          "takeaway": "教师动作应按其对学生的反事实优势加权，而这个优势能从现成 rollout 里无偏估出来。",
+          "keyExperiment": "仅用标准学生 rollout 与终局奖励估计优势，在数学/代码/MedQA 上超过 OPD 与 RL 基线。"
+        },
+        {
+          "title": "Random Remasking Scales Masked Diffusion Inference",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-23",
+          "authors": "Zhaoyi Zhou, Frank Wu, Andrea Zanette",
+          "institutions": "Carnegie Mellon University",
+          "abstract": "掩码扩散模型（MDM）通过逐步解掩来生成序列，但解码期间引入的错误通常不可逆。已有工作显示迭代纠错能提升样本质量，然而在\"去噪器是学习的、不完美的\"前提下，现有理论无法解释。作者把 MDM 推理重述为干净序列空间上的马尔可夫链，由\"重掩码-去噪\"核定义——随机重新引入掩码再去噪——从而分析真实去噪轨迹如何走向数据分布。该分析导出随机重掩码去噪（R²D）推理：纯测试时、免微调、免奖励。为进一步提升，作者提出轨迹纠错训练（TCT），让去噪器在生成轨迹上接触自己的错误。在逻辑任务上呈现近乎对数线性的测试时扩展：困难数独准确率超过 97%，3-SAT 超过 99%。在真实语言任务上，该方法优于迭代纠错基线，并在 HumanEval+ 上超过 LLaDA2.1-mini 官方 Q-mode 的精度。",
+          "contributions": [
+            "把 MDM 推理刻画为干净序列空间上的马尔可夫链（重掩码-去噪核），在不完美去噪器假设下给出轨迹分析。",
+            "据此提出 R²D：纯测试时、免微调、免奖励的随机重掩码去噪流程。",
+            "提出轨迹纠错训练 TCT，让去噪器在自身生成轨迹的错误上训练，进一步放大测试时扩展收益。"
+          ],
+          "conclusions": [
+            "随机重新掩码不是噪声注入，而是让错误可被后续去噪步骤修正的机制，它使测试时算力可换取精度。",
+            "逻辑任务上的近对数线性扩展说明扩散推理的测试时扩展规律与自回归不同。"
+          ],
+          "experiments": [
+            "困难数独准确率超过 97%，3-SAT 超过 99%，呈近对数线性测试时扩展。",
+            "在预训练语言模型上优于迭代纠错基线。",
+            "在 HumanEval+ 上超过 LLaDA2.1-mini 官方 Q-mode 精度。"
+          ],
+          "significance": "为掩码扩散推理提供可扩展的纠错机制与理论解释，把测试时算力变成可靠精度来源。",
+          "arxivUrl": "https://arxiv.org/abs/2610.30744",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30744.pdf",
+          "index": 6,
+          "takeaway": "随机重掩码-去噪把不可逆的解码错误变成可纠正的，从而让扩散推理获得近对数线性的测试时扩展。",
+          "keyExperiment": "困难数独 >97%、3-SAT >99% 准确率，HumanEval+ 超过 LLaDA2.1-mini 官方 Q-mode。"
+        },
+        {
+          "title": "Speculative Acceptance Does Not Decay with Position: A Full-Length Diagnostic on Long Chain-of-Thought with Independent Drafts",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-10-23",
+          "authors": "Zhiming Meng",
+          "institutions": "机构未标注",
+          "abstract": "\"投机解码的接受率随思维链变长而衰减\"已成事实上的行业叙事，推动了草稿模型协同设计与位置感知训练；但几乎所有直接证据都来自离线训练长度远短于推理长度的已训练草稿器，纯位置规律从未被隔离。作者给出首个全长度系统测量：在 MATH-500 全部 500 题上，以贪心与采样解码、两个独立草稿（同族 DeepSeek-R1-Distill-Qwen-1.5B 与跨族 Qwen2.5-1.5B-Instruct）对 DeepSeek-R1-Distill-Qwen-7B 验证，共约 178 万轮。题内配对检验显示，隔离贪心解码的重复病态后，四种配置在所支持区间内（贪心 0–8K、采样 0–12K）接受率均不随位置衰减，后半段反而略高且显著。温度扫描显示采样模式下的\"退化\"是 argmax 一致性的可见性假象，而非期望接受概率下降。拒绝高度集中在 wait/however/check 等反思触发词上。",
+          "contributions": [
+            "用独立草稿器隔离位置变量，给出首个全长度（0–12K）接受率-位置曲线，约 178 万轮验证。",
+            "推翻\"接受率随位置衰减\"的叙事：四种配置均不衰减，后半段反而略高；采样模式的退化被指认为 argmax 一致性的可见性假象。",
+            "把残余失效定位到决策点熵（反思触发词），而非位置：三种 LoRA 轨迹对齐干预都未能提升平均接受长度。"
+          ],
+          "conclusions": [
+            "位置感知训练与\"越长越差\"的草稿协同设计缺少证据基础，优化目标应转向高熵决策点。",
+            "观察到的采样模式退化是度量假象，评估投机解码时须区分 argmax 一致率与期望接受概率。"
+          ],
+          "experiments": [
+            "MATH-500 全部 500 题、四种配置、约 178 万轮验证：贪心 0–8K、采样 0–12K 区间内接受率均不随位置衰减。",
+            "题内配对检验显示每条轨迹后半段接受率略高于前半段且统计显著。",
+            "三种 LoRA 轨迹对齐干预（均匀、反思标记、熵加权）均未提升平均接受长度。"
+          ],
+          "significance": "用大规模全长度测量推翻一个被广泛当作设计前提的行业叙事，并把优化焦点从位置挪到决策点熵。",
+          "arxivUrl": "https://arxiv.org/abs/2610.30644",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30644.pdf",
+          "index": 7,
+          "takeaway": "投机解码的接受率并不随生成位置衰减，真正的敌人是反思触发词附近的高熵决策点。",
+          "keyExperiment": "约 178 万轮验证：四种草稿-目标配置在接受率上都不随位置衰减，后半段反而略高。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "FIGFLEX: A Mixed-Precision FP-INT GEMM Accelerator Co-Designed with Low-Bit LLM Quantization",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-23",
+          "authors": "Faraz Tahmasebi, Haocheng Xu, Andrew Trauger, Yomal Perera, Zhenyu Tang, Nael Chowdhury, Sitao Huang",
+          "institutions": "University of California, Irvine",
+          "abstract": "仅权重量化让激活保持浮点、权重存低比特整数，把主导负载变成浮点-整数（FP-INT）GEMM。量化器已达 2–3 bit 平均精度，硬件却没跟上：GPU 在 tensor core 相乘前把权重反量化回 FP16，位并行 FP-INT 加速器只支持单一精度，比特更少只省显存不省算力。作者提出算法-硬件协同设计的混合精度加速器 FIGFLEX，位并行数据通路随精度下降提升吞吐：一是 shift-add、radix-4 的 FP-INT 乘法重构，把乘累加融合为精度灵活的部分积累加，并用 INT3 优化回收该精度下闲置通路；二是混合精度量化器，按 GPTQ 无法补偿的误差为通道组分配位宽，逐输入通道列缩放用 2 的幂归一化把激活挡在 FP16 次正规范围外。LLaMA-2-7B 上 3-bit/2-bit 平均精度的 WikiText-2 困惑度为 5.85/8.77。",
+          "contributions": [
+            "提出 radix-4、shift-add 的 FP-INT 乘法重构，把乘累加融合成精度灵活的统一部分积累加，部分积减少约一半，并用 INT3 优化回收闲置通路。",
+            "给出与数据通路共同设计的混合精度量化器：按 GPTQ 无法补偿的误差分配通道组位宽，2 的幂列缩放避免 FP16 次正规下溢。",
+            "芯片级实现：低比特下吞吐随精度下降而提升，单位面积整芯片吞吐高于 AxCore 与 FIGLUT。"
+          ],
+          "conclusions": [
+            "低比特量化要真正省算力，必须在数据通路上随精度缩放吞吐，而不是在 FP16 上反量化后再算。",
+            "量化器与数据通路的联合设计可以让量化模型直接映射到硬件，而不牺牲 GPU 上已验证的精度。"
+          ],
+          "experiments": [
+            "LLaMA-2-7B 上 3-bit 与 2-bit 平均精度分别达 5.85 与 8.77 WikiText-2 困惑度，低于 GPTQ、AWQ、SliM-LLM、AMQ、QuIP#（无微调）。",
+            "3-bit 混合精度模型的线性 GEMM 上，单位面积整芯片吞吐比 AxCore 高 1.56 倍。",
+            "同口径下比 FIGLUT 高 1.42 倍。"
+          ],
+          "significance": "让\"比特更少\"第一次同时兑现为算力更省，而不只是显存更省。",
+          "arxivUrl": "https://arxiv.org/abs/2610.30480",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30480.pdf",
+          "index": 8,
+          "takeaway": "FP-INT 的位并行数据通路可随精度缩放吞吐，配合输出路径对齐的量化器，低比特才真正省算力。",
+          "keyExperiment": "LLaMA-2-7B 3-bit/2-bit 达 5.85/8.77 WikiText-2 困惑度，单位面积吞吐比 AxCore 高 1.56 倍、比 FIGLUT 高 1.42 倍。"
+        },
+        {
+          "title": "Repair Changes Which Layers to Remove: Exact Optima for Depth Pruning of Language Models",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-23",
+          "authors": "Jianchang Su, Dawei Xiang, Yifan Zhang, Wei Zhang",
+          "institutions": "University of Connecticut",
+          "abstract": "深度剪枝通过整层删除 transformer 层来加速大模型，近期方法用免训练线性映射替换被删层以恢复质量；但删哪些层由启发式打分决定，与最优选择的距离未知。作者精确评估层组的全部子集（约 5.3 万个剪枝模型，四个模型族，有/无修复），发现最优删除层依赖修复方式：线性修复吸收相邻层间的相互作用，把最优解从分散布局变成连续块，因此不含修复的选层方法距修复后的最优点最多错 189%。所以应当在将要施加的修复下选层。以 SLEB 为代价的贪心搜索，在最多 27B 参数的五个模型上相对 ReplaceMe 降低困惑度 20%–66%；带任务目标时同等数据下准确率最多高 25 点。损失的二阶展开给出一个打分，只需完整模型一次前向与一次反向即可选出修复后的块。",
+          "contributions": [
+            "首次精确枚举深度剪枝的层组子集（约 5.3 万个剪枝模型、四族、有/无修复），给出真实最优而非启发式近似。",
+            "发现修复会重塑最优结构：线性修复把最优删除集从分散布局变成连续块，不含修复的选层最多偏离 189%。",
+            "给出以 SLEB 为代价的贪心搜索与一个二阶损失打分，后者只需一次前向一次反向即可选出修复后的块。"
+          ],
+          "conclusions": [
+            "选层必须与修复方式联合优化，在无修复条件下选出的层在修复后会明显次优。",
+            "深度剪枝的最优结构是连续块而非分散层，这与\"中间层冗余\"的直觉不同。"
+          ],
+          "experiments": [
+            "约 5.3 万个剪枝模型的精确枚举：无修复选层距修复后最优点最多错 189%。",
+            "五个最多 27B 参数模型上相对 ReplaceMe 降低困惑度 20%–66%。",
+            "带任务目标时同等数据下准确率最多高 25 点；二阶打分只需一次前向 + 一次反向。"
+          ],
+          "significance": "用穷举给出深度剪枝的真实最优解，纠正了\"按启发式挑层\"这一沿用以久的做法。",
+          "arxivUrl": "https://arxiv.org/abs/2610.30552",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30552.pdf",
+          "index": 9,
+          "takeaway": "深度剪枝要在将要施加的修复下选层，最优解是连续块，而不是分散的若干层。",
+          "keyExperiment": "约 5.3 万个模型精确枚举：无修复选层距修复后最优最多差 189%，改在修复下选层则困惑度比 ReplaceMe 低 20%–66%。"
+        },
+        {
+          "title": "Compiling Autoregressive LLM Control into Policy-Exact Parallel Inference for Hierarchical RAG",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-23",
+          "authors": "Zehao Lin, Qianfeng Shen, Xixuan Hao, Shaobo Cui, Chunyu Li, Kai Chen, Bo Tang, Zhenjun Wang, Jin Yan, Zhiyu Li, Feiyu Xiong",
+          "institutions": "机构未标注",
+          "abstract": "大模型越来越多地充当结构化决策流水线的控制器，但决策仍由自回归文本解码执行。层次化 RAG 是典型场景：在文档树的每个前沿，模型按输入相关的动作语法从 k 个小节中提交 b 个，实现上要么是易失败的自由 JSON，要么是可靠但严格串行的语法约束生成。作者证明对有界视野的控制这种串行化并不必要：可达未来构成浅层动作前缀树，可编译为\"一次根 prefill + 一次树因果探测\"即评估所有前缀条件下的动作分布，且 token、位置与因果祖先与串行解码一致。前缀状态引理使编译后的控制在精确算术下策略等价：同一策略、两次前向的关键路径、零输出 token；再一次探测可认证精确的边缘化 MAP 集。在四个文档不相交划分与两个规模上（主设备 MetaX），编译控制与串行策略在 84%–89% 的问题上完全一致，控制延迟降低 35%–47%。",
+          "contributions": [
+            "指出有界视野的 LLM 控制在结构上无需自回归串行执行，可达未来只是浅层动作前缀树。",
+            "给出编译式方案：一次根 prefill + 一次树因果探测即可得到所有前缀条件下的动作分布，并用前缀状态引理证明策略精确等价（零输出 token、两次前向关键路径）。",
+            "再一次探测即可认证精确的边缘化 MAP 集；在 MetaX 主设备与 H800 上均验证延迟收益。"
+          ],
+          "conclusions": [
+            "结构化控制的延迟瓶颈不是模型算力而是串行解码，把控制编译成树形探测可以直接消掉它。",
+            "精确等价（而非近似）使这种加速可以无风险替换现有的语法约束串行生成。"
+          ],
+          "experiments": [
+            "四个文档不相交划分、两个规模上与串行策略在 84%–89% 的问题上完全一致，所有被检测到的分歧都是浮点近似相等。",
+            "控制延迟相对逐 token 串行解码降低 35%–47%。",
+            "相对理想化分块引擎仍降低 6%–7%；H800 复现保持同样排序。"
+          ],
+          "significance": "把\"LLM 当控制器\"的执行方式从逐 token 解码改写成树形探测，在保持策略精确的同时削掉三分之一以上的延迟。",
+          "arxivUrl": "https://arxiv.org/abs/2610.30664",
+          "pdfUrl": "https://arxiv.org/pdf/2610.30664.pdf",
+          "index": 10,
+          "takeaway": "有界视野的 LLM 控制可编译成树形探测，策略精确等价而延迟降 35%–47%。",
+          "keyExperiment": "MetaX 上 84%–89% 问题与串行策略完全一致，控制延迟降低 35%–47%（H800 复现同序）。"
+        }
+      ]
+    }
+  ]
+}
