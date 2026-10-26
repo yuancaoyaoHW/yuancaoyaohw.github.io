@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-26",
+  "title": "2026-10-26 论文精选",
+  "lede": "今日主线是把搬运与选择从关键路径上挪走：KV 缓存跨层调度、稀疏注意力的索引复用、RL 轨迹传输与 FP4 训练/量化修正，六篇系统与硬件论文都在重排访存与计算。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 409
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "HyScale: Scaling Long-Context Training for Learned Sparse Attention",
+          "score": 4.6,
+          "category": "cs.AI",
+          "date": "2026-10-26",
+          "authors": "Yangsheng Deng, Xinjing Huang, Yulong Wang, Yunzhuo Liu, Jun Hu, Shuyong Tang, Junchi Zeng, Mingji Han, Ray Ying, Key Zhang, Luo Mai",
+          "institutions": "University of Edinburgh, Tencent Hunyuan",
+          "abstract": "HyScale 是面向学习式稀疏注意力的长上下文训练系统。自 DeepSeek-V3.2 起这类注意力已进入生产，但“选择”步骤成了训练瓶颈：每个 query 都要为全部历史 token 打分，而稀疏注意力实际只读 k 个；现有系统还会物化完整打分表，并在反向重计算时重复选择。作者的关键观察是——选择的输出不是激活值，而是一组索引。据此提出 HyTopK 与 selection replay：前者在线精确求出每个 query 的 top-k 而无需打分表，后者在重计算时复用前向选择结果。配合端到端系统优化，HyScale 在 512 张 H20 上把 GLM-5.1 的 1M token 训练相对 Megatron-LM 加速 2.07 倍，DeepSeek-V4-Flash 与 Qwen3.8-Flash-Next 的稀疏注意力层分别加速 2.01 倍与 1.57 倍。",
+          "contributions": [
+            "把稀疏注意力的“选择”重新定义为索引而非激活，HyTopK 在线求得精确 top-k，省掉完整打分表的显存与带宽开销。",
+            "selection replay 在前向保存选择结果、反向重计算直接复用，消除反向阶段重复的打分与选择。",
+            "配套端到端系统优化（重计算调度、通信与负载均衡），让索引级节省真正落到集群墙钟时间上。"
+          ],
+          "conclusions": [
+            "长上下文稀疏注意力训练的瓶颈在选择而非注意力计算本身，索引级复用是有效切入口。",
+            "加速可跨架构迁移：同一套机制在 DeepSeek、Qwen、GLM 三个不同稀疏注意力实现上均有效。"
+          ],
+          "experiments": [
+            "512 张 H20 上 GLM-5.1 的 1M token 序列训练，相对 Megatron-LM 加速 2.07 倍。",
+            "DeepSeek-V4-Flash 的 CSA 层在 32 张 H800、1M token 下加速 2.01 倍。",
+            "Qwen3.8-Flash-Next 的 QSA 层同配置下加速 1.57 倍。"
+          ],
+          "significance": "把百万级上下文稀疏注意力训练从“打得动”推成“训得起”，对长上下文预训练成本影响直接。",
+          "takeaway": "选择的输出是索引不是激活：存索引、复用索引，省下打分表与重复 top-k。",
+          "keyExperiment": "512 张 H20 训练 GLM-5.1 百万 token 序列，比 Megatron-LM 快 2.07 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.32057",
+          "pdfUrl": "https://arxiv.org/pdf/2610.32057.pdf",
+          "channel": "AI Infra",
+          "index": 1
+        },
+        {
+          "title": "KVStream: Adaptive Parallel Storage Management for KV Caching in Large-Scale LLM Serving",
+          "score": 4.5,
+          "category": "cs.DC",
+          "date": "2026-10-26",
+          "authors": "Avinash Maurya, Jaiaid Mobin, Jie Ye, M. Mustafa Rafique, Franck Cappello, Bogdan Nicolae",
+          "institutions": "Argonne National Laboratory, Rochester Institute of Technology, Illinois Institute of Technology",
+          "abstract": "长上下文 LLM 服务（agent、编程、文档类负载）会反复复用前缀，而 KV 缓存早已超出 GPU 与主机内存，前缀取回因此被压到推理步的关键路径上。现实是单块节点本地 NVMe 承担了几乎全部取回流量，而节点已挂载的并行文件系统或云对象存储几乎不承载推理流量。作者把前缀取回建模为跨层存储的聚合带宽调度问题，提出 KVStream：按步批量发起读、把写操作推迟到前向之后、每个数据块在各层都保留副本，并让空闲的层自适应“认领”下一批未读块。性能模型证明这种路由无需预测与调参即可逼近聚合带宽上界，静态分层则会随带宽漂移越来越糟。作者把它接入 LMCache，在四个模型、六个数据集、最多 128 张 GPU 上验证：取回效率距理论上界 5% 以内，离线吞吐比 LMCache 高 1.49 倍，突发到达下平均 TTFT 降低最多 6.1 倍。",
+          "contributions": [
+            "把前缀取回从“选一层”改成跨层聚合带宽调度，并给出可达带宽上界的自适应认领机制，无需预测或调参。",
+            "读批量化、写延迟到前向之后、块级多层副本，使存储 I/O 不再串在推理关键路径上。",
+            "给出可解释的性能模型，说明 TTFT 收益随负载增长、在主机内存充足或到达顺序友好时消失。"
+          ],
+          "conclusions": [
+            "存储分层的最优路由不该由静态划分决定，让空闲层自取任务即可逼近聚合带宽上界。",
+            "TTFT 改善主要来自队列排空，负载越突发收益越大；缓存能命中时收益消失。"
+          ],
+          "experiments": [
+            "四个模型、六个数据集、最多 128 张 GPU，取回效率在理论上界 5% 以内。",
+            "离线吞吐比 LMCache 高最多 1.49 倍。",
+            "突发到达场景下平均 TTFT 降低最多 6.1 倍。"
+          ],
+          "significance": "给“KV 缓存放不进显存”这一常态化现实提供了可落地的多层存储调度方案，且已接入 LMCache 生态。",
+          "takeaway": "别静态分层：让各层空闲时自己抢下一批块，取回就能贴着聚合带宽上界跑。",
+          "keyExperiment": "最多 128 GPU、突发负载下平均 TTFT 降低 6.1 倍，离线吞吐高 1.49 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.31827",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31827.pdf",
+          "channel": "AI Infra",
+          "index": 2
+        },
+        {
+          "title": "KnitTrans: Coordinated Trajectory Transfer for Effective and Efficient LLM Reinforcement Learning",
+          "score": 4.4,
+          "category": "cs.DC",
+          "date": "2026-10-26",
+          "authors": "Bangjun Xiao, Chiheng Lou, Xiaodong Ji, Xiangwei Deng, Yikai Zhao, Gang Huang, Yun Ma, Hailin Zhang",
+          "institutions": "Peking University, Xiaomi LLM-Core",
+          "abstract": "在 LLM 强化学习中，轨迹从 rollout 端传到训练端同时决定学习质量与系统效率。为凑满整批的训练要求而强行等待，会让已完成的轨迹迟迟不能入训，放大“架构陈旧度”——分离式流水线相对同置执行多出来的参数版本差。除准入之外，数据访问与训练消费不匹配，还会让大体量轨迹载荷产生冗余搬运与无谓等待。KnitTrans 用三项设计打通 rollout 到训练的通路：约束保持的小批准入（提前灵活组批，同时校验剩余配额仍可满足）、按需轨迹数据访问（存储单元与消费方分配对齐，并把微批数据准备与计算重叠）、多模态编码去重（在一个小批内复用，同时保留所有骨干微批的梯度贡献）。实验显示架构陈旧度最多降低 93%，分离式执行与同置执行的学习质量差距明显收窄；多模态负载下传输延迟降低两个数量级，传输加训练整体加速最多 5.8 倍。",
+          "contributions": [
+            "提出约束保持的小批准入，在放宽早期组批自由度的同时校验剩余配额，显著压低分离式 RL 的架构陈旧度。",
+            "按需轨迹数据访问把存储单元与消费方对齐，并让微批数据准备与计算重叠，消除冗余搬运与等待。",
+            "多模态编码去重在小批内复用编码结果，同时保持各骨干微批的梯度贡献不失真。"
+          ],
+          "conclusions": [
+            "分离式 RL 的学习质量差距主要来自准入策略而非算法本身，放宽组批约束即可大幅回收。",
+            "轨迹传输的瓶颈在数据布局与消费节奏的错配，而非带宽不足。"
+          ],
+          "experiments": [
+            "相比整训练批准入，架构陈旧度最多降低 93%，学习质量差距明显收窄。",
+            "多模态负载下轨迹传输延迟降低两个数量级。",
+            "传输加训练端到端加速最多 5.8 倍。"
+          ],
+          "significance": "把 RL 后训练的工程瓶颈从“多买卡”转向“改数据通路”，对分离式 RL 基础设施是直接可用的改进。",
+          "takeaway": "别再等满整批：约束保持的小批准入 + 按需数据访问，陈旧度降 93%、端到端快 5.8 倍。",
+          "keyExperiment": "多模态负载下传输延迟降两个数量级，传输加训练端到端最高 5.8 倍加速。",
+          "arxivUrl": "https://arxiv.org/abs/2610.32389",
+          "pdfUrl": "https://arxiv.org/pdf/2610.32389.pdf",
+          "channel": "AI Infra",
+          "index": 3
+        },
+        {
+          "title": "Training an MoE LLM in MXFP4: How We Closed the Gap to BF16",
+          "score": 4.3,
+          "category": "cs.AI",
+          "date": "2026-10-26",
+          "authors": "Han Wang, Zhitao Wang, Natalia Frumkin, Xuanwu Yin, Alireza Khodamoradi, Dong Li, Emad Barsoum",
+          "institutions": "AMD",
+          "abstract": "用低于 8 bit 的算术训练 LLM 理论上能显著节省显存带宽与算力，但 FP4 的量化误差足以让优化失稳。本文给出 ALTO：在 MLPerf Small MoE Training 基准上，用 MXFP4 微缩放格式训练 20B 参数 MoE 模型 GPT-OSS-20B 的开源配方。它组合了混合 1D/2D 分块量化、随机 Hadamard 变换与随机舍入，并加入一个从 TetraJet-v2 简化而来的权重去振荡机制。C4 验证集、全局批 16 下，该配方在 16128 步达到验证损失 3.3350，仅比 BF16 基线 3.3283 高 0.007，把不用去振荡时的 3.3418 差距收掉约一半；按到达质量目标所需步数计，FP4 相对 BF16 的收敛开销从 +20.0% 降到 +5.0%。论文还如实报告了微分梯度估计、离群裁剪、宏块缩放三项端到端负结果。",
+          "contributions": [
+            "给出 GPT-OSS-20B 在 MXFP4 下的开源训练配方，把 FP4 相对 BF16 的收敛开销从 +20% 压到 +5%。",
+            "简化并验证权重去振荡机制，是收掉一半精度差距的关键一项。",
+            "如实公开三项“算子级 SNR 有提升、但端到端变差”的负结果，对后续 FP4 训练调参有直接的排除价值。"
+          ],
+          "conclusions": [
+            "FP4 训练的主要障碍是可复现的优化失稳，靠量化格式改造加上轻量去振荡即可基本抹平。",
+            "算子级信噪比提升不能预测端到端收敛，配方必须整链验证。"
+          ],
+          "experiments": [
+            "16128 步达到验证损失 3.3350，BF16 基线 3.3283，差距收窄到 0.007。",
+            "到达质量目标（验证损失 3.34）所需步数，FP4 开销从 +20.0% 降至 +5.0%。",
+            "全部实验在 AMD MI300 上以模拟 MXFP4 kernel 完成，未优化墙钟速度。"
+          ],
+          "significance": "FP4 训练从“能跑但掉点”推进到“几乎不掉点”，但作者也明确墙钟收益尚未验证，属于配方级进展。",
+          "takeaway": "MXFP4 + Hadamard + 随机舍入 + 去振荡，FP4 训练差距从 0.0135 收到 0.007。",
+          "keyExperiment": "验证损失 3.3350 vs BF16 3.3283，收敛开销 +20% 降到 +5%。",
+          "arxivUrl": "https://arxiv.org/abs/2610.32229",
+          "pdfUrl": "https://arxiv.org/pdf/2610.32229.pdf",
+          "channel": "AI Infra",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "LazyFlash: Forward-Dense, Backward-Sparse Attention for Accelerated Long-Context Fine-Tuning",
+          "score": 4.3,
+          "category": "cs.CL",
+          "date": "2026-10-26",
+          "authors": "Keqi Deng, Ruchao Fan, Jinyu Li",
+          "institutions": "Microsoft",
+          "abstract": "序列变长后注意力成为 LLM 的主要计算瓶颈，但稀疏注意力大多只面向推理：许多方法训练时仍走稠密路径，或无法支持稀疏训练，加上实现复杂度高，稀疏很难转化成真实墙钟加速，实践中稠密注意力仍是主流。LazyFlash 基于“注意力训练的开销由反向主导”这一观察，提出前向稠密、反向稀疏的注意力：前向保持严格稠密，训出来的仍是标准稠密模型，vLLM 等系统可零改动服务；反向则做梯度感知的分块稀疏，按注意力输出梯度范数给 query 块排序，跳过对参数更新贡献可忽略的块。梯度质量预算按 head 与训练步自适应决定跳多少，重要性采样保证期望上仍是稠密梯度。这些设计实现在分块 FlashAttention 反向 kernel 内，被跳过的块既不加载也不计算。长上下文文本与语音 LLM 实验显示下游性能保持，注意力反向最多加速 5.7 倍，端到端训练加速 1.7 倍。",
+          "contributions": [
+            "提出前向稠密、反向稀疏的注意力训练范式：训练产物仍是稠密模型，推理侧零改动，规避了稀疏模型的部署代价。",
+            "用注意力输出梯度范数做分块排序，配梯度质量预算与重要性采样，在期望上保持稠密梯度。",
+            "把稀疏性做进 FlashAttention 反向 kernel，跳过块完全不加载，使稀疏真正变成墙钟加速。"
+          ],
+          "conclusions": [
+            "注意力的可稀疏性在反向比前向大得多，只稀疏反向即可拿到大部分训练收益。",
+            "稀疏必须与 kernel 融合，否则索引与不规则访存会吃掉算法节省。"
+          ],
+          "experiments": [
+            "长上下文文本与语音 LLM 上下游性能与稠密训练持平。",
+            "注意力反向相对 FlashAttention 加速最多 5.7 倍。",
+            "端到端训练加速 1.7 倍。"
+          ],
+          "significance": "给“长上下文微调太贵”提供了不动模型结构、不改推理栈的加速路径，工程侵入性很低。",
+          "takeaway": "只稀疏反向、前向保持稠密：模型仍可被 vLLM 直接服务，反向快 5.7 倍。",
+          "keyExperiment": "注意力反向 5.7 倍、端到端训练 1.7 倍加速，下游指标不掉。",
+          "arxivUrl": "https://arxiv.org/abs/2610.31911",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31911.pdf",
+          "channel": "Algorithms",
+          "index": 5
+        },
+        {
+          "title": "NgramRL: Accelerating RL Post-Training for Structured Generation via Rollout-Aware N-gram Speculative Decoding",
+          "score": 4.1,
+          "category": "cs.AI",
+          "date": "2026-10-26",
+          "authors": "Nilesh Prasad Pandey, Jangseon Park, Jason Kong, Onat Gungor, Tajana Rosing",
+          "institutions": "UC San Diego, West Virginia University",
+          "abstract": "RL 后训练能提升 LLM 推理能力，但成本主要由自回归 rollout 生成主导，可占训练时间 70% 以上。现有投机解码方法不适配：模型式草稿器占用稀缺显存且会随策略演化失配，无模型方法又未利用跨轮次重复。作者观察到同一 prompt 的近期 rollout 本身就是高质量、自更新的草稿源，据此提出 NgramRL：用有界近期 rollout 历史为每个 prompt 构建 n-gram 草稿器，无需辅助模型、草稿器训练或常驻显存，目标模型验证保证分布不变。为掩盖 CPU 查找开销，还设计自适应扇出预取器预测验证结果，因果预算分配器集中预取高概率结果。热缓存下每次目标前向提交 3.60–7.77 token，比 SuffixDecoding 多最多 1.99 倍；Spider 上 Qwen3-8B 覆盖 96.6% 结果，rollout 吞吐提升 1.38 倍。",
+          "contributions": [
+            "把近期 rollout 历史当作自更新的 n-gram 草稿源，无需草稿模型、无需训练、不占常驻显存。",
+            "自适应扇出预取器预测（接受长度, 续写 token）组合，用因果预算分配集中预取，掩盖 CPU 查找延迟。",
+            "在 RL 场景下同时保住分布正确性（目标模型验证）与吞吐收益，覆盖推理与结构化生成两类负载。"
+          ],
+          "conclusions": [
+            "RL rollout 的重复性是可被显式利用的结构，比模型式草稿器更适合策略持续变化的场景。",
+            "无模型草稿的瓶颈在 CPU 侧查找，预取对齐能把重叠率推到接近理论上限。"
+          ],
+          "experiments": [
+            "热缓存下每次目标前向提交 3.60–7.77 token，比 SuffixDecoding 多最多 1.99 倍。",
+            "比 prompt-lookup decoding 提交 token 数多 7.0 倍。",
+            "Spider 上 Qwen3-8B 以 16 候选预算覆盖 96.6% 结果，rollout 吞吐提升 1.38 倍（上限 1.40 倍）。"
+          ],
+          "significance": "把投机解码从“推理加速技巧”搬到 RL 训练循环里，直接压 rollout 这一最大成本项。",
+          "takeaway": "用上一条 rollout 当草稿：不加模型不加显存，热缓存下每步提交 3.6–7.8 token。",
+          "keyExperiment": "Spider/Qwen3-8B：预取覆盖 96.6%，rollout 吞吐 1.38 倍（重叠上限 1.40 倍）。",
+          "arxivUrl": "https://arxiv.org/abs/2610.32881",
+          "pdfUrl": "https://arxiv.org/pdf/2610.32881.pdf",
+          "channel": "Algorithms",
+          "index": 6
+        },
+        {
+          "title": "BiLoCo: Binary Low-Rank Corrections for Post-Training Quantization",
+          "score": 4.2,
+          "category": "cs.LG",
+          "date": "2026-10-26",
+          "authors": "David Jin, Beshr IslamBouli, Tarushii Goel, Han Guo, Yoon Kim",
+          "institutions": "Massachusetts Institute of Technology",
+          "abstract": "FP4 训练后量化是降低 LLM 推理成本的关键手段，Blackwell GPU 原生支持 FP4 张量核心，但直接量化仍留明显精度差距。SVDQuant 用 SVD 低秩修正缓解误差，但修正每 rank 需很多 bit，且跑在与主 FP4 GEMM 相同的张量核心上。BiLoCo 把左右因子改存为 ±1 二值符号向量：每个 rank-1 分量存储降到 1/16，修正退化为加减法，可放在 CUDA 核心上与 FP4 GEMM 并行。4B–72B 模型上，同显存预算下追平或优于 SVDQuant。B300 上实现为单 launch 融合 kernel：FP4 GEMM 走张量核心，位打包修正走 CUDA 核心，二者在 epilogue 合并；batch 1 时 rank 到 512 最多比纯 FP4 GEMM 慢 11%，rank 128 时 batch 到 8 最多慢 20%。",
+          "contributions": [
+            "用 ±1 二值因子取代 BF16 低秩修正，每 rank-1 分量存储降到 1/16，把修正搬到 CUDA 核心与张量核心并行。",
+            "在 4B–72B 模型上于同显存预算下追平或超过 SVDQuant，属于同成本更强、不是同效果更贵。",
+            "在 B300 上实现单 launch 融合 kernel（GEMM + 位打包修正 + epilogue 合并），给出接近零开销的实测区间。"
+          ],
+          "conclusions": [
+            "低秩修正的精度不必靠高比特承载，符号化后仍够用，且能顺带解决与主 GEMM 抢张量核心的问题。",
+            "融合 kernel 的额外开销随 rank 与 batch 缓慢增长，在实用配置下可接受。"
+          ],
+          "experiments": [
+            "4B–72B LLM 上同显存预算下追平或优于 SVDQuant。",
+            "batch size 1、rank 到 512 时，融合 kernel 比纯 FP4 GEMM 最多慢 11%。",
+            "rank 128、batch 到 8 时最多慢 20%。"
+          ],
+          "significance": "让 FP4 PTQ 的低秩修正真正“免费”，是 Blackwell 上做 FP4 部署时值得抄的工程方案。",
+          "takeaway": "低秩修正用 ±1 存：显存省 16 倍，还腾出张量核心给主 GEMM，融合 kernel 只慢 ≤11%。",
+          "keyExperiment": "B300 单 kernel 融合：rank 512、batch 1 下最多比纯 FP4 GEMM 慢 11%。",
+          "arxivUrl": "https://arxiv.org/abs/2610.32243",
+          "pdfUrl": "https://arxiv.org/pdf/2610.32243.pdf",
+          "channel": "Algorithms",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Decode Late, Multiply Once: Rethinking the Dot Product for Quantized Weights",
+          "score": 4.0,
+          "category": "cs.LG",
+          "date": "2026-10-26",
+          "authors": "Jonathan Tapson",
+          "institutions": "BrainChip Inc",
+          "abstract": "大网络越来越多用 1–4 bit 权重配 16/32 bit 激活，但点积仍每个元素一次乘法。本文指出长度 n、k bit 权重的点积可用 n+2^k 次加法、最多 2^k 次解码与 2^k 次乘法完成：每个权重码直接当地址偏移选中 2^k 个累加器之一，激活值加进被选中的累加器，最后只做一次融合的解码加乘法，解码后的权重向量从不生成。该改写对整数算术精确，兼容浮点与任意含非线性解码器，可扩展到分组缩放与矩阵/张量积。乘法器数量下降 n/2^k，总算术能耗改善较小但有界。文中提出散列累加处理单元 SA-PE 替换权重驻留脉动阵列的 MAC，用 load/stream/reduce/drain 调度让小乘法器每块只跑 2^k 次，权重存储最多缩小 w_d/k；FPGA 综合显示不共享的 SA-PE 更大，收益出现在乘法器跨 PE 共享时。",
+          "contributions": [
+            "把 k bit 权重点积改写成“权重码当地址、加法进对应累加器、最后只解码乘一次”，乘法次数降 n/2^k 且对整数精确。",
+            "提出 SA-PE 与 load/stream/reduce/drain 调度，让单个小乘法器跨 PE 分时复用，权重存储降 w_d/k。",
+            "给出代价模型与 FPGA 综合数据，明确指出面积收益依赖乘法器共享，不夸大单 PE 优势。"
+          ],
+          "conclusions": [
+            "量化权重的乘法冗余是结构性的，可在不改变数值语义的前提下重构掉大部分。",
+            "收益兑现条件是共享乘法器；否则单个 PE 反而更大，属于架构级而非单元级优化。"
+          ],
+          "experiments": [
+            "整数算术下与常规流水精确等价，浮点误差不劣于常规实现（软件模型验证）。",
+            "乘法器数量下降 n/2^k，本地权重存储最多缩小 w_d/k。",
+            "FPGA RTL 综合：不共享 SA-PE 面积大于 MAC PE，共享乘法器后才出现收益。"
+          ],
+          "significance": "给低比特推理的硬件设计提供了一条绕开“每元素一次乘”的正交思路，工程上适合 IP 级采纳。",
+          "takeaway": "权重码当累加器地址：乘法从 n 次降到 2^k 次，前提是乘法器要跨 PE 共享。",
+          "keyExperiment": "软件模型确认整数精确等价；FPGA 综合显示共享乘法器后面积收益才出现。",
+          "arxivUrl": "https://arxiv.org/abs/2610.31913",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31913.pdf",
+          "channel": "Architecture",
+          "index": 8
+        },
+        {
+          "title": "InferSlice: A Reference Architecture for SLO-driven LLM Inference over a Telco Wide-Area Network",
+          "score": 4.0,
+          "category": "cs.DC",
+          "date": "2026-10-26",
+          "authors": "Juan Parra-Ullauri, Anthony Chiu, Hari Madhukumar, Zhaozhou Wu, Anderson Bravalheri, Alex Healing, Andy Corston-Petrie, Dimitra Simeonidou, Nektaria Efthymiou",
+          "institutions": "BT, University of Bristol, NVIDIA",
+          "abstract": "LLM 推理正成为企业核心服务，但主权、合规、时延与资源就近等要求限制集中式云的适用性，电信运营商的地理分散算力恰好能承接。然而现有服务框架为紧耦合数据中心设计，对跨地域异构资源协同支持很弱。本文提出 InferSlice：面向电信网、以 SLO 驱动的 LLM 推理参考架构，集成网络切片、GPU 切分、弹性服务与可观测性，由 BT 牵头、联合布里斯托大学与 NVIDIA 在 JOINER 英国国家级广域网上落地。评估覆盖分级服务差异化、弹性扩容、边缘带宽瓶颈，以及张量/流水/数据并行与 prefill/decode 分离在 WAN 上的可达性。结果显示：不同服务档位对应截然不同的时延-吞吐区间；权重流式加载缩短扩容时间；副本对放置不敏感但受内存约束；流水并行能容忍近距与中距跨站，张量并行与分离式部署超过单个子网跳即失效。",
+          "contributions": [
+            "提出面向电信广域网、以 SLO 为中心的 LLM 推理参考架构，整合网络切片、GPU 切分、弹性服务与可观测性。",
+            "在国家级 WAN 上系统评估各并行策略的可达边界，给出“哪些并行只在单子网内成立”的实测结论。",
+            "总结运营经验与开放问题，指出权重流式加载、副本放置、边缘带宽等工程取舍。"
+          ],
+          "conclusions": [
+            "广域分散部署下，流水并行还有生存空间，张量并行与 prefill/decode 分离跨子网即崩。",
+            "服务分级确实能形成不同的时延-吞吐区间，但边缘侧带宽常是真瓶颈。"
+          ],
+          "experiments": [
+            "JOINER 英国国家级 WAN 上完成分级服务、弹性扩容、带宽瓶颈三组评估。",
+            "权重流式加载缩短弹性扩容时间。",
+            "张量并行与 prefill/decode 分离在超过单个子网跳后失效，流水并行可容忍近距与中距跨站。"
+          ],
+          "significance": "给“跨地域主权合规推理”提供了第一份可操作的系统级边界清单，负面结论尤其值钱。",
+          "takeaway": "跨站点部署别指望 TP：流水并行还能扛，TP 与 PD 分离出了子网就崩。",
+          "keyExperiment": "JOINER WAN 实测：TP 与 PD 分离超过单子网跳即失效，流水并行可跨近中距站点。",
+          "arxivUrl": "https://arxiv.org/abs/2610.32638",
+          "pdfUrl": "https://arxiv.org/pdf/2610.32638.pdf",
+          "channel": "Architecture",
+          "index": 9
+        },
+        {
+          "title": "Learning Structured Sparsity for Large Models: Bridging Model Compressibility and Efficient Inference",
+          "score": 3.9,
+          "category": "cs.LG",
+          "date": "2026-10-26",
+          "authors": "Tianxiang Xia, Kai Lion, Niao He, Michael Muehlebach, Melanie Zeilinger, Hao Ma",
+          "institutions": "ETH Zürich, Max Planck Institute for Intelligent Systems, HKU",
+          "abstract": "规模法则持续奖励更大模型，随之而来的算力与显存需求让推理越来越依赖云，但网络不稳、通信时延与隐私要求常使云端推理不可行，端侧本地执行成为刚需。已有工作表明学习“稀疏加低秩”表示可让单个 checkpoint 弹性压缩到多个显存预算，但参数变少不必然等于推理变快——非结构化稀疏的索引开销与不规则访存会抵消算力节省。本文提出 S-SALAAD：训练中联合学习权重及其低秩与结构化稀疏分量，支持一族硬件友好的结构化稀疏模式，并把结构学习与预算感知压缩、专用 CPU/GPU kernel 耦合，使单 checkpoint 在多显存档位下都能高效推理。在 Llama2 与 Qwen3 上覆盖预训练与蒸馏，S-SALAAD 在困惑度、显存与推理时延三维度把经验帕累托前沿推前，说明结构化学习能把弹性可压缩真正转成更低显存与时延。",
+          "contributions": [
+            "在训练中联合学习低秩与结构化稀疏分量，支持多种硬件友好的稀疏模式，而非事后剪枝。",
+            "把结构学习与预算感知压缩、专用 CPU/GPU kernel 打通，使参数减少真正转化为时延下降。",
+            "在 Llama2 与 Qwen3、预训练与蒸馏两种设定下同时推进困惑度-显存-时延的帕累托前沿。"
+          ],
+          "conclusions": [
+            "端侧部署的障碍不是“能不能压”，而是压缩后能否被硬件高效执行，结构化约束是必要环节。",
+            "单一 checkpoint 跨多档显存弹性服务，在结构化稀疏加持下可行。"
+          ],
+          "experiments": [
+            "Llama2 与 Qwen3 上覆盖预训练与蒸馏，困惑度-显存-时延帕累托前沿整体前移。",
+            "单个 checkpoint 在多个显存档位下均可高效推理，配套 CPU 与 GPU kernel。",
+            "结论在多类硬件平台上相对基线均成立。"
+          ],
+          "significance": "把“压缩率好看但跑不快”的老问题正面解决，是端侧大模型部署的实用路线。",
+          "takeaway": "稀疏必须结构化才换得到时延：联合学习结构 + 预算感知压缩 + 专用 kernel。",
+          "keyExperiment": "Llama2/Qwen3 预训练与蒸馏设定下，困惑度-显存-时延帕累托前沿全面前移。",
+          "arxivUrl": "https://arxiv.org/abs/2610.31897",
+          "pdfUrl": "https://arxiv.org/pdf/2610.31897.pdf",
+          "channel": "Architecture",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
