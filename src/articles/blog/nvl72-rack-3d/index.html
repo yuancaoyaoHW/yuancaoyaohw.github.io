@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GB200 NVL72 机架 3D 拆解：从托盘、NVLink 到集群</title>
+<style>
+/* 配色只引用共享语义层 --a-*（public/styles/article-tokens.css），作用域限定在 .nv 容器内。
+   3D 模型本身在 /demos/nvl72/ 独立运行，通过 iframe 嵌入，样式与站点互不干扰。 */
+:where(.article-body, .interactive-body) .nv {
+  max-width: 920px; margin: 0 auto; padding: 8px 20px 60px;
+  color: var(--a-fg); line-height: 1.8; font-size: 15.5px;
+}
+.nv h1 { color: var(--a-fg-strong); font-size: 30px; line-height: 1.35; margin: 8px 0 10px; }
+.nv h2 { color: var(--a-fg-strong); font-size: 21px; margin: 0 0 12px; }
+.nv h3 { color: var(--a-fg-strong); font-size: 16px; margin: 18px 0 6px; }
+.nv p { margin: 0 0 12px; }
+.nv ul { margin: 0 0 12px 1.3em; padding: 0; }
+.nv li { margin: 3px 0; }
+.nv b, .nv strong { color: var(--a-fg-strong); }
+.nv code { background: var(--a-code-bg); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+.nv .lead { color: var(--a-fg-muted); font-size: 16px; margin-bottom: 22px; }
+.nv section {
+  margin: 0 0 28px; padding: 24px 26px; background: var(--a-surface);
+  border: 1px solid var(--a-line); border-radius: 12px;
+}
+.nv .tag {
+  display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  color: var(--a-green); background: var(--a-green-bg); border: 1px solid var(--a-green-line);
+  padding: 1px 8px; border-radius: 999px; margin-bottom: 8px;
+}
+
+/* ---- 3D 舞台 ---- */
+.nv .demo { padding: 14px; }
+.nv .views { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.nv .views button, .nv .jump, .nv .fs {
+  font: inherit; font-size: 13px; cursor: pointer; border-radius: 7px;
+  padding: 4px 11px; border: 1px solid var(--a-line); background: var(--a-bg); color: var(--a-fg);
+}
+.nv .views button:hover, .nv .jump:hover, .nv .fs:hover { border-color: var(--a-line-hover); color: var(--a-fg-strong); }
+.nv .views button[aria-pressed="true"] {
+  background: var(--a-green-bg); border-color: var(--a-green-line); color: var(--a-green);
+}
+.nv .views button:focus-visible, .nv .jump:focus-visible, .nv .fs:focus-visible {
+  outline: 2px solid var(--a-accent); outline-offset: 2px;
+}
+.nv .frame {
+  position: relative; height: min(76vh, 760px); min-height: 440px;
+  border-radius: 10px; overflow: hidden; border: 1px solid var(--a-line); background: #070b12;
+}
+.nv .frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+.nv .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.nv .hint { color: var(--a-fg-muted); font-size: 13px; }
+.nv .bar .acts { display: flex; gap: 6px; }
+.nv .bar a.fs { text-decoration: none; display: inline-block; }
+.nv .mobile-note { display: none; color: var(--a-amber); font-size: 13px; margin-top: 8px; }
+@media (max-width: 760px) {
+  .nv .frame { height: 70vh; min-height: 360px; }
+  .nv .mobile-note { display: block; }
+  .nv section { padding: 18px 16px; }
+}
+
+/* ---- 规格表 / 要点卡 ---- */
+.nv table.specs { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 14px; }
+.nv table.specs th, .nv table.specs td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--a-line); vertical-align: top; }
+.nv table.specs th { color: var(--a-fg-muted); font-weight: 500; white-space: nowrap; width: 30%; }
+.nv .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 10px 0 14px; }
+.nv .card { border: 1px solid var(--a-line); border-radius: 9px; padding: 10px 12px; background: var(--a-bg); }
+.nv .card .n { font-size: 22px; font-weight: 700; color: var(--a-fg-strong); line-height: 1.3; }
+.nv .card .l { font-size: 13px; color: var(--a-fg-muted); }
+.nv .note {
+  border-left: 3px solid var(--a-blue); background: var(--a-blue-bg);
+  padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 14.5px;
+}
+.nv .warn { border-left-color: var(--a-amber); background: var(--a-amber-bg); }
+.nv .c-g { color: var(--a-green); } .nv .c-b { color: var(--a-blue); }
+.nv .c-o { color: var(--a-amber); } .nv .c-r { color: var(--a-red); } .nv .c-p { color: var(--a-purple); }
+</style>
+</head>
+<body>
+<div class="nv">
+<h1>GB200 NVL72 机架 3D 拆解：从托盘、NVLink 到集群</h1>
+<p class="lead">GB200 NVL72 是作为一个整体交付的：出厂时 18 个计算托盘、9 个 NVSwitch 托盘、机架背部的 NVLink 铜缆、电源架、直流母排和液冷歧管都已装好并测试过，到机房只需接上交流电、冷却水和网络。下面的 3D 模型可以逐层打开每个模块；正文按同样的顺序讲每个模块做什么、和谁连。</p>
+
+<section class="demo" id="demo" aria-label="交互式 3D 模型">
+  <div class="views" role="group" aria-label="切换视图">
+    <button type="button" data-view="rack" aria-pressed="true">整机架</button>
+    <button type="button" data-view="compute">计算托盘</button>
+    <button type="button" data-view="superchip">GB200 超级芯片</button>
+    <button type="button" data-view="gpu">B200 GPU</button>
+    <button type="button" data-view="switch">NVSwitch 托盘</button>
+    <button type="button" data-view="fabric">NVLink 全互联</button>
+    <button type="button" data-view="power">供电</button>
+    <button type="button" data-view="cooling">液冷</button>
+    <button type="button" data-view="cluster">集群组织</button>
+  </div>
+  <div class="frame" id="nv-frame">
+    <iframe id="nv-iframe" src="/demos/nvl72/#rack" title="GB200 NVL72 机架交互式 3D 模型" loading="lazy" allow="fullscreen"></iframe>
+  </div>
+  <div class="bar">
+    <span class="hint">左键拖动旋转 · 右键平移 · 滚轮缩放 · 单击选中看说明 · 双击深入 · Esc 返回上一层</span>
+    <span class="acts">
+      <button type="button" class="fs" id="nv-fs">⛶ 全屏</button>
+      <a class="fs" id="nv-open" href="/demos/nvl72/#rack" target="_blank" rel="noopener">新标签页打开 ↗</a>
+    </span>
+  </div>
+  <p class="mobile-note">小屏幕上信息面板会挤占画面，建议用桌面浏览器或点「新标签页打开」全屏查看。</p>
+</section>
+
+<section id="s-rack">
+  <span class="tag">整机架</span>
+  <h2>一台机架就是一台计算机</h2>
+  <p>NVL72 的设计目标是让 72 颗 Blackwell GPU 处在<strong>同一个 NVLink 域</strong>里：任意两颗 GPU 之间都只隔一颗 NVSwitch，带宽和延迟都和同一台服务器内部一样。为了做到这一点，GPU 之间不走网卡和光模块，而是用机架背部的铜缆直连交换芯片，所以所有东西必须挤在一个机架里。</p>
+  <div class="grid">
+    <div class="card"><div class="n c-g">18</div><div class="l">计算托盘（每个 2 × GB200 = 4 GPU + 2 CPU）</div></div>
+    <div class="card"><div class="n c-b">9</div><div class="l">NVSwitch 托盘（每个 2 颗 NVSwitch 芯片）</div></div>
+    <div class="card"><div class="n">72 / 36</div><div class="l">B200 GPU / Grace CPU</div></div>
+    <div class="card"><div class="n c-o">~120 kW</div><div class="l">整柜功耗量级，8 个电源架供电</div></div>
+  </div>
+  <p>从下往上看模型：B 路电源架 → 计算托盘 #11–#18 → 9 个 NVSwitch 托盘 → 计算托盘 #1–#10 → A 路电源架 → 管理交换机。交换托盘放在中间，是为了让最远的计算托盘到交换托盘的铜缆也尽量短。</p>
+  <ul>
+    <li><b>前面</b>：每个计算托盘露出 4 个 ConnectX 网口（计算网）、2 个 BlueField-3（存储/前端）和 E1.S 本地盘。</li>
+    <li><b>后面</b>：每个托盘有 4 个 NVLink 盲插连接器、1 个直流母排夹头、1 对冷/热快接头（UQD）。托盘推到底时三者同时接通，没有任何需要手工插的线。</li>
+    <li><b>侧面</b>：一蓝一红两根液冷歧管，以及旁边的 CDU。</li>
+  </ul>
+  <p>在模型里点工具栏的「▶ 出厂组装过程」，可以看到托盘按 U 位依次推入、最后铜缆出现的顺序；单击任一托盘会把它抽出来，并高亮这个托盘的所有 NVLink 铜缆。</p>
+  <button type="button" class="jump" data-view="rack">在模型中查看整机架 →</button>
+</section>
+<section id="s-compute">
+  <span class="tag">整机架 › 计算托盘</span>
+  <h2>计算托盘：2 颗超级芯片 + 网卡 + 盲插背板</h2>
+  <p>每个 1U 计算托盘装两块 GB200 超级芯片板，也就是 2 颗 Grace CPU 和 4 颗 B200 GPU，功耗约 5.4–6 kW，全部靠冷板液冷散热，托盘里没有大风扇。</p>
+  <table class="specs">
+    <tr><th>GPU 显存</th><td>4 × 192 GB HBM3e</td></tr>
+    <tr><th>CPU 内存</th><td>2 × 480 GB LPDDR5X</td></tr>
+    <tr><th>NVLink</th><td>4 GPU × 18 = 72 条链路，合计 7.2 TB/s，全部从托盘后部 4 个连接器出去</td></tr>
+    <tr><th>扩展网络</th><td>4 × ConnectX-8（800 Gb/s）—— 每颗 GPU 配一张，构成计算网的 4 条「轨道」</td></tr>
+    <tr><th>前端 / 存储</th><td>2 × BlueField-3 DPU，接存储和用户流量，与计算网物理隔离</td></tr>
+    <tr><th>本地盘</th><td>E1.S NVMe，放 OS、数据缓存和 checkpoint</td></tr>
+  </table>
+  <p>托盘内部有三条「通道」，模型里点开计算托盘能看到它们的走向：</p>
+  <ul>
+    <li><b class="c-g">数据</b>：GPU 的 NVLink 走到托盘后部的 <b>NVLink 盲插连接器</b>，再进入背板铜缆盒；ConnectX 网卡走 PCIe 接到前面板。</li>
+    <li><b class="c-o">供电</b>：后部母排夹头从机架直流母排取约 50V 直流，经板上 VRM 降压给各芯片。</li>
+    <li><b class="c-b">冷却</b>：左侧冷 UQD 进水 → 依次流过 CPU/GPU 冷板 → 右侧热 UQD 回水。</li>
+  </ul>
+  <div class="note">「连接器的正确性」是看懂这台机器的关键：一个计算托盘<strong>只有</strong>后部这三类接口（NVLink、母排、液冷），前面板只有网络和盘。所以维修时可以整盘拔出、换上，不碰任何一根铜缆。</div>
+  <button type="button" class="jump" data-view="compute">在模型中打开计算托盘 →</button>
+</section>
+
+<section id="s-superchip">
+  <span class="tag">计算托盘 › GB200 超级芯片</span>
+  <h2>Grace + 2 × B200：一块板上的统一内存</h2>
+  <p>GB200 超级芯片 = 1 颗 Grace CPU + 2 颗 B200 GPU。CPU 与 GPU 之间不走 PCIe，而是 <b>NVLink-C2C</b>（900 GB/s 双向，缓存一致），GPU 可以直接访问 Grace 的 480 GB LPDDR5X。对推理来说，这相当于每颗 GPU 背后多了一块慢一些但很大的内存：KV cache 卸载、超长上下文、大模型权重的分层存放都可以利用它。</p>
+  <table class="specs">
+    <tr><th>Grace CPU</th><td>72 × Arm Neoverse V2 核，约 480 GB LPDDR5X，约 500 GB/s</td></tr>
+    <tr><th>CPU ↔ GPU</th><td>NVLink-C2C 900 GB/s，统一地址空间</td></tr>
+    <tr><th>板级功耗</th><td>约 2.7 kW</td></tr>
+  </table>
+  <button type="button" class="jump" data-view="superchip">在模型中打开超级芯片 →</button>
+</section>
+
+<section id="s-gpu">
+  <span class="tag">超级芯片 › B200 GPU</span>
+  <h2>B200：两颗晶粒拼成一颗 GPU</h2>
+  <p>B200 由两颗光罩极限尺寸的晶粒组成（共约 2080 亿晶体管，TSMC 4NP），两颗晶粒之间用 10 TB/s 的片间互联连成一颗逻辑 GPU，软件看到的就是一张卡。CoWoS-L 封装上还放着 8 个 HBM3e 堆叠，每个 24 GB、约 1 TB/s，合计 192 GB、约 8 TB/s。</p>
+  <ul>
+    <li><b>算力</b>：FP4 稠密约 10 PFLOPS，功耗约 1000–1200 W。</li>
+    <li><b>NVLink 5</b>：18 个端口 × 100 GB/s = 1.8 TB/s 双向。这 18 个端口正好对应机架里的 18 颗 NVSwitch 芯片，每颗芯片各连 1 条。</li>
+  </ul>
+  <button type="button" class="jump" data-view="gpu">在模型中打开 B200 →</button>
+</section>
+<section id="s-switch">
+  <span class="tag">整机架 › NVSwitch 托盘</span>
+  <h2>NVSwitch 托盘：把 72 颗 GPU 拉进同一个交换平面</h2>
+  <p>9 个 NVSwitch 托盘各装 2 颗第五代 NVLink Switch 芯片，全机架共 18 颗。每颗芯片有 72 个 NVLink5 端口，正好每颗 GPU 一个；单芯片交换带宽 7.2 TB/s，单托盘 14.4 TB/s。芯片内还集成了 <b>SHARP</b> 网内归约单元，可以在交换芯片里直接做 all-reduce 的求和。</p>
+  <p>交换托盘不连任何网卡，前面板只有管理口和状态灯；它的全部数据端口都在后部的 4 个 NVLink 连接器上，通过背板铜缆接到 18 个计算托盘。</p>
+  <button type="button" class="jump" data-view="switch">在模型中打开 NVSwitch 托盘 →</button>
+</section>
+
+<section id="s-fabric">
+  <span class="tag">整机架 › NVLink 全互联</span>
+  <h2>1296 条链路，任意两颗 GPU 只隔 1 跳</h2>
+  <p>连线规则很简单：<b>GPU <i>g</i> 的第 <i>s</i> 号端口 ↔ NVSwitch <i>s</i> 的第 <i>g</i> 号端口</b>。72 颗 GPU × 18 颗交换芯片 = 1296 条 NVLink5 链路，每条 100 GB/s 双向。物理上它们是背板里约 5000 根、总长约 3 km 的铜缆，集中在 4 个竖直的铜缆盒里，对应托盘后部的 4 个连接器位置。</p>
+  <ul>
+    <li><b>点对点</b>：GPU A 发往 GPU B 的数据可以同时走 18 颗交换芯片，每条路径都是 A → 交换芯片 → B，合计 1.8 TB/s。模型里打开「点对点传输」能看到 18 条并行路径。</li>
+    <li><b>SHARP all-reduce</b>：每颗 GPU 只发一次数据到交换芯片，求和在交换芯片里完成，再广播回来。环形算法在 72 颗 GPU 上需要 2 × (72 − 1) = 142 步，这里每颗 GPU 只发送一次、接收一次。</li>
+  </ul>
+  <p>在拓扑视图里单击一颗 GPU，会高亮它的 18 条链路；单击一颗交换芯片，会高亮它的 72 条链路。</p>
+  <div class="note">这就是 NVL72 对大模型推理的意义：张量并行、专家并行（MoE 的 all-to-all）在 72 颗 GPU 范围内都能跑在 NVLink 带宽上，而不必降到每卡 800 Gb/s（100 GB/s）的网卡带宽，差了约 18 倍。</div>
+  <button type="button" class="jump" data-view="fabric">在模型中查看全互联拓扑 →</button>
+</section>
+
+<section id="s-power">
+  <span class="tag">整机架 › 供电</span>
+  <h2>供电：A/B 双路交流 → 电源架 → 直流母排</h2>
+  <p>机架上下各 4 个电源架，A 路从顶部进线、B 路从地板进线，都是 415V 三相交流。每个电源架有 6 个约 5.5 kW 的热插拔 PSU（钛金级，效率 &gt; 97%），把交流变成约 50V 直流，送到机架背部中间那根<b>直流母排</b>上。母排承载数千安培电流，每个托盘推入时由后部的取电夹直接夹上母排取电，单个计算托盘约 120 A。</p>
+  <p>A/B 两路是 N+N 冗余：任意一路断电，另一路仍能带满整机架。</p>
+  <button type="button" class="jump" data-view="power">在模型中查看供电 →</button>
+</section>
+
+<section id="s-cooling">
+  <span class="tag">整机架 › 液冷</span>
+  <h2>液冷：歧管、UQD 与 CDU</h2>
+  <p>120 kW 量级的功耗无法用风冷带走，NVL72 的 CPU、GPU 和交换芯片都装了冷板。冷却液的路径是：</p>
+  <ul>
+    <li><b class="c-b">CDU</b>（冷却液分配单元）把约 20–30 °C 的冷却液泵进机架左侧的<b class="c-b">供水歧管</b>；</li>
+    <li>每个托盘后部左侧的冷 <b>UQD</b> 快接头接入供水，冷却液流过托盘内的冷板，从右侧热 UQD 流出；</li>
+    <li>约 40–45 °C 的回水汇入右侧<b class="c-r">回水歧管</b>，回到 CDU；</li>
+    <li>CDU 里的板式换热器把热量交给机房一次侧冷却水，两个回路的液体不混合。</li>
+  </ul>
+  <p>整机架流量约 150–200 L/min，温升约 10–12 °C。UQD 是无滴漏、可带压插拔的，所以拔托盘时不需要先停水。CDU 内有漏液、压力和流量传感器。</p>
+  <button type="button" class="jump" data-view="cooling">在模型中查看液冷 →</button>
+</section>
+<section id="s-cluster">
+  <span class="tag">整机架 › 集群组织</span>
+  <h2>从 1 个机架到 AI 工厂</h2>
+  <p>机架内部的 72 颗 GPU 靠 NVLink 互联（scale-up）；机架之间靠 InfiniBand 或以太网（scale-out）。模型里的集群视图画的是一个<b>扩展单元（SU）</b>：8 台 NVL72，共 576 颗 GPU。机架之外有三张彼此独立的网：</p>
+  <h3 class="c-p">① 计算网（东西向）：轨道优化的胖树</h3>
+  <p>每个计算托盘的 4 张 ConnectX 网卡分别属于 4 条<b>轨道</b>：所有托盘的第 <i>r</i> 号网卡都接到第 <i>r</i> 条轨道的 leaf 交换机。8 个机架 × 18 托盘 = 每条轨道 144 张网卡，接 2 台 144 口 leaf（各 72 口下行、72 口上行）；8 台 leaf 的 576 个上行口再接 4 台 144 口 spine。</p>
+  <p>按轨道接线的好处是：跨机架的集合通信中，同号 GPU 之间的流量留在同一条轨道内，同一台 leaf 下只需 1 跳，跨 leaf 也只多经过一层 spine。在模型里单击某台 leaf 会高亮它所在的轨道。</p>
+  <h3 class="c-b">② 存储 / 前端网（南北向）</h3>
+  <p>走每个托盘的 BlueField-3 DPU，接并行文件系统（NVMe-oF、GPUDirect Storage）和用户入口 / 推理前端，与计算网物理隔离，checkpoint 和数据加载不会挤占训练与推理的通信带宽。</p>
+  <h3 class="c-o">③ 带外管理网</h3>
+  <p>1/10 GbE，连接每个托盘的 BMC、PSU、CDU 和 NVSwitch 的管理口，由管理节点上的 BCM、SLURM 控制器、DCGM 和 Redfish 做监控、开关机和固件升级。业务网全挂了它也还能用。</p>
+  <p>工具栏里还有两个规模开关：<b>NVL576</b>（用第二级 NVLink 交换把 8 个机架连成一个 576 GPU 的 NVLink 域，示意）和 <b>AI 工厂</b>（多个 SU 通过 core 层组网，到数万 GPU）。</p>
+  <button type="button" class="jump" data-view="cluster">在模型中查看集群组织 →</button>
+</section>
+
+<section id="s-notes">
+  <h2>关于这个模型</h2>
+  <ul>
+    <li>模型是示意，不是 CAD：U 位、尺寸和铜缆走线按公开资料重绘，用来说明连接关系，不代表某一家 OEM 的具体机型。规格数字是公开资料中的量级，不同版本与厂商会有出入。</li>
+    <li>铜缆为了可视化做了合并：机架视图中每一束代表 2 条链路（18 × 4 × 9 = 648 束）；拓扑视图则画出了全部 1296 条。</li>
+    <li>模型用 Three.js 渲染，独立页面在 <a href="/demos/nvl72/" target="_blank" rel="noopener">/demos/nvl72/</a>，可以在 URL 后加 <code>#fabric</code>、<code>#cluster</code> 等直接打开某个视图。</li>
+  </ul>
+</section>
+
+<script>
+(() => {
+  const iframe = document.getElementById('nv-iframe');
+  const frame = document.getElementById('nv-frame');
+  const open = document.getElementById('nv-open');
+  const btns = document.querySelectorAll('.nv .views button');
+  if (!iframe) return;
+  let loaded = false;
+  iframe.addEventListener('load', () => { loaded = true; });
+  const mark = v => {
+    btns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+    open.href = '/demos/nvl72/#' + v;
+  };
+  const go = v => {
+    mark(v);
+    // 同源且已加载时只改 hash，模型内部的 hashchange 监听会切换视图而不重新加载
+    try {
+      if (loaded && iframe.contentWindow.location.pathname.startsWith('/demos/nvl72')) {
+        iframe.contentWindow.location.hash = v; return;
+      }
+    } catch (e) { /* 非同源时退回改 src */ }
+    iframe.src = '/demos/nvl72/#' + v;
+  };
+  document.querySelectorAll('.nv [data-view]').forEach(b => b.addEventListener('click', () => {
+    go(b.dataset.view);
+    if (b.classList.contains('jump')) frame.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }));
+  // 在模型里双击深入 / 面包屑跳转时同步按钮状态
+  setInterval(() => {
+    if (!loaded) return;
+    try {
+      const v = iframe.contentWindow.location.hash.slice(1);
+      if (v && open.href.split('#')[1] !== v) mark(v);
+    } catch (e) {}
+  }, 700);
+  document.getElementById('nv-fs').addEventListener('click', () => {
+    (frame.requestFullscreen || frame.webkitRequestFullscreen || (() => {})).call(frame);
+  });
+})();
+</script>
+</div>
+</body>
+</html>
