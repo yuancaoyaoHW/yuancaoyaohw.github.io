@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-28",
+  "title": "2026-10-28 论文精选",
+  "lede": "今日主线是“把被 GPU 门控的资源重新变成独立资源”：CPU 与主机内存成为可独立调度的解码引擎，KV 以跨层共享潜变量压缩，MoE 专家去重被证明只在带宽比合适时才划算，TMA 的使用边界也在 H100 上被量化。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 883
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "DualPace: Decoupled Scheduling and Cooperative GPU--CPU Decoding for LLM Serving",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-27",
+          "authors": "YuXuan Lin, KeQiang Wu, Kingsum Chow",
+          "institutions": "Ningbo Global Innovation Center, Zhejiang University",
+          "abstract": "大模型服务依赖批处理提升吞吐，但 KV cache 随序列长度增长，限制了常驻 GPU 的并发数。CPU offload 虽能用主机内存扩展 KV 容量，现有系统却基本仍由 GPU 门控：CPU 常驻请求只有等到 GPU 调度器露出空隙才能推进。本文提出 DualPace，把主机变成可独立调度的解码引擎：GPU 引擎负责 prefill 与 GPU 常驻解码，启用 AMX 的 CPU 引擎独立批处理并推进 CPU 常驻解码；两者调度解耦、执行协作，CPU 既能在本地完成整个解码迭代，也可按需调用 GPU Dense Assist 处理稠密阶段。以解码为主的场景中，DualPace 相对 NEO 提升吞吐 6.9%–43.2%，相对 vLLM 提升 11.5%–90.6% 且延迟持平；同等 P99 ITL 下请求率比 NEO 高 7.3%–50.5%。",
+          "contributions": [
+            "把 CPU 从被动的 offload 缓存侧提升为一套独立调度的解码引擎，GPU 与 CPU 双引擎调度解耦、执行协作。",
+            "给出 CPU 本地完成整轮解码与按需调用 GPU Dense Assist 的混合执行策略，并用离线 profile 决定硬件相关批大小与路由。",
+            "在解码为主的负载下同时改善吞吐与尾延迟，说明主机内存与 CPU 算力可以作为独立服务资源参与扩容。"
+          ],
+          "conclusions": [
+            "CPU 侧进展不必再等 GPU 调度器让出空隙，突发式推进与尾延迟抬升被显著缓解。",
+            "双引擎解耦调度可与现有 GPU 服务系统叠加，在保持 TTFT 优势的同时提高可持续请求率。"
+          ],
+          "experiments": [
+            "相对 SOTA 开源 offload 系统 NEO，解码型场景吞吐提升 6.9%–43.2%，且延迟水平相同。",
+            "相对 vLLM 吞吐提升 11.5%–90.6%。",
+            "同等 P99 ITL 下请求率比 NEO 高 7.3%–50.5%。"
+          ],
+          "significance": "把 CPU 与主机内存变成可独立调度的解码资源，为显存受限下的 LLM 服务扩容提供了新维度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.33501",
+          "pdfUrl": "https://arxiv.org/pdf/2610.33501.pdf",
+          "index": 1,
+          "takeaway": "CPU 不再只是 KV 的溢出仓库，而是第二个可独立调度的解码引擎。",
+          "keyExperiment": "解码型负载下吞吐比 NEO 高 6.9%–43.2%、比 vLLM 高 11.5%–90.6%，延迟持平。"
+        },
+        {
+          "title": "Prefetch-Steered Routing: Deterministic Cache-Aware Expert Selection for Offloaded Mixture-of-Experts Decoding",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-27",
+          "authors": "Siming Huang",
+          "institutions": "The Hong Kong University of Science and Technology (Guangzhou)",
+          "abstract": "MoE 模型放不进 GPU 显存时，batch-1 解码的主要开销是把专家权重从主机内存拷进 GPU。缓存感知路由把路由器偏向常驻专家以减少拷贝，但一旦叠加异步预取，模型输出就依赖传输时序，未模拟该时序的评测不再对应真实部署的模型。作者提出 prefetch-steered routing（PSR）：路由只依据确定性的逻辑缓存，每层每 token 至多插入下一层路由器预测的 n 个专家，物理拷贝只影响延迟、不影响输出。在 OLMoE-1B-7B 上（50%/25% 专家常驻），PSR 解码比精确路由加 LRU 快 2.2–2.3 倍，比 Cache-Prior 工作点快 25%–30%，基准平均差异仅 +0.1 与 +0.5 分；Moonlight-16B-A3B 在 37.5% 常驻下快 1.9 倍；Qwen3.6-35B-A3B 上拷贝相对计算便宜，PSR 只保住质量优势、不再更快。",
+          "contributions": [
+            "指出缓存感知路由叠加异步预取后输出依赖传输时序，会让评测与部署模型脱节。",
+            "提出 PSR：路由基于确定性逻辑缓存，物理拷贝只影响延迟不影响结果，从而恢复可评测性并保留加速。",
+            "系统比较 PSR 与精确路由、Cache-Prior 及块级专家投机解码在多模型/多常驻比例下的取舍。"
+          ],
+          "conclusions": [
+            "在专家常驻比例低、拷贝主导的场景，PSR 以极小质量代价换取显著解码加速。",
+            "当拷贝相对计算便宜（如更大模型、更高带宽）时 PSR 的加速优势消失，只有质量优势保留。"
+          ],
+          "experiments": [
+            "OLMoE-1B-7B、50%/25% 常驻：比精确路由加 LRU 快 2.2–2.3 倍，比 Cache-Prior 快 25%–30%。",
+            "Moonlight-16B-A3B、37.5% 常驻：比精确路由加 LRU 快 1.9 倍，八项基准中三项显著更好。",
+            "Qwen3.6-35B-A3B 上块级草稿投机解码比任何自回归配置快 2.1–2.9 倍。"
+          ],
+          "significance": "为显存外 MoE 解码提供了一个可复现、可评测的缓存感知路由基线。",
+          "arxivUrl": "https://arxiv.org/abs/2610.34721",
+          "pdfUrl": "https://arxiv.org/pdf/2610.34721.pdf",
+          "index": 2,
+          "takeaway": "让预取只影响延迟、不影响路由决策，才能既快又测得准。",
+          "keyExperiment": "OLMoE 50%/25% 常驻下比精确路由+LRU 快 2.2–2.3 倍，基准差异仅 0.1–0.5 分。"
+        },
+        {
+          "title": "BellowsKV: One Latent for Many Layers, Expanded on Demand",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-27",
+          "authors": "Jiamu Zhang, Hanjie Chen",
+          "institutions": "Rice University",
+          "abstract": "LLM 已成为长程 agent 的骨干，需缓存全部历史 token 的 KV，而每层独立缓存使 KV 显存成为服务主瓶颈。现有压缩多在单层内做量化、降通道或淘汰 token，高压缩比下精度损失明显；跨层共享一份压缩缓存的方案同样在高压比下急剧退化。作者观察到相邻层 KV 表示差异很大，而相邻层输入隐状态高度相似，且同预算下降维比量化损失更大。据此提出免训练的 BellowsKV：把相邻 n 层隐状态映射为每 token 一份共享潜变量，推理时各层通过层专属投影读取自己的 K/V；潜变量保持全维，只用低精度存储或按块共享淘汰决策来压缩。在 Llama-3.1-8B、Mistral-7B、Qwen2.5-7B 上，3.6 倍压缩保留约 99% 全缓存精度，13–14 倍压缩保留 97%–98%，而最强跨层方法 16 倍压缩下最多 84%。",
+          "contributions": [
+            "发现相邻层 KV 差异大但输入隐状态高度相似，且共享潜变量降维的损失远大于量化。",
+            "提出免训练 BellowsKV：每 token 一份跨层共享潜变量，各层用专属投影按需展开自己的 K/V。",
+            "给出量化版与共享淘汰版两种压缩路径，前者近乎无损，后者利用层间 token 重要性排序一致。"
+          ],
+          "conclusions": [
+            "压缩跨层共享的是隐状态而非 KV 本身，可在高压比下避免跨层方法的精度崩塌。",
+            "共享潜变量无需训练即可插到现成模型上，兼容量化与淘汰两类压缩。"
+          ],
+          "experiments": [
+            "Llama-3.1-8B / Mistral-7B / Qwen2.5-7B：3.6 倍压缩保留约 99% 全缓存精度。",
+            "13–14 倍压缩下保留 97%–98% 精度。",
+            "最强跨层方法在 16 倍压缩下最多保留 84%。"
+          ],
+          "significance": "为跨层 KV 压缩提供了新的压缩对象（隐状态共享潜变量），把高压比下的精度天花板抬高一个档位。",
+          "arxivUrl": "https://arxiv.org/abs/2610.35023",
+          "pdfUrl": "https://arxiv.org/pdf/2610.35023.pdf",
+          "index": 3,
+          "takeaway": "跨层共享的应该是隐状态，而不是 KV 本身。",
+          "keyExperiment": "13–14 倍压缩仍保留 97%–98% 精度，同区间的跨层方法已跌到 84% 上限。"
+        },
+        {
+          "title": "Speeding up Log-Sum-Exp: Kernel Fusion at the Memory Wall, Integer Arithmetic at the Compute Wall",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-27",
+          "authors": "Lingyun Yao, Martin Andraud, Niki Loppi, Andrea Pilzer, Anji Liu, Guy Van den Broeck, Martin Trapp",
+          "institutions": "Aalto University, UC Louvain, NVIDIA, National University of Singapore, UCLA, KTH Royal Institute of Technology",
+          "abstract": "Log-Sum-Exp（LSE）是 log 域稳定计算的基础原语，但其在通用 CPU/GPU 上的高效实现长期被忽视，可能成为大规模工作负载的瓶颈。GPU 上事实标准的实现每次调用派发九个连续子 kernel，带来冗余 HBM 流量与启动开销；CPU 上 exp/log 属于高代价运算，限制计算效率。作者提出两个可直接替换的 kernel：FuseLSE 用单趟融合 kernel 在 GPU 的 SFU 上完成 exp 与 log；IntLSE 进一步用近似整数运算替代 LSE 计算以适配 CPU。跨工作负载规模与硬件平台的基准显示，GPU 上两者在小规模下比 PyTorch 快约 10–11 倍、大规模快约 6 倍，加速来自启动开销与 HBM 流量减少；CPU 上因缺少 SFU、LSE 计算本身占主导，IntLSE 比 FuseLSE 再快约 3–6 倍。",
+          "contributions": [
+            "定位 LSE 两个平台瓶颈：GPU 上是九个子 kernel 的 HBM 流量与启动开销，CPU 上是 exp/log 的高运算代价。",
+            "FuseLSE 用单趟融合 kernel 直接在 GPU 特殊函数单元上计算，消除中间张量与多次派发。",
+            "IntLSE 用近似整数算术在 CPU 上替代浮点 LSE，把计算密集转为低代价定点运算。"
+          ],
+          "conclusions": [
+            "LSE 这类“小算子”的框架实现开销可被单 kernel 化与算术替换显著削减。",
+            "两平台最优策略不同：GPU 受内存墙约束走融合，CPU 受计算墙约束走整数近似。"
+          ],
+          "experiments": [
+            "GPU 上小工作负载比 PyTorch 快约 10–11 倍，大规模约 6 倍。",
+            "CPU 上 IntLSE 比 FuseLSE 快约 3–6 倍。",
+            "基准覆盖多工作负载规模与 CPU/GPU 两类硬件平台。"
+          ],
+          "significance": "把被忽视的数值原语纳入 kernel 优化视野，直接惠及概率图模型、注意力与采样等大量下游负载。",
+          "arxivUrl": "https://arxiv.org/abs/2610.33647",
+          "pdfUrl": "https://arxiv.org/pdf/2610.33647.pdf",
+          "index": 4,
+          "takeaway": "小算子也可能卡住整条流水线：GPU 靠融合破内存墙，CPU 靠整数算术破计算墙。",
+          "keyExperiment": "GPU 小规模下较 PyTorch 快 10–11 倍，CPU 上整数版再比融合版快 3–6 倍。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "INTRA: Interleaved Non-contiguous Token spaRse Attention",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-27",
+          "authors": "Yuxuan Xia, Wenbo Lu, Shaoyi Zheng, Shengjie Wang",
+          "institutions": "New York University",
+          "abstract": "Transformer 受注意力二次复杂度限制，稀疏注意力可降本，但有效稀疏必须同时保住长程信息传递并贴合 GPU 硬件。作者从中继通信视角、在计算查询集约束下设计静态稀疏注意力 INTRA：不在每个稀疏层内直接覆盖全部 token 对，而用互补稀疏组在层间提供短的间接通信路径——Scatter 在局部邻域大范围采样形成中继组，Gather 在后续层把它们重新连起来，从而在分区模型下得到具备全局可达性的稀疏模式。其 FlashAttention 式 kernel 在运行时计算结构化索引、加载非连续 token 并打包成稠密块计算。A100 上，INTRA 在 2K 的 FLUX.1-dev 生成中取得 1.53 倍加速，图像质量优于对比的 CLEAR 配置；纯注意力基准上相对 MoBA 与密度受限 NSA 分别快至 8.4 倍与 10.4 倍。",
+          "contributions": [
+            "用跨层的 Scatter/Gather 互补稀疏组构成中继路径，在稀疏层内不直接覆盖全部 token 对也能保持全局可达。",
+            "在 CQS 约束下把稀疏模式做成静态可预测结构，并实现运行时索引计算加非连续 token 打包的 FlashAttention 式 kernel。",
+            "在图像生成与长上下文语言建模两类负载上验证加速与质量同时成立。"
+          ],
+          "conclusions": [
+            "跨层中继能替代单层内的密集覆盖，用更少注意力连接维持长程通信。",
+            "结构化稀疏模式可映射到高效 GPU kernel，稀疏不再以牺牲硬件效率为代价。"
+          ],
+          "experiments": [
+            "A100 上 2K 的 FLUX.1-dev 生成加速 1.53 倍，图像质量优于对比的 CLEAR 配置。",
+            "纯注意力基准相对 MoBA 快至 8.4 倍、相对密度受限 NSA 快至 10.4 倍。",
+            "LLaMA-3.1-8B 长上下文 prefill 效率提升，教师强制检索表现良好。"
+          ],
+          "significance": "给出了“稀疏但保持长程可达”的可落地设计，并证明其对硬件友好。",
+          "arxivUrl": "https://arxiv.org/abs/2610.34056",
+          "pdfUrl": "https://arxiv.org/pdf/2610.34056.pdf",
+          "index": 5,
+          "takeaway": "稀疏注意力不必在单层内覆盖所有 token 对，跨层中继同样能保住长程通信。",
+          "keyExperiment": "纯注意力基准相对 MoBA 快 8.4 倍、相对密度受限 NSA 快 10.4 倍。"
+        },
+        {
+          "title": "T2D: Target-to-Draft Model Pruning & Adaptation for Efficient Speculative Decoding",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-27",
+          "authors": "Shahriar Kabir Nahin, Xiao Ye, Muhao Chen, Ben Zhou, Anshuman Chhabra",
+          "institutions": "University of South Florida, Arizona State University, University of California Davis",
+          "abstract": "投机解码能显著加速自回归生成，但其效果取决于草稿模型与目标模型的分布对齐程度，以及草稿模型的推理延迟。现有做法要么直接用独立预训练的小模型当草稿，要么把目标模型剪枝成人工指定的结构，都没能显式平衡“对齐与效率”的取舍。本文把草稿模型设计形式化为优化问题，提出 T2D 框架：直接从目标模型出发，用延迟感知的结构化剪枝加知识蒸馏构造草稿模型，同时以实测推理延迟与在目标模型回复上的交叉熵为目标联合优化。在多领域投机解码基准与多个规模的模型族上，T2D 可剪掉最多 92% 的目标模型得到高性能草稿模型，优于对比基线；所得草稿模型还能被其他投机解码的 token 对齐与蒸馏方法即插即用地复用，带来额外增益。",
+          "contributions": [
+            "把草稿模型设计写成显式优化问题，目标同时包含实测推理延迟与对齐目标的交叉熵。",
+            "T2D 从目标模型出发做延迟感知结构化剪枝加蒸馏，自动搜索剪枝结构而非手工指定。",
+            "所得草稿模型可作为即插即用组件供其他投机解码对齐/蒸馏方法复用。"
+          ],
+          "conclusions": [
+            "草稿模型的对齐度与延迟必须联合优化，单看其一都会浪费投机解码潜力。",
+            "从目标模型内部剪出的草稿比独立预训练小模型更对齐，且剪枝比例可推到很高。"
+          ],
+          "experiments": [
+            "最多可剪掉目标模型 92% 的参数仍得到高性能草稿模型。",
+            "在多领域投机解码基准与多个模型族上均优于对比基线。",
+            "作为即插即用草稿供其他对齐与蒸馏方法复用时带来进一步增益。"
+          ],
+          "significance": "把“草稿模型怎么来”从经验选择变成可优化的设计问题。",
+          "arxivUrl": "https://arxiv.org/abs/2610.34103",
+          "pdfUrl": "https://arxiv.org/pdf/2610.34103.pdf",
+          "index": 6,
+          "takeaway": "草稿模型应当从目标模型里剪出来，并且延迟与对齐要一起优化。",
+          "keyExperiment": "剪掉目标模型最多 92% 参数，仍优于现有草稿构造基线。"
+        },
+        {
+          "title": "Speculative Decoding for Mixture-of-Experts Models: Expert Bytes, Kernel Bandwidth and the Best Draft Length",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-27",
+          "authors": "Yuzheng Lan",
+          "institutions": "ReClan AI Studio",
+          "abstract": "投机解码在一次验证 pass 中检查多个草稿 token；在 MoE 模型上相邻 token 常选中同一批专家，去重引擎每个 pass 只读一次各专家，请求字节数少于按槽位读取的引擎。作者把一步耗时写成各 kernel 请求字节数除以有效带宽再加固定开销，在几何接受率假设下推导出投机快于普通解码的条件，并证明最优草稿长度随接受率呈单调阶梯、给出带宽误差如何影响结论的界。核心结论是去重只在每槽字节占比低于带宽比时才更快。在 Metal、MLX-LM 与被改造为去重的 CUDA 后端上，按槽位 kernel 的有效带宽更高（比值 0.32–0.75），去重仅在每次 5–8 个 token 时或从不更快；用路由轨迹字节数乘带宽可预测去重节省的时间。",
+          "contributions": [
+            "把 MoE 投机解码的一步耗时分解为“每 kernel 请求字节/有效带宽 + 固定开销”，据此解析给出投机收益条件。",
+            "证明最优草稿长度是接受率的单调阶梯函数，并界定带宽估计误差对结论的影响（关键步骤形式化验证）。",
+            "用路由轨迹与单独测得的带宽提前预测去重收益与交叉点，免去端到端调参。"
+          ],
+          "conclusions": [
+            "去重是否更快取决于字节节省比例与带宽比例的相对关系，而非单纯的字节减少。",
+            "在三个真实引擎上按槽位 kernel 的带宽普遍更高，去重的适用窗口比直觉窄得多。"
+          ],
+          "experiments": [
+            "三后端上有效带宽比 r=0.32–0.75，去重仅在每次 5–8 token 时更快或从不更快。",
+            "时间节省预测在 CUDA 与 MLX-LM 每个点、Metal 48 点中的 36 点落在误差界内。",
+            "交叉点预测在 12 个“引擎×模型×深度”配置中 10 个误差不超过一个 pass size。"
+          ],
+          "significance": "用可验证的带宽模型替代经验试错，回答 MoE 上该不该做专家去重、草稿多长。",
+          "arxivUrl": "https://arxiv.org/abs/2610.34440",
+          "pdfUrl": "https://arxiv.org/pdf/2610.34440.pdf",
+          "index": 7,
+          "takeaway": "MoE 上专家去重不是白赚：省字节未必省时间，瓶颈是带宽比。",
+          "keyExperiment": "三后端带宽比 0.32–0.75，去重仅在每次 5–8 token 时更快，交叉点预测 10/12 命中。"
+        },
+        {
+          "title": "RSI Arena: Towards Recursive Self-Improvement with Human Feedback",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-27",
+          "authors": "Yue Huang, Yanbo Wang, Lichi Li, Yuanyuan Chen, Andreas Haupt, Xiaonan Luo, Zheyuan Liu, Jihye Choi, Felix Juefei-Xu, Xiangliang Zhang, Radha Poovendran, Misha Sra, Ying Liu, Ben Burtenshaw, Thomas Wolf, Alex Pentland, Zichen Chen, Zhangchen Xu",
+          "institutions": "Hugging Face, MIT, University of Washington, University of Notre Dame（机构未逐篇标注）",
+          "abstract": "AI agent 能否自主训练出有用的语言模型，并借助用户反馈持续改进？作者提出 RSI Arena 两阶段研究，作为迈向递归自我改进的一步。十个前沿模型担任训练 agent，均从 NVIDIA Nemotron 3.5 Lightning 30B-A3B Base 出发；第一阶段六天内每个 agent 拥有 1000 GPU 小时与 300 美元 API 额度，在共享 64 卡集群上自主选数据、实现训练流程并挑选检查点，用 20 项基准加盲测人类偏好评估。十个 agent 都产出了可用助手，最强的由 GPT-6 Astra 训练，在 12 项能力基准上中位填补 base 到 Instruct 差距的 76%，人类偏好按长度与格式校正后接近 NVIDIA Instruct。第二阶段回传用户比较记录后再给三天训练，十个模型中八个偏好评分提升，但基准提升有限且与偏好提升无明显关联。",
+          "contributions": [
+            "搭建可审计的自主后训练竞技场：十个前沿模型在同等算力与预算下各自完成数据选择、训练实现与检查点决策。",
+            "用 20 项基准加盲测人类偏好双轨评估，并引入第二阶段的真实用户比较反馈做迭代训练。",
+            "揭示自主后训练的失败模式：基准涨分与偏好涨分脱节、长度偏置、以及安全性回退。"
+          ],
+          "conclusions": [
+            "现有前沿模型已能自主训练出可用的 30B 级助手，最强者在能力基准上填补 76% 的 base 到 Instruct 差距。",
+            "人类反馈能带来可测量的偏好提升（8/10 模型），但并非所有改进都对应能力提升。"
+          ],
+          "experiments": [
+            "最强 agent 在 12 项能力基准上中位填补 base 到 Instruct 差距的 76%。",
+            "第二阶段十个模型中有八个的风格校正相对评分提升。",
+            "基准提升有限且与偏好提升无明确关联；一个模型在 StrongREJECT 上的有害顺从上升。"
+          ],
+          "significance": "把“AI 自主训练 AI”放进可审计的对照实验，为人类反馈驱动的递归自我改进提供了基线。",
+          "arxivUrl": "https://arxiv.org/abs/2610.33624",
+          "pdfUrl": "https://arxiv.org/pdf/2610.33624.pdf",
+          "index": 8,
+          "takeaway": "十个前沿模型都能用 1000 GPU 小时自主训出可用助手，但基准涨分不等于人更喜欢。",
+          "keyExperiment": "最强 agent 中位填补 base 到 Instruct 差距的 76%，人类偏好接近 NVIDIA Instruct。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "When and Why to Use TMA: A Workload-Grounded Characterization of Tensor Memory Acceleration on NVIDIA Hopper GPUs",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-27",
+          "authors": "Christin David Bose, Cesar Avalos Baddouh, Junrui Pan, Timothy G. Rogers",
+          "institutions": "Purdue University",
+          "abstract": "Tensor Memory Accelerator（TMA）自 Hopper 起被生产级 kernel 广泛使用，但用法明显有选择性：CUTLASS、FlashAttention-3、FlashInfer 的专家只对 kernel 内部分张量用 TMA，其余操作数仍退回 cp.async、直接全局加载或分布式共享内存（DSM）。厂商文档与孤立微基准都没回答实践者的真问题：给定一个内存操作数，该不该用 TMA、要不要配 multicast？本文在 H100 上做工作负载落地式刻画：梳理 FlashAttention-3 前向内部的 TMA、multicast、DSM、cp.async 选择，用定向微基准分离判别特征，给出加载机制选择的经验规则；把 TMA multicast 与 DSM 作为竞争广播原语对比，隔离分页 KV 的 dispatch 在不同页大小、数据类型与执行阶段下的差异。",
+          "contributions": [
+            "以 FlashAttention-3 前向为样本，梳理真实 kernel 内部 TMA、multicast、DSM、cp.async 的混用策略而非孤立微基准。",
+            "用传输尺寸交叉点与 multicast 扩展性微基准分离出决定加载机制选择的判别特征，形成 Hopper 上的经验规则。",
+            "把 TMA multicast 与 DSM 作为竞争广播原语对比，并隔离分页 KV dispatch 在页大小/数据类型/形状/执行阶段的变化。"
+          ],
+          "conclusions": [
+            "TMA 并非普适最优：是否划算取决于传输尺寸与竞争广播原语的相对代价。",
+            "定性 dispatch 规则可跨代沿用，但绝对交叉点随张量核与带宽缩放而移动（B200 上验证）。"
+          ],
+          "experiments": [
+            "在 H100 上跨页大小、数据类型、模型形状与执行阶段隔离分页 KV 的 TMA dispatch 差异。",
+            "通过 B200 上的 CUTLASS GEMM 研究验证规则可迁移至 server Blackwell（SM100）。",
+            "微基准给出传输尺寸交叉点与 multicast 扩展性曲线。"
+          ],
+          "significance": "为 kernel 开发者提供“这个操作数该不该用 TMA/multicast”的可预测判据，而非照抄某个库的配置。",
+          "arxivUrl": "https://arxiv.org/abs/2610.34907",
+          "pdfUrl": "https://arxiv.org/pdf/2610.34907.pdf",
+          "index": 9,
+          "takeaway": "TMA 只在特定传输尺寸与广播场景划算，其余操作数用 cp.async 或 DSM 更快。",
+          "keyExperiment": "H100 上给出传输尺寸交叉点与 multicast 扩展性规则，并在 B200 上验证定性可迁移。"
+        },
+        {
+          "title": "SPARTA: A Sparse Ternary LLM Accelerator with Adaptive Attention and Unified Datapath for Long-Context Edge Inference",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-10-27",
+          "authors": "Yanzhen Zhou, Zhengyu Han, Qunyou Liu, Zheyu Yan, Weihong Xu, Cheng Zhuo",
+          "institutions": "Zhejiang University, Veloxis AI",
+          "abstract": "端侧 LLM 受显存与带宽限制：1.58 位三值权重虽大幅压缩存储，长上下文推理仍被 KV cache 流量与注意力计算卡住；现有加速器又为三值线性层与注意力各用一套数据通路，带来硬件与执行开销。作者提出 SPARTA，面向长上下文端侧推理的稀疏三值 LLM 加速器，包含三部分：利用 prefill 计算密集与 decode 访存密集下异构稀疏性的相位感知稀疏数据流；把三值 SpMM/SpMV 与 bit-serial 注意力映射到共享处理单元的统一计算阵列；以及自适应两阶段注意力引擎，用页级 Top-k 选择减少 K cache 访问、token 级 Top-p 剪枝减少 V cache 流量。相比全注意力，SPARTA 把 KV 流量降低 4.1–4.8 倍；相比 Jetson AGX Orin，生成吞吐高 3.9 倍、端到端能效高 8.3 倍。",
+          "contributions": [
+            "相位感知稀疏数据流，按 prefill 计算密集与 decode 访存密集分别利用异构稀疏性。",
+            "统一计算阵列把三值 SpMM/SpMV 与 bit-serial 注意力映射到共享处理单元，同时利用零权重与零比特稀疏。",
+            "自适应两阶段注意力引擎：页级 Top-k 选择压 K cache 访问，token 级 Top-p 剪枝压 V cache 流量。"
+          ],
+          "conclusions": [
+            "三值量化之外的真正瓶颈是 KV 与注意力访存，专用注意力引擎是端侧长上下文的关键。",
+            "统一数据通路比分离的线性层/注意力通路在面积效率上有数量级优势。"
+          ],
+          "experiments": [
+            "KV 流量相对全注意力降低 4.1–4.8 倍，相对先进稀疏注意力方案再降 1.3–1.5 倍。",
+            "相对 Jetson AGX Orin：生成吞吐 3.9 倍、端到端能效 8.3 倍。",
+            "相对 Ryzen 7 9700X：吞吐 5.0 倍、能效 81.7 倍；相对 FIGLUT/TeLLMe/MCBP 吞吐高 1.6–12.0 倍、能效高 2.0–4.2 倍。"
+          ],
+          "significance": "为端侧长上下文推理给出量化、稀疏与注意力引擎协同设计的一体化硬件方案。",
+          "arxivUrl": "https://arxiv.org/abs/2610.34824",
+          "pdfUrl": "https://arxiv.org/pdf/2610.34824.pdf",
+          "index": 10,
+          "takeaway": "端侧长上下文的瓶颈已从权重存储转移到 KV 与注意力访存，需要专用数据流与统一数据通路。",
+          "keyExperiment": "KV 流量降 4.1–4.8 倍，相对 Jetson AGX Orin 吞吐 3.9 倍、能效 8.3 倍。"
+        }
+      ]
+    }
+  ]
+}
