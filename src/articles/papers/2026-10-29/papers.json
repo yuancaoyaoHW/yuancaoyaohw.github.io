@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-29",
+  "title": "2026-10-29 论文精选",
+  "lede": "今日主线是把通信与调度从关键路径上挪开：MoE 的 dispatch/combine 交给交换机、分布式投机解码只传 token 索引、GPU kernel 变成可链接的组件，调度侧则把工具就绪、环境覆盖与 KV 淘汰策略都变成运行时决策。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 490
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "INC-MoE: Overlapping In-Network Collectives and Expert Computation for Expert-Parallel Mixture-of-Experts Inference",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-28",
+          "authors": "John Stephan, Razvan Puscasu, Xu Yong, Ding Jiutao, Guan Zixuan",
+          "institutions": "Huawei",
+          "abstract": "专家并行 MoE 服务中，dispatch 把 token 送到承载选中专家的卡，combine 把专家输出送回 token 归属卡，两者都在关键路径上；多机部署时跨节点带宽远低于节点内，两段通信常主导 MoE 层延迟。INC-MoE 把两段通信都卸载到网络交换机：dispatch 用交换机侧组播实现网内 AllGather，combine 用交换机侧归约实现网内 ReduceScatter。两段通信占用链路相反方向，并发执行相对环形集合通信可把带宽受限通信时间降低 (N-2)/(2(N-1))，即 4 卡 33%、8 卡 43%。系统把 token 切成 band，在单个持久化 kernel 内跑 AllGather-FFN-ReduceScatter 三级流水，由角色专职线程块分别处理 gather、计算与 reduce 实现重叠，并作为 vLLM MoE 层的即插即用替换。",
+          "contributions": [
+            "把 dispatch 与 combine 映射为交换机侧组播 AllGather 与归约 ReduceScatter，端主机只需消息语义，不依赖主机集合通信库",
+            "给出双向并发通信的收益上界 (N-2)/(2(N-1))，并解释为什么两段通信可以免费共享链路带宽",
+            "单 kernel 内 band 流水加角色专职线程块，把两段集合通信与专家计算三者重叠，可直接替换 vLLM 的 EP MoE 层"
+          ],
+          "conclusions": [
+            "交换卸载与 kernel 级重叠是互补的两件事，只有合并后才能在规模扩展场景拿到收益",
+            "在模拟四节点测试台上，与 vLLM 默认集合通信路径的逐 token cosine 相似度为 1.0，输出完全一致"
+          ],
+          "experiments": [
+            "OLMoE-1B-7B（16 层 MoE、64 专家、top-8）四路 EP prefill：TTFT 最多降低 33.1%，prefill 吞吐最多提升 49.5%",
+            "测试台模拟四个节点、交换机由第五块加速器承担，经 400 Gbps 链路共享后每卡有效带宽 100 Gbps",
+            "相对 ring 集合通信，带宽受限通信时间理论上界降低：4 rank 33%、8 rank 43%"
+          ],
+          "significance": "把 MoE 的 all-to-all 从主机侧集合通信变成交换机内计算，是专家并行扩展性的结构性改法。",
+          "arxivUrl": "https://arxiv.org/abs/2610.36339",
+          "pdfUrl": "https://arxiv.org/pdf/2610.36339.pdf",
+          "index": 1,
+          "takeaway": "dispatch 与 combine 交给交换机做，两段通信并发再省掉 1/3 带宽时间。",
+          "keyExperiment": "OLMoE 四路 EP prefill 上 TTFT −33.1%、吞吐 +49.5%，输出与 vLLM 逐 token 一致。"
+        },
+        {
+          "title": "Distributed LLM Inference via Communication-Efficient Speculative Decoding",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-28",
+          "authors": "Joohyun Shin, Byeonghyeon Park, Keumseo Ryum, Joonhyuk Kang",
+          "institutions": "KAIST",
+          "abstract": "设备与服务器协同的分布式投机解码受限于词表级通信开销：精确拒绝采样要求把覆盖整个词表的 token 分布在对端之间来回传输，带宽受限时这笔开销会吃掉投机解码的加速。DISCO 在不改变目标分布的前提下消除词表级分布传输：在服务器侧放一份草稿小模型副本，服务器便可本地算出拒绝采样所需的草稿侧分布，于是设备与服务器之间只需交换草稿 token 索引与标量概率。作者还给出分布式投机解码的通信-计算权衡分析，推导出 DISCO 相对基线占优的盈亏平衡带宽，并在带宽扫描与异构 GPU 真实环境下验证：极端带宽限制下仍保持约 1.5 倍加速，5 Mbps 时两个模型都保持 1.3 倍以上。",
+          "contributions": [
+            "把草稿侧分布的计算搬到服务器侧副本上，端到端只传 token 索引与标量概率，且严格保持目标分布",
+            "给出通信-计算权衡与盈亏平衡带宽的解析估计，可直接用链路带宽判断方案是否划算",
+            "只改动草稿分布的计算位置，不动目标模型与接受规则，可迁移到其他投机解码变体"
+          ],
+          "conclusions": [
+            "分布式投机解码的瓶颈是词表规模而不是草稿长度，草稿越长旧方法越吃亏",
+            "与 DSSD 的每 token 延迟差约 16.4 ms，据此估出约 109 Mbps 的盈亏平衡带宽，与实测拐点吻合"
+          ],
+          "experiments": [
+            "带宽扫描下 DISCO 全程保持约 1.5 倍加速；5 Mbps 极端限制下两个模型仍超过 1.3 倍，DSD 与 DSSD 显著退化",
+            "RTX 4090 与 A100 的异构真实环境最高 1.92 倍加速，所有设置均优于 DSSD 与自回归解码",
+            "草稿长度 γ=4 固定设定下，加速对带宽的敏感度显著低于对比方法"
+          ],
+          "significance": "把“传分布”改成“传索引加标量”，分布式投机解码的带宽门槛降一个量级。",
+          "arxivUrl": "https://arxiv.org/abs/2610.35957",
+          "pdfUrl": "https://arxiv.org/pdf/2610.35957.pdf",
+          "index": 2,
+          "takeaway": "服务器也放一份草稿小模型，拒绝采样就能本地完成，不必传词表分布。",
+          "keyExperiment": "5 Mbps 下仍保持 1.3 倍以上加速，异构真实环境最高 1.92 倍。"
+        },
+        {
+          "title": "Request-Adaptive Execution for Efficient Hybrid LLM Inference",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-28",
+          "authors": "Fahao Chen, Xuzhe Yan, Qi Zhang, Peng Li, Dongxiao Yu, Song Guo",
+          "institutions": "Shandong University, Xi’an Jiaotong University, Hong Kong University of Science and Technology",
+          "abstract": "混合 LLM 把 Attention 与状态空间模型拼在一起，以兼得建模能力与线性复杂度带来的效率，但现有混合模型仍是静态设计：一旦选定 Attention 与 SSM 的层布局，所有请求都走同一套执行路径，而真实服务负载中不同请求对上下文信息的依赖方式差异很大。本文提出请求自适应的混合推理系统：模型侧在每个 block 内同时放置 Attention 与 SSM 层，用面向 prefill 的门控为每个请求选一套布局并在整个解码期保持固定；服务侧用选择性 batching 在层选择分歧时维持批处理效率，并用混合感知的上下文缓存保证前缀复用的正确性。六个数据集上质量-效率权衡优于静态混合基线，系统吞吐最高提升 3.87 倍。",
+          "contributions": [
+            "用 prefill 阶段的请求级门控决定该请求走 Attention 还是 SSM 分支，解码期固定，避免逐 token 切换带来的调度抖动",
+            "选择性 batching：把走不同分支的请求拆成子批但共享同一次调度，保住批处理效率",
+            "混合感知上下文缓存：在分支布局不一致时仍能正确复用前缀状态"
+          ],
+          "conclusions": [
+            "静态布局对所有请求施加同一成本，是混合模型在真实负载下效率损失的主要来源",
+            "模型可选布局与运行时支持分歧必须协同设计，单靠模型或单靠系统都拿不到收益"
+          ],
+          "experiments": [
+            "六个数据集上质量-效率权衡优于静态混合基线",
+            "系统级评测吞吐最高提升 3.87 倍，同时显著降低推理延迟",
+            "选择性 batching 与混合感知缓存共同支撑了分支分歧下的批处理效率"
+          ],
+          "significance": "混合架构从模型设计期的固定选择，变成每个请求的运行时可调项。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37432",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37432.pdf",
+          "index": 3,
+          "takeaway": "每个请求自己选 Attention 还是 SSM 分支，运行时负责把分歧的成本压下去。",
+          "keyExperiment": "六数据集质量-效率更优，端到端吞吐最高 3.87 倍。"
+        },
+        {
+          "title": "WAKMan: Workload Aware KVCache Manager",
+          "score": 3.9,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-28",
+          "authors": "Suhas Kumar Morisetty, Vaibhavi Lokegaonkar, Sachin Mathew Varghese, Wesley Harris",
+          "institutions": "机构未标注",
+          "abstract": "前缀缓存让 LLM 服务器复用共享前缀的 KV 状态、加速 prefill，但显存有限时淘汰策略直接决定收益大小。生产流量混合了单轮、多轮与 agentic 请求：agentic 的下一步往往几秒内就回来、偏好最近使用；热门提示与长对话要隔很多请求才重来、偏好访问频率。作者在 20 种流量混合上实测发现没有单一策略总最优：agentic 为主的混合里 vLLM 默认的 LRU 比面向频率的 S3FIFO 命中率高 12%，其余混合下 LRU 落后最多 22%，甚至单个负载参数就能翻转胜者。WAKMan 通过在线回放近期流量挑选淘汰策略，既不预先知道请求类型也不读 prompt 内容，命中率平均比 LRU 高 5 个百分点，平均与最差 regret 均为最低。",
+          "contributions": [
+            "用 20 种流量混合定量刻画“没有全胜淘汰策略”，并指出 recency 与 frequency 的适用边界由请求返回间隔决定",
+            "提出基于 trace replay 的运行时策略选择：回放近期访问序列模拟候选策略，按 regret 选当前最优",
+            "方法只依赖可回放的访问序列，任何策略都能加入候选池，不绑定具体实现"
+          ],
+          "conclusions": [
+            "KV 淘汰策略应按当前流量组合动态选择，而不是全局固定",
+            "仅用 LRU 与 S3FIFO 两个候选时，WAKMan 已在 20 种混合上取得最低的平均与最差 regret"
+          ],
+          "experiments": [
+            "20 种混合下平均命中率比 LRU 高 5 个百分点",
+            "LRU 相对 S3FIFO：agentic 混合高 12%，其余混合最多低 22%",
+            "平均与最差情形的最优性差距在所有对比策略中最小"
+          ],
+          "significance": "前缀缓存的收益有一半来自淘汰策略与流量是否匹配，值得做成运行时自适应组件。",
+          "arxivUrl": "https://arxiv.org/abs/2610.36355",
+          "pdfUrl": "https://arxiv.org/pdf/2610.36355.pdf",
+          "index": 4,
+          "takeaway": "回放最近的访问序列来挑淘汰策略，比任何固定策略都稳。",
+          "keyExperiment": "20 种混合平均命中率比 LRU 高 5 个百分点，最差 regret 最低。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "TAO: Tool-Aware Joint Scheduling for LLM-Based Agentic Serving",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.DC",
+          "date": "2026-10-28",
+          "authors": "Shuhuai Li, Shengdong Ye, Dongdong Ge, Yinyu Ye, Jianghao Lin",
+          "institutions": "Shanghai Jiao Tong University, Stanford University",
+          "abstract": "agentic 服务在 GPU 集群上跑模型推理、在分布式 CPU 上跑外部工具，两类资源交替占用。现有系统一是评价服务时不考虑工具何时返回，浪费稀缺资源；二是用启发式规则决定 GPU 准入与放置，调度次优。TAO 把近期工具就绪时间、带时间衰减的节点级缓存信用、token 占用量统一成一个价值接口，在容量约束下用动态规划联合选择并放置等待中的会话，再用异步重校验把计划接到实际执行。在 12 组模型-负载-并发设置中，相对各指标最优的 SOTA 基线，延迟最多降低 26.8%，平均 TTFT 最多降低 36.3%，decode 吞吐最多提升 29.5%。",
+          "contributions": [
+            "价值接口把工具返回就绪度、KV 缓存局部性（带时间衰减的 cache credit）与 token 占用放进同一量纲",
+            "在容量约束下用动态规划联合完成准入与放置，替代原有启发式决策",
+            "异步快照重校验，让计划能跟上工具延迟漂移而不阻塞推理"
+          ],
+          "conclusions": [
+            "工具执行让 agentic 推理呈现间歇性需求，累积上下文让选哪张卡变得重要，两者必须进同一个目标函数",
+            "基于历史预测的工具时长可以逼近 oracle 调度性能"
+          ],
+          "experiments": [
+            "12 组设置中延迟最多降低 26.8%、平均 TTFT 最多降低 36.3%、decode 吞吐最多提升 29.5%",
+            "在 DeepSeek-V4 Flash 与 Qwen3-32B 两类服务配置上均验证有效",
+            "工具返回延迟越长，就绪度信息对放置决策的价值越大，收益越明显"
+          ],
+          "significance": "agentic serving 的调度粒度要从“请求”升级到“请求-工具-缓存”三元组。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37230",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37230.pdf",
+          "index": 5,
+          "takeaway": "等工具返回的会话该怎么占 GPU，用一个统一价值函数加动态规划解掉。",
+          "keyExperiment": "12 组设置延迟 −26.8%、TTFT −36.3%、decode 吞吐 +29.5%。"
+        },
+        {
+          "title": "EnvSched: Environment-Aware Scheduling for Rollout-Efficient Agent Reinforcement Learning",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-28",
+          "authors": "Sihan Yang, Weichen Bai, Ruichuan An, Yiming Cheng, Zhiyuan Feng, Tianyi Jiang, Renye Yan, Ning Ding, Yifan Zhang, Renrui Zhang, Yehui Tang, Wentao Zhang",
+          "institutions": "Peking University, Xi’an Jiaotong University, Tsinghua University, Samsung Research, CASIA, CUHK",
+          "abstract": "语言 agent 的可执行环境规模上来后，rollout 的生成与验证成为训练的主要成本。EnvSched 提出环境级数据管理：把任务实例与决定其工具、状态、转移和验证器的环境绑定成调度单元。它把环境-任务对建成双关系图，同环境边刻画任务语义与共享工具、状态、验证器结构，跨环境边刻画抽象执行与奖励拓扑，沿两类边传播历史 rollout 统计来预测任务内奖励方差。调度时兼顾利用与覆盖：优先选预测奖励方差大、能区分策略的任务，同时把批次摊到欠观察的环境与交互模式，并配合环境配额与相似度惩罚。在 Qwen3 系列四个规模上，相同 rollout 预算下稳定优于随机调度。",
+          "contributions": [
+            "把环境提升为一等调度单元，任务实例与执行环境一起组织、评估、调度",
+            "双关系图加历史统计传播来预测任务内奖励方差，不需要额外 pilot rollout",
+            "利用与覆盖的双目标加环境配额，避免批次塌缩到少数热门环境"
+          ],
+          "conclusions": [
+            "奖励差异性与环境覆盖是互补的两类训练价值，缺任何一项都会掉效率",
+            "环境级数据管理为在有限 rollout 预算下扩展 agent 能力提供了通用视角"
+          ],
+          "experiments": [
+            "Qwen3-8B 训练 40 步平均分 48.81，超过随机调度训练 120 步的最高分",
+            "30B 上 BFCL-v3、τ-Bench、ACEBench-Agent 达 37.79、54.75、70.67，比随机调度分别高 3.92、3.03、2.67 点",
+            "任务内奖励方差 0.03208→0.04290（+34%），每批覆盖环境数 36.53→45.96（+26%）"
+          ],
+          "significance": "agentic RL 的算力浪费大半在 rollout 选择上，环境级调度是比调超参更直接的杠杆。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37609",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37609.pdf",
+          "index": 6,
+          "takeaway": "把环境和任务一起当成调度单元，同样的 rollout 预算换更高分数。",
+          "keyExperiment": "Qwen3-8B 40 步超过随机调度 120 步，30B 三项基准各高 2.7-3.9 点。"
+        },
+        {
+          "title": "EnergyCal: Taming Loss Spikes in Muon-Family Optimizers for Sparse MoE Training",
+          "score": 3.8,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-28",
+          "authors": "Masato Fujitake",
+          "institutions": "机构未标注",
+          "abstract": "稀疏 MoE 语言模型用 Muon 系优化器训练时会出现大幅 loss spike。EnergyCal 给出一个轻量规则：按路由专家更新方向的有限步 Newton-Schulz 方向的归一化平方 Frobenius 范数（能量）来衰减这些专家的更新。它不改动谱变换本身，也不引入持久优化器状态，只在更新幅度上做单边抑制。在 4B 参数 MoE 上，相对开发集选出的低学习率 MuonH 配方，EnergyCal-MuonH 把平均阈值化 spike 负担降低 99.51%、最终几何平均困惑度降低 4.06%，吞吐代价 1.62%；在匹配名义学习率与权重衰减的普通 Muon 上，两个指数设置的平均 spike 负担降低 95.98%。作者强调这是经验性稳定化，不代表优化器整体更优。",
+          "contributions": [
+            "用 Newton-Schulz 更新方向的能量作为路由专家更新的稳定化信号，改动只落在更新尺度上",
+            "不增加持久优化器状态、不改谱变换，可与 MuonH 与普通 Muon 叠加使用",
+            "明确划定结论边界：单次更新干预无法复现全部效果，收益来自多步累积"
+          ],
+          "conclusions": [
+            "路由专家更新能量异常是 spike 的直接相关量，按能量衰减即可大幅抑制",
+            "在有无 Hyperball 两种设置下都观察到稳定化，但不构成优化器优越性结论"
+          ],
+          "experiments": [
+            "4B MoE：平均 spike 负担 −99.51%，最终几何平均 PPL −4.06%，吞吐代价 −1.62%",
+            "普通 Muon 在两指数设置下平均 spike 负担 −95.98%，端点指标小幅改善",
+            "单次更新干预未能复现全部效果，说明稳定化是多步累积效应"
+          ],
+          "significance": "MoE 加 Muon 的训练不稳定有一个几乎零成本的补丁，代价是 1.6% 吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37062",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37062.pdf",
+          "index": 7,
+          "takeaway": "按 Newton-Schulz 更新方向的能量给路由专家更新打折，spike 几乎消失。",
+          "keyExperiment": "4B MoE 上 spike 负担 −99.51%、PPL −4.06%，吞吐只掉 1.62%。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "PipeLink: Contract-Guided Linking of GPU Kernel Components",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-28",
+          "authors": "Jize Guo, Xupeng Miao",
+          "institutions": "Peking University",
+          "abstract": "最快的机器学习 kernel 由多个组件拼成：loader、矩阵乘 mainloop、epilogue、通信阶段，它们在同一 GPU 的 SM 上并发运行并共享片上内存、barrier、warp 与寄存器。由于这些组件把“自己占据共享空间的哪一块”硬编码进去，它们无法被单独编译、分发或替换：跨来源组合只能手工 fork，或拆成多个独立 kernel。PipeLink 是面向 kernel 组件的契约式链接器：每个组件单独编译成携带契约（声明需要什么、承诺什么）的 LTO 目标文件，链接器互检契约、用一次联合求解为所有组件重定位 SM 资源、自动生成组件间的数据搬移，最后交由厂商 LTO 后端折叠成常量，因此组合没有运行时开销。Hopper 与 Blackwell 上 51 组配置中，链接后的 kernel 与同源整体编译差距在 0.2% 以内。",
+          "contributions": [
+            "把契约、重定位与链接这套目标文件机制引入 GPU kernel 组件，使组件可独立编译、分发与替换",
+            "一次联合求解完成 SM 资源（共享内存、barrier、warp、寄存器）的整体放置，并自动生成组件间传输",
+            "链接决策折叠为常量，组合的运行时开销为零"
+          ],
+          "conclusions": [
+            "组件只能靠 fork 源码来组合，是 kernel 生态难以复用的结构性原因",
+            "契约式链接让不同库、不同作者、不同 GPU 世代的组件可以直接拼装"
+          ],
+          "experiments": [
+            "Hopper/Blackwell 上 51 组配置：链接结果与整体编译差距不超过 0.2%",
+            "把 CuTe attention 算子嵌进 ThunderKittens 的 decode megakernel，解码加速 2.16 倍",
+            "四 owner 的 MoE 训练 megakernel 与原单体版本持平；同一 attention core 不改代码即产出稀疏与上下文并行变体，优于 FlexAttention、vLLM 与 TransformerEngine"
+          ],
+          "significance": "kernel 复用从复制粘贴加手改变成链接，是 megakernel 组合生态的基础设施。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37200",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37200.pdf",
+          "index": 8,
+          "takeaway": "给每个 kernel 组件加一份契约，链接器负责重定位，组合零开销。",
+          "keyExperiment": "51 组配置与整体编译差距 ≤0.2%，CuTe 算子嵌入 decode megakernel 提速 2.16 倍。"
+        },
+        {
+          "title": "CRISP: Co-designing Pruning and Scheduling for Efficient MoE Inference on Edge Servers",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-28",
+          "authors": "Congwei Zhang, Youming Tao, Yifei Zou, Yu Yang, Ruirui Zhang, Xiaoyu Zhang, Falko Dressler, Xiuzhen Cheng, Dongxiao Yu",
+          "institutions": "Shandong University, TU Berlin, City University of Hong Kong",
+          "abstract": "在显存受限的边缘平台上做 MoE 推理，瓶颈常是专家权重的搬运而不是计算：每个 token 只激活少量专家，但路由依赖输入，所有专家都得保持可访问，内存搬移因此主导延迟。均匀剪枝与专家丢弃忽略了两件事：专家组合的出现频率高度偏斜，同一个组合内各专家的贡献也不对称。CRISP 做组合感知的剪枝与运行时调度协同：按重要性重排神经元，使同一份存储的专家能支持多种执行宽度；按组合频率与专家角色为 hot、warm、cold 组合分配差异化执行；再利用宽度异构把专家加载与计算重叠起来。在 Mixtral-8x7B 与 DeepSeek-MoE-16B 上，同内存预算下吞吐最高提升 2.1 倍，精度损失控制在 3.6% 以内。",
+          "contributions": [
+            "组合感知剪枝：以专家组合而非单个专家为粒度决定保留多少容量",
+            "重要性重排让一份存储支持多档执行宽度，冷组合用窄宽度省下搬运",
+            "剪枝感知调度：把宽度异构带来的加载-计算重叠显式利用起来"
+          ],
+          "conclusions": [
+            "边缘 MoE 的关键不是少读权重，而是判断在哪里减容量才匹配真实使用方式",
+            "剪枝造成的不均匀性应当被当作系统机会，而不是需要抹平的副作用"
+          ],
+          "experiments": [
+            "Mixtral-8x7B 与 DeepSeek-MoE-16B：同内存预算下吞吐最高 2.1 倍",
+            "相对全宽推理精度损失不超过 3.6%",
+            "吞吐增益主要来自宽度异构带来的专家加载与计算重叠"
+          ],
+          "significance": "边缘 MoE 剪枝的粒度要从单个专家改成专家组合，并把剪枝结果当调度信息用。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37442",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37442.pdf",
+          "index": 9,
+          "takeaway": "按专家组合而非单个专家剪容量，冷组合用窄宽度，省下的搬运就是吞吐。",
+          "keyExperiment": "两个 MoE 模型同内存预算吞吐最高 2.1 倍，精度只掉 3.6%。"
+        },
+        {
+          "title": "Multi-State Linear Attention with Generalized Second-Order Routing",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-28",
+          "authors": "Hee Seung Hwang, Sanghyuk Chun, Xindi Wu, Olga Russakovsky, Zhiwei Deng",
+          "institutions": "Princeton University, Google DeepMind",
+          "abstract": "多状态线性注意力把长上下文切段、各自压缩成一个记忆状态，避免二次复杂度，但段间聚合只使用 query 与各段 key 的均值对齐，丢掉了对齐在段内的分布信息。MERLIN 提出按矩路由：为每段 key 维护一阶与二阶矩，query 用这些矩同时恢复与每段对齐的均值与方差，从而按内容自适应地为各状态读出加权，比只看均值更能反映段内相关性的分散程度。在 Gated DeltaNet-1.3B 与 Mamba-2-780M 的多状态变体上，MERLIN 在长上下文任务上稳定优于现有聚合方法：RULER needle-in-a-haystack 与长上下文问答分别提升 8.3% 与 7.0%，LongBench 多个子任务提升 13.5% 与 12.0%，且内存更省。",
+          "contributions": [
+            "指出多状态线性注意力的段聚合只用均值对齐是信息损失点，方差同样携带相关性信号",
+            "用每段 key 的一阶与二阶矩做闭式路由，不引入额外网络参数",
+            "在两种线性注意力骨干上验证，且比现有聚合方法更省内存"
+          ],
+          "conclusions": [
+            "段级聚合的二阶统计是近乎免费且有效的相关性信号",
+            "MERLIN 是通用路由机制，可直接套用到多状态线性注意力系列模型"
+          ],
+          "experiments": [
+            "Gated DeltaNet-1.3B：RULER NIAH 与长上下文 QA 分别 +8.3%、LongBench 子任务 +13.5%",
+            "Mamba-2-780M：对应提升 +7.0% 与 +12.0%",
+            "相比现有聚合方法内存效率更高"
+          ],
+          "significance": "长上下文线性注意力的段聚合从看均值升级为看均值加方差，几乎零额外成本。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37645",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37645.pdf",
+          "index": 10,
+          "takeaway": "给每段 key 存一阶和二阶矩，query 用它恢复对齐的均值与方差再路由。",
+          "keyExperiment": "两个骨干上 RULER NIAH +8.3%/+7.0%，LongBench 子任务 +13.5%/+12.0%。"
+        }
+      ]
+    }
+  ]
+}
