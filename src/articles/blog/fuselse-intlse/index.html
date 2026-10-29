@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>加速 Log-Sum-Exp：GPU 上靠融合，CPU 上靠整数</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --teal: var(--a-teal); --teal-bg: var(--a-teal-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+.callout-teal { background: var(--teal-bg); border-color: var(--teal); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 640px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+.anim-progress { height: 4px; background: var(--code-bg); }
+.anim-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.anim-stage-rail { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid var(--a-border); background: transparent; color: var(--fg-muted); cursor: pointer; }
+.anim-stage-rail .stage-chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--a-on-solid); }
+.anim-stage-rail .stage-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-status { padding: 10px 16px 14px; font-size: 13px; }
+.anim-status .step-info { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.anim-status .step-desc { color: var(--fg-soft); line-height: 1.6; }
+.anim-legend { padding: 0 16px 14px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--fg-muted); }
+.anim-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.anim-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.back-top, .theme-toggle { position: fixed; right: 24px; z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--a-border); background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 15px; }
+.back-top { bottom: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.back-top.show { opacity: 1; pointer-events: auto; }
+.theme-toggle { bottom: 72px; }
+.back-top:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.toc-toggle { display: none; }
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; max-height: 40vh; }
+  .content { width: 100%; }
+  .toc[hidden] { display: none; }
+  .toc-toggle { display: block; margin-bottom: 10px; padding: 6px 12px; border: 1px solid var(--a-border); border-radius: 6px; background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: none; }
+  .anim-canvas-wrap svg .anim-layer .hot { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body class="interactive-body">
+<script>
+/* SVG 的呈现属性（fill / stroke）不解析 var()，所以动画脚本要在运行时把
+   语义令牌读成具体色值。主题切换后重绘即可拿到新值。 */
+(function () {
+  window.aC = function (name, fallback) {
+    var host = document.querySelector('.interactive-body, .article-body') || document.documentElement;
+    var v = getComputedStyle(host).getPropertyValue(name);
+    return (v && v.trim()) || fallback || '#888';
+  };
+})();
+</script>
+<button class="theme-toggle" id="artThemeBtn" onclick="toggleTheme()" aria-label="切换深浅主题" title="切换主题">◑</button>
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+  <button class="toc-toggle" onclick="toggleToc()" aria-expanded="true" aria-controls="tocNav">目录</button>
+  <nav class="toc" id="tocNav" aria-label="文章目录">
+    <h3>目录</h3>
+    <a href="#hook">这篇论文在问什么</a>
+    <a href="#why">① 为什么 LSE 值得单独优化</a>
+    <a href="#profile">② torch.logsumexp 里的 9 个 kernel</a>
+    <a href="#fuse">③ FuseLSE：一遍读完</a>
+    <a href="#int">④ IntLSE：把 exp/log 换成加法和移位</a>
+    <a href="#bench">⑤ 微基准：GPU 上打平，CPU 上拉开</a>
+    <a href="#decomp">⑥ 时间去哪了：launch、HBM 与算力</a>
+    <a href="#bits">⑦ 16 位变体</a>
+    <a href="#apps">⑧ 三个应用：RLHF、概率电路、粒子滤波</a>
+    <a href="#critique">⑨ 局限与没回答的问题</a>
+    <a href="#summary">⑩ 一句话总结</a>
+  </nav>
+
+  <main class="content">
+
+    <section class="hook" id="hook">
+      <h1>加速 Log-Sum-Exp：GPU 上靠融合，CPU 上靠整数</h1>
+      <p class="tagline">Log-Sum-Exp（LSE）是 softmax、交叉熵、概率电路和粒子滤波里最常见的归约之一，但 PyTorch 的 <code>torch.logsumexp</code> 在 V100 上比同尺寸的 <code>torch.sum</code> 慢约 6 倍。这篇 NeurIPS 2026 论文把原因拆成两堵墙：GPU 上是<strong>内存墙</strong>——eager 实现拆成 9 个 kernel、把输入在 HBM 里来回搬了 6 遍；CPU 上是<strong>计算墙</strong>——没有专用的超越函数单元，每个 <code>exp</code>/<code>log</code> 都很贵。对应给出两个单 kernel 实现：<strong>FuseLSE</strong> 用成对 LSE 的结合律一遍读完输入，在 V100/H100/H200/B300 上比 eager 快 6.25–6.86×、比 <code>torch.compile</code> 和 XLA 快约 2×；<strong>IntLSE</strong> 用 Mitchell 近似把 <code>exp</code>/<code>log</code> 变成一次整数加法和一次移位，在单线程 CPU 上比 PyTorch 快最多 22×。</p>
+      <div class="badges">
+        <span class="badge badge-accent">arXiv:2610.33647</span>
+        <span class="badge badge-purple">NeurIPS 2026</span>
+        <span class="badge badge-blue">kernel 融合 × 定点近似</span>
+        <span class="badge badge-green">GPU 6.25–6.86× · CPU 最多 22×</span>
+      </div>
+    </section>
+
+    <section id="why">
+      <h2>① 为什么 LSE 值得单独优化</h2>
+      <p>对长度为 $N$ 的向量 $x$，LSE 的标准写法要先减去最大值，避免 $\exp$ 上溢：</p>
+      <div class="eq">$$\mathrm{LSE}(x)=\log\sum_{i=1}^{N}e^{x_i}=c+\log\sum_{i=1}^{N}e^{x_i-c},\qquad c=\max_i x_i$$<span class="eq-note">式 (1)：减最大值的稳定写法。数学上与左边完全相等，但需要先知道全局最大值</span></div>
+      <p>论文挑了三类负载，它们的共同点是 LSE 本身就是瓶颈，而且<strong>多数情况下没有矩阵乘可以和它融合</strong>：</p>
+      <ul>
+        <li><strong>RLHF 的逐 token log-prob</strong>：PPO、GRPO 等每一步都要对策略模型和参考模型的 logits 求 $\log p(y_t)=z_{y_t}-\mathrm{LSE}(z)$。词表从 Llama-2 的 32k 涨到 Llama-3 的 128k、Gemma 的 256k，LSE 要扫的行越来越长。TRL 里对应的函数是 <code>selective_log_softmax</code>（下文简称 SLS）。</li>
+        <li><strong>概率电路（PC）</strong>：sum 节点在对数域里就是加权 LSE。PyJuice 的稠密层可以把它塞进矩阵乘，但稀疏结构、EinsumNetworks 这类实现只能单独算 LSE。</li>
+        <li><strong>粒子滤波</strong>：每个时间步都要把 $N$ 个粒子的对数权重归一化，一次 LSE。序列长、步数多，且常常跑在 CPU 上。</li>
+      </ul>
+      <p>FlashAttention、online softmax、Cut Cross-Entropy（CCE）都已经把 LSE 和前面的矩阵乘融合在一起，所以 attention 和训练时的交叉熵不在本文讨论范围内。论文针对的是<strong>独立的 LSE</strong>：输入已经在 HBM 里，只需要算出每一行的 LSE。</p>
+      <div class="callout callout-blue"><strong>「两堵墙」的含义</strong>：GPU 有 SFU（特殊函数单元）硬件算 <code>exp</code>/<code>log</code>，算力富余，时间几乎全花在搬数据上，优化手段是减少 HBM 读写次数。CPU 没有 SFU，<code>exp</code>/<code>log</code> 是几十个周期的软件序列，优化手段是减少超越函数调用。同一个运算在两种硬件上碰到的瓶颈不同，所以论文给出两个实现。</div>
+    </section>
+
+    <section id="profile">
+      <h2>② torch.logsumexp 里的 9 个 kernel</h2>
+      <p>论文用 Nsight 在 V100 上剖析了一次 $(B,N)=(512,128256)$ 的 <code>torch.logsumexp</code>：它被拆成 <strong>9 个子 kernel</strong>，总耗时 1.95 ms；同样形状的 <code>torch.sum</code> 只要 311 µs。四个重 kernel 占了绝大多数时间：</p>
+      <table>
+        <thead><tr><th>kernel</th><th>作用</th><th>耗时</th><th>HBM 读写（以输入大小为 1×）</th></tr></thead>
+        <tbody>
+          <tr><td><code>amax</code></td><td>求每行最大值 $c$</td><td>312 µs</td><td>读 1×</td></tr>
+          <tr><td><code>sub</code></td><td>$x-c$，写出中间张量</td><td>654 µs</td><td>读 1× + 写 1×</td></tr>
+          <tr><td><code>exp</code></td><td>$e^{x-c}$，再写出一遍</td><td>642 µs</td><td>读 1× + 写 1×</td></tr>
+          <tr><td><code>sum</code></td><td>按行求和</td><td>317 µs</td><td>读 1×</td></tr>
+          <tr><td class="dim">abs、unary、mask_fill、log、add</td><td class="dim">处理 $\pm\infty$、取对数、加回 $c$</td><td class="dim">很短</td><td class="dim">只碰 $B$ 个元素</td></tr>
+        </tbody>
+      </table>
+      <p>四个重 kernel 合计把输入搬了 <strong>6 遍</strong>。每个 kernel 本身都接近 HBM 带宽上限（论文 Table 7 里 eager 的 DRAM 利用率为 89.7%），问题不在单个 kernel 慢，而在中间张量被反复写出、再读回。<code>sum</code> 只读一遍，所以耗时约为 LSE 的 1/6。</p>
+      <p><code>torch.compile</code> 和 JAX/XLA 能把逐元素运算融合进归约，但保留了「先求最大值、再求和」的<strong>两遍结构</strong>，读写量约 2×。另外 <code>torch.compile</code> 对每个新形状都要重新编译，在变长输入上会反复付出编译时间（⑧ 的 RLHF 表格里冷启动编译是 4.56 s）。</p>
+      <div class="anim-frame" data-anim="1"><div class="anim-header"><span class="anim-title">动画 1 · 9 个 kernel 与 1 个 kernel：时间和 HBM 读写</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 430" role="img" aria-label="torch.logsumexp 的 9 个 kernel 时间线与 HBM 读写量，对比 torch.compile 和 FuseLSE"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-blue)"></i>读 HBM</span><span><i style="background:var(--a-red)"></i>写中间张量</span><span><i style="background:var(--a-fg-muted)"></i>轻量 kernel</span><span><i style="background:var(--a-accent)"></i>FuseLSE</span></div></div>
+    </section>
+
+    <section id="fuse">
+      <h2>③ FuseLSE：一遍读完</h2>
+      <p>两遍结构的根源是式 (1) 需要全局最大值 $c$。FuseLSE 换了一种写法：两个数的 LSE 可以只用这两个数本身稳定地算出来，</p>
+      <div class="eq">$$\mathrm{LSE}(x,y)=\max(x,y)+\log\!\left(1+e^{-|x-y|}\right)$$<span class="eq-note">式 (2)：成对 LSE。$e^{-|x-y|}\in(0,1]$，不会上溢</span></div>
+      <p>成对 LSE 满足结合律：$\mathrm{LSE}(\mathrm{LSE}(a,b),c)=\mathrm{LSE}(a,b,c)$。于是 LSE 可以像 <code>sum</code> 一样做任意顺序的树形归约，每个线程边读边累加，不需要先扫一遍求最大值。代价是每次合并都要一次 <code>exp</code> 和一次 <code>log</code>，总共 $N-1$ 次 <code>log</code>，而式 (1) 只要一次。在 GPU 上这笔账划算，因为 <code>exp</code>/<code>log</code> 走 SFU，而时间瓶颈在 HBM。</p>
+      <p>kernel 的结构和一个手写的 <code>sum</code> 归约几乎一样：</p>
+      <ol>
+        <li><strong>每行一个 block，256 线程</strong>。每个线程在寄存器里放一个累加器，初值为 $-10^{30}$；遇到第一个有效输入时直接赋值而不做合并，避免 $-\infty-(-\infty)$ 产生 NaN。</li>
+        <li><strong>向量化读取</strong>：用 <code>float4</code> 一次读 4 个 float，一个 warp 每步覆盖 128 个连续元素，访存完全合并。</li>
+        <li><strong>快速超越函数</strong>：<code>__expf</code>、<code>__logf</code> 直接映射到 SFU 指令，精度略低于 <code>expf</code>/<code>logf</code>（⑤ 的误差表里 FuseLSE 比 torch 大约一个数量级，仍在 $10^{-6}$–$10^{-5}$ 量级）。</li>
+        <li><strong>两级归约</strong>：先在 warp 内用 shuffle 把 32 个累加器合并成 1 个，再把 8 个 warp 的结果写进 32 B 共享内存，由第一个 warp 合并成 1 个，最后线程 0 写回结果。</li>
+      </ol>
+      <p>整个过程只读一遍输入，只写 $B$ 个结果，读写量约 <strong>1×</strong>。论文 Table 7 用 Nsight Compute 测得的 FuseLSE 读写量是 1.01×，eager 是 5.98×。</p>
+      <div class="anim-frame" data-anim="2"><div class="anim-header"><span class="anim-title">动画 2 · FuseLSE 的一个 block：读取、累加、warp shuffle、共享内存</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 430" role="img" aria-label="FuseLSE 单个 block 的成对 LSE 归约过程"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-blue)"></i>HBM 中的一行输入</span><span><i style="background:var(--a-teal)"></i>线程寄存器累加器</span><span><i style="background:var(--a-purple)"></i>warp 结果</span><span><i style="background:var(--a-accent)"></i>行结果</span></div></div>
+      <div class="callout callout-green"><strong>和 online softmax 的关系</strong>：online softmax 维护「当前最大值 + 缩放后的和」两个量，在遇到新最大值时重新缩放；成对 LSE 只维护一个量，即当前的 LSE 值。两者都是一遍算法，数学上等价。成对形式的状态更少，合并两个部分结果时只需式 (2)，更适合做 warp shuffle。</div>
+    </section>
+
+    <section id="int">
+      <h2>④ IntLSE：把 exp/log 换成加法和移位</h2>
+      <p>FuseLSE 解决了 GPU 上的内存墙，但每次合并仍要一次 <code>exp</code> 和一次 <code>log</code>。在没有 SFU 的硬件上（CPU、MCU、FPGA），这两个函数是几十个周期的软件序列，$N-1$ 次 <code>log</code> 就成了新的瓶颈。IntLSE 保留 FuseLSE 的全部归约结构，只替换式 (2) 里的成对函数。</p>
+      <p>先换到以 2 为底。设 $x\ge y$，$z=y-x\le 0$，则</p>
+      <div class="eq">$$\mathrm{LSE}_2(x,y)=x+f(z),\qquad f(z)\triangleq\log_2\!\left(1+2^{z}\right)$$<span class="eq-note">以 2 为底的成对 LSE；$f(0)=1$，$z\to-\infty$ 时 $f(z)\to 0$</span></div>
+      <p>然后连用两次 Mitchell 近似：对 $v\in[0,1)$，$2^v\approx 1+v$，$\log_2(1+v)\approx v$。把 $z$ 拆成整数部分 $I_z\le 0$ 和小数部分 $F_z\in[0,1)$，有 $2^{z}=2^{F_z}\cdot 2^{I_z}\approx(1+F_z)\,2^{I_z}$；这个值落在 $[0,1]$，再用第二个近似把外层的 $\log_2(1+\cdot)$ 去掉，得到</p>
+      <div class="eq">$$\hat f(z)\triangleq(1+F_z)\gg(-I_z)$$<span class="eq-note">式 (3)：一次整数加法（$1+F_z$）和一次算术右移。在定点数里 $I_z$、$F_z$ 就是整数位和小数位，拆分不需要额外指令</span></div>
+      <p>近似误差 $\varepsilon(z)=f(z)-\hat f(z)$ 有几个好性质：</p>
+      <ul>
+        <li><strong>非负且周期性</strong>：每个整数区间 $[-n,-n+1)$ 形状相同、幅度按 $2^{-n}$ 缩小，峰值出现在 $z=-n$，值为 $\log_2(1+2^{-n})-2^{-n}$。最大的一个在 $n=1$：$\log_2 1.5-0.5\approx 0.085$；$n=2,3$ 时分别约 0.072、0.045。</li>
+        <li><strong>远处元素几乎不贡献误差</strong>：$z$ 越负，$\hat f$ 和 $\varepsilon$ 都按指数衰减。</li>
+        <li><strong>总误差有上界</strong>：假设 $z$ 在 $(-\infty,0]$ 上按单位密度分布，期望累积误差为 $\int_{-\infty}^{0}\varepsilon\,dz=\frac{\pi^2}{12(\ln 2)^2}-\frac{3}{2}\approx 0.212$，与 $N$ 无关（附录 A.1）。真实输入不满足这个假设，所以论文在 ⑤ 里按分布实测。</li>
+      </ul>
+      <p>为了进一步压低单步误差，IntLSE 加了一张 <strong>64 项的修正查找表</strong>，放在 CUDA 常量内存里，用 $\hat f(z)$ 的高 6 位做索引。查表后单步最大误差从 0.085 降到 <strong>0.0068</strong>，代价是每次合并多一次常量内存读取。</p>
+      <div class="anim-frame" data-anim="3"><div class="anim-header"><span class="anim-title">动画 3 · Mitchell 近似：f(z)、f̂(z)、误差峰与查找表</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 430" role="img" aria-label="精确函数 f(z) 与 Mitchell 近似 f̂(z) 的曲线、误差峰值和查找表修正"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-blue)"></i>精确 f(z)</span><span><i style="background:var(--a-accent)"></i>Mitchell f̂(z)</span><span><i style="background:var(--a-red)"></i>误差 ε(z)</span><span><i style="background:var(--a-green)"></i>查表后误差</span></div></div>
+      <h3>定点表示</h3>
+      <p>每个输入 $x_i$ 先转成以 2 为底的 Q16.16 定点数：$\mathrm{round}(x_i\cdot\log_2 e\cdot 2^{16})$，存成 INT32。之后的成对合并、warp shuffle、block 归约全部是整数运算，结构与 FuseLSE 相同；线程 0 最后把结果换回以 $e$ 为底的 float32 写出。Q16.16 能表示的范围是 $|x|<32768$（以 2 为底），对常见的 log 概率、logits 足够。</p>
+      <div class="callout callout-orange"><strong>为什么不直接用 FP32 做 Mitchell 近似</strong>：Mitchell 近似的核心是「浮点数的位模式本身就是对数的分段线性近似」。在定点数里，整数位和小数位天然分开，$\gg(-I_z)$ 是一条移位指令；在浮点数里同样的操作要拆指数和尾数。CPU 上 INT32 加法 1 个周期，FP32 加法约 4 个周期，<code>log</code> 最多 40 个周期，差距就在这里。</div>
+    </section>
+
+    <section id="bench">
+      <h2>⑤ 微基准：GPU 上打平，CPU 上拉开</h2>
+      <p>设置：$B=512$，$N$ 在对数网格上从 2 扫到 128256，输入取 $U(-1,0)$、$U(-100,0)$、$U(-500,0)$ 三种分布。GPU 是 V100-PCIe-32GB，CPU 是 Xeon Gold 6134；CPU 上 FuseLSE 是多线程 C++，IntLSE 是手写 AVX2 的 C。每个点取 20 个随机种子的中位数，误差对照 FP64 参考值。</p>
+      <table>
+        <thead><tr><th>平台</th><th>对比</th><th>结果</th><th>原因</th></tr></thead>
+        <tbody>
+          <tr><td>GPU，$N\le 1024$</td><td>两者 vs torch</td><td class="best">10–11×</td><td>9 次 kernel launch 合成 1 次</td></tr>
+          <tr><td>GPU，$N\ge 8192$</td><td>两者 vs torch</td><td class="best">≈6×</td><td>HBM 读写从 6× 降到 1×</td></tr>
+          <tr><td>GPU，$N=128256$</td><td>FuseLSE / IntLSE</td><td>6.24× / 6.18×</td><td>1.94 ms → 0.310 / 0.313 ms</td></tr>
+          <tr><td>CPU</td><td>IntLSE vs FuseLSE</td><td class="best">3.1–6.1×</td><td>没有 SFU，exp/log 是瓶颈</td></tr>
+          <tr><td>CPU，$U(-1,0)$</td><td>IntLSE vs torch</td><td class="bad">慢 1.54×</td><td rowspan="3">IntLSE 单线程，torch 四线程；torch 的速度随输入值变化</td></tr>
+          <tr><td>CPU，$U(-100,0)$</td><td>IntLSE vs torch</td><td class="gain">快 3.66×</td></tr>
+          <tr><td>CPU，$U(-500,0)$</td><td>IntLSE vs torch</td><td class="gain">快 6.15×</td></tr>
+        </tbody>
+      </table>
+      <p>GPU 上 FuseLSE 和 IntLSE 的速度相差不到 1%。在 launch 主导和 HBM 主导两种情形下，成对函数的算术开销都被藏住了，把 <code>exp</code>/<code>log</code> 换成整数指令不改变运行时间。CPU 上没有 SFU，kernel 变成计算受限，整数算术的优势才显现出来。</p>
+      <h3>误差</h3>
+      <p>FuseLSE 的中位相对误差低于 $10^{-4}\%$，与 torch 同一量级。IntLSE 带查找表时，在 $U(-100,0)$、$U(-500,0)$ 上分别为 0.15%、0.04%，在最窄的 $U(-1,0)$ 上升到 2.38%：输入越集中，$z$ 越多落在误差最大的 $[-1,0]$ 区间。去掉查找表后，大 $N$ 下绝对误差饱和在 0.2 左右，比带表版本高 20–80 倍。论文 Table 4 在更多分布和极端输入上测了 p95 绝对误差（$N=128256$，$B=128$）：</p>
+      <table>
+        <thead><tr><th>输入</th><th>torch</th><th>FuseLSE</th><th>IntLSE</th></tr></thead>
+        <tbody>
+          <tr><td>$U(-1,0)$</td><td>7.0e-7</td><td>4.1e-6</td><td>1.4e-4</td></tr>
+          <tr><td>$U(-100,0)$</td><td>2.6e-7</td><td>3.0e-6</td><td>1.4e-3</td></tr>
+          <tr><td>$U(-500,0)$</td><td>2.5e-7</td><td>8.7e-7</td><td>1.7e-3</td></tr>
+          <tr><td>$\mathcal N(0,1)$</td><td>6.9e-7</td><td>8.4e-6</td><td>6.5e-4</td></tr>
+          <tr><td>$\mathcal N(0,20^2)$</td><td>3.7e-6</td><td>7.7e-6</td><td class="bad">4.2e-3</td></tr>
+          <tr><td>$U(-1000,1000)$</td><td>2.9e-5</td><td>4.5e-5</td><td>2.1e-3</td></tr>
+          <tr><td>近似并列</td><td>7.9e-7</td><td>4.1e-6</td><td>4.8e-4</td></tr>
+          <tr><td>单个 +1000</td><td>0</td><td>0</td><td>6.1e-5</td></tr>
+          <tr><td>50% 为 $-\infty$</td><td>7.0e-7</td><td>4.2e-6</td><td>3.0e-4</td></tr>
+        </tbody>
+      </table>
+      <p>FuseLSE 最差 4.5e-5，和 torch 自己的 FP32 误差同一量级。IntLSE 最差 4.2e-3，在各分布上比 FuseLSE 高一到三个数量级。</p>
+      <h3>单线程对单线程</h3>
+      <p>前面 CPU 上的对比是 IntLSE 单线程对 torch 四线程。Table 5 在 Xeon 6148 上把两边都限制为单线程：</p>
+      <table>
+        <thead><tr><th>输入</th><th>下溢比例</th><th>torch (ms)</th><th>IntLSE (ms)</th><th>加速</th></tr></thead>
+        <tbody>
+          <tr><td>$U(-1,0)$</td><td>0%</td><td>33.0</td><td>27.6</td><td>1.2×</td></tr>
+          <tr><td>$\mathcal N(0,1)$</td><td>0%</td><td>34.2</td><td>27.6</td><td>1.2×</td></tr>
+          <tr><td>近似并列</td><td>0%</td><td>36.3</td><td>27.6</td><td>1.3×</td></tr>
+          <tr><td>$U(-100,0)$</td><td>12.7%</td><td>294.4</td><td>27.6</td><td class="gain">10.7×</td></tr>
+          <tr><td>单个 +1000</td><td>100%</td><td>304.5</td><td>27.6</td><td class="gain">11.0×</td></tr>
+          <tr><td>$U(-1000,1000)$</td><td>95.6%</td><td>358.6</td><td>27.6</td><td class="gain">13.0×</td></tr>
+          <tr><td>$U(-500,0)$</td><td>82.5%</td><td>389.1</td><td>27.6</td><td class="gain">14.1×</td></tr>
+          <tr><td>$\mathcal N(0,20^2)$</td><td>50.2%</td><td>606.9</td><td>27.6</td><td class="best">22.0×</td></tr>
+          <tr><td>50% 为 $-\infty$</td><td>–</td><td>188.8</td><td>29.9</td><td class="gain">6.3×</td></tr>
+        </tbody>
+      </table>
+      <p>「下溢」指 $x_i-\max<-87.3$，此时 FP32 的 $\exp$ 结果是次正规数。没有下溢时 torch 只比 IntLSE 慢 20–30%；一旦有下溢，torch 的耗时涨到 9–18 倍。论文只说这反映了「torch 的 SIMD 流水线对不同输入值的反应」；常见的解释是 x86 上次正规数运算会走微码慢路径（本文推测）。IntLSE 在所有有限输入上都是 27.6 ms，因为整数加法和移位的耗时与数值无关；最后一行的 29.9 ms 是处理 $-\infty$ 掩码的鲁棒版本。</p>
+    </section>
+
+    <section id="decomp">
+      <h2>⑥ 时间去哪了：launch、HBM 与算力</h2>
+      <p>为了验证上面「两种情形」的解释，论文用 Nsight Compute 在 V100（HBM 峰值 900 GB/s）和 H100-SXM5（3350 GB/s）上把每次调用的时间拆成四条线，输入为 $U(-100,0)$，$B=512$，$N$ 从 256 到 128256：</p>
+      <ul>
+        <li><strong>总 GPU 时间</strong>；</li>
+        <li><strong>HBM 下界</strong>：实际搬运字节数 ÷ 峰值带宽；</li>
+        <li><strong>SM 活跃计算时间</strong>：各 kernel 时间乘以 SM 利用率之和；</li>
+        <li><strong>launch 参考线</strong>：$N=256$ 时的总时间，近似纯启动开销。</li>
+      </ul>
+      <p>结论很清楚。$N$ 小时三种实现的总时间都远高于 HBM 下界和计算线，贴着 launch 参考线，FuseLSE 的优势来自启动次数从 9 降到 1。$N$ 大时总时间收敛到各自的 HBM 下界，计算线一直在下方，torch 的下界约是两个融合 kernel 的 6 倍。IntLSE 在 GPU 上的 SM 计算时间反而比 FuseLSE 多：V100 上 123 vs 80 µs（+50%），H100 上 50 vs 40 µs（+26%）。论文引用的测量是：V100 上 INT32 和 FP32 指令延迟都是 4 个周期；即使在更老的 Pascal 上，<code>__expf</code>/<code>__logf</code> 这类 SFU 指令也只有约 14 个周期。GPU 上整数没有延迟优势，IntLSE 的加法、移位、查表反而是额外的 ALU 开销。CPU 上情况相反：INT32 加法 1 个周期，FP32 加法约 4 倍，一次 <code>log</code> 最多 40 个周期。论文的结论是：现代 GPU 上用 FuseLSE，IntLSE 只适合 CPU 和没有快速 SFU 的平台。</p>
+      <div class="anim-frame" data-anim="4"><div class="anim-header"><span class="anim-title">动画 4 · 两种情形与四代 GPU：launch 主导、HBM 主导、Table 6/7</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 430" role="img" aria-label="LSE 耗时随 N 的变化，以及四代 GPU 上 eager、torch.compile、XLA 与 FuseLSE 的对比"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-fg-muted)"></i>eager</span><span><i style="background:var(--a-blue)"></i>torch.compile</span><span><i style="background:var(--a-purple)"></i>JAX/XLA</span><span><i style="background:var(--a-accent)"></i>FuseLSE</span></div></div>
+      <h3>对编译器基线与新 GPU</h3>
+      <p>Table 6 在 $(512,128256)$ 上对比了 PyTorch 2.8 的 <code>torch.compile</code> 和 JAX 0.7.1 的 XLA，不计编译时间。括号里是 FuseLSE 相对该实现的加速比：</p>
+      <table>
+        <thead><tr><th>实现</th><th>V100</th><th>H100</th><th>H200</th><th>B300</th></tr></thead>
+        <tbody>
+          <tr><td>eager</td><td>1.936 ms (6.25×)</td><td>0.584 ms (6.53×)</td><td>0.462 ms (6.86×)</td><td>0.366 ms (6.70×)</td></tr>
+          <tr><td><code>torch.compile</code></td><td>0.605 ms (1.95×)</td><td>0.163 ms (1.83×)</td><td>0.120 ms (1.78×)</td><td class="dim">–</td></tr>
+          <tr><td>JAX/XLA</td><td>0.651 ms (2.10×)</td><td>0.184 ms (2.06×)</td><td>0.134 ms (1.99×)</td><td class="dim">–</td></tr>
+          <tr><td>FuseLSE</td><td class="best">0.310 ms</td><td class="best">0.0894 ms</td><td class="best">0.0674 ms</td><td class="best">0.0546 ms</td></tr>
+        </tbody>
+      </table>
+      <p>B300 一列只有 eager：Triton 和 XLA 当时还不能生成 sm_103 的代码。Table 7 用 Nsight Compute 解释了差距：</p>
+      <table>
+        <thead><tr><th>GPU</th><th>实现</th><th>读写量</th><th>时间 (µs)</th><th>DRAM 利用率</th><th>SFU 利用率</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="4">V100<br><span class="dim">0.90 TB/s</span></td><td>eager</td><td>5.98×</td><td>1951</td><td>89.7%</td><td>2.1%</td></tr>
+          <tr><td>compile</td><td>1.98×</td><td>619</td><td>93.5%</td><td>7.8%</td></tr>
+          <tr><td>XLA</td><td>2.02×</td><td>656</td><td>90.0%</td><td>6.4%</td></tr>
+          <tr><td>FuseLSE</td><td class="best">1.01×</td><td class="best">315</td><td>92.0%</td><td>28.0%</td></tr>
+          <tr><td rowspan="4">H100<br><span class="dim">3.35 TB/s</span></td><td>eager</td><td>5.88×</td><td>594</td><td>77.5%</td><td>3.3%</td></tr>
+          <tr><td>compile</td><td>1.91×</td><td>170</td><td>88.2%</td><td>12.2%</td></tr>
+          <tr><td>XLA</td><td>2.03×</td><td>187</td><td>84.8%</td><td>11.3%</td></tr>
+          <tr><td>FuseLSE</td><td class="best">1.01×</td><td class="best">94</td><td>84.0%</td><td>45.8%</td></tr>
+          <tr><td rowspan="4">H200<br><span class="dim">4.80 TB/s</span></td><td>eager</td><td>5.85×</td><td>481</td><td>65.0%</td><td>4.7%</td></tr>
+          <tr><td>compile</td><td>1.89×</td><td>125</td><td>81.0%</td><td>19.1%</td></tr>
+          <tr><td>XLA</td><td>2.03×</td><td>141</td><td>77.1%</td><td>16.7%</td></tr>
+          <tr><td>FuseLSE</td><td class="best">1.01×</td><td class="best">72.6</td><td>74.3%</td><td class="bad">65.9%</td></tr>
+        </tbody>
+      </table>
+      <p>四种实现的 DRAM 利用率都不低，差别几乎全在读写量：6× 对 2× 对 1×，时间比例也基本是这个比例。成对算法多出的 $N-1$ 次 <code>log</code> 没有吃掉这部分收益。计算量和读写量都是 $O(N)$，所以 FuseLSE 的算术强度与 $N$ 无关；最多只有 0.21% 的周期在等数学流水线。</p>
+      <div class="callout callout-red"><strong>SFU 利用率在逐代上升</strong>：FuseLSE 的 SFU 利用率从 V100 的 28% 涨到 H100 的 46%、H200 的 66%。Table 7 标注的峰值 SFU 吞吐（SM 数 × 16 ops/clock × boost 频率）是 V100 1.8 Top/s、H100 和 H200 都是 4.2 Top/s，而 HBM 带宽从 0.90 涨到 3.35、4.80 TB/s。H100 到 H200 带宽涨了 43%，SFU 峰值没变，同样的算术强度下 SFU 更接近上限。论文没有给 B300 的 Nsight 数据；按这个趋势，未来某一代 GPU 上 FuseLSE 有可能从内存受限变成 SFU 受限，那时 IntLSE 这类不依赖 SFU 的写法在 GPU 上也可能有意义（本文推测）。论文结论部分也建议硬件设计者在 GPU 上继续提供快速的整数流水线。</div>
+    </section>
+
+    <section id="bits">
+      <h2>⑦ 16 位变体：再砍一半字节</h2>
+      <p>FuseLSE 把启动开销压到一次 launch，但大 $N$ 下仍然受 HBM 限制。剩下能动的只有每个元素的字节数。论文在 §4.3 试了两个 16 位变体：</p>
+      <ul>
+        <li><strong>FuseLSE16</strong>：输入以 FP16 存储，读进寄存器后转成 FP32 累加；</li>
+        <li><strong>IntLSE-Q10.6</strong>：输入以 INT16 定点存储（10 位整数、6 位小数），内部用 INT32 累加。</li>
+      </ul>
+      <p>设置与 ⑤ 相同：V100-PCIe-32GB，$B=512$，$U(-100,0)$，$N$ 从 2 到 128256；时间是 100 次预热后 1000 次的 CUDA event 平均，误差是 20 个种子对 FP64 参考值的平均。</p>
+      <table>
+        <thead><tr><th>$N$</th><th>FuseLSE</th><th>FuseLSE16</th><th>IntLSE-Q10.6</th></tr></thead>
+        <tbody>
+          <tr><td>$\le 1024$</td><td colspan="3">三者都约 10–11×（launch 主导，字节数不影响）</td></tr>
+          <tr><td>128256</td><td>6.25×</td><td class="best">12.06×</td><td class="gain">10.73×</td></tr>
+        </tbody>
+      </table>
+      <p>大 $N$ 下字节数减半，加速比也接近翻倍，符合 ⑥ 里「时间 ≈ 字节数 ÷ 带宽」的判断。两个变体在精度上分道扬镳：</p>
+      <ul>
+        <li>FuseLSE16 的平均绝对误差始终低于 $3\times10^{-3}$，并随 $N$ 下降，$N\approx10^4$ 以上与 <code>torch.logsumexp</code> 基本重合。输入量化误差在求和里被平均掉了。</li>
+        <li>IntLSE-Q10.6 的误差随 $N$ 增长，$N=128256$ 时约 1%，比 FuseLSE16 高四个数量级。6 位小数的分辨率是 $2^{-6}$（以 2 为底），每次合并的 Mitchell 误差和舍入误差一起累积。</li>
+      </ul>
+      <div class="callout callout-purple"><strong>为什么 FP16 赢了</strong>：FP16 只是存储格式，累加仍在 FP32，误差主要来自输入量化一次；Q10.6 的整个归约都在低精度定点里进行，误差每一步都在叠加。论文的判断是：在 V100 上 FuseLSE16 同时拿到了带宽收益和接近 FP32 的精度；IntLSE-Q10.6 只在没有快速 SFU 的硬件上有意义，因为那里整数流水线才是真正的计算下限。另外 Q10.6 的表示范围按 10 位有符号整数算只有 $|x|<512$（以 2 为底，约合自然对数下 355，本文推算），比 Q16.16 的 32768 窄得多。</div>
+      <p>两个变体都没有接入后面的应用，因为周围的运算都在 FP32 上，单独把 LSE 的输入降到 16 位要额外转换。</p>
+    </section>
+
+    <section id="apps">
+      <h2>⑧ 三个应用：RLHF、概率电路、粒子滤波</h2>
+      <p>微基准之外，论文把两个 kernel 接进三个实际应用。前两个在 GPU 上，推荐 FuseLSE；第三个在 CPU 上，用 IntLSE。</p>
+      <h3>RLHF 的 token 对数概率</h3>
+      <p>RLHF 训练时要算每个 token 的对数概率 $z_{y_t}-\mathrm{LSE}(z_1,\dots,z_V)$，每个位置都是一次长度为词表大小 $V$ 的 LSE。HuggingFace TRL 把这一步写成 <code>selective_log_softmax</code>（SLS）。论文在运行时把 <code>torch.logsumexp</code> 替换成一个包装函数，能处理的形状转给自己的 kernel，其余回退到 PyTorch，TRL 本身不改。骨干是 GPT-2（124M），只替换 LM head 来模拟不同词表；输入是 HH-RLHF 文本，$T=1024$，V100 上 3 次预热后测 50 次。</p>
+      <table>
+        <thead><tr><th>方法</th><th>LM head + SLS (ms)</th><th>SLS 单独 (ms)</th><th>冷启动编译</th></tr></thead>
+        <tbody>
+          <tr><td>torch</td><td>59.12</td><td>12.34</td><td class="dim">–</td></tr>
+          <tr><td><code>torch.compile</code></td><td>51.64</td><td class="dim">已融合</td><td class="bad">4.56 s</td></tr>
+          <tr><td>FuseLSE</td><td class="gain">49.20</td><td class="best">2.01</td><td class="dim">–</td></tr>
+          <tr><td>IntLSE</td><td class="gain">49.33</td><td class="best">2.07</td><td class="dim">–</td></tr>
+          <tr><td>cce</td><td>133.11</td><td class="dim">已融合</td><td>0.97 s</td></tr>
+          <tr><td>cce (<code>torch.compile</code>)</td><td class="best">48.74</td><td class="dim">已融合</td><td>1.74 s</td></tr>
+        </tbody>
+      </table>
+      <p class="note-inline">GPT-2，$B=8$，$V=50\text{K}$。cce 是 Wijmans 等人的 Cut Cross-Entropy，把 LM head 矩阵乘和 LSE 融合在一起；RLHF 是本文唯一能和这类方法比较的场景。</p>
+      <p>SLS 一步快了约 6×，但整个 LM head + SLS 阶段只快 1.20×，因为两边共享的 47 ms 矩阵乘占了大头。编译 cce 的总时间略好于 FuseLSE（48.74 vs 49.20 ms），代价是每个新形状要 1.74 s 冷启动编译；RLHF 里序列长度经常变化，这笔开销会反复出现。四种词表上的 SLS 加速比：</p>
+      <table>
+        <thead><tr><th>模型（词表）</th><th>$B$</th><th>FuseLSE</th><th>IntLSE</th></tr></thead>
+        <tbody>
+          <tr><td>Llama-2 (32K)</td><td>8</td><td>6.15×</td><td>6.03×</td></tr>
+          <tr><td>GPT-2 (50K)</td><td>8</td><td>6.16×</td><td>5.96×</td></tr>
+          <tr><td>Llama-3 (128K)</td><td>4</td><td>6.27×</td><td>6.15×</td></tr>
+          <tr><td>Gemma (256K)</td><td>2</td><td class="best">6.30×</td><td>6.19×</td></tr>
+        </tbody>
+      </table>
+      <p>SLS 占 GPT-2 前向时间的 4%–14%，比例随 $V$ 增大，所以词表越大这个 kernel 越重要。误差方面，FuseLSE 相对 torch 的绝对误差是 $1.1\times10^{-6}$ 到 $1.9\times10^{-5}$，IntLSE 是 $5.4\times10^{-3}$ 到 $1.5\times10^{-2}$。在 GPU 上两者速度相同，IntLSE 只多了误差，没有理由选它。</p>
+      <h3>概率电路推理</h3>
+      <p>概率电路（PC）的每个 sum 层都要对加权后的子节点对数似然做 LSE。论文用 PyJuice 在 MNIST 上搭 HCLT 电路，隐变量数 $K\in\{4,8,16,32\}$，批大小 512。PyJuice 的稀疏模式里，每个 sum 层是一串 torch 运算组成的两遍 LSE（max、exp、求和、log）。论文复用成对 LSE 原语写了 FuseLSE-sparse 和 IntLSE-sparse，把稀疏 gather 和加对数权重也放进同一个 kernel，并强制所有层走稀疏模式。</p>
+      <ul>
+        <li><strong>速度</strong>：两者相对 PyJuice 默认模式的前向加速都是约 1.7×（1.68–1.77×），彼此相差 3% 以内。LSE 嵌在稀疏前向里，单独的 LSE 加速比看不到。</li>
+        <li><strong>精度</strong>：FuseLSE 的对数似然绝对误差 $3.0$–$4.2\times10^{-4}$；IntLSE 是 0.45–1.26 nats，相对每个样本约 $-4500$ nats 的对数似然很小；PyJuice 默认模式在 $K=32$ 时误差也涨到 $1.6\times10^{-2}$。</li>
+      </ul>
+      <h3>CPU 上的粒子滤波</h3>
+      <p>粒子滤波每个时间步要对 $N$ 个粒子的对数权重做一次 LSE 归一化，常部署在 CPU 上。模型是一元随机波动率模型，$T=200$，Xeon Gold 6134 单线程，500 次计时取中位数：</p>
+      <table>
+        <thead><tr><th>$N$</th><th>50</th><th>100</th><th>200</th><th>500</th><th>1000</th><th>2000</th></tr></thead>
+        <tbody>
+          <tr><td>vs scipy</td><td>14.3×</td><td class="best">15.4×</td><td>14.5×</td><td>12.7×</td><td>11.4×</td><td>9.1×</td></tr>
+          <tr><td>vs torch</td><td>4.7×</td><td>5.2×</td><td>5.1×</td><td>4.3×</td><td>3.6×</td><td>2.8×</td></tr>
+          <tr><td>vs numpy</td><td>2.0×</td><td>2.1×</td><td>2.1×</td><td>1.8×</td><td>1.8×</td><td>1.5×</td></tr>
+        </tbody>
+      </table>
+      <p>numpy 是原代码库实际使用的 LSE 路径，所以对实际用户最相关的数字是 1.5–2.1×。IntLSE 的绝对误差在各个 $N$ 上约 $10^{-2}$。这些是单次 LSE 原语的延迟，不是整个滤波器的运行时间。</p>
+      <div class="anim-frame" data-anim="5"><div class="anim-header"><span class="anim-title">动画 5 · 选哪种算术：GPU/CPU 与三个应用的结果</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg5" viewBox="0 0 820 430" role="img" aria-label="GPU 与 CPU 上 FuseLSE、IntLSE 的选择，以及 RLHF、概率电路、粒子滤波三个应用的加速比"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-fg-muted)"></i>基线</span><span><i style="background:var(--a-accent)"></i>FuseLSE</span><span><i style="background:var(--a-green)"></i>IntLSE</span><span><i style="background:var(--a-red)"></i>误差 / 限制</span></div></div>
+    </section>
+
+    <section id="critique">
+      <h2>⑨ 局限与没回答的问题</h2>
+      <p>论文自己承认的局限有两条：IntLSE 的近似误差会累积，可能不适合对精度最敏感的场景；两个 16 位变体还没有接入应用。下面是读完后觉得值得补充的几点。</p>
+      <ul>
+        <li><strong>标题里的「计算墙」只在 CPU 上验证。</strong>引言用 CPU、MCU、FPGA 说明 IntLSE 的价值，但实验只有 x86 CPU。MCU 和 FPGA 上整数路径与浮点路径的差距可能更大，也可能被别的开销盖住，论文没有数据。</li>
+        <li><strong>CPU 对比混入了实现差异。</strong>⑤ 里 IntLSE 是手写 AVX2 的单线程 C，FuseLSE 是多线程 C++，torch 是四线程。3.1–6.1× 里有多少来自整数算术、多少来自手写向量化，没有拆开。Table 5 的单线程对比更干净，但换了一台 CPU（6148 而非 6134），而且没有下溢时只快 1.2–1.3×，大加速主要来自 torch 碰到次正规数后变慢。</li>
+        <li><strong>GPU 上真正的对手是 1.8–2.1×，不是 6×。</strong>6× 是相对 eager 的数字。相对 <code>torch.compile</code> 和 XLA 是 1.78–2.10×，相对编译后的 cce，LM head + SLS 阶段反而慢 1%。论文没有和 Liger Kernel 之类手写 Triton 的单遍 LSE / 交叉熵 kernel 比较，单遍实现的读写量同样约 1×，差距可能更小（本文推测）。</li>
+        <li><strong>端到端收益有限。</strong>RLHF 只报告了 LM head + SLS 阶段的 1.20×，没有完整训练步的吞吐；粒子滤波只报告 LSE 原语的延迟，论文图注也说明不是整个滤波器的运行时间。</li>
+        <li><strong>每行一个 block。</strong>FuseLSE 按行分配 block，行数少、行很长时（比如 $B=1$ 时对整个词表求 LSE），只有极少数 SM 在工作，带宽用不满。论文的实验行数都很多（$B=512$，或 RLHF 里 $B\cdot(T-1)$ 行），没有覆盖这种形状（本文推测）。</li>
+        <li><strong>鲁棒版本的覆盖面。</strong>附录 Table 3 的鲁棒 kernel 处理 $\pm\infty$、NaN 和非连续张量，开销分别是 +3.2%（FuseLSE）和 +7.4%（IntLSE）。FuseLSE 支持反向传播；IntLSE 的反向、$+\infty$ 和 NaN 都转给参考实现；两者都不支持多轴归约。IntLSE 的定点范围限制在 $|x|<32768$（以 2 为底）。</li>
+        <li><strong>B300 没有 profile。</strong>⑥ 提到 SFU 利用率逐代上升，但最新的 B300 只有时间、没有 Nsight 数据，「FuseLSE 是否会变成 SFU 受限」这个最有意思的问题没有回答。</li>
+      </ul>
+    </section>
+
+    <section id="summary">
+      <h2>⑩ 一句话总结</h2>
+      <div class="callout callout-accent">LSE 是内存受限的归约：GPU 上 <code>torch.logsumexp</code> 的 9 个 kernel 把输入搬了 6 遍，FuseLSE 用满足结合律的成对 LSE 把它改成一遍读完的单 kernel，在 V100 到 B300 上比 eager 快 6.25–6.86×、比 <code>torch.compile</code>/XLA 快 1.8–2.1×，SFU 上多出的 $N-1$ 次 <code>log</code> 被 HBM 时间完全藏住；只有到了没有 SFU 的 CPU 上，计算才成为瓶颈，IntLSE 用 Mitchell 近似把 <code>exp</code>/<code>log</code> 换成定点加法和移位，在单线程下比 torch 快 1.2–22×，代价是 $10^{-3}$–$10^{-2}$ 量级的绝对误差。</div>
+      <p class="note-inline">论文：Lingyun Yao（Aalto）、Martin Andraud（UC Louvain）、Niki Loppi、Andrea Pilzer（NVIDIA）、Anji Liu（NUS）、Guy Van den Broeck（UCLA）、Martin Trapp（KTH），<em>Speeding up Log-Sum-Exp: Kernel Fusion at the Memory Wall, Integer Arithmetic at the Compute Wall</em>，arXiv:2610.33647，2026-10；代码 github.com/lingyunyao/fuselse。耗时、加速比、误差和 Nsight 数据取自论文正文与表格；动画 2、3 的结构和曲线按论文公式绘制，其中线程数缩减和查找表残差曲线为示意；动画 4 的「两种情形」曲线为示意，柱状图数值来自 Table 6/7；文中标注「本文推测」「本文推算」的内容不是论文结论。</p>
+    </section>
+
+  </main>
+</div>
+<script>
+(function () {
+'use strict';
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, a) {
+  var n = document.createElementNS(NS, tag);
+  if (a) for (var k in a) if (a[k] != null) n.setAttribute(k, a[k]);
+  return n;
+}
+function C(name, fb) { return window.aC(name, fb); }
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function AnimEngine(svg, cfg) {
+  this.svg = svg;
+  this.steps = cfg.steps || [];
+  this.i = 0;
+  this.speed = 1;
+  this.playing = false;
+  this.timer = null;
+  this.frame = svg.closest('.anim-frame');
+  this._initDefs();
+  this.layer = el('g', { 'class': 'anim-layer' });
+  svg.appendChild(this.layer);
+  this._buildRail();
+  this.goTo(0);
+}
+
+AnimEngine.prototype._initDefs = function () {
+  var defs = el('defs');
+  var mk = [['arrA', C('--a-accent', '#FF7A00')], ['arrG', C('--a-green', '#4CC98A')],
+            ['arrR', C('--a-red', '#FF7268')], ['arrB', C('--a-blue', '#74B4FF')],
+            ['arrP', C('--a-purple', '#B79BFF')], ['arrM', C('--a-fg-muted', '#888')],
+            ['arrY', C('--a-amber', '#E9B449')], ['arrT', C('--a-teal', '#48CFC4')]];
+  var id = this.svg.id;
+  for (var j = 0; j < mk.length; j++) {
+    var m = el('marker', { id: id + '-' + mk[j][0], viewBox: '0 0 10 10', refX: '9', refY: '5',
+      markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse' });
+    m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: mk[j][1] }));
+    defs.appendChild(m);
+  }
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype.mk = function (name) { return 'url(#' + this.svg.id + '-' + name + ')'; };
+AnimEngine.prototype.clear = function () { while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild); };
+
+AnimEngine.prototype.draw = function (node, o) {
+  o = o || {};
+  this.layer.appendChild(node);
+  if (o.reveal && !REDUCED) {
+    node.style.opacity = '0';
+    node.style.transition = 'opacity 320ms ease';
+    var d = o.delay || 0;
+    setTimeout(function () { node.style.opacity = o.opacity != null ? o.opacity : '1'; }, d / this.speed);
+  } else if (o.opacity != null) { node.style.opacity = o.opacity; }
+  if (o.cls) node.setAttribute('class', ((node.getAttribute('class') || '') + ' ' + o.cls).trim());
+  return node;
+};
+
+AnimEngine.prototype.t = function (x, y, str, o) {
+  o = o || {};
+  var n = el('text', { x: x, y: y, 'text-anchor': o.anchor || 'middle',
+    'font-size': o.size || 12, 'font-weight': o.weight || 400,
+    'font-family': o.mono ? '"JetBrains Mono", Consolas, monospace' : 'inherit',
+    fill: o.fill || C('--a-fg', '#ccc') });
+  n.textContent = str;
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, o) {
+  o = o || {};
+  var g = el('g');
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: o.rx != null ? o.rx : 6,
+    fill: fill || 'none', stroke: stroke || C('--a-line', '#444'),
+    'stroke-width': o.sw || 1.5, 'stroke-dasharray': o.dash || null }));
+  if (label) {
+    var lines = String(label).split('|');
+    var y0 = y + h / 2 - (lines.length - 1) * 8 + 4;
+    for (var j = 0; j < lines.length; j++) {
+      var tn = el('text', { x: x + w / 2, y: y0 + j * 16, 'text-anchor': 'middle',
+        'font-size': o.size || 12, 'font-weight': o.weight || 500,
+        fill: o.labelFill || stroke || C('--a-fg', '#ccc') });
+      tn.textContent = lines[j];
+      g.appendChild(tn);
+    }
+  }
+  return this.draw(g, o);
+};
+
+AnimEngine.prototype.line = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  return this.draw(el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, 'stroke-linecap': 'round' }), o);
+};
+AnimEngine.prototype.arrow = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  var n = el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-fg-muted', '#888'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': this.mk(o.marker || 'arrM') });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.circle = function (cx, cy, r, o) {
+  o = o || {};
+  return this.draw(el('circle', { cx: cx, cy: cy, r: r, fill: o.fill || 'none',
+    stroke: o.stroke || 'none', 'stroke-width': o.sw || 1.5 }), o);
+};
+
+AnimEngine.prototype.ellipse = function (cx, cy, rx, ry, rot, o) {
+  o = o || {};
+  var n = el('ellipse', { cx: cx, cy: cy, rx: rx, ry: ry, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, transform: 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.path = function (d, o) {
+  o = o || {};
+  return this.draw(el('path', { d: d, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': o.marker ? this.mk(o.marker) : null }), o);
+};
+
+/* 横向条形：用于实验数据对比。value 已按 max 归一到 w 像素。 */
+AnimEngine.prototype.bar = function (x, y, w, h, label, val, max, color, o) {
+  o = o || {};
+  var len = Math.max(2, w * Math.min(1, val / max));
+  var g = el('g');
+  var lt = el('text', { x: x - 8, y: y + h / 2 + 4, 'text-anchor': 'end', 'font-size': 11,
+    fill: C('--a-fg-muted', '#888') });
+  lt.textContent = label;
+  g.appendChild(lt);
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: 3, fill: C('--a-code-bg', '#222') }));
+  var b = el('rect', { x: x, y: y, width: len, height: h, rx: 3, fill: color });
+  g.appendChild(b);
+  var vt = el('text', { x: x + len + 8, y: y + h / 2 + 4, 'text-anchor': 'start', 'font-size': 11,
+    'font-weight': 600, fill: color });
+  vt.textContent = o.fmt ? o.fmt(val) : val;
+  g.appendChild(vt);
+  if (!REDUCED) {
+    b.setAttribute('width', 0);
+    vt.style.opacity = '0';
+    var sp = this.speed, d = o.delay || 0;
+    setTimeout(function () {
+      b.style.transition = 'width 520ms cubic-bezier(.2,.8,.3,1)';
+      b.setAttribute('width', len);
+      vt.style.transition = 'opacity 300ms ease 260ms';
+      vt.style.opacity = '1';
+    }, d / sp + 30);
+  }
+  return this.draw(g, { cls: o.cls });
+};
+AnimEngine.prototype._buildRail = function () {
+  var rail = this.frame.querySelector('.anim-stage-rail');
+  if (!rail) return;
+  rail.textContent = '';
+  for (var j = 0; j < this.steps.length; j++) {
+    var b = document.createElement('button');
+    b.className = 'stage-chip';
+    b.type = 'button';
+    b.dataset.idx = j;
+    b.setAttribute('role', 'tab');
+    b.textContent = (j + 1) + '. ' + (this.steps[j].chip || this.steps[j].title);
+    rail.appendChild(b);
+  }
+};
+
+AnimEngine.prototype.goTo = function (idx) {
+  if (idx < 0 || idx >= this.steps.length) return;
+  this.i = idx;
+  this.clear();
+  var step = this.steps[idx];
+  step.render(this);
+  this._updateUI();
+};
+
+AnimEngine.prototype._updateUI = function () {
+  var f = this.frame, step = this.steps[this.i], n = this.steps.length;
+  var info = f.querySelector('.step-info'), desc = f.querySelector('.step-desc'),
+      bar = f.querySelector('.anim-progress .bar');
+  if (info) info.textContent = '步骤 ' + (this.i + 1) + ' / ' + n + ' · ' + step.title;
+  if (desc) desc.innerHTML = step.desc || '';
+  if (bar) bar.style.width = ((this.i + 1) / n * 100) + '%';
+  var chips = f.querySelectorAll('.stage-chip');
+  for (var j = 0; j < chips.length; j++) chips[j].setAttribute('aria-current', j === this.i ? 'true' : 'false');
+  var prev = f.querySelector('.btn-prev'), next = f.querySelector('.btn-next');
+  if (prev) prev.disabled = this.i === 0;
+  if (next) next.disabled = this.i === n - 1;
+};
+
+AnimEngine.prototype.next = function () { if (this.i < this.steps.length - 1) this.goTo(this.i + 1); };
+AnimEngine.prototype.prev = function () { if (this.i > 0) this.goTo(this.i - 1); };
+AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+AnimEngine.prototype.setSpeed = function (v) { this.speed = v; };
+
+AnimEngine.prototype.play = function () {
+  var self = this;
+  if (this.i >= this.steps.length - 1) this.goTo(0);
+  this.playing = true;
+  this._setPlayBtn();
+  var tick = function () {
+    if (!self.playing) return;
+    var dur = (self.steps[self.i].duration || 2600) / self.speed;
+    self.timer = setTimeout(function () {
+      if (!self.playing) return;
+      if (self.i >= self.steps.length - 1) { self.pause(); return; }
+      self.goTo(self.i + 1);
+      tick();
+    }, dur);
+  };
+  tick();
+};
+
+AnimEngine.prototype.pause = function () {
+  this.playing = false;
+  if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  this._setPlayBtn();
+};
+AnimEngine.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
+AnimEngine.prototype._setPlayBtn = function () {
+  var b = this.frame.querySelector('.btn-play');
+  if (b) b.textContent = this.playing ? '❙❙ 暂停' : '▶ 播放';
+};
+/* ---------- 场景 1：9 个 kernel 与 1 个 kernel ---------- */
+function scene1() {
+  var X0 = 110, W = 670, TOT = 1951;
+  function sx(us) { return X0 + W * us / TOT; }
+  var heavy = [['amax', 312, 1, 0], ['sub', 654, 1, 1], ['exp', 642, 1, 1], ['sum', 317, 1, 0]];
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), red = C('--a-red', '#FF7268'), muted = C('--a-fg-muted', '#888');
+    var strong = C('--a-fg-strong', '#eee'), accent = C('--a-accent', '#F08A4B'), line = C('--a-line', '#333');
+    var purple = C('--a-purple', '#B79BFF'), green = C('--a-green', '#5BD08A');
+    e.t(410, 26, 'V100，(B, N) = (512, 128256)，时间来自论文 Fig. 1 / Table 7；细条位置为示意', { size: 12, fill: C('--a-amber', '#E9B449') });
+    /* 时间轴 */
+    e.line(X0, 168, X0 + W, 168, { stroke: line, sw: 1 });
+    [0, 500, 1000, 1500].forEach(function (v) {
+      e.line(sx(v), 164, sx(v), 172, { stroke: muted, sw: 1 });
+      e.t(sx(v), 186, v + ' µs', { size: 10, fill: muted, mono: true });
+    });
+    e.t(X0 - 10, 120, 'eager', { anchor: 'end', size: 12, weight: 700, fill: strong });
+    var x = X0;
+    for (var i = 0; i < heavy.length; i++) {
+      var h = heavy[i], w = W * h[1] / TOT;
+      var hot = (k === 1 && h[3]) ? 'hot' : null;
+      e.rect(x, 96, w - 3, 46, h[0] + '|' + h[1] + ' µs', C('--a-blue-bg', '#1c2a40'), h[3] && k >= 1 ? red : blue, { rx: 4, sw: h[3] && k >= 1 ? 2 : 1.2, size: 12, cls: hot });
+      if (k >= 1) {
+        e.t(x + w / 2, 88, h[3] ? '读 1× + 写 1×' : '读 1×', { size: 10, fill: h[3] ? red : blue });
+      }
+      x += w;
+    }
+    for (var j = 0; j < 5; j++) e.rect(x + j * 4, 96, 2.5, 46, null, muted, 'none', { sw: 0 });
+    e.t(x + 14, 156, '×5', { size: 10, fill: muted, mono: true });
+    if (k === 0) {
+      e.t(410, 230, '一次 torch.logsumexp = 9 个 kernel launch，总 1.95 ms', { size: 15, weight: 700, fill: strong });
+      e.t(410, 256, '四个重 kernel 占了几乎全部时间；abs / unary / mask_fill / log / add 只碰 B 个元素', { size: 12, fill: muted });
+    }
+    /* 读写量柱 */
+    if (k >= 1) {
+      var bx = 150, by = 400, unit = 26;
+      e.t(60, 250, 'HBM 读写', { anchor: 'start', size: 12, weight: 700, fill: strong });
+      e.t(60, 266, '（输入大小 = 1×）', { anchor: 'start', size: 10, fill: muted });
+      var segs = [blue, blue, red, blue, red, blue];
+      for (var s = 0; s < 6; s++) e.rect(bx, by - (s + 1) * unit, 70, unit - 3, s === 0 ? null : null, segs[s], 'none', { sw: 0, opacity: 0.85 });
+      e.t(bx + 35, by + 18, 'eager', { size: 11, fill: strong });
+      e.t(bx + 35, by - 6 * unit - 8, '6×', { size: 16, weight: 700, fill: red, mono: true, cls: k === 1 ? 'hot' : null });
+      if (k === 1) {
+        e.t(470, 260, '中间张量 x−c、exp(x−c) 被写回 HBM 再读出', { size: 13, fill: red, weight: 700 });
+        e.t(470, 284, '每个 kernel 都接近带宽上限（DRAM 89.7%）', { size: 12, fill: muted });
+        e.t(470, 304, '慢在搬了 6 遍，而不是单个 kernel 慢', { size: 12, fill: muted });
+      }
+    }
+    if (k >= 2) {
+      e.rect(250, by - unit, 70, unit - 3, null, muted, 'none', { sw: 0 });
+      e.t(285, by + 18, 'torch.sum', { size: 11, fill: strong });
+      e.t(285, by - unit - 8, '1× · 311 µs', { size: 11, fill: muted, mono: true });
+      if (k === 2) {
+        e.t(560, 270, '同形状 torch.sum 只要 311 µs', { size: 14, weight: 700, fill: strong });
+        e.t(560, 294, '≈ LSE 的 1/6，正好对应读写量之比', { size: 12, fill: muted });
+      }
+    }
+    if (k >= 3) {
+      e.rect(350, by - unit, 70, unit - 3, null, blue, 'none', { sw: 0 });
+      e.rect(350, by - 2 * unit, 70, unit - 3, null, blue, 'none', { sw: 0, opacity: 0.6 });
+      e.t(385, by + 18, 'compile', { size: 11, fill: strong });
+      e.t(385, by - 2 * unit - 8, '1.98× · 619 µs', { size: 11, fill: blue, mono: true });
+      e.rect(450, by - unit, 70, unit - 3, null, purple, 'none', { sw: 0 });
+      e.rect(450, by - 2 * unit, 70, unit - 3, null, purple, 'none', { sw: 0, opacity: 0.6 });
+      e.t(485, by + 18, 'XLA', { size: 11, fill: strong });
+      e.t(485, by - 2 * unit - 8, '2.02× · 656 µs', { size: 11, fill: purple, mono: true });
+      if (k === 3) {
+        e.t(660, 250, '编译器融合了逐元素运算', { size: 13, weight: 700, fill: strong });
+        e.t(660, 272, '但保留两遍：先 max，再求和', { size: 12, fill: muted });
+        e.t(660, 292, '读写量约 2×', { size: 12, fill: blue });
+      }
+    }
+    if (k >= 4) {
+      e.rect(X0, 120 - 76 + 6, W * 315 / TOT, 30, 'FuseLSE · 1 次 launch · 315 µs', C('--a-accent-bg', '#3a2414'), accent, { rx: 4, sw: 2, size: 11, cls: k === 4 ? 'hot' : null });
+      e.rect(550, by - unit, 70, unit - 3, null, accent, 'none', { sw: 0 });
+      e.t(585, by + 18, 'FuseLSE', { size: 11, fill: strong });
+      e.t(585, by - unit - 8, '1.01×', { size: 14, weight: 700, fill: accent, mono: true });
+      e.t(720, 300, '6.25×', { size: 26, weight: 700, fill: green, mono: true });
+      e.t(720, 324, 'vs eager（Table 6）', { size: 11, fill: muted });
+      e.t(720, 350, '1.95× vs compile', { size: 12, fill: blue, mono: true });
+    }
+  }
+  var steps = [
+    ['时间线', 'torch.logsumexp 的 9 个 kernel', 'Nsight 剖析：<code>amax</code> 312 µs、<code>sub</code> 654 µs、<code>exp</code> 642 µs、<code>sum</code> 317 µs，另有 5 个只处理 B 个元素的轻量 kernel。'],
+    ['读写量', '中间张量让输入被搬了 6 遍', '<code>amax</code> 和 <code>sum</code> 各读一遍；<code>sub</code>、<code>exp</code> 各读一遍再写一遍。合计 6×，Nsight 实测 5.98×。'],
+    ['参照', '同形状的 torch.sum', '只读一遍，311 µs，约为 LSE 的 1/6。这说明瓶颈在 HBM 字节数。'],
+    ['编译器', 'torch.compile 与 XLA：两遍', '逐元素运算被融合进归约，但「先求最大值再求和」的两遍结构还在，读写量约 2×，619 / 656 µs。'],
+    ['FuseLSE', '一个 kernel，一遍读完', '成对 LSE 让每个线程边读边累加，读写量 1.01×，315 µs（Table 7 的 Nsight 时间；Table 6 的 CUDA event 时间为 0.310 ms）。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 2：FuseLSE kernel 内部 ---------- */
+function scene2() {
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), teal = C('--a-teal', '#3CC6C0'), purple = C('--a-purple', '#B79BFF');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), accent = C('--a-accent', '#F08A4B');
+    var amber = C('--a-amber', '#E9B449'), line = C('--a-line', '#333'), surf = C('--a-surface', '#1b1b1b');
+    var bbg = C('--a-blue-bg', '#1c2a40'), pbg = C('--a-purple-bg', '#2a2140');
+    e.t(410, 24, '结构按论文 §3.1 绘制；线程数缩减显示（每 warp 画 8 条 lane），为示意', { size: 12, fill: amber });
+    /* 一行输入 */
+    var RX = 60, RW = 700, cells = 40, cw = RW / cells;
+    e.t(RX - 8, 66, '第 b 行', { anchor: 'end', size: 11, fill: strong });
+    for (var i = 0; i < cells; i++) {
+      var grp = Math.floor(i / 4) % 8;
+      var on = k >= 1 && i < 32;
+      e.rect(RX + i * cw, 52, cw - 1.5, 22, null, on ? bbg : surf, on ? blue : line, { sw: on ? 1.2 : 0.8, cls: (k === 1 && i < 4) ? 'hot' : null });
+    }
+    e.t(RX + RW + 6, 66, '… N', { anchor: 'start', size: 11, fill: muted, mono: true });
+    if (k === 0) {
+      e.rect(250, 120, 320, 56, 'grid = B 个 block|每个 block 256 线程，负责一行', bbg, blue, { rx: 6, size: 13 });
+      e.arrow(410, 78, 410, 116, { marker: 'arrB', stroke: blue, sw: 1.5 });
+      for (var b = 0; b < 6; b++) {
+        e.rect(170 + b * 82, 220, 70, 40, 'block ' + (b < 5 ? b : '…'), surf, b === 0 ? blue : line, { rx: 4, size: 11, sw: b === 0 ? 1.6 : 1 });
+      }
+      e.t(410, 296, 'B 个输出标量，每个 block 写一个', { size: 13, fill: strong });
+      e.t(410, 320, '行与行之间完全独立，没有跨 block 同步', { size: 12, fill: muted });
+    }
+    if (k >= 1) {
+      /* float4：每条 lane 一次读 4 个 */
+      for (var l = 0; l < 8; l++) {
+        var cx = RX + (l * 4 + 2) * cw;
+        e.arrow(cx, 78, cx, 104, { marker: 'arrB', stroke: blue, sw: 1 });
+        e.rect(cx - 12, 108, 24, 18, 't' + l, surf, blue, { rx: 3, size: 9, mono: true });
+      }
+      e.t(RX + 32 * cw + 10, 114, '← 一个 warp 一步读', { anchor: 'start', size: 11, fill: blue });
+      e.t(RX + 32 * cw + 10, 130, '32 × float4 = 128 个 float', { anchor: 'start', size: 10, fill: blue, mono: true });
+      if (k === 1) {
+        e.t(410, 190, '每条 lane 一次 float4 读 4 个 float32，连续地址合并访问', { size: 13, weight: 700, fill: strong });
+        e.t(410, 214, '256 线程按步长扫过整行，每个线程约访问 N/256 个元素', { size: 12, fill: muted });
+        e.t(410, 238, '这是 kernel 能逼近 HBM 峰值带宽的前提', { size: 12, fill: muted });
+      }
+    }
+    if (k >= 2) {
+      for (var a = 0; a < 8; a++) {
+        var ax = RX + (a * 4 + 2) * cw;
+        e.rect(ax - 18, 140, 36, 22, 'acc', C('--a-teal-bg', '#14302e'), teal, { rx: 3, size: 10, mono: true, cls: k === 2 && a === 0 ? 'hot' : null });
+      }
+      if (k === 2) {
+        e.rect(150, 190, 520, 92, null, surf, teal, { rx: 6, sw: 1.2 });
+        e.t(410, 214, '寄存器累加器：初值 −1e30，第一个有效输入直接赋值（避开 NaN）', { size: 12, fill: teal });
+        e.t(410, 240, 'acc ← max(acc, x) + log(1 + exp(−|acc − x|))', { size: 14, weight: 700, fill: strong, mono: true });
+        e.t(410, 266, 'exp / log 走 SFU：__expf、__logf；每行共 N−1 次 log', { size: 12, fill: muted });
+        e.t(410, 312, '不需要先扫一遍求全局最大值：每次成对合并自带局部 max', { size: 12, fill: muted });
+      }
+    }
+    if (k >= 3) {
+      /* warp 内 butterfly：8 → 4 → 2 → 1（示意，实际 32 → 1） */
+      var lx = [];
+      for (var q = 0; q < 8; q++) lx.push(RX + (q * 4 + 2) * cw);
+      var Y0 = 180, dy = 40, lv = 0, span = 4;
+      while (span >= 1) {
+        for (var p = 0; p < 8; p++) {
+          var partner = p ^ span;
+          if (p < partner) {
+            e.line(lx[p], Y0 + lv * dy, lx[partner], Y0 + (lv + 1) * dy, { stroke: purple, sw: 1 });
+            e.line(lx[partner], Y0 + lv * dy, lx[p], Y0 + (lv + 1) * dy, { stroke: purple, sw: 1 });
+          }
+        }
+        lv++; span = span / 2;
+        if (span < 1) break;
+      }
+      for (var z = 0; z <= 3; z++) e.t(lx[7] + 24, Y0 + z * dy + 4, ['32', '16', '8', '…→1'][z], { anchor: 'start', size: 10, fill: purple, mono: true });
+      e.rect(lx[0] - 18, Y0 + 3 * dy + 6, 36, 22, 'w0', pbg, purple, { rx: 3, size: 10, mono: true, cls: k === 3 ? 'hot' : null });
+      if (k === 3) {
+        e.t(640, 220, 'warp shuffle 蝶形归约', { anchor: 'start', size: 13, weight: 700, fill: strong });
+        e.t(640, 244, 'lane 之间直接交换寄存器值', { anchor: 'start', size: 12, fill: muted });
+        e.t(640, 266, '32 → 1，不经过共享内存', { anchor: 'start', size: 12, fill: muted });
+        e.t(640, 288, '每次合并仍是成对 LSE', { anchor: 'start', size: 12, fill: purple });
+      }
+    }
+    if (k >= 4) {
+      var SX = 360, SY = 330;
+      e.t(SX + 120, SY - 6, '共享内存 32 B', { size: 11, fill: strong });
+      for (var s = 0; s < 8; s++) {
+        e.rect(SX + s * 30, SY, 28, 24, 'w' + s, pbg, purple, { rx: 3, size: 10, mono: true });
+      }
+      e.arrow(RX + 2 * cw + 18, 312, SX - 4, SY + 8, { marker: 'arrP', stroke: purple, sw: 1.2 });
+      e.arrow(SX + 240 + 4, SY + 12, 640, SY + 12, { marker: 'arrA', stroke: accent, sw: 1.5 });
+      e.rect(644, SY - 4, 120, 32, '线程 0 写 out[b]', C('--a-accent-bg', '#3a2414'), accent, { rx: 4, size: 11, sw: 2, cls: 'hot' });
+      e.t(SX + 120, SY + 46, '8 个 warp 结果 → 第一个 warp 再做一次 8 → 1', { size: 11, fill: muted });
+      e.t(410, 408, 'HBM 读写 ≈ 1× 输入：每个元素读一次，只写 B 个标量', { size: 13, weight: 700, fill: accent });
+    }
+  }
+  var steps = [
+    ['分配', '一行一个 block', 'kernel 启动 B 个 block，每个 256 线程，协作把一行 N 个元素归约成一个标量。'],
+    ['读取', 'float4 合并访问', '每个线程一次读 4 个 float32，一个 warp 一步覆盖 128 个元素；256 线程按步长扫完整行，每个线程约 N/256 个元素。'],
+    ['累加', '寄存器里的成对 LSE', '每个线程只有一个寄存器累加器，初值 −10<sup>30</sup>，第一个有效输入直接赋值以避开 NaN；之后每读一个元素就用成对 LSE 合并一次，<code>exp</code>/<code>log</code> 走 SFU。'],
+    ['warp 归约', 'shuffle 蝶形：32 → 1', '256 个部分结果先在每个 warp 内用 warp shuffle 蝶形归约到 1 个，全程在寄存器里（图中每 warp 只画 8 条 lane）。'],
+    ['block 归约', '32 字节共享内存，线程 0 写回', '8 个 warp 的结果经 32 字节共享内存再归约一次，线程 0 把标量写回全局内存。整体读写量约为输入的 1×，eager 是 6×。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 3：Mitchell 近似与误差 ---------- */
+function scene3() {
+  var LN2 = Math.LN2;
+  function f(z) { return Math.log(1 + Math.pow(2, z)) / LN2; }
+  function fh(z) { var I = Math.floor(z), F = z - I; if (z >= 0) { I = 0; F = 0; } return (1 + F) * Math.pow(2, I); }
+  function eps(z) { return f(z) - fh(z); }
+  /* LUT 残差：示意，按分段常数修正后归一到论文给出的峰值 0.0068 */
+  function resRaw(z) { var w = 1 / 8, c = (Math.floor(z / w) + 0.5) * w; return eps(z) - eps(c); }
+  var RMAX = 0;
+  for (var t = -4; t <= 0; t += 0.002) RMAX = Math.max(RMAX, Math.abs(resRaw(t)));
+  function res(z) { return resRaw(z) / RMAX * 0.0068; }
+  var LX0 = 70, LX1 = 380, RX0 = 470, RX1 = 790, Y0 = 350, Y1 = 90;
+  function lx(z) { return LX0 + (z + 4) / 4 * (LX1 - LX0); }
+  function ly(v) { return Y0 - v * (Y0 - Y1); }
+  function rx(z) { return RX0 + (z + 4) / 4 * (RX1 - RX0); }
+  function ry(v) { return Y0 - v / 0.1 * (Y0 - Y1); }
+  function curve(fn, X, Y, step) {
+    var d = '', first = true, prev = null;
+    for (var z = -4; z <= 0.0001; z += step) {
+      var zz = Math.min(z, 0), v = fn(zz);
+      d += (first ? 'M' : 'L') + X(zz).toFixed(1) + ',' + Y(v).toFixed(1) + ' ';
+      first = false;
+    }
+    return d;
+  }
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), red = C('--a-red', '#FF7268'), green = C('--a-green', '#5BD08A');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), accent = C('--a-accent', '#F08A4B');
+    var amber = C('--a-amber', '#E9B449'), line = C('--a-line', '#333'), surf = C('--a-surface', '#1b1b1b');
+    e.t(410, 24, '曲线按论文公式计算；LUT 残差曲线为示意，只有峰值 0.0068 来自论文', { size: 12, fill: amber });
+    /* 左图坐标轴 */
+    e.line(LX0, Y0, LX1, Y0, { stroke: line, sw: 1 });
+    e.line(LX0, Y0, LX0, Y1 - 10, { stroke: line, sw: 1 });
+    [-4, -3, -2, -1, 0].forEach(function (z) {
+      e.t(lx(z), Y0 + 16, String(z), { size: 10, fill: muted, mono: true });
+    });
+    e.t((LX0 + LX1) / 2, Y0 + 34, 'z = y − x ≤ 0', { size: 11, fill: muted, mono: true });
+    e.t(LX0 - 6, ly(1) + 4, '1', { anchor: 'end', size: 10, fill: muted, mono: true });
+    e.t(LX0 - 6, ly(0.5) + 4, '0.5', { anchor: 'end', size: 10, fill: muted, mono: true });
+    e.path(curve(f, lx, ly, 0.02), { fill: 'none', stroke: blue, sw: 2.2 });
+    e.t(lx(-3.2), ly(f(-3.2)) - 26, 'f(z) = log₂(1 + 2ᶻ)', { size: 12, fill: blue, mono: true });
+    if (k === 0) {
+      e.rect(450, 110, 340, 150, null, surf, blue, { rx: 6, sw: 1.2 });
+      e.t(620, 140, '以 2 为底的成对 LSE', { size: 14, weight: 700, fill: strong });
+      e.t(620, 170, 'LSE₂(x, y) = x + f(y − x)', { size: 13, fill: blue, mono: true });
+      e.t(620, 198, '先排好 x ≥ y，于是 z ≤ 0', { size: 12, fill: muted });
+      e.t(620, 222, '难点只剩 f(z)：一次 2ᶻ、一次 log₂', { size: 12, fill: muted });
+      e.t(620, 244, 'CPU 上 log 最多 40 个周期', { size: 12, fill: red });
+    }
+    if (k >= 1) {
+      e.path(curve(fh, lx, ly, 0.01), { fill: 'none', stroke: accent, sw: 2, dash: k === 1 ? null : '5 3' });
+      e.t(lx(-1.7), ly(fh(-1.7)) + 22, 'f̂(z)', { size: 12, fill: accent, mono: true });
+      [-1, -2, -3].forEach(function (z) { e.circle(lx(z), ly(fh(z)), 3, { fill: accent }); });
+    }
+    if (k === 1) {
+      e.rect(450, 100, 340, 180, null, surf, accent, { rx: 6, sw: 1.2 });
+      e.t(620, 128, 'Mitchell 近似', { size: 14, weight: 700, fill: strong });
+      e.t(620, 154, '2ᵛ ≈ 1 + v，log₂(1 + v) ≈ v，v ∈ [0, 1)', { size: 12, fill: muted, mono: true });
+      e.t(620, 186, 'f̂(z) = (1 + F_z) ≫ (−I_z)', { size: 15, weight: 700, fill: accent, mono: true, cls: 'hot' });
+      e.t(620, 214, 'I_z ≤ 0 是整数部分，F_z ∈ [0, 1) 是小数部分', { size: 11, fill: muted });
+      e.t(620, 240, '定点下：一次加法 + 一次右移', { size: 13, fill: strong });
+      e.t(620, 264, '在每个整数点 z = −n 处是折线拐点', { size: 11, fill: muted });
+    }
+    if (k >= 2) {
+      e.line(RX0, Y0, RX1, Y0, { stroke: line, sw: 1 });
+      e.line(RX0, Y0, RX0, Y1 - 10, { stroke: line, sw: 1 });
+      [-4, -3, -2, -1, 0].forEach(function (z) { e.t(rx(z), Y0 + 16, String(z), { size: 10, fill: muted, mono: true }); });
+      e.t(RX0 - 6, ry(0.1) + 4, '0.1', { anchor: 'end', size: 10, fill: muted, mono: true });
+      e.t(RX0 - 6, ry(0.05) + 4, '0.05', { anchor: 'end', size: 10, fill: muted, mono: true });
+      e.t((RX0 + RX1) / 2, Y1 - 22, 'ε(z) = f(z) − f̂(z) ≥ 0', { size: 12, fill: red, mono: true });
+      if (k >= 3) {
+        var area = curve(eps, rx, ry, 0.01) + 'L' + rx(0) + ',' + Y0 + ' L' + rx(-4) + ',' + Y0 + ' Z';
+        e.path(area, { fill: red, stroke: 'none', opacity: k === 3 ? 0.28 : 0.12 });
+      }
+      e.path(curve(eps, rx, ry, 0.01), { fill: 'none', stroke: red, sw: 2, opacity: k >= 4 ? 0.45 : 1 });
+      [[-1, '0.085'], [-2, '0.072'], [-3, '0.045']].forEach(function (p) {
+        e.circle(rx(p[0]), ry(eps(p[0])), 3.5, { fill: red, cls: k === 2 && p[0] === -1 ? 'hot' : null });
+        e.t(rx(p[0]), ry(eps(p[0])) - 10, p[1], { size: 11, fill: red, mono: true });
+      });
+    }
+    if (k === 2) {
+      e.t(225, 414, '误差非负、周期性出现，峰值在 z = −n：log₂(1 + 2⁻ⁿ) − 2⁻ⁿ', { size: 12, fill: strong });
+      e.t(630, 414, '全局最大 ≈ 0.085（n = 1），随 z → −∞ 指数衰减', { size: 12, fill: muted });
+    }
+    if (k === 3) {
+      e.t(rx(-2.4), ry(0.035), '∫ε dz ≈ 0.212', { size: 15, weight: 700, fill: strong, cls: 'hot' });
+      e.t(410, 414, '= π² / (12 (ln 2)²) − 3/2。假设 z 在 (−∞, 0] 上单位密度采样，期望累积误差与 N 无关', { size: 12, fill: muted });
+    }
+    if (k >= 4) {
+      e.path(curve(res, rx, ry, 0.004), { fill: 'none', stroke: green, sw: 1.8 });
+      e.t(rx(-1.6), ry(0.02), 'LUT 修正后（示意）', { size: 11, fill: green });
+      e.rect(90, 110, 270, 92, null, surf, green, { rx: 6, sw: 1.2 });
+      e.t(225, 136, '64 项修正查找表', { size: 13, weight: 700, fill: strong });
+      e.t(225, 160, '放在 CUDA 常量内存，按 f̂ 的高 6 位索引', { size: 11, fill: muted });
+      e.t(225, 186, '峰值误差 0.085 → 0.0068', { size: 14, weight: 700, fill: green, mono: true, cls: 'hot' });
+    }
+  }
+  var steps = [
+    ['目标', '要近似的函数 f(z)', '把成对 LSE 换到以 2 为底：x + log<sub>2</sub>(1 + 2<sup>z</sup>)，z = y − x ≤ 0。只要把 f(z) 换成整数运算，整个归约就不需要浮点 <code>exp</code>/<code>log</code>。'],
+    ['近似', 'Mitchell：一次加法和一次移位', '用 2<sup>v</sup> ≈ 1 + v、log<sub>2</sub>(1 + v) ≈ v，f 变成 (1 + F<sub>z</sub>) ≫ (−I<sub>z</sub>)。在定点表示里，这就是一次整数加法加一次右移。'],
+    ['误差', '误差非负，峰值在整数点', 'ε(z) 在 z = −n 处达到 log<sub>2</sub>(1 + 2<sup>−n</sup>) − 2<sup>−n</sup>：0.085、0.072、0.045……，并随 z → −∞ 指数衰减，远处的元素几乎没有贡献。'],
+    ['累积', '期望累积误差 ≈ 0.212', '若 z 在 (−∞, 0] 上按单位密度出现，∫ε dz = π²/(12(ln 2)²) − 3/2 ≈ 0.212，与样本数无关。实际行上的误差取决于输入分布，论文在 Table 4 里实测。'],
+    ['LUT', '64 项查找表把峰值压到 0.0068', '查表是一次常量内存访问。论文给出的是峰值从 0.085 降到 0.0068；绿色残差曲线的形状是示意。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 4：两种情形与四代 GPU ---------- */
+function scene4() {
+  /* 示意模型：t = 启动开销 + 读写量 × N / 带宽（任意单位） */
+  function tE(n) { return 10.5 + 6 * n / 400; }
+  function tF(n) { return 1 + n / 400; }
+  var PX0 = 90, PX1 = 520, PY0 = 360, PY1 = 80;
+  function px(n) { return PX0 + (Math.log2(n) - 1) / 16 * (PX1 - PX0); }
+  function py(t) { return PY0 - (Math.log10(t) - 0) / 3.5 * (PY0 - PY1); }
+  function curve(fn) {
+    var d = '';
+    for (var l = 1; l <= 17.001; l += 0.1) { var n = Math.pow(2, l); d += (l === 1 ? 'M' : 'L') + px(n).toFixed(1) + ',' + py(fn(n)).toFixed(1) + ' '; }
+    return d;
+  }
+  var T6 = [['V100', [1.936, 0.605, 0.651, 0.310]], ['H100', [0.584, 0.163, 0.184, 0.0894]], ['H200', [0.462, 0.120, 0.134, 0.0674]], ['B300', [0.366, null, null, 0.0546]]];
+  var SP = [['6.25×', '1.95×', '2.10×'], ['6.53×', '1.83×', '2.06×'], ['6.86×', '1.78×', '1.99×'], ['6.70×', '', '']];
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), purple = C('--a-purple', '#B79BFF'), red = C('--a-red', '#FF7268');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), accent = C('--a-accent', '#F08A4B');
+    var amber = C('--a-amber', '#E9B449'), line = C('--a-line', '#333'), surf = C('--a-surface', '#1b1b1b');
+    var cols = [muted, blue, purple, accent];
+    if (k <= 1) {
+      e.t(410, 24, '示意曲线：启动开销 + 读写量 ÷ 带宽，不是论文测量；右侧倍数来自论文 §4.1', { size: 12, fill: amber });
+      e.line(PX0, PY0, PX1, PY0, { stroke: line, sw: 1 });
+      e.line(PX0, PY0, PX0, PY1, { stroke: line, sw: 1 });
+      [2, 64, 1024, 8192, 128256].forEach(function (n) { e.t(px(n), PY0 + 16, n >= 1024 ? (n === 128256 ? '128K' : (n / 1024) + 'K') : String(n), { size: 10, fill: muted, mono: true }); });
+      e.t((PX0 + PX1) / 2, PY0 + 34, 'N（对数轴）', { size: 11, fill: muted });
+      e.t(PX0 - 10, (PY0 + PY1) / 2, '时间', { anchor: 'end', size: 11, fill: muted });
+      var hiL = k === 0, hiR = k === 1;
+      e.rect(PX0, PY1, px(1024) - PX0, PY0 - PY1, null, hiL ? C('--a-blue-bg', '#1c2a40') : 'none', 'none', { sw: 0, opacity: 0.5 });
+      e.rect(px(8192), PY1, PX1 - px(8192), PY0 - PY1, null, hiR ? C('--a-red-bg', '#3a1c1a') : 'none', 'none', { sw: 0, opacity: 0.5 });
+      e.path(curve(tE), { fill: 'none', stroke: muted, sw: 2.2 });
+      e.path(curve(tF), { fill: 'none', stroke: accent, sw: 2.2 });
+      e.t(px(16), py(tE(16)) - 10, 'eager：9 次 launch', { size: 11, fill: muted });
+      e.t(px(16), py(tF(16)) - 10, 'FuseLSE：1 次 launch', { size: 11, fill: accent });
+      e.t((PX0 + px(1024)) / 2, PY1 + 16, 'launch 主导', { size: 12, weight: 700, fill: hiL ? blue : muted });
+      e.t((px(8192) + PX1) / 2, PY1 + 16, 'HBM 主导', { size: 12, weight: 700, fill: hiR ? red : muted });
+      var bx = 560;
+      e.rect(bx, 110, 230, 210, null, surf, hiL ? blue : red, { rx: 6, sw: 1.2 });
+      if (hiL) {
+        e.t(bx + 115, 140, 'N ≤ 1024', { size: 14, weight: 700, fill: strong, mono: true });
+        e.t(bx + 115, 178, '~10–11×', { size: 26, weight: 700, fill: blue, mono: true, cls: 'hot' });
+        e.t(bx + 115, 210, '数据很少，时间几乎全是', { size: 12, fill: muted });
+        e.t(bx + 115, 230, 'kernel 启动开销', { size: 12, fill: muted });
+        e.t(bx + 115, 262, '9 个 kernel → 1 个', { size: 13, fill: strong });
+        e.t(bx + 115, 290, 'FuseLSE 与 IntLSE 相差 < 1%', { size: 11, fill: muted });
+      } else {
+        e.t(bx + 115, 140, 'N ≥ 8192', { size: 14, weight: 700, fill: strong, mono: true });
+        e.t(bx + 115, 178, '~6×', { size: 26, weight: 700, fill: red, mono: true, cls: 'hot' });
+        e.t(bx + 115, 210, '时间 ≈ 读写字节数 ÷ 带宽', { size: 12, fill: muted });
+        e.t(bx + 115, 236, '6× 输入 → 1× 输入', { size: 13, fill: strong });
+        e.t(bx + 115, 262, 'N = 128256：1.94 ms vs 0.310 ms', { size: 11, fill: muted, mono: true });
+        e.t(bx + 115, 290, '两种情形下算术都被藏住', { size: 11, fill: muted });
+      }
+      return;
+    }
+    if (k === 2) {
+      e.t(410, 24, 'Table 6：(512, 128256)，不计编译时间；柱高按各 GPU 的 eager 时间归一', { size: 12, fill: amber });
+      var GX = 70, GW = 180, BW = 30, BY = 360, BH = 260;
+      e.line(GX - 10, BY, GX + 4 * GW, BY, { stroke: line, sw: 1 });
+      for (var g = 0; g < 4; g++) {
+        var row = T6[g][1], x0 = GX + g * GW;
+        for (var i = 0; i < 4; i++) {
+          var x = x0 + i * (BW + 6);
+          if (row[i] === null) { e.t(x + BW / 2, BY - 8, '–', { size: 12, fill: muted }); continue; }
+          var h = BH * row[i] / row[0];
+          e.rect(x, BY - h, BW, h, null, cols[i], 'none', { sw: 0, opacity: 0.9, cls: i === 3 ? 'hot' : null });
+          var lab = row[i] >= 0.1 ? row[i].toFixed(3) : row[i].toFixed(4);
+          e.t(x + BW / 2, BY - h - 6, lab, { size: 9, fill: cols[i], mono: true });
+        }
+        e.t(x0 + 70, BY + 18, T6[g][0], { size: 12, weight: 700, fill: strong });
+        e.t(x0 + 70, BY + 36, SP[g][0] + (SP[g][1] ? ' / ' + SP[g][1] + ' / ' + SP[g][2] : ''), { size: 10, fill: accent, mono: true });
+      }
+      e.t(410, 412, '底部：FuseLSE 相对 eager / compile / XLA 的加速比（ms）；B300 上 Triton 与 XLA 还不能生成 sm_103 代码', { size: 11, fill: muted });
+      return;
+    }
+    /* k = 3, 4：Table 7 */
+    e.t(410, 24, 'Table 7：Nsight Compute，(512, 128256)', { size: 12, fill: amber });
+    var gpus = [['V100', [5.98, 1.98, 2.02, 1.01], [89.7, 93.5, 90.0, 92.0], 28.0, '1.8 Top/s', '0.90 TB/s'],
+                ['H100', [5.88, 1.91, 2.03, 1.01], [77.5, 88.2, 84.8, 84.0], 45.8, '4.2 Top/s', '3.35 TB/s'],
+                ['H200', [5.85, 1.89, 2.03, 1.01], [65.0, 81.0, 77.1, 74.3], 65.9, '4.2 Top/s', '4.80 TB/s']];
+    var names = ['eager', 'compile', 'XLA', 'FuseLSE'];
+    if (k === 3) {
+      var X0 = 150, CW = 200, U = 40, Y = 340;
+      for (var q = 0; q < 3; q++) {
+        var gx = X0 + q * CW, gg = gpus[q];
+        for (var m = 0; m < 4; m++) {
+          var bh = gg[1][m] * U;
+          e.rect(gx + m * 38, Y - bh, 30, bh, null, cols[m], 'none', { sw: 0, opacity: 0.9 });
+          e.t(gx + m * 38 + 15, Y - bh - 6, gg[1][m].toFixed(2) + '×', { size: 9, fill: cols[m], mono: true });
+          e.t(gx + m * 38 + 15, Y + 14, Math.round(gg[2][m]) + '%', { size: 9, fill: muted, mono: true });
+        }
+        e.t(gx + 72, Y + 34, gg[0], { size: 12, weight: 700, fill: strong });
+      }
+      e.t(80, Y + 14, 'DRAM 利用率', { anchor: 'end', size: 10, fill: muted });
+      e.t(80, Y - 120, '读写量', { anchor: 'end', size: 11, fill: strong });
+      e.t(80, Y - 104, '（× 输入）', { anchor: 'end', size: 10, fill: muted });
+      e.t(410, 70, '四种实现都在较高的 DRAM 利用率下跑，时间差几乎全由读写量决定：6× : 2× : 1×', { size: 13, weight: 700, fill: strong });
+      return;
+    }
+    var SX = 120, SW = 180, SB = 330, SH = 220;
+    e.line(SX - 20, SB, SX + 3 * SW, SB, { stroke: line, sw: 1 });
+    e.line(SX - 20, SB - SH, SX + 3 * SW, SB - SH, { stroke: line, sw: 1, dash: '4 4' });
+    e.t(SX - 26, SB - SH + 4, '100%', { anchor: 'end', size: 10, fill: muted, mono: true });
+    for (var r = 0; r < 3; r++) {
+      var sx = SX + r * SW + 40, v = gpus[r][3], hh = SH * v / 100;
+      e.rect(sx, SB - hh, 60, hh, null, r === 2 ? red : accent, 'none', { sw: 0, opacity: 0.9, cls: r === 2 ? 'hot' : null });
+      e.t(sx + 30, SB - hh - 8, v.toFixed(1) + '%', { size: 14, weight: 700, fill: r === 2 ? red : accent, mono: true });
+      e.t(sx + 30, SB + 18, gpus[r][0], { size: 12, weight: 700, fill: strong });
+      e.t(sx + 30, SB + 36, 'HBM ' + gpus[r][5], { size: 10, fill: muted, mono: true });
+      e.t(sx + 30, SB + 52, 'SFU 峰值 ' + gpus[r][4], { size: 10, fill: muted, mono: true });
+    }
+    e.t(410, 70, 'FuseLSE 的 SFU 利用率逐代上升', { size: 14, weight: 700, fill: strong });
+    e.t(410, 94, 'H100 → H200：带宽 +43%，SFU 峰值不变；B300 没有 Nsight 数据', { size: 12, fill: muted });
+    e.t(SX + 3 * SW + 20, 200, '会不会变成', { anchor: 'start', size: 12, fill: red });
+    e.t(SX + 3 * SW + 20, 220, 'SFU 受限？', { anchor: 'start', size: 12, fill: red });
+    e.t(SX + 3 * SW + 20, 240, '（本文推测）', { anchor: 'start', size: 10, fill: muted });
+  }
+  var steps = [
+    ['小 N', 'launch 主导：~10–11×', 'N ≤ 1024 时数据量很小，时间几乎全是 kernel 启动开销。FuseLSE 把 9 次 launch 并成 1 次。曲线为示意。'],
+    ['大 N', 'HBM 主导：~6×', 'N ≥ 8192 后时间正比于读写字节数，eager 搬 6 遍、FuseLSE 搬 1 遍。N = 128256 时 1.94 ms 对 0.310 ms。'],
+    ['Table 6', '四代 GPU 与编译器基线', 'FuseLSE 对 eager 6.25–6.86×，对 <code>torch.compile</code> 1.78–1.95×，对 XLA 1.99–2.10×。B300 上只有 eager 可比。'],
+    ['Table 7', '差距来自读写量', '读写量 5.85–5.98× / 1.89–2.03× / 1.01×，DRAM 利用率都在 65% 以上。成对算法多出的 N−1 次 <code>log</code> 没有显现出来。'],
+    ['SFU', 'SFU 利用率 28% → 46% → 66%', '带宽增长比 SFU 峰值快，同样的算术强度下 SFU 越来越接近上限。将来某代 GPU 上 FuseLSE 可能转为 SFU 受限（本文推测）。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 5：选哪种算术与三个应用 ---------- */
+function scene5() {
+  function shell(e, k) {
+    var green = C('--a-green', '#5BD08A'), red = C('--a-red', '#FF7268'), blue = C('--a-blue', '#74B4FF');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), accent = C('--a-accent', '#F08A4B');
+    var amber = C('--a-amber', '#E9B449'), line = C('--a-line', '#333'), surf = C('--a-surface', '#1b1b1b');
+    var gbg = C('--a-green-bg', '#16301f'), abg = C('--a-accent-bg', '#3a2414');
+    function bar(x, y, w, val, max, col, lab, hot) {
+      var bw = w * val / max;
+      e.rect(x, y, bw, 18, null, col, 'none', { sw: 0, opacity: 0.9, cls: hot ? 'hot' : null });
+      e.t(x + bw + 6, y + 13, lab, { anchor: 'start', size: 11, fill: col, mono: true });
+    }
+    if (k === 0) {
+      e.t(410, 24, '数值来自论文 §4.1 与 §2.2', { size: 12, fill: amber });
+      e.rect(60, 60, 330, 300, null, surf, accent, { rx: 8, sw: 1.4 });
+      e.rect(430, 60, 330, 300, null, surf, green, { rx: 8, sw: 1.4 });
+      e.t(225, 92, 'GPU：有 SFU', { size: 15, weight: 700, fill: strong });
+      e.t(595, 92, 'CPU：没有 SFU', { size: 15, weight: 700, fill: strong });
+      e.t(225, 130, '内存受限，算术被 HBM 时间藏住', { size: 12, fill: muted });
+      e.t(225, 154, 'INT32 与 FP32 指令延迟都是 4 个周期', { size: 12, fill: muted });
+      e.t(225, 196, 'FuseLSE ≈ IntLSE（相差 < 1%）', { size: 14, weight: 700, fill: accent });
+      e.t(225, 222, 'IntLSE 的 SM 计算时间反而多 26–50%', { size: 11, fill: red });
+      e.rect(115, 270, 220, 40, '→ 用 FuseLSE', abg, accent, { rx: 6, sw: 2, size: 14, cls: 'hot' });
+      e.t(595, 130, '计算受限，exp / log 很贵', { size: 12, fill: muted });
+      e.t(595, 154, 'INT32 加法 1 周期，log 最多 40 周期', { size: 12, fill: muted });
+      e.t(595, 196, 'IntLSE 比 FuseLSE 快 3.1–6.1×', { size: 14, weight: 700, fill: green });
+      e.t(595, 222, '代价：10⁻³–10⁻² 量级的误差', { size: 11, fill: red });
+      e.rect(485, 270, 220, 40, '→ 用 IntLSE', gbg, green, { rx: 6, sw: 2, size: 14, cls: 'hot' });
+      e.t(410, 396, 'CPU 对比：IntLSE 手写 AVX2 单线程，FuseLSE 多线程 C++', { size: 11, fill: muted });
+      return;
+    }
+    if (k === 1) {
+      e.t(410, 24, 'Table 5：Xeon Gold 6148 单线程，N = 128256，B = 128', { size: 12, fill: amber });
+      var rows = [['U(−1, 0)', 0.0, 33.0, '1.2×'], ['N(0, 1)', 0.0, 34.2, '1.2×'], ['U(−100, 0)', 12.7, 294.4, '10.7×'],
+                  ['U(−1000, 1000)', 95.6, 358.6, '13.0×'], ['U(−500, 0)', 82.5, 389.1, '14.1×'], ['N(0, 20²)', 50.2, 606.9, '22.0×']];
+      e.t(150, 62, '输入分布', { anchor: 'end', size: 11, fill: muted });
+      e.t(205, 62, '下溢', { size: 11, fill: muted });
+      e.t(260, 62, 'torch（灰）vs IntLSE 27.6 ms（绿）', { anchor: 'start', size: 11, fill: muted });
+      for (var i = 0; i < rows.length; i++) {
+        var y = 80 + i * 48, r = rows[i];
+        e.t(150, y + 22, r[0], { anchor: 'end', size: 11, fill: strong, mono: true });
+        e.t(205, y + 22, r[1].toFixed(1) + '%', { size: 11, fill: r[1] > 0 ? red : muted, mono: true });
+        bar(260, y + 4, 380, r[2], 607, muted, r[2].toFixed(1), false);
+        bar(260, y + 24, 380, 27.6, 607, green, '', false);
+        e.t(760, y + 26, r[3], { anchor: 'end', size: 14, weight: 700, fill: r[1] > 0 ? green : muted, mono: true, cls: i === 5 ? 'hot' : null });
+      }
+      e.t(410, 392, 'IntLSE 时间与输入无关；torch 在 exp 结果变成次正规数时明显变慢', { size: 12, fill: strong });
+      e.t(410, 412, '没有下溢时只快 1.2–1.3×', { size: 11, fill: muted });
+      return;
+    }
+    if (k === 2) {
+      e.t(410, 24, 'RLHF：GPT-2，B = 8，V = 50K，V100（Table 1）', { size: 12, fill: amber });
+      e.t(80, 80, 'SLS 单独', { anchor: 'start', size: 13, weight: 700, fill: strong });
+      bar(200, 66, 460, 12.34, 13, muted, 'torch 12.34 ms', false);
+      bar(200, 90, 460, 2.01, 13, accent, 'FuseLSE 2.01 ms', true);
+      bar(200, 114, 460, 2.07, 13, green, 'IntLSE 2.07 ms', false);
+      e.t(760, 108, '≈ 6×', { anchor: 'end', size: 20, weight: 700, fill: accent, mono: true });
+      e.t(80, 190, 'LM head + SLS', { anchor: 'start', size: 13, weight: 700, fill: strong });
+      bar(200, 176, 460, 59.12, 60, muted, 'torch 59.12', false);
+      bar(200, 200, 460, 51.64, 60, blue, 'compile 51.64', false);
+      bar(200, 224, 460, 49.20, 60, accent, 'FuseLSE 49.20', false);
+      bar(200, 248, 460, 48.74, 60, C('--a-teal', '#3CC6C0'), 'cce (compile) 48.74', false);
+      e.rect(200, 280, 460 * 47 / 60, 22, '共享的矩阵乘约 47 ms', surf, line, { rx: 3, size: 11, sw: 1 });
+      e.t(760, 230, '1.20×', { anchor: 'end', size: 20, weight: 700, fill: red, mono: true });
+      e.t(410, 340, 'kernel 快了 6×，整个阶段只快 1.20×：矩阵乘占了大头', { size: 13, weight: 700, fill: strong });
+      e.t(410, 364, '编译 cce 略快 1%，但每个新形状要 1.74 s 冷启动编译', { size: 12, fill: muted });
+      e.t(410, 386, '四种词表上 SLS 加速 6.15–6.30×（FuseLSE）', { size: 12, fill: muted });
+      return;
+    }
+    if (k === 3) {
+      e.t(410, 24, '概率电路：PyJuice HCLT，MNIST，K ∈ {4, 8, 16, 32}，批大小 512', { size: 12, fill: amber });
+      e.rect(80, 70, 300, 140, null, surf, accent, { rx: 6, sw: 1.2 });
+      e.t(230, 104, '前向加速（相对 PyJuice 默认）', { size: 12, fill: muted });
+      e.t(230, 150, '≈ 1.7×', { size: 30, weight: 700, fill: accent, mono: true, cls: 'hot' });
+      e.t(230, 186, '1.68–1.77×，两者相差 3% 以内', { size: 12, fill: muted });
+      e.rect(440, 70, 300, 140, null, surf, red, { rx: 6, sw: 1.2 });
+      e.t(590, 104, '对数似然绝对误差', { size: 12, fill: muted });
+      e.t(590, 136, 'FuseLSE  3.0–4.2 × 10⁻⁴', { size: 13, fill: accent, mono: true });
+      e.t(590, 162, 'IntLSE  0.45–1.26 nats', { size: 13, fill: green, mono: true });
+      e.t(590, 188, '每样本对数似然约 −4500 nats', { size: 11, fill: muted });
+      e.t(410, 260, '稀疏 gather 与加对数权重也融进同一个 kernel', { size: 13, weight: 700, fill: strong });
+      e.t(410, 286, 'LSE 嵌在稀疏前向里，看不到单独的 LSE 加速比', { size: 12, fill: muted });
+      e.t(410, 310, 'PyJuice 默认模式在 K = 32 时误差也涨到 1.6 × 10⁻²', { size: 12, fill: muted });
+      return;
+    }
+    e.t(410, 24, '粒子滤波：随机波动率模型，T = 200，Xeon Gold 6134 单线程', { size: 12, fill: amber });
+    var Ns = ['50', '100', '200', '500', '1000', '2000'];
+    var vs = [[14.3, 15.4, 14.5, 12.7, 11.4, 9.1], [4.7, 5.2, 5.1, 4.3, 3.6, 2.8], [2.0, 2.1, 2.1, 1.8, 1.8, 1.5]];
+    var cn = ['vs scipy', 'vs torch', 'vs numpy'], cc = [muted, blue, green];
+    var GX = 110, GW = 110, BY = 340, U = 15;
+    e.line(GX - 10, BY, GX + 6 * GW, BY, { stroke: line, sw: 1 });
+    for (var g = 0; g < 6; g++) {
+      for (var m = 0; m < 3; m++) {
+        var v = vs[m][g], h = v * U, x = GX + g * GW + m * 28;
+        e.rect(x, BY - h, 22, h, null, cc[m], 'none', { sw: 0, opacity: 0.9, cls: m === 2 ? 'hot' : null });
+        e.t(x + 11, BY - h - 5, v.toFixed(1), { size: 9, fill: cc[m], mono: true });
+      }
+      e.t(GX + g * GW + 39, BY + 16, 'N=' + Ns[g], { size: 10, fill: strong, mono: true });
+    }
+    for (var c = 0; c < 3; c++) {
+      e.rect(560 + c * 80, 60, 12, 12, null, cc[c], 'none', { sw: 0 });
+      e.t(576 + c * 80, 70, cn[c], { anchor: 'start', size: 11, fill: cc[c] });
+    }
+    e.t(410, 380, 'numpy 是原代码库实际用的路径：对用户最相关的是 1.5–2.1×', { size: 13, weight: 700, fill: strong });
+    e.t(410, 402, '绝对误差约 10⁻²；这些是单次 LSE 原语的延迟，不是整个滤波器', { size: 11, fill: red });
+  }
+  var steps = [
+    ['选择', 'GPU 用 FuseLSE，CPU 用 IntLSE', 'GPU 上两者速度相差不到 1%，IntLSE 只多误差；CPU 没有 SFU，<code>exp</code>/<code>log</code> 成为瓶颈，IntLSE 快 3.1–6.1×。'],
+    ['Table 5', 'CPU 单线程：快多少取决于下溢', 'IntLSE 在所有有限输入上都是 27.6 ms。没有下溢时只快 1.2×；torch 碰到次正规数后变慢，加速才到 10.7–22.0×。'],
+    ['RLHF', 'SLS 快 6×，阶段快 1.20×', '替换 TRL 的 <code>selective_log_softmax</code> 里的 <code>torch.logsumexp</code>。矩阵乘约 47 ms 两边共享，所以 LM head + SLS 只快 1.20×。'],
+    ['概率电路', '稀疏前向约 1.7×', 'FuseLSE-sparse 和 IntLSE-sparse 速度接近；IntLSE 的对数似然误差 0.45–1.26 nats，相对 −4500 nats 很小。'],
+    ['粒子滤波', 'CPU 上 1.5–15.4×', '相对 scipy 9.1–15.4×、torch 2.8–5.2×、numpy 1.5–2.1×。N 越大加速越小。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+var builders = { svg1: scene1, svg2: scene2, svg3: scene3, svg4: scene4, svg5: scene5 };
+var engines = {};
+function initAll() {
+  for (var id in builders) {
+    var svg = document.getElementById(id);
+    if (!svg) continue;
+    engines[id] = new AnimEngine(svg, { steps: builders[id]() });
+  }
+}
+function engineOf(node) {
+  var frame = node.closest('.anim-frame');
+  if (!frame) return null;
+  var svg = frame.querySelector('svg');
+  return svg ? engines[svg.id] : null;
+}
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('button');
+  if (!b || !b.closest('.anim-frame')) return;
+  var eng = engineOf(b);
+  if (!eng) return;
+  if (b.classList.contains('btn-next')) { eng.pause(); eng.next(); }
+  else if (b.classList.contains('btn-prev')) { eng.pause(); eng.prev(); }
+  else if (b.classList.contains('btn-reset')) eng.reset();
+  else if (b.classList.contains('btn-play')) eng.toggle();
+  else if (b.classList.contains('stage-chip')) { eng.pause(); eng.goTo(+b.dataset.idx); }
+});
+document.addEventListener('input', function (ev) {
+  if (!ev.target.classList.contains('speed')) return;
+  var eng = engineOf(ev.target);
+  if (eng) eng.setSpeed(parseFloat(ev.target.value));
+});
+document.addEventListener('keydown', function (ev) {
+  var frame = document.activeElement && document.activeElement.closest && document.activeElement.closest('.anim-frame');
+  if (!frame) return;
+  var eng = engineOf(document.activeElement);
+  if (!eng) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); eng.pause(); eng.next(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); eng.pause(); eng.prev(); }
+  else if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON') { ev.preventDefault(); eng.toggle(); }
+});
+
+/* SVG 里的色值是切换主题那一刻读出来的具体值，主题一变就过期。
+   用 MutationObserver 盯 data-theme，无论用户点的是站点导航里的开关还是
+   本文右下角这个按钮，都会重绘当前步。存储键与站点保持一致（'theme'）。 */
+function redrawAll() {
+  for (var id in engines) { engines[id].pause(); engines[id].goTo(engines[id].i); }
+}
+window.toggleTheme = function () {
+  var root = document.documentElement;
+  var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (err) {}
+};
+if (window.MutationObserver) {
+  new MutationObserver(function () { setTimeout(redrawAll, 30); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+window.toggleToc = function () {
+  var toc = document.getElementById('tocNav');
+  var btn = document.querySelector('.toc-toggle');
+  var hidden = toc.hasAttribute('hidden');
+  if (hidden) toc.removeAttribute('hidden'); else toc.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+};
+
+/* TOC 高亮 + 回到顶部 */
+function initChrome() {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if ('IntersectionObserver' in window && secs.length) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  var bt = document.getElementById('backTop');
+  if (bt) window.addEventListener('scroll', function () { bt.classList.toggle('show', window.scrollY > 400); }, { passive: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { initAll(); initChrome(); });
+} else { initAll(); initChrome(); }
+})();
+</script>
+</body>
+</html>
+

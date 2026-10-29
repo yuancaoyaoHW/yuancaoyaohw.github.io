@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DualPace：让 CPU 解码不再等 GPU 开窗</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --teal: var(--a-teal); --teal-bg: var(--a-teal-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+.callout-teal { background: var(--teal-bg); border-color: var(--teal); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 640px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+.anim-progress { height: 4px; background: var(--code-bg); }
+.anim-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.anim-stage-rail { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid var(--a-border); background: transparent; color: var(--fg-muted); cursor: pointer; }
+.anim-stage-rail .stage-chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--a-on-solid); }
+.anim-stage-rail .stage-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-status { padding: 10px 16px 14px; font-size: 13px; }
+.anim-status .step-info { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.anim-status .step-desc { color: var(--fg-soft); line-height: 1.6; }
+.anim-legend { padding: 0 16px 14px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--fg-muted); }
+.anim-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.anim-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.back-top, .theme-toggle { position: fixed; right: 24px; z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--a-border); background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 15px; }
+.back-top { bottom: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.back-top.show { opacity: 1; pointer-events: auto; }
+.theme-toggle { bottom: 72px; }
+.back-top:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.toc-toggle { display: none; }
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; max-height: 40vh; }
+  .content { width: 100%; }
+  .toc[hidden] { display: none; }
+  .toc-toggle { display: block; margin-bottom: 10px; padding: 6px 12px; border: 1px solid var(--a-border); border-radius: 6px; background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: none; }
+  .anim-canvas-wrap svg .anim-layer .hot { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body class="interactive-body">
+<script>
+/* SVG 的呈现属性（fill / stroke）不解析 var()，所以动画脚本要在运行时把
+   语义令牌读成具体色值。主题切换后重绘即可拿到新值。 */
+(function () {
+  window.aC = function (name, fallback) {
+    var host = document.querySelector('.interactive-body, .article-body') || document.documentElement;
+    var v = getComputedStyle(host).getPropertyValue(name);
+    return (v && v.trim()) || fallback || '#888';
+  };
+})();
+</script>
+<button class="theme-toggle" id="artThemeBtn" onclick="toggleTheme()" aria-label="切换深浅主题" title="切换主题">◑</button>
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+  <button class="toc-toggle" onclick="toggleToc()" aria-expanded="true" aria-controls="tocNav">目录</button>
+  <nav class="toc" id="tocNav" aria-label="文章目录">
+    <h3>目录</h3>
+    <a href="#hook">这篇论文在问什么</a>
+    <a href="#gated">① GPU 门控的 CPU 卸载</a>
+    <a href="#why">② 为什么 decode 可以放到 CPU 上</a>
+    <a href="#neo">③ NEO 的非对称流水线</a>
+    <a href="#dual">④ 两个引擎、各自调度</a>
+    <a href="#kv">⑤ KV 安全包络与迁移预留</a>
+    <a href="#assist">⑥ Dense Assist：执行上合作</a>
+    <a href="#profile">⑦ 阈值从离线 profiling 来</a>
+    <a href="#eval">⑧ 实验结果</a>
+    <a href="#critique">⑨ 局限与没回答的问题</a>
+    <a href="#summary">⑩ 一句话总结</a>
+  </nav>
+
+  <main class="content">
+
+    <section class="hook" id="hook">
+      <h1>DualPace：让 CPU 解码不再等 GPU 开窗</h1>
+      <p class="tagline">把 KV cache 放到主机内存、在 CPU 上算 decode attention，是突破 HBM 容量限制的常见做法。但在 NEO 这类系统里，CPU 只是 GPU 流水线中的一个阶段：CPU 上的请求能不能前进，取决于 GPU 调度器这一轮有没有给它留出合适的重叠窗口。浙江大学宁波全球创新中心的这篇论文把这种耦合叫做 <strong>GPU-gated CPU offloading</strong>，并给出 <strong>DualPace</strong>：GPU 和 CPU 各有一个独立调度的引擎，各自管队列、时钟和 KV；CPU 引擎用 AMX 跑 BF16 稠密算子，批次较大时再按需把稠密阶段借给 GPU 执行（<strong>Dense Assist</strong>）。口号是「调度上解耦，执行上合作」。在 Azure-Conversation 负载上，DualPace 的可持续请求率比 NEO 高 6.9–43.2%，比 vLLM 高 11.5–90.6%。</p>
+      <div class="badges">
+        <span class="badge badge-accent">arXiv:2610.33501</span>
+        <span class="badge badge-purple">cs.DC</span>
+        <span class="badge badge-blue">CPU 卸载 × 双引擎调度</span>
+        <span class="badge badge-green">vs NEO +6.9–43.2% · vs vLLM +11.5–90.6%</span>
+      </div>
+    </section>
+
+    <section id="gated">
+      <h2>① GPU 门控的 CPU 卸载</h2>
+      <p>LLM 服务要同时控制两种延迟：首 token 延迟（TTFT）和生成过程中的 token 间隔（ITL）。continuous batching 能摊薄 GPU 执行成本，但并发上限由 HBM 决定：KV cache 随序列长度和批大小一起增长，长上下文或高负载下会占满显存。PagedAttention 减少了碎片，但没有去掉容量上限。</p>
+      <p>服务器的主机内存通常比 HBM 大得多，CPU 也越来越强。Intel AMX 提供高吞吐的 BF16 矩阵运算，让主机有可能成为一个<strong>计算层</strong>，而不只是 KV 的溢出空间。FlexGen、FastDecode、NEO 等系统已经在用这个思路：把请求的 KV 放在主机内存，在 CPU 上执行依赖 KV 的 attention，稠密阶段仍留在 GPU 上。</p>
+      <p>论文的观察是：这些系统扩大了 KV 容量，却没有让主机成为一个能自主推进的服务层。以 NEO 为例，它只在预测的 CPU attention 时间能被另一个子批次的 GPU 工作盖住、且整条流水线预计比纯 GPU 更快时，才把 CPU attention 纳入本轮。这些条件保证 CPU 不会拉长 GPU 关键路径，但也意味着 <strong>CPU 能做有用的工作，却不能决定自己的请求什么时候前进</strong>。</p>
+      <div class="callout callout-red"><strong>Figure 1 的现象</strong>：Llama-3.1-8B、一张 RTX 4090、12 个 Xeon Silver 4510 物理核，回放 2,000 条 Azure-Conversation 请求。DualPace 的 CPU 侧累计解码 token 曲线持续上升；NEO 的曲线一段一段地前进，中间夹着明显的平台期（放大图里有一段持续数秒的停顿）。约 600 s 之后 NEO 的 CPU 侧曲线完全变平，而它的总 token 数仍在上涨，说明此时只有 GPU 在干活。负载升高时，这些停顿直接反映为更高的 P99 ITL，尽管主机内存里仍驻留着待解码的请求。</div>
+      <p>所以瓶颈不只是主机内存容量或 CPU 算力，而是 CPU 上的请求<strong>没有独立的调度权</strong>。论文据此提出的设计原则是：把「在哪执行」和「谁来决定什么时候执行」分开。已有系统大多只决定前者，后者仍交给 GPU；DualPace 把两者都解耦。</p>
+    </section>
+
+    <section id="why">
+      <h2>② 为什么 decode 可以放到 CPU 上</h2>
+      <p>论文先把一次前向拆成几个阶段。prefill 的输入是 $[B, L, H]$，decode 的输入是 $[B, 1, H]$：</p>
+      <ul>
+        <li><strong>pre-layer</strong>：embedding；</li>
+        <li><strong>每层</strong>：pre-attention（LayerNorm、QKV 投影、RoPE）→ attention → post-attention（O 投影、残差与 LayerNorm、FFN 的 gate/up、SiLU、down、残差）；</li>
+        <li><strong>post-layer</strong>：最后的 LayerNorm、LM head、采样。</li>
+      </ul>
+      <p>其中只有 attention 依赖历史 KV，其余都是与上下文长度无关的稠密算子。KV 放在主机内存时，有两种做法：</p>
+      <table>
+        <thead><tr><th>做法</th><th>每层跨 PCIe 的数据量</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>把 host KV 搬回 GPU 算 attention</td><td class="bad">$\Theta(BLH)$</td><td>随上下文长度 $L$ 增长，PCIe 很快成为瓶颈</td></tr>
+          <tr><td>在 CPU 上算 attention</td><td class="gain">$\Theta(BH)$</td><td>只交换 Q 和 attention 输出，与 $L$ 无关</td></tr>
+        </tbody>
+      </table>
+      <p>所以 KV 放在哪里，attention 就应该在哪里算。剩下的问题是：稠密算子要不要也放到 CPU 上？论文引用的测量给出了几个关键数字：</p>
+      <ul>
+        <li>Sapphire Rapids 在 GEMV 上能达到 H100 的 15–35%，在 GEMM 上只有 4–11%。decode 的稠密算子在批次小时接近 GEMV，批次大时才变成 GEMM。</li>
+        <li>CPU 上的 PagedAttention 在 $B=1$ 时与 GPU 相当，批次较大时差距在 10× 以内。attention 本身是带宽受限的，CPU 的内存带宽差距没有算力差距那么大。</li>
+        <li>AMX 的 BF16 峰值在 Sapphire Rapids 上约 20 TFLOPS，在 Granite Rapids 上约 40 TFLOPS，分别是 AVX512 的 4.5× 和 9×。</li>
+        <li>在论文的 4090 平台上，用 AVX512 跑 QKV/FFN 比 GPU 慢约 100×；换成 AMX（oneDNN BF16）后差距缩到约 10×。</li>
+      </ul>
+      <div class="callout callout-blue"><strong>这组数字决定了 DualPace 的形状</strong>：AMX 让 CPU 在小批次 decode 时能独立跑完整个前向，而不必每层都等 GPU 算稠密部分；但批次一大，稠密 GEMM 在 CPU 上仍然慢一个数量级，这时把稠密阶段临时交给 GPU 更划算。前者对应「调度上解耦」，后者对应「执行上合作」。</div>
+      <p>NEO 的做法是只把 attention 放到 CPU，稠密阶段全在 GPU 上。这样 CPU 上的请求每一层都要经过 GPU，GPU 调度器自然掌握了它们的节奏。下一节看这种设计具体怎样导致停顿。</p>
+    </section>
+
+    <section id="neo">
+      <h2>③ NEO 的非对称流水线</h2>
+      <p>NEO 把一轮迭代的请求分成两个子批次（下标 0、1 是子批次编号，不是层号）：</p>
+      <ul>
+        <li><strong>子批次 0</strong>：所有 prefill、GPU 驻留的 decode，以及挑选出来的一部分 CPU 驻留 decode；</li>
+        <li><strong>子批次 1</strong>：其余的 CPU 驻留 decode。</li>
+      </ul>
+      <p>两个子批次的 pre/post-attention 都在 GPU 上跑，CPU 只做主机 KV 上的 attention，所以激活值每一层都要跨一次 CPU–GPU 边界。NEO 让一个子批次的 CPU attention 与另一个子批次的 GPU 工作重叠。记 $T^{\mathrm{lin}}_j = T^{\mathrm{pre}}_j + T^{\mathrm{post}}_j$ 为子批次 $j$ 的 GPU 线性阶段时间，$T^{\mathrm{ga}}_0$ 为子批次 0 的 GPU attention 时间，$T^{\mathrm{ca}}_j$ 为 CPU attention 时间。两个重叠区要求：</p>
+      <div class="eq">$$T^{\mathrm{lin}}_0 \ge T^{\mathrm{ca}}_1, \qquad T^{\mathrm{lin}}_1 + T^{\mathrm{ga}}_0 \ge T^{\mathrm{ca}}_0 \tag{1}$$<span class="eq-note">第一式：子批次 0 的线性工作要盖住 CPU Attention 1；第二式：子批次 1 的线性工作加 GPU Attention 0 要盖住 CPU Attention 0。</span></div>
+      <p>NEO 逐个试探性地加入 CPU decode 请求，只要任一条件的预测余量变负就把它撤出。即使两个条件都满足，也只有在预测请求率高于纯 GPU 执行时才启用这条流水线。CPU 工作只在 GPU 这一轮提供了足够长、且对吞吐有利的重叠窗口时才被接纳。</p>
+      <h3>停顿从哪里来</h3>
+      <p>关键在两边时间的增长方式不同。一个 prefill 给 GPU 线性阶段贡献很多行（整段 prompt），一个 decode 只贡献一行。于是：</p>
+      <ul>
+        <li>prefill 多时，$T^{\mathrm{lin}}$ 长，窗口宽，CPU decode 能挤进来；</li>
+        <li>prefill 少、decode 多时，$T^{\mathrm{lin}}$ 变短，而 $T^{\mathrm{ca}}$ 要扫描 CPU 请求不断累积的 KV 历史，越来越长；</li>
+        <li>随着 prefill 到达情况和 KV 长度变化，式 (1) 在可行和不可行之间反复切换，CPU 侧进度呈突发状；</li>
+        <li>prefill 排空后，纯 decode 的迭代再也提供不了足够的重叠，CPU 侧进度停在一个平台上。</li>
+      </ul>
+      <p>论文的结论是：限制 NEO 的不是 CPU 的能力，而是 <strong>GPU-gated progress</strong>。CPU 驻留请求只能在 GPU 调度器给出合适窗口时前进。下面的动画按这个机制示意一轮轮迭代里窗口的开合。</p>
+
+      <div class="anim-frame" data-anim="1"><div class="anim-header"><span class="anim-title">动画 1 · NEO 的重叠窗口为什么时开时关</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 430" role="img" aria-label="NEO 两个子批次的 GPU 线性阶段与 CPU attention 时间线，展示重叠条件随 prefill 数量变化而失效"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-blue)"></i>GPU 线性阶段 T<sup>lin</sup></span><span><i style="background:var(--a-teal)"></i>GPU attention</span><span><i style="background:var(--a-purple)"></i>CPU attention T<sup>ca</sup></span><span><i style="background:var(--a-red)"></i>窗口不足 / 停顿</span></div></div>
+    </section>
+
+    <section id="dual">
+      <h2>④ 两个引擎、各自调度</h2>
+      <p>DualPace 的架构（论文 Figure 5）是一个 LLMEngine 下面挂两套独立的东西：GPU Scheduler 和 CPU Scheduler，各自有一个 executor coordinator，下面是各自的 worker（持有模型分片和 KV cache），两边通过 PCIe 和共享内存连接。</p>
+      <p>两个引擎各有自己的<strong>请求队列、调度时钟和 KV 管理器</strong>。任意时刻，每个请求只归一个引擎所有：</p>
+      <ul>
+        <li><strong>GPU 引擎</strong>拥有所有 prefill 和 GPU 驻留的 decode，管理 HBM 上的 KV；</li>
+        <li><strong>CPU 引擎</strong>拥有 CPU 驻留的 decode，管理主机内存里的 KV。</li>
+      </ul>
+      <p>和异构流水线不同，这里没有全局迭代屏障，两个批次不必同时开始或结束。所以即使当前 GPU 批次没有合适的重叠窗口，CPU 驻留请求也能继续解码。这是解决 ① 中停顿的直接手段。</p>
+      <h3>驻留由 GPU 调度器在 prefill 时决定</h3>
+      <p>所有请求都从 GPU 引擎进入，因为 DualPace 把每个 prefill 都放在 GPU 上算。对每个新请求，GPU 调度器决定它 prefill 之后 KV 放在哪：</p>
+      <table>
+        <thead><tr><th>路径</th><th>做法</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Prefill-to-GPU</strong></td><td>在 GPU 上算 prompt，KV 留在 HBM，之后加入 GPU decode</td></tr>
+          <tr><td><strong>Prefill-to-CPU</strong></td><td>HBM 放不下时，预先保留最终的 CPU KV 块，GPU 上只用逐层的临时 staging 缓冲；每层算出 K/V 后异步拷到预留的主机块，尽量与后续 GPU 计算重叠</td></tr>
+        </tbody>
+      </table>
+      <p>已有的 decode 请求也可以换驻留位置。HBM 紧张时，GPU 调度器选一个 GPU 驻留请求 swap-out：保留对应的主机块，把已经生成的 KV 拷过去。<strong>拷贝完成之后</strong>，这个请求才对 CPU 调度器可见。反过来，HBM 宽裕时可以把 CPU 驻留请求 swap-in 回来。</p>
+      <h3>迁移最小化</h3>
+      <p>两个引擎独立组批，但迁移把 HBM 和 DRAM 的分配耦合在了一起。单独调度两边可能把主机内存超额分配；过于积极的迁移又会让请求在设备间来回搬，浪费 PCIe 带宽。DualPace 的原则是请求尽量留在当前引擎：</p>
+      <ul>
+        <li>定义请求 $r$ 的 <strong>finish-peak 足迹</strong> $\hat{b}_r$：它在完成前可能需要的最多 KV 块数。</li>
+        <li><strong>swap-out</strong> 只在 HBM 装不下 GPU 驻留请求下一个 token 的 KV 增长时触发。</li>
+        <li><strong>swap-in</strong> 之前，GPU 调度器把 $\hat{b}_r$ 加进 HBM 准入预算，只有它和现有 GPU 请求的足迹一起放得下才执行。这样换回来的请求能一直留在 GPU 上直到完成，避免短命迁移和驻留震荡。</li>
+      </ul>
+      <p>按 finish-peak 而不是当前块数做准入是偏保守的：请求可能提前结束（遇到 EOS），预留的空间就浪费了。论文没有讨论 $\hat{b}_r$ 在输出长度未知时具体怎样估计（例如是否取 max_tokens 上限），本文推测是按请求声明的最大生成长度计算。</p>
+
+      <div class="anim-frame" data-anim="2"><div class="anim-header"><span class="anim-title">动画 2 · 请求在两个引擎之间的去向</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 430" role="img" aria-label="请求经 GPU prefill 后分流到 GPU 或 CPU 引擎，以及 swap-out、swap-in 的条件"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-blue)"></i>GPU 引擎 / HBM</span><span><i style="background:var(--a-purple)"></i>CPU 引擎 / 主机内存</span><span><i style="background:var(--a-accent)"></i>迁移</span><span><i style="background:var(--a-green)"></i>准入通过</span></div></div>
+    </section>
+
+    <section id="kv">
+      <h2>⑤ KV 安全包络与迁移预留</h2>
+      <p>主机内存是一个有限的执行层，不是无底的溢出缓冲。如果没有协调的准入，GPU 调度器可能不断把 prefill 导向 CPU 内存：短期内 TTFT 好看，但最终会耗尽两类空间，一是正在运行的 CPU decode 继续增长要用的空间，二是将来 GPU 驻留请求被驱逐时要落脚的空间。DualPace 跟踪四项 CPU KV 义务，都以物理 KV 块计：</p>
+      <div class="eq">$$B^{C}_{\mathrm{used}} + B^{C}_{\mathrm{planned}} + B^{C}_{\mathrm{growth}} + B^{C}_{\mathrm{migration}} \le B^{C}_{\mathrm{capacity}} \tag{2}$$<span class="eq-note">四项依次是：已经落地的 CPU KV；本轮已决定但还没落地的分配（Prefill-to-CPU、立即 swap-out）；CPU 运行队列的剩余增长；为将来可能被驱逐的 GPU 请求预留的位置。</span></div>
+      <p>增长项对 CPU 运行队列 $\mathcal{Q}^{\mathrm{run}}_C$ 里的每个请求累加「到峰值还差多少」，$b_r$ 是当前块数：</p>
+      <div class="eq">$$B^{C}_{\mathrm{growth}} = \sum_{r \in \mathcal{Q}^{\mathrm{run}}_C} \max\{\hat{b}_r - b_r,\ 0\} \tag{3}$$<span class="eq-note">CPU 上已在跑的请求，保证它们都能跑完。</span></div>
+      <p>迁移项是两个调度器之间的桥。设 $\mathcal{Q}_G$ 为本轮决策之后的 GPU 所有权队列（按驱逐优先级排序），$B^G_{\mathrm{capacity}}$ 为 GPU KV 容量：</p>
+      <div class="eq">$$B^{G}_{\mathrm{peak}} = \sum_{r \in \mathcal{Q}_G} \hat{b}_r \tag{4}$$<span class="eq-note">GPU 上所有请求都长到峰值时需要的总块数。</span></div>
+      <p>若 $B^G_{\mathrm{peak}} &gt; B^G_{\mathrm{capacity}}$，调度器从驱逐优先级的尾部开始扫描 $\mathcal{Q}_G$，把扫到的请求的 $\hat{b}_r$ 从 GPU 峰值里移到 $B^C_{\mathrm{migration}}$，直到剩下的部分放得进 HBM。这一项代表「目前归 GPU 所有、但不保证能一直留在 HBM」的 KV。</p>
+      <div class="callout callout-purple"><strong>四项如何连起两个调度器</strong>：Prefill-to-CPU 候选会增加 $B^C_{\mathrm{planned}}$；Prefill-to-GPU 候选会延长 $\mathcal{Q}_G$，可能增加 $B^C_{\mathrm{migration}}$。两种去向都只在式 (2) 仍成立时才被接纳。CPU 调度器在接纳新的 CPU decode 时，把 $B^C_{\mathrm{migration}}$ 当作不可用容量。于是两个引擎不需要同步迭代，也不会互相把对方的退路吃掉。</div>
+      <h3>每轮调度的细节（附录 A）</h3>
+      <p>GPU 引擎每轮按这个顺序做：</p>
+      <ul>
+        <li>回收已完成的 Prefill-to-CPU 传输，等待上一组拷贝结束；</li>
+        <li>恢复「下一个 token 在 HBM 上放得下」：驻留 decode 优先，从队尾驱逐，跳过主机上也放不下的牺牲者；驱逐不了就只跑放得下的子集，部分驱逐时本轮只做迁移；</li>
+        <li>发布 $B^C_{\mathrm{migration}}$；</li>
+        <li>接纳 GPU decode。若 CPU 批次已满、CPU 队列非空且本轮没有 swap-out，先做一次 FIFO 的提前 swap-in，再考虑 prefill；</li>
+        <li>按 FIFO 接纳 prefill，受行数、token 数和 staging 上限约束。一轮里一旦出现第一个 Prefill-to-CPU，同轮后续的 prompt 也都去 CPU；</li>
+        <li>用剩余 HBM 再做一轮 swap-in，或者给正在 CPU 上跑的请求打上延迟 swap-in 标记；</li>
+        <li>提交迁移（先目的端后源端），最多跑一个 GPU 批次。</li>
+      </ul>
+      <p>CPU 引擎每轮：快照预算；按 FIFO 保留运行中请求，被标记 swap-in 的请求让到前面，放不下的请求移到队首，此后不再接纳更老的等待请求；接纳已就绪的前缀；等待队首请求的就绪事件、从不跳过它，若只是被预留卡住就让出；只分配下一个 token 的块，跑一个批次。</p>
+      <p>论文强调的性质有三条：每个请求只有一个所有者；背压是局部的，主机内存紧张永远不会阻塞 GPU 上可运行的子集；迁移预留保证驱逐路径一直可用。</p>
+
+      <div class="anim-frame" data-anim="3"><div class="anim-header"><span class="anim-title">动画 3 · CPU KV 的四项义务</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 430" role="img" aria-label="主机 KV 容量条被 used、planned、growth、migration 四项占用，以及 GPU 峰值超出容量时尾部请求转入迁移预留"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-purple)"></i>used</span><span><i style="background:var(--a-teal)"></i>planned</span><span><i style="background:var(--a-amber)"></i>growth</span><span><i style="background:var(--a-accent)"></i>migration</span><span><i style="background:var(--a-blue)"></i>GPU 所有请求</span></div></div>
+    </section>
+
+    <section id="assist">
+      <h2>⑥ Dense Assist：执行上合作</h2>
+      <p>单纯的双引擎设计会碰到一个两难。CPU 拥有的 decode 每个阶段都在本地跑，能保住独立进度，但 post-attention 的稠密算子和输出头会随 CPU 批次变大越来越贵。反过来，如果把请求交回 GPU 引擎做稠密计算，又重新依赖 GPU 侧的准入。DualPace 的办法是：CPU 引擎保留请求所有权和调度权，GPU worker 只在明确的模型阶段边界上执行选定的稠密阶段。</p>
+      <p>这就是 <strong>GPU Dense Assist</strong>。它是一个<strong>算子级</strong>请求：CPU worker 先独立把批次推进到某个协助边界，只把这个边界需要的张量发给 GPU；GPU worker 执行请求的 post-attention 阶段或模型 post-layer，把结果返回给同一个 CPU 批次。这些请求从不进入 GPU 调度器的队列，KV 留在主机内存，也不占用任何长期的 GPU KV 块。GPU 协助只是加速稠密计算，不改变驻留位置，也不转移调度权。</p>
+      <h3>哪些阶段永远在 CPU 上</h3>
+      <p>pre-layer，以及每层的 pre-attention 和 attention，固定走 CPU 路径。这段本地前缀是调度解耦的关键：CPU 引擎可以不等 GPU 调度器就接纳并启动一个批次。之后的 post-attention 和最后的 post-layer 不访问 KV，所以可以在本地跑，也可以走 Dense Assist，不影响所有权和 KV 驻留。</p>
+      <p>选哪条路由两个批大小阈值决定：$P$ 是 post-attention 能在 CPU 本地跑的最大批，$F$ 是 post-layer 能在 CPU 本地跑的最大批。对大小为 $b$ 的 CPU decode 批次：</p>
+      <div class="eq">$$\pi_{P,F}(b) = \begin{cases} \text{Full-CPU}, &amp; b \le F \\ \text{Split-Final}, &amp; F &lt; b \le P \\ \text{Fused-Assist}, &amp; b &gt; P \end{cases} \tag{5}$$<span class="eq-note">合法设置为 $(P, F) = (0, 0)$ 或 $0 \le F &lt; P$。</span></div>
+      <table>
+        <thead><tr><th>模式</th><th>post-attention（每层）</th><th>post-layer（LM head）</th><th>每个前向的 assist 次数</th></tr></thead>
+        <tbody>
+          <tr><td>Full-CPU</td><td>CPU</td><td>CPU</td><td>0</td></tr>
+          <tr><td>Split-Final</td><td>CPU</td><td>GPU</td><td>1</td></tr>
+          <tr><td>Fused-Assist</td><td>GPU</td><td>GPU（与最后一层合并）</td><td>$N$</td></tr>
+        </tbody>
+      </table>
+      <p>为什么单独把 LM head 拿出来？论文没有展开。本文推算：Llama-3.1-8B 的 LM head 权重是 $128256 \times 4096 \approx 5.3$ 亿参数，而单层 FFN（gate、up、down）约 $3 \times 4096 \times 14336 \approx 1.8$ 亿，LM head 是整个前向里最大的单个 GEMM，批次一大最先在 CPU 上变贵。</p>
+      <h3>不抢占的阶段边界优先级</h3>
+      <p>GPU 主执行不再是一次完整前向，而是一串 FIFO 阶段任务，在 pre-layer 之后、每个 transformer 层之后、post-layer 之前设安全边界。DualPace 从不抢占正在跑的 CUDA kernel，也不取消已提交的工作。每到一个边界，GPU worker 先处理已就绪的 Dense Assist，再取下一个主阶段。这样 assist 的响应时间最多是「当前阶段跑完」，GPU 执行顺序仍是确定的。</p>
+      <p>式 (5) 也说明了什么时候这套协调可以不要：设 $C$ 为 CPU 引擎能组出的最大 decode 批次，若 $C \le F$，所有可达批次都走 Full-CPU，Dense Assist 静态不可达。这时 DualPace 改用整前向的 GPU 主路径，去掉逐层的 assist 检查，两个引擎完全独立运行。</p>
+      <div class="callout callout-teal"><strong>4090 平台上的实际阈值</strong>是 $(P, F) = (32, 16)$（来源见下一节）：CPU 批次 ≤ 16 全部本地跑；17–32 只把 LM head 交给 GPU；超过 32 每层的 post-attention 都交给 GPU。</div>
+
+      <div class="anim-frame" data-anim="4"><div class="anim-header"><span class="anim-title">动画 4 · 三种路由与 GPU 阶段边界</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 430" role="img" aria-label="CPU 批次大小决定 Full-CPU、Split-Final、Fused-Assist 三种路由，GPU 在阶段边界处理 Dense Assist"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-purple)"></i>CPU 执行</span><span><i style="background:var(--a-blue)"></i>GPU 主阶段</span><span><i style="background:var(--a-accent)"></i>Dense Assist</span><span><i style="background:var(--a-amber)"></i>阶段边界</span></div></div>
+    </section>
+
+    <section id="profile">
+      <h2>⑦ 阈值从离线 profiling 来</h2>
+      <p>DualPace 有三个控制量要在部署前定下来：Dense Assist 的路由阈值 $(P, F)$、GPU 每轮的批 token 上限、CPU decode 的批大小上限。三者都靠在目标机器上离线 profiling 得到，不需要在线调参。</p>
+      <h3>路由阈值：不只看 CPU 时间</h3>
+      <p>如果只追求 CPU 批次最快，答案几乎总是「能交给 GPU 就交给 GPU」。但每次 assist 都会占用 GPU 主路径的服务时间，挤掉 GPU 驻留请求的进度。所以 profiler 给每条路由 $r$ 一个综合代价：</p>
+      <div class="eq">$$S_r(b) = T^{\mathrm{CPU}}_r(b) + \lambda_{\mathrm{GPU}}\, D^{\mathrm{GPU}}_r(b) \tag{6}$$<span class="eq-note">$T^{\mathrm{CPU}}$ 是 CPU 推进这个批次可见的时间；$D^{\mathrm{GPU}}$ 是 Dense Assist 从 GPU 主路径挤占的服务时间。论文取 $\lambda_{\mathrm{GPU}} = 1$。</span></div>
+      <p>两项都按 $N$ 层展开，$t_p$、$t_l$ 是 CPU 本地的 post-attention 和 post-layer 时延，带横线的是「等 GPU 返回」的时延（含 Assist Buffer 读写和控制面等待），$d$ 是 GPU 侧被占用的时间（CUDA 执行加 launch/收尾）：</p>
+      <div class="eq">$$\begin{aligned} T_{\mathrm{full}} &amp;= N t_p + t_l, &amp; D_{\mathrm{full}} &amp;= 0 \\ T_{\mathrm{split}} &amp;= N t_p + \bar{t}^{S}_l, &amp; D_{\mathrm{split}} &amp;= d^{S}_l \\ T_{\mathrm{fused}} &amp;= (N-1)\bar{t}_p + \bar{t}^{A}_l, &amp; D_{\mathrm{fused}} &amp;= (N-1) d_p + d^{A}_l \end{aligned} \tag{7–8}$$<span class="eq-note">Fused-Assist 的每层开销会被乘上 $N-1$，这是它只在大批次才划算的原因。</span></div>
+      <p>目标函数是在候选批大小集合 $\mathcal{B}$ 上的平均代价：</p>
+      <div class="eq">$$J(P, F) = \frac{1}{|\mathcal{B}|} \sum_{b \in \mathcal{B}} S_{\pi_{P,F}(b)}(b) \tag{9}$$</div>
+      <p>Algorithm 1 的搜索过程：</p>
+      <ul>
+        <li>候选集 $\Theta = \{(0,0)\} \cup \{(P,F) \mid P \in \mathcal{B},\ F \in \mathcal{B} \cup \{0\},\ F &lt; P\}$；</li>
+        <li>对每个候选算 $J$，取最优值 $J^*$，保留 $J \le (1+\varepsilon) J^*$ 的近优集 $\Theta_\varepsilon$；</li>
+        <li>在 $\Theta_\varepsilon$ 里优先选平均 assist 调用次数最少的（Full 记 0 次、Split 记 1 次、Fused 记 $N$ 次），再比代价，最后比 $P$、$F$。</li>
+      </ul>
+      <p>4090 平台上精确最优是 $(32, 0)$，即 32 以下全部 Split-Final。取 $\varepsilon = 0.25\%$ 后选中 $(32, 16)$，代价只高 0.070%，但 16 以下的批次完全不碰 GPU。这个容差的意义是：几乎同样快时，宁可少一次跨设备握手。</p>
+      <h3>GPU 批 token 上限：1,024</h3>
+      <p>Figure 7(c) 显示，不同 $(B, L)$ 形状的单层吞吐都随总 token 数 $n = BL$ 收敛到相近的平台；过了平台，再塞进可选的 prefill 或 swap-in 只会拉长这一轮。做法借鉴 chunked prefill：profile 一个 decoder 层，按 $n$ 分组取均值，做单调非减的最小二乘拟合（保序回归），用最后 $K = 5$ 个点估计平台值，取吞吐进入平台 $\delta = 1\%$ 以内的最小 $n$。结果是 1,024（Figure 7(d)，$n$ 从 $2^6$ 到 $2^{14}$，平台约 30 万 tok/s）。</p>
+      <h3>CPU decode 批上限：256</h3>
+      <p>用真实权重的单个 decoder 层，在上下文 64/128/256/512 下扫批大小。吞吐在批 256 附近达到峰值（约 1.5 万 tok/s），之后 AMX 和内存带宽饱和，不再增长。论文强调这个上限只是建议值，面向时延的部署可以取更小的批。</p>
+      <table>
+        <thead><tr><th>控制量</th><th>profile 对象</th><th>4090 平台取值</th></tr></thead>
+        <tbody>
+          <tr><td>$(P, F)$</td><td>各批大小下的 CPU 本地 / assist 时延与 GPU 占用</td><td class="best">(32, 16)</td></tr>
+          <tr><td>GPU 批 token 上限</td><td>单层吞吐 vs $n = BL$</td><td>1,024</td></tr>
+          <tr><td>CPU decode 批上限</td><td>单层 CPU 吞吐 vs 批大小</td><td>256（建议值）</td></tr>
+        </tbody>
+      </table>
+      <p>附录 B 补充了测量协议：每个原语先 $W = 5$ 次预热，再做 $R = 3$ 轮、每轮 $I = 100$ 次计时调用，多卡时取各 TP rank 的最大值作为关键路径。微基准只覆盖 CUDA 执行，控制面开销（发布、可见性、launch 和收尾）另由端到端校准测得，并按批大小分组等权平均，避免校准负载的请求分布悄悄变成路由策略的先验。</p>
+      <h3>实现要点（§5）</h3>
+      <p>原型用 Python/PyTorch 写，前端是 FastAPI/Uvicorn，结构参考 DistServe。LLMEngine 里跑三个 asyncio 任务：GPU 引擎、CPU 引擎、完成处理，各自按「调度、提交、等待、应用」循环，没有共享屏障。worker 是 Ray actor，但 RPC 只用于启动和关闭；运行时通过固定布局的共享内存控制块通信，CPU KV 和 assist 激活各有一个共享池，并注册给 CUDA，H2D/D2H 拷贝不经过 Ray 对象存储的序列化。assist 握手是 CPU-Ready → GPU-Running → GPU-Done 三态；GPU worker 用 CUDA event 跟踪当前任务、协作式让出，不做全设备同步。CPU 侧算子沿用 vLLM 的 packed CPU-linear 组织，稠密部分用 oneDNN BF16，attention 用 AVX512-BF16 + OpenMP 的 PagedAttention。</p>
+    </section>
+
+    <section id="eval">
+      <h2>⑧ 实验结果</h2>
+      <table>
+        <thead><tr><th>模型</th><th>GPU</th><th>CPU（单 NUMA 节点）</th></tr></thead>
+        <tbody>
+          <tr><td>Llama-3.1-8B</td><td>1× RTX 4090</td><td>12 核 Xeon Silver 4510</td></tr>
+          <tr><td>Qwen3-14B</td><td>2× H20</td><td>24 核 Xeon Platinum 8469C</td></tr>
+          <tr><td>Qwen3-32B</td><td>4× H20</td><td>48 核 Xeon Platinum 8469C</td></tr>
+        </tbody>
+      </table>
+      <p>负载取 Azure 的两条 trace，各用前 2,000 个请求，按指数分布到达：Code（平均 prompt 2348、输出 22）和 Conv（平均 prompt 1599、输出 114）。基线是 vLLM 0.22.1（开 chunked prefill，不卸载，不开前缀缓存）和 NEO。指标是满足 SLO 时能承受的最大请求率，三条 SLO 分别是归一化时延 1 s/token、P99 TTFT 5 s、P99 ITL 1.5 s，请求率在测点之间线性插值。</p>
+      <h3>归一化时延下的可承受请求率（Figure 9）</h3>
+      <table>
+        <thead><tr><th>Conv</th><th>Llama-3.1-8B</th><th>Qwen3-14B</th><th>Qwen3-32B</th></tr></thead>
+        <tbody>
+          <tr><td>vs NEO</td><td class="gain">+43.2%</td><td class="gain">+6.9%</td><td class="gain">+18.1%</td></tr>
+          <tr><td>vs vLLM</td><td class="gain">+90.6%</td><td class="gain">+11.5%</td><td class="gain">+23.8%</td></tr>
+        </tbody>
+      </table>
+      <p>Code 负载的结果更混杂：DualPace 依旧胜过 NEO，但在两个 Qwen3 模型上 vLLM 更好。Code 的 prompt 长、平均输出只有 22 个 token，GPU prefill 一直在关键路径上；CPU 驻留 decode 能贡献的工作很少，难以摊销长 prompt 的 KV 搬运。论文的说法是，DualPace 最有利的场景是「GPU KV 压力与持续的 decode 工作同时出现」。Conv 正是这种场景。</p>
+      <h3>TTFT 与 ITL（Figure 10、附录 C）</h3>
+      <p>在 P99 ITL 目标下，DualPace 相对 NEO 的可承受请求率高 50.5%（8B）、15.2%（14B）、7.3%（32B）；TTFT 与 NEO 接近，因为两者的 prefill 都在 GPU 上。但 vLLM 的 ITL 更低：它不卸载，所有 decode 都在 GPU 上跑，单 token 间隔自然短。附录 C 的 TPOT 同样如此，DualPace 在 Conv 上相对 NEO 提升 61% / 15% / 3%，而 vLLM 的 TPOT 更低。在 Code 上，DualPace 的 P99 ITL 在大部分请求率下最低。</p>
+      <h3>消融（Figure 11，4090 平台）</h3>
+      <table>
+        <thead><tr><th>变量</th><th>归一化时延</th><th>TTFT</th><th>ITL</th></tr></thead>
+        <tbody>
+          <tr><td>CPU TP2 vs TP1</td><td class="gain">+15.0%</td><td class="gain">+14.3%</td><td class="gain">+29.7%</td></tr>
+          <tr><td>主机 KV 120 GiB vs 30 GiB</td><td class="gain">+28.7%</td><td class="gain">+28.3%</td><td class="bad">30 GiB 更低</td></tr>
+          <tr><td>主机 KV 120 GiB vs 60 GiB</td><td class="gain">+18.5%</td><td class="gain">+14.6%</td><td class="bad">60 GiB 更低</td></tr>
+        </tbody>
+      </table>
+      <p>主机 KV 从 120 GiB 加到 240 GiB 基本不再提升，因为瓶颈已转到 CPU 算力和内存带宽：更多主机 KV 只让更多请求驻留，不让每个 CPU 批次跑得更快。小容量下 ITL 反而更低，原因是更大比例的 decode 留在了 GPU 上。所以主机 KV 容量实际上是一个准入旋钮：给多了提升吞吐，给少了换取更低的单 token 间隔。</p>
+      <h3>Dense Assist 的开销（Figure 12）</h3>
+      <ul>
+        <li>没有 assist 时的空轮询每层 2–5 µs，每个批次约 0.1 ms 量级；</li>
+        <li>assist 时间里 CUDA 与主机侧的占比是 60.4% / 39.6%（32B）和 70.0% / 30.0%（8B），主机侧那部分就是 Assist Buffer 搬运和控制面；</li>
+        <li>CUDA 时间里 post-attention 占 79.8% / 79.2%，H2D 占 15.3% / 12.6%，其余是 D2H 和采样；</li>
+        <li>批 256 时一次 post-attention assist 的 CUDA 段只有 0.6–0.8 ms，这就是 GPU 主路径每个边界上被插队的时间。</li>
+      </ul>
+
+      <div class="anim-frame" data-anim="5"><div class="anim-header"><span class="anim-title">动画 5 · 结果数据一览</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg5" viewBox="0 0 820 430" role="img" aria-label="Figure 9 到 12 的结果：相对 NEO 与 vLLM 的请求率提升、ITL 提升、主机 KV 容量消融与 assist 开销构成"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-accent)"></i>DualPace 提升</span><span><i style="background:var(--a-purple)"></i>vs NEO</span><span><i style="background:var(--a-blue)"></i>vs vLLM</span><span><i style="background:var(--a-teal)"></i>CUDA 时间</span><span><i style="background:var(--a-amber)"></i>主机侧时间</span></div></div>
+    </section>
+
+    <section id="critique">
+      <h2>⑨ 局限与没回答的问题</h2>
+      <p>论文没有单独的局限章节，只在 Code 负载的分析里划出了适用边界。下面是读完后觉得值得补充的几点。</p>
+      <ul>
+        <li><strong>收益依赖负载形状。</strong>Code 负载上 vLLM 在两个 Qwen3 配置里胜出。DualPace 扩的是 decode 层的容量，输出短、prefill 占主导时，这部分容量用不上。真实部署里 RAG、代码补全这类长 prompt 短输出的流量不少，标题里的 +90.6% 只对应 Conv 这类场景。</li>
+        <li><strong>吞吐换来的是更长的单 token 间隔。</strong>vLLM 的 P99 ITL 和 TPOT 都更低。DualPace 在同等 SLO 下能接更多请求，但每个跑在 CPU 上的请求都比在 GPU 上慢。对交互式应用，1.5 s 的 P99 ITL 目标偏宽松，收紧后优势会怎样变化，论文没有扫。</li>
+        <li><strong>大模型、强 GPU 上提升变小。</strong>8B / 4090 的 +43.2% 到了 14B、32B / H20 上降为 +6.9%、+18.1%，ITL 目标下从 +50.5% 降到 +7.3%。H20 的算力被削减而 HBM 有 96 GB，多卡 TP 后 GPU 侧 KV 压力本就较小（本文推测）；换成 H100 这类算力更强、HBM 只有 80 GB 的卡，结果可能又不同。论文没有测 H100，也没有测 AMX 算力翻倍的 Granite Rapids。</li>
+        <li><strong>强依赖 AMX。</strong>整个「CPU 独立跑完整前向」的前提是 AMX 把稠密算子的差距从约 100× 缩到约 10×。AMD EPYC 和 Arm 服务器 CPU 没有 AMX，这套设计在那里是否成立是开放问题。</li>
+        <li><strong>代价权重没调。</strong>式 (6) 的 $\lambda_{\mathrm{GPU}}$ 固定为 1，等于假设 GPU 主路径上 1 ms 的损失和 CPU 批次上 1 ms 的损失等价。GPU 驻留请求更多或更少时，这个权重的最优值应该不同，论文没有做敏感性分析。</li>
+        <li><strong>finish-peak 准入偏保守。</strong>按 $\hat{b}_r$ 预留空间，请求提前遇到 EOS 时预留就浪费了。论文没说明 $\hat{b}_r$ 在输出长度未知时怎么估计（见 ④），也没有量化预留空间的实际利用率。</li>
+        <li><strong>实验覆盖面窄。</strong>只有两条 Azure trace，各取前 2,000 个请求；消融和 assist 开销只在 4090 单平台上做；没有前缀缓存、没有投机解码等常见优化的组合实验。三个阈值都要在每个部署上重新 profile。</li>
+        <li><strong>原型是 Python 写的。</strong>调度循环、共享内存控制块和 assist 握手都在 Python/asyncio 里，空轮询每层 2–5 µs 的开销在更小模型或更快 GPU 上占比会更高。论文没有给出代码链接。</li>
+      </ul>
+    </section>
+
+    <section id="summary">
+      <h2>⑩ 一句话总结</h2>
+      <div class="callout callout-accent">NEO 这类 CPU 卸载系统让 CPU 只算 attention，CPU 驻留请求每层都要等 GPU 给出重叠窗口，prefill 一少就停顿；DualPace 借助 AMX 让 CPU 引擎独立调度、独立跑完整个 decode 前向，两个引擎各管各的请求和 KV，靠四项 KV 义务（used、planned、growth、migration）的安全包络协调准入和迁移，批次变大时再把 post-attention 或 LM head 以算子级 Dense Assist 的方式临时交给 GPU，所有阈值由离线 profiling 确定；在 Conv 负载上可承受请求率比 NEO 高 6.9–43.2%、比 vLLM 高 11.5–90.6%，代价是单 token 间隔高于纯 GPU 的 vLLM，且在长 prompt 短输出的 Code 负载上不一定胜过 vLLM。</div>
+      <p class="note-inline">论文：YuXuan Lin、KeQiang Wu、Kingsum Chow（浙江大学宁波全球创新中心），<em>DualPace: Decoupled Scheduling and Cooperative GPU–CPU Decoding for LLM Serving</em>，arXiv:2610.33501，2026-10。实验数字取自论文 Figure 7、9–12 和附录 C；动画 1–4 按论文机制绘制，时间长度和请求数量均为示意；动画 5 的数值来自 Figure 9–12；文中标注「本文推测」「本文推算」的内容不是论文结论。</p>
+    </section>
+
+  </main>
+</div>
+<script>
+(function () {
+'use strict';
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, a) {
+  var n = document.createElementNS(NS, tag);
+  if (a) for (var k in a) if (a[k] != null) n.setAttribute(k, a[k]);
+  return n;
+}
+function C(name, fb) { return window.aC(name, fb); }
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function AnimEngine(svg, cfg) {
+  this.svg = svg;
+  this.steps = cfg.steps || [];
+  this.i = 0;
+  this.speed = 1;
+  this.playing = false;
+  this.timer = null;
+  this.frame = svg.closest('.anim-frame');
+  this._initDefs();
+  this.layer = el('g', { 'class': 'anim-layer' });
+  svg.appendChild(this.layer);
+  this._buildRail();
+  this.goTo(0);
+}
+
+AnimEngine.prototype._initDefs = function () {
+  var defs = el('defs');
+  var mk = [['arrA', C('--a-accent', '#FF7A00')], ['arrG', C('--a-green', '#4CC98A')],
+            ['arrR', C('--a-red', '#FF7268')], ['arrB', C('--a-blue', '#74B4FF')],
+            ['arrP', C('--a-purple', '#B79BFF')], ['arrM', C('--a-fg-muted', '#888')],
+            ['arrY', C('--a-amber', '#E9B449')], ['arrT', C('--a-teal', '#48CFC4')]];
+  var id = this.svg.id;
+  for (var j = 0; j < mk.length; j++) {
+    var m = el('marker', { id: id + '-' + mk[j][0], viewBox: '0 0 10 10', refX: '9', refY: '5',
+      markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse' });
+    m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: mk[j][1] }));
+    defs.appendChild(m);
+  }
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype.mk = function (name) { return 'url(#' + this.svg.id + '-' + name + ')'; };
+AnimEngine.prototype.clear = function () { while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild); };
+
+AnimEngine.prototype.draw = function (node, o) {
+  o = o || {};
+  this.layer.appendChild(node);
+  if (o.reveal && !REDUCED) {
+    node.style.opacity = '0';
+    node.style.transition = 'opacity 320ms ease';
+    var d = o.delay || 0;
+    setTimeout(function () { node.style.opacity = o.opacity != null ? o.opacity : '1'; }, d / this.speed);
+  } else if (o.opacity != null) { node.style.opacity = o.opacity; }
+  if (o.cls) node.setAttribute('class', ((node.getAttribute('class') || '') + ' ' + o.cls).trim());
+  return node;
+};
+
+AnimEngine.prototype.t = function (x, y, str, o) {
+  o = o || {};
+  var n = el('text', { x: x, y: y, 'text-anchor': o.anchor || 'middle',
+    'font-size': o.size || 12, 'font-weight': o.weight || 400,
+    'font-family': o.mono ? '"JetBrains Mono", Consolas, monospace' : 'inherit',
+    fill: o.fill || C('--a-fg', '#ccc') });
+  n.textContent = str;
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, o) {
+  o = o || {};
+  var g = el('g');
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: o.rx != null ? o.rx : 6,
+    fill: fill || 'none', stroke: stroke || C('--a-line', '#444'),
+    'stroke-width': o.sw || 1.5, 'stroke-dasharray': o.dash || null }));
+  if (label) {
+    var lines = String(label).split('|');
+    var y0 = y + h / 2 - (lines.length - 1) * 8 + 4;
+    for (var j = 0; j < lines.length; j++) {
+      var tn = el('text', { x: x + w / 2, y: y0 + j * 16, 'text-anchor': 'middle',
+        'font-size': o.size || 12, 'font-weight': o.weight || 500,
+        fill: o.labelFill || stroke || C('--a-fg', '#ccc') });
+      tn.textContent = lines[j];
+      g.appendChild(tn);
+    }
+  }
+  return this.draw(g, o);
+};
+
+AnimEngine.prototype.line = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  return this.draw(el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, 'stroke-linecap': 'round' }), o);
+};
+AnimEngine.prototype.arrow = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  var n = el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-fg-muted', '#888'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': this.mk(o.marker || 'arrM') });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.circle = function (cx, cy, r, o) {
+  o = o || {};
+  return this.draw(el('circle', { cx: cx, cy: cy, r: r, fill: o.fill || 'none',
+    stroke: o.stroke || 'none', 'stroke-width': o.sw || 1.5 }), o);
+};
+
+AnimEngine.prototype.ellipse = function (cx, cy, rx, ry, rot, o) {
+  o = o || {};
+  var n = el('ellipse', { cx: cx, cy: cy, rx: rx, ry: ry, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, transform: 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.path = function (d, o) {
+  o = o || {};
+  return this.draw(el('path', { d: d, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': o.marker ? this.mk(o.marker) : null }), o);
+};
+
+/* 横向条形：用于实验数据对比。value 已按 max 归一到 w 像素。 */
+AnimEngine.prototype.bar = function (x, y, w, h, label, val, max, color, o) {
+  o = o || {};
+  var len = Math.max(2, w * Math.min(1, val / max));
+  var g = el('g');
+  var lt = el('text', { x: x - 8, y: y + h / 2 + 4, 'text-anchor': 'end', 'font-size': 11,
+    fill: C('--a-fg-muted', '#888') });
+  lt.textContent = label;
+  g.appendChild(lt);
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: 3, fill: C('--a-code-bg', '#222') }));
+  var b = el('rect', { x: x, y: y, width: len, height: h, rx: 3, fill: color });
+  g.appendChild(b);
+  var vt = el('text', { x: x + len + 8, y: y + h / 2 + 4, 'text-anchor': 'start', 'font-size': 11,
+    'font-weight': 600, fill: color });
+  vt.textContent = o.fmt ? o.fmt(val) : val;
+  g.appendChild(vt);
+  if (!REDUCED) {
+    b.setAttribute('width', 0);
+    vt.style.opacity = '0';
+    var sp = this.speed, d = o.delay || 0;
+    setTimeout(function () {
+      b.style.transition = 'width 520ms cubic-bezier(.2,.8,.3,1)';
+      b.setAttribute('width', len);
+      vt.style.transition = 'opacity 300ms ease 260ms';
+      vt.style.opacity = '1';
+    }, d / sp + 30);
+  }
+  return this.draw(g, { cls: o.cls });
+};
+AnimEngine.prototype._buildRail = function () {
+  var rail = this.frame.querySelector('.anim-stage-rail');
+  if (!rail) return;
+  rail.textContent = '';
+  for (var j = 0; j < this.steps.length; j++) {
+    var b = document.createElement('button');
+    b.className = 'stage-chip';
+    b.type = 'button';
+    b.dataset.idx = j;
+    b.setAttribute('role', 'tab');
+    b.textContent = (j + 1) + '. ' + (this.steps[j].chip || this.steps[j].title);
+    rail.appendChild(b);
+  }
+};
+
+AnimEngine.prototype.goTo = function (idx) {
+  if (idx < 0 || idx >= this.steps.length) return;
+  this.i = idx;
+  this.clear();
+  var step = this.steps[idx];
+  step.render(this);
+  this._updateUI();
+};
+
+AnimEngine.prototype._updateUI = function () {
+  var f = this.frame, step = this.steps[this.i], n = this.steps.length;
+  var info = f.querySelector('.step-info'), desc = f.querySelector('.step-desc'),
+      bar = f.querySelector('.anim-progress .bar');
+  if (info) info.textContent = '步骤 ' + (this.i + 1) + ' / ' + n + ' · ' + step.title;
+  if (desc) desc.innerHTML = step.desc || '';
+  if (bar) bar.style.width = ((this.i + 1) / n * 100) + '%';
+  var chips = f.querySelectorAll('.stage-chip');
+  for (var j = 0; j < chips.length; j++) chips[j].setAttribute('aria-current', j === this.i ? 'true' : 'false');
+  var prev = f.querySelector('.btn-prev'), next = f.querySelector('.btn-next');
+  if (prev) prev.disabled = this.i === 0;
+  if (next) next.disabled = this.i === n - 1;
+};
+
+AnimEngine.prototype.next = function () { if (this.i < this.steps.length - 1) this.goTo(this.i + 1); };
+AnimEngine.prototype.prev = function () { if (this.i > 0) this.goTo(this.i - 1); };
+AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+AnimEngine.prototype.setSpeed = function (v) { this.speed = v; };
+
+AnimEngine.prototype.play = function () {
+  var self = this;
+  if (this.i >= this.steps.length - 1) this.goTo(0);
+  this.playing = true;
+  this._setPlayBtn();
+  var tick = function () {
+    if (!self.playing) return;
+    var dur = (self.steps[self.i].duration || 2600) / self.speed;
+    self.timer = setTimeout(function () {
+      if (!self.playing) return;
+      if (self.i >= self.steps.length - 1) { self.pause(); return; }
+      self.goTo(self.i + 1);
+      tick();
+    }, dur);
+  };
+  tick();
+};
+
+AnimEngine.prototype.pause = function () {
+  this.playing = false;
+  if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  this._setPlayBtn();
+};
+AnimEngine.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
+AnimEngine.prototype._setPlayBtn = function () {
+  var b = this.frame.querySelector('.btn-play');
+  if (b) b.textContent = this.playing ? '❙❙ 暂停' : '▶ 播放';
+};
+/* ---------- 场景 1：NEO 的重叠窗口 ---------- */
+function scene1() {
+  var cases = [
+    { lin0: 5, ga0: 1, lin1: 2.5, ca1: 4, ca0: 3 },
+    { lin0: 7.5, ga0: 1.4, lin1: 2, ca1: 3.2, ca0: 3 },
+    { lin0: 3, ga0: 0.8, lin1: 1.4, ca1: 4.6, ca0: 4 },
+    { lin0: 2, ga0: 0.6, lin1: 0, ca1: 0, ca0: 0 }
+  ];
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), teal = C('--a-teal', '#3CC6C0'), purple = C('--a-purple', '#B79BFF');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), red = C('--a-red', '#FF7268');
+    var amber = C('--a-amber', '#E9B449'), green = C('--a-green', '#5BD08A'), accent = C('--a-accent', '#F08A4B');
+    var line = C('--a-line', '#333');
+    var bbg = C('--a-blue-bg', '#1c2a40'), tbg = C('--a-teal-bg', '#14302e'), pbg = C('--a-purple-bg', '#2a2140');
+    var rbg = C('--a-red-bg', '#3a1c1a');
+    e.t(410, 24, '按论文 §3 的机制绘制；时间长度与曲线均为示意', { size: 12, fill: amber });
+    if (k <= 3) {
+      var c = cases[k], X0 = 150, U = 50, GY = 70, CY = 150, H = 36;
+      function blk(x, w, y, lab, fill, stroke, cls) {
+        if (w <= 0) return;
+        e.rect(x, y, w, H, w >= 44 ? lab : null, fill, stroke, { rx: 4, size: 11, cls: cls });
+      }
+      e.t(X0 - 12, GY + 23, 'GPU', { anchor: 'end', size: 12, weight: 700, fill: blue });
+      e.t(X0 - 12, CY + 23, 'CPU', { anchor: 'end', size: 12, weight: 700, fill: purple });
+      var g1 = X0 + c.lin0 * U, g2 = g1 + c.ga0 * U, g3 = g2 + c.lin1 * U;
+      blk(X0, c.lin0 * U, GY, '线性 0', bbg, blue);
+      blk(g1, c.ga0 * U, GY, 'GA 0', tbg, teal);
+      blk(g2, c.lin1 * U, GY, '线性 1', bbg, blue);
+      if (k === 3) {
+        e.rect(X0, CY, 420, H, 'CPU decode 全部被撤出，CPU 空闲', 'none', red, { rx: 4, dash: '5 4', size: 12, labelFill: red, cls: 'hot' });
+        e.t(410, 236, '只剩 GPU decode 的迭代：线性阶段太短，加入任何 CPU decode 都会让余量变负', { size: 13, weight: 700, fill: red });
+        e.t(410, 262, 'CPU 上的请求停在原地，等下一批 prefill 到来才可能再开窗', { size: 12, fill: muted });
+      } else {
+        /* 两个重叠窗口 */
+        e.rect(X0, CY - 6, g1 - X0, H + 12, null, 'none', amber, { rx: 4, dash: '4 4', sw: 1 });
+        e.rect(g1, CY - 6, g3 - g1, H + 12, null, 'none', amber, { rx: 4, dash: '4 4', sw: 1 });
+        e.t((X0 + g1) / 2, CY + H + 22, '窗口 1', { size: 11, fill: amber });
+        e.t((g1 + g3) / 2, CY + H + 22, '窗口 2', { size: 11, fill: amber });
+        var a1 = Math.min(c.ca1, c.lin0), o1 = c.ca1 - a1;
+        blk(X0, a1 * U, CY, 'CPU Attn 1', pbg, purple);
+        blk(X0 + a1 * U, o1 * U, CY, '超出', rbg, red, 'hot');
+        var s0 = Math.max(g1, X0 + c.ca1 * U);
+        var a0 = Math.max(0, Math.min(c.ca0, (g3 - s0) / U)), o0 = c.ca0 - a0;
+        blk(s0, a0 * U, CY, 'CPU Attn 0', pbg, purple);
+        blk(s0 + a0 * U, o0 * U, CY, '超出', rbg, red, 'hot');
+        var ok1 = c.lin0 >= c.ca1, ok2 = c.lin1 + c.ga0 >= c.ca0;
+        e.t(410, 246, '① 线性 0 = ' + c.lin0.toFixed(1) + '  ≥  CPU Attn 1 = ' + c.ca1.toFixed(1) + (ok1 ? '   ✓' : '   ✗'),
+          { size: 13, mono: true, fill: ok1 ? green : red });
+        e.t(410, 272, '② 线性 1 + GA 0 = ' + (c.lin1 + c.ga0).toFixed(1) + '  ≥  CPU Attn 0 = ' + c.ca0.toFixed(1) + (ok2 ? '   ✓' : '   ✗'),
+          { size: 13, mono: true, fill: ok2 ? green : red });
+      }
+      var notes = [
+        ['子批次 0：所有 prefill + GPU decode + 选中的部分 CPU decode', '子批次 1：其余 CPU decode；两者的线性阶段都在 GPU 上跑'],
+        ['prefill 贡献整段 prompt 的行，线性 0 很长', 'CPU attention 被完全盖住，CPU decode 可以被接纳'],
+        ['prefill 少、decode 多：线性阶段变短', 'CPU attention 要扫越来越长的 KV 历史，两个条件同时失效'],
+        ['prefill 排空后，纯 decode 迭代提供不了足够的重叠', 'CPU 侧进度停在平台上：GPU-gated progress']
+      ];
+      e.t(410, 332, notes[k][0], { size: 13, fill: strong });
+      e.t(410, 356, notes[k][1], { size: 12, fill: muted });
+      return;
+    }
+    /* k === 4：累计进度曲线 */
+    var PX = 110, PY = 380, W = 640, HH = 290, T = 10, V = 260;
+    function px(t) { return PX + t / T * W; }
+    function py(v) { return PY - v / V * HH; }
+    e.line(PX, PY, PX + W, PY, { stroke: line, sw: 1.2 });
+    e.line(PX, PY, PX, PY - HH - 6, { stroke: line, sw: 1.2 });
+    e.t(PX + W, PY + 22, '时间 →', { anchor: 'end', size: 11, fill: muted });
+    e.t(PX - 8, PY - HH + 4, 'CPU 侧', { anchor: 'end', size: 11, fill: muted });
+    e.t(PX - 8, PY - HH + 20, '累计 token', { anchor: 'end', size: 11, fill: muted });
+    var neo = [[0, 0], [1, 34], [2, 36], [3, 74], [3.6, 76], [4.4, 108], [5.2, 112], [10, 116]];
+    var d = '';
+    neo.forEach(function (p, i) { d += (i ? 'L' : 'M') + px(p[0]).toFixed(1) + ' ' + py(p[1]).toFixed(1) + ' '; });
+    e.path(d, { fill: 'none', stroke: purple, sw: 2.4 });
+    e.path('M' + px(0) + ' ' + py(0) + ' L' + px(10) + ' ' + py(235), { fill: 'none', stroke: accent, sw: 2.4, cls: 'hot' });
+    [[0.5, '突发'], [2.5, '突发'], [4, '突发']].forEach(function (b) {
+      e.t(px(b[0]) - 6, py(b[0] < 1 ? 17 : b[0] < 3 ? 55 : 92) - 12, b[1], { size: 10, fill: purple });
+    });
+    e.rect(px(5.4), py(116) - 46, 196, 28, 'prefill 排空 → 平台', 'none', red, { rx: 4, dash: '4 3', size: 11, labelFill: red });
+    e.t(px(6.2), py(196) - 10, 'DualPace：CPU 引擎按自己的时钟连续推进', { size: 12, weight: 700, fill: accent });
+    e.t(px(8.4), py(116) + 20, 'NEO', { size: 12, weight: 700, fill: purple });
+  }
+  var steps = [
+    ['结构', '一轮迭代：两个子批次交错', 'GPU 依次跑子批次 0 的线性阶段、GPU attention、子批次 1 的线性阶段；CPU 在窗口 1 里算子批次 1 的 attention，在窗口 2 里算子批次 0 的。对应式 (1) 的两个条件。'],
+    ['prefill 多', '窗口够宽，CPU decode 能挤进来', '一个 prefill 给线性阶段贡献整段 prompt 的行，T<sup>lin</sup><sub>0</sub> 很长，两个条件都有余量。'],
+    ['decode 多', 'CPU attention 超出窗口', 'decode 每个只贡献一行，T<sup>lin</sup> 缩短；T<sup>ca</sup> 却随 KV 历史变长。余量变负，NEO 把试探加入的 CPU 请求撤出。'],
+    ['排空', 'prefill 排空后停在平台', '纯 decode 的迭代找不到可行的重叠，CPU 驻留请求得不到任何进度，尽管 CPU 本身是空闲的。'],
+    ['对比', 'CPU 侧累计进度：突发 vs 连续', 'NEO 的 CPU 进度跟着 prefill 到达呈突发状，最后停在平台；DualPace 让 CPU 引擎独立调度，进度连续增长。曲线为示意。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 2：请求在两个引擎之间的去向 ---------- */
+function scene2() {
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), purple = C('--a-purple', '#B79BFF'), accent = C('--a-accent', '#F08A4B');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), red = C('--a-red', '#FF7268');
+    var amber = C('--a-amber', '#E9B449'), green = C('--a-green', '#5BD08A'), line = C('--a-line', '#333');
+    var bbg = C('--a-blue-bg', '#1c2a40'), pbg = C('--a-purple-bg', '#2a2140'), gbg = C('--a-green-bg', '#16301f');
+    var abg = C('--a-accent-bg', '#3a2414'), rbg = C('--a-red-bg', '#3a1c1a');
+    e.t(410, 24, '按论文 §4 的机制绘制；请求数量为示意', { size: 12, fill: amber });
+    /* 两个引擎 */
+    var GX = 170, CX = 500, EY = 52, EW = 270, EH = 120, MY = 190, MH = 46;
+    e.rect(GX, EY, EW, EH, null, bbg, blue, { rx: 8 });
+    e.rect(CX, EY, EW, EH, null, pbg, purple, { rx: 8 });
+    e.t(GX + EW / 2, EY + 22, 'GPU 引擎：prefill + GPU decode', { size: 12, weight: 700, fill: blue });
+    e.t(CX + EW / 2, EY + 22, 'CPU 引擎：CPU decode', { size: 12, weight: 700, fill: purple });
+    e.t(GX + 14, EY + 50, '队列', { size: 11, fill: muted, anchor: 'start' });
+    e.t(CX + 14, EY + 50, '队列', { size: 11, fill: muted, anchor: 'start' });
+    var hbmFull = k === 2 || k === 3;
+    e.rect(GX, MY, EW, MH, null, hbmFull ? rbg : 'none', hbmFull ? red : blue, { rx: 6 });
+    e.rect(CX, MY, EW, MH, null, 'none', purple, { rx: 6 });
+    e.t(GX + EW / 2, MY + 28, hbmFull ? 'HBM KV：紧张' : 'HBM KV', { size: 12, fill: hbmFull ? red : blue, weight: 700 });
+    e.t(CX + EW / 2, MY + 28, '主机内存 KV', { size: 12, fill: purple, weight: 700 });
+    e.t(GX + EW / 2, EY + EH - 12, '自己的调度时钟', { size: 10, fill: muted });
+    e.t(CX + EW / 2, EY + EH - 12, '自己的调度时钟', { size: 10, fill: muted });
+    function req(x, y, lab, stroke, fill, opt) {
+      opt = opt || {};
+      e.rect(x, y, 34, 24, lab, fill, stroke, { rx: 4, size: 11, cls: opt.cls, dash: opt.dash, opacity: opt.opacity });
+    }
+    var gq = ['r1', 'r2', 'r3'], cq = ['r4', 'r5'];
+    if (k === 1) gq.push('r6');
+    if (k === 2) cq.push('r6');
+    if (k === 3) gq = ['r1', 'r2'];
+    if (k === 4) { cq = ['r5']; gq.push('r4'); }
+    var QY = EY + 36;
+    gq.forEach(function (n, i) {
+      var hot = (k === 1 && n === 'r6') || (k === 4 && n === 'r4');
+      req(GX + 50 + i * 42, QY, n, hot ? green : blue, hot ? gbg : bbg, { cls: hot ? 'hot' : null });
+    });
+    cq.forEach(function (n, i) {
+      var hot = k === 2 && n === 'r6';
+      req(CX + 50 + i * 42, QY, n, hot ? green : purple, hot ? gbg : pbg, { cls: hot ? 'hot' : null });
+    });
+    if (k >= 1 && k <= 2) {
+      e.rect(30, QY, 90, 24, '新请求 r6', 'none', strong, { rx: 4, size: 11 });
+      e.arrow(122, QY + 12, GX - 4, QY + 12, { marker: 'arrB', stroke: blue, sw: 1.6 });
+      e.t(76, QY + 44, '先在 GPU 上 prefill', { size: 10, fill: muted });
+    }
+    var notes;
+    if (k === 0) {
+      e.line(GX + EW + 15, EY - 4, GX + EW + 15, MY + MH + 4, { stroke: line, sw: 1, dash: '3 4' });
+      e.t(410, 270, '每个请求任意时刻只归一个引擎所有；两边之间没有全局迭代屏障', { size: 13, weight: 700, fill: strong });
+      notes = ['GPU 引擎管 HBM 上的 KV，CPU 引擎管主机内存里的 KV', '两边各有请求队列、调度时钟和 KV 管理器，批次不必同时开始或结束'];
+    } else if (k === 1) {
+      e.arrow(GX + EW / 2 + 60, QY + 28, GX + EW / 2 + 60, MY - 4, { marker: 'arrG', stroke: green, sw: 1.8 });
+      e.t(410, 270, 'Prefill-to-GPU：prompt 在 GPU 上算，KV 留在 HBM，之后加入 GPU decode', { size: 13, weight: 700, fill: green });
+      notes = ['HBM 放得下时的默认路径', '准入要满足式 (2)：GPU 队列变长可能增加 migration 预留'];
+    } else if (k === 2) {
+      e.rect(GX + 20, MY + MH + 22, 70, 26, 'staging', abg, accent, { rx: 4, size: 11 });
+      for (var l = 0; l < 4; l++) {
+        var y0 = MY + MH + 35;
+        e.arrow(GX + 92, y0, CX + 30 + l * 52, MY + MH + 4, { marker: 'arrA', stroke: accent, sw: 1.2 });
+        e.t(CX + 30 + l * 52, MY + MH + 60, l < 3 ? 'L' + (l + 1) : '… LN', { size: 10, fill: accent });
+      }
+      e.t(410, 340, 'Prefill-to-CPU：先预留最终的主机 KV 块，GPU 上只有逐层的临时 staging', { size: 13, weight: 700, fill: accent });
+      notes = ['每层算出 K/V 后立刻异步拷到主机，尽量和后续层的 GPU 计算重叠', null];
+    } else if (k === 3) {
+      req(GX + 50 + 2 * 42, QY, 'r3', red, rbg, { dash: '4 3', opacity: 0.6 });
+      req(CX + 50 + 2 * 42, QY, 'r3', purple, 'none', { dash: '4 3', opacity: 0.5 });
+      e.arrow(GX + EW - 30, MY + 23, CX + 30, MY + 23, { marker: 'arrA', stroke: accent, sw: 2 });
+      e.t(GX + EW + 45, MY + 14, '拷 KV', { size: 11, fill: accent });
+      e.t(410, 270, 'swap-out：HBM 放不下 GPU 请求下一个 token 的增长，从驱逐队尾选 r3', { size: 13, weight: 700, fill: accent });
+      notes = ['先保留主机块，把已生成的 KV 拷过去', '拷贝完成之前，CPU 调度器看不到 r3（虚线），不会提前调度它'];
+    } else if (k === 4) {
+      e.arrow(CX + 30, MY + 23, GX + EW - 30, MY + 23, { marker: 'arrG', stroke: green, sw: 2 });
+      e.t(GX + EW + 45, MY + 14, '拷回', { size: 11, fill: green });
+      e.t(410, 270, 'swap-in：已有 GPU 足迹 + b̂(r4) ≤ HBM 容量，才把 r4 换回', { size: 13, weight: 700, fill: green });
+      notes = ['b̂ 是 finish-peak 足迹，按请求跑到完成时的最多块数计算', '换回的请求能一直留在 GPU 上直到完成，避免来回迁移'];
+    } else {
+      var TY = 268, TX = 120;
+      e.t(TX - 10, TY + 16, 'GPU', { anchor: 'end', size: 12, weight: 700, fill: blue });
+      e.t(TX - 10, TY + 56, 'CPU', { anchor: 'end', size: 12, weight: 700, fill: purple });
+      var gb = [90, 60, 120, 70, 110, 80], cb = [150, 140, 160, 150];
+      var x = TX;
+      gb.forEach(function (w, i) { e.rect(x, TY, w - 4, 26, '批 ' + (i + 1), bbg, blue, { rx: 3, size: 10 }); x += w; });
+      x = TX + 20;
+      cb.forEach(function (w, i) { e.rect(x, TY + 40, w - 4, 26, 'CPU 批 ' + (i + 1), pbg, purple, { rx: 3, size: 10 }); x += w; });
+      e.t(410, TY + 96, '两条时间线的批次边界互不对齐：GPU 批次没有重叠窗口时，CPU 照样解码', { size: 13, weight: 700, fill: strong });
+      notes = [null, '背压是局部的：主机内存紧张不会阻塞 GPU 上可运行的那部分请求'];
+    }
+    if (notes[0]) e.t(410, 362, notes[0], { size: 12, fill: strong });
+    if (notes[1]) e.t(410, 386, notes[1], { size: 12, fill: muted });
+  }
+  var steps = [
+    ['结构', '两个引擎，单一所有者', 'GPU 引擎拥有所有 prefill 和 GPU 驻留 decode，CPU 引擎拥有 CPU 驻留 decode。没有全局屏障。'],
+    ['Prefill-to-GPU', 'HBM 够用：KV 留在 GPU', '所有请求都从 GPU 引擎进入。prompt 在 GPU 上算完，KV 写进 HBM，请求接着做 GPU decode。'],
+    ['Prefill-to-CPU', 'HBM 不够：逐层把 KV 拷到主机', '仍在 GPU 上 prefill，但预先保留主机 KV 块，GPU 只用逐层 staging。拷贝完成后请求进入 CPU 队列。'],
+    ['swap-out', '驱逐 GPU 请求到主机', '只有 HBM 装不下下一个 token 的增长时才触发。拷贝完成后请求才对 CPU 调度器可见。'],
+    ['swap-in', '按 finish-peak 足迹换回', '把 b̂<sub>r</sub> 加进 HBM 准入预算，放得下才执行。保守，但避免短命迁移和驻留震荡。'],
+    ['独立时钟', '两条时间线各走各的', 'GPU 和 CPU 各自「调度、提交、等待、应用」，批次长度和边界互不约束。时长为示意。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 3：CPU KV 的四项义务 ---------- */
+function scene3() {
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), teal = C('--a-teal', '#3CC6C0'), purple = C('--a-purple', '#B79BFF');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), red = C('--a-red', '#FF7268');
+    var amber = C('--a-amber', '#E9B449'), green = C('--a-green', '#5BD08A'), accent = C('--a-accent', '#F08A4B');
+    var bbg = C('--a-blue-bg', '#1c2a40'), tbg = C('--a-teal-bg', '#14302e'), pbg = C('--a-purple-bg', '#2a2140');
+    var abg = C('--a-accent-bg', '#3a2414'), rbg = C('--a-red-bg', '#3a1c1a');
+    e.t(410, 24, '按论文 §4.1 与附录 A 的机制绘制；块数为示意', { size: 12, fill: amber });
+    var X0 = 140, U = 5.6, BY = 70, BH = 40, CAP = 100;
+    /* CPU KV 条 */
+    e.t(X0 - 12, BY + 25, '主机 KV', { anchor: 'end', size: 12, weight: 700, fill: purple });
+    e.rect(X0, BY, CAP * U, BH, null, 'none', strong, { rx: 4, sw: 1.4 });
+    e.t(X0 + CAP * U, BY - 8, 'capacity = ' + CAP, { anchor: 'end', size: 11, fill: muted, mono: true });
+    var used = 34, planned = k >= 1 ? 10 : 0, growth = k >= 2 ? 18 : 0, mig = k >= 3 ? 24 : 0;
+    var cand = k === 4 ? 20 : 0;
+    var segs = [['used', used, pbg, purple], ['planned', planned, tbg, teal], ['growth', growth, 'none', amber], ['migration', mig, abg, accent]];
+    var x = X0;
+    segs.forEach(function (s) {
+      if (s[1] <= 0) return;
+      e.rect(x, BY, s[1] * U, BH, s[1] * U >= 50 ? s[0] + ' ' + s[1] : null, s[2], s[3], { rx: 3, size: 11, dash: s[0] === 'growth' ? '4 3' : null });
+      x += s[1] * U;
+    });
+    var tot = used + planned + growth + mig;
+    if (cand) {
+      var over = tot + cand > CAP;
+      e.rect(x, BY - 4, cand * U, BH + 8, '候选 ' + cand, rbg, red, { rx: 3, size: 11, dash: '5 3', cls: 'hot' });
+      e.t(X0, BY - 8, tot + ' + ' + cand + ' = ' + (tot + cand) + (over ? '  >  ' : '  ≤  ') + CAP + (over ? '   ✗ 拒绝' : '   ✓'),
+        { anchor: 'start', size: 12, mono: true, weight: 700, fill: over ? red : green });
+    } else {
+      e.t(X0, BY - 8, 'used + planned + growth + migration = ' + tot + '  ≤  ' + CAP + '   ✓', { anchor: 'start', size: 12, mono: true, fill: green });
+    }
+    /* GPU 所有请求的峰值足迹 */
+    if (k >= 3) {
+      var GY = 200, reqs = [16, 14, 18, 12, 14, 12, 12], GCAP = 76, gx = X0;
+      e.t(X0 - 12, GY + 17, 'GPU 队列', { anchor: 'end', size: 12, weight: 700, fill: blue });
+      e.t(X0 - 12, GY + 33, '各请求 b̂', { anchor: 'end', size: 11, fill: muted });
+      var acc = 0;
+      reqs.forEach(function (b, i) {
+        acc += b;
+        var moved = acc > GCAP;
+        e.rect(gx, GY, b * U - 2, 30, 'r' + (i + 1), moved ? abg : bbg, moved ? accent : blue, { rx: 3, size: 10 });
+        gx += b * U;
+      });
+      e.line(X0 + GCAP * U, GY - 14, X0 + GCAP * U, GY + 44, { stroke: red, sw: 1.6, dash: '4 3' });
+      e.t(X0 + GCAP * U, GY - 20, 'HBM capacity', { size: 11, fill: red });
+      e.t(X0 + 2, GY + 50, '驱逐优先级：头 →', { anchor: 'start', size: 10, fill: muted });
+      e.t(gx, GY + 50, '← 尾，从这里开始扫', { anchor: 'end', size: 10, fill: accent });
+      e.arrow(X0 + 88 * U, GY - 4, X0 + 80 * U, BY + BH + 6, { marker: 'arrA', stroke: accent, sw: 1.4 });
+    }
+    var notes = [
+      ['已经落地在主机内存里的 CPU KV', '只看这一项做准入，会把主机内存当成无底的溢出缓冲'],
+      ['本轮已决定但还没落地的分配', 'Prefill-to-CPU 的预留块、立即 swap-out 的目的块'],
+      ['式 (3)：Σ max(b̂ − b, 0)，CPU 运行队列到峰值还差的块数', '已在 CPU 上跑的请求，保证每一个都能跑完'],
+      ['式 (4)：GPU 峰值 > HBM 容量，就从队尾把 b̂ 移进 migration', '这部分 KV 归 GPU 所有，但不保证能一直留在 HBM，主机要给它留位'],
+      ['新候选会让式 (2) 不成立，GPU 调度器不把它导向 CPU', 'CPU 调度器接纳新 decode 时，也把 migration 当作不可用容量']
+    ];
+    var NY = k >= 3 ? 300 : 230;
+    e.t(410, NY, notes[k][0], { size: 13, weight: 700, fill: strong });
+    e.t(410, NY + 24, notes[k][1], { size: 12, fill: muted });
+    if (k === 4) e.t(410, NY + 60, '于是两个引擎不必同步迭代，驱逐路径也始终可用', { size: 12, fill: green });
+  }
+  var steps = [
+    ['used', '已落地的 CPU KV', '最直观的一项：当前主机内存里已经写入的 KV 块。'],
+    ['planned', '本轮决定、尚未落地', 'Prefill-to-CPU 的预留块和本轮立即执行的 swap-out，都在拷贝完成前先记账。'],
+    ['growth', 'CPU 请求的剩余增长', '对 CPU 运行队列里每个请求累加 b̂<sub>r</sub> − b<sub>r</sub>，按 finish-peak 预留，保证它们都能跑完。'],
+    ['migration', '为 GPU 驱逐预留落脚点', 'B<sup>G</sup><sub>peak</sub> 超出 HBM 容量时，从驱逐优先级的尾部扫描，把超出部分请求的 b̂ 记到主机侧。这是两个调度器之间的桥。'],
+    ['准入', '违反式 (2) 的候选被拒', '四项之和加上候选超过容量，就不接纳。Prefill-to-GPU 候选也要检查：它延长 GPU 队列，可能增加 migration。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 4：三种路由与 GPU 阶段边界 ---------- */
+function scene4() {
+  var routes = [
+    { b: 8, name: 'Full-CPU', n: 0, rule: 'b = 8 ≤ F = 16' },
+    { b: 24, name: 'Split-Final', n: 1, rule: 'F = 16 < b = 24 ≤ P = 32' },
+    { b: 64, name: 'Fused-Assist', n: 'N', rule: 'b = 64 > P = 32' }
+  ];
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), purple = C('--a-purple', '#B79BFF'), accent = C('--a-accent', '#F08A4B');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), green = C('--a-green', '#5BD08A');
+    var amber = C('--a-amber', '#E9B449'), line = C('--a-line', '#333');
+    var bbg = C('--a-blue-bg', '#1c2a40'), pbg = C('--a-purple-bg', '#2a2140'), abg = C('--a-accent-bg', '#3a2414');
+    e.t(410, 24, '按论文 §4.2 的机制绘制；(P, F) = (32, 16) 取自 4090 平台，层数与时长为示意', { size: 12, fill: amber });
+    if (k <= 2) {
+      var r = routes[k], X0 = 120, Y = 92, H = 34, L = 4;
+      e.t(410, 58, 'CPU decode 批 b = ' + r.b + '：' + r.rule + ' → ' + r.name, { size: 14, weight: 700, fill: strong });
+      e.t(X0 - 10, Y + 22, 'CPU', { anchor: 'end', size: 12, weight: 700, fill: purple });
+      e.t(X0 - 10, Y + 92, 'GPU', { anchor: 'end', size: 12, weight: 700, fill: blue });
+      var x = X0, gpuX = [];
+      function cpu(w, lab) { e.rect(x, Y, w - 3, H, w >= 46 ? lab : null, pbg, purple, { rx: 3, size: 10 }); x += w; }
+      function gpu(w, lab) {
+        e.rect(x, Y + 70, w - 3, H, lab, abg, accent, { rx: 3, size: 10, cls: 'hot' });
+        e.arrow(x + 2, Y + H + 2, x + 2, Y + 68, { marker: 'arrA', stroke: accent, sw: 1.2 });
+        e.arrow(x + w - 6, Y + 68, x + w - 6, Y + H + 2, { marker: 'arrA', stroke: accent, sw: 1.2 });
+        e.rect(x, Y, w - 3, H, null, 'none', line, { rx: 3, dash: '3 3' });
+        x += w;
+      }
+      cpu(56, 'pre-layer');
+      for (var l = 1; l <= L; l++) {
+        cpu(64, 'L' + l + ' attn');
+        if (k === 2 && l < L) gpu(58, 'post-attn');
+        else if (k === 2) gpu(84, 'post-attn+head');
+        else cpu(58, 'post-attn');
+      }
+      if (k === 1) gpu(64, 'LM head');
+      if (k === 0) cpu(64, 'LM head');
+      e.t(X0, Y + 136, 'pre-layer、每层 pre-attention 与 attention 固定在 CPU（访问主机 KV）', { anchor: 'start', size: 12, fill: purple });
+      e.t(X0, Y + 158, 'post-attention 和 post-layer 不访问 KV，可以本地跑，也可以作为 Dense Assist 交给 GPU', { anchor: 'start', size: 12, fill: muted });
+      e.rect(250, 296, 320, 44, '每个前向的 assist 次数：' + r.n, 'none', k ? accent : green, { rx: 6, size: 14, weight: 700, labelFill: k ? accent : green });
+      var notes = ['批次小，CPU 本地的稠密算子足够快，完全不碰 GPU', '只把 LM head 交给 GPU：它是前向里最大的单个 GEMM', '每层的 post-attention 都交给 GPU，LM head 与最后一层合并成一次'];
+      e.t(410, 372, notes[k], { size: 13, fill: strong });
+      e.t(410, 396, '请求所有权、调度权和 KV 驻留始终留在 CPU 引擎', { size: 12, fill: muted });
+      return;
+    }
+    if (k === 3) {
+      var X = 80, GY = 120, W = 660;
+      e.t(410, 58, 'GPU 主路径 = 一串 FIFO 阶段任务，安全边界之间不打断', { size: 14, weight: 700, fill: strong });
+      var stages = [['pre-layer', 60], ['层 1', 96], ['层 2', 96], ['A', 40], ['层 3', 96], ['层 4', 96], ['A', 40], ['post-layer', 80]];
+      var x2 = X;
+      e.t(X - 10, GY + 23, 'GPU', { anchor: 'end', size: 12, weight: 700, fill: blue });
+      stages.forEach(function (s) {
+        var isA = s[0] === 'A';
+        e.rect(x2, GY, s[1] - 4, 36, isA ? 'assist' : s[0], isA ? abg : bbg, isA ? accent : blue, { rx: 3, size: 11, cls: isA ? 'hot' : null });
+        x2 += s[1];
+      });
+      var bx = X - 2;
+      stages.forEach(function (s, i) {
+        if (i > 0) e.line(bx, GY - 14, bx, GY + 50, { stroke: amber, sw: 1.6, dash: '3 3' });
+        bx += s[1];
+      });
+      e.t(X + 60 + 192 - 2, GY - 22, '边界', { size: 11, fill: amber });
+      e.rect(X + 100, 210, 180, 30, 'CPU：assist 已就绪', pbg, purple, { rx: 4, size: 11 });
+      e.arrow(X + 230, 208, X + 252 + 16, GY + 40, { marker: 'arrA', stroke: accent, sw: 1.4 });
+      e.rect(X + 400, 210, 200, 30, 'CPU：层 4 运行中就绪', pbg, purple, { rx: 4, size: 11 });
+      e.arrow(X + 500, 208, X + 500, GY + 40, { marker: 'arrA', stroke: accent, sw: 1.4 });
+      e.t(X + 500, 262, '等层 4 跑完，在下一个边界处理', { size: 11, fill: muted });
+      e.t(410, 310, '每到一个边界，GPU worker 先处理已就绪的 Dense Assist，再取下一个主阶段', { size: 13, fill: strong });
+      e.t(410, 334, '从不抢占正在跑的 CUDA kernel，也不取消已提交的工作', { size: 12, fill: muted });
+      e.t(410, 358, 'assist 的响应时间最多是「当前阶段跑完」，GPU 执行顺序仍是确定的', { size: 12, fill: muted });
+      e.t(410, 392, 'assist 请求不进 GPU 调度队列，不占长期 GPU KV 块', { size: 12, fill: green });
+      return;
+    }
+    /* k === 4：C ≤ F 时去掉协调 */
+    var AX = 120, AW = 580, AY = 110;
+    e.t(410, 58, '若 CPU 能组出的最大批 C ≤ F，Dense Assist 静态不可达', { size: 14, weight: 700, fill: strong });
+    e.line(AX, AY, AX + AW, AY, { stroke: line, sw: 1.4 });
+    function bx2(b) { return AX + b / 80 * AW; }
+    e.rect(AX, AY - 18, bx2(16) - AX, 36, 'Full-CPU', pbg, purple, { rx: 3, size: 11 });
+    e.rect(bx2(16), AY - 18, bx2(32) - bx2(16), 36, 'Split', abg, accent, { rx: 3, size: 11, opacity: 0.35 });
+    e.rect(bx2(32), AY - 18, AX + AW - bx2(32), 36, 'Fused-Assist', abg, accent, { rx: 3, size: 11, opacity: 0.35 });
+    [0, 16, 32, 64, 80].forEach(function (b) { e.t(bx2(b), AY + 36, String(b), { size: 10, fill: muted, mono: true }); });
+    e.line(bx2(12), AY - 30, bx2(12), AY + 20, { stroke: green, sw: 2 });
+    e.t(bx2(12), AY - 36, 'C = 12', { size: 11, fill: green, weight: 700 });
+    e.t(AX + AW, AY + 54, 'CPU 批大小 b', { anchor: 'end', size: 11, fill: muted });
+    e.rect(120, 200, 270, 70, '逐层阶段任务 + 边界检查', bbg, blue, { rx: 6, size: 12, opacity: 0.4 });
+    e.arrow(396, 235, 426, 235, { marker: 'arrG', stroke: green, sw: 1.8 });
+    e.rect(430, 200, 270, 70, '整前向一次跑完的 GPU 主路径', bbg, blue, { rx: 6, size: 12, cls: 'hot' });
+    e.t(410, 320, '所有可达批次都走 Full-CPU，GPU 上去掉逐层的 assist 检查', { size: 13, fill: strong });
+    e.t(410, 346, '两个引擎完全独立运行，协调只剩 KV 准入和迁移', { size: 12, fill: muted });
+  }
+  var steps = [
+    ['b = 8', 'Full-CPU：0 次 assist', 'b ≤ F，post-attention 和 LM head 都在 CPU 本地跑。'],
+    ['b = 24', 'Split-Final：1 次 assist', 'F &lt; b ≤ P，每层 post-attention 仍在 CPU，只有最后的 post-layer（LM head）交给 GPU。'],
+    ['b = 64', 'Fused-Assist：N 次 assist', 'b &gt; P，每层 post-attention 都交给 GPU，最后一层与 LM head 合并。批次越大，CPU 稠密算子越贵，越值得交出去。'],
+    ['边界', 'GPU 在阶段边界插入 assist', '主路径被切成 pre-layer、各层、post-layer 的 FIFO 任务。ready 的 assist 在下一个边界被优先处理，不抢占正在跑的 kernel。'],
+    ['C ≤ F', '协调可以整个关掉', '如果 CPU 批次永远到不了 F，就用整前向的 GPU 主路径，省掉逐层检查。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 5：结果数据一览 ---------- */
+function scene5() {
+  var models = ['Llama-3.1-8B', 'Qwen3-14B', 'Qwen3-32B'];
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), teal = C('--a-teal', '#3CC6C0'), purple = C('--a-purple', '#B79BFF');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), accent = C('--a-accent', '#F08A4B');
+    var amber = C('--a-amber', '#E9B449'), line = C('--a-line', '#333'), green = C('--a-green', '#5BD08A');
+    var tbg = C('--a-teal-bg', '#14302e');
+    var src = ['数据：论文 Figure 9（Conv，归一化时延 1 s/token）', '数据：论文 Figure 10 与附录 C（Conv）', '数据：论文 Figure 11（Llama-3.1-8B / RTX 4090，Conv）', '数据：论文 Figure 12（Conv）'];
+    e.t(410, 24, src[k], { size: 12, fill: amber });
+    var PX = 120, PY = 330, PW = 620, PH = 230;
+    function axis(max, ticks, unit) {
+      e.line(PX, PY, PX + PW, PY, { stroke: line, sw: 1.2 });
+      ticks.forEach(function (v) {
+        var y = PY - v / max * PH;
+        e.line(PX, y, PX + PW, y, { stroke: line, sw: 0.6, dash: '2 4' });
+        e.t(PX - 8, y + 4, v + unit, { anchor: 'end', size: 10, fill: muted, mono: true });
+      });
+    }
+    function bar(x, w, v, max, fill, lab, opt) {
+      opt = opt || {};
+      var h = v / max * PH;
+      e.rect(x, PY - h, w, h, null, fill, fill, { rx: 2, opacity: opt.opacity, cls: opt.cls });
+      if (lab) e.t(x + w / 2, PY - h - 7, lab, { size: 11, weight: 700, fill: opt.labFill || fill, mono: true });
+    }
+    if (k <= 1) {
+      var sets = k === 0 ? [[43.2, 6.9, 18.1], [90.6, 11.5, 23.8]] : [[50.5, 15.2, 7.3], [61, 15, 3]];
+      var cols = k === 0 ? [purple, blue] : [purple, teal];
+      var names = k === 0 ? ['vs NEO', 'vs vLLM'] : ['P99 ITL 1.5 s 目标', 'P99 TPOT（附录 C）'];
+      axis(100, [0, 25, 50, 75, 100], '%');
+      models.forEach(function (m, i) {
+        var gx = PX + 40 + i * 200;
+        sets.forEach(function (s, j) {
+          bar(gx + j * 64, 52, s[i], 100, cols[j], '+' + s[i] + '%', { cls: k === 0 && i === 0 && j === 1 ? 'hot' : null });
+        });
+        e.t(gx + 58, PY + 20, m, { size: 12, fill: strong });
+      });
+      names.forEach(function (n, j) {
+        e.rect(PX + 380 + j * 130, 54, 12, 12, null, cols[j], cols[j], { rx: 2 });
+        e.t(PX + 398 + j * 130, 64, n, { anchor: 'start', size: 11, fill: cols[j] });
+      });
+      e.t(PX, 64, k === 0 ? 'DualPace 可承受请求率的提升' : 'DualPace 相对 NEO 的提升', { anchor: 'start', size: 13, weight: 700, fill: accent });
+      e.t(410, 380, k === 0 ? '8B / 单张 4090 上提升最大；14B、32B 用多张 H20，GPU 侧余量更大，提升收窄'
+        : '提升来自 CPU 驻留请求不再等窗口；但 vLLM 的 ITL 和 TPOT 仍低于两者', { size: 12, fill: muted });
+      if (k === 0) e.t(410, 402, 'Code 负载上 DualPace 仍胜过 NEO，但两个 Qwen3 配置里 vLLM 更好', { size: 12, fill: muted });
+      return;
+    }
+    if (k === 2) {
+      var caps = ['30 GiB', '60 GiB', '120 GiB', '240 GiB'], rel = [1 / 1.287, 1 / 1.185, 1, 1];
+      axis(1, [0, 0.25, 0.5, 0.75, 1], '');
+      caps.forEach(function (c, i) {
+        var x = PX + 50 + i * 150;
+        bar(x, 80, rel[i], 1, i >= 2 ? accent : purple, (rel[i] * 100).toFixed(0) + '%', { opacity: i === 3 ? 0.6 : 1 });
+        e.t(x + 40, PY + 20, c, { size: 12, fill: strong, mono: true });
+      });
+      e.t(PX, 64, '归一化时延目标下的可承受请求率（以 120 GiB 为 100%）', { anchor: 'start', size: 13, weight: 700, fill: accent });
+      e.t(PX + 50 + 3 * 150 + 40, PY - PH - 26, '≈ 120 GiB', { size: 11, fill: muted });
+      e.t(410, 380, '120 → 240 GiB 不再提升：瓶颈转到 CPU 算力和内存带宽', { size: 12, fill: strong });
+      e.t(410, 402, '30 / 60 GiB 的 P99 ITL 反而更低：更多 decode 留在 GPU 上', { size: 12, fill: green });
+      return;
+    }
+    /* k === 3：assist 开销 */
+    var BX = 130, BW = 260, BH = 30;
+    e.t(410, 58, 'Dense Assist 占用 GPU 的时间构成', { size: 13, weight: 700, fill: accent });
+    var rows = [['Qwen3-32B · 4×H20', 60.4, 79.8, 15.3], ['Llama-3.1-8B · 4090', 70.0, 79.2, 12.6]];
+    e.t(BX + BW / 2, 92, '组件时间：CUDA vs 主机侧', { size: 11, fill: muted });
+    e.t(BX + BW + 130 + BW / 2, 92, 'CUDA 时间内部', { size: 11, fill: muted });
+    rows.forEach(function (r, i) {
+      var y = 110 + i * 70, cw = r[1] / 100 * BW;
+      e.t(BX - 8, y + 20, r[0].split(' · ')[0], { anchor: 'end', size: 11, fill: strong });
+      e.t(BX - 8, y + 36, r[0].split(' · ')[1], { anchor: 'end', size: 10, fill: muted });
+      e.rect(BX, y, cw, BH, 'CUDA ' + r[1].toFixed(1) + '%', tbg, teal, { rx: 2, size: 11 });
+      e.rect(BX + cw, y, BW - cw, BH, '主机 ' + (100 - r[1]).toFixed(1) + '%', 'none', amber, { rx: 2, size: 11, labelFill: amber });
+      var X2 = BX + BW + 130, pw = r[2] / 100 * BW, hw = r[3] / 100 * BW, rest = (100 - r[2] - r[3]).toFixed(1);
+      e.rect(X2, y, pw, BH, 'post-attn ' + r[2] + '%', tbg, teal, { rx: 2, size: 11 });
+      e.rect(X2 + pw, y, hw, BH, hw >= 40 ? 'H2D ' + r[3] + '%' : null, 'none', blue, { rx: 2, size: 10, labelFill: blue });
+      e.rect(X2 + pw + hw, y, BW - pw - hw, BH, null, 'none', muted, { rx: 2 });
+      e.t(X2 + BW + 6, y + 20, rest + '%', { anchor: 'start', size: 10, fill: muted, mono: true });
+    });
+    e.t(BX + BW + 130 + BW + 6, 100, '其余', { anchor: 'start', size: 10, fill: muted });
+    e.t(410, 270, '没有 assist 就绪时，边界上的空轮询每层只多 2–5 µs，每批约 0.1 ms 量级', { size: 12, fill: strong });
+    e.t(410, 296, '批 256 时一次 post-attention assist 的 CUDA 段只有 0.6–0.8 ms', { size: 12, fill: strong });
+    e.t(410, 322, '因此固定的主机侧提交开销在这个粒度上显得明显（30–40%）', { size: 12, fill: muted });
+    e.t(410, 360, 'CUDA 时间大部分花在 post-attention 本身：assist 要加速的正是这部分稠密计算', { size: 12, fill: green });
+    e.t(410, 386, '主机提交与 CUDA 执行可以部分重叠，堆叠条表示组件工作量，不是串行时延', { size: 11, fill: muted });
+  }
+  var steps = [
+    ['Figure 9', '可承受请求率：Conv 负载', '相对 NEO +6.9–43.2%，相对 vLLM +11.5–90.6%。标题里的 +90.6% 是 8B / 4090 这一格。'],
+    ['ITL', '尾部 token 间隔', '1.5 s 的 P99 ITL 目标下，相对 NEO 高 50.5% / 15.2% / 7.3%；P99 TPOT 提升 61% / 15% / 3%。vLLM 不卸载，ITL 和 TPOT 更低。'],
+    ['主机 KV', '容量是准入旋钮', '120 GiB 比 30 GiB 高 28.7%、比 60 GiB 高 18.5%（柱高按这两个数折算）；240 GiB 与 120 GiB 基本持平。'],
+    ['assist 开销', 'GPU 主路径被插队多少', '32B：CUDA 60.4%、主机 39.6%；8B：CUDA 70.0%、主机 30.0%。CUDA 内 post-attention 占 79.8% / 79.2%，H2D 占 15.3% / 12.6%。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+var builders = { svg1: scene1, svg2: scene2, svg3: scene3, svg4: scene4, svg5: scene5 };
+var engines = {};
+function initAll() {
+  for (var id in builders) {
+    var svg = document.getElementById(id);
+    if (!svg) continue;
+    engines[id] = new AnimEngine(svg, { steps: builders[id]() });
+  }
+}
+function engineOf(node) {
+  var frame = node.closest('.anim-frame');
+  if (!frame) return null;
+  var svg = frame.querySelector('svg');
+  return svg ? engines[svg.id] : null;
+}
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('button');
+  if (!b || !b.closest('.anim-frame')) return;
+  var eng = engineOf(b);
+  if (!eng) return;
+  if (b.classList.contains('btn-next')) { eng.pause(); eng.next(); }
+  else if (b.classList.contains('btn-prev')) { eng.pause(); eng.prev(); }
+  else if (b.classList.contains('btn-reset')) eng.reset();
+  else if (b.classList.contains('btn-play')) eng.toggle();
+  else if (b.classList.contains('stage-chip')) { eng.pause(); eng.goTo(+b.dataset.idx); }
+});
+document.addEventListener('input', function (ev) {
+  if (!ev.target.classList.contains('speed')) return;
+  var eng = engineOf(ev.target);
+  if (eng) eng.setSpeed(parseFloat(ev.target.value));
+});
+document.addEventListener('keydown', function (ev) {
+  var frame = document.activeElement && document.activeElement.closest && document.activeElement.closest('.anim-frame');
+  if (!frame) return;
+  var eng = engineOf(document.activeElement);
+  if (!eng) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); eng.pause(); eng.next(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); eng.pause(); eng.prev(); }
+  else if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON') { ev.preventDefault(); eng.toggle(); }
+});
+
+/* SVG 里的色值是切换主题那一刻读出来的具体值，主题一变就过期。
+   用 MutationObserver 盯 data-theme，无论用户点的是站点导航里的开关还是
+   本文右下角这个按钮，都会重绘当前步。存储键与站点保持一致（'theme'）。 */
+function redrawAll() {
+  for (var id in engines) { engines[id].pause(); engines[id].goTo(engines[id].i); }
+}
+window.toggleTheme = function () {
+  var root = document.documentElement;
+  var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (err) {}
+};
+if (window.MutationObserver) {
+  new MutationObserver(function () { setTimeout(redrawAll, 30); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+window.toggleToc = function () {
+  var toc = document.getElementById('tocNav');
+  var btn = document.querySelector('.toc-toggle');
+  var hidden = toc.hasAttribute('hidden');
+  if (hidden) toc.removeAttribute('hidden'); else toc.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+};
+
+/* TOC 高亮 + 回到顶部 */
+function initChrome() {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if ('IntersectionObserver' in window && secs.length) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  var bt = document.getElementById('backTop');
+  if (bt) window.addEventListener('scroll', function () { bt.classList.toggle('show', window.scrollY > 400); }, { passive: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { initAll(); initChrome(); });
+} else { initAll(); initChrome(); }
+})();
+</script>
+</body>
+</html>
+

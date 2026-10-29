@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoE 上的投机解码：专家字节、核带宽与最佳草稿长度</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --teal: var(--a-teal); --teal-bg: var(--a-teal-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+.callout-teal { background: var(--teal-bg); border-color: var(--teal); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 640px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+.anim-progress { height: 4px; background: var(--code-bg); }
+.anim-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.anim-stage-rail { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid var(--a-border); background: transparent; color: var(--fg-muted); cursor: pointer; }
+.anim-stage-rail .stage-chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--a-on-solid); }
+.anim-stage-rail .stage-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-status { padding: 10px 16px 14px; font-size: 13px; }
+.anim-status .step-info { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.anim-status .step-desc { color: var(--fg-soft); line-height: 1.6; }
+.anim-legend { padding: 0 16px 14px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--fg-muted); }
+.anim-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.anim-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.back-top, .theme-toggle { position: fixed; right: 24px; z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--a-border); background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 15px; }
+.back-top { bottom: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.back-top.show { opacity: 1; pointer-events: auto; }
+.theme-toggle { bottom: 72px; }
+.back-top:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.toc-toggle { display: none; }
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; max-height: 40vh; }
+  .content { width: 100%; }
+  .toc[hidden] { display: none; }
+  .toc-toggle { display: block; margin-bottom: 10px; padding: 6px 12px; border: 1px solid var(--a-border); border-radius: 6px; background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: none; }
+  .anim-canvas-wrap svg .anim-layer .hot { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body class="interactive-body">
+<script>
+/* SVG 的呈现属性（fill / stroke）不解析 var()，所以动画脚本要在运行时把
+   语义令牌读成具体色值。主题切换后重绘即可拿到新值。 */
+(function () {
+  window.aC = function (name, fallback) {
+    var host = document.querySelector('.interactive-body, .article-body') || document.documentElement;
+    var v = getComputedStyle(host).getPropertyValue(name);
+    return (v && v.trim()) || fallback || '#888';
+  };
+})();
+</script>
+<button class="theme-toggle" id="artThemeBtn" onclick="toggleTheme()" aria-label="切换深浅主题" title="切换主题">◑</button>
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+  <button class="toc-toggle" onclick="toggleToc()" aria-expanded="true" aria-controls="tocNav">目录</button>
+  <nav class="toc" id="tocNav" aria-label="文章目录">
+    <h3>目录</h3>
+    <a href="#hook">这篇论文在问什么</a>
+    <a href="#why">① 为什么 MoE 上投机常常不赚</a>
+    <a href="#bytes">② 两种专家核与字节账</a>
+    <a href="#reuse">③ 路由复用：实测比均匀假设高 3–8 倍</a>
+    <a href="#bandwidth">④ 带宽反转：去重核反而更慢</a>
+    <a href="#saving">⑤ 节省公式：ū 与 r 比大小</a>
+    <a href="#staircase">⑥ 最佳草稿长度是一道阶梯</a>
+    <a href="#threshold">⑦ 复用阈值</a>
+    <a href="#errors">⑧ 带宽误差怎么传到结论里</a>
+    <a href="#experiments">⑨ 实验复盘</a>
+    <a href="#critique">⑩ 论文没给的东西</a>
+    <a href="#summary">⑪ 一句话总结</a>
+  </nav>
+
+  <main class="content">
+
+    <section class="hook" id="hook">
+      <h1>MoE 上的投机解码：专家字节、核带宽与最佳草稿长度</h1>
+      <p class="tagline">稠密模型上，验证 k 个草稿和解码 1 个 token 读的是同一份权重，所以投机几乎是白赚。MoE 不一样：每个 token 选不同的专家，一次验证要多读多少专家字节，取决于路由；这些字节读得多快，又取决于读它们的那个 kernel。这篇论文把「投机在 MoE 上到底快不快、草稿该多长、能快多少」写成了<strong>字节 ÷ 有效带宽</strong>的一套闭式结论，用 Lean 4 证明，再在 llama.cpp（CUDA / Metal）和 MLX-LM 上逐条对账。</p>
+      <div class="badges">
+        <span class="badge badge-accent">arXiv:2610.34440</span>
+        <span class="badge badge-purple">MoE × 投机解码</span>
+        <span class="badge badge-blue">Lean 4 形式化证明</span>
+        <span class="badge badge-green">DeepSeek-V2-Lite 预注册验证</span>
+      </div>
+    </section>
+
+    <section id="why">
+      <h2>① 为什么 MoE 上投机常常不赚</h2>
+      <p>投机解码的账很简单：草稿模型一次猜 $k$ 个 token，目标模型一次前向把这 $k$ 个加上当前 token 共 $n=k+1$ 个位置一起打分。batch=1 的 decode 是读内存受限的，一次前向的时间主要是「把权重从显存读一遍」。稠密模型里 $n$ 个位置共享同一份权重，读一次就够，所以验证 $n$ 个 token 的时间接近解码 1 个 token。</p>
+      <p>MoE 把这个前提打破了。每层有 $N$ 个专家，每个 token 只选其中 $m$ 个。$n$ 个 token 一起验证时，它们选中的专家并集可能接近 $nm$ 个，也可能因为相邻 token 爱选同一批专家而小得多。验证一次要读的专家字节，是路由的函数。</p>
+      <p>论文开篇给了一个很扎心的实测：在 llama.cpp Metal 上用真实草稿模型跑 MT-Bench，<strong>37 个 prompt 里有 33 个是普通解码最快</strong>。投机解码在 MoE 上并不是默认赚钱的。</p>
+      <div class="callout callout-blue">
+        <strong>论文要回答的三个问题</strong>，全部写成步长时间 $V(k)$ 的函数：
+        <ol>
+          <li>投机什么时候比不投机快（接受率 $a$ 的阈值）？</li>
+          <li>最佳草稿长度 $k^*(a)$ 是多少？</li>
+          <li>最多能快多少？</li>
+        </ol>
+        而 $V(k)$ 又被拆成「要读的字节 ÷ 读这些字节的 kernel 的有效带宽」。前者由路由决定，后者只能测。
+      </div>
+      <p>已有工作的成本模型大多只有一个带宽：Leviathan 等人的仿射步长 $1+\chi k$（当且仅当 $a&gt;\chi$ 时有加速）；MoESD 在均匀路由下算出 $n$ 个 token 的不同专家数 $N(1-q^n)$；S2-MoE 按新引入专家数乘每专家延迟计费；SpecFit 把一次 cycle 写成截距加系数乘专家并集。它们都默认所有专家字节用同一个带宽读，也都没推出下面要讲的「阶梯」结构。</p>
+    </section>
+
+    <section id="bytes">
+      <h2>② 两种专家核与字节账</h2>
+      <p>一次验证前向要处理 $n$ 个 token、每个 token $m$ 个专家，共 $nm$ 个「槽位」（slot）。读这些专家权重有两种 kernel 写法：</p>
+      <ul>
+        <li><strong>逐槽核（per-slot）</strong>：每个槽位各读一次自己的专家。两个 token 选了同一个专家，就读两遍。llama.cpp 和 MLX 在 $n\le 8$ 或 $9$ 时默认走这条路。</li>
+        <li><strong>去重核（dedup）</strong>：先把 $n$ 个 token 选中的专家取并集，每个不同的专家只读一次，再把对应 token 的激活拼起来做一次小矩阵乘。</li>
+      </ul>
+      <p>论文先定义「复用率」。第 $l$ 层、第 $j$ 个位置上 token 选中的专家集合记作 $S_{l,t+j-1}$，它和前面 $j-1$ 个 token 已选专家的重叠比例是</p>
+      <div class="eq">$$\rho_l(n)=\frac{1}{m}\,\mathbb{E}\Big|S_{l,t+n-1}\cap\big(S_{l,t}\cup\cdots\cup S_{l,t+n-2}\big)\Big|$$<span class="eq-note">(1) 第 n 个 token 的 m 个专家里，平均有多大比例已经被前面的 token 选过</span></div>
+      <p>于是 $n$ 个 token 的专家并集大小是把每个新 token 带来的「新专家」累加起来：</p>
+      <div class="eq">$$U_l(n)=m\sum_{j=1}^{n}\big(1-\rho_l(j)\big),\qquad \rho_l(1)=0$$<span class="eq-note">(2) 并集大小；均匀路由下 $1-\rho(n)=q^{n-1}$，$q=1-m/N$</span></div>
+      <p>每个专家占 $w_l$ 字节，层数求和后，两种核要读的专家字节分别是</p>
+      <div class="eq">$$E_{\text{slot}}(n)=nmW,\qquad E_{\text{dedup}}(n)=\sum_l w_l\,U_l(n)$$<span class="eq-note">(3) $W=\sum_l w_l$；记 $\bar u=E_{\text{dedup}}/E_{\text{slot}}$ 为「不同专家占比」</span></div>
+      <p>只看字节，去重核永远不比逐槽核多读（$\bar u\le 1$），而且 $n$ 越大省得越多。如果故事到这里就结束，大家早就全换成去重核了。动画 1 演示这本账，以及它为什么不够。</p>
+
+      <div class="anim-frame" data-anim="1"><div class="anim-header"><span class="anim-title">动画 1 · 4 个 token × 4 个槽位：字节账与带宽账</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 430" role="img" aria-label="4 个 token 各选 4 个专家，逐槽核读 16 份，去重核读 9 份，但去重核带宽更低"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-blue)"></i>首次出现的专家</span><span><i style="background:var(--a-amber)"></i>重复选中的专家</span><span><i style="background:var(--a-green)"></i>去重核</span><span><i style="background:var(--a-red)"></i>逐槽核</span></div></div>
+    </section>
+
+    <section id="reuse">
+      <h2>③ 路由复用：实测比均匀假设高 3–8 倍</h2>
+      <p>MoESD 等前作用均匀路由估算并集：每个 token 独立、等概率地选 $m$ 个专家。真实模型里相邻 token 的路由高度相关。论文在 WikiText-103 上实测了第二个 token 的复用率 $\hat\rho(2)$：</p>
+      <table>
+        <thead><tr><th>模型</th><th>$N$ / $m$</th><th>均匀假设 $m/N$</th><th>实测 $\hat\rho(2)$</th><th>实测 $\hat\rho(9)$</th></tr></thead>
+        <tbody>
+          <tr><td>OLMoE-1B-7B</td><td>64 / 8</td><td>0.125</td><td>0.363</td><td>0.762</td></tr>
+          <tr><td>Qwen3-30B-A3B</td><td>128 / 8</td><td>0.0625</td><td>0.480</td><td>0.780</td></tr>
+          <tr><td>gpt-oss-20b</td><td>32 / 4</td><td>0.125</td><td>0.492</td><td>0.856</td></tr>
+        </tbody>
+      </table>
+      <p>第二个 token 就有 36–49% 的专家是前一个 token 已经选过的，是均匀假设的 2.9 倍（OLMoE）到 7.7 倍（Qwen3）。到第 9 个 token，新 token 的专家有 76–86% 已在并集里。这与其他工作测到的 Qwen3 相邻 token 复用 44–48%、0.444 一致。</p>
+      <p>复用越高，并集越小，$\bar u$ 越低，去重核在字节上的优势越大。Table 1 里 $n=8$ 时 OLMoE 的 $\bar u=0.50$，gpt-oss 只有 $0.36$：去重核只需读逐槽核三分之一出头的专家字节。</p>
+      <div class="callout callout-purple"><strong>复用率是一个序列：</strong>论文的阈值和节省公式都写在 $\rho_l(j)$ 上，而不是一个标量「平均复用率」。下文第 ⑦ 节会看到，这一点决定了「复用高于某个常数就赚」这种单一规则不存在。</div>
+    </section>
+
+    <section id="bandwidth">
+      <h2>④ 带宽反转：去重核反而更慢</h2>
+      <p>字节少不等于时间短。论文给每个 kernel 单独测了<strong>有效带宽</strong>：读到的专家字节除以 kernel 耗时。Table 1 把两种核的带宽并排放（单位 GB/s，$r=\beta_{\text{dedup}}/\beta_{\text{slot}}$）：</p>
+      <table>
+        <thead><tr><th>引擎</th><th>模型</th><th>$n{=}2$ $\beta_{\text{slot}}$ / $\beta_{\text{dedup}}$</th><th>$r$</th><th>$\bar u$</th><th>$n{=}8$ $\beta_{\text{slot}}$ / $\beta_{\text{dedup}}$</th><th>$r$</th><th>$\bar u$</th></tr></thead>
+        <tbody>
+          <tr><td>CUDA</td><td>OLMoE</td><td>618 / 464</td><td>0.75</td><td>0.82</td><td>933 / 546</td><td>0.58</td><td>0.50</td></tr>
+          <tr><td>CUDA</td><td>gpt-oss</td><td>654 / 346</td><td>0.53</td><td>0.72</td><td>1018 / 434</td><td>0.43</td><td>0.36</td></tr>
+          <tr><td>CUDA</td><td>DSV2-Lite</td><td>523 / 355</td><td>0.68</td><td>0.83</td><td>814 / 480</td><td>0.59</td><td>0.62</td></tr>
+          <tr><td>Metal</td><td>OLMoE</td><td>250 / 147</td><td>0.59</td><td>0.82</td><td>428 / 219</td><td>0.51</td><td>0.50</td></tr>
+          <tr><td>Metal</td><td>Qwen3</td><td>131 / 65</td><td>0.50</td><td>0.77</td><td>280 / 98</td><td>0.35</td><td>0.43</td></tr>
+          <tr><td>Metal</td><td>gpt-oss</td><td>213 / 79</td><td>0.37</td><td>0.72</td><td>339 / 114</td><td>0.34</td><td>0.36</td></tr>
+          <tr><td>Metal</td><td>DSV2-Lite</td><td>196 / 91</td><td>0.47</td><td>0.82</td><td>350 / 148</td><td>0.42</td><td>0.62</td></tr>
+          <tr><td>MLX</td><td>OLMoE</td><td>129 / 75</td><td>0.58</td><td>0.82</td><td>358 / 116</td><td>0.32</td><td>0.50</td></tr>
+        </tbody>
+      </table>
+      <p>每一行都是 $r&lt;1$：去重核的有效带宽只有逐槽核的 32–75%。原因有两层：</p>
+      <ul>
+        <li><strong>逐槽核重读便宜。</strong>同一个专家被两个槽位选中时，第二次读常常命中缓存。论文用拟合 (4) 估出重读一份专家相对首读的成本 $c_{\text{re}}/c_u$：CUDA 0.18–0.34，MLX 0.27–0.40，Metal 0.88–1.04。RTX 4070 Ti SUPER 有 48 MiB L2，从 $n=4$ 起逐槽核的「有效带宽」甚至超过 672 GB/s 的 DRAM 峰值，因为重复槽位由 L2 供数。Metal 上重读几乎不打折。</li>
+        <li><strong>去重核本身更慢。</strong>它需要额外的 gather/scatter、更多 launch（CUDA 上一次前向 160 次 launch 对 64 次，约多 0.1 ms），每个专家只拿到少数几个 token 的激活，矩阵乘形状更差。MLX 的 issue 4509 也记录过：gather qmm 在 M=1 时带宽只有 M=4 的一半左右。</li>
+      </ul>
+      <p>所以两个比值在打架：$\bar u$ 说去重核少读多少字节，$r$ 说去重核每字节慢多少。动画 2 把两者摆在一起。</p>
+
+      <div class="anim-frame" data-anim="2"><div class="anim-header"><span class="anim-title">动画 2 · Table 1：r 与 ū 比大小</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 430" role="img" aria-label="8 个配置在 n=2 和 n=8 下的带宽比 r 与不同专家占比 ū"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-purple)"></i>带宽比 r</span><span><i style="background:var(--a-teal)"></i>不同专家占比 ū</span><span><i style="background:var(--a-green)"></i>去重核更快（ū&lt;r）</span><span><i style="background:var(--a-red)"></i>逐槽核更快</span></div></div>
+    </section>
+
+    <section id="saving">
+      <h2>⑤ 节省公式：ū 与 r 比大小</h2>
+      <p>论文把一次 $n$-token 前向在 kernel 选择 $p\in\{\text{slot},\text{dedup}\}$ 下的时间写成</p>
+      <div class="eq">$$\tau_p(n)=t_0+\frac{D(n)}{\beta_D}+\frac{E_p(n)}{\beta_p(n)}+\varphi_p(n)$$<span class="eq-note">(5) 固定开销 + 稠密部分（注意力、共享专家等）字节 ÷ 带宽 + 专家字节 ÷ 该核带宽 + 其余项</span></div>
+      <p>两种核只在专家项上不同。把专家项相减并提出逐槽核的时间：</p>
+      <div class="eq">$$S(n)=\frac{E_{\text{slot}}}{\beta_{\text{slot}}}-\frac{E_{\text{dedup}}}{\beta_{\text{dedup}}}=\frac{E_{\text{slot}}}{\beta_{\text{slot}}}\Big(1-\frac{\bar u}{r}\Big)$$<span class="eq-note">(6) 去重核相对逐槽核省下的时间</span></div>
+      <div class="eq">$$S(n)&gt;0\iff \bar u(n)&lt;r(n)$$<span class="eq-note">(7) 去重核更快，当且仅当「不同专家占比」小于「带宽比」</span></div>
+      <p>如果只有一个带宽（$r\equiv 1$），因为 $n\ge 2$ 时总有 $\bar u&lt;1$，去重核在每个 $n\ge2$ 上都更快。这正是单带宽模型的结论，也正是它错的地方。Table 1 里：</p>
+      <ul>
+        <li>CUDA OLMoE：$n=2$ 时 $1-\bar u/r=1-0.82/0.75=-0.093$，逐槽核更快；$n=8$ 时 $1-0.50/0.58=+0.138$，去重核更快。中间某个 $n$ 发生交叉。</li>
+        <li>CUDA DSV2-Lite：$n=8$ 时 $1-0.62/0.59=-0.05$，在测到的范围内去重核一直更慢。</li>
+        <li>Metal Qwen3、Metal DSV2-Lite、MLX OLMoE 在 $n=8$ 时 $\bar u/r$ 分别是 1.23、1.48、1.56，去重核依然明显更慢。</li>
+      </ul>
+      <div class="callout callout-accent"><strong>这就是 llama.cpp 默认在小 $n$ 用逐槽核的原因。</strong>PR 30047 靠手工调参决定 per-slot/dedup 的切换点；公式 (7) 说，这个切换点就是 $\bar u(n)$ 曲线穿过 $r(n)$ 曲线的那个 $n$，而两条曲线都能在一小时内测出来。</div>
+    </section>
+
+    <section id="staircase">
+      <h2>⑥ 最佳草稿长度是一道阶梯</h2>
+      <p>有了步长时间 $V(k)$（$k$ 个草稿的一轮总时间，$V(0)$ 是普通解码一步），几何接受率 $a$ 下一轮期望产出 $G_a(k)=(1-a^{k+1})/(1-a)$ 个 token，吞吐是 $T_a(k)=G_a(k)/V(k)$。投机比不投机快的条件和加速比是：</p>
+      <div class="eq">$$T_a(k)&gt;T_a(0)\iff V(k)-V(0)&lt;(a+a^2+\cdots+a^k)\,V(0)$$<span class="eq-note">(8) 多花的时间，要少于「期望多接受的草稿数 × 一步普通解码的时间」</span></div>
+      <div class="eq">$$\frac{T_a(k)}{T_a(0)}=\frac{G_a(k)\,V(0)}{V(k)},\qquad a_0=\frac{V(1)}{V(0)}-1$$<span class="eq-note">(9) 加速比；$a_0$ 是 1 个草稿开始赚钱的接受率</span></div>
+      <p>注意 $V(k)$ 里的带宽是在 $k+1$ 个 token 的前向上测的，$V(0)$ 里的是 1 个 token 前向的带宽，两者不要求相同。这正是 MoE 和稠密模型的差别：稠密模型的 $V(k)$ 几乎是平的，MoE 的 $V(k)$ 随 $k$ 明显上升。</p>
+      <p>第 3.3 节的阶梯定理说：</p>
+      <ul>
+        <li><strong>单调：</strong>$a\le a'\Rightarrow k^*(a)\le k^*(a')$。证明只用到 $i&lt;k$ 时 $G_a(k)/G_a(i)$ 关于 $a$ 不减，不需要 $T_a$ 关于 $k$ 单峰，所以阶梯可以一次跳过不止一级。</li>
+        <li><strong>台阶位置精确可算：</strong>$a_j=\max_{i&lt;j}\min_{k\ge j}\alpha_{k,i}$，其中 $\alpha_{k,i}$ 是草稿长度 $k$ 开始胜过 $i$ 的最小接受率。</li>
+        <li><strong>凸步长时的简化：</strong>若增量 $c_i=V(i)-V(i-1)$ 满足 $0\le c_1\le c_2\le\cdots$，只需比较相邻两级：</li>
+      </ul>
+      <div class="eq">$$k^*(a)\ge j\iff a^j\,V(j-1)&gt;G_a(j-1)\,c_j,\qquad a_1=\min\!\Big(\frac{c_1}{V(0)},1\Big)$$<span class="eq-note">(10) 第 j 个草稿值不值：它被接受的概率 × 前 j−1 级的步长，与前 j−1 级产出 × 它新增的时间比大小</span></div>
+      <p>这一节和上一节的代数只用到 $V&gt;0$，Lean 中也是在这个一般性下证明的。动画 3 用一组<strong>示意</strong>参数画出两道阶梯：MoE 型 $V(k)=1+0.12k+0.01k^2$ 与稠密型 $V(k)=1+0.02k$。前者 $a_1=0.13$，接受率 0.8 时 $k^*=4$、加速 2.05×；后者 $a_1=0.02$，同一接受率下 $k^*=11$、加速 3.8×。这两组数字不是论文的测量，只用来说明形状。</p>
+
+      <div class="anim-frame" data-anim="3"><div class="anim-header"><span class="anim-title">动画 3 · 最佳草稿长度 k*(a) 的阶梯（示意参数）</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 430" role="img" aria-label="示意参数下 MoE 与稠密模型的步长时间与最佳草稿长度阶梯"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-accent)"></i>MoE 型 V(k)</span><span><i style="background:var(--a-blue)"></i>稠密型 V(k)</span><span><i style="background:var(--a-green)"></i>台阶点 a_j</span></div></div>
+    </section>
+
+    <section id="threshold">
+      <h2>⑦ 复用阈值</h2>
+      <p>对于验证时全程走去重核的引擎，第 3.4 节把条件 (8) 改写成对路由的要求。先定义 $k$ 个草稿 token 的字节加权平均复用率</p>
+      <div class="eq">$$\bar\rho_k=\frac{1}{kW}\sum_l w_l\sum_{j=2}^{k+1}\rho_l(j),\qquad E_{\text{dedup}}(k+1)=mW+mWk(1-\bar\rho_k)$$<span class="eq-note">(11)(12) 专家字节只由路由决定</span></div>
+      <p>草稿长度 $k$ 比不投机快，当且仅当 $\bar\rho_k&gt;\rho^*_k(a)$，其中（$B_k=\beta_{\text{dedup}}(k+1)$）</p>
+      <div class="eq">$$\rho^*_k(a)=1-\frac{B_k}{mWk}\Big[(G_a(k)-1)\tau(1)-\frac{\Delta D_k}{\beta_D}-\Delta\varphi_k\Big]-\frac1k\Big(\frac{B_k}{\beta(1)}-1\Big)$$<span class="eq-note">(14) 方括号是草稿在专家读之外可以多花的时间；最后一项在去重核比 1-token 前向更慢时要求更多复用</span></div>
+      <p>在单一带宽、零固定开销下它退化为纯字节形式 (16)：$\rho^*_k(a)=1-\big[(G_a(k)-1)V_{\text{dedup}}(0)-(kv(k)-kv(0))\big]/(mWk)$。这是「只数字节」能给出的阈值。</p>
+      <p>三个性质值得记住：</p>
+      <ul>
+        <li>阈值随 $a$ 上升而下降：接受率越高，越不需要复用来帮忙。</li>
+        <li>更多复用只会降低每个 $E_{\text{dedup}}(k+1)$，所以在一种路由下成立的加速，在任何复用更多的路由下都成立。前提是去重核在固定 $n$ 下的带宽和固定开销不依赖于哪些专家重复。</li>
+        <li>路由只通过 $(\bar\rho_1,\dots,\bar\rho_{k_{\max}})$ 这个序列进入结论，<strong>不存在</strong>一条对所有路由都成立的单一规则「$\bar\rho_k&gt;c$ 就赚」（附录 B.2）。</li>
+      </ul>
+    </section>
+
+    <section id="errors">
+      <h2>⑧ 带宽误差怎么传到结论里</h2>
+      <p>整套理论里唯一需要测量、又测不准的量是带宽。论文假设每个带宽的估计 $\hat\beta=\beta(1+e)$，$|e|\le\varepsilon&lt;1$，其余项精确，然后证明了五条误差界（Table 2，全部在 Lean 中验证）。记 $M_p(n)$ 为 $\tau_p(n)$ 中的内存部分，$M^e_p(n)$ 为其中的专家部分：</p>
+      <table>
+        <thead><tr><th>预测量</th><th>误差界</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td>验证时间 (17)</td><td>$|\hat\tau_p-\tau_p|\le\frac{\varepsilon}{1-\varepsilon}M_p\le\frac{\varepsilon}{1-\varepsilon}\tau_p$</td><td>相对误差不超过 $\varepsilon/(1-\varepsilon)$</td></tr>
+          <tr><td>节省 (18)</td><td>$|\hat S-S|\le\frac{\varepsilon}{1-\varepsilon}\big(M^e_{\text{slot}}+M^e_{\text{dedup}}\big)$</td><td>分子是两项之和，$S$ 是两项之差</td></tr>
+          <tr><td>哪个核更快 (19)</td><td>$|\ln r-\ln\bar u|&gt;\ln\frac{1+\varepsilon}{1-\varepsilon}$ 时符号可靠</td><td>交叉点附近判不准</td></tr>
+          <tr><td>最佳草稿长度 (20)</td><td>$T_a(\hat k^*)\ge\frac{1-\delta}{1+\delta}T_a(k^*)$</td><td>选错最多损失 $2\delta/(1+\delta)$ 吞吐</td></tr>
+          <tr><td>最佳加速比 (21)</td><td>介于 $\frac{1-\delta}{1+\delta}$ 与 $\frac{1+\delta}{1-\delta}$ 倍之间</td><td>$\delta\le\varepsilon/(1-\varepsilon)$</td></tr>
+        </tbody>
+      </table>
+      <p>10% 的带宽误差给出 $\delta\le 0.111$，加速比最多偏 $1.111/0.889-1=25\%$。三类预测的敏感度排序很清楚：</p>
+      <ul>
+        <li><strong>节省最敏感。</strong>误差界相对于 $S$ 本身的放大倍数是 $(M^e_{\text{slot}}+M^e_{\text{dedup}})/|M^e_{\text{slot}}-M^e_{\text{dedup}}|$，在交叉点处趋于无穷。实测放大倍数：MLX 3.2–3.8×，CUDA 6–220×，Metal 3.2–340×，最大值都出现在交叉点。</li>
+        <li><strong>验证时间居中。</strong>它多乘了一个 $M_p/\tau_p\le1$。</li>
+        <li><strong>最佳草稿长度最不敏感。</strong>所有 $V(k)$ 共享的公共误差因子不改变 $\arg\max$。</li>
+      </ul>
+      <p>各引擎的 $\varepsilon$ 取两种核拟合误差的较大者：llama.cpp CUDA 0.054，llama.cpp Metal 0.031，MLX-LM 0.148。</p>
+
+      <div class="anim-frame" data-anim="4"><div class="anim-header"><span class="anim-title">动画 4 · 同一个 ε，在交叉点附近被放大</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 430" role="img" aria-label="两种核的专家时间曲线、节省及其误差带，交叉点附近误差带相对节省无限放大"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-red)"></i>逐槽核专家时间</span><span><i style="background:var(--a-green)"></i>去重核专家时间</span><span><i style="background:var(--a-purple)"></i>节省 S(n) 与误差带</span></div></div>
+    </section>
+
+    <section id="experiments">
+      <h2>⑨ 实验复盘</h2>
+      <h3>实验设置</h3>
+      <ul>
+        <li><strong>硬件：</strong>Apple M4 Max（546 GB/s，跑 llama.cpp Metal 与 MLX-LM）；RTX 4070 Ti SUPER（672 GB/s，48 MiB L2，跑 llama.cpp CUDA）。</li>
+        <li><strong>引擎改动：</strong>每个引擎只加一个开关，把小 $n$ 的验证前向送进它已有的去重核。开关关闭时保持默认（$n\le9$ 逐槽，CUDA 上 $n\le 8$）；打开时从 $n=2$ 起走去重核。附录 E 核对了两种设置输出一致。</li>
+        <li><strong>配置：</strong>OLMoE、Qwen3、gpt-oss × 上下文深度 $d\in\{512,4096\}$ × 引擎，共 12 个配置；6 个 WikiText-103 验证集 prompt（与提供路由 trace 的测试集文档不相交）。</li>
+        <li><strong>草稿：</strong>oracle 草稿，提出目标模型自己的贪心 token，再以概率 $1-a$ 破坏，使接受率恰为几何分布。$k=0..8$，11 个接受率取值 0.2–0.98。</li>
+        <li><strong>预测怎么来：</strong>按 (22) 把每层专家算子的时间加到实测的单 token 时间上：$\hat\tau_p(n)=\tau^{\text{meas}}(1)+\sum_l(\bar t_{p,l}(n)-\bar t_l(1))$。专家算子时间来自字节拟合，在 WikiText 路由 trace 的每个窗口上求值，不用任何整模型运行的数据。「实测时间版」跳过拟合，直接用每层算子在路由窗口上的实测中位时间。</li>
+      </ul>
+      <div class="callout callout-orange"><strong>唯一一次事后修改：</strong>第一次计算时，单 token 时间 $\bar t_l(1)$ 取自去重核的拟合，结果 12 个配置里有 10 个交叉点放错。因为引擎在 $n=1$ 时无论开关都走逐槽核，作者改用逐槽核拟合。论文明确说这是与测量对比后做的唯一改动。OLMoE、Qwen3、gpt-oss 的预测都是在整模型数据已经存在之后算的。</div>
+
+      <h3>字节：去重核读的就是并集</h3>
+      <p>在 OLMoE 和 gpt-oss 的一层上，用 Nsight Compute 跑了 $n=2..8$ 共 70 个 profile。去重核从 DRAM 读到的字节与并集字节 $Ub$ 相差 0.2–2.5%。逐槽核请求 $nmb$ 字节，实际 DRAM 读取在 $Ub$ 到 $2.35\,Ub$ 之间（Figure 3），多出来的部分被 L2 吸收。验证文本上的不同专家占比 $U/(nm)$ 与 WikiText 相差不超过 0.06，只有 gpt-oss 在 $d=4096$ 时低 0.08–0.16：那组文本里 81% 的 4-gram 是重复的（$d=512$ 时 48%）。</p>
+
+      <h3>节省与交叉点（Table 3）</h3>
+      <p>用 WikiText 路由预测的节省，最大误差在 CUDA 上 0.23–0.52 ms，Apple 引擎 0.43–3.7 ms，Metal gpt-oss $d=4096$ 达 9.7 ms。交叉点（去重核开始更快的 $n$）：</p>
+      <table>
+        <thead><tr><th>引擎 / 模型 / $d$</th><th>实测</th><th>WikiText 预测</th><th>验证文本预测</th><th>实测时间版</th></tr></thead>
+        <tbody>
+          <tr><td>Metal OLMoE 512 / 4096</td><td>7 / 7</td><td>7 / 7</td><td>7 / 7</td><td>8 / 8</td></tr>
+          <tr><td>Metal Qwen3 512 / 4096</td><td>– / –</td><td>– / –</td><td>– / –</td><td>– / –</td></tr>
+          <tr><td>Metal gpt-oss 512 / 4096</td><td>8 / 6</td><td class="bad">– / –</td><td>– / 7</td><td>– / 7</td></tr>
+          <tr><td>MLX OLMoE 512 / 4096</td><td>– / –</td><td>– / –</td><td>– / –</td><td>– / –</td></tr>
+          <tr><td>CUDA OLMoE 512 / 4096</td><td>5 / 5</td><td>4 / 4</td><td>4 / 4</td><td>5 / 5</td></tr>
+          <tr><td>CUDA gpt-oss 512 / 4096</td><td>6 / 5</td><td>5 / 5</td><td>5 / 4</td><td>6 / 5</td></tr>
+        </tbody>
+      </table>
+      <p>「–」表示 $n\le9$ 内没有交叉，去重核一直更慢。三种预测分别在 10、11、11 个配置上落在实测 ±1 以内。WikiText 预测在其余 6 个 Apple 配置上与实测完全一致，在 4 个 CUDA 配置中有 3 个早了一格，两个 Metal gpt-oss 配置都没预测到交叉。这和第 ④ 节的算术吻合：Metal gpt-oss 在 $n=8$ 时 $\bar u/r=1.06$，离交叉只差一点，误差 $\varepsilon$ 足以翻转符号。</p>
+      <p>实测节省落在 (18) 误差带内的点：CUDA 28/28，MLX 16/16，Metal 36/48。要覆盖最大节省误差所需的带宽误差，CUDA 是 0.022–0.033，MLX 0.107–0.108，Metal 0.014–0.126，其中 3 个配置超过 Metal 的 $\varepsilon=0.031$。$n=1$ 时 Apple 引擎上开关打开反而在 8 个配置里有 6 个更慢，而两种设置跑的是同一个核，说明存在跨运行的偏移。</p>
+
+      <h3>最佳草稿长度与加速比</h3>
+      <ul>
+        <li>CUDA 上预测的 $\hat k^*$ 在 11 个接受率中有 10–11 个落在实测最优 ±1 内；实测时间版 11/11，吞吐损失 1.6–7.7%。Apple 引擎上是 7–10/11。</li>
+        <li>开关打开时验证时间误差：CUDA 3–21%，Metal 6–25%，MLX 38–41%。实测时间版在 CUDA 上 4–16%，Apple 上 15–31%；校准版在 12 个配置中 8 个降到 1–6%。</li>
+        <li>全部 330 个接受率点都落在界 (20)(21) 内。</li>
+        <li>CUDA 上真实投机运行与「从验证时间算出的加速比」之比，中位数 0.93–1.04；oracle 草稿实际产出比 $G_a(k)$ 少 2–5%。</li>
+      </ul>
+
+      <h3>DeepSeek-V2-Lite：唯一的预注册测试</h3>
+      <p>DeepSeek-V2-Lite-Chat（Q4_K_M，64 个路由专家选 6 个，2 个共享专家，MLA 注意力，首层稠密，26 个 MoE 层）没有字节拟合。作者在跑任何整模型投机之前，写下了实测时间版的预测和六条评分规则及容差。测量用时 CUDA 22 分钟、Metal 48 分钟，对比整模型投机运行 3.8 小时和约 8 小时。</p>
+      <table>
+        <thead><tr><th>引擎 / 版本 / $d$</th><th>节省误差 (ms)</th><th>$k^*$ ±1</th><th>吞吐损失</th><th>$\tau$ 误差 / $\delta$</th></tr></thead>
+        <tbody>
+          <tr><td>CUDA 实测时间版 512</td><td>0.23</td><td class="gain">11/11</td><td>2.9%</td><td>9.9% / 0.072</td></tr>
+          <tr><td>CUDA 实测时间版 4096</td><td>0.28</td><td class="gain">11/11</td><td>4.1%</td><td>10.1% / 0.077</td></tr>
+          <tr><td>Metal 实测时间版 512</td><td>1.6</td><td>9/11</td><td class="bad">20.1%</td><td>34.0% / 0.27</td></tr>
+          <tr><td>Metal 实测时间版 4096</td><td>4.4</td><td>6/11</td><td class="bad">22.5%</td><td>28.4% / 0.25</td></tr>
+          <tr><td>Metal 校准版 512</td><td>1.5</td><td>11/11</td><td>6.4%</td><td>4.3% / 0.036</td></tr>
+          <tr><td>Metal 校准版 4096</td><td>4.4</td><td>9/11</td><td>8.3%</td><td>10.5% / 0.098</td></tr>
+        </tbody>
+      </table>
+      <p>两个引擎都预测且实测到 $n=2..8$ 无交叉（去重核一直更慢），符号判断全对。CUDA 满足全部 6 条规则：节省 14/14 点在带内，$k^*$ 22/22 在 ±1 内，实测加速比低于预测 1–21%，差距来自 oracle 草稿。Metal 实测时间版满足交叉、符号、加速比三条，未通过 $k^*$、吞吐损失、$\tau$ 三条；Metal 节省需要 0.075 的带宽误差才能覆盖，是 $\varepsilon$ 的 2.4 倍。校准版把 Metal 的 $k^*$ 提到 20/22。</p>
+      <p>事后作者又在第 1、13 层上补了字节拟合。Metal 拟合误差 0.021–0.049，节省误差降到 1.1/3.7 ms。CUDA 拟合误差 0.027–0.129，逐槽核拟合偏慢 5–13%，多出约 0.9 ms，而真实节省是 −0.5 ms，于是在 $n=7$ <strong>预测出一个不存在的交叉点</strong>，节省误差从 0.23/0.28 ms 涨到 0.95/1.1 ms。带内点数 CUDA 13/14，Metal 11/16。这正是动画 4 讲的现象：节省本身接近零时，几个百分点的拟合误差足以翻转结论。</p>
+
+      <div class="anim-frame" data-anim="5"><div class="anim-header"><span class="anim-title">动画 5 · 预测对账：交叉点、k* 与 DSV2 预注册</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg5" viewBox="0 0 820 430" role="img" aria-label="12 个配置交叉点的预测与实测、最佳草稿长度命中数，以及 DeepSeek-V2-Lite 预注册结果"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-fg-strong)"></i>实测</span><span><i style="background:var(--a-blue)"></i>WikiText 预测</span><span><i style="background:var(--a-green)"></i>命中</span><span><i style="background:var(--a-red)"></i>未命中</span></div></div>
+    </section>
+
+    <section id="critique">
+      <h2>⑩ 论文没给的东西</h2>
+      <ul>
+        <li><strong>只有 batch=1。</strong>服务端的 MoE 推理通常是多请求合批，此时不同请求之间的专家重叠、逐槽核的 L2 命中、去重核的矩阵形状都会变，(7) 的两边要重新测。论文把 batch&gt;1 列为后续工作。</li>
+        <li><strong>带宽不可预测。</strong>理论把带宽当成测量输入。作者试过用其他模型的拟合去预测一个留出模型，误差 9–206%。换模型、换量化、换引擎版本，都得重新花一小时测。</li>
+        <li><strong>草稿是 oracle，草稿成本取零。</strong>几何接受率和 $h(k)=0$ 让阶梯定理干净可用，但真实草稿模型的接受率随位置衰减、按 token 难度波动，草稿本身也要时间。开篇那个 33/37 的 MT-Bench 结果用的是真实草稿，正文验证用的却是 oracle，两者之间没有对接。</li>
+        <li><strong>大部分验证是事后的。</strong>OLMoE、Qwen3、gpt-oss 的预测在整模型数据存在后才算，还做过一次对照测量后的修正。真正预注册的只有 DeepSeek-V2-Lite 一个模型，而且 Metal 上六条规则只过了三条。</li>
+        <li><strong>Metal 需要校准。</strong>Metal 在 $d=512$ 时有一个「慢 GPU 状态」，跨运行偏移明显，实测时间版吞吐损失超过 20%，要靠校准版才降到 6–8%。</li>
+        <li><strong>覆盖面窄。</strong>每个平台一台机器，模型 7–30B，DRAM 字节计数只在 CUDA 上有。</li>
+        <li><strong>可复现性。</strong>代码和数据「按需提供」；论文说明代码、图、Lean 证明和初稿由 AI agent 完成，单一作者负责指导和审阅。</li>
+      </ul>
+      <div class="callout callout-teal"><strong>对引擎开发者最有用的一条：</strong>不要用单一带宽的成本模型决定 per-slot/dedup 的切换点，也不要只看并集字节。对每个 $n$ 测一次 $r(n)$ 和 $\bar u(n)$，切换点就是两条曲线的交点；如果 $|\ln r-\ln\bar u|$ 小于 $\ln\frac{1+\varepsilon}{1-\varepsilon}$，说明两种核差不多快，选哪个都行。论文的结论里把 $r(n)$ 称为 kernel 工作的杠杆：把去重核的带宽做到接近逐槽核，MoE 投机的收益才会出来。</div>
+    </section>
+
+    <section id="summary">
+      <h2>⑪ 一句话总结</h2>
+      <div class="callout callout-accent">MoE 上投机解码快不快，由「不同专家占比 $\bar u$」和「去重核相对逐槽核的带宽比 $r$」谁大决定；在这个字节 ÷ 带宽的步长模型上，最佳草稿长度是一道单调、可跳级、台阶点可精确计算的阶梯，带宽误差 $\varepsilon$ 对它的影响最小，对两种核的节省影响最大。</div>
+      <p class="note-inline">论文：Yuzheng Lan（ReClan AI Studio），<em>Speculative Decoding for Mixture-of-Experts Models: Expert Bytes, Kernel Bandwidth and the Best Draft Length</em>，arXiv:2610.34440，2026-10。本文中所有数值均取自论文正文与表格；动画 3 的步长参数为示意，非论文测量；凡论文未测量的内容，本文均已标注。</p>
+    </section>
+
+  </main>
+</div>
+<script>
+(function () {
+'use strict';
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, a) {
+  var n = document.createElementNS(NS, tag);
+  if (a) for (var k in a) if (a[k] != null) n.setAttribute(k, a[k]);
+  return n;
+}
+function C(name, fb) { return window.aC(name, fb); }
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function AnimEngine(svg, cfg) {
+  this.svg = svg;
+  this.steps = cfg.steps || [];
+  this.i = 0;
+  this.speed = 1;
+  this.playing = false;
+  this.timer = null;
+  this.frame = svg.closest('.anim-frame');
+  this._initDefs();
+  this.layer = el('g', { 'class': 'anim-layer' });
+  svg.appendChild(this.layer);
+  this._buildRail();
+  this.goTo(0);
+}
+
+AnimEngine.prototype._initDefs = function () {
+  var defs = el('defs');
+  var mk = [['arrA', C('--a-accent', '#FF7A00')], ['arrG', C('--a-green', '#4CC98A')],
+            ['arrR', C('--a-red', '#FF7268')], ['arrB', C('--a-blue', '#74B4FF')],
+            ['arrP', C('--a-purple', '#B79BFF')], ['arrM', C('--a-fg-muted', '#888')],
+            ['arrY', C('--a-amber', '#E9B449')], ['arrT', C('--a-teal', '#48CFC4')]];
+  var id = this.svg.id;
+  for (var j = 0; j < mk.length; j++) {
+    var m = el('marker', { id: id + '-' + mk[j][0], viewBox: '0 0 10 10', refX: '9', refY: '5',
+      markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse' });
+    m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: mk[j][1] }));
+    defs.appendChild(m);
+  }
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype.mk = function (name) { return 'url(#' + this.svg.id + '-' + name + ')'; };
+AnimEngine.prototype.clear = function () { while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild); };
+
+AnimEngine.prototype.draw = function (node, o) {
+  o = o || {};
+  this.layer.appendChild(node);
+  if (o.reveal && !REDUCED) {
+    node.style.opacity = '0';
+    node.style.transition = 'opacity 320ms ease';
+    var d = o.delay || 0;
+    setTimeout(function () { node.style.opacity = o.opacity != null ? o.opacity : '1'; }, d / this.speed);
+  } else if (o.opacity != null) { node.style.opacity = o.opacity; }
+  if (o.cls) node.setAttribute('class', ((node.getAttribute('class') || '') + ' ' + o.cls).trim());
+  return node;
+};
+
+AnimEngine.prototype.t = function (x, y, str, o) {
+  o = o || {};
+  var n = el('text', { x: x, y: y, 'text-anchor': o.anchor || 'middle',
+    'font-size': o.size || 12, 'font-weight': o.weight || 400,
+    'font-family': o.mono ? '"JetBrains Mono", Consolas, monospace' : 'inherit',
+    fill: o.fill || C('--a-fg', '#ccc') });
+  n.textContent = str;
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, o) {
+  o = o || {};
+  var g = el('g');
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: o.rx != null ? o.rx : 6,
+    fill: fill || 'none', stroke: stroke || C('--a-line', '#444'),
+    'stroke-width': o.sw || 1.5, 'stroke-dasharray': o.dash || null }));
+  if (label) {
+    var lines = String(label).split('|');
+    var y0 = y + h / 2 - (lines.length - 1) * 8 + 4;
+    for (var j = 0; j < lines.length; j++) {
+      var tn = el('text', { x: x + w / 2, y: y0 + j * 16, 'text-anchor': 'middle',
+        'font-size': o.size || 12, 'font-weight': o.weight || 500,
+        fill: o.labelFill || stroke || C('--a-fg', '#ccc') });
+      tn.textContent = lines[j];
+      g.appendChild(tn);
+    }
+  }
+  return this.draw(g, o);
+};
+
+AnimEngine.prototype.line = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  return this.draw(el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, 'stroke-linecap': 'round' }), o);
+};
+AnimEngine.prototype.arrow = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  var n = el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-fg-muted', '#888'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': this.mk(o.marker || 'arrM') });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.circle = function (cx, cy, r, o) {
+  o = o || {};
+  return this.draw(el('circle', { cx: cx, cy: cy, r: r, fill: o.fill || 'none',
+    stroke: o.stroke || 'none', 'stroke-width': o.sw || 1.5 }), o);
+};
+
+AnimEngine.prototype.ellipse = function (cx, cy, rx, ry, rot, o) {
+  o = o || {};
+  var n = el('ellipse', { cx: cx, cy: cy, rx: rx, ry: ry, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, transform: 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.path = function (d, o) {
+  o = o || {};
+  return this.draw(el('path', { d: d, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': o.marker ? this.mk(o.marker) : null }), o);
+};
+
+/* 横向条形：用于实验数据对比。value 已按 max 归一到 w 像素。 */
+AnimEngine.prototype.bar = function (x, y, w, h, label, val, max, color, o) {
+  o = o || {};
+  var len = Math.max(2, w * Math.min(1, val / max));
+  var g = el('g');
+  var lt = el('text', { x: x - 8, y: y + h / 2 + 4, 'text-anchor': 'end', 'font-size': 11,
+    fill: C('--a-fg-muted', '#888') });
+  lt.textContent = label;
+  g.appendChild(lt);
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: 3, fill: C('--a-code-bg', '#222') }));
+  var b = el('rect', { x: x, y: y, width: len, height: h, rx: 3, fill: color });
+  g.appendChild(b);
+  var vt = el('text', { x: x + len + 8, y: y + h / 2 + 4, 'text-anchor': 'start', 'font-size': 11,
+    'font-weight': 600, fill: color });
+  vt.textContent = o.fmt ? o.fmt(val) : val;
+  g.appendChild(vt);
+  if (!REDUCED) {
+    b.setAttribute('width', 0);
+    vt.style.opacity = '0';
+    var sp = this.speed, d = o.delay || 0;
+    setTimeout(function () {
+      b.style.transition = 'width 520ms cubic-bezier(.2,.8,.3,1)';
+      b.setAttribute('width', len);
+      vt.style.transition = 'opacity 300ms ease 260ms';
+      vt.style.opacity = '1';
+    }, d / sp + 30);
+  }
+  return this.draw(g, { cls: o.cls });
+};
+AnimEngine.prototype._buildRail = function () {
+  var rail = this.frame.querySelector('.anim-stage-rail');
+  if (!rail) return;
+  rail.textContent = '';
+  for (var j = 0; j < this.steps.length; j++) {
+    var b = document.createElement('button');
+    b.className = 'stage-chip';
+    b.type = 'button';
+    b.dataset.idx = j;
+    b.setAttribute('role', 'tab');
+    b.textContent = (j + 1) + '. ' + (this.steps[j].chip || this.steps[j].title);
+    rail.appendChild(b);
+  }
+};
+
+AnimEngine.prototype.goTo = function (idx) {
+  if (idx < 0 || idx >= this.steps.length) return;
+  this.i = idx;
+  this.clear();
+  var step = this.steps[idx];
+  step.render(this);
+  this._updateUI();
+};
+
+AnimEngine.prototype._updateUI = function () {
+  var f = this.frame, step = this.steps[this.i], n = this.steps.length;
+  var info = f.querySelector('.step-info'), desc = f.querySelector('.step-desc'),
+      bar = f.querySelector('.anim-progress .bar');
+  if (info) info.textContent = '步骤 ' + (this.i + 1) + ' / ' + n + ' · ' + step.title;
+  if (desc) desc.innerHTML = step.desc || '';
+  if (bar) bar.style.width = ((this.i + 1) / n * 100) + '%';
+  var chips = f.querySelectorAll('.stage-chip');
+  for (var j = 0; j < chips.length; j++) chips[j].setAttribute('aria-current', j === this.i ? 'true' : 'false');
+  var prev = f.querySelector('.btn-prev'), next = f.querySelector('.btn-next');
+  if (prev) prev.disabled = this.i === 0;
+  if (next) next.disabled = this.i === n - 1;
+};
+
+AnimEngine.prototype.next = function () { if (this.i < this.steps.length - 1) this.goTo(this.i + 1); };
+AnimEngine.prototype.prev = function () { if (this.i > 0) this.goTo(this.i - 1); };
+AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+AnimEngine.prototype.setSpeed = function (v) { this.speed = v; };
+
+AnimEngine.prototype.play = function () {
+  var self = this;
+  if (this.i >= this.steps.length - 1) this.goTo(0);
+  this.playing = true;
+  this._setPlayBtn();
+  var tick = function () {
+    if (!self.playing) return;
+    var dur = (self.steps[self.i].duration || 2600) / self.speed;
+    self.timer = setTimeout(function () {
+      if (!self.playing) return;
+      if (self.i >= self.steps.length - 1) { self.pause(); return; }
+      self.goTo(self.i + 1);
+      tick();
+    }, dur);
+  };
+  tick();
+};
+
+AnimEngine.prototype.pause = function () {
+  this.playing = false;
+  if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  this._setPlayBtn();
+};
+AnimEngine.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
+AnimEngine.prototype._setPlayBtn = function () {
+  var b = this.frame.querySelector('.btn-play');
+  if (b) b.textContent = this.playing ? '❙❙ 暂停' : '▶ 播放';
+};
+
+/* ---------- 场景 1：字节账与带宽账 ---------- */
+function scene1() {
+  var ROUTE = [[3, 17, 42, 8], [3, 17, 5, 61], [42, 3, 29, 50], [8, 5, 42, 11]];
+  var X0 = 110, Y0 = 92, CW = 62, CH = 46, GAP = 8;
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), amber = C('--a-amber', '#E9B449');
+    var green = C('--a-green', '#4CC98A'), red = C('--a-red', '#FF7268');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee');
+    e.t(410, 34, '一次验证前向：n = 4 个 token，每个 token 选 m = 4 个专家，共 nm = 16 个槽位', { size: 14, weight: 600, fill: strong });
+    for (var s = 0; s < 4; s++) e.t(X0 + s * (CW + GAP) + CW / 2, Y0 - 12, '槽 ' + (s + 1), { size: 11, fill: muted });
+    var seen = {}, newCnt = [];
+    for (var i = 0; i < 4; i++) {
+      var y = Y0 + i * (CH + GAP), nw = 0;
+      e.t(X0 - 16, y + CH / 2 + 4, 't' + (i + 1), { anchor: 'end', size: 13, weight: 600, mono: true, fill: strong });
+      for (var j = 0; j < 4; j++) {
+        var id = ROUTE[i][j], rep = !!seen[id];
+        if (!rep) nw++;
+        var x = X0 + j * (CW + GAP);
+        var fill = C('--a-code-bg', '#222'), stroke = C('--a-line', '#444'), lf = C('--a-fg', '#ccc');
+        if (k >= 1) {
+          fill = rep ? C('--a-amber-bg', '#3a2f14') : C('--a-blue-bg', '#1b2b40');
+          stroke = rep ? amber : blue; lf = stroke;
+        }
+        e.rect(x, y, CW, CH, 'E' + id, fill, stroke, { size: 13, weight: 600, labelFill: lf, cls: (k === 1 && rep) ? 'hot' : null });
+      }
+      for (j = 0; j < 4; j++) seen[ROUTE[i][j]] = true;
+      newCnt.push(nw);
+      if (k >= 1) {
+        var rho = (4 - nw) / 4;
+        e.t(X0 + 4 * (CW + GAP) + 6, y + CH / 2 + 4, 'ρ(' + (i + 1) + ') = ' + rho.toFixed(2), { anchor: 'start', size: 12, mono: true, fill: rho > 0 ? amber : muted });
+      }
+    }
+    var gy = Y0 + 4 * (CH + GAP) + 18;
+    if (k >= 1) e.t(X0 + 136, gy, '琥珀色：前面的 token 已选过的专家', { size: 12, fill: amber });
+    if (k >= 2) {
+      e.t(640, 98, '要读的专家份数', { size: 13, weight: 600, fill: strong });
+      e.bar(600, 118, 180, 22, '逐槽核', 16, 16, red, { fmt: function (v) { return v + ' 份'; } });
+    }
+    if (k >= 3) {
+      e.bar(600, 152, 180, 22, '去重核', 9, 16, green, { fmt: function (v) { return v + ' 份'; } });
+      e.t(640, 200, 'U = 4 + 2 + 2 + 1 = 9', { size: 12, mono: true, fill: C('--a-fg', '#ccc') });
+      e.t(640, 222, 'ū = 9 / 16 = 0.56', { size: 14, weight: 700, mono: true, fill: green, cls: k === 3 ? 'hot' : null });
+    }
+    if (k >= 4) {
+      e.t(640, 262, '耗时 ∝ 份数 ÷ 带宽（示意 r = 0.5）', { size: 12, fill: muted });
+      e.bar(600, 278, 172, 22, '逐槽核', 16, 18, red, { fmt: function (v) { return v + ' / 1.0'; } });
+      e.bar(600, 310, 172, 22, '去重核', 18, 18, green, { fmt: function (v) { return '9 / 0.5'; } });
+      e.t(640, 352, '字节少 44%，时间反而多 12%', { size: 13, weight: 700, fill: red, cls: k === 4 ? 'hot' : null });
+    }
+    if (k >= 5) {
+      e.rect(150, 368, 520, 44, '去重核更快  ⇔  ū < r      （这里 0.56 > 0.5，逐槽核赢）', C('--a-purple-bg', '#2a2140'), C('--a-purple', '#B79BFF'), { size: 14, weight: 700 });
+    }
+  }
+  var steps = [
+    ['路由', '每个 token 选 4 个专家', '4 个连续 token 的路由结果。每个格子是一个槽位，写着它选中的专家编号。'],
+    ['复用', '相邻 token 选中的专家高度重叠', '蓝色是第一次出现的专家，琥珀色是前面 token 已经选过的。右侧 ρ(j) 是第 j 个 token 的复用率，即公式 (1)。'],
+    ['逐槽核', '逐槽核：16 个槽位读 16 份', '逐槽核每个槽位各读一次自己的专家权重，重复的也重读，共 nm = 16 份。'],
+    ['去重核', '去重核：只读并集 9 份', '去重核先取并集，每个不同的专家只读一次。U = 9，不同专家占比 ū = 9/16 ≈ 0.56。只看字节，去重核省 44%。'],
+    ['带宽', '但去重核每字节更慢', '时间是字节除以带宽。若去重核的有效带宽只有逐槽核的一半（r = 0.5，示意值；Table 1 实测 r 在 0.32–0.75），它要 18 个单位时间，逐槽核只要 16。'],
+    ['结论', '比的是 ū 和 r', '去重核更快的条件是 ū < r，即公式 (7)。字节账只给出 ū，带宽账给出 r，两者都要测。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 2：Table 1 的 r 与 ū ---------- */
+function scene2() {
+  var ROWS = [
+    ['CUDA OLMoE', .75, .82, .58, .50], ['CUDA gpt-oss', .53, .72, .43, .36],
+    ['CUDA DSV2-Lite', .68, .83, .59, .62], ['Metal OLMoE', .59, .82, .51, .50],
+    ['Metal Qwen3', .50, .77, .35, .43], ['Metal gpt-oss', .37, .72, .34, .36],
+    ['Metal DSV2-Lite', .47, .82, .42, .62], ['MLX OLMoE', .58, .82, .32, .50]
+  ];
+  var BX = 160, BW = 300, Y0 = 66, RH = 40;
+  function shell(e, k) {
+    var purple = C('--a-purple', '#B79BFF'), teal = C('--a-teal', '#48CFC4');
+    var green = C('--a-green', '#4CC98A'), red = C('--a-red', '#FF7268');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee');
+    var n8 = k >= 3, showU = k >= 1, verdict = (k === 2 || k >= 4);
+    e.t(410, 32, (n8 ? 'n = 8' : 'n = 2') + '：带宽比 r = β_dedup / β_slot  与  不同专家占比 ū', { size: 14, weight: 600, fill: strong });
+    e.line(BX, Y0 - 10, BX, Y0 + 8 * RH - 4, { stroke: C('--a-line', '#444'), sw: 1 });
+    e.t(BX + BW, Y0 - 14, '1.0', { size: 10, fill: muted, mono: true });
+    e.line(BX + BW, Y0 - 10, BX + BW, Y0 + 8 * RH - 4, { stroke: C('--a-line', '#444'), sw: 1, dash: '3 4' });
+    if (verdict) e.t(640, Y0 - 14, '1 − ū / r', { size: 12, weight: 600, fill: muted, mono: true });
+    var wins = 0;
+    for (var i = 0; i < ROWS.length; i++) {
+      var R = ROWS[i], y = Y0 + i * RH;
+      var r = n8 ? R[3] : R[1], u = n8 ? R[4] : R[2];
+      var s = 1 - u / r, win = s > 0;
+      if (win) wins++;
+      var fmt = function (v) { return v.toFixed(2); };
+      e.bar(BX, y, BW, 13, R[0], r, 1, purple, { fmt: fmt, delay: i * 60 });
+      if (showU) e.bar(BX, y + 16, BW, 13, '', u, 1, teal, { fmt: fmt, delay: i * 60 + 120 });
+      if (verdict) {
+        var col = win ? green : red;
+        var hot = (k === 5 && i === 5) || (k === 4 && win);
+        e.t(640, y + 18, (s >= 0 ? '+' : '−') + Math.abs(s).toFixed(3), { size: 13, weight: 700, mono: true, fill: col, cls: hot ? 'hot' : null });
+        e.t(700, y + 18, win ? '去重核快' : '逐槽核快', { anchor: 'start', size: 12, fill: col });
+      }
+    }
+    var fy = Y0 + 8 * RH + 22;
+    if (k === 2) e.t(410, fy, 'n = 2：8 个配置全部 ū > r，逐槽核都更快', { size: 13, weight: 700, fill: red });
+    if (k === 4) e.t(410, fy, 'n = 8：只有 ' + wins + ' 个配置翻转为去重核更快（Metal OLMoE 只领先 2%）', { size: 13, weight: 700, fill: green });
+    if (k === 5) e.t(410, fy, 'Metal gpt-oss 在 n = 8 时 ū / r = 1.06：离交叉只差 6%，带宽误差足以翻转判断', { size: 13, weight: 700, fill: C('--a-amber', '#E9B449') });
+  }
+  var steps = [
+    ['n=2 · r', 'n = 2 时的带宽比 r', '紫色条是去重核有效带宽除以逐槽核有效带宽。8 个配置全部 r < 1，去重核每字节只有逐槽核的 37–75% 快。'],
+    ['n=2 · ū', '加上不同专家占比 ū', '青色条是 ū = E_dedup / E_slot。n = 2 时 ū 在 0.72–0.83：两个 token 只有约两成专家重叠，去重核省的字节不多。'],
+    ['n=2 判定', 'n = 2：逐槽核全胜', '按公式 (6)，节省 S ∝ 1 − ū/r。8 行全是负数，去重核全部更慢。这就是引擎在小 n 默认走逐槽核的原因。'],
+    ['n=8 · r, ū', 'n = 8：ū 下降得比 r 快', '随着 n 增大，路由复用累积，ū 降到 0.36–0.62；r 也在下降（0.32–0.59），但多数配置下降得慢一些。'],
+    ['n=8 判定', 'n = 8：部分配置翻转', 'CUDA OLMoE、CUDA gpt-oss、Metal OLMoE 三个配置变为去重核更快；其余五个即使到 n = 8 也仍是逐槽核更快。'],
+    ['临界', '交叉点附近判不准', 'Metal gpt-oss 的 1 − ū/r 只有 −0.059。第 ⑧ 节会说明，交叉点附近带宽误差 ε 会被成倍放大，Table 3 里两个 Metal gpt-oss 配置的交叉点都没预测到。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 3：最佳草稿长度阶梯（示意参数） ---------- */
+function scene3() {
+  var KMAX = 12;
+  function Vm(k) { return 1 + 0.12 * k + 0.01 * k * k; }
+  function Vd(k) { return 1 + 0.02 * k; }
+  function G(a, k) { return (1 - Math.pow(a, k + 1)) / (1 - a); }
+  function kstar(a, V) {
+    var best = 0, bt = 1 / V(0);
+    for (var k = 1; k <= KMAX; k++) { var t = G(a, k) / V(k); if (t > bt + 1e-12) { bt = t; best = k; } }
+    return { k: best, sp: bt * V(0) };
+  }
+  function stair(V) {
+    var pts = [], jumps = [], prev = 0;
+    for (var a = 0; a <= 0.995; a += 0.0025) {
+      var ks = kstar(a, V).k;
+      if (ks !== prev) { jumps.push([a, prev, ks]); prev = ks; }
+      pts.push([a, ks]);
+    }
+    return { pts: pts, jumps: jumps };
+  }
+  var SM = stair(Vm), SD = stair(Vd);
+  var LX0 = 60, LX1 = 360, AX0 = 450, AX1 = 790, YB = 370, YT = 100;
+  function lx(k) { return LX0 + k / KMAX * (LX1 - LX0); }
+  function ly(v) { return YB - (v - 1) / 3 * (YB - YT); }
+  function ax(a) { return AX0 + a * (AX1 - AX0); }
+  function ay(k) { return YB - k / KMAX * (YB - YT); }
+  function stairPath(S) {
+    var d = 'M' + ax(0) + ',' + ay(0), last = 0;
+    for (var i = 0; i < S.jumps.length; i++) {
+      var J = S.jumps[i];
+      d += ' L' + ax(J[0]).toFixed(1) + ',' + ay(last) + ' L' + ax(J[0]).toFixed(1) + ',' + ay(J[2]);
+      last = J[2];
+    }
+    return d + ' L' + ax(0.995) + ',' + ay(last);
+  }
+  function shell(e, k) {
+    var acc = C('--a-accent', '#FF7A00'), blue = C('--a-blue', '#74B4FF'), green = C('--a-green', '#4CC98A');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), ln = C('--a-line', '#444');
+    e.t(410, 30, '示意参数，非论文测量', { size: 12, fill: C('--a-amber', '#E9B449') });
+    e.t((LX0 + LX1) / 2, 64, '步长时间 V(k)', { size: 13, weight: 600, fill: strong });
+    e.line(LX0, YB, LX1, YB, { stroke: ln, sw: 1 }); e.line(LX0, YB, LX0, YT - 10, { stroke: ln, sw: 1 });
+    for (var g = 0; g <= KMAX; g += 4) e.t(lx(g), YB + 16, '' + g, { size: 10, fill: muted, mono: true });
+    for (var v = 1; v <= 4; v++) e.t(LX0 - 8, ly(v) + 4, v + '', { anchor: 'end', size: 10, fill: muted, mono: true });
+    e.t(LX1, YB + 29, '草稿长度 k', { anchor: 'end', size: 11, fill: muted });
+    var dm = '', dd = '';
+    for (var q = 0; q <= KMAX; q++) {
+      dm += (q ? ' L' : 'M') + lx(q).toFixed(1) + ',' + ly(Vm(q)).toFixed(1);
+      dd += (q ? ' L' : 'M') + lx(q).toFixed(1) + ',' + ly(Vd(q)).toFixed(1);
+    }
+    e.path(dm, { stroke: acc, sw: 2.5 }); e.path(dd, { stroke: blue, sw: 2.5 });
+    e.t(lx(9.5), ly(Vm(10)) - 8, 'MoE：1 + 0.12k + 0.01k²', { anchor: 'end', size: 11, fill: acc });
+    e.t(lx(12), ly(Vd(12)) - 10, '稠密：1 + 0.02k', { anchor: 'end', size: 11, fill: blue });
+    if (k < 1) return;
+    e.t((AX0 + AX1) / 2, 64, '最佳草稿长度 k*(a)', { size: 13, weight: 600, fill: strong });
+    e.line(AX0, YB, AX1, YB, { stroke: ln, sw: 1 }); e.line(AX0, YB, AX0, YT - 10, { stroke: ln, sw: 1 });
+    for (var t = 0; t <= 10; t += 2) e.t(ax(t / 10), YB + 16, (t / 10).toFixed(1), { size: 10, fill: muted, mono: true });
+    for (var h = 0; h <= KMAX; h += 4) e.t(AX0 - 8, ay(h) + 4, '' + h, { anchor: 'end', size: 10, fill: muted, mono: true });
+    e.t(AX1, YB + 32, '接受率 a', { anchor: 'end', size: 11, fill: muted });
+    e.path(stairPath(SM), { stroke: acc, sw: 2.5, reveal: true });
+    if (k >= 2) {
+      for (var i = 0; i < SM.jumps.length; i++) {
+        var J = SM.jumps[i];
+        e.circle(ax(J[0]), ay(J[2]), 3.5, { fill: green, cls: k === 2 ? 'hot' : null });
+      }
+      e.t(ax(0.14) + 6, ay(1) - 8, 'a₁ = 0.13', { anchor: 'start', size: 11, fill: green, mono: true });
+    }
+    if (k >= 3) e.path(stairPath(SD), { stroke: blue, sw: 2.5, reveal: true });
+    if (k >= 4) {
+      var m8 = kstar(0.8, Vm), d8 = kstar(0.8, Vd);
+      e.line(ax(0.8), YB, ax(0.8), YT - 6, { stroke: muted, sw: 1, dash: '4 4' });
+      e.circle(ax(0.8), ay(m8.k), 5, { fill: acc, cls: 'hot' });
+      e.circle(ax(0.8), ay(d8.k), 5, { fill: blue, cls: 'hot' });
+      e.t(ax(0.8) - 8, ay(m8.k) + 18, 'k* = ' + m8.k + '，' + m8.sp.toFixed(2) + '×', { anchor: 'end', size: 12, weight: 700, fill: acc });
+      e.t(ax(0.8) - 8, ay(d8.k) - 10, 'k* = ' + d8.k + '，' + d8.sp.toFixed(1) + '×', { anchor: 'end', size: 12, weight: 700, fill: blue });
+    }
+    if (k >= 5) e.t(410, 418, '单调：a 越大 k* 越大；但台阶点 a_j 要按 (10) 逐级算，V(k) 越陡，阶梯越矮、越靠右', { size: 12, weight: 600, fill: strong });
+  }
+  var steps = [
+    ['V(k)', '两种步长曲线', 'V(k) 是带 k 个草稿的一轮验证时间（以 V(0) = 1 为单位）。稠密模型多验几个 token 几乎不加时间；MoE 每多一个 token 就多读一批新专家，V(k) 明显上升。参数只为示意。'],
+    ['MoE 阶梯', 'MoE 型的 k*(a)', '对每个接受率 a，取使吞吐 T_a(k) = G_a(k)/V(k) 最大的 k。结果是一道随 a 单调上升的阶梯。'],
+    ['台阶点', '台阶点 a_j 精确可算', '绿点是 k* 上一级的接受率。这组 V(k) 的增量 c_i 递增（凸），按 (10) 只需比较相邻两级；第一个台阶 a₁ = c₁/V(0) = 0.13。'],
+    ['稠密阶梯', '叠上稠密型', '稠密型 V(k) 很平，a₁ 只有 0.02，台阶又密又高。同样的阶梯定理，形状完全不同。'],
+    ['a = 0.8', '同一接受率下的差距', 'a = 0.8 时，MoE 型最佳只投 4 个草稿、加速 2.05×；稠密型投 11 个、加速约 3.8×。MoE 的收益被 V(k) 的上升吃掉了一半。'],
+    ['小结', '阶梯的形状由 V(k) 决定', '定理只用到 V > 0，所以只要测出 V(k)，就能算出整道阶梯。对 MoE 来说，V(k) 又取决于第 ④⑤ 节的 ū 与 r。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 4：误差带在交叉点附近放大 ---------- */
+function scene4() {
+  function Ms(n) { return 1 + n; }
+  function Md(n) { return 3.4 + 0.5 * n; }
+  var X0 = 80, X1 = 500;
+  function x(n) { return X0 + (n - 1) / 8 * (X1 - X0); }
+  function yT(v) { return 200 - v / 11 * 140; }
+  function yB(v) { v = Math.max(-3.2, Math.min(3.2, v)); return 322 - v / 3.2 * 80; }
+  function band(eps, n) { return eps / (1 - eps) * (Ms(n) + Md(n)); }
+  function shell(e, k) {
+    var red = C('--a-red', '#FF7268'), green = C('--a-green', '#4CC98A'), purple = C('--a-purple', '#B79BFF');
+    var amber = C('--a-amber', '#E9B449'), muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), ln = C('--a-line', '#444');
+    var eps = k >= 4 ? 0.148 : 0.054, eng = k >= 4 ? 'MLX' : 'CUDA';
+    e.t(290, 30, '示意曲线；ε 取论文各引擎的拟合误差', { size: 12, fill: amber });
+    e.line(X0, 200, X1, 200, { stroke: ln, sw: 1 });
+    e.t(X0 - 8, 64, '专家时间 (ms)', { anchor: 'start', size: 11, fill: muted });
+    var ds = '', dd = '';
+    for (var n = 1; n <= 9.001; n += 0.25) {
+      ds += (n === 1 ? 'M' : ' L') + x(n).toFixed(1) + ',' + yT(Ms(n)).toFixed(1);
+      dd += (n === 1 ? 'M' : ' L') + x(n).toFixed(1) + ',' + yT(Md(n)).toFixed(1);
+    }
+    e.path(ds, { stroke: red, sw: 2.5 }); e.path(dd, { stroke: green, sw: 2.5 });
+    e.t(x(9) + 6, yT(Ms(9)) + 4, 'M_slot', { anchor: 'start', size: 11, fill: red, mono: true });
+    e.t(x(9) + 6, yT(Md(9)) + 4, 'M_dedup', { anchor: 'start', size: 11, fill: green, mono: true });
+    var nc = 4.8;
+    if (k >= 1) {
+      e.line(x(nc), 72, x(nc), 404, { stroke: muted, sw: 1, dash: '3 4' });
+      e.t(x(nc), 418, '交叉点', { size: 11, fill: muted });
+      e.line(X0, yB(0), X1, yB(0), { stroke: ln, sw: 1 });
+      e.t(X0 - 8, yB(0) + 4, '0', { anchor: 'end', size: 10, fill: muted, mono: true });
+      e.t(X0 - 8, 236, 'S(n) = M_slot − M_dedup', { anchor: 'start', size: 11, fill: purple, mono: true });
+    }
+    if (k >= 2) {
+      var up = '', lo = '';
+      for (n = 1; n <= 9.001; n += 0.25) {
+        var S = Ms(n) - Md(n), b = band(eps, n);
+        up += (n === 1 ? 'M' : ' L') + x(n).toFixed(1) + ',' + yB(S + b).toFixed(1);
+        lo = ' L' + x(n).toFixed(1) + ',' + yB(S - b).toFixed(1) + lo;
+      }
+      e.path(up + lo + ' Z', { fill: C('--a-purple-bg', '#2a2140'), stroke: 'none', sw: 0, opacity: 0.85 });
+      if (k >= 3) {
+        var lo2 = null, hi2 = null;
+        for (n = 1; n <= 9.001; n += 0.05) {
+          if (Math.abs(Ms(n) - Md(n)) <= band(eps, n)) { if (lo2 === null) lo2 = n; hi2 = n; }
+        }
+        e.rect(x(lo2), 244, x(hi2) - x(lo2), 156, null, C('--a-red-bg', '#3a1a1a'), red, { rx: 2, sw: 1, dash: '4 3', opacity: 0.7, cls: 'hot' });
+        e.t(x(nc), 258, '符号判不准', { size: 11, weight: 700, fill: red });
+      }
+    }
+    if (k >= 1) {
+      var dS = '';
+      for (n = 1; n <= 9.001; n += 0.25) dS += (n === 1 ? 'M' : ' L') + x(n).toFixed(1) + ',' + yB(Ms(n) - Md(n)).toFixed(1);
+      e.path(dS, { stroke: purple, sw: 2.5 });
+    }
+    for (var t = 1; t <= 9; t++) e.t(x(t), 214, 'n=' + t, { size: 10, fill: muted, mono: true });
+    if (k < 2) return;
+    var RX = 560;
+    e.t(RX, 80, eng + '：ε = ' + eps, { anchor: 'start', size: 14, weight: 700, fill: strong, cls: k === 4 ? 'hot' : null });
+    e.t(RX, 102, '误差界 = ε/(1−ε) · (M_slot + M_dedup)', { anchor: 'start', size: 11, fill: muted, mono: true });
+    e.t(RX, 128, '放大倍数 = 误差界 / |S|：', { anchor: 'start', size: 12, fill: C('--a-fg', '#ccc') });
+    var probe = [2, 4, 5, 8];
+    for (var i = 0; i < probe.length; i++) {
+      var p = probe[i], Sp = Math.abs(Ms(p) - Md(p)), amp = (Ms(p) + Md(p)) / Sp;
+      var unsafe = band(eps, p) >= Sp;
+      e.t(RX, 152 + i * 22, 'n=' + p + '   |S| = ' + Sp.toFixed(1) + ' ms   ' + amp.toFixed(0) + '×', { anchor: 'start', size: 12, mono: true, fill: unsafe ? red : C('--a-fg', '#ccc') });
+    }
+    if (k >= 5) {
+      e.t(RX, 262, '论文实测放大倍数', { anchor: 'start', size: 13, weight: 600, fill: strong });
+      e.t(RX, 284, 'MLX    3.2–3.8×', { anchor: 'start', size: 12, mono: true, fill: C('--a-fg', '#ccc') });
+      e.t(RX, 304, 'CUDA   6–220×', { anchor: 'start', size: 12, mono: true, fill: C('--a-fg', '#ccc') });
+      e.t(RX, 324, 'Metal  3.2–340×', { anchor: 'start', size: 12, mono: true, fill: red });
+      e.t(RX, 350, '最大值都在交叉点处', { anchor: 'start', size: 12, fill: muted });
+      e.t(RX, 376, 'k* 只受 δ 影响，最稳', { anchor: 'start', size: 12, weight: 600, fill: green });
+    }
+  }
+  var steps = [
+    ['两条曲线', '两种核的专家时间', '红线是逐槽核的专家时间 M_slot，绿线是去重核的 M_dedup（示意）。小 n 时去重核更慢，n 增大后它的斜率更低，两线交叉。'],
+    ['节省 S', '节省是两者之差', '紫线 S(n) = M_slot − M_dedup，过零点就是交叉点。交叉点左边 S < 0，逐槽核更快。'],
+    ['误差带', '误差带按两项之和算', '按 (18)，带宽误差 ε 下 S 的误差不超过 ε/(1−ε)·(M_slot + M_dedup)。带宽是和，节省是差，所以误差带宽度几乎不随 n 缩小。这里用 CUDA 的 ε = 0.054。'],
+    ['判不准', '交叉点附近，误差带盖住零', '红框里 |S| 小于误差界，无法确定哪个核更快，对应 (19)：只有 |ln r − ln ū| 足够大时符号才可靠。放大倍数在交叉点趋于无穷。'],
+    ['换 ε', 'MLX 的 ε = 0.148', '同样的曲线换成 MLX 的拟合误差，判不准的区间明显变宽。不过 MLX OLMoE 实际在 n ≤ 9 内没有交叉，S 离零较远，实测放大只有 3.2–3.8×。'],
+    ['实测', '论文测到的放大倍数', 'CUDA 最高 220×，Metal 最高 340×，都出现在交叉点。相比之下，最佳草稿长度只看 V(k) 的相对大小，公共误差因子不改变 argmax，最不敏感。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 5：预测对账 ---------- */
+function scene5() {
+  // [配置, 实测, WikiText 预测]；0 表示 n ≤ 9 内无交叉
+  var CFG = [
+    ['Metal OLMoE 512', 7, 7], ['Metal OLMoE 4096', 7, 7],
+    ['Metal Qwen3 512', 0, 0], ['Metal Qwen3 4096', 0, 0],
+    ['Metal gpt-oss 512', 8, 0], ['Metal gpt-oss 4096', 6, 0],
+    ['MLX OLMoE 512', 0, 0], ['MLX OLMoE 4096', 0, 0],
+    ['CUDA OLMoE 512', 5, 4], ['CUDA OLMoE 4096', 5, 4],
+    ['CUDA gpt-oss 512', 6, 5], ['CUDA gpt-oss 4096', 5, 5]
+  ];
+  var LX = 150, X0 = 170, X1 = 470, Y0 = 70, RH = 26;
+  function nx(n) { return n === 0 ? X1 + 12 : X0 + (n - 2) / 7 * (X1 - X0 - 30); }
+  function hit(c) { return c[1] === 0 && c[2] === 0 ? true : (c[1] && c[2] && Math.abs(c[1] - c[2]) <= 1); }
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), green = C('--a-green', '#4CC98A'), red = C('--a-red', '#FF7268');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), ln = C('--a-line', '#444'), fg = C('--a-fg', '#ccc');
+    e.t(320, 34, 'Table 3：交叉点 n（去重核开始更快）', { size: 14, weight: 600, fill: strong });
+    for (var t = 2; t <= 9; t++) e.t(nx(t), Y0 - 12, '' + t, { size: 10, fill: muted, mono: true });
+    e.t(nx(0), Y0 - 12, '无', { size: 10, fill: muted });
+    var hits = 0;
+    for (var i = 0; i < CFG.length; i++) {
+      var c = CFG[i], y = Y0 + i * RH, h = hit(c);
+      if (h) hits++;
+      e.t(LX, y + 4, c[0], { anchor: 'end', size: 11, fill: fg });
+      e.line(X0, y, X1 + 20, y, { stroke: ln, sw: 1, dash: '2 4' });
+      e.circle(nx(c[1]), y, 6, { fill: strong });
+      if (k >= 1) {
+        var col = k >= 2 ? (h ? green : red) : blue;
+        e.circle(nx(c[2]), y, 4, { fill: 'none', stroke: col, sw: 2.5, cls: (k === 2 && !h) ? 'hot' : null });
+      }
+    }
+    if (k >= 2) e.t(320, Y0 + 12 * RH + 8, 'WikiText 预测 ±1 内：' + hits + ' / 12（验证文本、实测时间版各 11 / 12）', { size: 12, weight: 700, fill: green });
+    if (k < 3) return;
+    var RX = 540;
+    e.t(RX, 70, '最佳草稿长度 k*：±1 内的接受率点', { anchor: 'start', size: 13, weight: 600, fill: strong });
+    var fmt = function (v) { return v + ' / 11'; };
+    e.bar(RX + 90, 86, 140, 16, 'CUDA', 10, 11, green, { fmt: function () { return '10–11 / 11'; } });
+    e.bar(RX + 90, 110, 140, 16, 'CUDA 实测时间', 11, 11, green, { fmt: fmt });
+    e.bar(RX + 90, 134, 140, 16, 'Apple', 7, 11, C('--a-amber', '#E9B449'), { fmt: function () { return '7–10 / 11'; } });
+    e.t(RX, 172, '330 个接受率点全部落在界 (20)(21) 内', { anchor: 'start', size: 11, fill: muted });
+    if (k < 4) return;
+    e.t(RX, 208, 'DeepSeek-V2-Lite 预注册：6 条规则', { anchor: 'start', size: 13, weight: 600, fill: strong });
+    var RULES = ['交叉', '符号', '加速比', 'k* ±1', '吞吐损失', 'τ 误差'];
+    var CUDA = [1, 1, 1, 1, 1, 1], METAL = [1, 1, 1, 0, 0, 0];
+    var rows = [['CUDA', CUDA], ['Metal', METAL]];
+    for (var j = 0; j < RULES.length; j++) e.t(RX + 62 + j * 38, 230, RULES[j], { size: 9, fill: muted });
+    for (var r = 0; r < 2; r++) {
+      var yy = 240 + r * 30;
+      e.t(RX + 36, yy + 15, rows[r][0], { anchor: 'end', size: 11, fill: fg });
+      for (j = 0; j < 6; j++) {
+        var ok = rows[r][1][j];
+        e.rect(RX + 48 + j * 38, yy, 28, 22, ok ? '✓' : '✗', ok ? C('--a-green-bg', '#16321f') : C('--a-red-bg', '#3a1a1a'), ok ? green : red, { rx: 4, sw: 1.2, size: 13, weight: 700 });
+      }
+    }
+    e.t(RX, 318, 'Metal 校准版：k* ±1 提到 20 / 22，吞吐损失 6–8%', { anchor: 'start', size: 11, fill: green });
+    if (k < 5) return;
+    e.rect(RX - 6, 336, 278, 72, null, C('--a-red-bg', '#3a1a1a'), red, { rx: 6, sw: 1.2, cls: 'hot' });
+    e.t(RX + 6, 356, '事后补的 CUDA 字节拟合', { anchor: 'start', size: 12, weight: 700, fill: red });
+    e.t(RX + 6, 376, '逐槽核拟合偏慢 5–13%，多出 ≈0.9 ms', { anchor: 'start', size: 11, fill: fg });
+    e.t(RX + 6, 396, '真实节省 −0.5 ms → 预测出 n=7 的假交叉', { anchor: 'start', size: 11, fill: fg });
+  }
+  var steps = [
+    ['实测', '12 个配置的实测交叉点', '白点是实测交叉点：去重核从哪个 n 起比逐槽核快。最右一列「无」表示 n ≤ 9 内去重核一直更慢，12 个配置里有 4 个这样。'],
+    ['预测', '叠上 WikiText 路由预测', '空心圆是只用 WikiText 路由 trace 和字节拟合算出的交叉点，没有用任何整模型运行的数据。'],
+    ['对账', '±1 内算命中', '绿色命中、红色未中。CUDA 有 3 个配置早了一格，仍在 ±1 内；两个 Metal gpt-oss 配置没预测到交叉，正是第 ④ 节说的 ū/r ≈ 1.06 的临界情况。'],
+    ['k*', '最佳草稿长度更稳', 'CUDA 上 11 个接受率中 10–11 个的预测 k* 落在实测最优 ±1 内，吞吐损失 1.6–7.7%；Apple 引擎 7–10 个。这与 ⑧ 的敏感度排序一致。'],
+    ['DSV2 预注册', '唯一预先写下的测试', '在跑任何整模型投机前写下预测和 6 条规则。CUDA 全过；Metal 实测时间版只过交叉、符号、加速比 3 条，k*、吞吐损失、τ 误差三条未过；校准版把 k* 命中提到 20/22。'],
+    ['反例', '拟合误差翻转结论', '事后给 CUDA 补字节拟合，几个百分点的偏差就在 n = 7 造出一个不存在的交叉点。节省本身接近零时，这正是动画 4 的放大效应。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+var builders = { svg1: scene1, svg2: scene2, svg3: scene3, svg4: scene4, svg5: scene5 };
+var engines = {};
+function initAll() {
+  for (var id in builders) {
+    var svg = document.getElementById(id);
+    if (!svg) continue;
+    engines[id] = new AnimEngine(svg, { steps: builders[id]() });
+  }
+}
+function engineOf(node) {
+  var frame = node.closest('.anim-frame');
+  if (!frame) return null;
+  var svg = frame.querySelector('svg');
+  return svg ? engines[svg.id] : null;
+}
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('button');
+  if (!b || !b.closest('.anim-frame')) return;
+  var eng = engineOf(b);
+  if (!eng) return;
+  if (b.classList.contains('btn-next')) { eng.pause(); eng.next(); }
+  else if (b.classList.contains('btn-prev')) { eng.pause(); eng.prev(); }
+  else if (b.classList.contains('btn-reset')) eng.reset();
+  else if (b.classList.contains('btn-play')) eng.toggle();
+  else if (b.classList.contains('stage-chip')) { eng.pause(); eng.goTo(+b.dataset.idx); }
+});
+document.addEventListener('input', function (ev) {
+  if (!ev.target.classList.contains('speed')) return;
+  var eng = engineOf(ev.target);
+  if (eng) eng.setSpeed(parseFloat(ev.target.value));
+});
+document.addEventListener('keydown', function (ev) {
+  var frame = document.activeElement && document.activeElement.closest && document.activeElement.closest('.anim-frame');
+  if (!frame) return;
+  var eng = engineOf(document.activeElement);
+  if (!eng) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); eng.pause(); eng.next(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); eng.pause(); eng.prev(); }
+  else if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON') { ev.preventDefault(); eng.toggle(); }
+});
+
+/* SVG 里的色值是切换主题那一刻读出来的具体值，主题一变就过期。
+   用 MutationObserver 盯 data-theme，无论用户点的是站点导航里的开关还是
+   本文右下角这个按钮，都会重绘当前步。存储键与站点保持一致（'theme'）。 */
+function redrawAll() {
+  for (var id in engines) { engines[id].pause(); engines[id].goTo(engines[id].i); }
+}
+window.toggleTheme = function () {
+  var root = document.documentElement;
+  var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (err) {}
+};
+if (window.MutationObserver) {
+  new MutationObserver(function () { setTimeout(redrawAll, 30); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+window.toggleToc = function () {
+  var toc = document.getElementById('tocNav');
+  var btn = document.querySelector('.toc-toggle');
+  var hidden = toc.hasAttribute('hidden');
+  if (hidden) toc.removeAttribute('hidden'); else toc.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+};
+
+/* TOC 高亮 + 回到顶部 */
+function initChrome() {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if ('IntersectionObserver' in window && secs.length) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  var bt = document.getElementById('backTop');
+  if (bt) window.addEventListener('scroll', function () { bt.classList.toggle('show', window.scrollY > 400); }, { passive: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { initAll(); initChrome(); });
+} else { initAll(); initChrome(); }
+})();
+</script>
+</body>
+</html>
+

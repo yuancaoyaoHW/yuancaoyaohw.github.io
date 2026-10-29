@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T2D：把目标模型剪成草稿模型，让架构自己长出来</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$','$'],['\\(','\\)']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' },
+  startup: {
+    ready: () => {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => { window.__mathReady = true; });
+    }
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+
+/* 配色引用共享语义层 --a-*（public/styles/article-tokens.css）：一色一义、
+   深浅主题自动成立。作用域从 :root 降到正文容器——站点外壳的令牌不会被本文接管。
+   尺寸与时长留在 :root，那是本文的排版需要，不属于共享层。 */
+:root { --toc-w: 240px; --a-content-w: 860px; --layer-ms: 300ms; }
+:is(.article-body, .interactive-body) {
+  --bg: var(--a-bg); --fg: var(--a-fg-strong); --fg-soft: var(--a-fg); --fg-muted: var(--a-fg-muted);
+  --accent: var(--a-accent); --accent-soft: var(--a-accent-line); --accent-bg: var(--a-accent-bg);
+  --green: var(--a-green); --green-soft: var(--a-green-line); --green-bg: var(--a-green-bg);
+  --red: var(--a-red); --red-soft: var(--a-red-line); --red-bg: var(--a-red-bg);
+  --a-orange: var(--a-amber); --orange-bg: var(--a-amber-bg);
+  --blue: var(--a-blue); --blue-soft: var(--a-blue-line); --blue-bg: var(--a-blue-bg);
+  --purple: var(--a-purple); --purple-soft: var(--a-purple-line); --purple-bg: var(--a-purple-bg);
+  --teal: var(--a-teal); --teal-bg: var(--a-teal-bg);
+  --a-border: var(--a-line); --card-bg: var(--a-surface); --code-bg: var(--a-code-bg);
+  --disabled: var(--a-fg-muted); --focus: var(--a-accent);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; line-height: 1.75; font-size: 15px; }
+.layout { display: flex; max-width: calc(var(--toc-w) + var(--a-content-w) + 40px); margin: 0 auto; gap: 20px; padding: 20px; }
+
+.toc { position: sticky; top: 20px; width: var(--toc-w); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; }
+.toc h3 { font-size: 14px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--a-border); }
+.toc a { display: block; padding: 6px 12px; color: var(--fg-soft); text-decoration: none; font-size: 13px; border-left: 3px solid transparent; transition: background 0.15s, color 0.15s, border-color 0.15s; border-radius: 0 4px 4px 0; }
+.toc a:hover { background: var(--accent-bg); color: var(--accent); }
+.toc a.active { border-left-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--accent-bg); }
+.content { width: var(--a-content-w); flex-shrink: 0; }
+:where(.article-body, .interactive-body) section { margin-bottom: 50px; padding: 30px; background: var(--card-bg); border-radius: 12px; border: 1px solid var(--a-border); }
+section h2 { font-size: 24px; margin-bottom: 16px; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+section h3 { font-size: 18px; margin: 20px 0 10px; color: var(--accent); }
+section h4 { font-size: 15px; margin: 16px 0 8px; color: var(--fg-soft); }
+section p { margin-bottom: 12px; color: var(--fg-soft); }
+section ul, section ol { margin: 10px 0 12px 20px; color: var(--fg-soft); }
+section li { margin-bottom: 6px; }
+.callout { padding: 16px 20px; border-radius: 8px; margin: 16px 0; border-left: 4px solid; }
+.callout strong { color: var(--fg); }
+.callout-accent { background: var(--accent-bg); border-color: var(--accent); }
+.callout-green { background: var(--green-bg); border-color: var(--green); }
+.callout-red { background: var(--red-bg); border-color: var(--red); }
+.callout-blue { background: var(--blue-bg); border-color: var(--blue); }
+.callout-purple { background: var(--purple-bg); border-color: var(--purple); }
+.callout-orange { background: var(--orange-bg); border-color: var(--a-orange); }
+.callout-teal { background: var(--teal-bg); border-color: var(--teal); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; overflow-x: auto; display: block; }
+:where(.article-body, .interactive-body) th, :where(.article-body, .interactive-body) td { padding: 8px 12px; border: 1px solid var(--a-border); text-align: center; white-space: nowrap; }
+:where(.article-body, .interactive-body) th { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+:where(.article-body, .interactive-body) td { color: var(--fg-soft); }
+.gain { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+.best { background: var(--green-bg); }
+:where(.article-body, .interactive-body) code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: "JetBrains Mono", "Consolas", monospace; }
+.note-inline { font-size: 12px; color: var(--fg-muted); }
+.eq { margin: 14px 0; padding: 12px 16px; background: var(--code-bg); border-left: 3px solid var(--purple); border-radius: 6px; overflow-x: auto; }
+.eq .eq-note { display: block; margin-top: 6px; font-size: 12px; color: var(--fg-muted); }
+.hook { text-align: center; padding: 40px 30px; background: linear-gradient(135deg, var(--accent-bg), var(--purple-bg)); border: none; }
+.hook h1 { font-size: 28px; margin-bottom: 16px; }
+.hook .tagline { font-size: 16px; color: var(--fg-soft); max-width: 640px; margin: 0 auto 20px; }
+.hook .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hook .badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.badge-accent { background: var(--accent); color: var(--a-on-solid); }
+.badge-green { background: var(--green); color: var(--a-on-solid); }
+.badge-blue { background: var(--blue); color: var(--a-on-solid); }
+.badge-purple { background: var(--purple); color: var(--a-on-solid); }
+.anim-frame { margin: 20px 0; border: 1px solid var(--a-border); border-radius: 8px; overflow: hidden; background: var(--card-bg); }
+.anim-header { padding: 10px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--a-border); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.anim-header .anim-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+.anim-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.anim-controls button { padding: 5px 11px; border: 1px solid var(--a-border); border-radius: 4px; background: var(--card-bg); cursor: pointer; font-size: 12px; color: var(--fg-soft); transition: background 0.15s, color 0.15s, opacity 0.15s; }
+.anim-controls button:hover:not([disabled]) { background: var(--accent); color: var(--a-on-solid); }
+.anim-controls button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-controls button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.anim-controls .speed-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); }
+.anim-controls .speed-wrap input[type="range"] { width: 90px; vertical-align: middle; }
+.anim-canvas-wrap { padding: 12px; display: flex; justify-content: center; overflow-x: auto; }
+.anim-canvas-wrap svg { max-width: 100%; height: auto; background: var(--bg); }
+.anim-canvas-wrap svg .anim-layer { transition: opacity var(--layer-ms) ease; }
+.anim-canvas-wrap svg .anim-layer .dim { opacity: 0.25; }
+.anim-canvas-wrap svg .anim-layer .hot { animation: hotPulse 1.8s ease-in-out infinite; }
+@keyframes hotPulse { 0%, 100% { filter: none; } 50% { filter: brightness(1.18); } }
+.anim-progress { height: 4px; background: var(--code-bg); }
+.anim-progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
+.anim-stage-rail { display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap; }
+.anim-stage-rail .stage-chip { padding: 3px 10px; border-radius: 12px; font-size: 11px; border: 1px solid var(--a-border); background: transparent; color: var(--fg-muted); cursor: pointer; }
+.anim-stage-rail .stage-chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: var(--a-on-solid); }
+.anim-stage-rail .stage-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.anim-status { padding: 10px 16px 14px; font-size: 13px; }
+.anim-status .step-info { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.anim-status .step-desc { color: var(--fg-soft); line-height: 1.6; }
+.anim-legend { padding: 0 16px 14px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 11px; color: var(--fg-muted); }
+.anim-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.anim-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.back-top, .theme-toggle { position: fixed; right: 24px; z-index: 40; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--a-border); background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 15px; }
+.back-top { bottom: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.back-top.show { opacity: 1; pointer-events: auto; }
+.theme-toggle { bottom: 72px; }
+.back-top:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.toc-toggle { display: none; }
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; padding: 12px; }
+  .toc { position: static; width: 100%; height: auto; max-height: 40vh; }
+  .content { width: 100%; }
+  .toc[hidden] { display: none; }
+  .toc-toggle { display: block; margin-bottom: 10px; padding: 6px 12px; border: 1px solid var(--a-border); border-radius: 6px; background: var(--card-bg); color: var(--fg-soft); cursor: pointer; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-canvas-wrap svg .anim-layer { transition: none; }
+  .anim-canvas-wrap svg .anim-layer .hot { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body class="interactive-body">
+<script>
+/* SVG 的呈现属性（fill / stroke）不解析 var()，所以动画脚本要在运行时把
+   语义令牌读成具体色值。主题切换后重绘即可拿到新值。 */
+(function () {
+  window.aC = function (name, fallback) {
+    var host = document.querySelector('.interactive-body, .article-body') || document.documentElement;
+    var v = getComputedStyle(host).getPropertyValue(name);
+    return (v && v.trim()) || fallback || '#888';
+  };
+})();
+</script>
+<button class="theme-toggle" id="artThemeBtn" onclick="toggleTheme()" aria-label="切换深浅主题" title="切换主题">◑</button>
+<button class="back-top" id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="回到顶部">↑</button>
+
+<div class="layout">
+  <button class="toc-toggle" onclick="toggleToc()" aria-expanded="true" aria-controls="tocNav">目录</button>
+  <nav class="toc" id="tocNav" aria-label="文章目录">
+    <h3>目录</h3>
+    <a href="#hook">这篇论文在问什么</a>
+    <a href="#dilemma">① 草稿模型的两难</a>
+    <a href="#prior">② 现有剪枝做法的缺陷</a>
+    <a href="#gates">③ 可学习门与延迟预测器</a>
+    <a href="#loss">④ 单边增广拉格朗日目标</a>
+    <a href="#finalize">⑤ 离散化与续训</a>
+    <a href="#setup">⑥ 实验设置</a>
+    <a href="#results">⑦ 主结果：五个目标模型全部领先</a>
+    <a href="#sweep">⑧ 为什么要自动找架构</a>
+    <a href="#arch">⑨ 训练动态与剪出来的架构</a>
+    <a href="#more">⑩ AdaSpec 与 Sheared-Llama 对照</a>
+    <a href="#critique">⑪ 局限与没回答的问题</a>
+    <a href="#summary">⑫ 一句话总结</a>
+  </nav>
+
+  <main class="content">
+
+    <section class="hook" id="hook">
+      <h1>T2D：把目标模型剪成草稿模型，让架构自己长出来</h1>
+      <p class="tagline">投机解码要一个又快又像目标模型的草稿模型。现成的小模型往往跟目标对不齐，从头蒸馏又贵；直接从目标模型剪一个出来是很自然的想法，但剪成什么形状——几层、多宽、几个头——通常靠人拍脑袋。T2D 把层、注意力头、FFN 通道都挂上可学习的门，用一个冻结的延迟预测器把「快」写进损失，再用单边增广拉格朗日约束「像」，让优化器自己决定草稿的架构。结果是一批<strong>只剩 2–4 层、但几乎不减宽度</strong>的草稿模型，在 5 个目标模型、11 个领域上全部胜过固定架构的剪枝基线。</p>
+      <div class="badges">
+        <span class="badge badge-accent">arXiv:2610.34103</span>
+        <span class="badge badge-purple">结构化剪枝 × 投机解码</span>
+        <span class="badge badge-blue">延迟感知架构搜索</span>
+        <span class="badge badge-green">5 个目标 · 11 个领域全胜</span>
+      </div>
+    </section>
+
+    <section id="dilemma">
+      <h2>① 草稿模型的两难</h2>
+      <p>投机解码每一轮由草稿模型顺序生成 $\gamma$ 个候选 token，再由目标模型一次前向全部验证。论文用的是贪心验证：从头开始数，与目标模型贪心输出一致的那一段前缀被接受，第一个不一致的位置由目标模型的输出替换。记每轮被接受的草稿 token 数为 $a$，草稿与目标单步延迟之比为 $c=T_D/T_T$，那么相对普通自回归解码的加速比是</p>
+      <div class="eq">$$S=\frac{\mathbb{E}[a]+1}{\gamma c+1}$$<span class="eq-note">(1) 分子：每轮产出的 token 数（接受的草稿加上目标模型补的 1 个）；分母：每轮耗时，以目标单步为单位。论文全文取 $\gamma=4$</span></div>
+      <p>这个式子把草稿模型的设计压成两个量：接受长度 $\mathbb{E}[a]$ 和相对延迟 $c$。草稿越像目标，$\mathbb{E}[a]$ 越接近 $\gamma$；草稿越小，$c$ 越接近 0。两者天然冲突：一个准但慢的草稿，分母里的 $\gamma c$ 会把分子的收益吃掉，甚至比不投机还慢。论文的 Fig. 1 正是用这样一个例子开头。</p>
+      <div class="anim-frame" data-anim="1"><div class="anim-header"><span class="anim-title">动画 1 · 准而慢、快而偏、刚刚好：三种草稿的一轮时间线</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg1" viewBox="0 0 820 430" role="img" aria-label="三种草稿模型在 γ=4 时一轮投机的时间线与加速比对比"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-blue)"></i>草稿前向</span><span><i style="background:var(--a-purple)"></i>目标验证</span><span><i style="background:var(--a-green)"></i>被接受的 token</span><span><i style="background:var(--a-red)"></i>被拒绝的 token</span></div></div>
+      <p>所以「怎样的草稿最好」不是一个精度问题，而是一个在 $(\mathbb{E}[a], c)$ 平面上找最优点的问题。而 $c$ 的大小，取决于草稿在目标硬件上的真实延迟，这又取决于它的架构形状——同样的参数量，深而窄和浅而宽的模型在 batch=1 decode 下的延迟可以差很多。</p>
+    </section>
+
+    <section id="prior">
+      <h2>② 现有剪枝做法的缺陷</h2>
+      <p>从目标模型剪出草稿，好处是词表、tokenizer、训练分布天然对齐，剩下的权重也是目标模型的一部分，起点就比随机初始化的小模型像得多。论文把已有做法分成两类，各有一个问题。</p>
+      <table>
+        <thead><tr><th>做法</th><th>代表工作</th><th>问题</th></tr></thead>
+        <tbody>
+          <tr><td>非结构化剪枝</td><td>SD²（Lasby 2025）、Monjur 2026</td><td class="bad">权重稀疏但矩阵形状不变，稠密 GEMM 核上没有延迟收益</td></tr>
+          <tr><td>按手工架构结构化剪枝</td><td>Wei 2026、Yan 2025（Wide）</td><td class="bad">目标架构由人定，不针对投机解码优化，离 Pareto 前沿很远</td></tr>
+          <tr><td>层剪枝</td><td>ShortGPT（Men 2025）</td><td class="dim">按层重要性删层，只动深度一个维度</td></tr>
+        </tbody>
+      </table>
+      <p>非结构化剪枝的问题是工程上的：batch=1 decode 的瓶颈是读权重，稀疏矩阵若不配专门的稀疏核，读的字节数并不会少。结构化剪枝真正删掉行列，延迟能降，但「删成什么形状」需要先定下来。Wide 的做法受 Sheared-LLaMA 启发，先指定一个 5 层的目标架构，再联合剪枝与蒸馏；论文实验里这个 5 层架构被用于所有目标模型，ShortGPT 也剪到同一个架构，便于对照。</p>
+      <div class="callout callout-orange"><strong>核心论点：</strong>草稿的最优形状随目标模型、随硬件而变，手工指定一定会偏。T2D 想做的是把「形状」也变成优化变量，用投机解码真正关心的两个量——延迟和与目标的一致性——来驱动它。</div>
+    </section>
+
+    <section id="gates">
+      <h2>③ 可学习门与延迟预测器</h2>
+      <p>T2D 在目标模型的三种结构单元上挂 Hard-Concrete 门（Louizos 2017）：每一层一个层门 $z^L_\ell$，每个 KV 组一个头门 $z^H_h$，每层每个 FFN 中间通道一个通道门 $z^I_{\ell,i}$。Hard-Concrete 分布允许门在训练中取到精确的 0 或 1，又能对其参数求梯度；每个门有一个「期望打开概率」$\bar z$。用这些期望值，可以写出草稿架构的三个「软」尺寸：</p>
+      <div class="eq">$$\bar L=\sum_\ell \bar z^L_\ell,\qquad \bar H=Q\sum_h \bar z^H_h,\qquad \bar I=\frac{\sum_\ell \bar z^L_\ell\sum_i \bar z^I_{\ell,i}}{\sum_\ell \bar z^L_\ell}$$<span class="eq-note">(3) 期望层数、期望注意力头数、按层门加权的平均 FFN 宽度。$Q$ 是每个 KV 组的 query 头数（GQA）</span></div>
+      <p>有两个细节值得注意。第一，头门作用在 KV 组上，剪掉一组就同时剪掉 $Q$ 个 query 头和一对 KV 头，保证剪完仍是合法的 GQA 结构。第二，论文把隐藏维度绑定到头数：$\bar d=\bar H\cdot d_{\text{head}}$，于是剪头同时会缩小残差流宽度。Vicuna 的草稿最终从 40 个头剪到 35 个，隐藏维度也随之从 5120 变成 4480。</p>
+      <p>有了 $(\bar L,\bar H,\bar I)$，还需要知道这个形状在目标 GPU 上跑一步 decode 要多久。参数量或 FLOPs 都不是好的代理：batch=1 下，层数带来的是串行的 kernel 启动和同步开销，宽度带来的是读权重的字节数，两者对延迟的贡献完全不成比例。T2D 的办法是直接学一个延迟预测器：</p>
+      <ul>
+        <li><strong>数据：</strong>按候选形状构造未初始化的模型，在目标硬件上实测一次带 KV cache 的 decode 步，取多次重复的中位数；</li>
+        <li><strong>模型：</strong>3 层 MLP（两个 256 维隐层，SiLU），输入 $(L,H,I)$ 标准化后加少量扰动，输出 log 延迟，Huber 损失训练；</li>
+        <li><strong>使用：</strong>训练好后冻结，$\bar T=\exp(\mathrm{MLP}(\bar L,\bar H,\bar I))$，延迟损失 $\mathcal L_{\text{lat}}=\bar T/T_T$，正好是式 (1) 里的 $c$。</li>
+      </ul>
+      <p>因为输入是门的期望值，整个预测器对门参数可微，延迟梯度能一路传回每一个门。训练时加扰动，是为了让 MLP 在离散网格点之间也平滑，不至于给出奇怪的梯度。</p>
+      <div class="anim-frame" data-anim="2"><div class="anim-header"><span class="anim-title">动画 2 · 从门到延迟：可微的架构代价</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg2" viewBox="0 0 820 430" role="img" aria-label="层门、头门、通道门的期望值汇总为 L、H、I，经冻结 MLP 得到预测延迟"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-blue)"></i>层门</span><span><i style="background:var(--a-teal)"></i>头门</span><span><i style="background:var(--a-amber)"></i>FFN 通道门</span><span><i style="background:var(--a-purple)"></i>延迟预测器</span></div></div>
+    </section>
+
+    <section id="loss">
+      <h2>④ 单边增广拉格朗日目标</h2>
+      <p>「像」用交叉熵度量：在当前被门遮住的模型上，对目标模型自己生成的回答 $\tilde y$ 算 CE，记为 $\mathcal L_{\text{CE}}$。拿目标生成的文本而不是原始数据集的答案来训，相当于序列级蒸馏，直接对准贪心验证要求的「和目标输出一致」。</p>
+      <p>把两项直接相加会有个时序问题。优化从未剪的目标模型出发，此时 CE 很低、延迟很高，延迟项必须在前期占主导，剪枝才会启动（论文 Llama-2 配置里 $\mu_{\text{lat}}=200$、$\mu_{\text{CE}}=1$）。但一旦剪得太猛，有用的结构被成批遮掉，CE 会陡增，后面再也救不回来。T2D 的办法是给 CE 设一条参考线 $\mathcal L'_{\text{CE}}$，只在越线时施加惩罚：</p>
+      <div class="eq">$$\hat{\mathcal L}_{\text{CE}}\leftarrow(1-m)\,\hat{\mathcal L}_{\text{CE}}+m\,\mathcal L_{\text{CE}},\qquad g=\max\!\Big(\frac{\hat{\mathcal L}_{\text{CE}}-\mathcal L'_{\text{CE}}}{\hat{\mathcal L}_{\text{CE}}},\,0\Big)$$<span class="eq-note">平滑 CE 与违约量 $g$：平滑 CE 在参考线以下时 $g=0$，惩罚不起作用</span></div>
+      <div class="eq">$$\mathcal L=\mu_{\text{lat}}\,\mathcal L_{\text{lat}}+\mu_{\text{CE}}\,\mathcal L_{\text{CE}}+\lambda_1 g+\lambda_2 g^2$$<span class="eq-note">(4) 联合目标；模型权重、门参数一起做梯度下降</span></div>
+      <div class="eq">$$\lambda_i\leftarrow\mathrm{clip}\big(\lambda_i+\eta_i\,g,\;0,\;\lambda_i^{\max}\big),\quad i=1,2$$<span class="eq-note">惩罚权重做对偶上升：越线越久，$\lambda$ 越大；Llama-2 配置 $\eta_1=\eta_2=10^{-3}$，$\mathcal L'_{\text{CE}}=0.5$</span></div>
+      <p>这是增广拉格朗日法的标准形态：线性项 $\lambda_1 g$ 是拉格朗日乘子，二次项 $\lambda_2 g^2$ 是罚项，两者都随违约量自适应增长。「单边」指只惩罚 CE 超出参考线，不惩罚 CE 低于参考线——低于参考线时，优化器可以放心地继续剪。$g$ 用相对量而非绝对差，让同一个 $\mathcal L'_{\text{CE}}$ 在不同目标模型间更容易迁移。平滑 CE 则避免单个 batch 的噪声让 $\lambda$ 抖动。</p>
+      <div class="anim-frame" data-anim="3"><div class="anim-header"><span class="anim-title">动画 3 · 训练动态：剪枝、CE 越线、乘子介入、平台</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg3" viewBox="0 0 820 430" role="img" aria-label="训练过程中剪枝比例、平滑交叉熵与拉格朗日乘子随步数变化的示意曲线"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-accent)"></i>剪枝比例</span><span><i style="background:var(--a-blue)"></i>平滑 CE</span><span><i style="background:var(--a-red)"></i>参考线 L′</span><span><i style="background:var(--a-purple)"></i>乘子 λ</span></div></div>
+      <div class="callout callout-purple"><strong>参考线就是「多像才够」的旋钮。</strong>$\mathcal L'_{\text{CE}}$ 越大，允许草稿偏离目标越多，剪得越狠、$c$ 越小，但 $\mathbb E[a]$ 也越低。T2D 并没有把式 (1) 的加速比直接作为目标优化，而是用「延迟最小化 + CE 约束」去近似它。这个近似是否在所有目标上都接近最优，论文没有给出 $\mathcal L'_{\text{CE}}$ 的扫描。</div>
+    </section>
+
+    <section id="finalize">
+      <h2>⑤ 离散化与续训</h2>
+      <p>联合训练结束后，门还是连续分数。T2D 按门的分数选出保留的层、KV 组和 FFN 通道，按 $d^*=H^*d_{\text{head}}$ 实例化一个<strong>全新的稠密 Transformer</strong>，把对应权重从（训练过的）目标模型里拷过来。这一步之后得到的是真正变小的模型：矩阵是满的，标准 GEMM 核就能跑出延迟收益，不依赖任何稀疏算子。</p>
+      <p>连续门到离散决策会有一个落差：训练时一个门可能停在 0.7，离散化后要么全开要么全关。为此 T2D 在同一份对齐数据 $\mathcal D$ 上再续训 1 个 epoch，让权重适应新形状。整个流程是：</p>
+      <ol>
+        <li>采集目标硬件上的延迟数据，训练并冻结 MLP 预测器；</li>
+        <li>门 + 模型权重联合优化 2 个 epoch（式 4）；</li>
+        <li>离散化、实例化稠密草稿、拷贝权重；</li>
+        <li>在目标生成的回答上续训 1 个 epoch。</li>
+      </ol>
+      <p>Wide 基线也按同样的预算处理：联合优化 2 个 epoch，再续训 1 个 epoch，区别只在于它的目标架构是事先固定的。</p>
+    </section>
+
+    <section id="setup">
+      <h2>⑥ 实验设置</h2>
+      <table>
+        <thead><tr><th>项目</th><th>设置</th></tr></thead>
+        <tbody>
+          <tr><td>目标模型</td><td>Llama-2-7B-Chat、Vicuna-13B-v1.5、Qwen2.5-7B-Instruct、Qwen3-14B、Nemotron-OpenReasoning-32B（后两个是推理模型）</td></tr>
+          <tr><td>对齐数据</td><td>250K 个指令，来自 Dolly-15K、Alpaca、WizardLM、UltraChat、OpenOrca、WildChat、MetaMathQA、CodeFeedback、Bactrian-X、xP3；覆盖约 95% 词表，提问约 0.022B token</td></tr>
+          <tr><td>回答</td><td>由各目标模型生成，约 0.142–0.147B token，平均每条 567–588 token；留 5K 条做验证</td></tr>
+          <tr><td>评测</td><td>SPEED Bench：798 条查询，11 个领域</td></tr>
+          <tr><td>投机设置</td><td>链式草稿，$\gamma=4$，贪心验证，batch=1</td></tr>
+          <tr><td>基线</td><td>ShortGPT 层剪枝；Wide（固定 5 层架构的联合剪枝 + 蒸馏）。两者剪到同一个架构</td></tr>
+          <tr><td>硬件</td><td>NVIDIA DGX B200（192 GB），共 14 张</td></tr>
+          <tr><td>训练超参（Llama-2）</td><td>batch 32，序列长 4096；续训学习率 1e-4；层门、头门学习率 1e-3，FFN 门 3e-3</td></tr>
+        </tbody>
+      </table>
+      <p>所有草稿都只在约 0.17B token 的对齐数据上训练，和动辄几十 B token 预训练的小模型相比，数据量小两个数量级。超参表只给了 Llama-2 的配置，其余目标模型论文只说「相应调整」。</p>
+    </section>
+
+    <section id="results">
+      <h2>⑦ 主结果：五个目标模型全部领先</h2>
+      <p>Table 1 报告 SPEED Bench 上每个领域的加速比。下表是全领域整体加速比：</p>
+      <table>
+        <thead><tr><th>目标模型</th><th>ShortGPT</th><th>Wide</th><th>T2D</th><th>T2D 相对 Wide</th></tr></thead>
+        <tbody>
+          <tr><td>Llama-2-7B-Chat</td><td>1.45×</td><td>1.59×</td><td class="best">1.74×</td><td class="gain">+9.4%</td></tr>
+          <tr><td>Vicuna-13B-v1.5</td><td>1.74×</td><td>1.78×</td><td class="best">1.89×</td><td class="gain">+6.2%</td></tr>
+          <tr><td>Qwen2.5-7B-Instruct</td><td>1.24×</td><td>1.28×</td><td class="best">1.42×</td><td class="gain">+10.9%</td></tr>
+          <tr><td>Qwen3-14B</td><td>1.07×</td><td>1.10×</td><td class="best">1.20×</td><td class="gain">+9.1%</td></tr>
+          <tr><td>Nemotron-OR-32B</td><td>1.43×</td><td>1.72×</td><td class="best">1.79×</td><td class="gain">+4.1%</td></tr>
+        </tbody>
+      </table>
+      <p>T2D 在全部 5 × 11 = 55 个（目标，领域）组合里都是最高的；单个领域最好的是 Vicuna 的多语言，2.46×。领域之间差距明显，以 Llama-2 为例：</p>
+      <table>
+        <thead><tr><th>领域</th><th>Code</th><th>Hum.</th><th>Math</th><th>Multi.</th><th>QA</th><th>RAG</th><th>Reason</th><th>Role</th><th>STEM</th><th>Summ.</th><th>Writing</th></tr></thead>
+        <tbody>
+          <tr><td>T2D</td><td>1.98</td><td>1.59</td><td>1.92</td><td class="best">2.03</td><td>1.46</td><td>1.79</td><td>1.90</td><td class="dim">1.35</td><td>1.72</td><td>1.60</td><td>1.62</td></tr>
+        </tbody>
+      </table>
+      <p>代码、数学、多语言、推理这类输出模式固定、可预测性高的领域加速最多；角色扮演最少。角色扮演在 Qwen 系上更明显：Qwen2.5 的 ShortGPT 和 Wide 分别只有 0.88× 和 0.90×，Qwen3 是 0.87× 和 0.90×，<strong>都比不投机还慢</strong>；T2D 把它们拉到 1.02× 和 1.00×，刚好不亏。</p>
+      <div class="anim-frame" data-anim="4"><div class="anim-header"><span class="anim-title">动画 4 · Table 1：三种剪枝在五个目标上的整体加速比</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg4" viewBox="0 0 820 430" role="img" aria-label="ShortGPT、Wide、T2D 在五个目标模型上的整体加速比柱状图，以及 Qwen 角色扮演领域的对比"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-fg-muted)"></i>ShortGPT</span><span><i style="background:var(--a-blue)"></i>Wide</span><span><i style="background:var(--a-accent)"></i>T2D</span><span><i style="background:var(--a-red)"></i>低于 1×</span></div></div>
+      <div class="callout callout-blue"><strong>Qwen3 为什么只有 1.20×？</strong>论文没有专门分析。一种猜测是推理模型的长思维链输出熵更高、只剩 2 层的草稿更难猜中。但同为推理模型、64 层同样剪到 2 层的 Nemotron 却有 1.79×，说明「推理模型」或「剪得浅」都不足以解释，更可能和目标模型本身的输出分布、以及 14B 目标单步延迟较低（$c$ 难以压小）有关。这些都是本文的推测，论文未做消融。</div>
+    </section>
+
+    <section id="sweep">
+      <h2>⑧ 为什么要自动找架构</h2>
+      <p>为了说明「剪多少」本身就是一个需要搜的量，论文用 ShortGPT 把 Llama-2-7B-Chat 分别剪掉 65%、71%、77%、83%、89%、95%，每个都续训 1 个 epoch，再在 SPEED Bench 上测三条曲线：加速比、相对目标的延迟比 $c$、相对 $\gamma$ 的平均接受比 $\mathbb E[a]/\gamma$（Fig. 3）。</p>
+      <ul>
+        <li>剪得越多，$c$ 和接受比<strong>同时下降</strong>；</li>
+        <li>加速比先升后降，在 <strong>89%</strong> 处达到峰值：在这之前，延迟降得比接受率快；在这之后，接受率塌得比延迟快；</li>
+        <li>T2D 没有被告知这个数字，联合优化在 Llama-2 上自己停在了 <strong>88%</strong>。</li>
+      </ul>
+      <p>用式 (1) 很容易看出为什么会有一个内部最优点。剪枝比例 $p$ 增大时，分母 $\gamma c(p)+1$ 单调变小，分子 $\mathbb E[a](p)+1$ 也单调变小。早期 $c$ 很大，分母下降主导；到 $p$ 很高时 $c$ 已经接近一个由 embedding、LM head 和启动开销决定的下限，再剪也省不了多少时间，接受率却开始快速塌陷。最优点落在哪里，取决于这两条曲线在具体模型和硬件上的形状，没有通用的经验值。</p>
+      <div class="callout callout-green"><strong>这是 T2D 对 Wide 的根本优势。</strong>Wide 和 ShortGPT 用的是 Yan 2025 在 Llama-2-7B-Chat 上找到的最好的 5 层架构，然后原样套到所有目标上。对 Llama-2 这个架构接近最优，但对 64 层的 Nemotron 或 FFN 很宽的 Qwen2.5，最优的层数和宽度显然不同。T2D 对每个目标单独找，Table 7 里得到的是 2 到 4 层不等的架构。</div>
+    </section>
+
+    <section id="arch">
+      <h2>⑨ 训练动态与剪出来的架构</h2>
+      <p>论文 Fig. 4 画了 Llama-2 训练全程的剪枝比例、层/头/FFN 保留比例、延迟比和训练 CE，附录 E 的 Fig. 8 给出其余目标模型的同类曲线。读下来是四个阶段：</p>
+      <ol>
+        <li><strong>CE 先降：</strong>门是随机初始化的，开局 CE 很高；最初几步权重适应门，CE 下降；</li>
+        <li><strong>预热后开剪：</strong>约 10% 训练进度处预热结束，延迟项开始推着门关闭，CE 随之上升；</li>
+        <li><strong>乘子介入：</strong>平滑 CE 越过参考线后，$\lambda_1,\lambda_2$ 明显增大，CE 回落，剪枝速度与 CE 达到平衡；</li>
+        <li><strong>平台：</strong>剪枝比例在约 88% 处变平，此后主要是权重在给定形状下继续对齐。</li>
+      </ol>
+      <p>更有意思的是剪的方式。Llama-2 上几乎全部延迟收益来自删层，头和 FFN 只剪了很少：论文据此说「更宽的模型更适合投机解码」。原因在 batch=1 decode 的成本结构里：每一层都要经过一串串行的 kernel（norm、QKV、attention、O、FFN 上下投影），层数决定了这条依赖链的长度；而在显存带宽打满之前，加宽矩阵只是让每个 kernel 多读一些字节，增量没有删掉一整层多。更大的模型里头和 FFN 维度本身更大、占延迟的比例不可忽略，T2D 也会剪一些；Vicuna 的头数在训练中先降后又小幅回升。</p>
+      <table>
+        <thead><tr><th>目标</th><th>草稿参数</th><th>层数</th><th>隐藏维度</th><th>头数</th><th>FFN</th><th>估算剪枝比例*</th></tr></thead>
+        <tbody>
+          <tr><td>Llama-2-7B</td><td>0.86B</td><td class="gain">3 <span class="dim">(32)</span></td><td>4096</td><td>32</td><td>10752 <span class="dim">(11008)</span></td><td>≈87–88%</td></tr>
+          <tr><td>Vicuna-13B</td><td>1.21B</td><td class="gain">4 <span class="dim">(40)</span></td><td>4480 <span class="dim">(5120)</span></td><td>35 <span class="dim">(40)</span></td><td>11264 <span class="dim">(13824)</span></td><td>≈91%</td></tr>
+          <tr><td>Qwen2.5-7B</td><td>1.54B</td><td class="gain">2 <span class="dim">(28)</span></td><td>3584</td><td>28</td><td>18432 <span class="dim">(18944)</span></td><td>≈80%</td></tr>
+          <tr><td>Qwen3-14B</td><td>2.20B</td><td class="gain">2 <span class="dim">(40)</span></td><td>5120</td><td>40</td><td>16896 <span class="dim">(17408)</span></td><td>≈85%</td></tr>
+          <tr><td>Nemotron-32B</td><td>2.51B</td><td class="gain">2 <span class="dim">(64)</span></td><td>5120</td><td>40</td><td>27136 <span class="dim">(27648)</span></td><td>≈92%</td></tr>
+        </tbody>
+      </table>
+      <p class="note-inline">* 草稿列取自论文 Table 7；括号里的原始尺寸和最后一列剪枝比例是本文按公开模型配置估算的，不是论文给出的数。Nemotron 的 ≈92% 与论文摘要「最多剪掉 92%」一致。</p>
+      <div class="anim-frame" data-anim="5"><div class="anim-header"><span class="anim-title">动画 5 · Table 7：五个目标模型与剪出来的草稿</span><div class="anim-controls"><button class="btn-prev" type="button">‹ 上一步</button><button class="btn-play" type="button">▶ 播放</button><button class="btn-next" type="button">下一步 ›</button><button class="btn-reset" type="button">↺ 重置</button><label class="speed-wrap">速度<input type="range" class="speed" min="0.5" max="2" step="0.25" value="1" aria-label="播放速度"></label></div></div><div class="anim-stage-rail" role="tablist" aria-label="动画阶段"></div><div class="anim-canvas-wrap"><svg id="svg5" viewBox="0 0 820 430" role="img" aria-label="五个目标模型的层数与宽度，对比 T2D 剪出的 2 到 4 层草稿"></svg></div><div class="anim-progress"><div class="bar"></div></div><div class="anim-status"><div class="step-info"></div><div class="step-desc"></div></div><div class="anim-legend"><span><i style="background:var(--a-line)"></i>被剪掉的层</span><span><i style="background:var(--a-accent)"></i>保留的层</span><span><i style="background:var(--a-blue)"></i>宽度（隐藏维度）</span><span><i style="background:var(--a-amber)"></i>FFN 宽度</span></div></div>
+    </section>
+
+    <section id="more">
+      <h2>⑩ AdaSpec 与 Sheared-Llama 对照</h2>
+      <h3>换一种对齐方法：AdaSpec</h3>
+      <p>T2D 默认的对齐只是在目标生成回答上做 SFT。AdaSpec（Hu 2026）是专为投机解码设计的蒸馏方法。论文把三种 Llama-2 草稿都换成 AdaSpec 在 GSM8K 上蒸馏，再按 AdaSpec 的协议在 GSM8K 测试集上测：</p>
+      <table>
+        <thead><tr><th>草稿</th><th>ShortGPT</th><th>Wide</th><th>T2D</th></tr></thead>
+        <tbody><tr><td>GSM8K 加速比（AdaSpec 蒸馏）</td><td>1.43×</td><td>1.59×</td><td class="best">1.79×</td></tr></tbody>
+      </table>
+      <p>T2D 比 ShortGPT 高约 25%、比 Wide 高约 13%（论文写「最多高 20%」，以 Table 2 数字为准）。这说明 T2D 找到的架构收益和对齐方法是正交的：换更好的蒸馏，架构优势依然在。不过这组实验只有一个目标模型、一个数据集，也没有报告 T2D 用 SFT 在 GSM8K 上的数字，看不出 AdaSpec 本身带来多少增益。</p>
+      <h3>剪出来的 vs 独立预训练的</h3>
+      <p>另一个自然的对照是现成的小模型。Sheared-Llama-1.3B 是从 Llama-2-7B 剪出来、再用 50B token 继续预训练的通用小模型，数据量约是 T2D 的 340 倍。论文用同样的目标生成回答把它续训 1 个 epoch（记为 Sheared-Llama-1.3B-ft）：</p>
+      <table>
+        <thead><tr><th>草稿</th><th>参数</th><th>整体加速比</th></tr></thead>
+        <tbody>
+          <tr><td>Sheared-Llama-1.3B-ft</td><td>1.27B</td><td class="bad">1.18×</td></tr>
+          <tr><td>T2D</td><td>0.86B</td><td class="best">1.74×</td></tr>
+        </tbody>
+      </table>
+      <p>附录 F 的分领域结果里，Sheared-Llama-ft 在 QA（0.90×）和摘要（0.73×）上都比不投机还慢，最好的推理领域也只有 1.40×。论文的解释是 Sheared-Llama 为通用生成质量设计，没有优化延迟–对齐的权衡。从架构上看还有一层：Sheared-Llama-1.3B 是 24 层、隐藏维度 2048 的深而窄结构（这是公开配置，论文未列出），参数更多、层数是 T2D 的 8 倍，batch=1 下单步延迟反而更高。这正好印证了 ⑨ 的「宽而浅」结论。</p>
+    </section>
+
+    <section id="critique">
+      <h2>⑪ 局限与没回答的问题</h2>
+      <ul>
+        <li><strong>只测了最简单的投机形式。</strong>链式草稿、$\gamma=4$、贪心验证、batch=1。没有采样验证（rejection sampling），没有树形草稿，也没有和 EAGLE、Medusa 这类特征级草稿头对比。EAGLE 系通常能拿到 2.5–3× 以上，T2D 的 1.2–1.9× 在这个语境下并不算高。</li>
+        <li><strong>$\gamma$ 固定。</strong>剪出来的草稿越快，最优 $\gamma$ 通常越大；在 $\gamma=4$ 下比较，可能低估了极浅草稿的潜力，也可能让不同方法的排序在别的 $\gamma$ 下改变。</li>
+        <li><strong>基线偏弱。</strong>Wide 的 5 层架构是在 Llama-2 上找的，原样套到 64 层的 Nemotron 上并不公平；更合理的对照是对每个目标做一次 Fig. 3 那样的剪枝比例扫描，取最优点。</li>
+        <li><strong>延迟预测器绑定硬件。</strong>换 GPU、换推理框架、换精度都要重新测量、重训 MLP，最优架构也可能变。论文只在 B200 上测试。</li>
+        <li><strong>训练成本没报告。</strong>门 + 全模型权重联合训练 2 个 epoch，对 32B 目标意味着要在显存里放一个完整的可训练 32B 模型，这比训一个 1B 草稿贵得多。GPU 小时数论文没给。</li>
+        <li><strong>超参只给了 Llama-2。</strong>$\mathcal L'_{\text{CE}}$、$\mu_{\text{lat}}$ 这些直接决定剪到哪里的量，其余目标「需要相应调整」，没有给敏感度分析。</li>
+        <li><strong>Qwen3 的 1.20×</strong>。在最新的目标上收益最小，原因没有分析（⑦ 的推测仅供参考）。</li>
+      </ul>
+    </section>
+
+    <section id="summary">
+      <h2>⑫ 一句话总结</h2>
+      <div class="callout callout-accent">T2D 把「草稿模型长什么样」交给优化器：层、头、FFN 通道挂上可学习门，冻结的 MLP 把门的期望值变成可微的硬件延迟，单边增广拉格朗日只在交叉熵越线时出手；在 batch=1、$\gamma=4$ 的贪心投机下，它为五个目标模型剪出只剩 2–4 层、几乎满宽的草稿，整体加速 1.20–1.89×，全部胜过固定 5 层架构的剪枝基线。</div>
+      <p class="note-inline">论文：Shahriar Kabir Nahin、Xiao Ye、Muhao Chen、Ben Zhou、Anshuman Chhabra（USF、ASU、UC Davis），<em>T2D: Target-to-Draft Model Pruning &amp; Adaptation for Efficient Speculative Decoding</em>，arXiv:2610.34103，2026-10。加速比、架构、超参取自论文正文与表格；动画 1–3 的曲线和数值为示意，非论文测量；目标模型原始尺寸、剪枝比例估算、Sheared-Llama 的层数为本文补充，已在文中标注。</p>
+    </section>
+
+  </main>
+</div>
+<script>
+(function () {
+'use strict';
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, a) {
+  var n = document.createElementNS(NS, tag);
+  if (a) for (var k in a) if (a[k] != null) n.setAttribute(k, a[k]);
+  return n;
+}
+function C(name, fb) { return window.aC(name, fb); }
+var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function AnimEngine(svg, cfg) {
+  this.svg = svg;
+  this.steps = cfg.steps || [];
+  this.i = 0;
+  this.speed = 1;
+  this.playing = false;
+  this.timer = null;
+  this.frame = svg.closest('.anim-frame');
+  this._initDefs();
+  this.layer = el('g', { 'class': 'anim-layer' });
+  svg.appendChild(this.layer);
+  this._buildRail();
+  this.goTo(0);
+}
+
+AnimEngine.prototype._initDefs = function () {
+  var defs = el('defs');
+  var mk = [['arrA', C('--a-accent', '#FF7A00')], ['arrG', C('--a-green', '#4CC98A')],
+            ['arrR', C('--a-red', '#FF7268')], ['arrB', C('--a-blue', '#74B4FF')],
+            ['arrP', C('--a-purple', '#B79BFF')], ['arrM', C('--a-fg-muted', '#888')],
+            ['arrY', C('--a-amber', '#E9B449')], ['arrT', C('--a-teal', '#48CFC4')]];
+  var id = this.svg.id;
+  for (var j = 0; j < mk.length; j++) {
+    var m = el('marker', { id: id + '-' + mk[j][0], viewBox: '0 0 10 10', refX: '9', refY: '5',
+      markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse' });
+    m.appendChild(el('path', { d: 'M0,0 L10,5 L0,10 z', fill: mk[j][1] }));
+    defs.appendChild(m);
+  }
+  this.svg.appendChild(defs);
+};
+AnimEngine.prototype.mk = function (name) { return 'url(#' + this.svg.id + '-' + name + ')'; };
+AnimEngine.prototype.clear = function () { while (this.layer.firstChild) this.layer.removeChild(this.layer.firstChild); };
+
+AnimEngine.prototype.draw = function (node, o) {
+  o = o || {};
+  this.layer.appendChild(node);
+  if (o.reveal && !REDUCED) {
+    node.style.opacity = '0';
+    node.style.transition = 'opacity 320ms ease';
+    var d = o.delay || 0;
+    setTimeout(function () { node.style.opacity = o.opacity != null ? o.opacity : '1'; }, d / this.speed);
+  } else if (o.opacity != null) { node.style.opacity = o.opacity; }
+  if (o.cls) node.setAttribute('class', ((node.getAttribute('class') || '') + ' ' + o.cls).trim());
+  return node;
+};
+
+AnimEngine.prototype.t = function (x, y, str, o) {
+  o = o || {};
+  var n = el('text', { x: x, y: y, 'text-anchor': o.anchor || 'middle',
+    'font-size': o.size || 12, 'font-weight': o.weight || 400,
+    'font-family': o.mono ? '"JetBrains Mono", Consolas, monospace' : 'inherit',
+    fill: o.fill || C('--a-fg', '#ccc') });
+  n.textContent = str;
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.rect = function (x, y, w, h, label, fill, stroke, o) {
+  o = o || {};
+  var g = el('g');
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: o.rx != null ? o.rx : 6,
+    fill: fill || 'none', stroke: stroke || C('--a-line', '#444'),
+    'stroke-width': o.sw || 1.5, 'stroke-dasharray': o.dash || null }));
+  if (label) {
+    var lines = String(label).split('|');
+    var y0 = y + h / 2 - (lines.length - 1) * 8 + 4;
+    for (var j = 0; j < lines.length; j++) {
+      var tn = el('text', { x: x + w / 2, y: y0 + j * 16, 'text-anchor': 'middle',
+        'font-size': o.size || 12, 'font-weight': o.weight || 500,
+        fill: o.labelFill || stroke || C('--a-fg', '#ccc') });
+      tn.textContent = lines[j];
+      g.appendChild(tn);
+    }
+  }
+  return this.draw(g, o);
+};
+
+AnimEngine.prototype.line = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  return this.draw(el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, 'stroke-linecap': 'round' }), o);
+};
+AnimEngine.prototype.arrow = function (x1, y1, x2, y2, o) {
+  o = o || {};
+  var n = el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+    stroke: o.stroke || C('--a-fg-muted', '#888'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': this.mk(o.marker || 'arrM') });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.circle = function (cx, cy, r, o) {
+  o = o || {};
+  return this.draw(el('circle', { cx: cx, cy: cy, r: r, fill: o.fill || 'none',
+    stroke: o.stroke || 'none', 'stroke-width': o.sw || 1.5 }), o);
+};
+
+AnimEngine.prototype.ellipse = function (cx, cy, rx, ry, rot, o) {
+  o = o || {};
+  var n = el('ellipse', { cx: cx, cy: cy, rx: rx, ry: ry, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 1.5,
+    'stroke-dasharray': o.dash || null, transform: 'rotate(' + rot + ' ' + cx + ' ' + cy + ')' });
+  return this.draw(n, o);
+};
+
+AnimEngine.prototype.path = function (d, o) {
+  o = o || {};
+  return this.draw(el('path', { d: d, fill: o.fill || 'none',
+    stroke: o.stroke || C('--a-line', '#444'), 'stroke-width': o.sw || 2,
+    'stroke-dasharray': o.dash || null, 'marker-end': o.marker ? this.mk(o.marker) : null }), o);
+};
+
+/* 横向条形：用于实验数据对比。value 已按 max 归一到 w 像素。 */
+AnimEngine.prototype.bar = function (x, y, w, h, label, val, max, color, o) {
+  o = o || {};
+  var len = Math.max(2, w * Math.min(1, val / max));
+  var g = el('g');
+  var lt = el('text', { x: x - 8, y: y + h / 2 + 4, 'text-anchor': 'end', 'font-size': 11,
+    fill: C('--a-fg-muted', '#888') });
+  lt.textContent = label;
+  g.appendChild(lt);
+  g.appendChild(el('rect', { x: x, y: y, width: w, height: h, rx: 3, fill: C('--a-code-bg', '#222') }));
+  var b = el('rect', { x: x, y: y, width: len, height: h, rx: 3, fill: color });
+  g.appendChild(b);
+  var vt = el('text', { x: x + len + 8, y: y + h / 2 + 4, 'text-anchor': 'start', 'font-size': 11,
+    'font-weight': 600, fill: color });
+  vt.textContent = o.fmt ? o.fmt(val) : val;
+  g.appendChild(vt);
+  if (!REDUCED) {
+    b.setAttribute('width', 0);
+    vt.style.opacity = '0';
+    var sp = this.speed, d = o.delay || 0;
+    setTimeout(function () {
+      b.style.transition = 'width 520ms cubic-bezier(.2,.8,.3,1)';
+      b.setAttribute('width', len);
+      vt.style.transition = 'opacity 300ms ease 260ms';
+      vt.style.opacity = '1';
+    }, d / sp + 30);
+  }
+  return this.draw(g, { cls: o.cls });
+};
+AnimEngine.prototype._buildRail = function () {
+  var rail = this.frame.querySelector('.anim-stage-rail');
+  if (!rail) return;
+  rail.textContent = '';
+  for (var j = 0; j < this.steps.length; j++) {
+    var b = document.createElement('button');
+    b.className = 'stage-chip';
+    b.type = 'button';
+    b.dataset.idx = j;
+    b.setAttribute('role', 'tab');
+    b.textContent = (j + 1) + '. ' + (this.steps[j].chip || this.steps[j].title);
+    rail.appendChild(b);
+  }
+};
+
+AnimEngine.prototype.goTo = function (idx) {
+  if (idx < 0 || idx >= this.steps.length) return;
+  this.i = idx;
+  this.clear();
+  var step = this.steps[idx];
+  step.render(this);
+  this._updateUI();
+};
+
+AnimEngine.prototype._updateUI = function () {
+  var f = this.frame, step = this.steps[this.i], n = this.steps.length;
+  var info = f.querySelector('.step-info'), desc = f.querySelector('.step-desc'),
+      bar = f.querySelector('.anim-progress .bar');
+  if (info) info.textContent = '步骤 ' + (this.i + 1) + ' / ' + n + ' · ' + step.title;
+  if (desc) desc.innerHTML = step.desc || '';
+  if (bar) bar.style.width = ((this.i + 1) / n * 100) + '%';
+  var chips = f.querySelectorAll('.stage-chip');
+  for (var j = 0; j < chips.length; j++) chips[j].setAttribute('aria-current', j === this.i ? 'true' : 'false');
+  var prev = f.querySelector('.btn-prev'), next = f.querySelector('.btn-next');
+  if (prev) prev.disabled = this.i === 0;
+  if (next) next.disabled = this.i === n - 1;
+};
+
+AnimEngine.prototype.next = function () { if (this.i < this.steps.length - 1) this.goTo(this.i + 1); };
+AnimEngine.prototype.prev = function () { if (this.i > 0) this.goTo(this.i - 1); };
+AnimEngine.prototype.reset = function () { this.pause(); this.goTo(0); };
+AnimEngine.prototype.setSpeed = function (v) { this.speed = v; };
+
+AnimEngine.prototype.play = function () {
+  var self = this;
+  if (this.i >= this.steps.length - 1) this.goTo(0);
+  this.playing = true;
+  this._setPlayBtn();
+  var tick = function () {
+    if (!self.playing) return;
+    var dur = (self.steps[self.i].duration || 2600) / self.speed;
+    self.timer = setTimeout(function () {
+      if (!self.playing) return;
+      if (self.i >= self.steps.length - 1) { self.pause(); return; }
+      self.goTo(self.i + 1);
+      tick();
+    }, dur);
+  };
+  tick();
+};
+
+AnimEngine.prototype.pause = function () {
+  this.playing = false;
+  if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+  this._setPlayBtn();
+};
+AnimEngine.prototype.toggle = function () { this.playing ? this.pause() : this.play(); };
+AnimEngine.prototype._setPlayBtn = function () {
+  var b = this.frame.querySelector('.btn-play');
+  if (b) b.textContent = this.playing ? '❙❙ 暂停' : '▶ 播放';
+};
+
+/* ---------- 场景 1：草稿既要快又要像 ---------- */
+function scene1() {
+  var X0 = 170, U = 140, G = 4;
+  var rows = [
+    { name: '不投机', sub: '只跑目标', base: true },
+    { name: '草稿 A', sub: '像但慢', c: 0.40, a: 3, Ea: 3.2 },
+    { name: '草稿 B', sub: '快但不像', c: 0.03, a: 1, Ea: 0.8 },
+    { name: '草稿 C', sub: '又快又像', c: 0.08, a: 3, Ea: 2.6 }
+  ];
+  function S(r) { return r.base ? 1 : (r.Ea + 1) / (G * r.c + 1); }
+  function drawRow(e, r, y, hot) {
+    var blue = C('--a-blue', '#74B4FF'), purple = C('--a-purple', '#B79BFF'), green = C('--a-green', '#4CC98A');
+    var red = C('--a-red', '#FF7268'), muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), ln = C('--a-line', '#444');
+    e.t(24, y + 14, r.name, { anchor: 'start', size: 14, weight: 700, fill: strong });
+    e.t(24, y + 32, r.sub, { anchor: 'start', size: 11, fill: muted });
+    var x = X0;
+    if (!r.base) {
+      var w = Math.max(3, r.c * U);
+      for (var i = 0; i < G; i++) {
+        e.rect(x, y, w - 1, 22, null, C('--a-blue-bg', '#1c2a40'), blue, { rx: 2, sw: 1 });
+        x += w;
+      }
+    }
+    e.rect(x, y, U - 2, 22, '目标前向', C('--a-purple-bg', '#2a2140'), purple, { rx: 3, sw: 1, size: 11 });
+    var endX = x + U;
+    var cx = X0 + 8, cy = y + 40;
+    if (r.base) {
+      e.circle(cx, cy, 6, { fill: purple, stroke: 'none' });
+    } else {
+      for (var j = 0; j < G; j++) {
+        var f = j < r.a ? green : (j === r.a ? red : ln);
+        e.circle(cx + j * 17, cy, 6, { fill: f, stroke: 'none' });
+      }
+      e.circle(cx + G * 17 + 6, cy, 6, { fill: purple, stroke: 'none' });
+      e.t(cx + G * 17 + 18, cy + 4, '本轮产出 ' + (r.a + 1) + ' 个', { anchor: 'start', size: 10, fill: muted });
+    }
+    e.line(endX + 4, y + 11, 560, y + 11, { stroke: ln, sw: 1, dash: '2 4' });
+    var info = r.base ? 'c = 1（参照）' : 'c = ' + r.c.toFixed(2) + '   E[a] = ' + r.Ea.toFixed(1);
+    e.t(572, y + 10, info, { anchor: 'start', size: 11, fill: muted, mono: true });
+    e.t(572, y + 32, 'S = ' + S(r).toFixed(2) + '×', { anchor: 'start', size: 15, weight: 700, mono: true, fill: hot ? C('--a-accent', '#F08A4B') : strong, cls: hot ? 'hot' : null });
+  }
+  function shell(e, k) {
+    var muted = C('--a-fg-muted', '#888'), amber = C('--a-amber', '#E9B449');
+    e.t(410, 30, '示意参数，非论文测量；γ = 4，贪心验证', { size: 12, fill: amber });
+    e.t(X0, 60, '一轮投机的时间线（目标单步 = 1 个单位）', { anchor: 'start', size: 11, fill: muted });
+    e.t(572, 60, 'S = (E[a]+1) / (γc+1)', { anchor: 'start', size: 11, fill: muted, mono: true });
+    for (var i = 0; i <= Math.min(k, 3); i++) drawRow(e, rows[i], 78 + i * 76, k === 4 && i === 3);
+    if (k >= 4) {
+      e.t(410, 405, '加速比同时取决于 c 和 E[a]：只压一个量，另一个会把收益吃掉', { size: 13, weight: 700, fill: C('--a-accent', '#F08A4B') });
+    }
+  }
+  var steps = [
+    ['不投机', '基线：每个 token 跑一次目标', '自回归 decode 时，目标模型每前向一次只产出 1 个 token。投机解码的一切收益都相对这条基线计算。'],
+    ['像但慢', '草稿 A：接受率高，但草稿本身太贵', '草稿单步耗时是目标的 40%（c = 0.40），4 个草稿 token 的时间已经超过一次目标前向。即使平均接受 3.2 个，S 也只有约 1.6×。'],
+    ['快但不像', '草稿 B：几乎不花时间，却总被拒', '草稿极浅（c = 0.03），但第 2 个 token 就被拒，平均只接受 0.8 个。大部分验证算力浪费掉，S 同样约 1.6×。'],
+    ['平衡', '草稿 C：快且像', 'c = 0.08、E[a] = 2.6，分母只比 1 大一点，分子接近 4：S ≈ 2.7×。T2D 的目标就是自动找到这样的草稿。'],
+    ['结论', '两个量要一起优化', '式 (1) 里 c 和 E[a] 互相牵制：剪得越狠 c 越小，E[a] 也越低。最优草稿落在中间某处，位置随目标模型和硬件而变。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 2：从门到延迟 ---------- */
+function scene2() {
+  var NL = 8, NH = 4, NI = 8, Q = 2;
+  var zL = [0.95, 0.2, 0.9, 0.1, 0.15, 0.85, 0.1, 0.9];
+  var zH = [1, 0.9, 0.95, 0.3];
+  function zI(l, i) { var v = 0.55 + 0.5 * Math.sin(i * 1.7 + l * 0.9); return Math.max(0.05, Math.min(1, v)); }
+  var Lbar = 0, Hbar = 0, Inum = 0;
+  for (var l = 0; l < NL; l++) { Lbar += zL[l]; var s = 0; for (var i = 0; i < NI; i++) s += zI(l, i); Inum += zL[l] * s; }
+  for (var h = 0; h < NH; h++) Hbar += Q * zH[h];
+  var Ibar = Inum / Lbar;
+  var cLat = 0.05 + 0.8 * (Lbar / NL) * (0.5 + 0.25 * Hbar / (Q * NH) + 0.25 * Ibar / NI);
+  function shell(e, k) {
+    var blue = C('--a-blue', '#74B4FF'), teal = C('--a-teal', '#3CC6C0'), amber = C('--a-amber', '#E9B449');
+    var purple = C('--a-purple', '#B79BFF'), red = C('--a-red', '#FF7268'), muted = C('--a-fg-muted', '#888');
+    var strong = C('--a-fg-strong', '#eee'), accent = C('--a-accent', '#F08A4B');
+    e.t(410, 30, '示意参数，非论文测量；8 层 × 4 个 KV 组 × 8 个 FFN 通道的玩具模型', { size: 12, fill: amber });
+    for (var l = 0; l < NL; l++) {
+      var y = 52 + l * 44, op = k >= 1 ? 0.25 + 0.75 * zL[l] : 1;
+      e.rect(30, y, 270, 34, null, C('--a-blue-bg', '#1c2a40'), blue, { rx: 4, sw: 1, opacity: op });
+      e.t(44, y + 21, 'ℓ' + (l + 1), { anchor: 'start', size: 11, fill: strong, mono: true });
+      if (k >= 1) e.t(70, y + 21, zL[l].toFixed(2), { anchor: 'start', size: 11, mono: true, weight: 700, fill: zL[l] > 0.5 ? blue : muted });
+      if (k >= 2) {
+        for (var h = 0; h < NH; h++) e.circle(126 + h * 15, y + 17, 5, { fill: teal, stroke: 'none', cls: null, sw: 0, opacity: op * (0.2 + 0.8 * zH[h]) });
+        for (var i = 0; i < NI; i++) {
+          var v = zI(l, i);
+          e.rect(196 + i * 12, y + 29 - 22 * v, 8, 22 * v, null, amber, 'none', { sw: 0, opacity: op });
+        }
+      }
+    }
+    if (k >= 2) {
+      e.t(150, 418, '头门 z̄ᴴ = ' + zH.map(function (x) { return x.toFixed(2); }).join(' / '), { size: 10, fill: teal, mono: true });
+    }
+    if (k >= 3) {
+      var bx = 360, items = [
+        ['L̄ = Σ z̄ᴸ', Lbar.toFixed(2) + ' / ' + NL, blue],
+        ['H̄ = Q·Σ z̄ᴴ', Hbar.toFixed(2) + ' / ' + Q * NH, teal],
+        ['Ī = 加权平均', Ibar.toFixed(2) + ' / ' + NI, amber]
+      ];
+      for (var t = 0; t < 3; t++) {
+        var yy = 110 + t * 86;
+        e.rect(bx, yy, 150, 58, null, C('--a-surface', '#1b1b1b'), items[t][2], { rx: 6, sw: 1.5 });
+        e.t(bx + 75, yy + 22, items[t][0], { size: 12, fill: items[t][2], mono: true });
+        e.t(bx + 75, yy + 44, items[t][1], { size: 15, weight: 700, fill: strong, mono: true, cls: k === 3 ? 'hot' : null });
+        e.arrow(304, 70 + t * 130, bx - 4, yy + 29, { stroke: items[t][2], sw: 1.2, dash: '4 3' });
+      }
+    }
+    if (k >= 4) {
+      e.rect(560, 170, 110, 110, '冻结 MLP|2×256, SiLU', C('--a-purple-bg', '#2a2140'), purple, { rx: 8, sw: 2, size: 12 });
+      for (var t2 = 0; t2 < 3; t2++) e.arrow(512, 139 + t2 * 86, 556, 200 + t2 * 25, { marker: 'arrP', stroke: purple, sw: 1.2 });
+      e.arrow(672, 225, 700, 225, { marker: 'arrA', stroke: accent, sw: 2 });
+      e.t(760, 200, 'T̄ = exp(MLP)', { size: 11, fill: muted, mono: true });
+      e.t(760, 232, 'c = T̄/T_T', { size: 13, fill: strong, mono: true });
+      e.t(760, 258, '≈ ' + cLat.toFixed(2), { size: 18, weight: 700, fill: accent, mono: true, cls: 'hot' });
+    }
+    if (k >= 5) {
+      e.path('M 615 290 C 615 380, 330 400, 304 330', { stroke: red, sw: 2, dash: '6 4', marker: 'arrR' });
+      e.t(470, 398, '∂c/∂z̄：延迟梯度传回每一个门', { size: 12, weight: 700, fill: red });
+    }
+  }
+  var steps = [
+    ['结构', '目标模型的三种可剪单元', '每层是一个层门的作用范围；层内有若干 KV 组（GQA）和 FFN 中间通道。T2D 给它们分别挂上 Hard-Concrete 门。'],
+    ['层门', '层门：一层留不留', '每层一个层门，期望值 z̄ᴸ 接近 0 的层在训练中逐渐被关掉。方块透明度表示该层的期望打开概率。'],
+    ['头门 / 通道门', '头门作用在 KV 组，通道门作用在 FFN', '剪一个 KV 组就同时剪掉 Q 个 query 头和一对 KV 头，剪完仍是合法 GQA；每层每个 FFN 通道各一个门，柱高是期望值。'],
+    ['软尺寸', '汇总成三个「软」架构尺寸', '式 (3)：L̄ 是层门之和，H̄ 是 Q 乘头门之和，Ī 是按层门加权的平均 FFN 宽度。它们是门参数的光滑函数。'],
+    ['延迟预测', '冻结的 MLP 给出预测延迟', '预测器在目标 GPU 上用实测 decode 延迟训练，输入 (L, H, I)，输出 log 延迟。T̄ 除以目标单步延迟 T_T 就是式 (1) 里的 c。'],
+    ['可微', '延迟对门可微', '因为输入是期望值、MLP 冻结，c 对每一个门参数都有梯度。延迟损失 μ_lat·c 推着门关闭，CE 约束拉着它们留下。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 3：训练动态 ---------- */
+function scene3() {
+  var X0 = 70, X1 = 600, YT = 70, YB = 360, Lp = 0.5;
+  function x(t) { return X0 + t * (X1 - X0); }
+  function yP(v) { return YB - v * (YB - YT); }
+  function yC(v) { return YB - v / 1.4 * (YB - YT); }
+  function prune(t) {
+    if (t < 0.1) return 0;
+    var u = (t - 0.1) / 0.5; if (u > 1) u = 1;
+    return 0.88 * (1 - Math.pow(1 - u, 2.2));
+  }
+  function ce(t) {
+    var base = 1.1 * Math.exp(-t / 0.03) + 0.28;
+    var bump = t < 0.1 ? 0 : (t < 0.3 ? 0.42 * Math.exp(-Math.pow((t - 0.3) / 0.11, 2)) : 0.17 + 0.25 * Math.exp(-Math.pow((t - 0.3) / 0.08, 2)));
+    return base + bump;
+  }
+  function lam(t) {
+    var acc = 0;
+    for (var s = 0; s < t; s += 0.005) acc += Math.max(0, ce(s) - Lp) / ce(s);
+    return Math.min(1, acc / 6);
+  }
+  function curve(f, ymap, t1) {
+    var d = '';
+    for (var t = 0; t <= t1 + 1e-9; t += 0.005) d += (t === 0 ? 'M' : ' L') + x(t).toFixed(1) + ',' + ymap(f(t)).toFixed(1);
+    return d;
+  }
+  var ends = [0.1, 0.1, 0.24, 0.42, 0.62, 1];
+  function shell(e, k) {
+    var accent = C('--a-accent', '#F08A4B'), blue = C('--a-blue', '#74B4FF'), red = C('--a-red', '#FF7268');
+    var purple = C('--a-purple', '#B79BFF'), muted = C('--a-fg-muted', '#888'), ln = C('--a-line', '#444'), amber = C('--a-amber', '#E9B449');
+    var t1 = ends[k];
+    e.t(410, 30, '示意曲线，形状参照论文 Fig. 4（Llama-2），非论文测量', { size: 12, fill: amber });
+    e.line(X0, YB, X1, YB, { stroke: ln, sw: 1 });
+    e.line(X0, YT, X0, YB, { stroke: ln, sw: 1 });
+    e.t(X1, YB + 38, '训练进度 →', { anchor: 'end', size: 11, fill: muted });
+    e.t(X0 - 8, YT - 10, '比例 / CE', { anchor: 'start', size: 11, fill: muted });
+    for (var g = 0; g <= 1.001; g += 0.25) e.t(x(g), YB + 22, (g * 100).toFixed(0) + '%', { size: 10, fill: muted, mono: true });
+    e.rect(x(0), YT, x(0.1) - x(0), YB - YT, null, C('--a-surface', '#1b1b1b'), 'none', { rx: 0, sw: 0, opacity: 0.8 });
+    e.t(x(0.05), YT + 16, '预热', { size: 11, fill: muted });
+    e.line(X0, yC(Lp), X1, yC(Lp), { stroke: red, sw: 1.5, dash: '6 4' });
+    e.t(X1 + 6, yC(Lp) + 4, 'L′ = 0.5', { anchor: 'start', size: 11, fill: red, mono: true });
+    e.path(curve(ce, yC, t1), { stroke: blue, sw: 2.5 });
+    if (k >= 1) e.path(curve(prune, yP, t1), { stroke: accent, sw: 2.5 });
+    if (k >= 3) e.path(curve(lam, function (v) { return YB - v * 0.45 * (YB - YT); }, t1), { stroke: purple, sw: 2, dash: '5 3' });
+    if (k >= 2 && k <= 3) {
+      var lo = null, hi = null;
+      for (var t = 0.1; t <= t1; t += 0.005) if (ce(t) > Lp) { if (lo === null) lo = t; hi = t; }
+      if (lo !== null) {
+        e.rect(x(lo), yC(1.0), x(hi) - x(lo), yC(Lp) - yC(1.0), null, C('--a-red-bg', '#3a1a1a'), red, { rx: 2, sw: 1, dash: '3 3', opacity: 0.55, cls: 'hot' });
+        e.t((x(lo) + x(hi)) / 2, yC(1.0) - 6, 'g > 0', { size: 11, weight: 700, fill: red, mono: true });
+      }
+    }
+    if (k >= 5) {
+      e.line(x(0.62), yP(0.88), X1, yP(0.88), { stroke: accent, sw: 1, dash: '2 3' });
+      e.t(X1 + 6, yP(0.88) + 4, '88%', { anchor: 'start', size: 13, weight: 700, fill: accent, mono: true, cls: 'hot' });
+    }
+    var tn = Math.min(t1, 1);
+    var RX = 665;
+    e.t(RX, 120, '剪枝比例', { anchor: 'start', size: 11, fill: accent });
+    e.t(RX, 142, (prune(tn) * 100).toFixed(0) + '%', { anchor: 'start', size: 18, weight: 700, mono: true, fill: accent });
+    e.t(RX, 180, '平滑 CE', { anchor: 'start', size: 11, fill: blue });
+    e.t(RX, 202, ce(tn).toFixed(2), { anchor: 'start', size: 18, weight: 700, mono: true, fill: blue });
+    e.t(RX, 240, 'g', { anchor: 'start', size: 11, fill: red });
+    e.t(RX, 262, Math.max(0, (ce(tn) - Lp) / ce(tn)).toFixed(2), { anchor: 'start', size: 18, weight: 700, mono: true, fill: red });
+    if (k >= 3) {
+      e.t(RX, 300, '乘子 λ（相对）', { anchor: 'start', size: 11, fill: purple });
+      e.t(RX, 322, lam(tn).toFixed(2), { anchor: 'start', size: 18, weight: 700, mono: true, fill: purple });
+    }
+  }
+  var steps = [
+    ['CE 先降', '开局：门随机初始化，CE 很高', '门是随机初始化的，相当于随机遮掉一部分结构，CE 一开始很高；最初几步权重适应门，CE 迅速下降到参考线以下。'],
+    ['预热结束', '约 10% 处延迟项开始推门', '预热结束后 μ_lat·c 主导梯度，门开始成批关闭，剪枝比例快速上升。'],
+    ['越线', '剪得太快，CE 越过参考线', '有用的结构被遮掉，平滑 CE 升到 L′ 之上，违约量 g 变成正数。此时只有线性和二次罚项开始起作用。'],
+    ['乘子介入', 'λ 做对偶上升，把 CE 拉回来', 'g > 0 的每一步 λ 都在增大，CE 的权重随之变大；剪枝放慢，CE 回落到参考线附近。g 回到 0 后 λ 不再增长，但也不减小。'],
+    ['平衡', '剪枝速度与 CE 达到平衡', 'CE 贴着参考线下方，剪枝继续但越来越慢：每多剪一点都要付出接近越线的代价。'],
+    ['平台', '停在约 88%', '剪枝比例在约 88% 处变平，此后主要是权重在给定形状下继续对齐。论文 Fig. 3 的手工扫描峰值在 89%，T2D 自己找到了附近。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 4：Table 1 整体加速比 ---------- */
+function scene4() {
+  var T = [
+    ['Llama-2-7B', 1.45, 1.59, 1.74],
+    ['Vicuna-13B', 1.74, 1.78, 1.89],
+    ['Qwen2.5-7B', 1.24, 1.28, 1.42],
+    ['Qwen3-14B', 1.07, 1.10, 1.20],
+    ['Nemotron-32B', 1.43, 1.72, 1.79]
+  ];
+  var R = [['Qwen2.5 角色扮演', 0.88, 0.90, 1.02], ['Qwen3 角色扮演', 0.87, 0.90, 1.00]];
+  var X0 = 180, W = 480, MAX = 2.0;
+  function xv(v) { return X0 + v / MAX * W; }
+  function shell(e, k) {
+    var muted = C('--a-fg-muted', '#888'), blue = C('--a-blue', '#74B4FF'), accent = C('--a-accent', '#F08A4B');
+    var red = C('--a-red', '#FF7268'), strong = C('--a-fg-strong', '#eee'), ln = C('--a-line', '#444');
+    var cols = [muted, blue, accent], names = ['ShortGPT', 'Wide', 'T2D'];
+    var rows = k >= 4 ? R : T, top = k >= 4 ? 110 : 60, gap = k >= 4 ? 120 : 70;
+    e.t(410, 30, k >= 4 ? 'Table 1：Qwen 系角色扮演领域' : 'Table 1：SPEED Bench 全领域整体加速比', { size: 13, weight: 700, fill: strong });
+    for (var g = 0; g <= MAX + 1e-9; g += 0.5) {
+      e.line(xv(g), top - 12, xv(g), top + rows.length * gap - 14, { stroke: ln, sw: 1, dash: g === 1 ? null : '2 4' });
+      e.t(xv(g), top + rows.length * gap, g.toFixed(1) + '×', { size: 10, fill: g === 1 ? strong : muted, mono: true });
+    }
+    var show = k >= 4 ? 3 : (k === 0 ? 1 : (k === 1 ? 2 : 3));
+    for (var r = 0; r < rows.length; r++) {
+      var y = top + r * gap, hot = (k === 3 && r === 3);
+      e.t(X0 - 12, y + 22, rows[r][0], { anchor: 'end', size: 12, weight: 700, fill: hot ? accent : strong });
+      for (var m = 0; m < show; m++) {
+        var v = rows[r][m + 1], bh = k >= 4 ? 22 : 14, by = y + m * (bh + 3);
+        var col = v < 1 ? red : cols[m];
+        e.rect(X0, by, xv(v) - X0, bh, null, col, 'none', { rx: 2, sw: 0, reveal: true, delay: r * 90 + m * 40, opacity: m === 2 ? 1 : 0.85 });
+        e.t(xv(v) + 6, by + bh - 3, v.toFixed(2) + '×' + (k >= 4 ? '  ' + names[m] : ''), { anchor: 'start', size: 11, mono: true, weight: m === 2 ? 700 : 400, fill: col });
+      }
+      if (k >= 2 && k < 4) {
+        var gain = (rows[r][3] / rows[r][2] - 1) * 100;
+        e.t(760, y + 22, '+' + gain.toFixed(1) + '%', { size: 12, weight: 700, mono: true, fill: C('--a-green', '#4CC98A'), cls: hot ? 'hot' : null });
+      }
+    }
+    if (k >= 2 && k < 4) e.t(760, top - 18, 'T2D 相对 Wide', { size: 10, fill: muted });
+    if (k >= 4) {
+      e.t(xv(1) + 4, top - 22, '1× = 不投机', { anchor: 'start', size: 11, fill: strong });
+      e.t(410, 400, '固定 5 层的基线在这里反而拖慢生成；T2D 也只是刚好不亏', { size: 12, weight: 700, fill: red });
+    }
+  }
+  var steps = [
+    ['ShortGPT', 'ShortGPT：按层重要性删到 5 层', '只动深度一个维度。Qwen3-14B 上只有 1.07×，几乎没有收益。'],
+    ['Wide', 'Wide：同一个 5 层架构，联合剪枝 + 蒸馏', '训练预算与 T2D 相同（2 + 1 个 epoch），只是架构事先固定。在 Nemotron 上比 ShortGPT 高出最多（1.43 → 1.72）。'],
+    ['T2D', 'T2D：每个目标单独找架构', '五个目标全部最高，相对 Wide 提升 4.1%–10.9%；最多的是 Qwen2.5，最少的是 Nemotron，那里 Wide 已经接近最优。'],
+    ['Qwen3', 'Qwen3-14B 是最难的目标', '三种方法都低于 1.25×。论文没有分析原因，⑦ 的提示框给了几种推测。'],
+    ['角色扮演', '角色扮演：基线比不投机还慢', 'Qwen2.5 和 Qwen3 上 ShortGPT / Wide 都低于 1×（红色）。草稿猜不中时，草稿前向的时间全部白花。T2D 把它们拉回到 1.02× 和 1.00×。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+/* ---------- 场景 5：Table 7 剪出来的架构 ---------- */
+function scene5() {
+  var M = [
+    { n: 'Llama-2-7B', L: 32, l: 3, D: 4096, d: 4096, F: 11008, f: 10752, p: '0.86B' },
+    { n: 'Vicuna-13B', L: 40, l: 4, D: 5120, d: 4480, F: 13824, f: 11264, p: '1.21B' },
+    { n: 'Qwen2.5-7B', L: 28, l: 2, D: 3584, d: 3584, F: 18944, f: 18432, p: '1.54B' },
+    { n: 'Qwen3-14B', L: 40, l: 2, D: 5120, d: 5120, F: 17408, f: 16896, p: '2.20B' },
+    { n: 'Nemotron-32B', L: 64, l: 2, D: 5120, d: 5120, F: 27648, f: 27136, p: '2.51B' }
+  ];
+  var CW = 150, X0 = 35, YT = 70, YB = 330;
+  function keep(m, i) {
+    if (m.l >= 3) return i === 0 || i === m.L - 1 || (m.l === 4 && i === 1) || i === Math.floor(m.L / 2);
+    return i === 0 || i === m.L - 1;
+  }
+  function shell(e, k) {
+    var accent = C('--a-accent', '#F08A4B'), blue = C('--a-blue', '#74B4FF'), amber = C('--a-amber', '#E9B449');
+    var muted = C('--a-fg-muted', '#888'), strong = C('--a-fg-strong', '#eee'), ln = C('--a-line', '#444');
+    e.t(410, 30, '架构取自论文 Table 7；目标原始尺寸按公开配置补充；保留哪几层为示意', { size: 12, fill: amber });
+    for (var c = 0; c < M.length; c++) {
+      var m = M[c], cx = X0 + c * CW + CW / 2, hot = (k === 3 && c === 4);
+      var w = m.D / 5120 * 110, h = (YB - YT) / m.L;
+      e.t(cx, YT - 14, m.n, { size: 12, weight: 700, fill: hot ? accent : strong });
+      for (var i = 0; i < m.L; i++) {
+        var y = YB - (i + 1) * h, kp = keep(m, i);
+        var fill = k >= 1 ? (kp ? accent : C('--a-line', '#444')) : blue;
+        var op = k >= 1 ? (kp ? 1 : 0.35) : 0.75;
+        e.rect(cx - w / 2, y + 0.5, w, Math.max(1, h - 1.2), null, fill, 'none', { rx: 1, sw: 0, opacity: op });
+      }
+      e.t(cx, YB + 18, (k >= 1 ? m.l + ' / ' : '') + m.L + ' 层', { size: 12, mono: true, weight: 700, fill: k >= 1 ? accent : muted, cls: hot ? 'hot' : null });
+      if (k >= 2) {
+        var wd = m.d / 5120 * 110;
+        e.rect(cx - w / 2, YB + 30, w, 8, null, 'none', ln, { rx: 2, sw: 1, dash: '2 2' });
+        e.rect(cx - wd / 2, YB + 30, wd, 8, null, blue, 'none', { rx: 2, sw: 0 });
+        e.t(cx, YB + 52, 'd ' + m.d + (m.d !== m.D ? ' (' + m.D + ')' : ''), { size: 10, mono: true, fill: m.d !== m.D ? blue : muted });
+        var fw = m.F / 27648 * 110, ff = m.f / 27648 * 110;
+        e.rect(cx - fw / 2, YB + 60, fw, 8, null, 'none', ln, { rx: 2, sw: 1, dash: '2 2' });
+        e.rect(cx - ff / 2, YB + 60, ff, 8, null, amber, 'none', { rx: 2, sw: 0 });
+        e.t(cx, YB + 82, 'FFN ' + m.f + ' / ' + m.F, { size: 10, mono: true, fill: m.f / m.F < 0.9 ? amber : muted });
+      }
+      if (k >= 4) e.t(cx, YT + 4, '草稿 ' + m.p, { size: 11, fill: muted, mono: true });
+    }
+  }
+  var steps = [
+    ['目标', '五个目标模型：28 到 64 层', '柱高相同，层数越多每层越薄；柱宽按隐藏维度画。Nemotron-32B 有 64 层，Qwen2.5-7B 只有 28 层。'],
+    ['层数', '草稿只剩 2–4 层', '橙色是保留的层（位置为示意，论文 Table 7 只给层数）。三个更大、更新的目标都只留 2 层，Llama-2 留 3 层，Vicuna 留 4 层。'],
+    ['宽度', '宽度几乎没动', '蓝条是隐藏维度、黄条是 FFN 宽度，虚框是原始尺寸。只有 Vicuna 剪了头（40 → 35），隐藏维度随之变为 4480；FFN 也只有 Vicuna 剪掉约 19%，其余不到 3%。'],
+    ['Nemotron', '64 层剪到 2 层', '深度只剩 1/32，宽度全保留：估算剪掉约 92% 参数，与论文摘要「最多剪掉 92%」一致。'],
+    ['宽而浅', '结论：batch=1 下草稿要宽而浅', '层数决定串行 kernel 链的长度，宽度只增加每个 kernel 读的字节数。优化器在每个目标上都选择了砍深度、保宽度。']
+  ];
+  return steps.map(function (s, j) {
+    return { chip: s[0], title: s[1], desc: s[2], render: function (e) { shell(e, j); } };
+  });
+}
+
+var builders = { svg1: scene1, svg2: scene2, svg3: scene3, svg4: scene4, svg5: scene5 };
+var engines = {};
+function initAll() {
+  for (var id in builders) {
+    var svg = document.getElementById(id);
+    if (!svg) continue;
+    engines[id] = new AnimEngine(svg, { steps: builders[id]() });
+  }
+}
+function engineOf(node) {
+  var frame = node.closest('.anim-frame');
+  if (!frame) return null;
+  var svg = frame.querySelector('svg');
+  return svg ? engines[svg.id] : null;
+}
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('button');
+  if (!b || !b.closest('.anim-frame')) return;
+  var eng = engineOf(b);
+  if (!eng) return;
+  if (b.classList.contains('btn-next')) { eng.pause(); eng.next(); }
+  else if (b.classList.contains('btn-prev')) { eng.pause(); eng.prev(); }
+  else if (b.classList.contains('btn-reset')) eng.reset();
+  else if (b.classList.contains('btn-play')) eng.toggle();
+  else if (b.classList.contains('stage-chip')) { eng.pause(); eng.goTo(+b.dataset.idx); }
+});
+document.addEventListener('input', function (ev) {
+  if (!ev.target.classList.contains('speed')) return;
+  var eng = engineOf(ev.target);
+  if (eng) eng.setSpeed(parseFloat(ev.target.value));
+});
+document.addEventListener('keydown', function (ev) {
+  var frame = document.activeElement && document.activeElement.closest && document.activeElement.closest('.anim-frame');
+  if (!frame) return;
+  var eng = engineOf(document.activeElement);
+  if (!eng) return;
+  if (ev.key === 'ArrowRight') { ev.preventDefault(); eng.pause(); eng.next(); }
+  else if (ev.key === 'ArrowLeft') { ev.preventDefault(); eng.pause(); eng.prev(); }
+  else if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON') { ev.preventDefault(); eng.toggle(); }
+});
+
+/* SVG 里的色值是切换主题那一刻读出来的具体值，主题一变就过期。
+   用 MutationObserver 盯 data-theme，无论用户点的是站点导航里的开关还是
+   本文右下角这个按钮，都会重绘当前步。存储键与站点保持一致（'theme'）。 */
+function redrawAll() {
+  for (var id in engines) { engines[id].pause(); engines[id].goTo(engines[id].i); }
+}
+window.toggleTheme = function () {
+  var root = document.documentElement;
+  var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('theme', next); } catch (err) {}
+};
+if (window.MutationObserver) {
+  new MutationObserver(function () { setTimeout(redrawAll, 30); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+window.toggleToc = function () {
+  var toc = document.getElementById('tocNav');
+  var btn = document.querySelector('.toc-toggle');
+  var hidden = toc.hasAttribute('hidden');
+  if (hidden) toc.removeAttribute('hidden'); else toc.setAttribute('hidden', '');
+  if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+};
+
+/* TOC 高亮 + 回到顶部 */
+function initChrome() {
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if ('IntersectionObserver' in window && secs.length) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+  var bt = document.getElementById('backTop');
+  if (bt) window.addEventListener('scroll', function () { bt.classList.toggle('show', window.scrollY > 400); }, { passive: true });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { initAll(); initChrome(); });
+} else { initAll(); initChrome(); }
+})();
+</script>
+</body>
+</html>
+
