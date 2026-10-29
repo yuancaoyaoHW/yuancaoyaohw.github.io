@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CUDA 软件栈分层动画：从一行 PyTorch 到 GPU，再到一次 LLM 推理</title>
+<style>
+/* 配色只引用共享语义层 --a-*（public/styles/article-tokens.css），作用域限定在 .cs 容器内。
+   动画本身在 /demos/cuda-stack/ 独立运行，通过 iframe 嵌入，样式与站点互不干扰。 */
+:where(.article-body, .interactive-body) .cs {
+  max-width: 1080px; margin: 0 auto; padding: 8px 20px 60px;
+  color: var(--a-fg); line-height: 1.8; font-size: 15.5px;
+}
+.cs h1 { color: var(--a-fg-strong); font-size: 30px; line-height: 1.35; margin: 8px 0 10px; }
+.cs h2 { color: var(--a-fg-strong); font-size: 21px; margin: 0 0 12px; }
+.cs p { margin: 0 0 12px; }
+.cs ul { margin: 0 0 12px 1.3em; padding: 0; }
+.cs li { margin: 3px 0; }
+.cs b, .cs strong { color: var(--a-fg-strong); }
+.cs code { background: var(--a-code-bg); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+.cs .lead { color: var(--a-fg-muted); font-size: 16px; margin-bottom: 22px; }
+.cs section {
+  margin: 0 0 28px; padding: 24px 26px; background: var(--a-surface);
+  border: 1px solid var(--a-line); border-radius: 12px;
+}
+.cs section.demo { padding: 12px; }
+.cs .demo iframe { display: block; width: 100%; height: 900px; border: 0; background: transparent; }
+.cs .bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 0 4px; }
+.cs .hint { color: var(--a-fg-muted); font-size: 13px; }
+.cs a.open {
+  font-size: 13px; text-decoration: none; border-radius: 7px; padding: 3px 11px;
+  border: 1px solid var(--a-line); background: var(--a-bg); color: var(--a-fg);
+}
+.cs a.open:hover { border-color: var(--a-line-hover); color: var(--a-fg-strong); }
+.cs table.specs { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 14px; }
+.cs table.specs th, .cs table.specs td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--a-line); vertical-align: top; }
+.cs table.specs th { color: var(--a-fg-muted); font-weight: 500; }
+.cs .note {
+  border-left: 3px solid var(--a-blue); background: var(--a-blue-bg);
+  padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 14.5px;
+}
+@media (max-width: 760px) { .cs section { padding: 18px 16px; } }
+</style>
+</head>
+<body>
+<div class="cs">
+<h1>CUDA 软件栈分层动画：从一行 PyTorch 到 GPU，再到一次 LLM 推理</h1>
+<p class="lead">读 GPU 性能相关的资料时，cuBLAS、cudart、libcuda、nvidia.ko、PTX、SASS、Fabric Manager、DCGM 这些名字会同时出现，却很少有人讲清楚它们各在哪一层、谁调用谁。下面这张图把它们放进同一个分层结构里。点任意一个方块能看到它是什么、对应哪个文件或命令、你什么时候会碰到它；上方的 7 个场景可以单步播放，跟着一次调用从上走到下。</p>
+
+<section class="demo" aria-label="CUDA 软件栈交互动画">
+  <iframe id="cs-iframe" src="/demos/cuda-stack/" title="CUDA 软件栈分层交互动画" loading="lazy"></iframe>
+  <div class="bar">
+    <span class="hint">点方块看说明 · 选场景后用「下一步」或 ← → 单步 · 空格自动播放</span>
+    <a class="open" href="/demos/cuda-stack/" target="_blank" rel="noopener">新标签页打开 ↗</a>
+  </div>
+</section>
+
+<section>
+  <h2>图怎么读</h2>
+  <p>左侧主栏从上到下是一次调用经过的层次：</p>
+  <ul>
+    <li><b>用户态（你的进程里）</b>：你的代码和 Python 库 → PyTorch 的 ATen 调度器或 torch.compile → cuBLAS / cuDNN / NCCL 等数学与通信库 → CUDA Runtime（<code>libcudart.so</code>）→ 用户态驱动 <code>libcuda.so</code> 和 NVML。</li>
+    <li><b>系统调用</b>：<code>/dev/nvidia*</code> 设备文件，用户态和内核之间只通过它们上的 ioctl 和 mmap 交流。</li>
+    <li><b>内核态</b>：<code>nvidia.ko</code> 管显存、页表和命令通道，<code>nvidia-uvm.ko</code> 管统一内存的缺页迁移。</li>
+    <li><b>硬件</b>：SM、HBM 显存、NVLink / NVSwitch。</li>
+  </ul>
+  <p>右侧一栏是不在调用路径上、但同样会碰到的东西：编译工具链（nvcc、Triton、PTX、SASS、fatbinary）和后台常驻服务（nvidia-persistenced、Fabric Manager、DCGM）。</p>
+</section>
+
+<section>
+  <h2>7 个场景</h2>
+  <table class="specs">
+    <tr><th>场景</th><th>讲什么</th></tr>
+    <tr><td>① 逐层认识</td><td>自上而下把每一层过一遍，先建立整体印象。</td></tr>
+    <tr><td>② 一次矩阵乘</td><td><code>torch.matmul</code> 怎么变成 cuBLAS kernel、经驱动写进命令缓冲区、由 GPU 执行。</td></tr>
+    <tr><td>③ 编译：PTX 与 SASS</td><td>nvcc 产出的 fatbinary 里有什么，驱动什么时候直接用 SASS、什么时候 JIT 编译 PTX，「no kernel image is available」从哪来。</td></tr>
+    <tr><td>④ torch.compile</td><td>Dynamo → AOT Autograd → Inductor → Triton 的生成链路。</td></tr>
+    <tr><td>⑤ 容器与版本号</td><td>镜像里装的是 Toolkit，宿主机提供驱动；<code>nvidia-smi</code> 里的「CUDA Version」是驱动支持的上限。</td></tr>
+    <tr><td>⑥ 常驻服务</td><td>persistenced、Fabric Manager、DCGM 各管什么，一台服务器上谁装什么。</td></tr>
+    <tr><td>⑦ 一次 LLM 推理</td><td>以 8 卡张量并行的 70B 模型为例：服务启动、分词调度、Prefill、all-reduce、Decode、CUDA Graph、采样与流式返回、连续批处理、KV cache 卸载，最后是按现象排查瓶颈的对照表。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>最常用的几条结论</h2>
+  <ul>
+    <li><b>驱动只能比 Toolkit 新，不能旧</b>：CUDA 12.x 需要 R525 以上的驱动，CUDA 13 需要 R580 以上。<code>nvidia-smi</code> 显示的 CUDA 版本是驱动能支持的最高版本，不是装了哪个 Toolkit。</li>
+    <li><b>容器只带用户态</b>：镜像里放 cudart、cuBLAS、PyTorch；<code>libcuda.so</code> 和内核模块来自宿主机，由 NVIDIA Container Toolkit 在启动时挂进来。</li>
+    <li><b>Fabric Manager 版本必须和驱动完全一致</b>，否则有 NVSwitch 的机器上 CUDA 初始化会失败。</li>
+    <li><b>推理的两个阶段瓶颈不同</b>：Prefill 受算力限制，决定首 token 延迟；Decode 受显存带宽限制，决定之后每个 token 的间隔。</li>
+  </ul>
+  <div class="note">模型是示意：方块之间的关系按公开文档整理，版本号和带宽数字是写作时的量级，具体以你所用版本的官方文档为准。</div>
+</section>
+
+<script>
+(() => {
+  const iframe = document.getElementById('cs-iframe');
+  if (!iframe) return;
+  const root = document.documentElement;
+  // 同源 iframe：同步站点主题，并按内容高度撑开，避免出现第二个滚动条
+  const sync = () => {
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.body) return;
+      doc.documentElement.setAttribute('data-theme', root.getAttribute('data-theme') || 'dark');
+      // 用 body 的实际高度：documentElement.scrollHeight 不会小于 iframe 当前视口，只增不减
+      iframe.style.height = Math.ceil(doc.body.getBoundingClientRect().height) + 'px';
+    } catch (e) { /* 非同源时保持默认高度 */ }
+  };
+  iframe.addEventListener('load', () => {
+    sync();
+    try { new ResizeObserver(sync).observe(iframe.contentDocument.body); } catch (e) {}
+  });
+  new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
+</div>
+</body>
+</html>

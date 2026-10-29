@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>if (window.self !== window.top) document.documentElement.classList.add('embed');</script>
+<title>CUDA 软件栈分层动画：从 train.py 到 GPU</title>
+<style>
+.viz-root {
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#8a63d2; --c6:#6b6a65;
+  --tint:16%;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#9a7be0; --c6:#8f8e88; --tint:26%;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#9a7be0; --c6:#8f8e88; --tint:26%;
+}
+* { box-sizing:border-box; }
+body { margin:0; }
+.viz-root {
+  background:var(--page); color:var(--ink); min-height:100vh;
+  font:14px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  padding:20px 24px 40px;
+}
+h1 { font-size:20px; margin:0 0 4px; font-weight:650; }
+.sub { color:var(--ink2); margin:0 0 14px; max-width:980px; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+.toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+.tabs { display:flex; gap:4px; flex-wrap:wrap; }
+button {
+  font:inherit; color:var(--ink); background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:5px 12px; cursor:pointer;
+}
+button:hover { border-color:var(--axis); }
+button:disabled { opacity:.4; cursor:default; }
+button:focus-visible, .box:focus-visible { outline:2px solid var(--c1); outline-offset:2px; }
+.tab[aria-selected="true"] { background:var(--ink); color:var(--surface); border-color:var(--ink); }
+.row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+.stage { flex:1 1 640px; min-width:320px; padding:10px; }
+.side { flex:1 1 360px; min-width:300px; max-width:560px; }
+svg#stack { display:block; width:100%; height:auto; }
+svg text { fill:var(--ink); font-family:inherit; }
+.box { cursor:pointer; transition:opacity .35s; }
+.box rect { fill:color-mix(in srgb, var(--g) var(--tint), var(--surface)); stroke:var(--g); stroke-width:1.3; transition:stroke-width .2s; }
+.box:hover rect { stroke-width:2.2; }
+.box .t { font-size:14px; font-weight:620; }
+.box .s { font-size:11.5px; fill:var(--ink2); }
+.box.sel rect { stroke:var(--ink); stroke-width:2.4; }
+svg.focus .box { opacity:.22; }
+svg.focus .box.hl { opacity:1; }
+.box.hl rect { stroke-width:2.6; animation:pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { fill:color-mix(in srgb, var(--g) calc(var(--tint) + 22%), var(--surface)); } }
+.brk line { stroke:var(--axis); stroke-width:1.5; }
+.brk text { font-size:12px; fill:var(--muted); writing-mode:vertical-rl; letter-spacing:2px; }
+.divider { stroke:var(--axis); stroke-width:1; stroke-dasharray:5 4; }
+.divlabel { font-size:11px; fill:var(--muted); }
+.grplabel { font-size:12px; fill:var(--muted); font-weight:600; }
+.flow { fill:none; stroke:var(--c2); stroke-width:3; stroke-linecap:round; stroke-linejoin:round;
+  stroke-dasharray:9 7; animation:march .7s linear infinite; opacity:.9; }
+@keyframes march { to { stroke-dashoffset:-16; } }
+.token { fill:var(--c2); stroke:var(--surface); stroke-width:2.5; }
+.ov rect { fill:none; stroke-width:2; stroke-dasharray:8 5; rx:12; }
+.ov text { font-size:13px; font-weight:650; }
+.ov { opacity:0; transition:opacity .4s; pointer-events:none; }
+.ov.on { opacity:1; }
+.legend { display:flex; flex-wrap:wrap; gap:14px; color:var(--ink2); font-size:12.5px; margin:8px 4px 2px; }
+.legend span { display:inline-flex; align-items:center; gap:6px; }
+.sw { display:inline-block; width:11px; height:11px; border-radius:3px; border:1.5px solid; }
+.stepbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+.dots { display:flex; gap:4px; margin-left:4px; }
+.dots i { width:8px; height:8px; border-radius:50%; background:var(--grid); cursor:pointer; }
+.dots i.on { background:var(--c2); }
+.counter { color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums; margin-left:auto; }
+.side h2 { font-size:16px; margin:0 0 6px; }
+.side p { margin:0 0 8px; color:var(--ink2); }
+.side ul { margin:4px 0 8px; padding-left:18px; color:var(--ink2); }
+.side b { color:var(--ink); }
+code, pre { font:12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+p code, li code, td code { background:color-mix(in srgb, var(--ink) 7%, transparent); padding:0 4px; border-radius:4px; }
+pre { background:color-mix(in srgb, var(--ink) 6%, var(--surface)); border:1px solid var(--border);
+  border-radius:8px; padding:8px 10px; margin:6px 0 10px; overflow-x:auto; white-space:pre; }
+.extra { margin:8px 0 4px; }
+.extra:empty { display:none; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0; }
+.chip { border:1.5px solid var(--axis); border-radius:6px; padding:2px 8px; font-size:12.5px; background:var(--surface); transition:all .3s; }
+.chip.on { border-color:var(--c3); background:color-mix(in srgb, var(--c3) 22%, var(--surface)); font-weight:600; }
+.chip.warn { border-color:var(--c2); background:color-mix(in srgb, var(--c2) 22%, var(--surface)); font-weight:600; }
+.chip.off { opacity:.35; text-decoration:line-through; }
+.arrow { color:var(--muted); }
+.mini { font-size:12.5px; color:var(--ink2); margin:2px 0; }
+table.vt { border-collapse:collapse; width:100%; font-size:12.5px; margin:6px 0 8px; }
+table.vt th, table.vt td { border-bottom:1px solid var(--border); padding:4px 6px; text-align:left; vertical-align:top; }
+table.vt th { color:var(--muted); font-weight:600; }
+.info { border-top:1px solid var(--border); margin-top:12px; padding-top:10px; }
+.info h3 { font-size:15px; margin:0 0 2px; }
+.info .kind { font-size:12px; color:var(--muted); margin-bottom:6px; }
+.info h4 { font-size:12.5px; color:var(--muted); margin:8px 0 2px; font-weight:600; }
+.info p { margin:0 0 6px; }
+.hintline { color:var(--muted); font-size:12.5px; }
+@media (max-width:760px) { .viz-root { padding:14px 10px 30px; } }
+/* 嵌入博客文章时：标题和导语由文章提供，背景透明，高度由父页面按内容撑开 */
+.embed .viz-root { background:transparent; min-height:0; padding:2px 1px 6px; }
+.embed h1, .embed .sub { display:none; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<h1>CUDA 软件栈：一行 PyTorch 代码是怎么跑到 GPU 上的</h1>
+<p class="sub">对应《AI 系统性能工程》第 3 章「软件栈」一节。左边是从你的代码到硬件的分层结构，<b>点任何一个方块</b>都能在右下看到它是什么、你什么时候会碰到它。上方的场景按步骤播放动画：逐层认识、一次矩阵乘的调用路径、编译与兼容性、torch.compile、容器与版本号、常驻服务，以及一次大模型推理从请求到返回的全过程。</p>
+<div class="toolbar"><div class="tabs" role="tablist" id="tabs"></div></div>
+<div class="row">
+  <div class="card stage">
+    <svg id="stack" viewBox="0 0 1000 632" role="img" aria-label="CUDA 软件栈分层图"></svg>
+    <div class="legend">
+      <span><i class="sw" style="border-color:var(--c1);background:color-mix(in srgb,var(--c1) 16%,var(--surface))"></i>应用与框架</span>
+      <span><i class="sw" style="border-color:var(--c3);background:color-mix(in srgb,var(--c3) 16%,var(--surface))"></i>CUDA Toolkit（用户态库）</span>
+      <span><i class="sw" style="border-color:var(--c5);background:color-mix(in srgb,var(--c5) 16%,var(--surface))"></i>编译工具链</span>
+      <span><i class="sw" style="border-color:var(--c2);background:color-mix(in srgb,var(--c2) 16%,var(--surface))"></i>NVIDIA 驱动</span>
+      <span><i class="sw" style="border-color:var(--c4);background:color-mix(in srgb,var(--c4) 16%,var(--surface))"></i>运维与常驻服务</span>
+      <span><i class="sw" style="border-color:var(--c6);background:color-mix(in srgb,var(--c6) 16%,var(--surface))"></i>硬件</span>
+    </div>
+  </div>
+  <div class="card side">
+    <div class="stepbar">
+      <button type="button" id="prev" aria-label="上一步">◀ 上一步</button>
+      <button type="button" id="play">▶ 自动播放</button>
+      <button type="button" id="next" aria-label="下一步">下一步 ▶</button>
+      <span class="dots" id="dots"></span>
+      <span class="counter" id="counter"></span>
+    </div>
+    <h2 id="st-title"></h2>
+    <div id="st-text"></div>
+    <div class="extra" id="st-extra"></div>
+    <div class="info" id="info"><p class="hintline">点左图中的任意方块，这里会显示它的详细说明。键盘：← → 切换步骤，空格播放/暂停。</p></div>
+  </div>
+</div>
+</div>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+// [id, x, y, w, h, 颜色, 标题, 副标题]
+const M = [
+  ['app',     60,  26, 320, 56, 'c1', '你的代码 train.py', 'model(x)、torch.matmul(a, b)'],
+  ['pylibs', 390,  26, 310, 56, 'c1', '其他 Python GPU 库', 'CuPy · Triton · Warp · cuPyNumeric…'],
+  ['torch',   60,  94, 320, 56, 'c1', 'PyTorch（ATen 调度器）', '把 Python 调用分派到具体的 CUDA kernel'],
+  ['compile',390,  94, 310, 56, 'c1', 'torch.compile', 'Dynamo → AOT Autograd → Inductor'],
+  ['cublas',  60, 162, 170, 56, 'c3', 'cuBLAS', '矩阵乘 GEMM'],
+  ['cudnn',  238, 162, 150, 56, 'c3', 'cuDNN', '卷积 / 注意力'],
+  ['nccl',   396, 162, 150, 56, 'c3', 'NCCL', '多卡通信'],
+  ['otherlib',554,162, 146, 56, 'c3', 'cuFFT 等', 'FFT / 稀疏 / 随机数'],
+  ['cudart',  60, 230, 640, 56, 'c3', 'CUDA Runtime（cudart）', 'cudaMalloc · cudaMemcpy · kernel<<<…>>> 启动 · libcudart.so'],
+  ['libcuda', 60, 298, 420, 56, 'c2', '用户态驱动 libcuda.so', 'Driver API cu* · 管理上下文 · PTX JIT 编译'],
+  ['nvml',   490, 298, 210, 56, 'c2', 'NVML', 'libnvidia-ml.so · 查询 / 管理'],
+  ['devfiles',60, 378, 640, 48, 'c2', '设备文件 /dev/nvidia*', '/dev/nvidia0…N · /dev/nvidiactl · /dev/nvidia-uvm'],
+  ['kmod',    60, 438, 420, 56, 'c2', '内核驱动 nvidia.ko', '显存分配、页表、命令通道、中断'],
+  ['uvm',    490, 438, 210, 56, 'c2', 'nvidia-uvm.ko', '统一内存的缺页迁移'],
+  ['gpu',     60, 518, 300, 60, 'c6', 'GPU 芯片（SM）', '执行 kernel 的流式多处理器'],
+  ['hbm',    370, 518, 160, 60, 'c6', 'HBM 显存', '权重、激活、KV cache'],
+  ['nvlink', 540, 518, 160, 60, 'c6', 'NVLink / NVSwitch', 'GPU 之间的高速互联'],
+  ['nvcc',   730,  26, 250, 56, 'c5', 'nvcc 编译器', '.cu → 主机代码 + 设备代码'],
+  ['triton', 730,  94, 250, 56, 'c5', 'Triton 编译器', 'Python 写的 kernel → PTX'],
+  ['ptx',    730, 162, 250, 56, 'c5', 'PTX', '虚拟指令集，驱动可再编译'],
+  ['sass',   730, 230, 250, 56, 'c5', 'SASS / CUBIN', '某一代 GPU 的机器码'],
+  ['fatbin', 730, 298, 250, 56, 'c5', 'fatbinary', '多份 SASS + PTX 打包在一起'],
+  ['persist',730, 378, 250, 48, 'c4', 'nvidia-persistenced', '让驱动常驻，省掉初始化'],
+  ['fm',     730, 438, 250, 56, 'c4', 'Fabric Manager', '配置 NVSwitch 路由'],
+  ['dcgm',   730, 518, 250, 60, 'c4', 'DCGM / nvidia-smi', '监控、健康检查、告警'],
+];
+const BOX = Object.fromEntries(M.map(([id, x, y, w, h, c, t, s]) => [id, { id, x, y, w, h, c, t, s }]));
+// 场景里用到的虚线框
+const OV = {
+  image: { c: 'c1', label: '容器镜像里自带', rects: [[50, 18, 660, 276], [722, 18, 266, 344]], lx: 560, ly: 18 },
+  host:  { c: 'c2', label: '宿主机提供（启动时注入容器）', rects: [[50, 290, 660, 212]], lx: 470, ly: 290 },
+};
+// 每个方块的详细说明：kind 归属，what 是什么，where 对应文件，when 什么时候碰到，link 上下游
+const INFO = {
+  app: { kind: '应用层 · 你写的 Python',
+    what: '训练或推理脚本本身。它只描述「做什么」（矩阵乘、softmax、反向传播），不关心 GPU 怎么执行。',
+    where: '<code>train.py</code>、<code>serve.py</code> 等，由 Python 解释器执行。',
+    when: '每天都在写。性能问题往往从这里开始排查：是不是有多余的 <code>.item()</code>、<code>.cpu()</code> 让 CPU 等 GPU。',
+    link: '向下调用 PyTorch 或其他 Python GPU 库。' },
+  pylibs: { kind: '应用层 · PyTorch 之外的选择',
+    what: '书里列出的几种 Python 写 GPU 程序的方式：<ul><li><b>CUDA Python</b>：NVIDIA 官方的 Python 绑定，直接调用 Driver / Runtime API。</li><li><b>CuPy</b>：接口和 NumPy 一样，数组放在 GPU 上。</li><li><b>Triton</b>：用 Python 写自定义 kernel，按「块」思考，编译器负责线程细节。</li><li><b>Warp</b>：面向物理仿真、图形的 kernel 编写框架。</li><li><b>cuPyNumeric</b>：NumPy 接口，可以自动分布到多卡多机。</li><li><b>cuTile</b>：CUDA 新的 tile（分块）编程模型，Python 侧接口。</li></ul>',
+    where: '都是 <code>pip install</code> 装的 Python 包，底层同样调用 cudart / libcuda。',
+    when: 'PyTorch 自带算子不够快、或者要写融合 kernel 时，最常用的是 Triton。',
+    link: '向下最终都落到 CUDA Runtime 或 Driver API；Triton 走右侧的 Triton 编译器生成 PTX。' },
+  torch: { kind: '框架层 · PyTorch 核心',
+    what: 'PyTorch 的 C++ 核心叫 ATen。你调用 <code>torch.matmul</code> 时，<b>调度器（dispatcher）</b>根据张量所在设备（CPU / CUDA）、数据类型（fp16 / bf16 / fp32）、是否需要梯度，选中一个具体实现。CUDA 实现要么调用 cuBLAS、cuDNN 这类库，要么启动 PyTorch 自己写的 kernel。',
+    where: '<code>torch/lib/libtorch_cuda.so</code>。pip 装的 PyTorch 还会带上 <code>nvidia-cublas-cu12</code>、<code>nvidia-cudnn-cu12</code> 等依赖包，也就是 CUDA 库本身。',
+    when: '默认的 eager 模式：每个算子立刻启动一个或几个 kernel。用 Nsight Systems 看时间线，每一小段就是这里发出的一次 kernel 启动。',
+    link: '上接你的代码；下接 CUDA 库和 cudart。' },
+  compile: { kind: '框架层 · 编译模式',
+    what: '<code>torch.compile(model)</code> 把一段 Python 代码变成一张计算图，再整体优化：<ul><li><b>TorchDynamo</b>：拦截 Python 字节码执行，把 PyTorch 操作记录成 FX 图；遇到无法追踪的代码就「图中断」回退到普通 Python。</li><li><b>AOT Autograd</b>：提前把反向传播的图也推导出来，前向反向一起优化。</li><li><b>TorchInductor</b>：后端编译器，把多个小算子融合成一个 kernel，GPU 上生成 Triton 代码。</li></ul>',
+    where: 'PyTorch 自带。生成的代码缓存在 <code>/tmp/torchinductor_&lt;用户名&gt;/</code>，可以打开看。',
+    when: '第一次调用很慢（在编译），之后变快。减少 kernel 启动次数和显存往返是它的主要收益。',
+    link: '向下交给右侧 Triton 编译器；矩阵乘这类算子仍可能调用 cuBLAS。' },
+  cublas: { kind: 'CUDA 库 · 线性代数',
+    what: 'NVIDIA 写好的矩阵运算库，核心是 GEMM（通用矩阵乘）。针对每一代 GPU 准备了大量手工调优的 kernel，运行时按矩阵形状、数据类型挑一个最快的。Transformer 里绝大部分算力花在这里。',
+    where: '<code>libcublas.so</code>、<code>libcublasLt.so</code>（Lt 是更灵活的新接口，支持 FP8 和融合 epilogue）。',
+    when: '每次 <code>nn.Linear</code>、<code>@</code>、<code>bmm</code>。Nsight 里名字类似 <code>sm90_xmma_gemm_…</code> 或 <code>cutlass_…</code> 的 kernel 就来自这里。',
+    link: '上接 ATen；下接 cudart / libcuda 启动 kernel。' },
+  cudnn: { kind: 'CUDA 库 · 深度学习原语',
+    what: '卷积、归一化、注意力（Flash Attention 风格的融合实现）等深度学习常用算子的高性能实现。',
+    where: '<code>libcudnn*.so</code>，PyTorch 通过 <code>nvidia-cudnn-cu12</code> 包带进来。',
+    when: '跑 CNN、调用 <code>scaled_dot_product_attention</code> 时可能选中 cuDNN 后端。<code>torch.backends.cudnn.benchmark=True</code> 会让它先试几种算法再挑最快的。',
+    link: '上接 ATen；下接 cudart。' },
+  nccl: { kind: 'CUDA 库 · 集合通信',
+    what: '多 GPU 之间的 all-reduce、all-gather、reduce-scatter、all-to-all 等通信。它会探测拓扑，自动选择走 NVLink、PCIe 还是 InfiniBand / RoCE 网卡。',
+    where: '<code>libnccl.so</code>。PyTorch 的 <code>torch.distributed</code> 后端 <code>"nccl"</code> 就是它。',
+    when: 'DDP、FSDP、张量并行时。<code>NCCL_DEBUG=INFO</code> 能看到它选了哪条链路。第 4 章详细讲。',
+    link: '上接 torch.distributed；下接 cudart，硬件上用 NVLink / NVSwitch 和网卡。' },
+  otherlib: { kind: 'CUDA 库 · 其他',
+    what: '同一类「写好的 kernel 集合」：cuFFT（快速傅里叶变换）、cuSPARSE（稀疏矩阵）、cuRAND（随机数）、cuSOLVER（分解求解）；还有 CUTLASS，是用来<b>自己拼</b> GEMM kernel 的 C++ 模板库。',
+    where: '都随 CUDA Toolkit 发布，各是一个 <code>.so</code>。',
+    when: '大模型里用得少，科学计算里常见。看懂 cuBLAS 这一格，其余同理。',
+    link: '上接框架；下接 cudart。' },
+  cudart: { kind: 'CUDA Toolkit · 运行时 API',
+    what: '写 CUDA 程序最常用的那套 API，函数名以 <code>cuda</code> 开头：分配显存 <code>cudaMalloc</code>、拷贝 <code>cudaMemcpy</code>、启动 kernel <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code>、流和事件 <code>cudaStream*</code>。它替你隐式管理上下文，比底层 Driver API 好用。',
+    where: '<code>libcudart.so</code>（或静态链接进程序）。属于 CUDA Toolkit，<b>跟着你的程序 / 镜像走</b>。',
+    when: '报错信息里的 <code>cudaError…</code> 来自这里。这些调用大多是<b>异步</b>的：函数返回不代表 GPU 做完了。',
+    link: '上接各个库和框架；向下全部转成 libcuda 的 <code>cu*</code> 调用。' },
+  libcuda: { kind: '驱动 · 用户态部分',
+    what: '驱动在你的进程里的那一半。提供 Driver API（<code>cuInit</code>、<code>cuCtxCreate</code>、<code>cuModuleLoad</code>、<code>cuLaunchKernel</code>），负责：<ul><li>创建 GPU 上下文（每个进程一个，占几百 MB 显存）；</li><li>加载 kernel 代码，SASS 不匹配时把 PTX <b>JIT 编译</b>成当前 GPU 的机器码；</li><li>把 kernel 启动命令写进和 GPU 共享的命令缓冲区。</li></ul>',
+    where: '<code>libcuda.so</code>。<b>它随驱动安装，不属于 CUDA Toolkit</b>，版本必须和内核里的 nvidia.ko 完全一致。',
+    when: '容器里看不到 GPU、或者报 driver 版本不够时，问题都出在这一层。',
+    link: '上接 cudart；下通过 ioctl 调用 /dev/nvidia* 进入内核。' },
+  nvml: { kind: '驱动 · 管理接口',
+    what: 'NVIDIA Management Library：查询和设置 GPU 状态的 C 库。温度、功耗、显存占用、利用率、ECC 错误、时钟、功耗上限、MIG 分区都通过它读写。',
+    where: '<code>libnvidia-ml.so</code>，和 libcuda 一样随驱动安装。Python 里是 <code>pynvml</code>。',
+    when: '<code>nvidia-smi</code> 就是 NVML 的命令行前端；DCGM、Kubernetes 设备插件、监控 exporter 也都调用它。它不参与计算。',
+    link: '上接 nvidia-smi、DCGM；下通过 /dev/nvidiactl 访问内核驱动。' },
+  devfiles: { kind: '用户态与内核态的边界',
+    what: 'Linux 把设备表示成文件。驱动加载后创建：<ul><li><code>/dev/nvidia0</code>…<code>/dev/nvidiaN</code>：每张 GPU 一个；</li><li><code>/dev/nvidiactl</code>：控制设备，所有进程共用；</li><li><code>/dev/nvidia-uvm</code>：统一内存；</li><li><code>/dev/nvidia-modeset</code>：显示相关。</li></ul>用户态程序 <code>open</code> 这些文件，再用 <code>ioctl</code>、<code>mmap</code> 系统调用请内核驱动办事。',
+    where: '<code>ls -l /dev/nvidia*</code> 能看到。',
+    when: '容器要用 GPU，就必须把这些设备文件映射进去；<code>CUDA_VISIBLE_DEVICES</code> 则是在用户态把一部分 GPU 藏起来。',
+    link: '上面是 libcuda / NVML；下面是 nvidia.ko。' },
+  kmod: { kind: '驱动 · 内核态部分',
+    what: '运行在操作系统内核里的驱动模块，直接操作硬件：初始化 GPU、管理显存和 GPU 页表、创建命令通道（channel）、处理中断和错误、做进程之间的隔离。',
+    where: '<code>nvidia.ko</code>（<code>lsmod | grep nvidia</code>），版本号就是 <code>nvidia-smi</code> 里的 Driver Version，例如 580.xx。',
+    when: '升级驱动、内核日志里的 <b>Xid</b> 错误（<code>dmesg | grep Xid</code>）、GPU 掉卡，都是这一层的事。',
+    link: '上接 /dev/nvidia*；下经 PCIe（或 Grace 上的 NVLink-C2C）连接 GPU。' },
+  uvm: { kind: '驱动 · 统一内存模块',
+    what: '实现 Unified Memory（<code>cudaMallocManaged</code>）：CPU 和 GPU 用同一个指针访问数据，GPU 访问到不在显存里的页时触发缺页，由它把页迁移过来。',
+    where: '<code>nvidia-uvm.ko</code>，对应 <code>/dev/nvidia-uvm</code>。',
+    when: '用托管内存、或在 Grace Hopper / Blackwell 上让 GPU 访问 CPU 内存时。缺页迁移很慢，性能敏感的路径一般显式拷贝或预取。',
+    link: '和 nvidia.ko 配合工作。' },
+  gpu: { kind: '硬件 · 计算',
+    what: 'GPU 芯片上有上百个 SM（流式多处理器），kernel 的每个线程块被分到某个 SM 上执行。芯片上还有拷贝引擎（负责 CPU↔GPU 数据搬运）和从命令缓冲区取命令的前端。',
+    where: '<code>nvidia-smi -L</code> 列出每张卡；计算能力（compute capability）如 H100 是 9.0、B200 是 10.0。',
+    when: '计算能力决定了需要哪个版本的 SASS，见「编译」场景。',
+    link: '执行 libcuda 写进命令缓冲区的 kernel；读写 HBM。' },
+  hbm: { kind: '硬件 · 显存',
+    what: '封装在 GPU 旁边的高带宽内存。<code>cudaMalloc</code> 拿到的地址就在这里，模型权重、激活、KV cache 都放在这里。',
+    where: 'H100 80 GB、约 3.35 TB/s；B200 192 GB、约 8 TB/s。',
+    when: 'OOM、显存带宽瓶颈（大部分推理解码阶段）都是它的问题。',
+    link: '被 SM 读写；和 CPU 内存之间由拷贝引擎搬运。' },
+  nvlink: { kind: '硬件 · 互联',
+    what: 'GPU 之间的高速链路。NVSwitch 是交换芯片，让一组 GPU 两两之间都能全速通信（如 HGX 8 卡、NVL72 的 72 卡）。',
+    where: '<code>nvidia-smi topo -m</code> 显示 GPU 之间是 NV18（NVLink）还是 PIX/SYS（PCIe）。',
+    when: 'NCCL 通信、张量并行时。NVSwitch 系统必须先启动 Fabric Manager，GPU 之间才能用 NVLink。',
+    link: '被 NCCL 使用；由 Fabric Manager 配置路由。' },
+  nvcc: { kind: '编译工具链 · CUDA C++ 编译器',
+    what: '编译 <code>.cu</code> 文件。它把源码拆成两半：CPU 上跑的<b>主机代码</b>交给 gcc / clang；GPU 上跑的<b>设备代码</b>（<code>__global__</code> 函数）先编成 PTX，再由 <code>ptxas</code> 编成 SASS。最后把两半链接成一个可执行文件或 <code>.so</code>。',
+    where: 'CUDA Toolkit 里的 <code>/usr/local/cuda/bin/nvcc</code>。只有编译时需要，运行时不需要。',
+    when: '编译 PyTorch C++ 扩展、FlashAttention、vLLM 自定义算子时。<code>-gencode arch=compute_90,code=sm_90</code> 这类参数决定生成哪些 SASS / PTX。',
+    link: '输出 PTX、SASS，打包成 fatbinary。' },
+  triton: { kind: '编译工具链 · Triton',
+    what: 'OpenAI 开源的 GPU 编程语言和编译器。你用 Python 写一个按「块」处理数据的 kernel，Triton 经过 MLIR / LLVM 生成 PTX，再调用 <code>ptxas</code> 得到 CUBIN。线程分配、共享内存、合并访存这些细节由编译器处理。',
+    where: '<code>pip install triton</code>，PyTorch 2.x 自带依赖。编译结果缓存在 <code>~/.triton/cache</code>。',
+    when: 'torch.compile 生成的 kernel、手写的融合算子（例如很多注意力、量化 kernel）。',
+    link: '上接 TorchInductor 或手写 Triton 代码；输出 PTX → SASS，由 libcuda 加载。' },
+  ptx: { kind: '编译产物 · 虚拟指令集',
+    what: 'PTX（Parallel Thread Execution）是一种「虚拟 GPU 汇编」，不对应任何一款具体芯片。它是文本格式，可以打开看。驱动可以在运行时把它编译成当前 GPU 的机器码（JIT），所以<b>带了 PTX 的程序能在将来的新 GPU 上运行</b>。',
+    where: '<code>nvcc -ptx</code> 可以单独输出 <code>.ptx</code> 文件；版本用 <code>compute_XX</code> 表示，如 <code>compute_90</code>。',
+    when: '新显卡发布、但你的程序还没为它编译 SASS 时，就是 PTX 在兜底。',
+    link: '由 nvcc / Triton 生成；被 ptxas 或驱动 JIT 编成 SASS。' },
+  sass: { kind: '编译产物 · 机器码',
+    what: 'SASS 是 GPU 真正执行的机器指令，<b>每一代架构都不同</b>。CUBIN 是装 SASS 的文件格式。为 <code>sm_80</code>（A100）编的 SASS 可以跑在 8.x 系列更新的卡上，但不能跑在 <code>sm_90</code>（H100）上。',
+    where: '<code>cuobjdump -sass</code> 能把可执行文件里的 SASS 反汇编出来；Nsight Compute 的 Source 页也能看到。',
+    when: '性能分析看到底层指令时；报错 <code>no kernel image is available for execution on the device</code> 说明既没有匹配的 SASS 也没有可用的 PTX。',
+    link: '由 ptxas 或驱动 JIT 生成；被 libcuda 加载到 GPU。' },
+  fatbin: { kind: '编译产物 · 打包格式',
+    what: '一个文件里同时放多份 SASS（例如 sm_80、sm_90、sm_100）再加一份 PTX。程序加载时驱动挑最合适的一份：有当前 GPU 的 SASS 就直接用，否则把 PTX JIT 编译。',
+    where: '嵌在可执行文件或 <code>.so</code> 里，例如 <code>libtorch_cuda.so</code> 里就有好几代架构的 SASS。',
+    when: '书里的建议：发布时同时带 SASS（启动快）和最新架构的 PTX（兼容未来）。',
+    link: '由 nvcc 生成；由 libcuda 解析加载。' },
+  persist: { kind: '常驻服务 · 驱动常驻',
+    what: '一个后台守护进程，持有 GPU 设备文件，让驱动在没有任何 CUDA 程序运行时也保持初始化状态。没有它，最后一个进程退出后驱动会把 GPU 状态拆掉，下一个程序启动时要重新初始化，多卡机器上可能要几秒。',
+    where: '<code>systemctl status nvidia-persistenced</code>。',
+    when: '服务器上建议常开。它只省<b>启动时间</b>，不会让计算变快。',
+    link: '直接和内核驱动交互，不在你的程序调用链上。' },
+  fm: { kind: '常驻服务 · NVSwitch 管理',
+    what: '在带 NVSwitch 的系统（HGX / DGX 8 卡等）上，Fabric Manager 负责初始化 NVSwitch、下发路由表、监控 NVLink 链路。它没起来时，CUDA 程序会报系统未就绪，GPU 之间也用不了 NVLink。NVL72 这类机架级系统中，交换托盘上的 NVLink 管理软件承担了类似的职责。',
+    where: '<code>nvidia-fabricmanager</code> 服务，版本必须和驱动一致。',
+    when: '只在有 NVSwitch 的机器上需要；PCIe 卡或两卡 NVLink 桥接不需要。',
+    link: '配置 NVLink / NVSwitch 硬件；和内核驱动协同。' },
+  dcgm: { kind: '常驻服务 · 监控',
+    what: '<b>nvidia-smi</b>：命令行工具，基于 NVML，看一眼当前状态。<b>DCGM</b>（Data Center GPU Manager）：后台服务 <code>nv-hostengine</code>，持续采集 SM 活跃度、Tensor Core 利用率、显存带宽、功耗、温度、ECC / Xid 错误，并能跑健康诊断。<code>dcgm-exporter</code> 把指标导出给 Prometheus。',
+    where: '<code>nvidia-smi</code>、<code>dcgmi</code>、<code>dcgm-exporter</code>。',
+    when: '集群监控、找慢节点、判断 GPU 是不是坏了。注意 nvidia-smi 的「GPU-Util」只表示有 kernel 在跑，不代表算力用满。',
+    link: '通过 NVML 读取驱动数据，不参与计算。' },
+};
+// 场景：每一步 {t 标题, p 正文, hl 高亮方块, at 调用路径走到第几个, ov 虚线框, x 额外内容, show 自动展示哪个方块的说明}
+const PATH_MM = ['app', 'torch', 'cublas', 'cudart', 'libcuda', 'devfiles', 'kmod', 'gpu', 'hbm'];
+const PATH_NVCC = ['nvcc', 'ptx', 'sass', 'fatbin', 'libcuda', 'gpu'];
+const PATH_TC = ['app', 'compile', 'triton', 'ptx', 'sass', 'libcuda', 'gpu'];
+// 推理场景顶部的流程条：k 为当前阶段（可以是数组），-1 表示不高亮
+const STAGES = ['分词 · 调度', '输入拷入显存', 'Prefill', 'Decode ×N 步', '采样', '流式返回'];
+function pipe(k) {
+  return '<div class="chips">' + STAGES.map((n, i) => `<span class="chip${[].concat(k).includes(i) ? ' on' : ''}">${n}</span>`).join('<span class="arrow">→</span>') + '</div>';
+}
+const SCENES = [
+ { name: '① 逐层认识', steps: [
+  { t: '整张图怎么读', p: '<p>越往上越接近你写的代码，越往下越接近硬件。<b>每一层只和相邻的层打交道</b>：PyTorch 不会直接操作显卡，它调用 CUDA 库；CUDA 库调用驱动；驱动再去操作 GPU。</p><p>右边一列不在每次调用的路径上：上半部分是<b>编译工具</b>（把代码变成 GPU 能执行的指令），下半部分是<b>后台服务</b>（让机器保持可用、可监控）。</p>', hl: [] },
+  { t: '第 1 层：你的代码和框架', p: '<p>你写 <code>y = model(x)</code>，PyTorch 负责把它拆成一个个算子（矩阵乘、加法、softmax……），再为每个算子找到 GPU 上的实现。</p><p>想跳过 PyTorch 直接写 GPU 程序，也有 CuPy、Triton 等 Python 库可选。</p>', hl: ['app', 'torch', 'compile', 'pylibs'], show: 'torch' },
+  { t: '第 2 层：CUDA 库', p: '<p>NVIDIA 已经把最常用的计算写成了高度优化的库：矩阵乘用 <b>cuBLAS</b>，卷积和注意力用 <b>cuDNN</b>，多卡通信用 <b>NCCL</b>。</p><p>PyTorch 的大部分 GPU 时间其实花在这些库的 kernel 里。它们和下面的 cudart 一起统称 <b>CUDA Toolkit</b>（用户态部分）。</p>', hl: ['cublas', 'cudnn', 'nccl', 'otherlib'], show: 'cublas' },
+  { t: '第 3 层：CUDA Runtime', p: '<p>所有库和框架最后都通过这套 API 和 GPU 打交道：<b>分配显存、拷贝数据、启动 kernel、同步</b>。CUDA 编程教程里学的就是这一层。</p>', hl: ['cudart'], show: 'cudart', x: '<pre>cudaMalloc(&amp;d_a, bytes);          // 在 HBM 上分配\ncudaMemcpy(d_a, h_a, bytes, H2D);  // CPU → GPU\nmatmul&lt;&lt;&lt;grid, block&gt;&gt;&gt;(d_a, d_b, d_c); // 启动 kernel\ncudaDeviceSynchronize();          // 等 GPU 做完</pre>' },
+  { t: '第 4 层：驱动的用户态部分', p: '<p><b>libcuda.so</b> 是驱动装进你进程里的那部分。cudart 的每个调用都翻译成它的 <code>cu*</code> 函数。它负责创建 GPU 上下文、加载 kernel 代码、把命令写进 GPU 的命令队列。</p><p>关键区别：<b>cudart 属于 CUDA Toolkit，libcuda 属于驱动</b>。前者跟着程序走，后者跟着机器走。这是后面兼容性问题的根源。</p>', hl: ['libcuda', 'nvml'], show: 'libcuda' },
+  { t: '第 5 层：/dev/nvidia* 设备文件', p: '<p>用户态程序不能直接碰硬件。Linux 的做法是：驱动在 <code>/dev</code> 下创建设备文件，程序打开文件、用 <code>ioctl</code> 系统调用提交请求，CPU 由此切换进内核态。</p><p>这一层就是「用户态」和「内核态」的门。</p>', hl: ['devfiles'], show: 'devfiles' },
+  { t: '第 6 层：内核驱动', p: '<p><b>nvidia.ko</b> 是装进 Linux 内核的模块，真正操作 GPU 的寄存器、显存页表和中断。<code>nvidia-smi</code> 显示的 Driver Version（如 580.xx）指的就是它，libcuda.so 的版本必须和它相同。</p>', hl: ['kmod', 'uvm'], show: 'kmod' },
+  { t: '第 7 层：硬件', p: '<p>GPU 的 SM 执行 kernel，HBM 存数据，NVLink / NVSwitch 连接多张 GPU。上面所有软件层的目标，就是让这些硬件尽量一直忙着。</p>', hl: ['gpu', 'hbm', 'nvlink'], show: 'gpu' },
+  { t: '右上：编译工具链', p: '<p>GPU 执行的是机器码（SASS），不是 C++ 或 Python。<b>nvcc</b> 编译 CUDA C++，<b>Triton</b> 编译 Python 写的 kernel，中间产物是 <b>PTX</b>，打包后的文件叫 <b>fatbinary</b>。这些只在编译时或第一次加载时参与，详见场景 ③④。</p>', hl: ['nvcc', 'triton', 'ptx', 'sass', 'fatbin'], show: 'ptx' },
+  { t: '右下：后台服务', p: '<p>这些是一直在后台跑的进程，不在 <code>torch.matmul</code> 的调用路径上，但缺了它们，机器可能启动慢、多卡用不了 NVLink、出了故障没人知道。详见场景 ⑥。</p>', hl: ['persist', 'fm', 'dcgm'], show: 'dcgm' },
+ ]},
+ { name: '② 一次矩阵乘', path: PATH_MM, steps: [
+  { t: '起点：一行 Python', p: '<p>跟着橙色小球，看 <code>c = a @ b</code> 一路往下走了哪些层。假设 <code>a</code>、<code>b</code> 已经是 GPU 上的 bf16 张量。</p>', at: 0, x: '<pre>a = torch.randn(4096, 4096, device="cuda", dtype=torch.bfloat16)\nb = torch.randn_like(a)\nc = a @ b    # ← 跟踪这一行</pre>' },
+  { t: 'PyTorch 调度器选实现', p: '<p>ATen 调度器检查：设备是 CUDA，类型是 bf16，不需要梯度。于是选中 CUDA 版的 <code>mm</code> 实现，它的工作是调用 cuBLAS。</p><p>这一步全在 CPU 上，大约几微秒。PyTorch 同时在 HBM 上为结果 <code>c</code> 分配了显存（来自它自己的缓存分配器，通常不需要真的调 <code>cudaMalloc</code>）。</p>', at: 1 },
+  { t: 'cuBLAS 挑 kernel', p: '<p>cuBLAS 根据矩阵形状（4096×4096×4096）、数据类型和当前 GPU 架构，从内置的 kernel 里挑一个最快的，算好 grid / block 大小。</p>', at: 2, x: '<p class="mini">Nsight Systems 时间线里会看到类似这样的 kernel 名字：</p><pre>sm90_xmma_gemm_bf16bf16_bf16f32_f32_tn_n_tilesize128x256x64…</pre>' },
+  { t: 'cudart：发起 kernel 启动', p: '<p>cuBLAS 通过运行时 API 发起 kernel 启动，放进当前的 CUDA <b>流（stream）</b>。</p><p>注意：这个调用是<b>异步</b>的。它把任务排进队列就返回，Python 立刻执行下一行，GPU 在后台计算。</p>', at: 3 },
+  { t: 'libcuda：写进命令队列', p: '<p>驱动的用户态部分把「启动哪个 kernel、参数是什么、grid 多大」编码成 GPU 能读的命令，写进一块 CPU 和 GPU 共享的<b>命令缓冲区</b>。</p><p>常见情况下，这一步<b>不需要进内核</b>：libcuda 写完命令后，直接改一个映射到用户态的「门铃」寄存器通知 GPU，开销只有几微秒。</p>', at: 4 },
+  { t: '/dev/nvidia0：需要内核时才走这条路', p: '<p>分配新显存、创建上下文、创建新流、注册内存这类操作，libcuda 必须对 <code>/dev/nvidia0</code> 发 <code>ioctl</code>，请内核驱动去做。</p><p>这也是为什么「第一次调用很慢」：第一次用 GPU 时要创建上下文、加载 kernel 模块，全都要经过内核。</p>', at: 5 },
+  { t: 'nvidia.ko：操作硬件', p: '<p>内核驱动设置显存页表、建立命令通道、映射门铃寄存器。之后 GPU 的前端会自己从命令缓冲区里取命令，不再需要 CPU 参与。</p>', at: 6 },
+  { t: 'GPU 执行', p: '<p>GPU 前端读到 kernel 启动命令，把成千上万个线程块分配到各个 SM 上。SM 里的 Tensor Core 做 bf16 矩阵乘。</p>', at: 7 },
+  { t: '读写 HBM，结束', p: '<p>线程从 HBM 读取 <code>a</code>、<code>b</code> 的分块，计算后把 <code>c</code> 写回 HBM。完成后 GPU 在流上记录完成标记。</p><p>你的 Python 代码只有在需要结果时才会等，例如 <code>print(c)</code>、<code>c.item()</code>、<code>torch.cuda.synchronize()</code>。</p>', at: 8, x: '<div class="chips"><span class="chip on">Python</span><span class="arrow">→</span><span class="chip on">ATen</span><span class="arrow">→</span><span class="chip on">cuBLAS</span><span class="arrow">→</span><span class="chip on">cudart</span><span class="arrow">→</span><span class="chip on">libcuda</span><span class="arrow">→</span><span class="chip on">GPU</span></div><p class="mini">CPU 上走完这一串约 5–20 µs；矩阵乘本身在 H100 上约 0.2 ms。小算子很多时，CPU 这一侧的开销就会变成瓶颈，这正是 torch.compile 和 CUDA Graphs 要解决的问题。</p>' },
+ ]},
+ { name: '③ 编译：PTX 与 SASS', path: PATH_NVCC, steps: [
+  { t: '从 .cu 源码开始', p: '<p>写一个 CUDA C++ kernel，用 nvcc 编译。nvcc 先把文件拆开：普通 C++ 部分交给 gcc，<code>__global__</code> 函数是设备代码，由 nvcc 自己处理。</p>', at: 0, x: '<pre>// add.cu\n__global__ void add(float* x, float* y, int n) {\n  int i = blockIdx.x * blockDim.x + threadIdx.x;\n  if (i &lt; n) y[i] += x[i];\n}\n\nnvcc add.cu -o add \\\n  -gencode arch=compute_90,code=sm_90 \\\n  -gencode arch=compute_90,code=compute_90</pre><p class="mini">第一行 <code>code=sm_90</code>：生成 H100 的 SASS。第二行 <code>code=compute_90</code>：再嵌一份 PTX。</p>' },
+  { t: '第一步产物：PTX', p: '<p>设备代码先被编译成 PTX。PTX 像一种「通用 GPU 汇编」：指令是虚拟的，寄存器数量不限，不针对任何一款具体芯片。</p>', at: 1, x: '<pre>.visible .entry add(.param .u64 x, .param .u64 y, .param .u32 n) {\n  mov.u32  %r1, %ctaid.x;\n  mad.lo.s32 %r4, %r1, %r2, %r3;\n  ld.global.f32 %f1, [%rd5];\n  add.f32  %f3, %f2, %f1;\n  st.global.f32 [%rd6], %f3;\n}</pre>' },
+  { t: '第二步产物：SASS', p: '<p><code>ptxas</code> 把 PTX 编译成某一代 GPU 的真实机器码 SASS，分配真实寄存器、安排指令顺序。<b>sm_90 的 SASS 只能在 Hopper（计算能力 9.x）上跑</b>，换成 Blackwell（10.0）就不认。</p>', at: 2, x: '<div class="chips"><span class="chip on">sm_80 · A100</span><span class="chip on">sm_90 · H100</span><span class="chip">sm_100 · B200</span></div><p class="mini">一份 SASS 对应一个架构；要支持多代 GPU 就要编多份。</p>' },
+  { t: '打包成 fatbinary', p: '<p>多份 SASS 和一份 PTX 被打包进同一个文件（fatbinary），再嵌入可执行文件或 <code>.so</code>。PyTorch 的 <code>libtorch_cuda.so</code> 很大，部分原因就是里面装了好几代架构的 SASS。</p>', at: 3, x: '<div class="chips"><span class="chip on">SASS sm_80</span><span class="chip on">SASS sm_90</span><span class="chip on">PTX compute_90</span></div>' },
+  { t: '加载时：驱动挑一份', p: '<p>程序第一次调用 kernel 时，libcuda 打开 fatbinary 找匹配当前 GPU 的那份：</p><ul><li>在 <b>H100</b> 上：找到 sm_90 的 SASS，直接加载，最快。</li><li>在 <b>B200</b> 上：没有 sm_100 的 SASS，于是取出 PTX，<b>当场 JIT 编译</b>成 sm_100 的 SASS。</li></ul>', at: 4, x: '<table class="vt"><tr><th>当前 GPU</th><th>sm_80</th><th>sm_90</th><th>PTX 90</th><th>结果</th></tr><tr><td>A100</td><td>✔ 用它</td><td></td><td></td><td>直接运行</td></tr><tr><td>H100</td><td></td><td>✔ 用它</td><td></td><td>直接运行</td></tr><tr><td>B200</td><td>✘</td><td>✘</td><td>✔ JIT</td><td>首次启动慢，之后走缓存</td></tr></table><p class="mini">JIT 结果缓存在 <code>~/.nv/ComputeCache</code>。如果既没有匹配的 SASS 也没有 PTX，会报 <code>no kernel image is available for execution on the device</code>。</p>' },
+  { t: '书里的结论', p: '<p><b>发布时既带 SASS 又带 PTX。</b>SASS 让已知 GPU 启动快、性能可预期；PTX 让程序在还没发布的新 GPU 上也能跑起来（只是第一次要等 JIT）。</p><p>PTX 能向后编译到更新的架构，但不能反过来：<code>compute_90</code> 的 PTX 无法在 A100（8.0）上运行。</p>', at: 5 },
+ ]},
+ { name: '④ torch.compile', path: PATH_TC, steps: [
+  { t: '同一段代码，换一条路', p: '<p>eager 模式下，每个算子单独启动一个 kernel，每次都从 HBM 读、写回 HBM。<code>torch.compile</code> 把整段代码当成一张图来优化，生成更少、更大的 kernel。</p>', at: 0, x: '<pre>def gelu_bias(x, b):\n    y = x + b\n    return 0.5 * y * (1 + torch.tanh(0.7978845608 * (y + 0.044715 * y**3)))\n\nf = torch.compile(gelu_bias)\nf(x, b)   # 第一次：编译；之后：直接跑生成的 kernel</pre>' },
+  { t: 'TorchDynamo → AOT Autograd → Inductor', p: '<ul><li><b>TorchDynamo</b>：在 Python 执行字节码时拦截，把张量操作记录成一张 FX 图。遇到 <code>print</code>、依赖数据的 <code>if</code> 等无法记录的代码时会「图中断」，前后分成两张图。</li><li><b>AOT Autograd</b>：训练时把反向传播的图也提前推导出来。</li><li><b>TorchInductor</b>：把图里能合并的逐元素操作融合在一起，为每组生成一个 Triton kernel。</li></ul>', at: 1, show: 'compile', x: '<div class="chips"><span class="chip off">add</span><span class="chip off">pow</span><span class="chip off">mul</span><span class="chip off">add</span><span class="chip off">tanh</span><span class="chip off">mul</span><span class="arrow">⇒</span><span class="chip on">1 个融合 kernel</span></div><p class="mini">eager 要启动约 8 个 kernel、来回读写 HBM 8 次；融合后读一次、写一次。</p>' },
+  { t: 'Triton 生成 PTX', p: '<p>Inductor 生成的是 Triton 的 Python 代码，Triton 编译器再经过 MLIR、LLVM 把它编译成 PTX。</p>', at: 2, x: '<pre>@triton.jit\ndef triton_poi_fused_add_mul_pow_tanh_0(in_ptr0, in_ptr1, out_ptr0, xnumel, XBLOCK: tl.constexpr):\n    xindex = tl.program_id(0) * XBLOCK + tl.arange(0, XBLOCK)\n    x = tl.load(in_ptr0 + xindex) + tl.load(in_ptr1 + xindex)\n    ...\n    tl.store(out_ptr0 + xindex, y)</pre><p class="mini">设置 <code>TORCH_LOGS=output_code</code> 就能把它打印出来。</p>' },
+  { t: 'PTX → SASS', p: '<p>和 nvcc 一样，PTX 再由 <code>ptxas</code> 编译成当前 GPU 的 SASS（CUBIN）。因为是在你的机器上现场编译，<b>直接按当前 GPU 的架构生成</b>，不需要 fatbinary。</p>', at: 4 },
+  { t: '加载并运行', p: '<p>编译好的 CUBIN 通过 libcuda 的 <code>cuModuleLoadData</code> 加载，之后每次调用都直接启动它。结果缓存在 <code>/tmp/torchinductor_*</code> 和 <code>~/.triton/cache</code>，下次启动进程时可以复用。</p>', at: 6, x: '<p class="mini">矩阵乘这类 cuBLAS 已经很快的算子，Inductor 通常仍然调用 cuBLAS（或在 <code>mode="max-autotune"</code> 下和 Triton 版本比一比再选）。</p>' },
+ ]},
+ { name: '⑤ 容器与版本号', steps: [
+  { t: '两个版本号，别搞混', p: '<p><code>nvidia-smi</code> 右上角有两个数字，含义完全不同：</p><ul><li><b>Driver Version: 580.65</b>：机器上装的驱动（nvidia.ko + libcuda.so）版本。</li><li><b>CUDA Version: 13.0</b>：这个驱动<b>最高支持</b>的 CUDA 版本，不是你装的 CUDA Toolkit 版本。</li></ul><p>你程序实际用的 CUDA 版本，看的是 <code>torch.version.cuda</code> 或 <code>nvcc --version</code>。</p>', hl: ['libcuda', 'kmod', 'cudart'], show: 'libcuda', x: '<pre>+-----------------------------------------------------------+\n| NVIDIA-SMI 580.65   Driver Version: 580.65   CUDA Version: 13.0 |\n+-----------------------------------------------------------+\n&gt;&gt;&gt; torch.version.cuda\n\'12.8\'      # PyTorch 自带的 CUDA 库版本</pre>' },
+  { t: '规则：新驱动能跑旧 CUDA', p: '<p>驱动向后兼容：<b>驱动版本 ≥ CUDA 要求的最低版本</b>，程序就能跑。反过来，CUDA 比驱动新，就会报 <code>CUDA driver version is insufficient</code>。</p>', hl: ['cudart', 'libcuda'], show: 'cudart', x: '<table class="vt"><tr><th>程序带的 CUDA</th><th>需要的驱动</th><th>驱动 580 上</th><th>驱动 535 上</th></tr><tr><td>CUDA 12.x</td><td>≥ R525</td><td>✔</td><td>✔</td></tr><tr><td>CUDA 13.x</td><td>≥ R580</td><td>✔</td><td>✘ 驱动太旧</td></tr></table><p class="mini">所以集群升级的顺序是：先升驱动，再升镜像里的 CUDA。</p>' },
+  { t: '容器里装了什么', p: '<p>Docker 镜像（例如 NGC 的 <code>nvcr.io/nvidia/pytorch:25.xx-py3</code>）里打包了上面这一整块：Python、PyTorch、cuBLAS / cuDNN / NCCL、cudart，以及 nvcc 等编译工具。</p><p>镜像里<b>没有驱动</b>。驱动包含内核模块，而容器和宿主机共用同一个内核，没法自带一个不同版本的内核驱动。</p>', ov: ['image'], hl: ['app', 'pylibs', 'torch', 'compile', 'cublas', 'cudnn', 'nccl', 'otherlib', 'cudart', 'nvcc', 'triton', 'ptx', 'sass', 'fatbin'], show: 'cudart' },
+  { t: '宿主机提供驱动', p: '<p>容器启动时（<code>docker run --gpus all</code>），<b>NVIDIA Container Toolkit</b> 做三件事：</p><ul><li>把 <code>/dev/nvidia*</code> 设备文件映射进容器；</li><li>把宿主机的 <code>libcuda.so</code>、<code>libnvidia-ml.so</code> 挂载进容器；</li><li>把 <code>nvidia-smi</code> 等工具也带进去。</li></ul><p>这样容器里用的 libcuda 永远和宿主机内核里的 nvidia.ko 版本一致。</p>', ov: ['image', 'host'], hl: ['libcuda', 'nvml', 'devfiles', 'kmod', 'uvm'], show: 'devfiles' },
+  { t: '所以排查顺序是', p: '<ol style="color:var(--ink2);padding-left:18px;margin:4px 0 8px"><li>宿主机上 <code>nvidia-smi</code> 能不能用？不能 → 驱动没装好。</li><li>容器里 <code>nvidia-smi</code> 能不能用？不能 → Container Toolkit 没配好、没加 <code>--gpus</code>。</li><li><code>torch.cuda.is_available()</code> 是 False？→ 镜像里的 CUDA 版本比宿主机驱动支持的新。</li><li>报 <code>no kernel image</code>？→ 程序没为这代 GPU 编 SASS，也没带 PTX。</li></ol><p>书里的建议：用 NGC 官方镜像，它们的 CUDA、cuDNN、NCCL、PyTorch 版本已经配好并测过；宿主机只需保证驱动足够新。</p>', ov: ['image', 'host'], hl: [] },
+ ]},
+ { name: '⑥ 常驻服务', steps: [
+  { t: '不在调用路径上的那些进程', p: '<p>前面的调用路径里没有出现右下角这几个服务。它们在后台一直运行，负责的是「机器能不能用、好不好用」，而不是「算得快不快」。</p>', hl: ['persist', 'fm', 'dcgm', 'nvml'] },
+  { t: 'nvidia-persistenced：省掉初始化', p: '<p>没有 CUDA 程序在跑时，驱动默认会把 GPU 状态拆掉。下一个程序启动时要重新初始化每张卡，8 卡机器上可能要 1–2 秒甚至更久，<code>nvidia-smi</code> 也会变慢。</p><p>persistenced 一直持有设备，让驱动保持「已初始化」。<b>它只省启动时间，不影响 kernel 的速度。</b></p>', hl: ['persist', 'kmod'], show: 'persist' },
+  { t: 'Fabric Manager：让 NVSwitch 能用', p: '<p>在 HGX / DGX 这类带 NVSwitch 的机器上，GPU 之间的 NVLink 要经过交换芯片。Fabric Manager 开机时初始化交换芯片、下发路由，运行中监控链路。</p><p>它没起来时，CUDA 初始化会失败，或者 GPU 之间只能退回走 PCIe。<b>版本必须和驱动完全一致</b>，升级驱动时要一起升。</p>', hl: ['fm', 'nvlink', 'kmod'], show: 'fm' },
+  { t: 'NVML、nvidia-smi 与 DCGM：看清 GPU 状态', p: '<p><b>NVML</b> 是读写 GPU 状态的底层库；<b>nvidia-smi</b> 是它的命令行界面；<b>DCGM</b> 是面向集群的后台监控服务，持续采集更细的指标并能做故障诊断。</p>', hl: ['dcgm', 'nvml'], show: 'dcgm', x: '<table class="vt"><tr><th>指标</th><th>说明</th></tr><tr><td>GPU-Util（nvidia-smi）</td><td>采样周期内有没有 kernel 在跑。一个只用 1 个 SM 的 kernel 也算 100%。</td></tr><tr><td>SM Activity（DCGM）</td><td>SM 实际忙碌的比例，更接近真实利用率。</td></tr><tr><td>Tensor Active（DCGM）</td><td>Tensor Core 忙碌的比例，矩阵乘是否吃满。</td></tr><tr><td>DRAM Active（DCGM）</td><td>显存带宽占用。</td></tr><tr><td>Xid / ECC</td><td>硬件和驱动错误，判断是否需要下线这张卡。</td></tr></table>' },
+  { t: '一台服务器上的完整清单', p: '<p>把整张图收拢一下，一台 GPU 服务器要正常跑 AI 任务，需要：</p>', hl: [], x: '<table class="vt"><tr><th>谁装</th><th>装什么</th></tr><tr><td>宿主机（运维）</td><td>nvidia.ko + libcuda + NVML（驱动包）、nvidia-persistenced、Fabric Manager（有 NVSwitch 时）、DCGM、NVIDIA Container Toolkit</td></tr><tr><td>镜像（开发者）</td><td>CUDA Toolkit（cudart、nvcc）、cuBLAS / cuDNN / NCCL、PyTorch、Triton、你的代码</td></tr></table><p class="mini">回到左图任意方块点一下，可以复习它属于哪一边。</p>' },
+ ]},
+ { name: '⑦ 一次 LLM 推理', steps: [
+  { t: '一次推理请求的全貌', p: '<p>前面的场景跟踪的是一个算子。这里把视角放大到一整次大模型推理：用户发来一句话，推理服务（vLLM、SGLang、TensorRT-LLM 等）一路处理到把回答流式返回。</p><p>例子：Llama-3-70B，bf16 权重约 140 GB，用 8 张 H100 做<b>张量并行</b>，每张卡放 1/8，约 17.5 GB。</p><p>整个过程分两个阶段：<b>Prefill</b> 一次处理完整段提示词，<b>Decode</b> 每次只生成 1 个 token，循环到结束。两个阶段的瓶颈完全不同。</p>', hl: [], x: pipe(-1) + '<table class="vt"><tr><th>指标</th><th>含义</th></tr><tr><td>TTFT</td><td>首 token 延迟：从请求到达到返回第一个 token，主要由 Prefill 决定</td></tr><tr><td>TPOT / ITL</td><td>之后每个 token 的间隔，由 Decode 一步的耗时决定</td></tr><tr><td>吞吐</td><td>整台机器每秒生成的 token 数，靠把很多请求拼成一批来提高</td></tr></table>' },
+  { t: '服务启动时做好的三件事', p: '<p>请求来之前，推理服务启动时已经做完了最慢的准备工作，每次请求都不再重复：</p><ul><li><b>加载权重</b>：从磁盘读 safetensors 文件，经 <code>cudaMemcpy</code> 放进每张卡的 HBM，常驻不动。</li><li><b>预分配 KV cache 池</b>：把剩下的显存（vLLM 默认用到 90%，<code>--gpu-memory-utilization</code>）一次性划成固定大小的块，避免运行中反复 <code>cudaMalloc</code>。</li><li><b>捕获 CUDA Graph</b>：对几种常见 batch 大小各跑一遍 decode，把整串 kernel 启动录下来，之后一次就能重放。</li></ul><p>同时 NCCL 建好 8 张卡之间的通信器，有 NVSwitch 的机器还要 Fabric Manager 已经在运行。</p>', hl: ['torch', 'cudart', 'nccl', 'hbm', 'fm'], show: 'hbm', x: pipe(-1) + '<pre>vllm serve meta-llama/Llama-3.1-70B-Instruct \\\n  --tensor-parallel-size 8 --gpu-memory-utilization 0.9</pre>' },
+  { t: '请求到达：分词与调度（CPU）', p: '<p>HTTP 请求到达推理服务的 Python 进程。<b>分词器</b>把文本切成 token id；<b>调度器</b>决定这一轮让哪些请求进 GPU（连续批处理），并为新请求预留 KV cache 的显存块（vLLM 的 PagedAttention 把 KV cache 按固定大小的块管理）。</p><p>这一步全在 CPU 上，GPU 还没开始干活。</p>', hl: ['app', 'torch'], show: 'app', x: pipe(0) + '<pre>"介绍一下 NVLink"\n  → tokenizer → [128000, 108514, 15225, 45, 53, 4026]   # 示意\n  → scheduler：本轮 batch = 正在 decode 的 37 个请求 + 这个新请求</pre>' },
+  { t: '输入拷进显存', p: '<p>token id 只有几 KB，放在锁页内存（pinned memory）里，通过 <code>cudaMemcpyAsync</code> 由 DMA 引擎经 PCIe 拷进 HBM。</p><p>模型权重不用拷：它们在服务启动时就已经常驻在 HBM 里了。每次请求真正搬进 GPU 的只有这点输入。</p>', route: ['app', 'torch', 'cudart', 'libcuda', 'devfiles', 'kmod', 'hbm'], show: 'hbm', x: pipe(1) + '<p class="mini">启动时加载权重才是大头：每张卡 17.5 GB，从磁盘读入再拷进 HBM，往往要几十秒到几分钟。</p>' },
+  { t: 'Prefill：一次算完整段提示词', p: '<p>提示词里所有 token <b>同时</b>穿过 80 层 Transformer。每一层依次启动这些 kernel：</p><p>因为一次处理成百上千个 token，矩阵乘的矩阵很大，Tensor Core 能吃满，这个阶段是<b>算力受限</b>的。每个 token 每一层算出的 K、V 被写进 HBM 里的 <b>KV cache</b>，Decode 阶段会反复读它们。</p>', route: ['torch', 'cublas', 'cudnn', 'cudart', 'libcuda', 'gpu', 'hbm'], show: 'cublas', x: pipe(2) + '<div class="chips"><span class="chip">RMSNorm · Triton/自写</span><span class="arrow">→</span><span class="chip on">QKV 投影 · cuBLAS</span><span class="arrow">→</span><span class="chip on">注意力 · FlashAttention/cuDNN</span><span class="arrow">→</span><span class="chip on">O 投影 · cuBLAS</span><span class="arrow">→</span><span class="chip">RMSNorm</span><span class="arrow">→</span><span class="chip on">MLP 3 个 GEMM · cuBLAS</span></div><p class="mini">× 80 层。注意力 kernel 同时把这一层的 K、V 写进 KV cache。</p>' },
+  { t: '张量并行：每层两次 all-reduce', p: '<p>每张卡只有每个权重矩阵的 1/8，算出来的是部分和。注意力的 O 投影和 MLP 的最后一个 GEMM 之后，8 张卡必须把部分和加起来，这就是 <b>all-reduce</b>，由 <b>NCCL</b> 经 NVLink / NVSwitch 完成。</p><p>80 层 × 2 = 每次前向 160 次 all-reduce。NCCL 的通信 kernel 也跑在 SM 上，所以 NVLink 带宽和延迟直接决定能把张量并行做多大，这正是 NVL72 把 72 张卡放进一个 NVLink 域的原因。</p>', route: ['nccl', 'cudart', 'libcuda', 'gpu', 'nvlink'], show: 'nccl', x: pipe(2) + '<div class="chips"><span class="chip">GPU0 部分和</span><span class="chip">GPU1 部分和</span><span class="arrow">…</span><span class="chip">GPU7 部分和</span><span class="arrow">⇒ all-reduce ⇒</span><span class="chip on">每张卡都拿到完整结果</span></div>' },
+  { t: 'Decode：一次只生成 1 个 token', p: '<p>Prefill 结束得到第一个 token。之后进入循环：每一步把上一步生成的 1 个 token 送进模型，同样穿过 80 层，算出下一个 token。</p><p>每一步计算量很小（每个请求只有 1 行），却要把<b>全部权重</b>和这个请求<b>全部的 KV cache</b>从 HBM 读一遍。所以 Decode 是<b>显存带宽受限</b>的：粗算每步至少 17.5 GB ÷ 3.35 TB/s ≈ 5 ms，这就是单个请求 TPOT 的下限。</p>', route: ['torch', 'cudart', 'libcuda', 'gpu', 'hbm'], show: 'hbm', x: pipe(3) + '<table class="vt"><tr><th></th><th>Prefill</th><th>Decode 一步</th></tr><tr><td>每请求处理</td><td>全部提示词 token</td><td>1 个 token</td></tr><tr><td>矩阵形状</td><td>大矩阵 × 大矩阵</td><td>细长矩阵 × 大矩阵</td></tr><tr><td>瓶颈</td><td>Tensor Core 算力</td><td>HBM 带宽</td></tr></table>' },
+  { t: 'CUDA Graph：把几百次启动压成一次', p: '<p>Decode 一步要启动上千个小 kernel（80 层 × 每层十几个），每个 kernel 本身可能只跑几微秒。如果每次都走 PyTorch → cudart → libcuda 的完整启动路径，CPU 端开销会比 GPU 计算还长，GPU 只能干等。</p><p>启动时录好的 <b>CUDA Graph</b> 在这里派上用场：一次 <code>cudaGraphLaunch</code> 就把整串 kernel 交给驱动，CPU 开销从几毫秒降到几十微秒。</p>', route: ['torch', 'cudart', 'libcuda', 'devfiles', 'kmod', 'gpu'], show: 'cudart', x: pipe(3) + '<div class="chips"><span class="chip warn">不用 Graph：CPU 逐个 launch × 1000+</span></div><div class="chips"><span class="chip on">用 Graph：cudaGraphLaunch × 1</span></div><p class="mini">代价是 batch 形状必须事先录好，所以 vLLM 会把实际 batch 补齐到最近的一个录制尺寸。</p>' },
+  { t: '采样、反分词、流式返回', p: '<p>最后一层输出每个词表位置的 logits（Llama-3 词表约 12.8 万）。<b>采样</b>在 GPU 上完成：除以温度 → softmax → top-k / top-p 截断 → 按概率抽一个 token id。</p><p>只有这个 id（几个字节）拷回 CPU。CPU 把它反分词成文字，通过 SSE / HTTP 流式发给用户，同时把 id 作为下一步 Decode 的输入。遇到结束符或达到 <code>max_tokens</code> 时这个请求结束，释放它的 KV cache 块。</p>', route: ['gpu', 'libcuda', 'cudart', 'torch', 'app'], show: 'app', x: pipe([4, 5]) + '<pre>data: {"choices":[{"delta":{"content":"NV"}}]}\ndata: {"choices":[{"delta":{"content":"Link"}}]}\n…</pre>' },
+  { t: '连续批处理与 PagedAttention', p: '<p>单个请求的 Decode 只用了 GPU 很小一部分算力。提高吞吐的办法是让很多请求<b>共用一次权重读取</b>：几十上百个请求拼成一个 batch，读一遍权重同时算出每个请求的下一个 token。</p><ul><li><b>连续批处理</b>：每一步都重新组 batch，结束的请求马上退出，新请求马上加入，不必等整批结束。</li><li><b>PagedAttention</b>：KV cache 按块分配（类似操作系统的分页），请求长短不一也不会浪费显存，能塞进更多请求。</li></ul><p>batch 越大，单步越慢一点但总吞吐越高，这就是吞吐与 TPOT 之间要调的权衡。</p>', hl: ['torch', 'gpu', 'hbm'], show: 'hbm', x: '<div class="chips"><span class="chip on">请求 A · decode</span><span class="chip on">请求 B · decode</span><span class="chip off">请求 C · 已结束</span><span class="chip warn">请求 D · 新加入 prefill</span><span class="chip on">…共 38 个</span></div><p class="mini">KV cache 显存 ≈ 2 × 层数 × KV 头数 × 头维度 × 字节数 × token 数。Llama-3-70B（GQA，8 个 KV 头）每个 token 约 320 KB，1 万 token 的上下文就是约 3.2 GB。</p>' },
+  { t: 'KV cache 放不下时：卸载到 CPU 内存', p: '<p>长上下文、多轮对话会让 KV cache 远超显存。常见做法是把暂时不用的 KV 块卸载到 CPU 内存，需要时再拷回来（vLLM 的 swap、LMCache 等）。</p><p>在普通服务器上这条路走 PCIe（约 64 GB/s），拷回的延迟很明显。GB200 上 Grace CPU 和 GPU 之间是 <b>NVLink-C2C</b>（900 GB/s，缓存一致），GPU 甚至可以借助统一内存（<b>nvidia-uvm.ko</b>）直接访问 480 GB LPDDR5X，KV 卸载的代价小得多。</p>', route: ['hbm', 'gpu', 'kmod', 'uvm'], show: 'uvm', x: '<table class="vt"><tr><th>KV 存放处</th><th>带宽量级</th></tr><tr><td>HBM（H100）</td><td>3.35 TB/s</td></tr><tr><td>Grace LPDDR5X（经 C2C）</td><td>约 0.5 TB/s，容量 480 GB</td></tr><tr><td>x86 主机内存（经 PCIe 5.0）</td><td>约 64 GB/s</td></tr></table>' },
+  { t: '小结：在哪看瓶颈', p: '<p>把一次推理放回这张软件栈图：上层（推理框架、PyTorch）负责调度和组 batch，中层（cuBLAS、FlashAttention、NCCL、CUDA Graph）把计算和通信变成 kernel，底层（驱动、HBM、NVLink）决定这些 kernel 跑多快。</p>', hl: ['app', 'torch', 'cublas', 'cudnn', 'nccl', 'gpu', 'hbm', 'nvlink', 'dcgm'], show: 'dcgm', x: '<table class="vt"><tr><th>现象</th><th>多半是</th><th>看什么</th></tr><tr><td>TTFT 高</td><td>Prefill 算力不够或排队</td><td>DCGM Tensor Active、调度队列长度</td></tr><tr><td>TPOT 高</td><td>Decode 被显存带宽卡住</td><td>DCGM DRAM Active 接近 100%</td></tr><tr><td>GPU 利用率低、SM Activity 时高时低</td><td>CPU 启动开销、没开 CUDA Graph</td><td>Nsight Systems 时间线上 kernel 之间的空隙</td></tr><tr><td>多卡比单卡没快多少</td><td>all-reduce 太慢</td><td>NVLink 带宽计数器、NCCL 日志</td></tr><tr><td>请求一多就 OOM 或被抢占</td><td>KV cache 不够</td><td>vLLM 日志里的 KV cache 使用率</td></tr></table>' },
+ ]},
+];
+OV.image.rects = [[50, 18, 660, 274], [722, 18, 266, 344]];
+OV.host.rects = [[50, 292, 660, 210]];
+OV.image.lx = 60; OV.host.lx = 400; OV.image.ly = OV.host.ly = 612;
+
+const svg = document.getElementById('stack');
+const el = (tag, attrs, parent) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+};
+const txt = (s, attrs, parent) => { const n = el('text', attrs, parent); n.textContent = s; return n; };
+
+// 左侧分区括号与分界线
+const brk = el('g', { class: 'brk' }, svg);
+[[26, 354, '用户态（你的进程里）'], [380, 424, '系统调用'], [438, 494, '内核态'], [518, 578, '硬件']].forEach(([a, b, s]) => {
+  el('line', { x1: 40, y1: a, x2: 40, y2: b }, brk);
+  el('line', { x1: 40, y1: a, x2: 46, y2: a }, brk);
+  el('line', { x1: 40, y1: b, x2: 46, y2: b }, brk);
+  txt(s, { x: 26, y: (a + b) / 2, 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, brk);
+});
+[[366, '↓ open / ioctl / mmap：进入内核'], [506, '↓ PCIe（Grace 平台上是 NVLink-C2C）']].forEach(([y, s]) => {
+  el('line', { class: 'divider', x1: 50, y1: y, x2: 710, y2: y }, svg);
+  txt(s, { class: 'divlabel', x: 706, y: y - 3, 'text-anchor': 'end' }, svg);
+});
+txt('后台常驻服务（不在调用路径上）', { class: 'grplabel', x: 730, y: 372 }, svg);
+
+const flowLayer = el('g', {}, svg);   // 流动线画在方块下面，只在方块间隙里露出来
+const flow = el('path', { class: 'flow', d: '' }, flowLayer);
+
+const nodes = {};
+M.forEach(([id]) => {
+  const b = BOX[id];
+  const g = el('g', { class: 'box', tabindex: 0, role: 'button', 'aria-label': b.t, style: `--g:var(--${b.c})` }, svg);
+  el('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 8 }, g);
+  const cy = b.y + b.h / 2;
+  txt(b.t, { class: 't', x: b.x + 12, y: cy - 4 }, g);
+  txt(b.s, { class: 's', x: b.x + 12, y: cy + 14 }, g);
+  g.addEventListener('click', () => showInfo(id));
+  g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); showInfo(id); } });
+  nodes[id] = g;
+});
+
+const ovNodes = {};
+for (const k in OV) {
+  const o = OV[k];
+  const g = el('g', { class: 'ov' }, svg);
+  o.rects.forEach(([x, y, w, h]) => el('rect', { x, y, width: w, height: h, rx: 12, style: `stroke:var(--${o.c})` }, g));
+  el('rect', { x: o.lx, y: o.ly - 10, width: 22, height: 10, rx: 2, style: `stroke:var(--${o.c})` }, g);
+  txt(o.label, { x: o.lx + 30, y: o.ly, style: `fill:var(--${o.c})` }, g);
+  ovNodes[k] = g;
+}
+const token = el('circle', { class: 'token', r: 9, cx: -50, cy: -50 }, svg);
+// ---- 调用路径：正交折线，经过方块之间的空隙 ----
+function buildRoute(ids) {
+  const pts = [], marks = [];
+  ids.forEach((id, i) => {
+    const b = BOX[id], cy = b.y + b.h / 2, cx = b.x + b.w / 2;
+    if (!i) { pts.push([b.x + Math.min(160, b.w / 2), cy]); marks.push(0); return; }
+    const [px, py] = pts[pts.length - 1];
+    if (px >= b.x + 16 && px <= b.x + b.w - 16) pts.push([px, cy]);
+    else {
+      const prev = BOX[ids[i - 1]];
+      const gy = Math.abs(py - cy) < 1 ? cy : (prev.y + prev.h < b.y ? (prev.y + prev.h + b.y) / 2 : (prev.y + b.y + b.h) / 2);
+      if (gy !== py) pts.push([px, gy]);
+      pts.push([cx, gy]);
+      if (gy !== cy) pts.push([cx, cy]);
+    }
+    marks.push(pts.length - 1);
+  });
+  const len = [0];
+  for (let i = 1; i < pts.length; i++) len.push(len[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  return { pts, marks, len };
+}
+const ROUTES = {};
+SCENES.forEach((s, i) => { if (s.path) ROUTES[i] = buildRoute(s.path); });
+const pointAt = (r, d) => {
+  let i = 1;
+  while (i < r.len.length - 1 && r.len[i] < d) i++;
+  const t = (d - r.len[i - 1]) / ((r.len[i] - r.len[i - 1]) || 1);
+  const [ax, ay] = r.pts[i - 1], [bx, by] = r.pts[i];
+  return [ax + (bx - ax) * Math.min(1, Math.max(0, t)), ay + (by - ay) * Math.min(1, Math.max(0, t))];
+};
+const pathTo = (r, d) => {
+  if (d <= 0) return '';
+  let s = `M${r.pts[0][0]},${r.pts[0][1]}`;
+  for (let i = 1; i < r.pts.length && r.len[i - 1] < d; i++) {
+    const [x, y] = r.len[i] <= d ? r.pts[i] : pointAt(r, d);
+    s += `L${x},${y}`;
+  }
+  return s;
+};
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let anim = 0, tokenDist = 0;
+function moveToken(r, target, instant) {
+  cancelAnimationFrame(anim);
+  const from = instant || reduceMotion ? target : tokenDist, t0 = performance.now();
+  const dur = Math.min(1400, Math.max(350, Math.abs(target - from) * 3.2));
+  const tick = now => {
+    const k = Math.min(1, (now - t0) / dur), e = k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+    tokenDist = from + (target - from) * e;
+    const [x, y] = pointAt(r, tokenDist);
+    token.setAttribute('cx', x); token.setAttribute('cy', y);
+    flow.setAttribute('d', pathTo(r, tokenDist));
+    if (k < 1) anim = requestAnimationFrame(tick);
+  };
+  anim = requestAnimationFrame(tick);
+}
+function hideToken() {
+  cancelAnimationFrame(anim); tokenDist = 0;
+  token.setAttribute('cx', -50); token.setAttribute('cy', -50); flow.setAttribute('d', '');
+}
+
+// ---- 右侧说明 ----
+const info = document.getElementById('info');
+let selected = null;
+function showInfo(id) {
+  const d = INFO[id], b = BOX[id];
+  if (selected) nodes[selected].classList.remove('sel');
+  selected = id; nodes[id].classList.add('sel');
+  info.innerHTML = `<h3 style="color:var(--${b.c})">${b.t}</h3><div class="kind">${d.kind}</div>
+    <h4>它是什么</h4><p>${d.what}</p><h4>对应的文件 / 命令</h4><p>${d.where}</p>
+    <h4>你什么时候会碰到它</h4><p>${d.when}</p><h4>上下游</h4><p>${d.link}</p>`;
+}
+// ---- 场景与步骤 ----
+const $ = id => document.getElementById(id);
+const tabs = $('tabs'), dots = $('dots');
+let sc = 0, st = 0, prevScene = -1, timer = null;
+SCENES.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.setAttribute('role', 'tab'); b.textContent = s.name;
+  b.addEventListener('click', () => { stop(); go(i, 0); });
+  tabs.appendChild(b);
+});
+function go(s, k) { sc = s; st = k; render(); }
+function render() {
+  const S = SCENES[sc], step = S.steps[st];
+  [...tabs.children].forEach((b, i) => b.setAttribute('aria-selected', String(i === sc)));
+  $('st-title').textContent = step.t;
+  $('st-text').innerHTML = step.p;
+  $('st-extra').innerHTML = step.x || '';
+  $('counter').textContent = `步骤 ${st + 1} / ${S.steps.length}`;
+  if (prevScene !== sc) {
+    dots.innerHTML = '';
+    S.steps.forEach((_, i) => {
+      const d = document.createElement('i');
+      d.title = S.steps[i].t;
+      d.addEventListener('click', () => { stop(); go(sc, i); });
+      dots.appendChild(d);
+    });
+  }
+  [...dots.children].forEach((d, i) => d.classList.toggle('on', i === st));
+  const hl = new Set(S.path ? S.path.slice(0, step.at + 1) : [...(step.route || []), ...(step.hl || [])]);
+  svg.classList.toggle('focus', hl.size > 0);
+  for (const id in nodes) nodes[id].classList.toggle('hl', hl.has(id));
+  for (const k in ovNodes) ovNodes[k].classList.toggle('on', !!(step.ov && step.ov.includes(k)));
+  if (S.path) {
+    const r = ROUTES[sc];
+    if (prevScene !== sc) { tokenDist = 0; flow.setAttribute('d', ''); }
+    moveToken(r, r.len[r.marks[step.at]], false);
+  } else if (step.route) {
+    // 单步自带路线：每次都从起点重新走一遍
+    const r = step._r || (step._r = buildRoute(step.route));
+    tokenDist = 0; flow.setAttribute('d', '');
+    moveToken(r, r.len[r.len.length - 1], false);
+  } else hideToken();
+  const show = step.show || (S.path && S.path[step.at]);
+  if (show) showInfo(show);
+  else if (!hl.size) {
+    if (selected) nodes[selected].classList.remove('sel');
+    selected = null;
+    info.innerHTML = '<p class="hintline">点左图中的任意方块，这里会显示它的详细说明。键盘：← → 切换步骤，空格播放/暂停。</p>';
+  }
+  $('prev').disabled = sc === 0 && st === 0;
+  $('next').disabled = sc === SCENES.length - 1 && st === S.steps.length - 1;
+  prevScene = sc;
+}
+function step(d) {
+  const n = SCENES[sc].steps.length;
+  if (d > 0) {
+    if (st < n - 1) go(sc, st + 1);
+    else if (sc < SCENES.length - 1) go(sc + 1, 0);
+    else return false;
+  } else {
+    if (st > 0) go(sc, st - 1);
+    else if (sc > 0) go(sc - 1, SCENES[sc - 1].steps.length - 1);
+  }
+  return true;
+}
+const playBtn = $('play');
+function stop() { clearInterval(timer); timer = null; playBtn.textContent = '▶ 自动播放'; }
+function play() {
+  if (timer) return stop();
+  playBtn.textContent = '⏸ 暂停';
+  timer = setInterval(() => { if (!step(1)) stop(); }, 4500);
+}
+$('prev').addEventListener('click', () => { stop(); step(-1); });
+$('next').addEventListener('click', () => { stop(); step(1); });
+playBtn.addEventListener('click', play);
+document.addEventListener('keydown', e => {
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  const onCtl = e.target.closest && e.target.closest('button, .box, input, textarea');
+  if (e.key === 'ArrowRight') { stop(); step(1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') { stop(); step(-1); e.preventDefault(); }
+  else if (e.key === ' ' && !onCtl) { play(); e.preventDefault(); }
+});
+render();
+</script>
+</body>
+</html>
