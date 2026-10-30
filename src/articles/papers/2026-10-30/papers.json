@@ -1,0 +1,354 @@
+{
+  "date": "2026-10-30",
+  "title": "2026-10-30 论文精选",
+  "lede": "今日主线是 GPU 集群与 kernel 之间的“中间地带”：100ms 粒度监控暴露调度空间，通信布局被藏进已有的集合通信，KV cache 与量化继续在压缩比上加码。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 480
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Plenty of Room in the Middle: Revealing Opportunities on a GPU Cluster via Fine-Grained Monitoring",
+          "aid": "2610.36329",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "authors": "Andrew Sheinberg, Samyak Gupta, Kai Li",
+          "institutions": "Princeton University",
+          "abstract": "论文研究 GPU 集群利用率低的问题：用基于 NVIDIA DCGM 的轻量监控工具，在 89 节点、319 张 GPU 的大学研究集群上以 100 毫秒粒度采集 GPU 内部计算利用率，运行数月，本文分析其中 10 天、12 个院系 150 名用户提交的 7399 个作业。测量给出三个结论：超过 70% 的作业占用显存不足 20%，50% 的作业 Streaming Multiprocessor 平均利用率低于 5%；80% 的作业申请时长与实际运行时长严重不匹配，直接废掉调度器的判断力；多 GPU 作业的通信呈高度周期性。作者据此指出“中间地带”仍有大量空间——不改硬件、不改应用，只靠更细粒度的作业调度与 GPU 多任务复用即可拿到可观的利用率提升。监控工具已开源。",
+          "contributions": [
+            "提出基于 DCGM 的轻量细粒度监控方案，以 100ms 粒度捕获作业运行中的 GPU 内部计算利用率，填补秒级/分钟级监控无法支撑 GPU 级优化的空白",
+            "在真实生产集群完成数月观测，给出显存占用、SM 利用率、申请时长失配、多 GPU 通信模式四类系统性画像",
+            "把结论落到两条可操作路径：细化作业级调度依据，以及在作业之间复用 GPU 空闲资源"
+          ],
+          "conclusions": [
+            "集群的主要瓶颈不是硬件算力，而是作业申请与实际使用之间的错配，收益大头在调度与复用层",
+            "多 GPU 作业的周期性通信模式为通信感知调度、网络与显存时间片复用提供了直接抓手"
+          ],
+          "experiments": [
+            "89 节点 / 319 GPU 集群，100ms 采样，10 天内 150 名用户提交 7399 个作业",
+            "超过 70% 作业显存占用低于 20%，50% 作业 SM 平均利用率低于 5%",
+            "80% 作业的申请时长与实际时长严重不匹配；多 GPU 作业通信呈高度周期性"
+          ],
+          "significance": "用一手细粒度测量证明：GPU 集群的收益大头在调度层，而不是硬件层。",
+          "takeaway": "100ms 粒度监控把“低利用率”拆成可操作的错配：显存超配、SM 空转、时长乱报。",
+          "keyExperiment": "319 张 GPU 上 10 天 7399 个作业的 100ms 采样显示，50% 作业 SM 利用率低于 5%、80% 作业申请时长与实际严重失配。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.36329",
+          "pdfUrl": "https://arxiv.org/pdf/2610.36329.pdf",
+          "index": 1
+        },
+        {
+          "title": "Evolving Agent Teams",
+          "aid": "2610.36848",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "authors": "Shiyi Cao, Ziming Mao, Dacheng Li, Joseph E. Gonzalez, Ion Stoica",
+          "institutions": "University of California, Berkeley",
+          "abstract": "软件工程智能体的进步让“用 agent 自动优化 GPU kernel”变得可行，但作者发现现有 coding agent 在真实专家手写的 kernel（如 FlashInfer）上会收敛到局部最优。为此提出 Evolving Agent Teams 多智能体框架：一个中央 supervisor 诊断当前局部最优的成因并据此重组智能体团队；一个持久化文件系统保存学习文档、演化历史与各团队的产出工件，让每次重组建立在累积经验之上，而不是重头再来。在匹配的 token 预算下该方法稳定优于强 coding agent 基线；在扩展预算下它从零生成 CUDA kernel，相对 FlashInfer 生产级 MLA paged decode kernel 取得 1.2 倍平均加速，在 FlashInfer-Bench 的 47 个生产负载中赢下 36 个。",
+          "contributions": [
+            "指出 coding agent 在专家级 kernel 上会陷入局部最优，并提出“诊断—重组”的团队演化机制而非更强的单轮搜索",
+            "用持久化文件系统（学习文档、演化历史、团队工件）把经验显式化，使重组能继承已获得的结构性认知",
+            "在 FlashInfer-Bench、AMD MI350X/B200、Apple 芯片 MoE offload 与机器人任务上给出跨平台验证"
+          ],
+          "conclusions": [
+            "突破局部最优的关键在于团队结构与经验的持续演化，而不只是单次生成质量",
+            "相同 token 预算下已优于强基线，说明收益来自组织机制而非单纯堆算力"
+          ],
+          "experiments": [
+            "从零生成的 CUDA kernel 对 FlashInfer 生产 MLA paged decode kernel 达 1.2 倍平均加速，47 个生产负载赢 36 个（其余 11 个为 0.86–0.99 倍）",
+            "KDA prefill：AMD MI350X 上 3.01 倍于 vLLM，NVIDIA B200 上 3.44 倍于 FlashKDA",
+            "Apple M4 Pro（48GB，MLX 4-bit）上 MoE expert offload 服务 Qwen3.8-Flash-Next 达 30.3 tokens/s；RoboDojo 保留种子 62.1，优于榜单最佳 55.3"
+          ],
+          "significance": "把多智能体的组织机制引入 GPU kernel 自动优化，并在生产级 kernel 上拿到实测加速。",
+          "takeaway": "让 agent 团队自己诊断局部最优并重组，比让单个 agent 再多试几次更有效。",
+          "keyExperiment": "从零生成的 CUDA kernel 在 FlashInfer-Bench 47 个生产负载上赢 36 个，对 MLA paged decode 平均快 1.2 倍。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.36848",
+          "pdfUrl": "https://arxiv.org/pdf/2610.36848.pdf",
+          "index": 2
+        },
+        {
+          "title": "DCKV: Learned Transform Coding of the Prompt KV Cache in Hybrid Language Models",
+          "aid": "2610.36950",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "authors": "Egor Maximov, Aleksei Merkelov, Vasiliy Alekseev, Ivan Krivorotov, Valentin Beliaev, Nikita Arsenin, Dmitry Bocharov, Aleksei Goncharov",
+          "institutions": "MIL Team, DAIMLD",
+          "abstract": "混合语言模型只在少数全注意力层保留 KV cache，但这部分状态仍随 prompt 线性增长，且必须被存储或搬运才能复用。论文提出 DCKV——首个端到端训练的 KV cache 可微编解码器：它的变换、量化器与熵模型（以 prompt token 与已解码的相邻位置为条件）在冻结语言模型的前提下联合优化，训练目标同时包含熵模型给出的码长与模型输出的变化量。在 Qwen3.5-2B 上，DCKV 用一个压缩 token 以比 bf16 少 55 倍以上的字节保存缓存，三个长上下文基准上的精度损失最多 1.8 分；压缩到 100 倍以上时损失最多 3.6 分。它只处理随 prompt 增长的那部分状态，正好落在混合注意力架构的结构性痛点上。",
+          "contributions": [
+            "首个面向 prompt KV cache 的端到端可训练编解码器，把变换、量化与熵编码放在同一目标下优化",
+            "训练目标同时约束码长与模型输出偏差，直接对齐“压缩后模型还能不能用”，而非只优化重建误差",
+            "针对混合注意力模型设计，只编解码少数全注意力层里随 prompt 增长的那部分缓存"
+          ],
+          "conclusions": [
+            "KV cache 可以被当作可学习压缩的信号，而非简单量化对象，压缩率与精度能够显式折中",
+            "55 倍压缩仅损失 ≤1.8 分，说明长上下文复用与跨节点搬运场景下该路线已具备实用性"
+          ],
+          "experiments": [
+            "Qwen3.5-2B：相对 bf16 压缩超过 55 倍，三个长上下文基准最多掉 1.8 分",
+            "压缩超过 100 倍时精度损失最多 3.6 分",
+            "熵模型以 prompt token 与已解码邻位为条件，与变换、量化端到端联合训练"
+          ],
+          "significance": "把经典变换编码搬到 KV cache 上并端到端训练，给出压缩率-精度的清晰折中曲线。",
+          "takeaway": "KV cache 该按“信号”来压：可微变换 + 熵编码一起训，55 倍压缩几乎不掉点。",
+          "keyExperiment": "Qwen3.5-2B 上 55 倍以上压缩仅损失 1.8 分，100 倍以上压缩损失 3.6 分。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.36950",
+          "pdfUrl": "https://arxiv.org/pdf/2610.36950.pdf",
+          "index": 3
+        },
+        {
+          "title": "Layerwise Repacking: Variable-Length Hybrid-Attention Training without an Extra Redistribution Pass",
+          "aid": "2610.35989",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "authors": "Jiahao Zhang, Junwei Feng, Dongliang Huang, Xiaoling Zhou, Yiqiao Liao, Chengru Song (Kling Infra Team)",
+          "institutions": "KlingAI Research (Kuaishou)",
+          "abstract": "变长训练让混合注意力模型的各层对并行度提出互相冲突的要求：最长样本的全注意力层需要 16 或 32 卡的宽序列并行组，其成本随序列长度平方增长；而稀疏注意力层以近线性的 MoE 计算为主，多数负载在节点内 SP8 组即可均衡。复用宽组会把这些层的 all-to-all 推到跨节点，实测有效带宽低 7 倍；换成小组又会改变样本归属，若在每个全/稀疏层边界另做一次重分布，就多一次数据搬运。Layerwise Repacking 为全注意力保留 SP16/32 父组，把样本重打包进节点内 SP{1,2,4,8} 子组，隐藏状态在全注意力层之间持续驻留；布局变更搭乘已有的两个全层 Ulysses 站点，一次变长 all-to-all 同时完成头交换与样本重打包，因此不新增重分布。父组成员由辅助求解器先重平衡，以提升子组可达的均衡度。",
+          "contributions": [
+            "揭示变长混合注意力训练的层间并行冲突：窄 SP 组会把稀疏层的 all-to-all 推到跨节点，实测有效带宽低 7 倍",
+            "提出父组—子组重打包，把布局切换藏进既有 Ulysses 的变长 all-to-all，零额外重分布 pass",
+            "辅助父组求解器通过调整父组的样本组成，提升子组调度可达到的均衡度"
+          ],
+          "conclusions": [
+            "通信优化的关键是把布局变更隐藏进已存在的集合通信，而不是新增一次数据重排",
+            "全注意力层用宽组、稀疏层用节点内小组，能在不牺牲正确性的前提下同时省时间与带宽"
+          ],
+          "experiments": [
+            "1F3S 混合模型前 200 步中的 22 个 SP16/32 步：仅重打包即让端到端时间降 5.95%，MFU 提升 3.75 个百分点",
+            "加入父组求解器后：端到端时间降 7.61%，MFU 提升 4.83 个百分点",
+            "跨节点 all-to-all 的实测有效带宽比节点内低 7.0 倍，是该方法要规避的核心代价"
+          ],
+          "significance": "一次“免费的”布局切换：把通信重排塞进原有集合通信，换来个位数百分比但无回归的训练加速。",
+          "takeaway": "变长混合注意力训练里，最贵的不是 all-to-all 本身，而是为切并行布局多付的那一次重分布。",
+          "keyExperiment": "22 个 SP16/32 训练步上端到端时间降 5.95%、MFU +3.75 点；加父组求解器后降 7.61%、MFU +4.83 点。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.35989",
+          "pdfUrl": "https://arxiv.org/pdf/2610.35989.pdf",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Let the Gate Decide: Per-Lookup Precision for Quantized Conditional Memory in LLMs",
+          "aid": "2610.35985",
+          "score": 4.6,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "authors": "Tianqi Chen, Xunchao Li, Linchuan Xie, Guanghua Yu, Jianchen Zhu, Peisong Wang, Jian Cheng",
+          "institutions": "中科院自动化所 (CASIA), 腾讯, 中国科学院大学",
+          "abstract": "条件记忆层（如 DeepSeek 的 Engram）给语言模型挂上大尺寸哈希 n-gram 表，把它们从 DeepSeek-V4.1-Flash 里移除会掉 36.8 个 PopQA 分。低比特量化最先损伤长尾事实，而常规补救“给高频行更多比特”反而更差：按访问频率精细化甚至不如随机精细化。作者把原因追到缩放每行的门控上——一次查找的量化误差被其门控加权，常见 n-gram 的门控小、长尾实体的稀有 n-gram 门控大，而门控本身可由 1-bit 码算出。GateRQ 因此把每行存成 1-bit 残差码阶梯，第一层常驻 GPU 显存用于算门控，只有门控排名靠前的查找才读取更深层，无需重新训练。",
+          "contributions": [
+            "揭示“按访问频率分配比特”失效的机制：量化误差被门控加权，真正受害的是稀有 n-gram 而非高频行",
+            "提出按门控排序的逐查找精度策略，并把门控压缩到 1-bit 码，使排序本身几乎不花显存",
+            "把每行组织成 1-bit 残差阶梯，浅层常驻显存、深层按需读取，可直接插入现有推理栈"
+          ],
+          "conclusions": [
+            "条件记忆的量化应按门控重要性而非访问频率分配比特，频率是个误导性的代理指标",
+            "在不重训练的前提下大幅压缩 GPU 上的表显存，并把它直接换成服务吞吐"
+          ],
+          "experiments": [
+            "DeepSeek-V4.1-Flash：GPU 表显存减少 7.8 倍，vLLM 吞吐较 FP8 表提升 11%–31%",
+            "每次查找读 1.50 bit 时 PopQA 约掉 1 分；读 2.10 bit 时掉 0.2 分（两个模型）",
+            "移除条件记忆层基线掉 36.8 个 PopQA 分，标定该模块对长尾事实的贡献"
+          ],
+          "significance": "把条件记忆的量化粒度从“行频次”改到“门控重要性”，一次拿到 7.8 倍显存压缩与两位数吞吐提升。",
+          "takeaway": "量化该看门控而不是访问频率：稀有 n-gram 的门控最大，误差也最贵。",
+          "keyExperiment": "DeepSeek-V4.1-Flash 上 GPU 表显存减少 7.8 倍，vLLM 吞吐较 FP8 提升 11%–31%，PopQA 仅掉约 1 分。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.35985",
+          "pdfUrl": "https://arxiv.org/pdf/2610.35985.pdf",
+          "index": 5
+        },
+        {
+          "title": "ResCom: Activation Residual Compensation for Large Language Model Quantization",
+          "aid": "2610.35955",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "authors": "Ning Yang, Bohan Cui, Zhuowen Liu, Yuting Wang",
+          "institutions": "中科院自动化所 (CASIA), 复旦大学, 香港中文大学, 中国科学院大学",
+          "abstract": "低位权重-激活量化能降低大模型部署的显存与算力开销，但校准之后激活的舍入误差仍会损伤精度；从舍入后的输入做重建无法区分落在同一量化桶内的激活，信息在量化那一刻就丢了。论文提出 ResCom：用激活舍入残差做低秩校正，补偿由此产生的层输出误差。一个输出感知的校准过程按“对输出重建的贡献”挑选残差方向，并闭式解出校正量，既不需要梯度训练，也不更新已校准的权重。在 Llama-3-8B 的 4-bit 权重与激活设置下，秩 32 的注意力校正把 WikiText-2 困惑度从 7.708 降到 7.147，MMLU 提升 2.89 分，五-shot GSM8K 从 23.96% 升到 36.16%。",
+          "contributions": [
+            "指出同一量化桶内激活不可区分是激活量化的信息瓶颈，改用舍入残差承载被丢弃的那部分信息",
+            "输出感知选向 + 闭式求解的校正，无需梯度训练、不改已校准权重，适配现有 PTQ 流程",
+            "在 1B–70B 模型规模与 C4 留出集上验证方法的泛化性"
+          ],
+          "conclusions": [
+            "激活残差是被浪费的低成本信号，低秩补偿即可换回可观精度，尤其体现在生成式任务上",
+            "精度收益的代价很小且可调：FP32 实现只增加 2.25% 的 prefill 时间，紧凑存储实现保留 27.7% 峰值显存下降"
+          ],
+          "experiments": [
+            "Llama-3-8B W4A4（秩 32）：WikiText-2 困惑度 7.708→7.147，MMLU +2.89 分，GSM8K 23.96%→36.16%",
+            "FP32 实现使 4K prefill 时间仅增加 2.25%",
+            "紧凑存储实现相对 FP16 仍保留 27.7% 的峰值显存下降"
+          ],
+          "significance": "一个不训练、只解线性方程的 W4A4 补丁，把 GSM8K 拉高 12 个百分点。",
+          "takeaway": "量化丢的信息就藏在舍入残差里，低秩闭式校正就能捡回来相当一部分。",
+          "keyExperiment": "Llama-3-8B W4A4 上 GSM8K 从 23.96% 升到 36.16%，MMLU +2.89 分，prefill 仅慢 2.25%。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.35955",
+          "pdfUrl": "https://arxiv.org/pdf/2610.35955.pdf",
+          "index": 6
+        },
+        {
+          "title": "Efficient Quantization Training with Stochastic Rounding via Structured Subspace Randomness",
+          "aid": "2610.36587",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "authors": "Zeyu Wang, Yiheng Duan, Tao Chen, Donghyun Koo, Sihan Liu, Wenbo Zhang, Chuan He, Liang Liu",
+          "institutions": "Google",
+          "abstract": "低精度训练常用随机舍入（SR）让量化梯度无偏、避免小更新被舍成 0，但标准 SR 要为每个梯度元素抽一个独立随机阈值；加速器的随机数由向量单元生成，吞吐远落后于矩阵单元，逐元素抽样会把向量单元打满，使带 SR 的 INT8 训练反而比 BF16 还慢。共享阈值能消掉这笔开销，却强制这些元素同向舍入并引入共同偏移。作者发现该偏移主要经激活梯度反向传播损伤训练，而前面的层无法用自身的本地舍入误差抵消外来偏移，必须在其产生的那一层消除。据此提出结构化子空间随机舍入 S3R：上游梯度只为激活与权重两个矩阵乘量化一次，每个 token 在隐维共享一个阈值；配套的 S3R-EC 从激活与权重梯度中减去结构化的平均舍入误差，优化器保持不变。",
+          "contributions": [
+            "定位 INT8 训练中随机舍入的瓶颈在向量单元的随机数吞吐，而不是舍入算法本身",
+            "证明共享阈值引入的偏差主要通过激活梯度反向传播，且必须在其产生层就地补偿",
+            "提出 S3R 与 S3R-EC：一次量化同时服务两个 GEMM，解析补偿消除偏差而不改优化器"
+          ],
+          "conclusions": [
+            "随机舍入的硬件成本可以被“结构化共享 + 解析补偿”消掉，SR 不再是 INT8 训练的拖累",
+            "误差补偿必须在源层执行，下游层无法靠本地舍入自洽地抵消上游偏移"
+          ],
+          "experiments": [
+            "TPU v5p 上稠密 LLM 的全 INT8 训练步比 BF16 快 1.24–1.32 倍",
+            "比逐元素独立 SR 快 1.11 倍",
+            "未补偿的阈值共享会损害收敛，S3R-EC 消除该退化并与独立 SR 的验证损失对齐"
+          ],
+          "significance": "把“随机舍入太贵”从算法问题转为结构问题，INT8 训练第一次真正跑赢 BF16。",
+          "takeaway": "共享随机阈值省钱但引入偏差，偏差要按 token 结构化地减回去。",
+          "keyExperiment": "TPU v5p 稠密 LLM 全 INT8 训练步比 BF16 快 1.24–1.32 倍，比独立 SR 快 1.11 倍。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.36587",
+          "pdfUrl": "https://arxiv.org/pdf/2610.36587.pdf",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Folding Attention Biases into Keys Makes Compacted KV Caches Run on Standard Kernels",
+          "aid": "2610.36520",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "authors": "Utkarsh Kanwat",
+          "institutions": "Independent Researcher",
+          "abstract": "Attention Matching（AM）通过为每个头保留部分 key、重新拟合 value、并给每个保留 key 的 logit 加一个偏置来压缩 KV cache，但 FlashAttention 与 vLLM 的 paged cache 都没有接收该偏置的输入口，压缩算法因此卡在 kernel 接口上。论文把偏置沿每个头的一个闭式方向折进 key 本身（方向由上下文 query 拟合），得到一个普通缓存：尺寸与头维和 AM 一致，走模型自己的 query 路径，输出误差由每个 query 在该方向上的投影偏离 1 的程度界定。等预算下，未改动的 vLLM 通过 KV connector 服务折叠缓存，Qwen3-4B 的 51 个问题全部与 Hugging Face 答案一致，Qwen3-14B 的 200 条 LongBench 样本有 180 条贪心输出一致。",
+          "contributions": [
+            "提出把 AM 的 logit 偏置折叠进 key 的闭式变换，使压缩缓存能直接跑在标准 attention kernel 上",
+            "给出输出误差界：由每个 query 在折叠方向上的投影偏离 1 的程度决定，可用于判断折叠是否安全",
+            "完全不改 vLLM 与 FlashAttention，仅通过既有 KV connector 即可服务折叠后的缓存"
+          ],
+          "conclusions": [
+            "KV 压缩方法落地的障碍常常是 kernel 接口而非算法本身，折叠思路能绕开接口改造",
+            "在多数设置下折叠版与保留偏置的 AM 精度无显著差异，仅在按发表预算运行时各有胜负"
+          ],
+          "experiments": [
+            "Qwen3-4B：51 个问题答案与 Hugging Face 全一致；Qwen3-14B：200 条 LongBench 中 180 条贪心输出一致",
+            "QuALITY 与 LongHealth 共 14 个设置中 13 个与 AM 精度在噪声范围内",
+            "12 个可比设置中，折叠版对全量缓存的 KL 全部低于“直接丢弃偏置”的版本"
+          ],
+          "significance": "用一个解析变换把压缩算法从“需要自定义 kernel”变成“标准 kernel 可用”。",
+          "takeaway": "压缩算法要落地，先解决接口：偏置不必单独传，折进 key 就行。",
+          "keyExperiment": "未改动的 vLLM 通过 KV connector 服务折叠缓存，Qwen3-4B 51 题与 HF 全一致，Qwen3-14B LongBench 180/200 条贪心一致。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.36520",
+          "pdfUrl": "https://arxiv.org/pdf/2610.36520.pdf",
+          "index": 8
+        },
+        {
+          "title": "Taming Multi-Dimensional Skew in Sparse Matrix Multiplication with Contention-Aware Scheduling",
+          "aid": "2610.36822",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "authors": "Wentao Huang, Qiming Huang, Yunhong Ji, Mian Lu, Yuqiang Chen, Bingsheng He, Kian-Lee Tan",
+          "institutions": "新加坡国立大学 (NUS), 中国人民大学, 第四范式 (Phancy Group)",
+          "abstract": "稀疏通用矩阵乘（SpGEMM）是图分析、关系查询与机器学习里的关键 kernel，但真实负载的倾斜让性能难以保证。论文指出工作负载分布不均是主因，且由两类并存的根因造成：一是多维倾斜——计算代价、输出密度与数据局部性的不均衡无法被任何单一均衡指标刻画；二是缓存争用——稠密子结构在片上引发严重干扰。为此提出自适应 morsel 调度 AMS：用固定输出大小的 morsel 解耦各倾斜维度，集成争用感知负载均衡 CALB 与数据感知 SMT 激活器 SMTact 来缓解缓存级争用，并配合混合累加机制 HYB 为每个 morsel 自适应选择最佳累加器。评估覆盖矩阵平方、关系查询、图分析等稀疏 kernel。",
+          "contributions": [
+            "把 SpGEMM 的倾斜拆成“多维倾斜 + 缓存争用”两个并存根因，解释了单一指标均衡为何失效",
+            "提出以固定输出大小的 morsel 作为调度单位，解耦计算代价、输出密度与数据局部性三个维度",
+            "CALB、SMTact、HYB 三个组件分别负责负载均衡、片上缓存争用与累加器选择"
+          ],
+          "conclusions": [
+            "稀疏 kernel 的调度必须同时考虑负载倾斜与缓存干扰，只看负载均衡会漏掉一半瓶颈",
+            "在倾斜负载上显著优于现有方法，在非倾斜负载上性能相当，增益并非以牺牲常规场景换取"
+          ],
+          "experiments": [
+            "在矩阵平方、关系查询、图分析等多类稀疏 kernel 的倾斜负载上显著优于 SOTA（论文按 kernel 分别报告，未给统一倍率）",
+            "在非倾斜负载上保持与 SOTA 相当的性能，无明显回退",
+            "带宽利用率同步提升，结论在多种硬件系统与负载上成立"
+          ],
+          "significance": "把稀疏 kernel 的调度问题从“均衡负载”升级为“均衡负载 + 隔离缓存干扰”。",
+          "takeaway": "倾斜不是一维的：算力、输出密度、局部性三者同时偏，还叠加片上缓存争用。",
+          "keyExperiment": "在矩阵平方、关系查询、图分析等倾斜负载上显著优于 SOTA，同时带宽利用率提升且非倾斜负载不回退。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.36822",
+          "pdfUrl": "https://arxiv.org/pdf/2610.36822.pdf",
+          "index": 9
+        },
+        {
+          "title": "God Does Not Play Dice: Enforcing Batch Invariance in Agentic Kernel Generation",
+          "aid": "2610.36623",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "authors": "Youwei Bao, Chengpeng Wang, Simin Chen",
+          "institutions": "George Mason University (STAR Lab), 新加坡国立大学 (NUS)",
+          "abstract": "LLM 服务系统会动态批处理用户请求，同一请求在不同轮次可能与不同请求同批执行；若 GPU kernel 不具备批不变性（batch invariance, BI），变化的批上下文就会改变同一输入的数值输出，破坏可复现性。现有 kernel 生成 agent 只盯正确性与效率，普遍忽视 BI——作者在 83 个可批处理的开源产物中确认了 19 处 BI 违规。为此论文提出一个 BI 强制组件（原文以占位符表示工具名）：把契约引导的静态依赖分析与跨批上下文的逐位一致性动态验证结合起来，以插件形式嵌入通用 kernel agent，在优化循环里充当连续验收门，在性能基准测试之前拒掉结构有风险或动态不一致的候选，并把反馈回传给 agent。",
+          "contributions": [
+            "首次系统测量 kernel 生成产物的批不变性缺陷：83 个可批处理产物中确认 19 处违规",
+            "提出契约引导的静态依赖分析 + 跨批逐位一致性动态验证的双层检查，兼顾覆盖与成本",
+            "以插件形式接入三个 agent 框架，在基准测试前设验收门并向 agent 回传失败原因"
+          ],
+          "conclusions": [
+            "批不变性应作为与正确性、速度并列的可靠性目标，纳入 kernel 自动优化流程",
+            "强制 BI 的代价可控：性能仅小幅让步，远小于服务端数值不可复现带来的调试成本"
+          ],
+          "experiments": [
+            "三个 agent 框架、真实 LLM 服务任务上，BI 通过率从 67.6% 提升到 91.9%",
+            "同时保留基线几何平均加速的 91.8%",
+            "83 个可批处理产物中确认 19 处 BI 违规，说明该缺陷在现有生态中普遍存在"
+          ],
+          "significance": "给 kernel 生成 agent 补上被忽略的第三个目标：数值在不同批上下文下必须一致。",
+          "takeaway": "动态批处理下 kernel 不批不变，同样的输入就会算出不定的结果——这是可复现性的隐形漏洞。",
+          "keyExperiment": "BI 通过率 67.6%→91.9%，同时保留基线几何平均加速的 91.8%。",
+          "date": "2026-10-28",
+          "arxivUrl": "https://arxiv.org/abs/2610.36623",
+          "pdfUrl": "https://arxiv.org/pdf/2610.36623.pdf",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
