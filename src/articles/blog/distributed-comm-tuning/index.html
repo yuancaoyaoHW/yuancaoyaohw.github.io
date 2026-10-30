@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分布式通信调优动画：先量，再藏、少传、走对路</title>
+<style>
+/* 配色只引用共享语义层 --a-*（public/styles/article-tokens.css），作用域限定在 .dct 容器内。
+   动画本身在 /demos/ch04-distributed-tuning/ 独立运行，通过同源 iframe 嵌入，样式与站点互不干扰。 */
+:where(.article-body, .interactive-body) .dct {
+  max-width: 1080px; margin: 0 auto; padding: 8px 20px 60px;
+  color: var(--a-fg); line-height: 1.8; font-size: 15.5px;
+}
+.dct h1 { color: var(--a-fg-strong); font-size: 30px; line-height: 1.35; margin: 8px 0 10px; }
+.dct h2 { color: var(--a-fg-strong); font-size: 21px; margin: 0 0 12px; }
+.dct p { margin: 0 0 12px; }
+.dct ul, .dct ol { margin: 0 0 12px 1.3em; padding: 0; }
+.dct li { margin: 4px 0; }
+.dct ol.fix li { margin: 0 0 10px; }
+.dct b, .dct strong { color: var(--a-fg-strong); }
+.dct code { background: var(--a-code-bg); padding: 1px 5px; border-radius: 4px; font-size: .9em; overflow-wrap: anywhere; }
+.dct .lead { color: var(--a-fg-muted); font-size: 16px; margin-bottom: 22px; }
+.dct section {
+  margin: 0 0 28px; padding: 24px 26px; background: var(--a-surface);
+  border: 1px solid var(--a-line); border-radius: 12px;
+}
+.dct section.demo { padding: 12px; }
+.dct .demo iframe { display: block; width: 100%; height: 1800px; border: 0; background: transparent; }
+.dct .bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; padding: 0 4px; }
+.dct .hint { color: var(--a-fg-muted); font-size: 13px; }
+.dct a.open {
+  font-size: 13px; text-decoration: none; border-radius: 7px; padding: 3px 11px;
+  border: 1px solid var(--a-line); background: var(--a-bg); color: var(--a-fg);
+}
+.dct a.open:hover { border-color: var(--a-line-hover); color: var(--a-fg-strong); }
+.dct table.specs { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 14px; }
+.dct table.specs th, .dct table.specs td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--a-line); vertical-align: top; }
+.dct table.specs th { color: var(--a-fg-muted); font-weight: 500; }
+.dct table.specs td:first-child { white-space: nowrap; color: var(--a-fg-strong); }
+.dct .note {
+  border-left: 3px solid var(--a-blue); background: var(--a-blue-bg);
+  padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 14.5px;
+}
+@media (max-width: 760px) {
+  .dct section { padding: 18px 16px; }
+  .dct section.demo { padding: 6px; }
+  .dct table.specs { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<div class="dct">
+<h1>分布式通信调优：先量，再藏、少传、走对路</h1>
+<p class="lead">数据并行训练每一步都要在所有 GPU 之间把梯度求一次平均。链路的速度是定的，能调的是通信怎么安排：先在时间线上量出它露在关键路径上多少，再把它藏到反向计算后面，少同步几次、少传几个字节，让流量走最快的链路，把求和交给交换机。推理时在 GPU 之间搬 KV 缓存也是同一套思路。下面的动画把每一步的改前和改后画在同一根时间轴上，可以播放、单步、拖动，也可以改参数看结果怎么变。</p>
+
+<section class="demo" aria-label="分布式通信调优交互动画">
+  <iframe id="dct-iframe" src="/demos/ch04-distributed-tuning/" title="分布式通信调优交互动画" loading="lazy"></iframe>
+  <div class="bar">
+    <span class="hint">空格播放或暂停，← → 跳到上一个或下一个事件，数字键 1 到 6 切换页面；鼠标停在色块上能看到这一段在做什么。</span>
+    <a class="open" href="/demos/ch04-distributed-tuning/" target="_blank" rel="noopener">在新标签页打开</a>
+  </div>
+</section>
+
+<section>
+  <h2>六页讲什么</h2>
+  <p>内容来自《AI Systems Performance Engineering》第 4 章“分布式调优”，配套代码在 <a href="https://github.com/cfregly/ai-performance-engineering" target="_blank" rel="noopener">cfregly/ai-performance-engineering</a> 的 ch04 目录。六页是一个顺序：每一页都在上一页的基础上再改一处。</p>
+  <table class="specs">
+    <tr><th>页</th><th>做法</th><th>默认参数下的结果（示意单位）</th></tr>
+    <tr><td>① 量</td><td>反向全部结束后再逐层 <code>dist.all_reduce</code>。Nsight Systems 里是“两段式”：反向内核跑完，才出现一串 NCCL 内核。</td><td>一步 23.0，通信 12.6 全部露在关键路径上，占 55%。</td></tr>
+    <tr><td>② 藏</td><td>DDP 把梯度分桶，桶凑齐就在单独的 NCCL 流上 all-reduce，和反向重叠，时间线变成锯齿状。</td><td>23.0 → 17.8。只能和反向重叠，下限是 15.4。</td></tr>
+    <tr><td>③ 少</td><td>梯度累积时把前 K−1 个微批放进 <code>no_sync()</code>，只同步最后一次；再用 <code>bf16_compress_hook</code> 把字节减半。</td><td>K = 4：69.8 → 47.7 → 42.1。</td></tr>
+    <tr><td>④ 路</td><td>4 块 GPU、两对 NVLink：先在对内归约，再跨 PCIe 交换一次，最后在对内广播，跨 PCIe 的字节从 1.5M 降到 M。</td><td>100 MiB：13.5 → 10.8。NVLink 只比 PCIe 快 2 倍时，分层反而更慢（16.8）。</td></tr>
+    <tr><td>⑤ 卸</td><td>SHARP / NVLS 在交换机里求和再组播，每块 GPU 只发一次、收一次。</td><td>n = 8：9.8 → 4.5。</td></tr>
+    <tr><td>⑥ 推</td><td>分离式推理里，NIXL 把 KV 缓存从 prefill GPU 直接传到 decode GPU，再按层流式传输，和 prefill 计算重叠。</td><td>decode 第 1 步：24.2 → 14.2 → 9.2。</td></tr>
+  </table>
+  <p>页面底部是体检清单，列出第 4 章各“陷阱”小节里会让训练悄悄变慢、却不报错的配置：后端落到 Gloo、GPUDirect RDMA 没生效、选错网卡、忽视 NCCL 警告、通信器反复创建、长期关着 P2P、没绑 NUMA、NCCL 版本不一致、落后的 rank。</p>
+</section>
+
+<section>
+  <h2>勘误与核对</h2>
+  <p>对照原文和 PyTorch、NCCL、NIXL 的文档，下面几处需要更正或补充。动画里已经按这里的说法处理。</p>
+  <ol class="fix">
+    <li><b>DDP 分桶的顺序。</b>书中说最后一层（fc3）的梯度“在反向传播中最后被计算”，较早层的梯度到反向结束时通常已归约完。顺序正好反了：反向从最后一层往前算，fc3 的梯度最先算出，它的桶最先发出；fc1 的梯度最后才算出，它的桶才是盖不住的尾巴。</li>
+    <li><b>默认桶大小。</b><code>bucket_cap_mb</code> 默认是 25 MiB。第一个桶默认只有约 1 MiB，好让第一次 all-reduce 尽早开始；第一次迭代之后，DDP 还会按梯度实际就绪的顺序重建一次桶。</li>
+    <li><b>“完全重叠约 12 ms”的前提。</b>书中例子是计算 10 ms、通信 12 ms，完全重叠时约等于两者中较大的那个。这要求前向也能和通信重叠。DDP 只能和反向重叠：前向要等上一步的优化器，优化器要等所有桶归约完，所以下限是 前向 + max(反向, 通信) + 优化器。按前向占计算的 30% 算，是 3 + max(7, 12) + 0.4 = 15.4，而不是 12.4。</li>
+    <li><b>压缩的代价。</b>BF16 / FP16 压缩钩子会损失一点精度。PowerSGD 是低秩近似，有损，靠误差反馈弥补；梯度稀疏化通常要改训练算法才能保住收敛。</li>
+    <li><b>SHARP 的收益来自哪里。</b>环形 all-reduce 里每块 GPU 要发出 2(n−1)/n·B 字节，网内归约只发 B、收 B，所以链路字节最多省一半，带宽上的收益不超过 2 倍。NVIDIA 报告的 2–5 倍里，超出 2 倍的部分来自延迟：环形要串行走 2(n−1) 步，网内归约只有一上一下，规模越大差得越多。</li>
+    <li><b>NIXL 的接口名。</b>书中写的是 <code>registerMem</code> → <code>trim</code> → <code>prepXfer</code> → <code>postXfer</code> → 轮询 <code>checkXfer</code>。<code>nixl.h</code> 里对应的是 <code>registerMem</code>、<code>createXferReq</code>（或 <code>prepXferDlist</code> 加 <code>makeXferReq</code>）、<code>postXferReq</code>、<code>getXferStatus</code>、<code>releaseXferReq</code>，两端先用 <code>getLocalMD</code> / <code>loadRemoteMD</code> 交换元数据。书中 <code>trim</code> 这一步没有核对到对应的接口。</li>
+    <li><b>环境变量改名。</b>书中的 <code>NCCL_ASYNC_ERROR_HANDLING=1</code> 在新版 PyTorch 里叫 <code>TORCH_NCCL_ASYNC_ERROR_HANDLING</code>，旧名已弃用。</li>
+    <li><b><code>NCCL_SOCKET_IFNAME</code> 填什么。</b>它填网络接口名（如 <code>ib0</code>、<code>eth0</code>），书中注释写成“填你的 HCA”。选哪几块 InfiniBand 网卡用的是 <code>NCCL_IB_HCA</code>（如 <code>mlx5_0</code>）。</li>
+    <li><b>Gloo 和 CUDA 张量。</b>Gloo 也能对 CUDA 张量做 all-reduce，只是要经主机内存中转，很慢，不会报错。所以误用 Gloo 时程序照常运行，只是慢。</li>
+  </ol>
+</section>
+<section>
+  <h2>数字怎么看</h2>
+  <ul>
+    <li>动画里的时间是示意单位，不是实测。训练页假设前向占计算的 30%、反向占 70%，每次 NCCL 调用另加 0.15 的固定开销；拓扑页和网内归约页按链路带宽加每步延迟估算。</li>
+    <li>模型没有计入 NCCL 内核占用的 SM 和显存带宽，也没有画 DDP 的首桶和重建桶，所以真实的重叠效果会差一些。</li>
+    <li>书中的实测量级照原样引用：表 4-1，重叠后反向加通信的时间降到约 70%，一步快约 30%；表 4-2，拓扑感知加重叠后 SM 忙时 60% → 90%，迭代 100 ms → 70 ms；表 4-3，每次迭代都重建通信器时，一次迭代从 0.5 ms 变成 48.5 ms；400 MB 的 all-reduce，Gloo 200 ms，NCCL 4 ms。</li>
+  </ul>
+  <div class="note">动画顶部的环形图是 8 块 GPU 的 ring all-reduce：前 7 步边传边加（reduce-scatter），后 7 步把加满的块再传一圈（all-gather），每块 GPU 一共发出 2(n−1)/n·B = 1.75B。第 ⑤ 页的网内归约省掉的就是这 14 步串行接力。</div>
+</section>
+
+<script>
+(() => {
+  const iframe = document.getElementById('dct-iframe');
+  if (!iframe) return;
+  const root = document.documentElement;
+  // 同源 iframe：同步站点主题，并按内容高度撑开，避免出现第二个滚动条
+  const sync = () => {
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.body) return;
+      doc.documentElement.setAttribute('data-theme', root.getAttribute('data-theme') || 'dark');
+      // 用 body 的实际高度：documentElement.scrollHeight 不会小于 iframe 当前视口，只增不减
+      iframe.style.height = Math.ceil(doc.body.getBoundingClientRect().height) + 'px';
+    } catch (e) { /* 非同源时保持默认高度 */ }
+  };
+  iframe.addEventListener('load', () => {
+    sync();
+    try { new ResizeObserver(sync).observe(iframe.contentDocument.body); } catch (e) {}
+  });
+  new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
+</div>
+</body>
+</html>

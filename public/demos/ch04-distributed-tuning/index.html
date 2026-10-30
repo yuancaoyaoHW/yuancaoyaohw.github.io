@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 4 章 分布式通信调优：先量，再藏、少传、走对路</title>
+<style>
+:root{
+  color-scheme:light;
+  --page:#eef1f6; --surface:#fcfcfb; --surface2:#f2f3f7; --ink:#0b0b0b; --ink2:#52514e; --muted:#6b6a66;
+  --grid:#e1e0d9; --axis:#c3c2b7; --line:rgba(11,11,11,.10); --line2:rgba(11,11,11,.17);
+  --accent:#6250d6; --accent-soft:rgba(98,80,214,.13);
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --api:var(--c4); --idle:var(--muted); --good:#0ca30c;
+  --tint:24%; --glass:rgba(252,252,251,.82);
+  --shadow:0 1px 0 rgba(255,255,255,.8) inset,0 22px 48px -30px rgba(30,40,90,.35);
+  --aur1:rgba(98,80,214,.20); --aur2:rgba(42,120,214,.17); --aur3:rgba(235,104,52,.11);
+  --circuit:rgba(30,40,80,.05);
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --page:#080b12; --surface:#121621; --surface2:#171c2a; --ink:#eef1f8; --ink2:#b9c0cf; --muted:#8a90a0;
+    --grid:#232838; --axis:#3a4052; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.15);
+    --accent:#9085e9; --accent-soft:rgba(144,133,233,.17);
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --good:#0ca30c;
+    --tint:34%; --glass:rgba(18,22,33,.74);
+    --shadow:0 1px 0 rgba(255,255,255,.05) inset,0 30px 70px -36px rgba(0,0,0,.9);
+    --aur1:rgba(144,133,233,.24); --aur2:rgba(57,135,229,.20); --aur3:rgba(217,89,38,.13);
+    --circuit:rgba(150,170,255,.055);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --page:#080b12; --surface:#121621; --surface2:#171c2a; --ink:#eef1f8; --ink2:#b9c0cf; --muted:#8a90a0;
+  --grid:#232838; --axis:#3a4052; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.15);
+  --accent:#9085e9; --accent-soft:rgba(144,133,233,.17);
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --good:#0ca30c;
+  --tint:34%; --glass:rgba(18,22,33,.74);
+  --shadow:0 1px 0 rgba(255,255,255,.05) inset,0 30px 70px -36px rgba(0,0,0,.9);
+  --aur1:rgba(144,133,233,.24); --aur2:rgba(57,135,229,.20); --aur3:rgba(217,89,38,.13);
+  --circuit:rgba(150,170,255,.055);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:var(--ink);font:14px/1.65 var(--sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.viz-root{position:relative;max-width:1180px;margin:0 auto;padding:30px 24px 44px;overflow:hidden;isolation:isolate}
+.viz-root::before{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
+  background-image:linear-gradient(var(--circuit) 1px,transparent 1px),linear-gradient(90deg,var(--circuit) 1px,transparent 1px);
+  background-size:28px 28px;-webkit-mask-image:linear-gradient(to bottom,#000 0,rgba(0,0,0,.6) 30%,transparent 75%);mask-image:linear-gradient(to bottom,#000 0,rgba(0,0,0,.6) 30%,transparent 75%)}
+.aurora{position:absolute;left:-10%;right:-10%;top:-140px;height:640px;z-index:-1;pointer-events:none;filter:blur(36px)}
+.aurora i{position:absolute;border-radius:50%;animation:drift 28s ease-in-out infinite alternate}
+.aurora i:nth-child(1){width:46%;height:72%;left:2%;top:10%;background:radial-gradient(closest-side,var(--aur1),transparent)}
+.aurora i:nth-child(2){width:42%;height:62%;left:40%;top:0;background:radial-gradient(closest-side,var(--aur2),transparent);animation-duration:36s;animation-delay:-9s}
+.aurora i:nth-child(3){width:34%;height:54%;left:64%;top:24%;background:radial-gradient(closest-side,var(--aur3),transparent);animation-duration:44s;animation-delay:-17s}
+@keyframes drift{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(6%,5%,0) scale(1.14)}100%{transform:translate3d(-6%,-3%,0) scale(.92)}}
+.defs{position:absolute;width:0;height:0;overflow:hidden}
+code{font-family:var(--mono);font-size:.88em;color:var(--ink);background:color-mix(in srgb,var(--ink) 7%,transparent);padding:.08em .36em;border-radius:4px;overflow-wrap:anywhere}
+/* ---------- 头图 ---------- */
+.hero{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.15fr);gap:30px;align-items:center;margin:4px 0 30px}
+.hero h1{font-size:36px;line-height:1.2;letter-spacing:-.012em;margin:0 0 16px;font-weight:700;text-wrap:balance}
+.hero .lead{color:var(--ink2);font-size:15px;line-height:1.85;margin:0 0 10px;max-width:33em}
+.hero .lead b{color:var(--ink);font-weight:600}
+.hero-viz{position:relative;margin:0;border-radius:20px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);
+  background:radial-gradient(110% 85% at 50% 42%,color-mix(in srgb,var(--accent) 12%,var(--surface)) 0%,var(--surface) 62%)}
+#hero{display:block;width:100%;height:310px}
+.hero-cap{padding:0 18px 14px;margin-top:-4px;font-size:12.5px;color:var(--ink2)}
+.hc-row{display:flex;justify-content:space-between;gap:2px 14px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.hc-row #hero-phase{color:var(--ink);font-weight:600}
+.hc-key{display:flex;flex-wrap:wrap;gap:2px 16px;margin-top:4px;font-size:12px;color:var(--muted)}
+.hc-key span{display:inline-flex;align-items:center;gap:6px}
+.theme-btn{margin-top:6px}
+
+/* ---------- 路线式页签：六步是一个顺序 ---------- */
+.route{position:relative;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));margin:0 0 26px;padding-top:4px}
+.route-track,.route-lit{position:absolute;top:17px;left:calc(100% / 12);height:2px;border-radius:2px}
+.route-track{right:calc(100% / 12);background:var(--grid)}
+.route-lit{width:0;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 25%,transparent),var(--accent));
+  transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.route-spark{position:absolute;top:-3px;left:0;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 10px 3px var(--accent);opacity:0;animation:spark 2.6s cubic-bezier(.5,0,.3,1) infinite}
+@keyframes spark{0%{left:0;opacity:0}12%{opacity:1}82%{opacity:1}100%{left:100%;opacity:0}}
+.tab{position:relative;appearance:none;border:0;background:none;color:inherit;font:inherit;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:7px;padding:0 4px 6px;border-radius:12px}
+.tab .stn{position:relative;z-index:1;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+  font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;background:var(--surface);border:2px solid var(--axis);color:var(--muted);
+  transition:background .35s,border-color .35s,color .35s,box-shadow .35s}
+.tab .verb{font-size:31px;line-height:1.05;font-weight:600;color:var(--muted);transition:color .3s,transform .3s cubic-bezier(.2,.8,.2,1)}
+.tab .cap{font-size:12px;line-height:1.4;color:var(--muted);text-align:center;transition:color .3s}
+.tab:hover .verb{color:var(--ink2);transform:translateY(-2px)}
+.tab.past .stn{border-color:var(--accent);color:var(--accent)}
+.tab[aria-selected="true"] .stn{background:var(--accent);border-color:var(--accent);color:#fff;
+  box-shadow:0 0 0 5px var(--accent-soft),0 0 22px -2px var(--accent)}
+.tab[aria-selected="true"] .verb{color:var(--ink);transform:none}
+.tab[aria-selected="true"] .cap{color:var(--ink2)}
+.tab[aria-selected="true"]::after{content:"";position:absolute;left:50%;bottom:0;width:26px;height:3px;margin-left:-13px;border-radius:3px;
+  background:var(--accent);box-shadow:0 0 12px var(--accent);animation:grow .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes grow{from{transform:scaleX(0)}to{transform:none}}
+
+/* ---------- 按钮与控件 ---------- */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{appearance:none;font:inherit;font-size:13px;color:var(--ink);background:var(--surface2);border:1px solid var(--line2);border-radius:10px;
+  height:34px;min-width:34px;padding:0 11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;
+  transition:background .2s,border-color .2s,transform .12s}
+.btn:hover{border-color:var(--accent)}
+.btn:active{transform:translateY(1px)}
+.btn svg{width:15px;height:15px;fill:currentColor;flex:none}
+.btn.play{width:46px;height:46px;min-width:46px;padding:0;border-radius:50%;border:0;color:#fff;
+  background:radial-gradient(circle at 35% 30%,color-mix(in srgb,#fff 22%,var(--accent)),var(--accent));box-shadow:0 8px 22px -8px var(--accent)}
+.btn.play svg{width:18px;height:18px}
+.btn.play.on{animation:halo 1.9s ease-out infinite}
+@keyframes halo{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent),0 8px 22px -8px var(--accent)}
+  100%{box-shadow:0 0 0 14px transparent,0 8px 22px -8px var(--accent)}}
+.seg{display:inline-flex;background:var(--surface2);border:1px solid var(--line2);border-radius:10px;padding:2px;gap:2px}
+.seg button{appearance:none;border:0;background:none;font:inherit;font-size:12.5px;color:var(--ink2);padding:0 9px;height:28px;border-radius:8px;
+  cursor:pointer;font-variant-numeric:tabular-nums;transition:background .2s,color .2s}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);font-weight:600}
+input[type=range]{-webkit-appearance:none;appearance:none;height:24px;margin:0;background:none;cursor:pointer;min-width:90px}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:linear-gradient(90deg,var(--accent) var(--p,0%),var(--grid) var(--p,0%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;margin-top:-5.5px;border-radius:50%;background:var(--surface);
+  border:3px solid var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:var(--grid)}
+input[type=range]::-moz-range-progress{height:4px;border-radius:4px;background:var(--accent)}
+input[type=range]::-moz-range-thumb{width:9px;height:9px;border-radius:50%;background:var(--surface);border:3px solid var(--accent)}
+/* ---------- 每一页 ---------- */
+.stage{transition:opacity .16s ease}
+.stage.out{opacity:0}
+.stage.swap .tl-panel{animation:fadeup .55s cubic-bezier(.2,.8,.2,1) both}
+.stage.swap .row{animation:fadeup .55s .08s cubic-bezier(.2,.8,.2,1) both}
+.stage.swap .row + .row{animation-delay:.14s}
+@keyframes fadeup{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.stage-head{margin:0 0 12px}
+.stage-head h2{font-size:22px;line-height:1.4;margin:0;font-weight:650;letter-spacing:-.005em;text-wrap:balance}
+.panel{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:16px 18px}
+.panel h3{margin:0 0 4px;font-size:14px;line-height:1.5;font-weight:600;color:var(--ink)}
+.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.controls .scrub{flex:1 1 240px;display:flex;align-items:center;gap:12px;margin:0 6px}
+.controls .scrub input{flex:1}
+.tlabel{font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tlabel b{color:var(--ink);font-weight:600}
+.params{display:flex;flex-wrap:wrap;gap:8px 22px;margin:12px 0 2px;padding-top:12px;border-top:1px solid var(--line)}
+.param{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink2)}
+.param input{width:132px}
+.param output{min-width:30px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;line-height:1.5;color:var(--ink2);margin:10px 0 4px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend svg{flex:none;overflow:visible}
+.sw{display:inline-block;width:14px;height:10px;border-radius:3px;flex:none}
+.sw.k-compute{background:var(--c1)}
+.sw.k-comm{background:var(--c2)}
+.sw.k-offload{background:var(--c3)}
+.sw.k-host{background:repeating-linear-gradient(45deg,rgba(0,0,0,.3) 0 1.5px,transparent 1.5px 4.5px),var(--c4)}
+.sw.k-sync{border:1.5px dashed var(--muted)}
+.note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.65}
+svg text{font-family:var(--sans)}
+
+/* ---------- 时间线（类似 Nsight Systems 的泳道） ---------- */
+#tl{display:block;width:100%;height:auto;overflow:visible;margin-top:2px}
+.gridline{stroke:var(--grid);stroke-width:1}
+.axis-text{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.groupline{stroke:var(--line2);stroke-width:1}
+.group-label{fill:var(--ink);font-size:12.5px;font-weight:600}
+.badge{stroke-width:1}
+.badge.pre{fill:none;stroke:var(--axis)}
+.badge.post{fill:var(--accent-soft);stroke:var(--accent)}
+.badge-text{font-size:10.5px;font-weight:600;fill:var(--ink2)}
+.badge-text.post{fill:var(--ink)}
+.lane-bg{fill:color-mix(in srgb,var(--ink) 3.5%,transparent)}
+.lane-label{fill:var(--ink2);font-size:11.5px}
+.blk.k-compute{fill:var(--c1)}
+.blk.k-comm{fill:var(--c2)}
+.blk.k-offload{fill:var(--c3)}
+.blk.k-host{fill:url(#hatch)}
+.blk.k-sync{fill:color-mix(in srgb,var(--muted) 12%,transparent);stroke:var(--muted);stroke-width:1.2;stroke-dasharray:4 3}
+.blk.ghost{opacity:.2}
+.blk.ghost.k-sync{opacity:.55;fill:none}
+.tl-in .blk.ghost{transform-box:fill-box;transform-origin:left center;animation:blkin .6s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0s)}
+@keyframes blkin{from{transform:scaleX(0);opacity:0}}
+.blk.live{filter:url(#glow)}
+.stripes{fill:url(#stripes);pointer-events:none;display:none}
+.stripes.on{display:inline}
+.blk-label{font-size:11px;font-weight:500;fill:var(--ink);pointer-events:none}
+.blk-label.on{fill:#fff}
+.blk-label.on.k-host{fill:#0b0b0b}
+.blk-label.k-sync,.blk-label.on.k-sync{fill:var(--ink2)}
+.hit{fill:transparent;cursor:pointer}
+.endmark{stroke:var(--ink);stroke-width:2}
+.end-label{fill:var(--ink);font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.endg{transform-box:fill-box;transform-origin:center}
+.endg .tick{fill:none;stroke:var(--good);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:14;stroke-dashoffset:14}
+.endg.hit-on .tick{stroke-dashoffset:0;transition:stroke-dashoffset .4s ease .05s}
+.endg.hit-on{animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.endg.quiet{animation:none}
+.endg.quiet .tick{transition:none}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.22)}100%{transform:scale(1)}}
+.idealmark{stroke:var(--ink2);stroke-width:1.4;stroke-dasharray:5 4}
+.idealmark.alt{stroke-dasharray:1.5 3.5;stroke-width:2;stroke-linecap:round}
+.mark-label{fill:var(--ink2);font-size:11px;font-variant-numeric:tabular-nums}
+.playhead{stroke:var(--accent);stroke-width:2}
+.ph-beam{fill:url(#beam);pointer-events:none}
+.ph-knob{fill:var(--accent);filter:url(#glow)}
+
+/* ---------- 文字说明与“此刻” ---------- */
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;margin-top:24px;align-items:start}
+.desc{font-size:14px;color:var(--ink2);line-height:1.85}
+.desc p{margin:0 0 10px}
+.desc ul{margin:0;padding:0;list-style:none}
+.desc li{position:relative;padding-left:16px;margin:0 0 8px}
+.desc li::before{content:"";position:absolute;left:2px;top:.75em;width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.75}
+.desc b{color:var(--ink);font-weight:600}
+.now{margin-top:16px;padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+.now h3{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.now ul li{padding:0;margin:0 0 4px;display:grid;grid-template-columns:14px 7em minmax(0,1fr);gap:8px;align-items:baseline;font-size:12.5px;line-height:1.6}
+.now ul li::before{display:none}
+.now li.gh{display:block;margin:8px 0 2px;color:var(--ink);font-weight:600}
+.now li .sw{align-self:start;margin-top:.5em}
+.now .ln-name{color:var(--ink2)}
+.now .op{color:var(--ink)}
+.now .info{display:block;color:var(--muted)}
+.tip{position:fixed;z-index:30;display:none;max-width:330px;padding:10px 12px;border-radius:12px;background:var(--glass);
+  -webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);border:1px solid var(--line2);
+  box-shadow:0 18px 44px -18px rgba(0,0,0,.55);font-size:12.5px;line-height:1.55;pointer-events:none}
+.tip .t1{display:flex;align-items:center;gap:7px;color:var(--ink);font-weight:600}
+.tip .t2{color:var(--muted);font-variant-numeric:tabular-nums}
+.tip .t3{color:var(--ink2);margin-top:3px}
+/* ---------- 右侧：梯度桶 / 拓扑 ---------- */
+.side{display:grid;gap:22px}
+#diag,#bars{display:block;width:100%;height:auto;overflow:visible;margin:4px auto 0}
+.sub-title{fill:var(--ink);font-size:12px;font-weight:600}
+.nd-sub{fill:var(--muted);font-size:10.5px}
+.st-text{fill:var(--ink2);font-size:11px;font-variant-numeric:tabular-nums}
+.uplink{stroke:var(--line2);stroke-width:1;stroke-dasharray:3 3}
+.up-text{fill:var(--muted);font-size:10px}
+.vial{fill:color-mix(in srgb,var(--ink) 4%,transparent);stroke:var(--axis);stroke-width:1.2}
+.vial.wait{stroke:var(--ink2);stroke-dasharray:3 2;animation:waitp 1.2s ease-in-out infinite}
+@keyframes waitp{50%{stroke-opacity:.35}}
+.liq{fill:var(--c1)}
+.liq.acc{fill:var(--c1);opacity:.6}
+.liq.comm{fill:var(--c2)}
+.liq.done{fill:var(--c1)}
+.ptl{fill:var(--c2);stroke:var(--surface);stroke-width:1}
+.bk-tick{fill:none;stroke:var(--good);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:0;transform-box:fill-box;transform-origin:center}
+.bk-tick.on{opacity:1;animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.ln{stroke:var(--axis);stroke-width:2.2;stroke-linecap:round;transition:stroke .25s}
+.ln.nvlink{stroke-width:5.5}
+.ln.pcie{stroke-width:1.8}
+.ln.on{stroke:var(--c2)}
+.ln.on.cpu{stroke:var(--c4)}
+.ln.on.red{stroke:var(--c3)}
+.halo{stroke:transparent;stroke-width:11;stroke-linecap:round;opacity:.3;transition:stroke .25s}
+.halo.nvlink{stroke-width:16}
+.halo.on{stroke:var(--c2)}
+.halo.on.cpu{stroke:var(--c4)}
+.halo.on.red{stroke:var(--c3)}
+.ln-label{fill:var(--muted);font-size:10.5px}
+.nd{fill:var(--surface2);stroke:var(--line2);stroke-width:1.2;transition:fill .25s,stroke .25s}
+.nd.gpu{stroke:color-mix(in srgb,var(--ink) 38%,transparent)}
+.nd.xsw{stroke:var(--ink2)}
+.nd.host{stroke:var(--c4)}
+.nd.busy{fill:color-mix(in srgb,var(--c1) 34%,var(--surface));stroke:var(--c1);animation:gpulse 1.1s ease-in-out infinite}
+.nd.agg{fill:color-mix(in srgb,var(--c3) 34%,var(--surface));stroke:var(--c3)}
+.nd.cpu{fill:url(#hatch);stroke:var(--c4)}
+@keyframes gpulse{50%{stroke-width:2.6}}
+.nd-label{fill:var(--ink);font-size:11px;font-weight:600;pointer-events:none}
+.dot{fill:var(--c2);stroke:var(--surface);stroke-width:1.5}
+.dot.red{fill:var(--c3)}
+.dot.cpu{fill:var(--c4)}
+.trail{stroke:none}
+.ripple{fill:none;stroke:var(--c3);stroke-width:2;opacity:0;transform-box:fill-box;transform-origin:center}
+.ripple.on{animation:ripple 1.1s ease-out infinite}
+@keyframes ripple{0%{opacity:.85;transform:scale(.85)}100%{opacity:0;transform:scale(1.9)}}
+
+/* ---------- 对照条形图与表格 ---------- */
+.bar{fill:url(#barg)}
+.bar.ideal{fill:none;stroke:var(--ink2);stroke-width:1.3;stroke-dasharray:4 3}
+.bar-label{fill:var(--ink2);font-size:12px}
+.bar-val{fill:var(--ink);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+details{margin-top:10px}
+summary{cursor:pointer;font-size:12.5px;color:var(--ink2);padding:4px 0;width:max-content}
+summary:hover{color:var(--ink)}
+.tbl-wrap{max-height:300px;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{padding:5px 9px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;background:var(--surface2);color:var(--ink2);font-weight:600}
+td{color:var(--ink2)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- 体检清单 ---------- */
+.check{margin-top:34px}
+.check-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.check h2{font-size:19px;margin:0;font-weight:650}
+.check .count{font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.check .intro{font-size:13px;color:var(--muted);margin:6px 0 0}
+.checklist{list-style:none;margin:14px 0 0;padding:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 26px}
+.checklist label{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;font-size:13px;line-height:1.75;color:var(--ink2);cursor:pointer;
+  padding:10px 12px;border-radius:12px;border:1px solid transparent;transition:background .2s,border-color .2s}
+.checklist label:hover{background:color-mix(in srgb,var(--ink) 3%,transparent);border-color:var(--line)}
+.checklist b{color:var(--ink);font-weight:600}
+.ck{appearance:none;width:20px;height:20px;margin:3px 0 0;border-radius:6px;border:1.5px solid var(--axis);background:var(--surface);cursor:pointer;
+  display:grid;place-items:center;transition:background .2s,border-color .2s}
+.ck::after{content:"";width:5px;height:10px;margin-top:-2px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) scale(0);
+  transition:transform .25s cubic-bezier(.3,1.6,.5,1)}
+.ck:checked{background:var(--accent);border-color:var(--accent)}
+.ck:checked::after{transform:rotate(45deg) scale(1)}
+.ck:checked + span{opacity:.62}
+
+/* ---------- 嵌入博客（iframe）时 ---------- */
+html.embed body{background:transparent}
+html.embed .viz-root{padding:4px 0 8px}
+html.embed .viz-root::before{display:none}
+html.embed .aurora{opacity:.6}
+html.embed .hero{grid-template-columns:1fr;margin-bottom:22px}
+html.embed .hero > div:first-child{display:none}
+.tl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+@media (max-width:920px){
+  .hero{grid-template-columns:1fr;gap:18px}
+  .row{grid-template-columns:1fr}
+  .checklist{grid-template-columns:1fr}
+}
+@media (max-width:600px){
+  .viz-root{padding:18px 14px 30px}
+  .hero h1{font-size:28px}
+  #hero{height:250px}
+  .tab .verb{font-size:24px}
+  .tab .cap{display:none}
+  .stage-head h2{font-size:18px}
+  .panel{padding:12px;border-radius:14px}
+  .param input{width:104px}
+  .controls .scrub{flex-basis:100%;margin:4px 0 0;order:9}
+  #tl{min-width:680px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  .aurora i{animation:none}
+  .route-spark{display:none}
+}
+</style>
+</head>
+<body>
+<script>if (window.self !== window.top) document.documentElement.classList.add('embed');</script>
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="6" height="6" style="fill:var(--c4)"/><rect width="2" height="6" fill="rgba(0,0,0,.3)"/>
+    </pattern>
+    <pattern id="stripes" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <rect width="4" height="10" fill="rgba(255,255,255,.34)"/>
+      <animateTransform attributeName="patternTransform" type="translate" from="0 0" to="10 0" dur="0.7s" repeatCount="indefinite" additive="sum"/>
+    </pattern>
+    <filter id="glow" x="-30%" y="-70%" width="160%" height="240%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="beam" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" style="stop-color:var(--accent);stop-opacity:0"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:.24"/>
+    </linearGradient>
+    <linearGradient id="barg" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" style="stop-color:var(--accent);stop-opacity:.5"/><stop offset="1" style="stop-color:var(--accent)"/>
+    </linearGradient>
+  </defs>
+</svg>
+<div class="viz-root">
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+  <header class="hero">
+    <div>
+      <h1>第 4 章　分布式通信调优</h1>
+      <p class="lead"><b>先量，再藏、少传、走对路。</b>数据并行训练每一步都要在所有 GPU 之间把梯度求一次平均。链路的速度是定的，能改的是通信怎么安排：先在时间线上量出它露在关键路径上多少，再把它藏到反向计算后面，少同步几次、少传几个字节，让流量走最快的链路，把求和交给交换机。推理时搬 KV 缓存也是同一套思路。</p>
+      <p class="lead">下面六页把每一步的改前和改后放在同一根时间轴上：可以播放、单步、拖动，也可以改参数看结果怎么变。</p>
+      <button class="btn theme-btn" id="theme" title="切换配色">配色：自动</button>
+    </div>
+    <figure class="hero-viz">
+      <canvas id="hero" role="img" aria-label="8 块 GPU 围成一个环做 all-reduce：梯度切成 8 块沿环接力，先边传边加，再把求和结果传一圈"></canvas>
+      <figcaption class="hero-cap">
+        <div class="hc-row"><span id="hero-phase">环形 all-reduce</span><span id="hero-bytes"></span></div>
+        <div class="hc-key"><span><i class="sw k-comm"></i>正在传的一块数据（B/8）</span><span><i class="sw k-compute"></i>柱高：这一块已经加进了几块 GPU 的份</span></div>
+      </figcaption>
+    </figure>
+  </header>
+
+  <nav class="route" role="tablist" id="tabs" aria-label="六个步骤">
+    <div class="route-track" aria-hidden="true"></div>
+    <div class="route-lit" id="route-lit" aria-hidden="true"><i class="route-spark"></i></div>
+  </nav>
+
+  <main class="stage" id="stage">
+    <div class="stage-head"><h2 id="stitle"></h2></div>
+    <section class="panel tl-panel" aria-label="时间线">
+      <div class="controls">
+        <button class="btn play" id="play" aria-label="播放"><svg viewBox="0 0 16 16" aria-hidden="true"><path id="play-ic" d="M4.5 2.5v11l9-5.5z"/></svg></button>
+        <button class="btn" id="prev" title="上一个事件（←）" aria-label="上一个事件"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h2v10H3zM13 3v10L6 8z"/></svg></button>
+        <button class="btn" id="next" title="下一个事件（→）" aria-label="下一个事件"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3h2v10h-2zM3 3v10l7-5z"/></svg></button>
+        <button class="btn" id="reset" title="回到开头" aria-label="回到开头"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5V.5L4.5 3.5 8 6.5V4a4 4 0 1 1-4 4H2.5A5.5 5.5 0 1 0 8 2.5z"/></svg></button>
+        <div class="scrub"><input type="range" id="scrub" min="0" max="1000" value="0" aria-label="时间"><span class="tlabel" id="tlabel">t = 0.0</span></div>
+        <div class="seg" id="speed" role="group" aria-label="播放速度"><button data-v="0.5">0.5×</button><button data-v="1" aria-pressed="true">1×</button><button data-v="2">2×</button><button data-v="4">4×</button></div>
+      </div>
+      <div class="params" id="params"></div>
+      <div class="legend" id="legend"></div>
+      <div class="tl-scroll"><svg id="tl" role="img" aria-label="改前与改后的时间线"></svg></div>
+      <p class="note" id="tlnote"></p>
+    </section>
+    <div class="row">
+      <div class="desc" id="desc"></div>
+      <div class="side">
+        <section class="panel">
+          <h3 id="dtitle">数据流</h3>
+          <div class="legend" id="dlegend"></div>
+          <svg id="diag" role="img" aria-label="梯度桶或拓扑与数据流"></svg>
+        </section>
+        <section class="panel">
+          <h3 id="btitle"></h3>
+          <svg id="bars" role="img" aria-label="改前与改后的耗时对照"></svg>
+          <p class="note" id="bnote"></p>
+          <details><summary>表格视图：本页所有操作</summary><div class="tbl-wrap"><table id="tbl"></table></div></details>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <section class="check" aria-labelledby="ck-h">
+    <div class="check-head"><h2 id="ck-h">体检清单：调优之前，先排除“悄悄变慢”的配置</h2><span class="count" id="ck-count">已排查 0 / 9</span></div>
+    <p class="intro">来自第 4 章各“陷阱”小节。这些问题大多不报错，只是让训练变慢。点一下可以勾掉已经查过的项。</p>
+    <ul class="checklist" id="checklist">
+      <li><label><input type="checkbox" class="ck"><span><b>后端用 NCCL，别落到 Gloo。</b>书中 400 MB 的 all-reduce：Gloo 走 CPU 和 TCP，用了 200 ms（约 2 GB/s，CPU 接近满载）；换成 NCCL 走 GPUDirect RDMA 后是 4 ms（约 100 GB/s，即 800 Gb/s InfiniBand 的线速）。Gloo 也能处理 CUDA 张量，但要经主机内存中转，只是慢，不会报错。用 <code>torch.distributed.get_backend()</code> 确认。</span></label></li>
+      <li><label><input type="checkbox" class="ck"><span><b>确认真的走了 GPUDirect RDMA。</b><code>lsmod | grep nvidia_peermem</code> 看内核模块，<code>NCCL_DEBUG=INFO</code> 的日志里确认是 NET/IB 路径。容器要能访问 <code>/dev/infiniband</code>，否则 NCCL 会悄悄退回 TCP，吞吐从几十 GB/s 掉到几 Gb/s。容器的 GID 分配和主机不一致时，也会退回由 CPU 驱动的复制。</span></label></li>
+      <li><label><input type="checkbox" class="ck"><span><b>多网卡时指定网卡。</b><code>NCCL_SOCKET_IFNAME</code> 填网络接口名（如 <code>ib0</code>、<code>eth0</code>），决定引导握手和 socket 通信走哪个接口；用哪几块 InfiniBand 网卡（HCA）由 <code>NCCL_IB_HCA</code> 指定（如 <code>mlx5_0</code>）。日志里出现 <code>NET/Socket: using Ethernet interface eth0</code>，而你本想走 IB 时，要查原因。</span></label></li>
+      <li><label><input type="checkbox" class="ck"><span><b>别忽视 NCCL 警告。</b><code>unable to enable P2P, falling back to copy</code> 表示两块 GPU 之间没建起直连，数据要经主机内存中转。</span></label></li>
+      <li><label><input type="checkbox" class="ck"><span><b>通信器只建一次，反复用。</b>建通信器要所有 rank 交换信息、建环和树、分配缓冲区。书中表 4-3：每次迭代都 <code>init_process_group</code> + 销毁要多花 48 ms，一次迭代从 0.5 ms 变成 48.5 ms。子组在开头用 <code>new_group()</code> 建好。</span></label></li>
+      <li><label><input type="checkbox" class="ck"><span><b>别随手关 NCCL 功能。</b><code>NCCL_P2P_DISABLE=1</code> 只用于排查：一直开着，节点内流量就要经主机内存中转，书中说延迟从几微秒涨到几十微秒，带宽从数百 GB/s 掉到数十 GB/s。其他 NCCL 环境变量没有明确理由也保持默认。</span></label></li>
+      <li><label><input type="checkbox" class="ck"><span><b>NUMA 亲和性。</b>每个 GPU 进程绑到离它最近的 CPU 核（<code>numactl</code>、SLURM 的 <code>--cpu-bind</code>），避免 NCCL 的后台线程挤在同一个核上。</span></label></li>
+      <li><label><input type="checkbox" class="ck"><span><b>版本一致。</b>PyTorch 自带的 NCCL 和系统里的 <code>libnccl</code> 不一致时，可能挂起，或悄悄退回较慢的实现。</span></label></li>
+      <li><label><input type="checkbox" class="ck"><span><b>找出落后的 rank。</b>最慢的 rank 决定整体速度。<code>dist.monitored_barrier(timeout=…)</code> 会报出迟迟不到的 rank，它只支持 Gloo 后端，NCCL 训练里要另建一个 Gloo 子组来用。书里的 <code>NCCL_ASYNC_ERROR_HANDLING=1</code> 在新版 PyTorch 里叫 <code>TORCH_NCCL_ASYNC_ERROR_HANDLING</code>，旧名已弃用。</span></label></li>
+    </ul>
+  </section>
+  <div class="tip" id="tip" role="tooltip"></div>
+</div>
+<script>
+const KINDS = {
+  compute: { name: '计算（前向、反向、优化器、prefill、decode）', v: '--c1' },
+  comm:    { name: '通信 / 传输（NCCL、NVLink、PCIe、RDMA）', v: '--c2' },
+  offload: { name: '交换机内求和与组播（SHARP、NVLS）', v: '--c3' },
+  sync:    { name: '等待 / 空闲', v: '--idle' },
+  host:    { name: 'CPU 参与（经主机内存中转）', v: '--c4' },
+};
+const ALPHA = 0.15;  // 每次 NCCL 调用的固定开销（启动、握手、延迟）
+const OPT = 0.4;     // optimizer.step()
+const CAST = 0.1;    // BF16 压缩钩子：每个桶 FP32 ↔ BF16 的转换
+const PARAMS = {
+  C:  { label: '计算（前向+反向）', min: 4, max: 16, step: 0.5, value: 10 },
+  A:  { label: '通信（全部梯度）', min: 2, max: 20, step: 0.5, value: 12 },
+  NB: { label: '桶数', min: 1, max: 32, step: 1, value: 4, show: v => `${v}（每桶 ${+(100 / v).toFixed(1)} MiB）` },
+  K:  { label: '累积微批 K', min: 1, max: 8, step: 1, value: 4 },
+  M:  { label: '消息', min: 2, max: 200, step: 2, value: 100, show: v => v + ' MiB' },
+  R:  { label: 'NVLink / PCIe 带宽比', min: 1, max: 12, step: 0.5, value: 8, show: v => v + '×' },
+  N:  { label: 'GPU 数 n', min: 2, max: 32, step: 1, value: 8 },
+  L:  { label: '层数', min: 2, max: 16, step: 1, value: 8 },
+  X:  { label: 'KV 传输耗时', min: 1, max: 12, step: 0.5, value: 5 },
+};
+const $ = id => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs = {}, parent) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+};
+const fmt = v => v.toFixed(1);
+const pct = v => Math.round(v * 100) + '%';
+const sw = kind => `<span class="sw k-${kind}"></span>`;
+// 往时间线里加一段：泳道 id 是“版本.泳道”，返回结束时间
+const adder = segs => (v, lane, s, d, kind, label, info, x) => {
+  if (d > 1e-3) segs.push({ v, lane: v + '.' + lane, s, e: s + d, kind, label, info, ...x });
+  return s + d;
+};
+// 第 j 个就绪的桶（从 L4 一端数起，共 n 个）装的是哪几层的梯度
+function layersOf(j, n) {
+  const a = (j - 1) / n, b = j / n, ls = [];
+  for (let l = 4; l >= 1; l--) if (a < (5 - l) / 4 - 1e-9 && b > (4 - l) / 4 + 1e-9) ls.push(l);
+  return ls.length > 1 ? `L${ls[ls.length - 1]}–L${ls[0]}` : `L${ls[0]}`;
+}
+// 一个 rank 上的训练（SPMD：所有 rank 走同一条时间线）
+// mode：serial = 反向全部结束后手动逐层 all-reduce；ddp = 按桶边算边传；nosync = 前 K−1 个微批不同步
+function train(add, v, P, { mode, nb = 4, K = 1, half = false }) {
+  const F = 0.3 * P.C, B = 0.7 * P.C, n = mode === 'serial' ? 4 : nb;
+  const bk = [], mb = [];
+  let t = 0, nc = 0, syncs = 0;
+  for (let m = 0; m < K; m++) {
+    const sync = mode !== 'nosync' || m === K - 1, tag = K > 1 ? ` #${m + 1}` : '';
+    mb.push(t);
+    t = add(v, 'sm', t, F, 'compute', '前向' + tag, `前向 L1 → L4${K > 1 ? `（第 ${m + 1}/${K} 个微批）` : ''}`);
+    const b0 = t;
+    for (let l = 4; l >= 1; l--) t = add(v, 'sm', t, B / 4, 'compute', `反向 L${l}`, `算出第 ${l} 层的梯度（反向从最后一层往前算）${sync ? '' : '；在 no_sync() 里，梯度只加到本地 .grad'}`);
+    const recs = [];
+    for (let j = 1; j <= n; j++) recs.push({ m, j, n, ready: b0 + j * B / n, cs: Infinity, ce: Infinity, acc: !sync });
+    bk.push(...recs);
+    if (!sync) continue;
+    // 手动循环 for p in model.parameters() 按 L1→L4 发；DDP 按桶就绪的顺序发
+    const order = mode === 'serial' ? [...recs].reverse() : recs;
+    for (const r of order) {
+      const s = Math.max(mode === 'serial' ? t : r.ready, nc);
+      const d = ALPHA + (half ? 0.5 : 1) * P.A / n + (half ? CAST : 0);
+      const lab = mode === 'serial' ? `all-reduce L${5 - r.j}` : `桶 ${r.j}`;
+      const info = mode === 'serial'
+        ? `dist.all_reduce(p.grad)：反向全部结束后才开始；传输 ${fmt(P.A / 4)} + 调用开销 ${ALPHA}`
+        : `第 ${r.j} 个就绪的桶（${layersOf(r.j, n)} 的梯度，${+(100 / n).toFixed(1)} MiB）：凑齐就在 NCCL 流上发起 all-reduce${half ? '；BF16 压缩后字节减半，另含 FP32↔BF16 转换' : ''}`;
+      nc = add(v, 'nc', s, d, 'comm', lab, info, { bk: r });
+      r.cs = s; r.ce = nc;
+    }
+    syncs++;
+    if (nc > t + 1e-6) t = add(v, 'sm', t, nc - t, 'sync', mode === 'serial' ? '等 all-reduce（SM 空闲）' : '等剩下的桶',
+      mode === 'serial' ? '计算流无事可做：要等全部梯度归约完才能 optimizer.step()' : 'backward() 返回前，DDP 让计算流等所有桶归约完（下一步要用同步后的梯度）');
+  }
+  t = add(v, 'sm', t, OPT, 'compute', 'optimizer.step', '用归约后的平均梯度更新参数（每个 rank 的结果一致）');
+  return { end: t, bk, mb, n, K, syncs, mode };
+}
+const commEnd = tr => Math.max(...tr.bk.filter(r => r.ce < Infinity).map(r => r.ce));
+const TRAIN_NOTE = '时间是示意单位，不是实测：前向占“计算”的 30%，反向占 70%（L4→L1 各 1/4）；每次 NCCL 调用另加 0.15 的固定开销，优化器步 0.4。所有 rank 执行同一条时间线（SPMD），这里只画一个 rank。';
+const TRAIN_LANES = [['sm', '计算流（SM）'], ['nc', 'NCCL 流']];
+const STAGES = [
+  { id: 'measure', tab: '① 先量：串行基线', params: ['C', 'A'], diag: 'buckets', note: TRAIN_NOTE,
+    title: '① 先量：用时间线看通信是不是露在关键路径上',
+    body: `<p>书中的对照实验：每个 rank 先跑完前向和反向，再对每个参数的梯度调用 <code>dist.all_reduce</code> 求平均，最后 <code>optimizer.step()</code>。书中例子：前向 + 反向 10 ms，all-reduce 12 ms，一步约 22 ms。</p>
+<ul><li>Nsight Systems 里是“两段式”：各层的反向内核全部跑完之后，才出现一串 NCCL all-reduce 内核。</li>
+<li>all-reduce 期间计算流在等（虚线框），通信的每一单位时间都直接加到迭代时间上。</li>
+<li>判断标准：迭代时间 ≈ 计算 + 通信，说明没有重叠。书中估计完全重叠时约 12 ms，即两者中较大的那个（点线“理想”）。这要求连前向也和通信重叠；DDP 只能和反向重叠，前向要等上一步的优化器，所以实际下限是 前向 + max(反向, 通信) + 优化器（虚线“DDP 下限”），见第 ② 页。</li>
+<li>先量再改：后面每一步优化，都要回到时间线上确认通信被藏住了多少。</li></ul>`,
+    variants: [{ id: 'a', name: '无重叠：反向全部结束后，再逐层 dist.all_reduce', short: '无重叠（串行）', lanes: TRAIN_LANES }],
+    build(P) {
+      const segs = [], add = adder(segs), a = train(add, 'a', P, { mode: 'serial' });
+      const ideal = Math.max(P.C, P.A) + OPT, lb = 0.3 * P.C + Math.max(0.7 * P.C, P.A) + OPT, comm = commEnd(a) - P.C;
+      return { segs, ends: { a: a.end }, train: { a }, btitle: '每个训练步耗时（示意单位，越短越好）',
+        marks: [{ t: ideal, alt: true, label: `理想：max(计算, 通信) + 优化器 = ${fmt(ideal)}` }, { t: lb, label: `DDP 下限：前向 + max(反向, 通信) + 优化器 = ${fmt(lb)}` }],
+        extra: [{ name: 'DDP 下限', value: lb }, { name: '理想（完全重叠）', value: ideal }],
+        bnote: `通信 ${fmt(comm)} 全部露在关键路径上，占这一步的 ${pct(comm / a.end)}，这段时间计算流在等。书中例子：计算 10 + 通信 12 ≈ 22 ms，完全重叠时约 12 ms；DDP 只能和反向重叠，本模型的下限是 ${fmt(lb)}。` };
+    } },
+  { id: 'overlap', tab: '② 藏：DDP 分桶重叠', params: ['C', 'A', 'NB'], diag: 'buckets', note: TRAIN_NOTE,
+    title: '② 藏起来：DDP 按桶 all-reduce，和反向传播重叠',
+    body: `<p>DDP 给每个参数挂 autograd 钩子，按 <code>model.parameters()</code> 的<b>逆序</b>把梯度装进桶（默认 <code>bucket_cap_mb=25</code>，即 25 MiB；第一个桶默认只有约 1 MiB，第一次迭代后还会按实际就绪顺序重建桶，这两点本模型没有画）。反向从最后一层往前算，一个桶的梯度凑齐，就在单独的 NCCL 流上发起 all-reduce，计算流接着算前面的层。</p>
+<ul><li>时间线变成“锯齿状”：反向内核和 NCCL 内核交错，通信被反向计算盖住一部分。</li>
+<li>只能和反向重叠：前向要等上一步的 <code>optimizer.step()</code>，优化器要等所有桶归约完。所以下限是 前向 + max(反向, 通信) + 优化器（虚线）。通信比反向长时（默认参数就是），多出来的部分仍会露出来。</li>
+<li>顺序别弄反：反向先算最后一层（L4），装 L4 梯度的桶最先发出；L1 的梯度最后才算出，它的桶就是盖不住的“尾巴”。书中把这个顺序写反了。</li>
+<li>桶大小是权衡：桶大则开始得晚（1 个桶时退化成串行，书中说小模型的梯度全装进一个桶就几乎没有重叠）；桶小则调用次数多，固定开销累加。拖动“桶数”找最低点，书中建议用 profiling 来定。</li>
+<li>重叠不是免费的：NCCL 内核本身也占一部分 SM 和显存带宽，本模型没有计入这部分干扰。</li></ul>`,
+    variants: [
+      { id: 'a', name: '改前 · 无重叠（同第 ① 页）', short: '无重叠', lanes: TRAIN_LANES },
+      { id: 'b', name: P => `改后 · DDP 分桶：桶凑齐就 all-reduce（${P.NB} 个桶）`, short: 'DDP 分桶', lanes: TRAIN_LANES },
+    ],
+    build(P) {
+      const segs = [], add = adder(segs), F = 0.3 * P.C, B = 0.7 * P.C;
+      const a = train(add, 'a', P, { mode: 'serial' }), b = train(add, 'b', P, { mode: 'ddp', nb: P.NB });
+      const lb = F + Math.max(B, P.A) + OPT, bwcA = commEnd(a) - F, bwcB = commEnd(b) - F;
+      const tot = P.A + P.NB * ALPHA, exp = Math.max(0, commEnd(b) - F - B);
+      return { segs, ends: { a: a.end, b: b.end }, train: { a, b }, btitle: '每个训练步耗时（示意单位，越短越好）',
+        marks: [{ t: lb, label: `DDP 下限：前向 + max(反向, 通信) + 优化器 = ${fmt(lb)}` }],
+        extra: [{ name: 'DDP 下限', value: lb }],
+        bnote: `反向 + 通信：${fmt(bwcA)} → ${fmt(bwcB)}（基线的 ${pct(bwcB / bwcA)}）；通信被反向盖住 ${pct((tot - exp) / tot)}。书中表 4-1 的说明性数字：约 70%、约 50%。` };
+    } },
+  { id: 'less', tab: '③ 少：累积 / 压缩', params: ['C', 'A', 'NB', 'K'], diag: 'buckets', note: TRAIN_NOTE,
+    title: '③ 传得少：梯度累积少同步几次，压缩少传几个字节',
+    body: `<p>梯度累积：K 个微批的梯度先在本地加到 <code>.grad</code> 里，只在最后一个微批做 all-reduce，同步次数降为 1/K，同步之间能做更多计算。DDP 里要把前 K−1 个微批放进 <code>with model.no_sync():</code>，否则每次 <code>backward()</code> 照样同步（第一组）。</p>
+<ul><li>代价：有效批量变成 K 倍，可能影响收敛，学习率等超参要跟着调。前两组在数学上等价：DDP 每次求的都是平均梯度，多余的同步只是浪费时间。</li>
+<li>压缩：比如 DDP 通信钩子 <code>bf16_compress_hook</code> 先把桶转成 BF16 再 all-reduce，字节减半，代价是一点类型转换开销和精度损失。更激进的有 PowerSGD（低秩近似，有损，靠误差反馈弥补）和梯度稀疏化（只发一部分梯度），后者通常要改训练算法才能保住收敛。</li>
+<li>还有一种“少”：第 ② 页的分桶本身就是把许多小张量合成大消息，减少调用次数和每次的固定开销。</li></ul>`,
+    variants: [
+      { id: 'a', name: P => `改前 · 累积 ${P.K} 个微批，但每次 backward 都同步（没用 no_sync）`, short: '每个微批都同步', lanes: TRAIN_LANES },
+      { id: 'b', name: P => P.K > 1 ? `改后 · 前 ${P.K - 1} 个微批放进 no_sync()，只同步最后一次` : '改后 · K = 1 时没有可以省的同步', short: 'no_sync 累积', lanes: TRAIN_LANES },
+      { id: 'c', name: '再加 BF16 压缩钩子：同步的字节减半', short: '累积 + BF16 压缩', lanes: TRAIN_LANES },
+    ],
+    build(P) {
+      const segs = [], add = adder(segs), o = { nb: P.NB, K: P.K };
+      const a = train(add, 'a', P, { ...o, mode: 'ddp' }), b = train(add, 'b', P, { ...o, mode: 'nosync' });
+      const c = train(add, 'c', P, { ...o, mode: 'nosync', half: true });
+      return { segs, ends: { a: a.end, b: b.end, c: c.end }, train: { a, b, c },
+        btitle: `处理 ${P.K} 个微批、做 1 次参数更新的总耗时（示意单位，越短越好）`,
+        bnote: `all-reduce 轮数 ${a.syncs} → ${b.syncs}。平均每个微批：${fmt(a.end / P.K)} → ${fmt(b.end / P.K)} → ${fmt(c.end / P.K)}。` };
+    } },
+  { id: 'topo', tab: '④ 走对路：拓扑感知', params: ['M', 'R'], diag: 'topo', dtitle: '拓扑与数据流（书中的 4 GPU 例子）', dl: ['nvlink', 'pcie', 'dot'],
+    note: '示意单位：经 PCIe 传 100 MiB 用 8，NVLink 快“带宽比”倍；每一步另加 0.25 的延迟。只画链路上的传输；GPU 上的求和由 NCCL 内核边收边做，算在传输里。',
+    title: '④ 走对路：让大部分流量走 NVLink，慢链路只传必要的部分',
+    body: `<p>书中的例子：4 块 GPU，GPU 0–1、GPU 2–3 各有一条 NVLink，两对之间只能经 PCIe 交换机。对一份 M 字节的梯度做 all-reduce：</p>
+<ul><li>改前：不看拓扑的扁平环 0→1→2→3→0。环形 all-reduce 要走 2(n−1) = 6 步，每步每块 GPU 同时给下一家发 M/4；1→2 和 3→0 这两跳每一步都要过 PCIe，整个环被它们拖住，NVLink 大部分时间在等。</li>
+<li>改后（分层）：先在每对内部经 NVLink 做 reduce，再由每对的一块 GPU 经 PCIe 交换一次，最后在对内广播。跨 PCIe 的字节从每个方向 1.5M 降到 M，要串行走的 PCIe 步数从 6 降到 1。</li>
+<li>NVLink 不够快时分层反而更慢（把带宽比拖到 2 看看），所以 NCCL 会按拓扑和消息大小挑算法。差异不明显或消息很小时可能不触发；<code>NCCL_ALGO</code>（Ring、Tree、NVLS、NVLSTree、PAT 等）可以强制指定，一般只用于排查和实验。</li>
+<li>怎么确认：<code>NCCL_DEBUG=INFO</code> 和 <code>NCCL_TOPO_DUMP_FILE=&lt;path&gt;</code> 看 NCCL 识别出的拓扑；Nsight Systems 里分层算法会出现组内、组间两类 NCCL 内核。</li></ul>`,
+    variants: [
+      { id: 'a', name: '改前 · 扁平环 0→1→2→3→0（不看拓扑）', short: '扁平环', lanes: [['l01', 'NVLink 0→1'], ['l12', 'PCIe 1→2（跨对）'], ['l23', 'NVLink 2→3'], ['l30', 'PCIe 3→0（跨对）']] },
+      { id: 'b', name: '改后 · 分层：对内 reduce → 对间交换 → 对内广播', short: '分层（拓扑感知）', lanes: [['n01', 'NVLink 0↔1'], ['n23', 'NVLink 2↔3'], ['pc', 'PCIe 0↔2（跨对）']] },
+    ],
+    build(P) {
+      const segs = [], add = adder(segs), LAT = 0.25, M = P.M, q = +(M / 4).toFixed(1);
+      const pcie = x => 8 * x / 100, nvl = x => pcie(x) / P.R;
+      // a：扁平环。2(n−1) = 6 步，每步所有 GPU 同时给环上的下一家发 M/4
+      const hops = [['l01', ['g0', 'g1']], ['l12', ['g1', 'sa', 'sb', 'g2']], ['l23', ['g2', 'g3']], ['l30', ['g3', 'sb', 'sa', 'g0']]];
+      const step = LAT + Math.max(pcie(M / 4), nvl(M / 4));
+      for (let k = 0; k < 6; k++) {
+        const rs = k < 3, i = rs ? k + 1 : k - 2, lab = (rs ? 'RS ' : 'AG ') + i;
+        for (const [id, p] of hops) {
+          const slow = p.length > 2, d = LAT + (slow ? pcie(M / 4) : nvl(M / 4));
+          add('a', id, k * step, d, 'comm', lab, `${rs ? 'reduce-scatter' : 'all-gather'} 第 ${i}/3 步：GPU ${p[0][1]} → GPU ${p[p.length - 1][1]} 发 ${q} MiB${slow ? '，要经过两个 PCIe 交换机' : '（NVLink）'}${rs ? '；收到的块加到本地' : ''}`, { fl: [p] });
+          if (step - d > 1e-3) add('a', id, k * step + d, step - d, 'sync', '等', 'NVLink 早传完了：环形每一步都要等最慢的那一跳（PCIe），下一步才有数据可发');
+        }
+      }
+      // b：书中描述的分层做法：对内 reduce → 每对选一块 GPU 经 PCIe 交换 → 对内广播
+      const t1 = LAT + nvl(M), t2 = t1 + LAT + pcie(M), endB = t2 + LAT + nvl(M);
+      add('b', 'n01', 0, t1, 'comm', '对内 reduce 1→0', `GPU 1 经 NVLink 把 ${M} MiB 发给 GPU 0，GPU 0 求和`, { fl: [['g1', 'g0']] });
+      add('b', 'n23', 0, t1, 'comm', '对内 reduce 3→2', `GPU 3 经 NVLink 把 ${M} MiB 发给 GPU 2，GPU 2 求和`, { fl: [['g3', 'g2']] });
+      add('b', 'pc', 0, t1, 'sync', '等对内 reduce', 'PCIe 这时还没有数据可发');
+      add('b', 'pc', t1, t2 - t1, 'comm', '对间交换 0↔2', `GPU 0 和 GPU 2 经 PCIe 互发各自这一对的部分和（每个方向 ${M} MiB，只要 1 步），相加后两边都得到全局和`, { fl: [['g0', 'sa', 'sb', 'g2'], ['g2', 'sb', 'sa', 'g0']] });
+      for (const id of ['n01', 'n23']) add('b', id, t1, t2 - t1, 'sync', '等对间交换', 'NVLink 空闲，等 PCIe 那一步');
+      add('b', 'n01', t2, endB - t2, 'comm', '对内广播 0→1', 'GPU 0 经 NVLink 把全局和发给 GPU 1', { fl: [['g0', 'g1']] });
+      add('b', 'n23', t2, endB - t2, 'comm', '对内广播 2→3', 'GPU 2 经 NVLink 把全局和发给 GPU 3', { fl: [['g2', 'g3']] });
+      const endA = 6 * step;
+      return { segs, ends: { a: endA, b: endB }, btitle: `一次 ${M} MiB all-reduce 的耗时（示意单位，越短越好）`,
+        bnote: `跨 PCIe 的字节（每个方向）：扁平环 ${fmt(1.5 * M)} MiB，分 6 步；分层 ${M} MiB，1 步。${endB > endA ? '当前带宽比下 NVLink 不够快，分层反而更慢。' : ''}书中表 4-2（拓扑感知 + 重叠，说明性）：SM 忙时 60% → 90%，迭代 100 ms → 70 ms。` };
+    },
+    topo() {
+      const N = (x, y, label) => ({ x, y, w: 62, h: 28, cls: label[0] === 'G' ? 'gpu' : 'xsw', label });
+      const view = (v, title, y) => ({ v, title, x: 10, y,
+        nodes: { g0: N(0, 0, 'GPU 0'), g1: N(0, 64, 'GPU 1'), sa: N(84, 32, 'PCIe A'), sb: N(194, 32, 'PCIe B'), g2: N(278, 0, 'GPU 2'), g3: N(278, 64, 'GPU 3') },
+        links: [{ a: 'g0', b: 'g1', cls: 'nvlink', label: 'NVLink', dx: 26, dy: 4 }, { a: 'g2', b: 'g3', cls: 'nvlink', label: 'NVLink', dx: -26, dy: 4 },
+          { a: 'g0', b: 'sa', cls: 'pcie' }, { a: 'g1', b: 'sa', cls: 'pcie' }, { a: 'g2', b: 'sb', cls: 'pcie' }, { a: 'g3', b: 'sb', cls: 'pcie' },
+          { a: 'sa', b: 'sb', cls: 'pcie', label: 'PCIe（跨对）', dy: -20 }] });
+      return { W: 360, H: 254, views: [view('a', '改前 · 扁平环', 24), view('b', '改后 · 分层', 152)] };
+    } },
+  { id: 'sharp', tab: '⑤ 卸载：网内归约', params: ['N'], diag: 'topo', dtitle: '交换机在做什么', dl: ['net', 'dot', 'red', 'busy', 'agg'],
+    note: '示意单位：每块 GPU 的链路传一整份数据 B 用 4；环形每一步另加 0.2 的延迟；网内归约把数据切成 8 块流水，另加 0.5 的交换机延迟。两种做法用同一条链路、同样的带宽。',
+    title: '⑤ 交给交换机：SHARP / NVLS 在网络里做归约',
+    body: `<p>环形 all-reduce 里交换机只转发：每块 GPU 把数据切成 n 块，接力 2(n−1) 步，每步收一块、加到本地再发出去。支持网内计算的交换机（InfiniBand Quantum 交换机上的 SHARP；NVLink 域里叫 NVLS，卸载到 NVSwitch）在数据流经时直接求和，再把结果组播回所有 GPU。</p>
+<ul><li>每块 GPU 只把自己的数据发一次、把结果收一次；上行和下行流水重叠，总时间取两者中较大的，而不是两者相加。</li>
+<li>书中给的量：环形 reduce-scatter 每块 GPU 要经 n−1 跳收 (n−1)/n·B；网内归约后只需收 B/n。但 all-reduce 要看整条链路：环形里每块 GPU 发出 2(n−1)/n·B，网内归约发 B、收 B，链路上的字节最多省一半，带宽上的收益不超过 2 倍。NVIDIA 报告的大规模 2–5 倍，其余来自延迟：环形要串行走 2(n−1) 步，网内归约只有一上一下。</li>
+<li>规模越大收益越大：n = 2 时环形只有 2 步，几乎没有优势；书中说 2–4 个节点时可能察觉不到，32 个节点时明显。</li>
+<li>SHARP 默认不启用：要交换机固件、聚合管理器、NCCL RDMA SHARP 插件和 GPUDirect RDMA 都就位，通常不用改代码。用 <code>NCCL_DEBUG=INFO</code> 的日志确认用上了；书中建议用 <code>NCCL_SHARP_DISABLE=1</code> 做 A/B 对比。</li></ul>`,
+    variants: [
+      { id: 'a', name: P => `改前 · 环形 all-reduce：2(n−1) = ${2 * (P.N - 1)} 步，交换机只转发`, short: '环形', lanes: [['ln', '每块 GPU 的链路'], ['sw', '交换机']] },
+      { id: 'b', name: '改后 · 网内归约：上行 → 交换机求和 → 下行组播，三者流水', short: '网内归约', lanes: [['up', 'GPU → 交换机'], ['sw', '交换机'], ['dn', '交换机 → GPU']] },
+    ],
+    build(P) {
+      const segs = [], add = adder(segs), n = P.N, TM = 4, LAT = 0.2, LS = 0.5, CH = 8;
+      const gs = [...Array(n).keys()].map(i => 'g' + i), st = LAT + TM / n;
+      for (let k = 0; k < 2 * (n - 1); k++) {
+        const rs = k < n - 1, i = rs ? k + 1 : k - n + 2;
+        add('a', 'ln', k * st, st, 'comm', (rs ? 'RS ' : 'AG ') + i, `${rs ? 'reduce-scatter' : 'all-gather'} 第 ${i}/${n - 1} 步：每块 GPU 把 1/${n} 的数据发给环上的下一家${rs ? '，收到的块在 GPU 上加到本地' : ''}`, { fl: gs.map((g, j) => [g, 'sw', gs[(j + 1) % n]]), nd: rs ? gs : [] });
+        add('a', 'sw', k * st, st, 'comm', '转发', '交换机只把数据转给下一块 GPU，不做计算');
+      }
+      const tau = TM / CH;
+      for (let c = 0; c < CH; c++) {
+        add('b', 'up', c * tau, tau, 'comm', `↑${c + 1}`, `第 ${c + 1}/${CH} 块：每块 GPU 把自己的这一块发给交换机（整份数据只发一次）`, { fl: gs.map(g => [g, 'sw']) });
+        add('b', 'sw', c * tau + LS / 2, tau, 'offload', `Σ${c + 1}`, `交换机把 ${n} 块 GPU 的第 ${c + 1} 块相加`, { nd: ['sw'] });
+        add('b', 'dn', c * tau + LS, tau, 'comm', `↓${c + 1}`, '交换机把求和结果组播给所有 GPU（每块 GPU 收一次）', { fl: gs.map(g => ['sw', g]), dot: 'red' });
+      }
+      const sp = k => 2 * (k - 1) * (LAT + TM / k) / (TM + LS);
+      return { segs, ends: { a: 2 * (n - 1) * st, b: TM + LS }, btitle: `${n} 块 GPU 做一次 all-reduce 的耗时（示意单位，越短越好）`,
+        bnote: `每块 GPU 发出的字节：环形 2(n−1)/n·B = ${(2 * (n - 1) / n).toFixed(2)}B，网内归约 1B；环形要串行走 ${2 * (n - 1)} 步。同一模型下 n = 2 / 8 / 32 的加速比约 ${[2, 8, 32].map(k => sp(k).toFixed(1) + '×').join(' / ')}。` };
+    },
+    topo(P) {
+      const n = P.N, s = n <= 8 ? 26 : n <= 16 ? 16 : 10, R = 62, C = 84;
+      const view = (v, title, x) => {
+        const nodes = { sw: { x: C - 30, y: C - 13, w: 60, h: 26, cls: 'xsw', label: '交换机' } }, links = [];
+        for (let i = 0; i < n; i++) {
+          const a = -Math.PI / 2 + 2 * Math.PI * i / n;
+          nodes['g' + i] = { x: C + R * Math.cos(a) - s / 2, y: C + R * Math.sin(a) - s / 2, w: s, h: s, cls: 'gpu', label: n <= 8 ? 'G' + i : '' };
+          links.push({ a: 'g' + i, b: 'sw' });
+        }
+        return { v, title, x, y: 24, nodes, links };
+      };
+      return { W: 360, H: 200, views: [view('a', '环形：只转发', 4), view('b', '网内归约：求和 + 组播', 186)] };
+    } },
+  { id: 'nixl', tab: '⑥ 推理：NIXL 传 KV', params: ['L', 'X'], diag: 'topo', dtitle: 'KV 缓存走哪条路', dl: ['pcie', 'net', 'dot', 'cpu', 'busy'],
+    note: '示意单位：prefill 每层 1.0，decode 每层 0.15；“KV 传输耗时”是 NIXL 直传整份 KV 的时间；经 CPU 中转时 D2H、主机到主机、H2D 三段各按同样的时间计，三段串行。',
+    title: '⑥ 推理也一样：NIXL 在 GPU 之间直接搬 KV 缓存，并和计算重叠',
+    body: `<p>分离式推理里，prefill GPU 算出提示词每一层的 KV 缓存，decode GPU 拿到它们才能接着生成。decode 的输入是 prefill 产出的 token，所以必须等 prefill 跑完；能省的是 KV 的搬运。</p>
+<ul><li>改前：经 CPU 中转，GPU → 主机内存 → 网络 → 主机内存 → GPU，三段串行，还要占用 CPU。书中说这类传统做法满足不了推理要的速度和延迟。</li>
+<li>NIXL 直传：显存到显存，不经过主机内存。NIXL 自动挑最快的路：同一块板上走 NVLink / NVLink-C2C，机架内走 NVSwitch，机架之间走 InfiniBand / RoCE 的 GPUDirect RDMA，必要时还能直接读写 NVMe。</li>
+<li>逐层流式：每算完一层就提交一个非阻塞传输，传输和后面层的 prefill 重叠；decode 每一层只需要对应层的 KV，块一到就能用，不必等全部传完。</li>
+<li>书中的写法：<code>registerMem</code> 注册内存 → <code>trim</code> 得到传输描述符 → <code>prepXfer</code> → <code>postXfer</code> → 轮询 <code>checkXfer</code>，最后 <code>releaseReqH</code>。实际的 <code>nixl.h</code> 里对应 <code>registerMem</code>、<code>createXferReq</code>（或 <code>prepXferDlist</code> + <code>makeXferReq</code>）、<code>postXferReq</code>、<code>getXferStatus</code>、<code>releaseXferReq</code>；两端各有一个 <code>nixlAgent</code>，先用 <code>getLocalMD</code> / <code>loadRemoteMD</code> 交换元数据。</li></ul>`,
+    variants: [
+      { id: 'a', name: '改前 · 经 CPU 中转：GPU → 主机内存 → 网络 → 主机内存 → GPU', short: '经 CPU 中转', lanes: [['p', 'Prefill GPU'], ['x', '经主机内存中转'], ['d', 'Decode GPU']] },
+      { id: 'b', name: '改后 · NIXL 直传（GPUDirect RDMA），prefill 结束后一次传完', short: 'NIXL 直传', lanes: [['p', 'Prefill GPU'], ['x', 'NIXL 传输'], ['d', 'Decode GPU']] },
+      { id: 'c', name: '再加逐层流式：每层算完就 postXfer，decode 逐层消费', short: 'NIXL 逐层流式', lanes: [['p', 'Prefill GPU'], ['x', 'NIXL 传输（逐层）'], ['d', 'Decode GPU']] },
+    ],
+    build(P) {
+      const segs = [], add = adder(segs), L = P.L, X = P.X, PL = 1, DL = 0.15, path = ['P', 'nA', 'nB', 'D'];
+      const pre = v => { let t = 0; for (let l = 1; l <= L; l++) t = add(v, 'p', t, PL, 'compute', 'L' + l, `prefill 第 ${l} 层：算出这一层的 KV 缓存`, { nd: ['P'] }); return t; };
+      const dec = (v, t0) => add(v, 'd', t0, L * DL, 'compute', 'decode 第 1 步', `用全部 ${L} 层的 KV 生成下一个 token`, { nd: ['D'] });
+      let t = pre('a');
+      t = add('a', 'x', t, X, 'host', 'D2H', 'KV 从 prefill GPU 拷到主机内存（PCIe）', { fl: [['P', 'hA']], dot: 'cpu', nd: ['hA'] });
+      t = add('a', 'x', t, X, 'host', '主机 → 主机', 'CPU 经网卡把主机内存里的 KV 发到对端的主机内存', { fl: [['hA', 'nA', 'nB', 'hB']], dot: 'cpu', nd: ['hA', 'hB'] });
+      t = add('a', 'x', t, X, 'host', 'H2D', 'KV 从主机内存拷进 decode GPU（PCIe）', { fl: [['hB', 'D']], dot: 'cpu', nd: ['hB'] });
+      add('a', 'd', 0, t, 'sync', '等 KV', '等 prefill 结束，再等 KV 经主机内存一段段搬过来');
+      const endA = dec('a', t);
+      t = add('b', 'x', pre('b'), X, 'comm', 'NIXL 传全部 KV', '网卡经 GPUDirect RDMA 直接读 prefill GPU 的显存、写进 decode GPU 的显存，不经过主机内存', { fl: [path] });
+      add('b', 'd', 0, t, 'sync', '等 KV', '等 prefill 结束、KV 传完');
+      const endB = dec('b', t);
+      let link = 0; const arr = [];
+      for (let l = 1; l <= L; l++) arr.push(link = add('c', 'x', Math.max(l * PL, link), X / L, 'comm', 'KV L' + l, `第 ${l} 层的 KV：这一层一算完就 postXfer（非阻塞），和后面层的 prefill 重叠`, { fl: [path] }));
+      let d = add('c', 'd', 0, pre('c'), 'sync', '等 prefill', 'decode 的输入是 prefill 产出的 token，要等 prefill 跑完');
+      for (let l = 1; l <= L; l++) {
+        if (arr[l - 1] > d + 1e-6) d = add('c', 'd', d, arr[l - 1] - d, 'sync', '等 KV', `第 ${l} 层的 KV 还在路上`);
+        d = add('c', 'd', d, DL, 'compute', 'D' + l, `decode 第 1 步的第 ${l} 层：这一层的 KV 已到（checkXfer 确认完成）`, { nd: ['D'] });
+      }
+      const exposed = Math.max(0, arr[L - 1] - L * PL), wait = d - L * PL - L * DL;
+      return { segs, ends: { a: endA, b: endB, c: d }, btitle: 'decode 第 1 步完成的时间（示意单位，越短越好）',
+        bnote: `直传省掉两次主机内存拷贝和 CPU 参与。逐层流式把 ${fmt(X - exposed)} / ${fmt(X)} 的传输藏在了 prefill 计算后面，${wait > 0.05 ? `decode 还要为 KV 多等 ${fmt(wait)}（每层传输比每层 prefill 慢时，传输会排队）` : 'decode 不用再为 KV 停下来'}。` };
+    },
+    topo() {
+      const N = (x, y, label, sub, cls = '') => ({ x, y, w: 52, h: 28, label, sub, cls });
+      const row = y => ({ P: N(0, y, 'Prefill', 'GPU', 'gpu'), nA: N(100, y, '网卡', 'A'), nB: N(196, y, '网卡', 'B'), D: N(296, y, 'Decode', 'GPU', 'gpu') });
+      const direct = [{ a: 'P', b: 'nA', cls: 'pcie' }, { a: 'nA', b: 'nB', label: 'RDMA' }, { a: 'nB', b: 'D', cls: 'pcie' }];
+      return { W: 360, H: 220, views: [
+        { v: 'a', title: '改前 · 经 CPU 中转', x: 6, y: 22, nodes: { ...row(44), hA: N(50, 0, '主机内存', 'A', 'host'), hB: N(246, 0, '主机内存', 'B', 'host') },
+          links: [{ a: 'P', b: 'hA', cls: 'pcie' }, { a: 'hA', b: 'nA' }, { a: 'nA', b: 'nB', label: '网络' }, { a: 'nB', b: 'hB' }, { a: 'hB', b: 'D', cls: 'pcie' }] },
+        { v: 'b', title: '改后 · NIXL 直传', x: 6, y: 126, nodes: row(0), links: direct },
+        { v: 'c', title: '再加逐层流式', x: 6, y: 184, nodes: row(0), links: direct }] };
+    } },
+];
+// ---------- 状态 ----------
+const RM = matchMedia('(prefers-reduced-motion: reduce)');
+const S = { stage: 0, t: 0, playing: false, speed: 1, model: null, maxT: 1, end: 1, last: 0, anim: !RM.matches, nowKey: '',
+  P: Object.fromEntries(Object.entries(PARAMS).map(([k, p]) => [k, p.value])) };
+const vname = v => typeof v.name === 'function' ? v.name(S.P) : v.name;
+const variantOf = g => STAGES[S.stage].variants.find(v => v.id === g.v);
+const laneName = g => Object.fromEntries(variantOf(g).lanes)[g.lane.slice(g.v.length + 1)];
+const textW = (s, px = 11.5) => [...s].reduce((a, ch) => a + (ch.charCodeAt(0) > 255 ? px : px * 0.56), 0);
+const niceStep = x => { const p = 10 ** Math.floor(Math.log10(x)); return [1, 2, 5, 10].map(k => k * p).find(v => v >= x - 1e-9); };
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const ease = x => 1 - (1 - x) ** 3;
+// “改前 · 某某”拆成徽标和正文
+const split = s => { const m = /^(改前|改后) · (.*)$/.exec(s); return m ? [m[1], m[2]] : [null, s]; };
+function badge(svg, x, y, word) {
+  const post = word === '改后';
+  el('rect', { x, y: y - 11, width: 32, height: 16, rx: 8, class: 'badge ' + (post ? 'post' : 'pre') }, svg);
+  el('text', { x: x + 16, y: y + 1, 'text-anchor': 'middle', class: 'badge-text' + (post ? ' post' : '') }, svg).textContent = word;
+  return 39;
+}
+
+function recompute(fresh) {
+  const m = S.model = STAGES[S.stage].build(S.P);
+  S.end = Math.max(...Object.values(m.ends));
+  S.maxT = Math.max(S.end, ...(m.marks || []).map(k => k.t)) * 1.02;
+  S.t = Math.min(S.t, S.end);
+  S.nowKey = '';
+  drawLegend(); drawTimeline(fresh); drawDiag(); drawBars(fresh); drawTable(); update();
+}
+
+// ---------- 时间线：每个版本一组泳道，共用一根时间轴 ----------
+const TL = { W: 1100, LW: 158, R: 18, GH: 24, LH: 32, BH: 22 };
+let tlParts = null;
+const tx = t => TL.LW + t / S.maxT * (TL.W - TL.LW - TL.R);
+function drawTimeline(fresh) {
+  const st = STAGES[S.stage], m = S.model, svg = $('tl'), laneY = {}, groups = [], marks = m.marks || [];
+  const TOP = 34 + 15 * marks.length;
+  svg.innerHTML = '';
+  svg.classList.toggle('tl-in', !!fresh && S.anim);
+  let y = TOP;
+  st.variants.forEach(v => {
+    groups.push({ v, y });
+    y += TL.GH;
+    v.lanes.forEach(([id]) => { laneY[v.id + '.' + id] = y; y += TL.LH; });
+    y += 10;
+  });
+  const H = y;
+  svg.setAttribute('viewBox', `0 0 ${TL.W} ${H}`);
+  const stp = niceStep(S.maxT / 12);
+  for (let v = 0; v <= S.maxT + 1e-6; v += stp) {
+    el('line', { x1: tx(v), x2: tx(v), y1: TOP - 6, y2: H - 8, class: 'gridline' }, svg);
+    el('text', { x: tx(v), y: TOP - 10, 'text-anchor': 'middle', class: 'axis-text' }, svg).textContent = +v.toFixed(2);
+  }
+  const ends = [];
+  groups.forEach(({ v, y }, i) => {
+    if (i) el('line', { x1: 8, x2: TL.W - TL.R, y1: y - 5, y2: y - 5, class: 'groupline' }, svg);
+    const [bw, name] = split(vname(v)), e = m.ends[v.id], lab = `完成 ${fmt(e)}`;
+    let x = 8;
+    if (bw) x += badge(svg, x, y + 15, bw);
+    el('text', { x, y: y + 16, class: 'group-label' }, svg).textContent = name;
+    v.lanes.forEach(([id, nm]) => {
+      const ly = laneY[v.id + '.' + id];
+      el('rect', { x: TL.LW, y: ly + 3, width: TL.W - TL.LW - TL.R, height: TL.LH - 6, rx: 5, class: 'lane-bg' }, svg);
+      el('text', { x: TL.LW - 10, y: ly + TL.LH / 2 + 4, 'text-anchor': 'end', class: 'lane-label' }, svg).textContent = nm;
+    });
+    const lw = textW(lab, 11.5), left = tx(e) - 26 - lw > x + textW(name, 12.5) + 14;
+    const on = S.t >= e - 1e-9, g = el('g', { class: 'endg' + (on ? ' hit-on quiet' : '') }, svg);
+    el('line', { x1: tx(e), x2: tx(e), y1: y + TL.GH - 4, y2: y + TL.GH + v.lanes.length * TL.LH, class: 'endmark' }, g);
+    const lx = left ? tx(e) - 8 : tx(e) + 8, kx = left ? lx - lw - 15 : lx + lw + 5;
+    el('text', { x: lx, y: y + 16, 'text-anchor': left ? 'end' : 'start', class: 'end-label' }, g).textContent = lab;
+    el('path', { d: `M${kx} ${y + 11} l3.5 3.5 l6.5 -7`, class: 'tick' }, g);
+    ends.push({ g, e, on });
+  });
+  // 下限 / 理想的标注：最左边那条的文字放在线的左边、离时间轴最近，其余的放右边、往上排，文字不会压到别的线
+  [...marks].sort((a, b) => a.t - b.t).forEach((k, i, all) => {
+    const by = TOP - 22 - 15 * i, mx = tx(k.t), w = textW(k.label, 11);
+    const right = i === 0 && all.length > 1 ? mx - 6 - w < 8 : mx + 6 + w < TL.W;
+    el('line', { x1: mx, x2: mx, y1: by - 9, y2: H - 8, class: 'idealmark' + (k.alt ? ' alt' : '') }, svg);
+    el('text', { x: right ? mx + 6 : mx - 6, y: by, 'text-anchor': right ? 'start' : 'end', class: 'mark-label' }, svg).textContent = k.label;
+  });
+  const blocks = [];
+  m.segs.forEach((g, i) => {
+    const x0 = tx(g.s) + 1, w = Math.max(2, tx(g.e) - tx(g.s) - 2), by = laneY[g.lane] + (TL.LH - TL.BH) / 2;
+    const ghost = el('rect', { x: x0, y: by, width: w, height: TL.BH, rx: 4, class: `blk ghost k-${g.kind}`, style: `--d:${Math.min(i * 0.018, 0.7).toFixed(3)}s` }, svg);
+    const fill = el('rect', { x: x0, y: by, width: 0, height: TL.BH, rx: 4, class: `blk k-${g.kind}` }, svg);
+    const str = g.kind === 'comm' ? el('rect', { x: x0, y: by, width: 0, height: TL.BH, rx: 4, class: 'stripes' }, svg) : null;
+    let clip = null;
+    if (textW(g.label, 11) + 8 < w) {
+      const cx = x0 + w / 2, cy = by + TL.BH / 2 + 4;
+      el('text', { x: cx, y: cy, 'text-anchor': 'middle', class: `blk-label k-${g.kind}` }, svg).textContent = g.label;
+      clip = el('rect', { x: x0, y: by, width: 0, height: TL.BH }, el('clipPath', { id: 'cp' + i }, svg));
+      el('text', { x: cx, y: cy, 'text-anchor': 'middle', class: `blk-label on k-${g.kind}`, 'clip-path': `url(#cp${i})` }, svg).textContent = g.label;
+    }
+    const hit = el('rect', { x: x0 - 2, y: by - 4, width: Math.max(w + 4, 10), height: TL.BH + 8, class: 'hit' }, svg);
+    hit.addEventListener('mousemove', ev => showTip(ev, g));
+    hit.addEventListener('mouseleave', hideTip);
+    hit.addEventListener('click', () => { S.t = g.s + 1e-4; S.playing = false; update(); });
+    blocks.push({ g, w, ghost, fill, str, clip, live: false });
+  });
+  const beam = el('rect', { x: TL.LW, y: TOP - 6, width: 0, height: H - TOP - 2, class: 'ph-beam' }, svg);
+  const ph = el('line', { x1: tx(0), x2: tx(0), y1: TOP - 6, y2: H - 8, class: 'playhead' }, svg);
+  const knob = el('circle', { cx: tx(0), cy: TOP - 6, r: 4.5, class: 'ph-knob' }, svg);
+  tlParts = { blocks, beam, ph, knob, ends };
+}
+function updateTimeline() {
+  const t = S.t, P = tlParts;
+  P.blocks.forEach(b => {
+    const f = clamp01((t - b.g.s) / (b.g.e - b.g.s)), fw = f * b.w, live = f > 0 && f < 1;
+    b.fill.setAttribute('width', fw);
+    if (b.clip) b.clip.setAttribute('width', fw);
+    if (b.str) b.str.setAttribute('width', fw);
+    b.ghost.style.visibility = f >= 1 ? 'hidden' : '';
+    if (live !== b.live) { b.live = live; b.fill.classList.toggle('live', live); if (b.str) b.str.classList.toggle('on', live); }
+  });
+  const x = tx(t), bx = Math.max(TL.LW, x - 72);
+  P.ph.setAttribute('x1', x); P.ph.setAttribute('x2', x);
+  P.knob.setAttribute('cx', x);
+  P.beam.setAttribute('x', bx); P.beam.setAttribute('width', Math.max(0, x - bx));
+  P.ends.forEach(o => {
+    const on = t >= o.e - 1e-9;
+    if (on !== o.on) { o.on = on; o.g.classList.remove('quiet'); o.g.classList.toggle('hit-on', on); }
+  });
+}
+// ---------- 右侧小图：训练页画梯度桶，其余页画拓扑与数据流 ----------
+let dParts = null;
+function drawDiag() {
+  const st = STAGES[S.stage], svg = $('diag');
+  svg.innerHTML = '';
+  dParts = st.diag === 'buckets' ? { kind: 'buckets', rows: drawBuckets(svg, st) } : { kind: 'topo', ...drawTopo(svg, st.topo(S.P)) };
+}
+function updateDiag() { if (dParts.kind === 'buckets') updateBuckets(); else updateTopo(); }
+const BKR = { W: 360, X0: 10, RH: 116, VY: 40, VH: 40 };
+function drawBuckets(svg, st) {
+  const { W, X0, RH, VY, VH } = BKR, BW = W - 2 * X0;
+  svg.setAttribute('viewBox', `0 0 ${W} ${st.variants.length * RH - 4}`);
+  svg.style.maxWidth = W * 1.35 + 'px';
+  return st.variants.map((v, i) => {
+    const y = i * RH, tr = S.model.train[v.id], n = tr.n, w = BW / n, gap = n > 16 ? 1 : 2, cells = [];
+    el('text', { x: X0, y: y + 13, class: 'sub-title' }, svg).textContent = v.short;
+    el('line', { x1: X0, x2: W - X0, y1: y + 24, y2: y + 24, class: 'uplink' }, svg);
+    el('text', { x: W - X0, y: y + 19, 'text-anchor': 'end', class: 'up-text' }, svg).textContent = '与其他 rank 交换';
+    for (let j = 1; j <= n; j++) {   // 第 1 个就绪的桶在最右边（L4 一端）
+      const x = X0 + (n - j) * w + gap / 2, cw = Math.max(1, w - gap), np = cw >= 22 ? 3 : cw >= 9 ? 2 : 1;
+      const vial = el('rect', { x, y: y + VY, width: cw, height: VH, rx: Math.min(5, cw / 3), class: 'vial' }, svg);
+      const liq = el('rect', { x: x + 2, y: y + VY + VH - 2, width: Math.max(0.5, cw - 4), height: 0, rx: Math.min(3, cw / 4), class: 'liq' }, svg);
+      const tick = cw >= 14 ? el('path', { d: `M${x + cw / 2 - 5} ${y + VY + VH / 2} l3.5 3.5 l6.5 -7`, class: 'bk-tick' }, svg) : null;
+      const ptl = [];
+      for (let k = 0; k < np; k++) ptl.push(el('circle', { r: cw >= 9 ? 2.6 : 1.7, class: 'ptl', style: 'display:none' }, svg));
+      const hit = el('rect', { x: x - gap / 2, y: y + VY - 4, width: w, height: VH + 8, class: 'hit' }, svg);
+      hit.addEventListener('mousemove', ev => bucketTip(ev, tr, j));
+      hit.addEventListener('mouseleave', hideTip);
+      cells.push({ j, x, cw, vial, liq, tick, ptl, st: '', lvl: -1 });
+    }
+    for (let l = 1; l <= 4; l++) {
+      el('text', { x: X0 + (l - 0.5) * BW / 4, y: y + VY + VH + 15, 'text-anchor': 'middle', class: 'nd-sub' }, svg).textContent = 'L' + l;
+      if (l < 4) el('line', { x1: X0 + l * BW / 4, x2: X0 + l * BW / 4, y1: y + VY + VH + 3, y2: y + VY + VH + 8, style: 'stroke:var(--axis)' }, svg);
+    }
+    const status = el('text', { x: X0, y: y + VY + VH + 31, class: 'st-text' }, svg);
+    return { tr, cells, status, y };
+  });
+}
+const curMb = (tr, t) => tr.mb.reduce((k, s, i) => (t >= s ? i : k), 0);
+const BK_STATE = {
+  empty: '本微批的梯度还没算出来', fill: '反向正在算这几层的梯度', acc: '已算出，在 no_sync() 里只加到本地 .grad，不通信',
+  wait: '已算出，等着发 all-reduce', comm: 'all-reduce 进行中', done: '已归约：各 rank 上是同一份平均梯度',
+};
+// 返回 [状态, 本微批里这个桶已经算出的比例]
+function bucketState(r, t) {
+  const B = 0.7 * S.P.C, f = clamp01((t - (r.ready - B / r.n)) / (B / r.n));
+  if (t < r.ready) return [f > 0 ? 'fill' : 'empty', f];
+  if (r.acc) return ['acc', 1];
+  if (t < r.cs) return ['wait', 1];
+  if (t < r.ce) return ['comm', 1];
+  return ['done', 1];
+}
+function updateBuckets() {
+  const t = S.t;
+  dParts.rows.forEach(({ tr, cells, status, y }) => {
+    const m = curMb(tr, t), recs = tr.bk.filter(r => r.m === m);
+    recs.forEach(r => {
+      const c = cells[r.j - 1], [s, f] = bucketState(r, t);
+      const lvl = tr.mode === 'nosync' ? (r.m + f) / tr.K : f;   // no_sync：几个微批的梯度在本地越攒越多
+      if (Math.abs(lvl - c.lvl) > 1e-4) {
+        c.lvl = lvl;
+        const h = (BKR.VH - 4) * lvl;
+        c.liq.setAttribute('y', y + BKR.VY + BKR.VH - 2 - h); c.liq.setAttribute('height', h);
+      }
+      if (s !== c.st) {
+        c.st = s;
+        c.liq.setAttribute('class', 'liq' + (s === 'acc' ? ' acc' : s === 'comm' ? ' comm' : ''));
+        c.vial.setAttribute('class', 'vial' + (s === 'wait' ? ' wait' : ''));
+        if (c.tick) c.tick.classList.toggle('on', s === 'done');
+        c.ptl.forEach(p => p.style.display = s === 'comm' ? '' : 'none');
+      }
+    });
+    const done = recs.filter(r => r.ce <= t).length;
+    const rounds = [...Array(tr.K).keys()].filter(i => tr.bk.some(r => r.m === i && !r.acc) && tr.bk.every(r => r.m !== i || r.ce <= t)).length;
+    const txt = tr.K > 1 ? `第 ${m + 1}/${tr.K} 个微批，已完成 ${rounds} 轮 all-reduce`
+      : tr.mode === 'serial' ? `已归约 ${done}/4 层的梯度` : `已归约 ${done}/${tr.n} 个桶`;
+    if (status.textContent !== txt) status.textContent = txt;
+  });
+}
+// all-reduce 进行中的桶口有粒子进出：奇数个往上发，偶数个收回来。只是“正在交换”的提示，按真实时间走
+function animParticles(now) {
+  if (!dParts || dParts.kind !== 'buckets') return;
+  const sec = S.anim ? now / 1000 : 0.3;
+  dParts.rows.forEach(({ cells, y }) => cells.forEach(c => {
+    if (c.st !== 'comm') return;
+    c.ptl.forEach((p, k) => {
+      const ph = (sec / 0.8 + k / c.ptl.length + c.j * 0.137) % 1, up = k % 2 === 0;
+      p.setAttribute('cx', c.x + c.cw * (k + 1) / (c.ptl.length + 1));
+      p.setAttribute('cy', up ? y + BKR.VY - 3 - ph * 13 : y + 27 + ph * 10);
+      p.style.opacity = (up ? 1 - ph : Math.min(1, (1 - ph) * 4)).toFixed(2);
+    });
+  }));
+}
+function bucketTip(ev, tr, j) {
+  const t = S.t, r = tr.bk.find(q => q.m === curMb(tr, t) && q.j === j);
+  const what = tr.mode === 'serial' ? `L${5 - j} 的梯度（${fmt(100 / 4)} MiB）` : `桶 ${j}：${layersOf(j, tr.n)} 的梯度（${+(100 / tr.n).toFixed(1)} MiB）`;
+  const when = `就绪 t = ${fmt(r.ready)}` + (r.acc ? '，本微批不通信' : `，all-reduce ${fmt(r.cs)} → ${fmt(r.ce)}`);
+  showRawTip(ev, what, when, BK_STATE[bucketState(r, t)[0]]);
+}
+function drawTopo(svg, L) {
+  svg.setAttribute('viewBox', `0 0 ${L.W} ${L.H}`);
+  svg.style.maxWidth = L.W * 1.35 + 'px';
+  const views = L.views.map(V => {
+    const [bw, title] = split(V.title);
+    let tx0 = V.x;
+    if (bw) tx0 += badge(svg, tx0, V.y - 9, bw);
+    el('text', { x: tx0, y: V.y - 8, class: 'sub-title' }, svg).textContent = title;
+    const c = id => { const n = V.nodes[id]; return [V.x + n.x + n.w / 2, V.y + n.y + n.h / 2]; };
+    const links = V.links.map(k => {
+      const [x1, y1] = c(k.a), [x2, y2] = c(k.b);
+      const halo = el('line', { x1, y1, x2, y2, class: 'halo ' + (k.cls || '') }, svg);   // 发光用一条更粗的半透明线，不用滤镜（水平/竖直线的滤镜区域是空的）
+      const ln = el('line', { x1, y1, x2, y2, class: 'ln ' + (k.cls || '') }, svg);
+      if (k.label) el('text', { x: (x1 + x2) / 2 + (k.dx || 0), y: (y1 + y2) / 2 + (k.dy ?? -6), 'text-anchor': 'middle', class: 'ln-label' }, svg).textContent = k.label;
+      return { ...k, ln, halo, cur: '' };
+    });
+    const nodes = {};
+    for (const id in V.nodes) {
+      const n = V.nodes[id], [cx, cy] = c(id), box = { x: V.x + n.x, y: V.y + n.y, width: n.w, height: n.h, rx: Math.min(6, n.w / 3) };
+      const rip = n.cls === 'xsw' ? el('rect', { ...box, class: 'ripple' }, svg) : null;
+      const r = el('rect', { ...box, class: 'nd ' + (n.cls || '') }, svg);
+      if (n.label) el('text', { x: cx, y: n.sub ? cy - 1 : cy + 4, 'text-anchor': 'middle', class: 'nd-label' }, svg).textContent = n.label;
+      if (n.sub) el('text', { x: cx, y: cy + 10, 'text-anchor': 'middle', class: 'nd-sub' }, svg).textContent = n.sub;
+      nodes[id] = { r, rip, cls: 'nd ' + (n.cls || ''), cur: '' };
+    }
+    return { v: V.v, c, links, nodes };
+  });
+  return { svg, views, dots: [] };
+}
+function along(pts, p) {
+  const seg = []; let tot = 0;
+  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(d); tot += d; }
+  let need = clamp01(p) * tot;
+  for (let i = 0; i < seg.length; i++) {
+    if (need <= seg[i] || i === seg.length - 1) {
+      const f = seg[i] ? need / seg[i] : 0;
+      return [pts[i][0] + f * (pts[i + 1][0] - pts[i][0]), pts[i][1] + f * (pts[i + 1][1] - pts[i][1])];
+    }
+    need -= seg[i];
+  }
+}
+const plen = pts => pts.slice(1).reduce((a, q, i) => a + Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]), 0);
+// 流动的数据点：一个亮点 + 几个渐隐的拖尾
+const TRAIL = 5;
+function mkDot(svg) {
+  const g = el('g', {}, svg), tr = [];
+  for (let k = TRAIL - 1; k >= 0; k--) tr[k] = el('circle', { r: 3.7 - k * 0.5, class: 'dot trail' }, g);   // 远的先画，亮点在最上面
+  return { g, tr, h: el('circle', { r: 4.3, class: 'dot' }, g), cls: '' };
+}
+function placeDot(d, pts, p, cls) {
+  d.g.style.display = '';
+  const [x, y] = along(pts, p), gap = 6 / Math.max(1, plen(pts)), c = 'dot ' + cls;
+  d.h.setAttribute('cx', x); d.h.setAttribute('cy', y);
+  if (d.cls !== c) { d.cls = c; d.h.setAttribute('class', c); d.tr.forEach(e => e.setAttribute('class', c + ' trail')); }
+  d.tr.forEach((e, k) => {
+    const q = p - (k + 1) * gap, [ex, ey] = along(pts, q);
+    e.setAttribute('cx', ex); e.setAttribute('cy', ey);
+    e.style.opacity = q > 0 ? (0.5 - k * 0.09).toFixed(2) : 0;
+  });
+}
+function updateTopo() {
+  const t = S.t, D = dParts;
+  let di = 0;
+  D.views.forEach(V => {
+    const lk = new Map(), nd = {};
+    S.model.segs.forEach(g => {
+      if (g.v !== V.v || t < g.s || t >= g.e) return;
+      (g.nd || []).forEach(id => { if (V.nodes[id]) nd[id] = g.kind === 'offload' ? 'agg' : g.kind === 'host' ? 'cpu' : 'busy'; });
+      (g.fl || []).forEach(path => {
+        for (let i = 1; i < path.length; i++) {
+          const k = V.links.find(k => (k.a === path[i - 1] && k.b === path[i]) || (k.b === path[i - 1] && k.a === path[i]));
+          if (k) lk.set(k, g.dot || '');
+        }
+        let d = D.dots[di++];
+        if (!d) { d = mkDot(D.svg); D.dots.push(d); }
+        placeDot(d, path.map(V.c), (t - g.s) / (g.e - g.s), g.dot || '');
+      });
+    });
+    V.links.forEach(k => {
+      const on = lk.has(k) ? ' on ' + lk.get(k) : '', c = 'ln ' + (k.cls || '') + on;
+      if (k.cur !== c) { k.cur = c; k.ln.setAttribute('class', c); k.halo.setAttribute('class', 'halo ' + (k.cls || '') + on); }
+    });
+    for (const id in V.nodes) {
+      const n = V.nodes[id], c = n.cls + (nd[id] ? ' ' + nd[id] : '');
+      if (n.cur !== c) { n.cur = c; n.r.setAttribute('class', c); if (n.rip) n.rip.classList.toggle('on', nd[id] === 'agg'); }
+    }
+  });
+  for (; di < D.dots.length; di++) D.dots[di].g.style.display = 'none';
+}
+// “此刻”：只在正在进行的操作变化时重画列表
+function renderNow() {
+  const st = STAGES[S.stage], m = S.model, t = S.t;
+  const act = st.variants.map(v => v.lanes.map(([id]) => m.segs.findIndex(s => s.lane === v.id + '.' + id && s.s <= t && t < s.e)));
+  const done = st.variants.map(v => t >= m.ends[v.id] - 1e-9), key = JSON.stringify([act, done]);
+  $('now-t').textContent = fmt(t);
+  if (key === S.nowKey) return;
+  S.nowKey = key;
+  $('now-ul').innerHTML = st.variants.map((v, i) => `<li class="gh">${v.short}${done[i] ? `：已完成（${fmt(m.ends[v.id])}）` : ''}</li>` + v.lanes.map(([, name], j) => {
+    const g = m.segs[act[i][j]];
+    return g ? `<li>${sw(g.kind)}<span class="ln-name">${name}</span><span class="op">${g.label}<span class="info">${g.info}</span></span></li>`
+             : `<li><span class="sw k-sync"></span><span class="ln-name">${name}</span><span class="op">空闲</span></li>`;
+  }).join('')).join('');
+}
+function update() {
+  updateTimeline(); updateDiag(); renderNow();
+  $('tlabel').textContent = `t = ${fmt(S.t)} / ${fmt(S.end)}`;
+  const sc = $('scrub'); sc.value = Math.round(S.t / S.end * 1000); sc.style.setProperty('--p', sc.value / 10 + '%');
+  const pb = $('play'); pb.classList.toggle('on', S.playing); pb.setAttribute('aria-label', S.playing ? '暂停' : '播放');
+  $('play-ic').setAttribute('d', S.playing ? 'M4 2.5h3v11H4zM9 2.5h3v11H9z' : 'M4.5 2.5v11l9-5.5z');
+}
+// ---------- 对照条形图 / 表格 / 图例 ----------
+let barParts = [], barAnim = null;
+const barPath = (x0, y, w, h) => `M${x0},${y} h${w - 4} a4,4 0 0 1 4,4 v${h - 8} a4,4 0 0 1 -4,4 h${-(w - 4)} z`;
+function drawBars(fresh) {
+  const st = STAGES[S.stage], m = S.model, svg = $('bars');
+  const items = st.variants.map(v => ({ name: v.short, value: m.ends[v.id], cls: 'bar' }))
+    .concat((m.extra || []).map(x => ({ ...x, cls: 'bar ideal' })));
+  const W = 560, LW = 132, R = 112, BH = 20, GAP = 12, T = 6, H = T + items.length * (BH + GAP) + 14;
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const max = Math.max(...items.map(i => i.value)), base = items[0].value, x = v => LW + v / max * (W - LW - R), stp = niceStep(max / 5);
+  for (let v = 0; v <= max + 1e-6; v += stp) {
+    el('line', { x1: x(v), x2: x(v), y1: T - 2, y2: H - 16, class: 'gridline' }, svg);
+    el('text', { x: x(v), y: H - 3, 'text-anchor': 'middle', class: 'axis-text' }, svg).textContent = +v.toFixed(2);
+  }
+  barParts = items.map((it, i) => {
+    const y = T + i * (BH + GAP), w = Math.max(5, x(it.value) - LW);
+    el('text', { x: LW - 10, y: y + BH / 2 + 4, 'text-anchor': 'end', class: 'bar-label' }, svg).textContent = it.name;
+    const bar = el('path', { d: barPath(LW, y, w, BH), class: it.cls }, svg);
+    const p = i ? `（${it.value < base ? '−' : '+'}${Math.abs(Math.round((1 - it.value / base) * 100))}%）` : '（基线）';
+    const t = el('text', { x: LW + w + 7, y: y + BH / 2 + 4, class: 'bar-val' }, svg);
+    t.textContent = fmt(it.value) + ' ' + p;
+    return { bar, t, it, p, y, w, x0: LW, BH };
+  });
+  $('btitle').textContent = m.btitle;
+  $('bnote').innerHTML = m.bnote || '';
+  barAnim = fresh && S.anim ? performance.now() : null;
+  if (barAnim) setBars(0);
+}
+// 切换页面时，条形从 0 长出来，数字跟着往上数
+function setBars(k) {
+  barParts.forEach((b, i) => {
+    const f = ease(clamp01(k * 1.3 - i * 0.14)), w = Math.max(5, b.w * f);
+    b.bar.setAttribute('d', barPath(b.x0, b.y, w, b.BH));
+    b.t.setAttribute('x', b.x0 + w + 7);
+    b.t.textContent = fmt(b.it.value * f) + ' ' + b.p;
+  });
+}
+function runBars(now) {
+  if (barAnim === null) return;
+  const k = clamp01((now - barAnim) / 1100);
+  setBars(k);
+  if (k >= 1) barAnim = null;
+}
+function drawTable() {
+  const m = S.model;
+  const rows = [...m.segs].sort((a, b) => a.s - b.s || a.lane.localeCompare(b.lane)).map(g =>
+    `<tr><td>${variantOf(g).short}</td><td>${laneName(g)}</td><td>${g.label}</td><td>${KINDS[g.kind].name}</td><td class="num">${fmt(g.s)}</td><td class="num">${fmt(g.e)}</td><td class="num">${fmt(g.e - g.s)}</td></tr>`).join('');
+  $('tbl').innerHTML = `<thead><tr><th>版本</th><th>泳道</th><th>操作</th><th>类型</th><th class="num">开始</th><th class="num">结束</th><th class="num">时长</th></tr></thead><tbody>${rows}</tbody>`;
+}
+const icon = (inner, w = 22) => `<svg width="${w}" height="12" aria-hidden="true">${inner}</svg>`;
+const DL = {
+  nvlink: icon('<line x1="2" y1="6" x2="20" y2="6" class="ln nvlink"/>') + 'NVLink',
+  pcie: icon('<line x1="2" y1="6" x2="20" y2="6" class="ln pcie"/>') + 'PCIe',
+  net: icon('<line x1="2" y1="6" x2="20" y2="6" class="ln"/>') + '网络 / 交换机链路',
+  dot: icon('<circle cx="6" cy="6" r="4" class="dot"/>', 12) + '传输中的数据',
+  red: icon('<circle cx="6" cy="6" r="4" class="dot red"/>', 12) + '交换机求和后的结果',
+  cpu: icon('<circle cx="6" cy="6" r="4" class="dot cpu"/>', 12) + '经主机内存的数据',
+  busy: icon('<rect x="1.5" y="1.5" width="13" height="9" rx="2" class="nd gpu busy"/>', 16) + 'GPU 在算 / 边收边加',
+  agg: icon('<rect x="1.5" y="1.5" width="13" height="9" rx="2" class="nd xsw agg"/>', 16) + '交换机在求和',
+};
+const vialIcon = s => icon(`<rect x="1" y="0.5" width="10" height="11" rx="2.5" class="vial${s === 'wait' ? ' wait' : ''}"/>`
+  + (s === 'empty' ? '' : `<rect x="2.5" y="${s === 'fill' ? 5.5 : s === 'acc' ? 6.5 : 2}" width="7" height="${s === 'fill' ? 4.5 : s === 'acc' ? 3.5 : 8}" rx="1.5" class="liq${s === 'acc' ? ' acc' : s === 'comm' ? ' comm' : ''}"/>`)
+  + (s === 'done' ? '<path d="M3.6 6.2 l1.8 1.8 l3.2 -3.6" class="bk-tick on" style="animation:none"/>' : ''), 12);
+const BK_LEGEND = [['empty', '还没算出'], ['fill', '正在算（液面 = 已算出的部分）'], ['acc', '只在本地累积（no_sync）'], ['wait', '等着发送'], ['comm', 'all-reduce 中'], ['done', '已归约']];
+function drawLegend() {
+  const m = S.model, used = new Set(m.segs.map(g => g.kind)), mk = m.marks || [], line = c => icon(`<line x1="7" y1="0" x2="7" y2="12" class="${c}"/>`, 14);
+  $('legend').innerHTML = Object.keys(KINDS).filter(k => used.has(k)).map(k => `<span>${sw(k)}${KINDS[k].name}</span>`).join('')
+    + `<span>${line('endmark')}该版本完成</span>`
+    + (mk.some(k => !k.alt) ? `<span>${line('idealmark')}下限</span>` : '')
+    + (mk.some(k => k.alt) ? `<span>${line('idealmark alt')}理想（完全重叠）</span>` : '');
+  const st = STAGES[S.stage];
+  if (st.diag === 'buckets') {
+    const acc = st.id === 'less';
+    $('dtitle').textContent = '每个 rank 上的梯度桶（共 100 MiB，L1 → L4）';
+    $('dlegend').innerHTML = BK_LEGEND.filter(([c]) => acc || c !== 'acc').map(([c, n]) => `<span>${vialIcon(c)}${n}</span>`).join('')
+      + '<span>反向从 L4 往 L1 算，桶从右往左就绪</span>';
+  } else {
+    $('dtitle').textContent = st.dtitle;
+    $('dlegend').innerHTML = st.dl.map(k => `<span>${DL[k]}</span>`).join('');
+  }
+}
+// ---------- 提示框 ----------
+const tip = $('tip');
+function showRawTip(ev, t1, t2, t3) {
+  tip.innerHTML = `<div class="t1">${t1}</div><div class="t2">${t2}</div>${t3 ? `<div class="t3">${t3}</div>` : ''}`;
+  tip.style.display = 'block';
+  const r = tip.getBoundingClientRect();
+  let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14;
+  tip.style.left = Math.max(8, x) + 'px'; tip.style.top = Math.max(8, y) + 'px';
+}
+function showTip(ev, g) {
+  showRawTip(ev, `${sw(g.kind)}${g.label}`, `${variantOf(g).short}，${laneName(g)}：${fmt(g.s)} → ${fmt(g.e)}，用时 ${fmt(g.e - g.s)}`, g.info);
+}
+function hideTip() { tip.style.display = 'none'; }
+// ---------- 控件 ----------
+const TABS = [['量', '串行基线'], ['藏', '分桶重叠'], ['少', '累积与压缩'], ['路', '拓扑感知'], ['卸', '网内归约'], ['推', '推理传 KV']];
+const fillRange = inp => inp.style.setProperty('--p', (inp.value - inp.min) / (inp.max - inp.min) * 100 + '%');
+function drawParams() {
+  const ids = STAGES[S.stage].params, show = id => (PARAMS[id].show ? PARAMS[id].show(S.P[id]) : S.P[id]);
+  $('params').innerHTML = ids.map(id => { const p = PARAMS[id]; return `<label class="param" for="p-${id}">${p.label}<input type="range" id="p-${id}" min="${p.min}" max="${p.max}" step="${p.step}" value="${S.P[id]}"><output id="pv-${id}" for="p-${id}">${show(id)}</output></label>`; }).join('');
+  ids.forEach(id => {
+    const inp = $('p-' + id);
+    fillRange(inp);
+    inp.oninput = () => { S.P[id] = +inp.value; $('pv-' + id).textContent = show(id); fillRange(inp); recompute(); };
+  });
+}
+$('tabs').insertAdjacentHTML('beforeend', STAGES.map((s, i) => `<button class="tab" role="tab" data-i="${i}" aria-selected="false"><span class="stn">${i + 1}</span><span class="verb">${TABS[i][0]}</span><span class="cap">${TABS[i][1]}</span></button>`).join(''));
+$('tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) setStage(+b.dataset.i); });
+let swapT = 0;
+// 切页：先淡出，换内容，再淡入；时间线色块从左往右依次长出来
+function setStage(i, first) {
+  const go = () => {
+    S.stage = i; S.t = 0; S.playing = false; S.nowKey = '';
+    document.querySelectorAll('.tab').forEach((b, j) => { b.setAttribute('aria-selected', j === i); b.classList.toggle('past', j < i); });
+    $('route-lit').style.width = `calc(${i} * 100% / 6)`;
+    const st = STAGES[i], sg = $('stage');
+    $('stitle').textContent = st.title;
+    $('desc').innerHTML = `${st.body}<div class="now"><h3>此刻 t = <span id="now-t">0.0</span></h3><ul id="now-ul"></ul></div>`;
+    $('tlnote').textContent = st.note;
+    history.replaceState(null, '', '#' + (i + 1));
+    drawParams(); recompute(true);
+    sg.classList.remove('out');
+    if (S.anim) { sg.classList.remove('swap'); void sg.offsetWidth; sg.classList.add('swap'); }
+  };
+  clearTimeout(swapT);
+  if (first || !S.anim) return go();
+  $('stage').classList.add('out');
+  swapT = setTimeout(go, 170);
+}
+function events() {
+  const set = new Set([0, S.end]);
+  S.model.segs.forEach(g => { set.add(+g.s.toFixed(4)); set.add(+g.e.toFixed(4)); });
+  return [...set].filter(v => v <= S.end + 1e-9).sort((a, b) => a - b);
+}
+function step(dir) {
+  S.playing = false;
+  const ev = events();
+  S.t = dir > 0 ? (ev.find(v => v > S.t + 1e-3) ?? S.t) : ([...ev].reverse().find(v => v < S.t - 1e-3) ?? 0);
+  update();
+}
+function togglePlay() {
+  if (!S.playing && S.t >= S.end - 1e-6) S.t = 0;
+  S.playing = !S.playing; S.last = performance.now(); update();
+}
+$('play').onclick = togglePlay;
+$('prev').onclick = () => step(-1);
+$('next').onclick = () => step(1);
+$('reset').onclick = () => { S.playing = false; S.t = 0; update(); };
+const spd = $('speed');
+spd.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === '1'));
+spd.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  S.speed = +b.dataset.v;
+  spd.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+});
+$('scrub').oninput = e => { S.playing = false; S.t = e.target.value / 1000 * S.end; update(); };
+const THEMES = [['', '自动'], ['light', '浅色'], ['dark', '深色']];
+let ti = 0;
+$('theme').onclick = () => {
+  ti = (ti + 1) % 3;
+  if (THEMES[ti][0]) document.documentElement.dataset.theme = THEMES[ti][0]; else delete document.documentElement.dataset.theme;
+  $('theme').textContent = '配色：' + THEMES[ti][1];
+};
+addEventListener('keydown', e => {
+  const tg = e.target instanceof Element ? e.target : document.body;
+  if (e.altKey || e.ctrlKey || e.metaKey || tg.matches('input, select, textarea')) return;
+  if (e.code === 'Space') { if (tg.closest('button, summary, a, label')) return; e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+  else if (/^[1-6]$/.test(e.key)) setStage(+e.key - 1);
+});
+// 体检清单：只数勾了几项，不保存
+const cks = [...document.querySelectorAll('#checklist .ck')];
+cks.forEach(c => c.addEventListener('change', () => { $('ck-count').textContent = `已排查 ${cks.filter(x => x.checked).length} / ${cks.length}`; }));
+// ---------- 头图：8 块 GPU 的环形 all-reduce ----------
+// 每块 GPU 的梯度切成 8 块。前 7 步 reduce-scatter：每步把一块传给下一块 GPU，对方加到自己那份上；
+// 后 7 步 all-gather：把加满 8 份的块再传一圈。共 2(n−1) = 14 步，每块 GPU 发出 2(n−1)/n·B = 1.75B。
+const hero = (() => {
+  const cv = $('hero'), ctx = cv.getContext('2d'), N = 8, STEPS = 2 * (N - 1), STEP = 0.62, HOLD = 1.8;
+  const CYCLE = STEPS * STEP + HOLD, FONT = getComputedStyle(document.body).fontFamily;
+  const sendChunk = (i, k) => (((k < N - 1 ? i - k : i + 1 - (k - N + 1)) % N) + N) % N;
+  // snap[k][g][c]：第 k 步开始前，GPU g 上第 c 块已经加进了几块 GPU 的份
+  const snap = [Array.from({ length: N }, () => Array(N).fill(1))];
+  for (let k = 0; k < STEPS; k++) {
+    const nx = snap[k].map(r => [...r]);
+    for (let i = 0; i < N; i++) { const r = (i + 1) % N, c = sendChunk(i, k); nx[r][c] = k < N - 1 ? nx[r][c] + snap[k][i][c] : snap[k][i][c]; }
+    snap.push(nx);
+  }
+  let W = 0, H = 0, dpr = 1, C = {}, vis = true, dirty = true, phase = '', bytes = '';
+  const t0 = performance.now();
+  function colors() {
+    const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
+    C = { ink: g('--ink'), ink2: g('--ink2'), muted: g('--muted'), grid: g('--grid'), line: g('--line2'), surf: g('--surface2'), c1: g('--c1'), c2: g('--c2'), acc: g('--accent') };
+    dirty = true;
+  }
+  function size() {
+    const r = cv.getBoundingClientRect();
+    dpr = Math.min(2, devicePixelRatio || 1); W = r.width; H = r.height;
+    cv.width = Math.max(1, Math.round(W * dpr)); cv.height = Math.max(1, Math.round(H * dpr));
+    dirty = true;
+  }
+  const ang = i => -Math.PI / 2 + 2 * Math.PI * i / N;
+  const rrect = (x, y, w, h, r) => { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); };
+  const disc = (x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill(); };
+  function draw(tau) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const cw = Math.max(46, Math.min(74, Math.min(W, H) * 0.24)), ch = Math.round(cw * 0.6), cx = W / 2, cy = H / 2;
+    const Ry = Math.max(30, H / 2 - ch / 2 - 14), Rx = Math.max(30, Math.min(W / 2 - cw / 2 - 14, Ry * 1.9));
+    const pt = a => [cx + Rx * Math.cos(a), cy + Ry * Math.sin(a)];
+    const run = tau < STEPS * STEP, k = run ? Math.floor(tau / STEP) : STEPS, p = run ? tau / STEP - k : 1, hold = run ? -1 : tau - STEPS * STEP;
+    const cnt = snap[k], arc = 2 * Math.PI / N, sync = hold >= 0 ? Math.max(0, 1 - hold / 1.3) : 0;
+    ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = C.grid;
+    ctx.beginPath(); ctx.ellipse(cx, cy, Rx, Ry, 0, 0, 2 * Math.PI); ctx.stroke();
+    if (sync) {   // 14 步走完：整个环闪一下
+      ctx.globalAlpha = sync; ctx.strokeStyle = C.acc; ctx.lineWidth = 3; ctx.shadowColor = C.acc; ctx.shadowBlur = 18;
+      ctx.beginPath(); ctx.ellipse(cx, cy, Rx, Ry, 0, 0, 2 * Math.PI); ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    if (run) for (let i = 0; i < N; i++) {
+      const a0 = ang(i), a1 = a0 + p * arc;
+      ctx.strokeStyle = C.c2; ctx.lineWidth = 3; ctx.globalAlpha = 0.45;
+      ctx.beginPath(); ctx.ellipse(cx, cy, Rx, Ry, 0, a0, a1); ctx.stroke();
+      ctx.fillStyle = C.c2;
+      for (let j = 7; j >= 1; j--) { const a = a1 - j * 0.045; if (a < a0) continue; ctx.globalAlpha = 0.55 * (1 - j / 8); disc(...pt(a), 4.6 - j * 0.45); }
+      ctx.globalAlpha = 1; ctx.shadowColor = C.c2; ctx.shadowBlur = 16;
+      disc(...pt(a1), 5.4); ctx.shadowBlur = 0;
+    }
+    if (hold >= 0) for (const d of [0, 0.3]) {   // 同步完成的涟漪
+      const h = hold - d, a = 0.7 - h * 0.5;
+      if (h < 0 || a <= 0) continue;
+      const s = 0.25 + h * 0.7;
+      ctx.globalAlpha = a; ctx.strokeStyle = C.acc; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(cx, cy, Rx * s, Ry * s, 0, 0, 2 * Math.PI); ctx.stroke();
+    }
+    for (let g = 0; g < N; g++) {
+      const [gx, gy] = pt(ang(g)), x = gx - cw / 2, y = gy - ch / 2;
+      ctx.globalAlpha = 1; ctx.fillStyle = C.surf; rrect(x, y, cw, ch, 7); ctx.fill();
+      ctx.lineWidth = 1.2; ctx.strokeStyle = C.line; ctx.stroke();
+      if (sync) { ctx.globalAlpha = sync; ctx.strokeStyle = C.acc; ctx.lineWidth = 2; ctx.shadowColor = C.acc; ctx.shadowBlur = 14; ctx.stroke(); ctx.shadowBlur = 0; }
+      ctx.globalAlpha = 1; ctx.fillStyle = C.ink2; ctx.font = `600 10.5px ${FONT}`; ctx.textAlign = 'left';
+      ctx.fillText('G' + g, x + 7, y + 13);
+      const bw = (cw - 14) / N, base = y + ch - 6, bh = ch - 23;
+      const rc = run && k > 0 && p < 0.5 ? sendChunk((g - 1 + N) % N, k - 1) : -1;   // 上一步刚收到的那一块
+      for (let c = 0; c < N; c++) {
+        const v = cnt[g][c] / N, h = Math.max(1.5, bh * v);
+        ctx.fillStyle = c === rc ? C.c2 : C.c1; ctx.globalAlpha = v >= 1 ? 1 : 0.4 + 0.5 * v;
+        rrect(x + 7 + c * bw + 0.75, base - h, Math.max(1, bw - 1.5), h, 1.5); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1; ctx.textAlign = 'center';
+    ctx.fillStyle = C.muted; ctx.font = `12px ${FONT}`;
+    ctx.fillText(run ? (k < N - 1 ? 'reduce-scatter' : 'all-gather') : '同步完成', cx, cy - Ry * 0.3);
+    ctx.fillStyle = C.ink; ctx.font = `600 ${Math.round(Math.min(46, Ry * 0.38))}px ${FONT}`;
+    ctx.fillText(String(run ? k + 1 : STEPS), cx, cy + Ry * 0.12);
+    ctx.fillStyle = C.muted; ctx.font = `12px ${FONT}`;
+    ctx.fillText(`/ ${STEPS} 步`, cx, cy + Ry * 0.12 + 20);
+    const ph = run ? (k < N - 1 ? `reduce-scatter：边传边加，第 ${k + 1} / ${N - 1} 步` : `all-gather：把加满的块再传一圈，第 ${k - N + 2} / ${N - 1} 步`) : `完成：${N} 块 GPU 拿到同一份梯度和`;
+    const bt = `每块 GPU 已发出 ${+(k / N).toFixed(3)}B，整次共 2(n−1)/n·B = ${+(STEPS / N).toFixed(3)}B`;
+    if (ph !== phase) { phase = ph; $('hero-phase').textContent = ph; }
+    if (bt !== bytes) { bytes = bt; $('hero-bytes').textContent = bt; }
+  }
+  function frame(now) {
+    if (!vis || document.hidden || !W) return;
+    if (!S.anim) { if (dirty) { draw(4.5 * STEP); dirty = false; } return; }   // 减少动态效果：只画一帧
+    draw((Math.max(0, now - t0) / 1000) % CYCLE);   // rAF 的时间戳可能比 t0 早一点，不能让 tau 变成负数
+  }
+  colors(); size();
+  new ResizeObserver(size).observe(cv);
+  new IntersectionObserver(es => { vis = es[0].isIntersecting; dirty = true; }).observe(cv);
+  new MutationObserver(colors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', colors);
+  return { frame, redraw: () => { dirty = true; } };
+})();
+
+// ---------- 主循环 ----------
+function loop(now) {
+  requestAnimationFrame(loop);   // 先排下一帧：哪一帧出错也不会让整个动画停掉
+  if (S.playing) {
+    const rate = Math.max(1.6, S.end / 15) * S.speed;   // 每页 1× 速度下大约 15 秒播完
+    const dt = Math.min(0.1, Math.max(0, (now - S.last) / 1000));   // 标签页切到后台再回来时不跳帧
+    S.t = Math.min(S.end, S.t + dt * rate);
+    if (S.t >= S.end) S.playing = false;
+    update();
+  }
+  S.last = now;
+  animParticles(now); runBars(now); hero.frame(now);
+}
+const defs = document.querySelector('svg.defs');
+const syncMotion = () => { S.anim = !RM.matches; if (S.anim) defs.unpauseAnimations(); else defs.pauseAnimations(); hero.redraw(); };
+RM.addEventListener('change', syncMotion);
+syncMotion();
+const h0 = parseInt(location.hash.slice(1), 10);
+setStage(h0 >= 1 && h0 <= STAGES.length ? h0 - 1 : 0, true);
+// 时间线第一次滚进视野时自动播一遍；对照条形图每次滚进视野时重新长一遍
+const autoIO = new IntersectionObserver(es => {
+  if (!es[0].isIntersecting) return;
+  autoIO.disconnect();
+  if (S.anim && !S.playing && S.t === 0) togglePlay();
+}, { threshold: 0.35 });
+autoIO.observe($('tl'));
+new IntersectionObserver(es => { if (es[0].isIntersecting && S.anim) { barAnim = performance.now(); setBars(0); } }, { threshold: 0.3 }).observe($('bars'));
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
