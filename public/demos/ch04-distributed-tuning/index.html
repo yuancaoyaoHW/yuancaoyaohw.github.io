@@ -160,9 +160,10 @@ svg text{font-family:var(--sans)}
 .gridline{stroke:var(--grid);stroke-width:1}
 .axis-text{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
 .groupline{stroke:var(--line2);stroke-width:1}
+.group-label,.end-label,.mark-label,.lane-label{paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
 .group-label{fill:var(--ink);font-size:12.5px;font-weight:600}
 .badge{stroke-width:1}
-.badge.pre{fill:none;stroke:var(--axis)}
+.badge.pre{fill:var(--surface);stroke:var(--axis)}
 .badge.post{fill:var(--accent-soft);stroke:var(--accent)}
 .badge-text{font-size:10.5px;font-weight:600;fill:var(--ink2)}
 .badge-text.post{fill:var(--ink)}
@@ -173,7 +174,11 @@ svg text{font-family:var(--sans)}
 .blk.k-offload{fill:var(--c3)}
 .blk.k-host{fill:url(#hatch)}
 .blk.k-sync{fill:color-mix(in srgb,var(--muted) 12%,transparent);stroke:var(--muted);stroke-width:1.2;stroke-dasharray:4 3}
-.blk.ghost{opacity:.2}
+.blk.ghost{opacity:1}
+.blk.ghost.k-compute{fill:color-mix(in srgb,var(--c1) 20%,var(--surface))}
+.blk.ghost.k-comm{fill:color-mix(in srgb,var(--c2) 20%,var(--surface))}
+.blk.ghost.k-offload{fill:color-mix(in srgb,var(--c3) 20%,var(--surface))}
+.blk.ghost.k-host{opacity:.3}
 .blk.ghost.k-sync{opacity:.55;fill:none}
 .tl-in .blk.ghost{transform-box:fill-box;transform-origin:left center;animation:blkin .6s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0s)}
 @keyframes blkin{from{transform:scaleX(0);opacity:0}}
@@ -188,7 +193,7 @@ svg text{font-family:var(--sans)}
 .endmark{stroke:var(--ink);stroke-width:2}
 .end-label{fill:var(--ink);font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
 .endg{transform-box:fill-box;transform-origin:center}
-.endg .tick{fill:none;stroke:var(--good);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:14;stroke-dashoffset:14}
+.endg .tick{fill:none;stroke:var(--good);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:16;stroke-dashoffset:16}
 .endg.hit-on .tick{stroke-dashoffset:0;transition:stroke-dashoffset .4s ease .05s}
 .endg.hit-on{animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
 .endg.quiet{animation:none}
@@ -211,7 +216,7 @@ svg text{font-family:var(--sans)}
 .desc b{color:var(--ink);font-weight:600}
 .now{margin-top:16px;padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
 .now h3{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
-.now ul li{padding:0;margin:0 0 4px;display:grid;grid-template-columns:14px 7em minmax(0,1fr);gap:8px;align-items:baseline;font-size:12.5px;line-height:1.6}
+.now ul li{padding:0;margin:0 0 4px;display:grid;grid-template-columns:14px 9em minmax(0,1fr);gap:8px;align-items:baseline;font-size:12.5px;line-height:1.6}
 .now ul li::before{display:none}
 .now li.gh{display:block;margin:8px 0 2px;color:var(--ink);font-weight:600}
 .now li .sw{align-self:start;margin-top:.5em}
@@ -227,6 +232,7 @@ svg text{font-family:var(--sans)}
 /* ---------- 右侧：梯度桶 / 拓扑 ---------- */
 .side{display:grid;gap:22px}
 #diag,#bars{display:block;width:100%;height:auto;overflow:visible;margin:4px auto 0}
+#diag{margin-top:14px}
 .sub-title{fill:var(--ink);font-size:12px;font-weight:600}
 .nd-sub{fill:var(--muted);font-size:10.5px}
 .st-text{fill:var(--ink2);font-size:11px;font-variant-numeric:tabular-nums}
@@ -333,6 +339,7 @@ html.embed .aurora{opacity:.6}
 html.embed .hero{grid-template-columns:1fr;margin-bottom:22px}
 html.embed .hero > div:first-child{display:none}
 .tl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#tl{min-width:880px}   /* 再窄字就小到看不清了：平板和手机上宁可横向滚动 */
 
 @media (max-width:920px){
   .hero{grid-template-columns:1fr;gap:18px}
@@ -354,7 +361,6 @@ html.embed .hero > div:first-child{display:none}
   .ts-svg{min-width:600px}
   .param input{width:104px}
   .controls .scrub{flex-basis:100%;margin:4px 0 0;order:9}
-  #tl{min-width:680px}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
@@ -591,7 +597,7 @@ const STAGES = [
     variants: [
       { id: 'a', name: P => `改前 · 累积 ${P.K} 个微批，但每次 backward 都同步（没用 no_sync）`, short: '每个微批都同步', lanes: TRAIN_LANES },
       { id: 'b', name: P => P.K > 1 ? `改后 · 前 ${P.K - 1} 个微批放进 no_sync()，只同步最后一次` : '改后 · K = 1 时没有可以省的同步', short: 'no_sync 累积', lanes: TRAIN_LANES },
-      { id: 'c', name: '再加 BF16 压缩钩子：同步的字节减半', short: '累积 + BF16 压缩', lanes: TRAIN_LANES },
+      { id: 'c', name: '再改 · 加 BF16 压缩钩子：同步的字节减半', short: '累积 + BF16 压缩', lanes: TRAIN_LANES },
     ],
     build(P) {
       const segs = [], add = adder(segs), o = { nb: P.NB, K: P.K };
@@ -703,7 +709,7 @@ const STAGES = [
     variants: [
       { id: 'a', name: '改前 · 经 CPU 中转：GPU → 主机内存 → 网络 → 主机内存 → GPU', short: '经 CPU 中转', lanes: [['p', 'Prefill GPU'], ['x', '经主机内存中转'], ['d', 'Decode GPU']] },
       { id: 'b', name: '改后 · NIXL 直传（GPUDirect RDMA），prefill 结束后一次传完', short: 'NIXL 直传', lanes: [['p', 'Prefill GPU'], ['x', 'NIXL 传输'], ['d', 'Decode GPU']] },
-      { id: 'c', name: '再加逐层流式：每层算完就 postXfer，decode 逐层消费', short: 'NIXL 逐层流式', lanes: [['p', 'Prefill GPU'], ['x', 'NIXL 传输（逐层）'], ['d', 'Decode GPU']] },
+      { id: 'c', name: '再改 · 加逐层流式：每层算完就 postXfer，decode 逐层消费', short: 'NIXL 逐层流式', lanes: [['p', 'Prefill GPU'], ['x', 'NIXL 传输（逐层）'], ['d', 'Decode GPU']] },
     ],
     build(P) {
       const segs = [], add = adder(segs), L = P.L, X = P.X, PL = 1, DL = 0.15, path = ['P', 'nA', 'nB', 'D'];
@@ -734,10 +740,10 @@ const STAGES = [
       const row = y => ({ P: N(0, y, 'Prefill', 'GPU', 'gpu'), nA: N(100, y, '网卡', 'A'), nB: N(196, y, '网卡', 'B'), D: N(296, y, 'Decode', 'GPU', 'gpu') });
       const direct = [{ a: 'P', b: 'nA', cls: 'pcie' }, { a: 'nA', b: 'nB', label: 'RDMA' }, { a: 'nB', b: 'D', cls: 'pcie' }];
       return { W: 360, H: 220, views: [
-        { v: 'a', title: '改前 · 经 CPU 中转', x: 6, y: 22, nodes: { ...row(44), hA: N(50, 0, '主机内存', 'A', 'host'), hB: N(246, 0, '主机内存', 'B', 'host') },
+        { v: 'a', title: '改前 · 经 CPU 中转', x: 6, y: 22, nodes: { ...row(48), hA: N(50, 5, '主机内存', 'A', 'host'), hB: N(246, 5, '主机内存', 'B', 'host') },
           links: [{ a: 'P', b: 'hA', cls: 'pcie' }, { a: 'hA', b: 'nA' }, { a: 'nA', b: 'nB', label: '网络' }, { a: 'nB', b: 'hB' }, { a: 'hB', b: 'D', cls: 'pcie' }] },
         { v: 'b', title: '改后 · NIXL 直传', x: 6, y: 126, nodes: row(0), links: direct },
-        { v: 'c', title: '再加逐层流式', x: 6, y: 184, nodes: row(0), links: direct }] };
+        { v: 'c', title: '再改 · 加逐层流式', x: 6, y: 184, nodes: row(0), links: direct }] };
     } },
 ];
 // ---------- 状态 ----------
@@ -752,9 +758,9 @@ const niceStep = x => { const p = 10 ** Math.floor(Math.log10(x)); return [1, 2,
 const clamp01 = x => Math.max(0, Math.min(1, x));
 const ease = x => 1 - (1 - x) ** 3;
 // “改前 · 某某”拆成徽标和正文
-const split = s => { const m = /^(改前|改后) · (.*)$/.exec(s); return m ? [m[1], m[2]] : [null, s]; };
+const split = s => { const m = /^(改前|改后|再改) · (.*)$/.exec(s); return m ? [m[1], m[2]] : [null, s]; };
 function badge(svg, x, y, word) {
-  const post = word === '改后';
+  const post = word !== '改前';
   el('rect', { x, y: y - 11, width: 32, height: 16, rx: 8, class: 'badge ' + (post ? 'post' : 'pre') }, svg);
   el('text', { x: x + 16, y: y + 1, 'text-anchor': 'middle', class: 'badge-text' + (post ? ' post' : '') }, svg).textContent = word;
   return 39;
@@ -792,20 +798,20 @@ function drawTimeline(fresh) {
     el('line', { x1: tx(v), x2: tx(v), y1: TOP - 6, y2: H - 8, class: 'gridline' }, svg);
     el('text', { x: tx(v), y: TOP - 10, 'text-anchor': 'middle', class: 'axis-text' }, svg).textContent = +v.toFixed(2);
   }
-  const ends = [];
+  const ends = [], top = el('g', { class: 'tl-top' }, svg);   // 组名和“完成”标注最后画：不被网格线、虚线和播放头压住
   groups.forEach(({ v, y }, i) => {
     if (i) el('line', { x1: 8, x2: TL.W - TL.R, y1: y - 5, y2: y - 5, class: 'groupline' }, svg);
     const [bw, name] = split(vname(v)), e = m.ends[v.id], lab = `完成 ${fmt(e)}`;
     let x = 8;
-    if (bw) x += badge(svg, x, y + 15, bw);
-    el('text', { x, y: y + 16, class: 'group-label' }, svg).textContent = name;
+    if (bw) x += badge(top, x, y + 15, bw);
+    el('text', { x, y: y + 16, class: 'group-label' }, top).textContent = name;
     v.lanes.forEach(([id, nm]) => {
       const ly = laneY[v.id + '.' + id];
       el('rect', { x: TL.LW, y: ly + 3, width: TL.W - TL.LW - TL.R, height: TL.LH - 6, rx: 5, class: 'lane-bg' }, svg);
       el('text', { x: TL.LW - 10, y: ly + TL.LH / 2 + 4, 'text-anchor': 'end', class: 'lane-label' }, svg).textContent = nm;
     });
     const lw = textW(lab, 11.5), left = tx(e) - 26 - lw > x + textW(name, 12.5) + 14;
-    const on = S.t >= e - 1e-9, g = el('g', { class: 'endg' + (on ? ' hit-on quiet' : '') }, svg);
+    const on = S.t >= e - 1e-9, g = el('g', { class: 'endg' + (on ? ' hit-on quiet' : '') }, top);
     el('line', { x1: tx(e), x2: tx(e), y1: y + TL.GH - 4, y2: y + TL.GH + v.lanes.length * TL.LH, class: 'endmark' }, g);
     const lx = left ? tx(e) - 8 : tx(e) + 8, kx = left ? lx - lw - 15 : lx + lw + 5;
     el('text', { x: lx, y: y + 16, 'text-anchor': left ? 'end' : 'start', class: 'end-label' }, g).textContent = lab;
@@ -841,6 +847,7 @@ function drawTimeline(fresh) {
   const beam = el('rect', { x: TL.LW, y: TOP - 6, width: 0, height: H - TOP - 2, class: 'ph-beam' }, svg);
   const ph = el('line', { x1: tx(0), x2: tx(0), y1: TOP - 6, y2: H - 8, class: 'playhead' }, svg);
   const knob = el('circle', { cx: tx(0), cy: TOP - 6, r: 4.5, class: 'ph-knob' }, svg);
+  svg.append(top);
   tlParts = { blocks, beam, ph, knob, ends };
 }
 function updateTimeline() {
@@ -870,10 +877,10 @@ function drawDiag() {
   dParts = st.diag === 'buckets' ? { kind: 'buckets', rows: drawBuckets(svg, st) } : { kind: 'topo', ...drawTopo(svg, st.topo(S.P)) };
 }
 function updateDiag() { if (dParts.kind === 'buckets') updateBuckets(); else updateTopo(); }
-const BKR = { W: 360, X0: 10, RH: 116, VY: 40, VH: 40 };
+const BKR = { W: 360, X0: 10, RH: 134, VY: 40, VH: 40 };   // RH 比一行内容高出一截：上一行的状态文字和下一行的标题分得开
 function drawBuckets(svg, st) {
   const { W, X0, RH, VY, VH } = BKR, BW = W - 2 * X0;
-  svg.setAttribute('viewBox', `0 0 ${W} ${st.variants.length * RH - 4}`);
+  svg.setAttribute('viewBox', `0 0 ${W} ${(st.variants.length - 1) * RH + VY + VH + 36}`);
   svg.style.maxWidth = W * 1.35 + 'px';
   return st.variants.map((v, i) => {
     const y = i * RH, tr = S.model.train[v.id], n = tr.n, w = BW / n, gap = n > 16 ? 1 : 2, cells = [];
@@ -977,6 +984,10 @@ function drawTopo(svg, L) {
       if (k.label) el('text', { x: (x1 + x2) / 2 + (k.dx || 0), y: (y1 + y2) / 2 + (k.dy ?? -6), 'text-anchor': 'middle', class: 'ln-label' }, svg).textContent = k.label;
       return { ...k, ln, halo, cur: '' };
     });
+    return { V, c, links };
+  });
+  const layer = el('g', { class: 'dots' }, svg);   // 数据点画在连线上面、方框下面：停在节点上时不挡住节点名
+  const views2 = views.map(({ V, c, links }) => {
     const nodes = {};
     for (const id in V.nodes) {
       const n = V.nodes[id], [cx, cy] = c(id), box = { x: V.x + n.x, y: V.y + n.y, width: n.w, height: n.h, rx: Math.min(6, n.w / 3) };
@@ -988,7 +999,7 @@ function drawTopo(svg, L) {
     }
     return { v: V.v, c, links, nodes };
   });
-  return { svg, views, dots: [] };
+  return { svg, layer, views: views2, dots: [] };
 }
 function along(pts, p) {
   const seg = []; let tot = 0;
@@ -1035,7 +1046,7 @@ function updateTopo() {
           if (k) lk.set(k, g.dot || '');
         }
         let d = D.dots[di++];
-        if (!d) { d = mkDot(D.svg); D.dots.push(d); }
+        if (!d) { d = mkDot(D.layer); D.dots.push(d); }
         placeDot(d, path.map(V.c), (t - g.s) / (g.e - g.s), g.dot || '');
       });
     });
