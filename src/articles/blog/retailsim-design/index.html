@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RetailSim 设计讲解：用 LLM 多智能体模拟 A 股散户的声音、态度与决策</title>
+<style>
+/* 配色只引用共享语义层 --a-*，作用域限定在 .rs 容器内。
+   讲解站在 /demos/retailsim/ 独立运行，通过 iframe 嵌入，样式与站点互不干扰。 */
+:where(.article-body, .interactive-body) .rs {
+  max-width: 1080px; margin: 0 auto; padding: 8px 20px 60px;
+  color: var(--a-fg); line-height: 1.8; font-size: 15.5px;
+}
+.rs h1 { color: var(--a-fg-strong); font-size: 30px; line-height: 1.35; margin: 8px 0 10px; }
+.rs h2 { color: var(--a-fg-strong); font-size: 21px; margin: 0 0 12px; }
+.rs p { margin: 0 0 12px; }
+.rs ul { margin: 0 0 12px 1.3em; padding: 0; }
+.rs li { margin: 3px 0; }
+.rs b, .rs strong { color: var(--a-fg-strong); }
+.rs code { background: var(--a-code-bg); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+.rs .lead { color: var(--a-fg-muted); font-size: 16px; margin-bottom: 22px; }
+.rs section {
+  margin: 0 0 28px; padding: 24px 26px; background: var(--a-surface);
+  border: 1px solid var(--a-line); border-radius: 12px;
+}
+.rs section.demo { padding: 12px; }
+.rs .demo iframe { display: block; width: 100%; height: 900px; border: 0; background: transparent; }
+.rs .bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 0 4px; }
+.rs .hint { color: var(--a-fg-muted); font-size: 13px; }
+.rs a.open {
+  font-size: 13px; text-decoration: none; border-radius: 7px; padding: 3px 11px;
+  border: 1px solid var(--a-line); background: var(--a-bg); color: var(--a-fg);
+}
+.rs a.open:hover { border-color: var(--a-line-hover); color: var(--a-fg-strong); }
+.rs table.specs { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 14px; }
+.rs table.specs th, .rs table.specs td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--a-line); vertical-align: top; }
+.rs table.specs th { color: var(--a-fg-muted); font-weight: 500; }
+.rs .note {
+  border-left: 3px solid var(--a-blue); background: var(--a-blue-bg);
+  padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 14.5px;
+}
+@media (max-width: 760px) { .rs section { padding: 18px 16px; } }
+</style>
+</head>
+<body>
+<div class="rs">
+<h1>RetailSim 设计讲解：用 LLM 多智能体模拟 A 股散户的声音、态度与决策</h1>
+<p class="lead">RetailSim 用几百个带人设的 LLM 智能体模拟 A 股散户：他们在股吧、雪球风格的论坛和熟人群里发什么帖、对政策和行情持什么态度、实际买卖了什么，以及嘴上说的和手上做的差多少。下面嵌入的是设计文档 v0.3 的讲解站，分总览、流程、演示和各模块四组，可以从顶栏的下拉菜单切换。</p>
+
+<section class="demo" aria-label="RetailSim 设计讲解站">
+  <iframe id="rs-iframe" src="/demos/retailsim/index.html" title="RetailSim 设计讲解站" loading="lazy"></iframe>
+  <div class="bar">
+    <span class="hint">顶栏下拉切换页面 · 模块页第 4 节可单步播放示例 · 内容较多，建议新标签页阅读</span>
+    <a class="open" href="/demos/retailsim/index.html" target="_blank" rel="noopener">新标签页打开 ↗</a>
+  </div>
+</section>
+
+<section>
+  <h2>做什么，不做什么</h2>
+  <p>产出是三类模拟数据：<b>声音</b>（按人设和渠道生成的帖子、评论、群聊）、<b>态度</b>（结构化的信念、情绪、理由、政策信任，可按人群切片）、<b>决策</b>（买卖持有观望、仓位、执行方式和理由，以及按 A 股规则判定后的实际成交）。每个智能体还有跨日连续的模拟账户，记录持仓、出入金和战绩。</p>
+  <p>它<b>不生成交易因子</b>，也不对预测力负责。输出是模拟，不是测量；下游如果拿去研究，需要自己检验。</p>
+</section>
+
+<section>
+  <h2>几个核心设计</h2>
+  <ul>
+    <li><b>LLM 出意向，规则内核管约束</b>：LLM 给出买卖意向和理由，内核负责 T+1、涨跌停、整手、权限、资金这些硬约束，以及损失厌恶、从众等可校准的行为偏差。内核改动的结果写回智能体记忆，之后的发言与之自洽。</li>
+    <li><b>先成交，后发帖</b>：每次激活分两次调用，第一次只出结构化的解读与意向，成交判定之后第二次才写帖子。帖子与实际所为之差就是"言行不一"，作为显式指标测量。</li>
+    <li><b>合成人口</b>：按年龄段、账户规模、MBTI 气质组分格抽样，用 IPF 对齐真实人口边际；人生经历在真实历史行情上预跑，再由 LLM 改写成背景故事。</li>
+    <li><b>发布者层与散户分开</b>：官媒、财经媒体、大 V、中小博主、喊单号（L0–L4）只发帖不交易，不进人群统计；会交易的大 V 是散户的一部分。</li>
+    <li><b>声音可信是总闸门</b>：验收分 V1 人群、V2 声音、V3 态度、V4 决策、V5 稳定五项，V2 用同期真实帖做人工盲评和判别器对照，不过关则帖子不对外交付。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>怎么读</h2>
+  <table class="specs">
+    <tr><th>想了解</th><th>从这里开始</th></tr>
+    <tr><td>整体是什么</td><td>总览页：模块地图、设计原则、路线图 Phase 0–3、非目标与风险。</td></tr>
+    <tr><td>一天怎么跑</td><td>流程组：数据如何进来、一次激活的完整链路、运行与复现。</td></tr>
+    <tr><td>直观感受</td><td>演示组：发布者演示（L0–L4 按参数出帖、推荐流加权、插入传闻对照）和散户决策演示（同一条新闻下不同人设的意向、内核逐步约束与实际成交），以及群聊演示。</td></tr>
+    <tr><td>某个模块的细节</td><td>模块组：每页按职责、为什么需要、机制详解、分步示例、接口、取舍、上下游、开放问题八节组织。</td></tr>
+  </table>
+  <p class="note">项目处于设计阶段，尚未实现。页面里的数值、人设和帖子都是示例数据，各页已标注；标"需复核"的规则和数据来源仍待确认。</p>
+</section>
+</div>
+</body>
+</html>

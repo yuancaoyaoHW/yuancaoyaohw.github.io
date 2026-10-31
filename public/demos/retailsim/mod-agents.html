@@ -1,0 +1,766 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agents 智能体 · RetailSim</title><link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/components.css"><style>
+/* mod-agents 私有样式，前缀 ag- */
+.ag-io{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:14px;align-items:stretch}
+@media(max-width:900px){.ag-io{grid-template-columns:minmax(0,1fr)}}
+.ag-io h4{margin:0 0 6px}
+.ag-io ul{margin:6px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink2)}
+.ag-io li{margin:4px 0}
+.ag-io .ag-mid{border-color:var(--sim)}
+.ag-tag{display:inline-block;font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);margin-left:4px;vertical-align:1px}
+.ag-tag.llm{border-color:var(--llm);color:var(--llm)}
+.ag-tag.kn{border-color:var(--sim);color:var(--sim)}
+.ag-tag.rule{border-color:var(--data);color:var(--data)}
+.ag-tag.mk{border-color:var(--market);color:var(--market)}
+.ag-f{font-family:var(--mono);font-size:13.5px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px;margin:8px 0;overflow-x:auto;white-space:nowrap;color:var(--ink)}
+.ag-svg{width:100%;height:auto;display:block}
+.ag-svg text{font-family:var(--sans);fill:var(--ink)}
+.ag-svg .lb{font-size:13px;font-weight:600}
+.ag-svg .sm{font-size:11px;fill:var(--mute)}
+.ag-calc{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 16px;margin:10px 0}
+.ag-calc label.ctl{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.ag-out{font-family:var(--mono);font-size:13.5px;line-height:1.7;margin-top:8px;overflow-wrap:anywhere}
+.ag-verdict{font-weight:700}
+.ag-verdict.sell{color:var(--down)}
+.ag-verdict.hold{color:var(--market)}
+.ag-stp-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.ag-stp-top select{max-width:100%}
+.ag-dots{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.ag-dots button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line2);background:var(--panel2);color:var(--ink2);font-size:12px;cursor:pointer;padding:0}
+.ag-dots button.on{background:var(--sim);color:#06101f;border-color:var(--sim);font-weight:700}
+.ag-stp-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin:4px 0 10px}
+.ag-stp-h b{font-size:17px}
+.ag-blk{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(max-width:860px){.ag-blk{grid-template-columns:minmax(0,1fr)}}
+.ag-blk>div{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px;min-width:0}
+.ag-blk h5{margin:0 0 6px;font-size:12.5px;color:var(--mute);letter-spacing:.06em}
+.ag-blk ul{margin:0;padding-left:16px;font-size:13.5px;line-height:1.65;color:var(--ink2);overflow-wrap:anywhere}
+.ag-blk li{margin:2px 0}
+.ag-ref{margin-top:10px;font-size:13px;color:var(--mute)}
+.ag-demo{border:1px dashed var(--warn);color:var(--warn);font-size:12px;padding:1px 8px;border-radius:999px}
+.ag-note{font-size:13px;color:var(--mute)}
+</style></head>
+<body><div class="layout"><aside class="toc"></aside><main>
+<header class="hero">
+<div class="eyebrow"><i></i>模块 · agents</div>
+<h1>agents：<span class="grad">一个散户怎么想、怎么说、怎么做</span></h1>
+<p class="lead">每个智能体每次被激活，就走一遍认知循环：读有限的几条信息，第 1 次调用 LLM 形成态度并给出买卖意向，由规则内核按 A 股规则和行为偏差改写成订单并判定成交，改动和原因写回记忆；想发帖的人再做第 2 次调用，看着实际成交结果写帖子。</p>
+<div class="meta">
+<span class="chip sim"><i></i>LLM 给意向，内核管约束</span>
+<span class="chip llm"><i></i>四层记忆</span>
+<span class="chip warn"><i></i>言行不一可测量</span>
+<span class="chip orch"><i></i>意向来源可替换</span>
+</div>
+</header>
+<section id="s1" class="reveal"><h2><span class="num">01</span>职责一览</h2>
+<p class="sub">一句话：把一张人设卡变成一个会看信息、会说话、会下单、会记仇的模拟散户。</p>
+<p>agents 模块管每个智能体的"脑子"：认知循环、注意力预算、三层记忆加预置记忆、情绪状态，以及可替换的意向来源接口<span class="ref">§3.3</span>。它自己不撮合、不记账、不生成新闻，也不决定谁和谁是好友。这些分别是 market、accounts、events、social 的事。agents 只读它们给的数据，只交出结构化的态度、帖子和意向。模块之间不互相 import，类型全部来自 <span class="mono">schemas</span>，由 <span class="mono">orchestrator</span> 按日内时段把它们接起来<span class="ref">§3.3</span>。</p>
+<div class="ag-io">
+<div class="card"><h4>输入</h4>
+<ul>
+<li><span class="mono">PersonaCard</span> ← population：人口属性、大五描述、内核参数 <span class="mono">KernelParams</span>、渠道偏好、经历向量、文风<span class="ref">§4.1</span></li>
+<li><span class="mono">FeedItem[]</span> ← social：模拟散户帖、发布者 L0–L4 帖、新闻快讯<span class="ref">§5.4</span>。events 只给 L0/L1 两类不带立场的版本，L2–L4 由 social 的发布者以帖子写出<span class="ref">§5.3</span><span class="ref">§5.6</span></li>
+<li>账户只读视图 ← accounts：总资产、可用资金、持仓与成本、两融负债<span class="ref">§3.3</span><span class="ref">§6.4</span></li>
+<li>行情与市场状态 ← market / data</li>
+<li><span class="mono">Fill</span> ← market：上一阶段订单的成交结果，用于写回</li>
+</ul></div>
+<div class="card glow ag-mid"><h4>agents（本模块）</h4>
+<ul>
+<li>激活判断与注意力预算：每次只看 K 条</li>
+<li>每次激活最多两次 LLM 调用：第 1 次出结构化态度与意向，第 2 次（只在想发帖时）在成交判定之后写帖子<span class="ref">§6.1</span></li>
+<li>规则内核：7 步修正，把意向改成订单，按执行方式定价</li>
+<li>写回与反思：改动原因进情景记忆，低频反思形成教训</li>
+</ul></div>
+<div class="card"><h4>输出</h4>
+<ul>
+<li><span class="mono">BeliefUpdate</span> → outputs 态度表<span class="ref">§10.3</span></li>
+<li><span class="mono">Post</span> → social 推荐流，同时进帖子表</li>
+<li><span class="mono">DecisionIntent</span>（盘前与盘中）→ outputs 决策表（意向那一栏）</li>
+<li><span class="mono">NextDayPlan</span> 明日打算（收盘后与晚间）→ 记忆与决策表，不产生订单<span class="ref">§3.4</span><span class="ref">§6.3</span></li>
+<li><span class="mono">FundingIntent</span> → accounts 出入金<span class="ref">§8.4</span></li>
+<li><span class="mono">OrderIntent[]</span> → market 成交判定</li>
+</ul></div>
+</div>
+<p class="ag-note">主要产物与职责以 <span class="mono">agents/__init__.py</span> 文档串和 §3.3 模块表为准；模块尚未实现。</p>
+</section>
+<section id="s2" class="reveal"><h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">只让大模型扮演散户，说得像，但做得不对；只用规则，做得对，但说不出话。</p>
+<p>项目要产出三样东西：散户的声音（帖子）、态度（结构化信念与情绪）和决策（买卖与仓位）<span class="ref">§1</span>。声音只能靠 LLM 写，因为它要有口语、黑话和情绪。决策却不能全交给 LLM：T+1、涨跌停、资金和交易权限是必须逐条执行的硬规则，交给 LLM 无法保证；损失厌恶、从众这类偏差需要按文献校准强度，而对齐训练过的模型本身就偏理性、割肉追涨太少<span class="ref">§13.3</span>。所以设计采用混合方案 C：LLM 给出意向，规则内核负责硬约束和可校准的行为偏差修正<span class="ref">§3.1 原则 1</span>。</p>
+<p>混合方案带来一个新问题：内核把"我要卖一半"改成"持有"，智能体第二天发帖时如果还以为自己卖了，就前后矛盾。agents 模块因此把内核改动的结果和原因写回该智能体的记忆，让后续发言与之自洽。说的和做的之间的差距不当作 bug 消掉，而是单独记录，作为一个可测量的特征，叫"言行不一"<span class="ref">§6.3 第 7 步</span>。</p>
+<p>第三个理由是成本与异质性。550 个智能体每天激活两次，第 1 次调用人人都做，输入约 3.0k token；第 2 次调用只有发帖者做，输入约 3.6k token，其中 3.0k 是与第 1 次共用的前缀<span class="ref">§14.2</span>。信息必须先按注意力预算裁到每人几条。同一运行内全体用同一底座<span class="ref">§6.6</span>，异质性主要从 LLM 之外注入：每人看到的信息不同，内核参数和人生经历也不同，这样才能避免 550 个人说同一句话<span class="ref">§13.2</span>。</p>
+<div class="callout warn"><b class="t">反例：让 LLM 直接下单</b>TwinMarket、StockAgent 等做法让 LLM 直接输出订单。这样无法区分"模型觉得该卖"和"规则不允许卖"。本项目只把"内核换成 LLM 直接输出 OrderIntent"放进消融实验，作为对照<span class="ref">§11.2</span>。</div>
+</section>
+<section id="s3" class="reveal"><h2><span class="num">03</span>机制详解</h2>
+<p class="sub">一次激活 = 一遍认知循环。紫色步骤调用 LLM，蓝色步骤是确定性的规则内核，青色是不调模型的规则筛选。</p>
+<svg class="ag-svg" viewBox="0 0 760 330" role="img" aria-label="认知循环示意图">
+<defs>
+<marker id="ag-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7f8aa8"/></marker>
+<linearGradient id="ag-gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#60a5fa" stop-opacity=".18"/><stop offset="1" stop-color="#c084fc" stop-opacity=".12"/></linearGradient>
+</defs>
+<text class="sm" x="20" y="22">信息流 · 行情 · 账户视图</text>
+<path class="flowline" d="M80,28 L80,52" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<g>
+<rect x="20" y="56" width="120" height="62" rx="10" fill="#0d1428" stroke="#22d3ee"/>
+<text class="lb" x="80" y="82" text-anchor="middle">1 感知</text><text class="sm" x="80" y="102" text-anchor="middle">perceive · 规则</text>
+</g>
+<g>
+<rect x="166" y="56" width="160" height="62" rx="10" fill="#0d1428" stroke="#c084fc"/>
+<text class="lb" x="246" y="82" text-anchor="middle">2 第 1 次调用</text><text class="sm" x="246" y="102" text-anchor="middle">解读 + 意向（结构化）</text>
+</g>
+<g>
+<rect x="352" y="56" width="120" height="62" rx="10" fill="#0d1428" stroke="#60a5fa"/>
+<text class="lb" x="412" y="82" text-anchor="middle">3 约束</text><text class="sm" x="412" y="102" text-anchor="middle">内核 7 步 · 定价</text>
+</g>
+<g>
+<rect x="498" y="56" width="120" height="62" rx="10" fill="#0d1428" stroke="#fbbf24"/>
+<text class="lb" x="558" y="82" text-anchor="middle">撮合</text><text class="sm" x="558" y="102" text-anchor="middle">market → Fill</text>
+</g>
+<path class="flowline" d="M140,87 L162,87" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<path class="flowline" d="M326,87 L348,87" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<path class="flowline" d="M472,87 L494,87" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<path class="flowline" d="M558,118 L558,190" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<text class="sm" x="566" y="160">Fill · 未成交原因</text>
+<path d="M694,194 L694,76" stroke="#f472b6" fill="none" marker-end="url(#ag-ar)"/>
+<text class="sm" x="694" y="66" text-anchor="middle">帖子进推荐流</text>
+<g>
+<rect x="498" y="194" width="120" height="62" rx="10" fill="#0d1428" stroke="#60a5fa"/>
+<text class="lb" x="558" y="220" text-anchor="middle">4 写回</text><text class="sm" x="558" y="240" text-anchor="middle">言行不一入表</text>
+</g>
+<g>
+<rect x="638" y="194" width="112" height="62" rx="10" fill="#0d1428" stroke="#c084fc"/>
+<text class="lb" x="694" y="220" text-anchor="middle">5 第 2 次调用</text><text class="sm" x="694" y="240" text-anchor="middle">发帖 · 仅想发帖者</text>
+</g>
+<path class="flowline" d="M618,225 L634,225" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<rect x="166" y="186" width="300" height="78" rx="12" fill="url(#ag-gm)" stroke="#60a5fa" stroke-dasharray="4 3"/>
+<text class="lb" x="316" y="212" text-anchor="middle">记忆</text>
+<text class="sm" x="316" y="232" text-anchor="middle">工作 · 情景 · 语义 · 预置</text>
+<text class="sm" x="316" y="250" text-anchor="middle">每次检索约 800 token 进 prompt</text>
+<path class="flowline" d="M498,225 L470,225" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<path class="flowline" d="M246,186 L246,122" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<text class="sm" x="254" y="158">检索</text>
+<g>
+<rect x="20" y="194" width="120" height="62" rx="10" fill="#0d1428" stroke="#c084fc"/>
+<text class="lb" x="80" y="220" text-anchor="middle">6 反思</text><text class="sm" x="80" y="240" text-anchor="middle">LLM · 每周 / 大盈亏</text>
+</g>
+<path d="M140,215 L162,215" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<path d="M166,236 L144,236" stroke="#7f8aa8" fill="none" marker-end="url(#ag-ar)"/>
+<text class="sm" x="20" y="290">紫框 = LLM 调用　蓝框 = 规则内核　青框 = 规则筛选　黄框 = market 模块（不属于 agents）</text>
+<text class="sm" x="20" y="306">第 2 次调用读当日意向、实际成交与未执行原因；文风示例帖只放在这一次；两次调用共用静态前缀</text>
+<text class="sm" x="20" y="322">编号对应下文各阶段；依据 §6.1 循环、§6.3 第 6–7 步与 §8.2 成交判定</text>
+</svg>
+<h3>3.1 认知循环：每个阶段做什么</h3>
+<p><b>先决定醒不醒。</b>MVP 的固定激活点是盘前与收盘后，非交易日为 20:00 晚间激活点；盘中检查点只由量级 ≥ 3 的事件触发<span class="ref">§3.4</span>。一个智能体在某个时段被激活有三种来由：按自身活跃度 ν 抽中；被触发，即持仓日涨跌超过个人阈值、关注的媒体里出现量级 ≥ 3 的事件、持仓在群里被讨论、持仓涨跌停；强制，即昨晚的明日打算是买或卖，次日盘前一定激活<span class="ref">§9.1</span><span class="ref">§3.4</span>。没被激活的人保持持仓、不发帖。被抽中但缺席的（解析失败、拒答、超时）照样记入激活表；盘前调用到 09:15 仍未完成的，当日记为未激活、原因"超时"<span class="ref">§9.1</span>。同一时段内的智能体并发运行，本时段发的帖子下一时段才可见，唯一例外是熟人群聊的阶段内多轮对话<span class="ref">§9.1</span><span class="ref">§7.1</span>。</p>
+<p><b>只有盘前出订单。</b>盘前（08:00–09:15）是唯一产生例行订单的激活点，按 T 日行情判定成交；盘中检查点也可下单，但执行方式只能是 <span class="mono">chase</span>，拿不到分钟线时交易意向转为明日打算，运行清单标"盘中无行情"。收盘后与晚间激活的第 1 次调用只出 <span class="mono">BeliefUpdate</span> 与明日打算，不出订单<span class="ref">§3.4</span>。</p>
+<p><b>感知（perceive，规则）。</b>候选信息很多，每人每次只看 K_i 条，K_i 由人设给出，在 3–15 条之间，约占 1,500 token 的信息流预算<span class="ref">§5.4</span>。每条候选打分：</p>
+<div class="ag-f">score = w_i(渠道) · m(量级) · rel_i(资产) · exp(−Δt / τ_d) · sal</div>
+<p>w_i(渠道) 是这个人对各渠道的偏好（人设字段 <span class="mono">media_diet</span>），m 是事件量级，rel_i 是信息涉及的资产与他的相关度，即与他的持仓、自选、关注行业的重合度（文档未给三者的权重），Δt 是信息发出到现在的时间，τ_d 是衰减时间常数，sal 是显著性。持仓异动（日涨跌超个人阈值或涨跌停）必入；其余按 softmax(score / T_i) 不放回抽取，随机性是有意保留的。没看到的信息不会消失，之后可能经群聊或大V转述再到达<span class="ref">§5.4</span>。信息顺序按种子对每个智能体打乱，以免模型偏爱排在前面的条目<span class="ref">§13.4</span>。</p>
+<p><b>第 1 次调用：解读（interpret，LLM）→ BeliefUpdate。</b>每次激活最多两次 LLM 调用，帖子在成交判定之后写<span class="ref">§6.1</span>。第 1 次调用把解读和意向合在一起，只出结构化字段，不放文风示例帖。prompt 按"静态在前、动态在后"排列：规则说明 → 人设卡 → 长期信念 → 检索到的记忆 → 当日信息 → 输出 schema，两次调用共用这段静态前缀，前缀缓存命中率最高<span class="ref">§6.1</span><span class="ref">§14</span>。人设卡里大五人格以描述语给出，不给分数，也不写 MBTI 类型名；内核参数完全不进 prompt，模型不知道自己的 λ 是多少<span class="ref">§4.1</span>。浮亏比例等数字由内核先算好再以文字给出，例如"浮亏 12.3%"<span class="ref">§13.4</span>。模型输出的是分档：对每只注意到的资产给立场（−2 到 2）、收益分档、信心（1–5）和至多 3 个理由标签，再给恐惧、贪婪、后悔、怕踏空四种情绪（各 0–3）、政策信任（−1/0/1）、想不想发帖，以及一段不超过 120 字的内心独白，独白只用于审计，不对外交付<span class="ref">§6.2</span>。用分档而不用连续数字，是因为模型报出的数字校准差、扎堆在整数上；分档到数值的映射由内核按人设做，过度自信的人映射得更极端<span class="ref">§6.2</span>。</p>
+<p><b>解析失败与拒答。</b>输出先过 Pydantic 校验，推理框架支持时再加 JSON schema 约束解码。校验不过就换种子重试，种子进缓存键，最多 2 次；仍失败则该智能体当日记为"未激活"、原因"解析失败"，不填默认值，也不沿用上期信念。拒答单独记类、不重试，当日同样记缺席，拒答率按话题与人群切片，作为底座选型扣分。失败的尝试也写入缓存，重放时复现同一重试序列<span class="ref">§6.2</span>。</p>
+<p><b>第 1 次调用：意向（intend）→ DecisionIntent 或明日打算。</b>盘前与盘中激活时，对每个资产给出买 / 卖 / 持有 / 观望、仓位档（tiny / small / half / large / all_in）、执行方式、至多 3 个理由、至多 2 条影响这个决定的帖子 id 和一句不超过 120 字的理由说明；每次激活最多再给一个出入金意向 <span class="mono">FundingIntent</span><span class="ref">§6.3</span>。执行方式三选一：<span class="mono">open</span> 开盘就买卖，<span class="mono">dip</span> 挂单等回调或反弹，<span class="mono">chase</span> 盘中追；盘中激活只能选 chase。LLM 只选执行方式，不报数字价格，价格由内核第 6 步定<span class="ref">§6.3</span>。<span class="mono">source_post_ids</span> 供 social 更新信任，按自报归因使用，不作修正<span class="ref">§7.2</span>。收盘后与晚间激活改为输出明日打算 <span class="mono">NextDayPlan</span>（买 / 卖 / 持有 / 观望 + 标的 + 不超过 60 字的理由），写入记忆，不产生订单<span class="ref">§3.4</span><span class="ref">§6.3</span>。意向来源是可替换接口：MVP 默认用 LLM，也可以换成不调模型的规则先验或 Jev；换成后两者时，第 1 次调用只做解读（见 3.7）<span class="ref">§6.1</span><span class="ref">§6.6</span>。</p>
+<p><b>约束与成交（constrain，内核；撮合，market）→ OrderIntent[] → Fill。</b>确定性的 7 步修正，见 3.2。订单交给 market 按 §8.2 判定成交。凡是内核改了意向或订单没成交，实际结果和原因都写回记忆<span class="ref">§6.1</span><span class="ref">§6.3</span>。</p>
+<p><b>第 2 次调用：发帖（post，LLM）→ Post。</b>只在 <span class="mono">want_to_post</span> 为真时调用。输入在共用前缀之后追加当日意向、实际成交与未执行原因，以及文风示例帖；文风示例帖只放在这一次调用里<span class="ref">§6.1</span>。所以帖子说的是成交之后的事，例如"挂了个低价没成交"<span class="ref">§6.3</span>。帖子表有 <span class="mono">reply_to</span>、<span class="mono">group_id</span>、<span class="mono">turn</span> 字段，可以是回复或群聊里的一轮<span class="ref">§10.3</span>。正文是自由文本，不在 JSON 里；文风随人设与渠道变化，每个智能体绑定一种说话风格，股吧与雪球换不同的示例池<span class="ref">§4.4</span><span class="ref">§7.4</span>。群聊接话只走第 2 次调用，不重做第 1 次调用<span class="ref">§6.1</span><span class="ref">§7.1</span>。帖子是一等产出，进入帖子表并参与 V2 声音验收。帖子与实际所为之差是言行不一；收盘后的明日打算与次日盘前实际意向之差叫"隔夜变卦"，也是言行不一的一种<span class="ref">§6.1</span><span class="ref">§3.4</span>。社交影响分两条路：观点路径是别人的帖子在解读时被读到；行为路径只统计看到的买卖行为（晒单、"已上车"、"割了"），进入内核的 H_j。两条路分开，避免同一条帖子被计两次<span class="ref">§7.5</span>。</p>
+<p><b>反思（reflect，LLM，低频）。</b>每周一次，或大盈亏之后触发；Tier-A 的每周反思放在周末激活点<span class="ref">§6.1</span><span class="ref">§3.4</span>。模型读一段时间的情景记忆，写出带信心度的教训存入语义记忆。反思 prompt 里不得出现仿真时钟之后的日期<span class="ref">§6.4</span>。</p>
+<p><b>记忆。</b>记忆是循环的起点也是终点：下一次激活时，按"近因 + 重要度 + 相关度"检索出约 800 token 放进 prompt，相关度以结构化匹配为主、本地嵌入为辅<span class="ref">§6.4</span>，细节见 3.4。</p>
+<h3>3.2 内核 7 步：意向怎么变成订单</h3>
+<p>内核的输入有六类：意向、观点分档与情绪、人设参数、持仓状态（成本 c、现价 p、浮盈 g = p/c − 1、持有天数）、行情状态、社交信号<span class="ref">§6.3</span>。7 步按顺序执行，每一步都是可复现的计算，没有 LLM 参与。下标 i 指智能体，j 指资产。</p>
+<h4>第 1 步：仓位档 → 目标权重 w<sup>int</sup></h4>
+<p>把 tiny / small / half / large / all_in 映射成目标权重 w<sup>int</sup><sub>ij</sub>（这只资产占总资产的比例）。映射斜率 s_i 随过度自信 κ_i 上升：同样说"半仓"，过度自信的人实际给得更多<span class="ref">§6.3</span>。文档没有给出各档的具体数值和 s_i 的函数形式，本页 s4 示例里的映射是演示用的假设。</p>
+<h4>第 2 步：行为偏差修正 Δ 与随恐惧变化的风险厌恶 γ(t)</h4>
+<div class="ag-f">w*<sub>ij</sub> = clip( w<sup>int</sup><sub>ij</sub> + Δ<sub>ij</sub>, 0, w<sub>i</sub><sup>max</sup> )</div>
+<div class="ag-f">Δ<sub>ij</sub> = ( β<sub>i</sub><sup>herd</sup>·H<sub>j</sub> + β<sub>i</sub><sup>ext</sup>·R<sub>j</sub><sup>(5d)</sup> + β<sub>i</sub><sup>lot</sup>·L<sub>j</sub> ) / ( γ<sub>i</sub>(t)·σ<sub>j</sub><sup>2</sup> )，　γ<sub>i</sub>(t) = γ<sub>i</sub>·(1 + η<sub>i</sub>·fear<sub>i</sub>(t))</div>
+<p>分子是三种"想多买一点"的冲动：H_j ∈ [−1, 1] 是他在信息流和群里看到的"别人在买"减"别人在卖"的净比例（只算行为，不算观点），R_j<sup>(5d)</sup> 是近 5 日收益（追涨杀跌），L_j 是彩票特征（近期涨停、高 MAX、低价）。分母是风险：σ_j 是近期波动率，γ_i(t) 是当下的风险厌恶，恐惧越高、情绪越敏感（η 越大），分母越大，修正越小。这是均值-方差框架下"冲动 ÷ 风险厌恶 × 方差"的写法<span class="ref">§6.3</span>。</p>
+<p>β 的先验中心取小值，因为 LLM 的意向里已经含有一部分从众与外推，内核只校准剩下的残差；β 的最终取值由 V4 行为矩决定<span class="ref">§6.3</span><span class="ref">§12.2</span>。修正后还要满足组合约束：总仓位 ≤ 1 + 杠杆上限（只有两融权限的人才有杠杆）、持股数 ≤ N_i<sup>max</sup>、保留现金缓冲<span class="ref">§6.3</span>。w<sub>i</sub><sup>max</sup>、N_i<sup>max</sup> 与缓冲比例文档未给数值。</p>
+<h4>第 3 步：实现效用，决定卖不卖</h4>
+<div class="ag-f">U<sub>real</sub> = ρ<sub>i</sub>·g（g &gt; 0）；　U<sub>real</sub> = −λ<sub>i</sub>·ρ<sub>i</sub>·|g|（g &lt; 0）</div>
+<p>这一步来自 Barberis &amp; Xiong (2012) 的实现效用：卖出那一刻，盈亏才"落袋"，人会为这一刻本身感到高兴或痛苦。ρ_i 是这种感受的强度（处置效应强度），λ_i 是损失厌恶，亏损时的痛苦是同等盈利快乐的 λ 倍，先验中位数 2.25<span class="ref">§6.3</span>。只有"组合改善 + U_real"超过惯性阈值 τ_i 才真的卖。盈利时 U_real 为正，容易过线，于是"卖赢家"；亏损时 U_real 为负，很难过线，于是"扛输家"；浮亏回到 0 附近时阻力消失，于是"回本就卖"<span class="ref">§6.3</span>。想卖但没过线的意向改成持有，原因记为"舍不得割"。"组合改善"一项文档没有给出公式。下面的小计算器可以拖动参数看判定怎么变。</p>
+<div class="card" id="ag-calc">
+<h4>卖不卖计算器 <span class="ag-demo">示例参数</span></h4>
+<p class="ag-note">按第 3 步公式现算。λ 默认取文档先验中位数 2.25<span class="ref">§6.3</span>；ρ、τ、"组合改善"文档没有数值，滑块范围是演示假设。</p>
+<div class="ag-calc">
+<label class="ctl">损失厌恶 λ = <b id="ag-c-lv">2.25</b><input type="range" id="ag-c-l" min="1" max="4" step="0.05" value="2.25"></label>
+<label class="ctl">实现效用强度 ρ = <b id="ag-c-rv">1.00</b><input type="range" id="ag-c-r" min="0.2" max="2" step="0.05" value="1"></label>
+<label class="ctl">浮盈 g = <b id="ag-c-gv">-12.0%</b><input type="range" id="ag-c-g" min="-0.3" max="0.3" step="0.005" value="-0.12"></label>
+<label class="ctl">组合改善（示例值）= <b id="ag-c-iv">0.15</b><input type="range" id="ag-c-i" min="-0.2" max="0.4" step="0.01" value="0.15"></label>
+<label class="ctl">惯性阈值 τ = <b id="ag-c-tv">0.05</b><input type="range" id="ag-c-t" min="0" max="0.3" step="0.01" value="0.05"></label>
+</div>
+<div class="ag-out" id="ag-c-out">（需要启用脚本）</div>
+</div>
+<h4>第 4 步：今天看不看盘</h4>
+<div class="ag-f">P(看盘) = 1 − exp( −ν<sub>i</sub> · a<sub>i</sub>(t) )</div>
+<p>每天是否打开账户按伯努利分布抽取。ν_i 是活跃度，a_i(t) 随注意力事件、持仓波动和情绪上升；文档没有给 a_i(t) 的具体形式。即使看了盘，也只在 |w* − w| &gt; τ_i 时才调仓，τ_i 是"差一点就懒得动"的不调仓区间<span class="ref">§6.3</span>。ν 与 τ 都按换手与交易频率分布校准（见 3.3 参数表）。</p>
+<h4>第 5 步：情绪分支</h4>
+<p>情绪在 BeliefUpdate 里是 0–3 的分档，3 为最高档<span class="ref">§6.2</span>。内核只在最高档时走分支<span class="ref">§6.3</span>：</p>
+<ul>
+<li><b>恐惧到顶且回撤超过阈值：</b>神经质高的人、在以往杠杆踩踏里受过伤的人，以概率 p_panic 清掉高波动持仓（恐慌割肉）；神经质低的人、长期被套的人"躺平"，接下来若干天不激活。</li>
+<li><b>贪婪或怕踏空到顶：</b>β<sup>herd</sup> 与 β<sup>lot</sup> 临时放大，第 2 步的修正随之变大。</li>
+</ul>
+<p>p_panic、回撤阈值、躺平天数和放大倍数，文档都没有给数值。哪些人算"受过伤"来自经历向量：2015 年被强平过的人杠杆上限低、恐慌阈值低<span class="ref">§6.5</span>。</p>
+<h4>第 6 步：硬约束</h4>
+<p>依次检查现金、T+1、整手、涨跌停可成交性、交易权限（创业板、科创板、北交所、两融）、两融额度与维持担保比例，并计入佣金、印花税、过户费，输出 <span class="mono">OrderIntent</span><span class="ref">§6.3</span>。LLM 只选执行方式，不报数字价格，内核按执行方式定价<span class="ref">§6.3</span>：</p>
+<ul>
+<li><span class="mono">open</span>：买入限价取涨停价，卖出取跌停价，也就是按开盘价成交，走 §8.2 第 1 步；集合竞价没有价格笼子。</li>
+<li><span class="mono">dip</span>：买入限价 = 前收 × (1 − k_i)，卖出限价 = 前收 × (1 + k_i)。k_i 是人设参数 <span class="mono">dip_k</span>，先验 1%–3%<span class="ref">§4.1</span>，走 §8.2 第 2 步：买单在限价 ≥ 当日最低价时成交。</li>
+<li><span class="mono">chase</span>：按当日均价加滑点成交，盘中激活取检查点至收盘的分钟均价；遇封板走 §8.2 第 3 步。</li>
+</ul>
+<p>订单当日有效，没成交的收盘撤单，"挂单没成交"写回记忆<span class="ref">§6.3</span>。T+1 的实现方式是：当日买入只增加总数量，次日开盘前才转为可卖<span class="ref">§8.4</span>。成交与否不归 agents 判断：订单交给 market，按日线规则判定，例如一字涨停时买单不成交；收盘封板但盘中开过板的，按成交概率 p 全成或全不成；个人订单超过该股当日真实成交额的设定比例（如 1%）时，超出部分不成交，原因写回记忆<span class="ref">§8.2</span>。market 对不合规订单直接拒绝并计数，不自动修正，因为自动修正会掩盖内核的错误<span class="ref">§8.1</span>。</p>
+<h4>第 7 步：写回</h4>
+<p>内核改动意向的情况包括：缩量、取消、挂单没成交、涨停买不进、T+1 卖不出、权限不足、舍不得割。每种改动都把实际结果和未执行原因写进情景记忆，下一次激活时模型会读到"我昨天想割没割成"，后续发言与之自洽<span class="ref">§6.3</span>。意向与实际成交分两栏进入决策表（<span class="mono">intent_action</span>、<span class="mono">intent_size</span>、<span class="mono">execution</span> 对 <span class="mono">exec_qty</span>、<span class="mono">exec_price</span>、<span class="mono">not_executed_reason</span>）<span class="ref">§10.3</span>，两者之差就是言行不一，按人群统计并给出原因分布<span class="ref">§10.2</span>。言行不一有三种测法：帖子与成交之差；明日打算与次日盘前实际意向之差，即隔夜变卦，决策表的 <span class="mono">plan_ref</span> 把两者链起来<span class="ref">§3.4</span><span class="ref">§10.3</span>；帖子里自报的战绩与账户实际战绩之差<span class="ref">§6.4</span>。</p>
+<h3>3.3 内核参数表</h3>
+<p>10 个参数挂在人设卡的 <span class="mono">KernelParams</span> 上<span class="ref">§4.1</span>，由 population 按大五分数、人口属性和经历生成。"随什么上升"一栏是先验假设，最终由 §12 校准决定<span class="ref">§6.3</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>参数</th><th>含义</th><th>行为表现</th><th>先验 / 校准来源</th><th>随什么上升</th></tr></thead>
+<tbody>
+<tr><td class="mono">γ</td><td>风险厌恶</td><td>均值-方差强度</td><td>调查自评风险偏好</td><td>年龄、神经质</td></tr>
+<tr><td class="mono">λ</td><td>损失厌恶</td><td>割肉之痛倍数</td><td>Tversky &amp; Kahneman (1992) 中位数 2.25</td><td>神经质</td></tr>
+<tr><td class="mono">ρ</td><td>实现效用</td><td>处置效应强度</td><td>用 PGR/PLR 校准（Odean 1998）</td><td>金融素养越低越高</td></tr>
+<tr><td class="mono">κ</td><td>过度自信</td><td>低估不确定性</td><td>Barber &amp; Odean (2001)</td><td>男性、牛市入市、短线风格</td></tr>
+<tr><td class="mono">β<sup>herd</sup></td><td>从众</td><td>跟随群体买卖</td><td>羊群效应文献（CSAD）</td><td>宜人性、新手</td></tr>
+<tr><td class="mono">β<sup>ext</sup></td><td>外推</td><td>追涨杀跌</td><td>调查预期文献</td><td>入市年限越短越高</td></tr>
+<tr><td class="mono">β<sup>lot</sup></td><td>彩票偏好</td><td>偏好涨停、高 MAX</td><td>MAX 效应文献</td><td>小资金、低收入</td></tr>
+<tr><td class="mono">ν</td><td>活跃度</td><td>看盘与交易频率</td><td>换手与交易频率分布</td><td>外向性、短线风格、退休有闲</td></tr>
+<tr><td class="mono">τ</td><td>惯性阈值</td><td>不调仓区间</td><td>换手分布</td><td>尽责性</td></tr>
+<tr><td class="mono">η</td><td>情绪敏感</td><td>恐惧对 γ 的放大</td><td>校准得到</td><td>神经质</td></tr>
+</tbody></table></div>
+<p>神经质同时作用在两处：一是 LLM 自报的恐惧（人设描述语里写了"容易紧张"），二是经 η 放大风险厌恶、压低仓位。两处的强度要一起校准，否则同一种性格会被算两遍<span class="ref">§4.1</span><span class="ref">§12.2</span>。λ、η 与 p_panic 都挂在神经质上<span class="ref">§4.2</span>。</p>
+<p><b>按底座分开校准。</b>每个底座各有一套 β、ρ、η 等参数的群体尺度，人设之间的相对关系不变；各底座的校准修正量记入运行清单，用来度量底座自带的偏差，也作为选型参考<span class="ref">§6.3</span>。V5 分两层报告：校准前的结果用于判定是否通过，校准后的结果只作解释<span class="ref">§12.1</span>。内核只修结构化字段，不改帖子文本<span class="ref">§6.3</span>。</p>
+<h3>3.4 记忆与反思</h3>
+<p>记忆分四层<span class="ref">§6.4</span>：</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>层</th><th>存什么</th><th>怎么用</th></tr></thead>
+<tbody>
+<tr><td>工作记忆</td><td>当日信息流、账户摘要（总资产、可用资金、仓位、各持仓浮盈亏）、盯盘快照</td><td>只在本次激活内有效，不持久化</td></tr>
+<tr><td>情景记忆</td><td>带日期的经历，包括内核写回的"没卖成""没买进"</td><td>重要度 = 规则分（盈亏大小、事件量级）+ LLM 评分；检索分 = 近因 + 重要度 + 相关度，做法同 Generative Agents；相关度以结构化匹配为主、嵌入相似度为辅</td></tr>
+<tr><td>语义记忆</td><td>反思得出的教训，每条带信心度和来源情景 id</td><td>可以被后来的经历削弱或推翻</td></tr>
+<tr><td>预置记忆</td><td>仿真起点之前的人生经历，3–8 段显著片段<span class="ref">§4.4</span></td><td>标记 <span class="mono">seeded</span>，与仿真中产生的记忆区分</td></tr>
+</tbody></table></div>
+<p>每次进 prompt 的记忆约 800 token，其中账户摘要约 100 token；旧情景定期压缩<span class="ref">§6.4</span>。预置记忆和初始持仓来自预跑：population 用规则内核在真实历史行情上把这个人的经历跑一遍，得到起点时的持仓与成本，再由 LLM 改写成背景故事，不得新增事实<span class="ref">§4.4</span>。</p>
+<p><b>相关度怎么算。</b>记忆写入时标注标的、事件类别、理由标签、盈亏方向，检索时与当日信息流逐项匹配，这是主路。嵌入相似度为辅，补结构化字段覆盖不到的联想。嵌入模型本地运行开源中文模型（如 BGE 系列，CPU 可跑），锁定权重版本，结果按文本哈希缓存；记忆检索、背景故事多样性检查与同质化诊断共用这一模型，版本号写入运行清单与缓存键；不用厂商嵌入 API<span class="ref">§6.4</span><span class="ref">§4.4</span><span class="ref">§13.2</span>。</p>
+<p><b>战绩怎么回到记忆。</b>每月把一段战绩摘要写成一条情景（Tier-A 每周一次）：区间与累计收益、相对沪深 300 的超额、最大回撤、最好与最差的一笔、出入金。显著单笔当日写入：单笔或单日账户波动超个人阈值、被强平、清仓、回本<span class="ref">§6.4</span>。战绩影响行为有两条路：一是 LLM 读到记忆，二是内核慢变量更新。慢变量更新有两类：自我归因学习（Gervais &amp; Odean 2001），赚钱抬高 κ，亏钱压低 κ 但幅度更小；赌场钱与回本效应（Thaler &amp; Johnson 1990），盈利后 γ 下降，深套时"等回本"的倾向增强。步长取小值，由 V4 定；两条路要一起校准，不能重复计入<span class="ref">§6.4</span>。</p>
+<h3>3.5 经验效应：人生经历怎样进入信念</h3>
+<div class="ag-f">μ<sup>exp</sup><sub>i,t</sub> = Σ<sub>k</sub> w<sub>i</sub>(k)·R<sub>t−k</sub>，　w<sub>i</sub>(k) ∝ (L<sub>i</sub> − k)<sup>θ</sup></div>
+<p>这是 Malmendier &amp; Nagel 的经验加权：亲身经历过的市场收益决定先验乐观程度，越近的年份权重越大。L_i 是看盘年限（从入市年份算起），θ 控制近期经历的权重，工作论文版在风险容忍度回归中估计为 1.43（标准误 0.28），参与回归中为 1.33（0.21），论文后文取 1.5；正式发表版的表格尚未核对<span class="ref">§6.5</span>。原文的窗口按年龄算，本项目改为按入市年限算，这是平台自己的假设，两种设定都实现，用硅基调查比较<span class="ref">§6.5</span><span class="ref">§12.1</span>。经历向量编码了 2007/2008、2015 杠杆牛与股灾及 2016 年初熔断、2018、2019–2021、2021–2024 与 2024-09-24、2025-04 关税冲击与汇金托底等关键行情，影响三件事：先验乐观 μ<sup>exp</sup>、对政策底的信任、杠杆厌恶<span class="ref">§6.5</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §4.4、§5.5，来自架构讨论 A1）</b>日线从 2005 年起，覆盖股改与 2007 年牛市；2005 年以前的经历只写进人生骨架作文字背景，不在行情上预跑<span class="ref">§4.4</span>。智能体看到的价格按 asof 当天现算前复权，收益与战绩统一用后复权<span class="ref">§5.5</span>。</div>
+<h3>3.6 Tier-A 与 Tier-B 的差别</h3>
+<p>MVP 约 550 人分两层<span class="ref">§14.1</span>。Tier-A 50 人用作大V、典型人群代表、深度样本与审计，记忆与反思完整，每个激活点都激活；Tier-B 500 人填满 100 格 × 5 人的人群保底，记忆精简、低频反思，事件触发加低频例行激活。两层共用同一套认知循环、同一个内核和同一个模型，区别只在记忆深度、反思频率、激活频率<span class="ref">§14.1</span>。战绩摘要写入记忆的频率也不同：Tier-A 每周，其余每月<span class="ref">§6.4</span>。人设卡的 <span class="mono">tier</span> 字段取 <span class="mono">A_bigv</span>、<span class="mono">A_deep</span>、<span class="mono">B</span> 三值<span class="ref">§4.1</span>。</p>
+<div class="grid g2">
+<div class="card"><h4>Tier-A · 50 人</h4><p>大V 20 人 + 深度样本 30 人<span class="ref">§14.1</span>。完整记忆与反思，每个激活点都激活；战绩每周回灌。</p></div>
+<div class="card"><h4>Tier-B · 500 人</h4><p>精简记忆，低频反思，事件触发加低频例行；战绩每月回灌。人群切片的主要来源<span class="ref">§14.1</span>。</p></div>
+</div>
+<div class="callout decide"><b class="t">已定（v0.3 §6.6、§14.1，来自架构讨论 A4）</b>MVP 同一底座内 Tier-A 与 Tier-B 用同一模型，分层只体现在记忆深度、反思频率与激活频率，避免把人设差异和模型大小混在一起。"2 个底座"即两个模型，跨底座比较时全体一起换。小模型延到 Phase 2 扩规模时再用，切换前在开发事件上用同一批 Tier-B 人设对比大小模型，V2 文风指标与 V5 一致性不退化才切。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §4.3、§14.1，来自架构讨论 A5）</b>Tier-A 50 人拆为大V 20 人与深度样本 30 人。深度样本按账户档每档 6 人、分散在不同年龄段，落在已有 Tier-B 的格内，每个账户档至少 1 个杠杆户；同格 Tier-A 与 Tier-B 只差记忆深度与反思频率，对比结果作为 V5 的分层效应检验。人群切片默认只用 Tier-B，Tier-A 单列；大V 的言行不一照常测量。</div>
+<h3>3.7 意向来源可替换</h3>
+<p>第 1 次调用里的"意向"部分是一个接口，有三种实现<span class="ref">§6.6</span>：</p>
+<div class="grid g3">
+<div class="card"><h4>LLM <span class="ag-tag llm">MVP 默认</span></h4><p>解读之后由同一底座输出 <span class="mono">DecisionIntent</span> 与理由，理由与帖子同出一源。</p></div>
+<div class="card"><h4>规则先验 <span class="ag-tag rule">对照</span></h4><p>不调 LLM，按观点分档、情绪与人设参数直接给意向。用作对照，也是降本备选；此时第 1 次调用只做解读<span class="ref">§6.1</span>。</p></div>
+<div class="card"><h4>Jev <span class="ag-tag kn">候选</span></h4><p>TypeSafe 的校准型决策模型，输入状态与预定义选项，输出各选项概率，不写文本。需通过 Phase 0 对比试验。</p></div>
+</div>
+<p>Phase 0 在开发事件上分别跑三种来源，比较 V4 行为矩误差与同质化诊断<span class="ref">§13.2</span>。Jev 胜出，则 Phase 1 由它给出意向分布并抽样，LLM 只写帖子与理由，言行一致靠写回记忆维持；否则 Jev 只保留评估分类器用途。使用 Jev 前要验证中文与股吧黑话能力、数值与长信息流下的误差、校准相对的是其训练分布而非 A 股散户，历史推演同样要过记忆探针；它是境外 API，输入按 §16.4 去标识化<span class="ref">§6.6</span>。另外，底座模型由运行配置统一指定，一次运行内不混用；温度在人设生成时绑定、运行期不变<span class="ref">§4.1</span>，只调到输出不重复为止，不靠高温制造差异<span class="ref">§13.2</span>。同一批人设在不同底座下的行为差异放在 V5 检验<span class="ref">§6.6</span>。</p>
+</section>
+<section id="s4" class="reveal"><h2><span class="num">04</span>走一遍示例</h2>
+<p class="sub">同一个示例交易日、同一条示例新闻、同一只被套的示例股票，换三个不同类型的散户，看认知循环在每一步怎么分岔。</p>
+<p>下面的演示把第 3 节的循环拆成 11 步，顺序与设计文档的两次调用一致：第 1 次调用（解读与意向）在内核之前，内核定价、market 判定成交并写回之后，才由第 2 次调用写帖子 <span class="ref">§6.1</span>。内核那几步的数字由页面脚本按 §6.3 公式现算，切换人物后重新计算。LLM 那几步的输出是手写的示意，真实运行时由模型生成。人物、股票、新闻、帖子全部是虚构的<b>示例数据</b>；文档没有给数值的参数（例如 p_panic、回撤阈值、仓位档映射、"组合改善"），这里填的是演示假设，并在每一步注明。三个人物对应 <a href="sim-personas.html">人物原型页</a> 里的短线新手、退休长线与 2015 年杠杆受伤的老股民，参数取值与那一页无关。</p>
+<div class="card glow" id="ag-stp">
+<div class="ag-stp-top">
+<label class="ctl">示例人物 <select id="ag-who">
+<option value="jie">阿杰 · 短线新手（示例）</option>
+<option value="zhou">老周 · 退休长线（示例）</option>
+<option value="lin">小林 · 2015 杠杆受伤（示例）</option>
+</select></label>
+<span class="ag-demo">示例数据</span>
+</div>
+<div class="ag-dots" id="ag-dots" aria-label="步骤"></div>
+<div class="ag-stp-h"><span class="chip sim" id="ag-kind"><i></i>阶段</span><b id="ag-title">（需要启用脚本）</b></div>
+<div class="ag-blk">
+<div><h5>输入</h5><ul id="ag-in"></ul></div>
+<div><h5>处理</h5><ul id="ag-do"></ul></div>
+<div><h5>输出</h5><ul id="ag-out"></ul></div>
+</div>
+<div class="ag-ref">对应文档条目：<span id="ag-doc"></span></div>
+<div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+<button class="btn" id="ag-prev" type="button">上一步</button>
+<button class="btn pri" id="ag-next" type="button">下一步</button>
+<button class="btn" id="ag-play" type="button">自动播放</button>
+<span class="ag-note" id="ag-pos"></span>
+</div>
+</div>
+<div class="callout info"><b class="t">三个人这一天的结局（示例）</b>阿杰在第 1 次调用里给出"开盘卖一半 A、买一点 B"，结果内核判定舍不得割，买 B 的单又因一字涨停排不进，一笔都没成交，意向与成交不一致记两条。他的帖子在第 2 次调用里、看到这个结果之后才写，说的正是没割成、没买进，所以帖子与成交一致。老周按兵不动，当天没打开账户，在熟人群里回了一句"拿着等它回来"，言行一致。小林恐惧到顶、回撤超过示例阈值，触发恐慌分支清仓 A。具体数字以上面演示现算的为准。</div>
+</section>
+<section id="s5" class="reveal"><h2><span class="num">05</span>接口与数据结构</h2>
+<p class="sub">agents 对外只交换结构化对象。字段名全部取自设计文档的 Pydantic 定义；文档没写的地方标"文档未定义"。</p>
+<p>第 1 次调用的结构化输出（解读 BeliefUpdate、意向 DecisionIntent 或明日打算 NextDayPlan）由 Pydantic 校验，推理框架支持时加 JSON schema 约束解码<span class="ref">§6.2</span>，所以下面的类型同时是 prompt 的输出格式。第 2 次调用产出帖子正文，写进帖子表<span class="ref">§6.1</span><span class="ref">§10.3</span>。类型定义放在 schemas 子包，agents 只引用<span class="ref">§3.3</span>。</p>
+<h3>BeliefUpdate 与 AssetView（第 1 次调用 · 解读）<span class="ref">§6.2</span></h3>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>类型.字段</th><th>取值</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td class="mono">BeliefUpdate.views</td><td class="mono">list[AssetView]</td><td>只对注意到的标的输出</td></tr>
+<tr><td class="mono">BeliefUpdate.emotion</td><td class="mono">fear / greed / regret / fomo → 0–3</td><td>四种情绪各一档；fear 进入 γ(t) 与情绪分支</td></tr>
+<tr><td class="mono">BeliefUpdate.policy_trust</td><td class="mono">-1 / 0 / 1</td><td>对"政策会托底"的信任变化</td></tr>
+<tr><td class="mono">BeliefUpdate.want_to_post</td><td class="mono">bool</td><td>是否做第 2 次调用写帖子<span class="ref">§6.1</span></td></tr>
+<tr><td class="mono">BeliefUpdate.monologue</td><td class="mono">str ≤ 120 字</td><td>内心独白，仅审计，不对外交付</td></tr>
+<tr><td class="mono">AssetView.asset</td><td class="mono">str</td><td>指数、行业或个股代码</td></tr>
+<tr><td class="mono">AssetView.horizon</td><td class="mono">1d / 1w / 1m</td><td>观点期限</td></tr>
+<tr><td class="mono">AssetView.stance</td><td class="mono">-2 … 2</td><td>强烈看空到强烈看多</td></tr>
+<tr><td class="mono">AssetView.ret_bucket</td><td class="mono">&lt;-5% … &gt;5%（6 档）</td><td>收益预期分档</td></tr>
+<tr><td class="mono">AssetView.confidence</td><td class="mono">1–5</td><td>信心</td></tr>
+<tr><td class="mono">AssetView.reasons</td><td class="mono">list[ReasonTag] ≤ 3</td><td>固定枚举，按重要性排序，用于理由分解<span class="ref">§10.2</span></td></tr>
+</tbody></table></div>
+<h3>DecisionIntent、NextDayPlan 与 FundingIntent（第 1 次调用 · 意向）<span class="ref">§6.3</span></h3>
+<p><span class="mono">DecisionIntent</span> 只在盘前与盘中激活产生；收盘后与晚间激活输出 <span class="mono">NextDayPlan</span>，不产生订单<span class="ref">§6.3</span><span class="ref">§3.4</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>类型.字段</th><th>取值</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td class="mono">DecisionIntent.asset</td><td class="mono">str</td><td>标的</td></tr>
+<tr><td class="mono">DecisionIntent.action</td><td class="mono">buy / sell / hold / watch</td><td>买、卖、持有、观望</td></tr>
+<tr><td class="mono">DecisionIntent.size</td><td class="mono">tiny / small / half / large / all_in</td><td>仓位档，由内核第 1 步映射成目标权重</td></tr>
+<tr><td class="mono">DecisionIntent.execution</td><td class="mono">open / dip / chase</td><td>开盘就买卖 / 挂单等回调或反弹 / 盘中追；盘中激活限 chase。内核第 6 步据此定价，LLM 不报价格</td></tr>
+<tr><td class="mono">DecisionIntent.reasons</td><td class="mono">list[ReasonTag] ≤ 3</td><td>同 AssetView</td></tr>
+<tr><td class="mono">DecisionIntent.source_post_ids</td><td class="mono">list[str] ≤ 2，默认空</td><td>当次信息流中影响决定的帖子，social 用它更新信任<span class="ref">§7.2</span></td></tr>
+<tr><td class="mono">DecisionIntent.rationale</td><td class="mono">str ≤ 120 字</td><td>一句话理由，进入决策表</td></tr>
+<tr><td class="mono">NextDayPlan.asset</td><td class="mono">str</td><td>标的</td></tr>
+<tr><td class="mono">NextDayPlan.action</td><td class="mono">buy / sell / hold / watch</td><td>明日打算；计划买或卖的人次日盘前强制激活<span class="ref">§3.4</span></td></tr>
+<tr><td class="mono">NextDayPlan.rationale</td><td class="mono">str ≤ 60 字</td><td>理由</td></tr>
+<tr><td class="mono">FundingIntent.action</td><td class="mono">deposit / withdraw / none</td><td>转入、转出、不动；每次激活至多一条</td></tr>
+<tr><td class="mono">FundingIntent.size</td><td class="mono">tiny / small / half / large / all</td><td>转入相对场外资金，转出相对账户资产</td></tr>
+<tr><td class="mono">FundingIntent.reason</td><td class="mono">str ≤ 60 字</td><td>理由</td></tr>
+</tbody></table></div>
+<h3>OrderIntent（内核的输出，交给 market）<span class="ref">§6.3</span></h3>
+<p>文档只写了它由第 6 步产出，类型放在 schemas<span class="ref">§3.3</span>，没有列字段。下表按第 6 步的约束列出它至少要带的信息，字段名<b>文档未定义</b>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>需要的信息</th><th>来源</th><th>字段名</th></tr></thead>
+<tbody>
+<tr><td>标的、方向、数量（整手）</td><td>第 6 步整手约束</td><td>文档未定义</td></tr>
+<tr><td>执行方式与限价：open 挂涨停（卖出挂跌停）价、dip 按前收 × (1 ∓ k_i)、chase 按均价加滑点</td><td>第 6 步按 <span class="mono">execution</span> 定价<span class="ref">§6.3</span></td><td>文档未定义</td></tr>
+<tr><td>有效期：当日有效，收盘撤单</td><td>第 6 步</td><td>文档未定义</td></tr>
+<tr><td>对应的意向（便于写回"未执行原因"）</td><td>第 7 步；交易流水表有 <span class="mono">decision_ref</span><span class="ref">§10.3</span></td><td>文档未定义</td></tr>
+</tbody></table></div>
+<h3>KernelParams（人设卡里的内核参数）<span class="ref">§4.1</span><span class="ref">§6.3</span></h3>
+<p>人设卡的 <span class="mono">kernel</span> 字段，含 γ λ ρ κ β^herd β^ext β^lot ν τ η 十个参数。数值不进 prompt，只给内核用。文档只给了 λ 的先验中位数 2.25，其余由 §12.2 校准，且按底座分开校准<span class="ref">§6.3</span>。第 6 步 dip 定价用的 <span class="mono">dip_k</span> 是人设卡上的单独字段，不在 kernel 里，先验 1%–3%<span class="ref">§4.1</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>参数</th><th>用在内核哪一步</th><th>与人设的关联（先验方向）</th></tr></thead>
+<tbody>
+<tr><td>γ 风险厌恶</td><td>第 2 步分母</td><td>年龄、神经质越高越大</td></tr>
+<tr><td>λ 损失厌恶</td><td>第 3 步</td><td>神经质越高越大</td></tr>
+<tr><td>ρ 实现效用</td><td>第 3 步</td><td>金融素养越低越大</td></tr>
+<tr><td>κ 过度自信</td><td>第 1 步映射斜率</td><td>男性、牛市入市、短线风格越大</td></tr>
+<tr><td>β^herd / β^ext / β^lot</td><td>第 2 步分子；第 5 步临时放大</td><td>宜人性高与新手从众强；入市年限短外推强；小资金、低收入彩票偏好强</td></tr>
+<tr><td>ν 活跃度</td><td>第 4 步</td><td>外向性高、短线、退休有闲越大</td></tr>
+<tr><td>τ 惯性阈值</td><td>第 3、4 步</td><td>尽责性越高越大</td></tr>
+<tr><td>η 情绪敏感</td><td>第 2 步 γ(t)</td><td>神经质越高越大</td></tr>
+</tbody></table></div>
+<h3>决策表（意向与成交并排）<span class="ref">§10.3</span></h3>
+<p>agents 写的是意向那一半，exec 那一半来自 market 的 Fill。一条意向或一条明日打算一行，两半之差就是"言行不一"的原始数据。时点、版本线、补跑、预热等字段从激活表按 <span class="mono">activation_id</span> 取，不在决策表重复<span class="ref">§10.3</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>字段</th><th>谁填</th></tr></thead>
+<tbody>
+<tr><td class="mono">activation_id, persona_id, event_id, run_id, sim_date, asset</td><td>orchestrator 与 agents</td></tr>
+<tr><td class="mono">intent_kind</td><td>agents：<span class="mono">order</span>（DecisionIntent）或 <span class="mono">plan</span>（NextDayPlan）</td></tr>
+<tr><td class="mono">intent_action, intent_size, execution, intent_reasons, source_post_ids, rationale</td><td>agents（第 1 次调用的意向原样）</td></tr>
+<tr><td class="mono">plan_ref</td><td>agents：次日盘前的实际意向链回前晚的明日打算，隔夜变卦由此算出</td></tr>
+<tr><td class="mono">exec_qty, exec_price</td><td>market 成交回报</td></tr>
+<tr><td class="mono">not_executed_reason</td><td>内核第 7 步（缩量、取消、挂单没成交、涨停买不进、T+1 卖不出、权限不足、舍不得割）</td></tr>
+<tr><td class="mono">liquidity_flag</td><td>market："需求与流动性不匹配"标记<span class="ref">§8.2</span></td></tr>
+</tbody></table></div>
+<p>激活表每个智能体每个激活点一行，被抽中但缺席的也记：<span class="mono">phase</span> 取盘前 / 盘中 / 收盘后 / 晚间，<span class="mono">trigger</span> 取 ν 抽中 / 事件 / 强制 / 群聊，缺席时 <span class="mono">absent_reason</span> 取解析失败 / 拒答 / 超时<span class="ref">§10.3</span>。帖子表带 <span class="mono">group_id、turn、reply_to</span>，记下群聊轮次与回复关系<span class="ref">§10.3</span>。</p>
+<p>一次激活的输出示例，对应第 4 节阿杰那一天。</p>
+<pre class="code" data-lang="json 示意，未实现"><span class="c">// 示意，未实现；示例数据，人物与标的均为虚构</span>
+{
+  <span class="k">"belief_update"</span>: {
+    <span class="k">"views"</span>: [{<span class="k">"asset"</span>: <span class="s">"示例股份A"</span>, <span class="k">"horizon"</span>: <span class="s">"1w"</span>, <span class="k">"stance"</span>: <span class="n">-1</span>,
+               <span class="k">"ret_bucket"</span>: <span class="s">"-2~0%"</span>, <span class="k">"confidence"</span>: <span class="n">2</span>, <span class="k">"reasons"</span>: [<span class="s">"trend"</span>]}],
+    <span class="k">"emotion"</span>: {<span class="k">"fear"</span>: <span class="n">1</span>, <span class="k">"greed"</span>: <span class="n">2</span>, <span class="k">"regret"</span>: <span class="n">2</span>, <span class="k">"fomo"</span>: <span class="n">2</span>},
+    <span class="k">"policy_trust"</span>: <span class="n">1</span>, <span class="k">"want_to_post"</span>: <span class="n">true</span>,
+    <span class="k">"monologue"</span>: <span class="s">"A 拿了一个月越拿越亏，B 有政策，再不换就踏空了"</span>
+  },
+  <span class="k">"decision_intents"</span>: [
+    {<span class="k">"asset"</span>: <span class="s">"示例股份A"</span>, <span class="k">"action"</span>: <span class="s">"sell"</span>, <span class="k">"size"</span>: <span class="s">"half"</span>, <span class="k">"execution"</span>: <span class="s">"open"</span>,
+     <span class="k">"reasons"</span>: [<span class="s">"trend"</span>], <span class="k">"source_post_ids"</span>: [], <span class="k">"rationale"</span>: <span class="s">"A 弱势，换到有政策催化的 B"</span>},
+    {<span class="k">"asset"</span>: <span class="s">"示例科技B"</span>, <span class="k">"action"</span>: <span class="s">"buy"</span>, <span class="k">"size"</span>: <span class="s">"small"</span>, <span class="k">"execution"</span>: <span class="s">"open"</span>,
+     <span class="k">"reasons"</span>: [<span class="s">"policy"</span>, <span class="s">"trend"</span>, <span class="s">"kol"</span>], <span class="k">"source_post_ids"</span>: [<span class="s">"示例帖2"</span>],
+     <span class="k">"rationale"</span>: <span class="s">"A 弱势，换到有政策催化的 B"</span>}
+  ],
+  <span class="k">"funding_intent"</span>: {<span class="k">"action"</span>: <span class="s">"none"</span>, <span class="k">"size"</span>: <span class="s">"tiny"</span>, <span class="k">"reason"</span>: <span class="s">""</span>}
+}
+<span class="c">// 内核与成交判定之后写进决策表的两行（exec 部分由 market 回填）</span>
+{<span class="k">"asset"</span>: <span class="s">"示例股份A"</span>, <span class="k">"intent_kind"</span>: <span class="s">"order"</span>, <span class="k">"intent_action"</span>: <span class="s">"sell"</span>, <span class="k">"execution"</span>: <span class="s">"open"</span>, <span class="k">"exec_qty"</span>: <span class="n">0</span>, <span class="k">"not_executed_reason"</span>: <span class="s">"舍不得割"</span>}
+{<span class="k">"asset"</span>: <span class="s">"示例科技B"</span>, <span class="k">"intent_kind"</span>: <span class="s">"order"</span>, <span class="k">"intent_action"</span>: <span class="s">"buy"</span>,  <span class="k">"execution"</span>: <span class="s">"open"</span>, <span class="k">"exec_qty"</span>: <span class="n">0</span>, <span class="k">"not_executed_reason"</span>: <span class="s">"涨停买不进"</span>}</pre>
+<p class="ag-note">BeliefUpdate、DecisionIntent、FundingIntent 在第 1 次调用里怎么打包成一个顶层对象，文档没写，上面的 <span class="mono">belief_update / decision_intents / funding_intent</span> 三个外层键是示意。FundingIntent 的 size 在 action 为 none 时取什么值也未定义。第 2 次调用的帖子正文在成交判定之后才生成，不在这个对象里。</p>
+</section>
+<section id="s6" class="reveal"><h2><span class="num">06</span>设计取舍与已定决定</h2>
+<p class="sub">每一项写清选了什么、放弃了什么、为什么。表中各项与下方三项已定决定都已写入设计文档 v0.3；下方三项来自架构讨论。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>问题</th><th>选择</th><th>放弃</th><th>为什么</th></tr></thead>
+<tbody>
+<tr><td>谁决定买卖</td><td>混合方案：LLM 给意向，内核管约束与偏差修正<span class="ref">§3.1</span></td><td>LLM 直接下单（只作消融<span class="ref">§11.2</span>）</td><td>T+1、涨跌停、资金这些硬约束要确定地执行，交给代码最可靠；损失厌恶、从众等偏差的强度要按 V4 行为矩校准<span class="ref">§12.2</span>，写成内核参数才有东西可调</td></tr>
+<tr><td>意向的粒度</td><td>动作 + 仓位档 + 理由标签<span class="ref">§6.3</span></td><td>让 LLM 输出精确股数或权重</td><td>分档稳定、可聚合；精确数字交给有参数的内核，参数可校准、可复现</td></tr>
+<tr><td>内核改了意向怎么办</td><td>写回记忆，并在决策表里意向与成交并排<span class="ref">§6.3</span></td><td>静默覆盖</td><td>不写回，第二天帖子会和账户对不上；并排存放让"言行不一"成为可测量的产出</td></tr>
+<tr><td>信息量</td><td>每次激活只看 K 条，按打分 softmax 抽样<span class="ref">§5.4</span></td><td>把当天所有信息都塞进 prompt</td><td>散户注意力有限（Hirshleifer, Lim &amp; Teoh 2009）<span class="ref">§5.4</span>；随机抽取让同一人设的两个智能体看到的信息也不完全相同<span class="ref">§5.4</span>，没看到的信息可能稍后经群聊或大 V 转述到达，扩散延迟由此产生</td></tr>
+<tr><td>人格怎么进 prompt</td><td>描述语，类型名与内核参数都不进<span class="ref">§4.1</span><span class="ref">§4.2</span></td><td>直接写"你是 INTJ，λ=2.4"</td><td>LLM 不需要知道自己的 λ，行为偏差的修正由内核实现<span class="ref">§4.1</span>；类型名只在"自认 MBTI"的智能体发言中出现<span class="ref">§4.2</span></td></tr>
+<tr><td>意向从哪来</td><td>可替换接口：LLM / 规则先验 / Jev<span class="ref">§6.6</span></td><td>写死 LLM</td><td>Phase 0 要对比三种来源的 V4 误差与同质化；规则先验也是降本备选</td></tr>
+<tr><td>帖子什么时候写</td><td>第 2 次调用，排在成交判定之后，输入里有当日意向、实际成交与未执行原因<span class="ref">§6.1</span></td><td>解读时顺手写帖</td><td>看着成交结果写，帖子能说出"挂了个低价没成交""涨停买不进"；风格示例帖只放进这一次调用，第 1 次调用只出结构化字段<span class="ref">§6.1</span><span class="ref">§6.3</span></td></tr>
+<tr><td>价格谁来定</td><td>LLM 只选执行方式 open / dip / chase，内核按方式定价<span class="ref">§6.3</span></td><td>让 LLM 报限价</td><td>数字价格交给有参数的内核才可校准、可复现；dip 的回调幅度是人设参数 <span class="mono">dip_k</span><span class="ref">§4.1</span></td></tr>
+<tr><td>记忆检索的相关度</td><td>结构化匹配为主，本地开源中文嵌入为辅，锁版本、按文本哈希缓存<span class="ref">§6.4</span></td><td>只用嵌入相似度；厂商嵌入 API</td><td>结构化标签可解释、可复现；本地锁版本的模型让重放结果不随厂商更新而变</td></tr>
+</tbody></table></div>
+<div class="callout decide"><b class="t">已定（v0.3 §6.2，来自架构讨论 A4）</b>解析失败与拒答分开处理。解析失败：Pydantic 校验不过就换种子重试，种子进缓存键，最多 2 次；仍失败则该智能体当日记为"未激活"、原因"解析失败"，不填默认值，也不沿用上期信念。拒答：单独记类、不重试，当日同样记缺席；拒答率按话题与人群切片，作为底座选型扣分<span class="ref">§13.3</span>。失败的尝试也写入缓存，重放时复现同一重试序列。失败率与拒答率写入运行清单并告警<span class="ref">§9.4</span><span class="ref">§14.4</span>；检查缺席是否集中在某些人群或行情日，结果放进 V1、V3 报告。v0.2 的 §6.2 写的是解析失败"沿用上期信念"，v0.3 已改。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.5，来自架构讨论 A1）</b>智能体看到的价格按 <span class="mono">asof</span> 当天现算前复权，与当年券商软件显示一致；收益与战绩计算统一用后复权<span class="ref">§5.5</span>。对 agents 的影响：prompt 里的成本价、现价、涨跌幅都是前复权口径；prompt 里的成本价按券商式摊薄成本显示〔需复核〕<span class="ref">§8.4</span>。内核第 3 步的浮盈 g 用哪种成本与复权口径，v0.3 没写，本页演示按 prompt 口径算。战绩回灌记忆里的收益率用后复权。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.3、§5.6，来自架构讨论 A3）</b>events 只产出 <span class="mono">EventCard</span> 与 L0（官媒转述）、L1（快讯）两类不带立场的文本；L2–L4 全部由 social 的发布者以 <span class="mono">Post</span> 产出<span class="ref">§5.3</span><span class="ref">§5.6</span>。对 agents 的影响：感知阶段的候选信息里，新闻只有 L0/L1 两类，大 V、博主、传闻都以帖子的形式进来；L4 传闻带 <span class="mono">origin="rumor"</span> 的事件卡与"传闻"标签，但智能体读到的是正文，标签只用于统计和下游过滤。</div>
+</section>
+<section id="s7" class="reveal"><h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">agents 读人设、信息和行情，写帖子、态度和意向；真正改账户的是 market 和 accounts。</p>
+<p>按一天的数据流顺序：orchestrator 决定谁在哪个时段被激活<span class="ref">§9.1</span>；agents 从 events、social 和行情里取候选信息，经 prompts 拼好提示词、经 llm 网关调用模型，第 1 次调用得到结构化的解读与意向；内核产出的 OrderIntent 交给 market 判定成交，成交回报经 accounts 记账后再回到 agents 写记忆；想发帖的智能体随后做第 2 次调用写帖子<span class="ref">§6.1</span>；帖子、态度、决策、激活等表交给 outputs<span class="ref">§10.3</span>，再由 validation 对照真实数据打分。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>模块</th><th>方向</th><th>交换什么</th></tr></thead>
+<tbody>
+<tr><td><a href="mod-population.html">population</a></td><td>读</td><td>人设卡（文字版进 prompt，KernelParams 给内核）、预置记忆 <span class="mono">seeded</span><span class="ref">§4.4</span><span class="ref">§6.4</span></td></tr>
+<tr><td><a href="mod-events.html">events</a></td><td>读</td><td>EventCard 的 L0/L1 版本，作为感知阶段的新闻候选<span class="ref">§5.2</span><span class="ref">§5.3</span></td></tr>
+<tr><td><a href="mod-social.html">social</a></td><td>读 / 写</td><td>读推荐流、群聊与发布者层 L0–L4 的帖子；写自己的 Post（第 2 次调用），下一时段他人可见<span class="ref">§7.3</span><span class="ref">§9.1</span>；群聊回复只走第 2 次调用<span class="ref">§7.1</span>；<span class="mono">source_post_ids</span> 交给 social 更新信任<span class="ref">§7.2</span></td></tr>
+<tr><td><a href="mod-market.html">market</a></td><td>写 / 读</td><td>交出按执行方式定好价的 OrderIntent，收回 Fill 与未成交原因（涨停买不进、挂单没成交等）<span class="ref">§6.3</span><span class="ref">§8.2</span></td></tr>
+<tr><td><a href="mod-accounts.html">accounts</a></td><td>读</td><td>账户摘要（约 100 token）、持仓成本与持有天数、定期战绩写回记忆<span class="ref">§6.4</span><span class="ref">§8.4</span></td></tr>
+<tr><td><a href="mod-llm.html">llm</a></td><td>调用</td><td>每次激活的两次调用与低频反思都经网关，两次调用共用静态前缀<span class="ref">§6.1</span>；缓存、重试、计量在网关做，失败的尝试也写入缓存<span class="ref">§6.2</span><span class="ref">§14.4</span></td></tr>
+<tr><td><a href="mod-prompts.html">prompts</a></td><td>调用</td><td>人设文字版、记忆、信息流、账户摘要的拼装模板</td></tr>
+<tr><td><a href="mod-schemas.html">schemas</a></td><td>引用</td><td>BeliefUpdate、DecisionIntent、FundingIntent、OrderIntent 的类型定义<span class="ref">§3.3</span></td></tr>
+<tr><td><a href="mod-orchestrator.html">orchestrator</a></td><td>被调用</td><td>激活名单、时段、随机种子<span class="ref">§9.1</span></td></tr>
+<tr><td><a href="mod-outputs.html">outputs</a></td><td>写</td><td>帖子表、态度表、决策表<span class="ref">§10.3</span></td></tr>
+<tr><td><a href="mod-validation.html">validation</a></td><td>被检验</td><td>V2 看帖子，V3 看态度，V4 看决策与言行不一率，V5 看同质化<span class="ref">§12.1</span></td></tr>
+</tbody></table></div>
+<p>相关的场景页：<a href="sim-personas.html">人物原型</a>（第 4 节三个示例人物的来源类型）、<a href="sim-publishers.html">发布者层</a>（感知阶段读到的大 V、博主、传闻从哪来）、<a href="flow-day.html">一个交易日</a>（各时段谁被激活）、<a href="flow-journey.html">一条新闻的旅程</a>（一条新闻怎样经发布者、推荐流到达智能体）。</p>
+</section>
+<section id="s8" class="reveal"><h2><span class="num">08</span>开放问题</h2>
+<p class="sub">设计文档 v0.3 里还没定、或标了〔需复核〕的地方。第 4 节的演示在这些地方填了假设值，真实实现前要逐项定下来。</p>
+<div class="callout todo"><b class="t">没有数值或公式的参数</b><ul>
+<li>情绪分支：p_panic、"回撤超阈值"的阈值、什么算"高波动持仓"、躺平持续"若干天"是几天、greed/fomo 到顶时 β^herd 与 β^lot 放大多少倍<span class="ref">§6.3</span>。</li>
+<li>第 1 步：仓位档 tiny…all_in 到目标权重的映射表，以及映射斜率 s_i 与 κ_i 的函数关系<span class="ref">§6.3</span>。</li>
+<li>第 2 步：单票上限 w_i^max、持股数上限 N_i^max、现金缓冲比例<span class="ref">§6.3</span>。</li>
+<li>第 3 步："组合改善"怎么算（换仓后均值-方差效用的增量，还是别的定义）<span class="ref">§6.3</span>。</li>
+<li>第 4 步：注意力 a_i(t) 的函数形式，文档只说"随注意力事件、持仓波动与情绪上升"<span class="ref">§6.3</span>。</li>
+<li>感知：衰减常数 τ_d 与 softmax 温度 T_i 的取值<span class="ref">§5.4</span>。</li>
+</ul></div>
+<div class="callout todo"><b class="t">内核步骤的先后与口径</b><ul>
+<li>第 3 步（舍不得割）和第 5 步（恐慌清仓）同时成立时谁优先，文档没写。本页演示假设情绪分支盖过第 3 步。</li>
+<li>第 4 步"不看盘"时，第 5 步的恐慌分支还执行不执行。本页演示假设不看盘就不会恐慌卖出。</li>
+<li>第 3 步浮盈 g 用的成本：prompt 里显示的是券商式摊薄成本〔需复核〕<span class="ref">§8.4</span>，已实现盈亏按先进先出，内核取哪一个未定。</li>
+<li>两融账户的强平线：券商常见 130%〔需复核〕<span class="ref">§8.4</span>；强平卖单以市价进入下一个成交判定时点，并写回记忆<span class="ref">§8.4</span>；它在决策表与记忆里记为哪类原因、是否经过内核第 6 步，文档未定义。</li>
+</ul></div>
+<div class="callout todo"><b class="t">等 Phase 0 结果</b><ul>
+<li>意向来源：LLM、规则先验、Jev 三者的对比试验结果决定 Phase 1 用哪一个<span class="ref">§6.6</span>；若 Jev 胜出，"LLM 只写帖子与理由"之后，理由与 Jev 抽到的意向不一致时怎么处理还没写。</li>
+<li>经验效应窗口：按年龄还是按入市年数，两种都实现，用硅基调查比较<span class="ref">§6.5</span>。</li>
+<li>OrderIntent 的字段与第 1 次调用输出的顶层打包结构，待 schemas 定。</li>
+</ul></div>
+</section>
+</main></div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+/* 本段全部为示例数据，人物、股票、新闻、帖子均为虚构；示意，未实现 */
+function num(x){return (typeof x==='number'&&isFinite(x))?x:0;}
+function div(a,b){a=num(a);b=num(b);return b===0?0:a/b;}
+function pct(x,d){return (num(x)*100).toFixed(d==null?1:d)+'%';}
+function f(x,d){return num(x).toFixed(d==null?3:d);}
+function yuan(x){return num(x).toLocaleString('zh-CN',{maximumFractionDigits:2})+' 元';}
+function $(id){return document.getElementById(id);}
+var MK={
+ A:{name:'示例股份A',pc:8.80,r5:-0.09,sig:0.45,H:-0.4,L:0,move:-0.041},
+ B:{name:'示例科技B',pc:13.64,r5:0.30,sig:0.70,H:0.6,L:1,yizi:true}
+};
+var FEED=[
+ {id:1,ch:'news',chn:'L0 官媒转述',txt:'（虚构）示例部委发布行业支持政策，示例科技B 所在行业受益',m:3,a:'B',dt:12,sal:1.0},
+ {id:2,ch:'guba',chn:'股吧帖',txt:'（虚构）"B 明天还有板，冲"',m:1,a:'B',dt:3,sal:1.2},
+ {id:3,ch:'group',chn:'熟人群聊',txt:'（虚构）"A 又跌了，我割了"',m:1,a:'A',dt:2,sal:1.3},
+ {id:4,ch:'kol',chn:'L2 大V帖',txt:'（虚构）"政策底已现，别在底部交出筹码"',m:2,a:'mkt',dt:8,sal:1.1},
+ {id:5,ch:'news',chn:'L1 快讯',txt:'（虚构）两市成交额较前日放量',m:2,a:'mkt',dt:14,sal:0.8}
+];
+var TAU_D=24, T_SOFT=0.2, BUF=0.02, PANIC_DD=0.15, P_PANIC=0.6, HIVOL=0.35;
+var FEE={com:0.00025,comMin:5,stamp:0.0005,tr:0.00001,ex:0.0000541};
+var BUY={tiny:0.05,small:0.10,half:0.25,large:0.40,all_in:1};
+var SELL={tiny:0.1,small:0.25,half:0.5,large:0.75,all:1,all_in:1};
+var P={
+ jie:{name:'阿杰',label:'短线新手',N:'高',hurt:false,thr:0.03,K:4,
+  kp:{g:2.0,l:2.4,r:1.2,k:1.4,bh:0.05,be:0.04,bl:0.04,nu:1.2,tau:0.03,eta:0.6},
+  w:{news:0.3,guba:0.5,group:0.2,kol:0.4},rel:{A:1,B:0.6,mkt:0.5},
+  acct:{cash:20800,q:9000,c:10.00,days:23},dd:0.13,
+  views:['A：立场 −1，收益档 "-2~0%"，信心 2，理由 [trend]','B：立场 +2，收益档 ">5%"，信心 4，理由 [policy, trend, kol]'],
+  emo:{fear:1,greed:2,regret:2,fomo:2},pt:1,wantPost:true,
+  mono:'A 拿了一个月越拿越亏，B 有政策，再不换就踏空了',
+  post:{ch:'股吧（示例个股吧）',txt:'本来想割 A 换 B，临了还是没舍得割；B 一字板挂涨停都排不进，白忙一早上。'},
+  intent:[{a:'A',act:'sell',size:'half',ex:'open',rs:['trend'],src:[]},{a:'B',act:'buy',size:'small',ex:'open',rs:['policy','trend','kol'],src:[2]}],
+  rat:'A 弱势，换到有政策催化的 B',imp:0.20,u1:0.42,u2:0.50,fill:null},
+ zhou:{name:'老周',label:'退休长线',N:'低',hurt:false,thr:0.05,K:3,
+  kp:{g:4.0,l:2.0,r:0.8,k:0.8,bh:0.01,be:0.01,bl:0,nu:0.3,tau:0.10,eta:0.3},
+  w:{news:0.6,guba:0.1,group:0.4,kol:0.2},rel:{A:1,B:0.2,mkt:0.5},
+  acct:{cash:324000,q:20000,c:11.50,days:900},dd:0.08,
+  views:['A：立场 0，收益档 "0~2%"，信心 3，理由 [valuation, flow]'],
+  emo:{fear:1,greed:0,regret:1,fomo:0},pt:1,wantPost:true,
+  mono:'跌这么多估值也不贵了，量也放出来了，不急',
+  post:{ch:'熟人群聊（回复"我割了"那条）',txt:'跌了就跌了，这钱又不急用，拿着等它回来。'},
+  intent:[{a:'A',act:'hold',size:'',ex:'',rs:['valuation','flow'],src:[]}],
+  rat:'估值不贵，不追不割',imp:0,u1:0.71,u2:0.50,fill:null},
+ lin:{name:'小林',label:'2015 杠杆受伤',N:'高',hurt:true,thr:0.03,K:3,
+  kp:{g:3.0,l:3.0,r:1.0,k:1.0,bh:0.03,be:0.02,bl:0.01,nu:0.8,tau:0.05,eta:1.0},
+  w:{news:0.3,guba:0.3,group:0.3,kol:0.3},rel:{A:1,B:0.2,mkt:0.5},
+  acct:{cash:14400,q:12000,c:10.73,days:400},dd:0.21,
+  views:['A：立场 −2，收益档 "<-5%"，信心 4，理由 [fear, herd]'],
+  emo:{fear:3,greed:0,regret:3,fomo:0},pt:0,wantPost:false,
+  mono:'又是 2015 那种感觉，群里都在割，不能再扛了',
+  post:null,
+  intent:[{a:'A',act:'sell',size:'half',ex:'open',rs:['fear','herd'],src:[3]}],
+  rat:'先砍一半，留点子弹',imp:0.10,u1:0.42,u2:0.35,fill:8.55}
+};
+var IN_GROUP={jie:false,zhou:true,lin:true};
+function lim(pc,up){return Math.round(pc*(up?1.1:0.9)*100)/100;}
+function fees(amt,sell){
+ amt=num(amt); if(amt<=0) return {com:0,stamp:0,tr:0,ex:0,sum:0};
+ var r={com:Math.max(FEE.comMin,amt*FEE.com),stamp:sell?amt*FEE.stamp:0,tr:amt*FEE.tr,ex:amt*FEE.ex};
+ r.sum=r.com+r.stamp+r.tr+r.ex; return r;
+}
+function compute(key){
+ var p=P[key]; if(!p) return null;
+ var kp=p.kp,a=p.acct,R={key:key};
+ R.vA=a.q*MK.A.pc; R.total=a.cash+R.vA; R.wA=div(R.vA,R.total);
+ R.g=div(MK.A.pc,a.c)-1;
+ R.trigMove=Math.abs(MK.A.move)>p.thr; R.trigGroup=!!IN_GROUP[key];
+ R.active=R.trigMove||R.trigGroup;
+ /* 感知 */
+ var sc=FEED.map(function(it){
+  var w=num(p.w[it.ch]),rel=num(p.rel[it.a]);
+  return {it:it,w:w,rel:rel,dec:Math.exp(-it.dt/TAU_D),s:w*it.m*rel*Math.exp(-it.dt/TAU_D)*it.sal};
+ });
+ var z=0; sc.forEach(function(x){x.e=Math.exp(x.s/T_SOFT); z+=x.e;});
+ sc.forEach(function(x){x.pr=div(x.e,z);});
+ R.scores=sc;
+ R.slots=Math.max(0,p.K-(R.trigMove?1:0));
+ R.seen=sc.slice().sort(function(x,y){return y.s-x.s;}).slice(0,R.slots);
+ /* 内核第 1-2 步 */
+ R.gt=kp.g*(1+kp.eta*p.emo.fear);
+ R.rows=p.intent.map(function(it){
+  var m=MK[it.a],cur=it.a==='A'?R.wA:0,wint=cur,map='';
+  if(it.act==='buy'){var b=num(BUY[it.size])*kp.k; wint=cur+b; map='加 '+f(BUY[it.size],2)+' × κ '+f(kp.k,1)+' = '+f(b,3);}
+  else if(it.act==='sell'){var fr=Math.min(1,num(SELL[it.size])*kp.k); wint=cur*(1-fr); map='减持比例 '+f(SELL[it.size],2)+' × κ '+f(kp.k,1)+' = '+f(fr,2);}
+  else {map='持有：目标权重 = 当前权重';}
+  var nm=kp.bh*m.H+kp.be*m.r5+kp.bl*m.L;
+  var dl=div(nm,R.gt*m.sig*m.sig);
+  var ws=Math.min(1,Math.max(0,wint+dl));
+  return {it:it,m:m,cur:cur,wint:wint,map:map,nm:nm,dl:dl,ws:ws,target:ws,why:''};
+ });
+ /* 第 3 步 */
+ R.rows.forEach(function(r){
+  if(r.it.act!=='sell') return;
+  r.U=R.g>0?kp.r*R.g:-kp.l*kp.r*Math.abs(R.g);
+  r.gate=p.imp+r.U; r.pass=r.gate>kp.tau;
+  if(!r.pass){r.target=r.cur; r.why='舍不得割';}
+ });
+ /* 第 4 步 */
+ R.emoMax=Math.max(p.emo.fear,p.emo.greed,p.emo.fomo);
+ R.att=1+(R.trigMove?1:0)+R.emoMax/3;
+ R.pLook=1-Math.exp(-kp.nu*R.att);
+ R.look=p.u1<R.pLook;
+ R.rows.forEach(function(r){
+  if(!R.look){r.target=r.cur; if(!r.why) r.why=r.it.act==='hold'?'':'未看盘';}
+  else if(Math.abs(r.target-r.cur)<=kp.tau){r.target=r.cur;}
+ });
+ /* 第 5 步 */
+ R.fearTop=p.emo.fear>=3&&p.dd>PANIC_DD;
+ R.fragile=p.N==='高'||p.hurt;
+ R.panic=R.look&&R.fearTop&&R.fragile&&p.u2<P_PANIC;
+ R.flat=R.fearTop&&!R.fragile;
+ R.amp=p.emo.greed>=3||p.emo.fomo>=3;
+ if(R.panic){R.rows.forEach(function(r){ if(r.it.a==='A'&&MK.A.sig>HIVOL){r.target=0; r.why='恐慌清仓（情绪分支）';} });}
+ /* 第 6 步与 market */
+ R.orders=[];
+ R.rows.forEach(function(r){
+  var d=r.target-r.cur; if(Math.abs(d)<1e-9) return;
+  var o={a:r.it.a,name:r.m.name};
+  if(d>0){
+   o.side='买'; o.px=lim(r.m.pc,true); o.type='open · 挂涨停价，按开盘价成交';
+   var avail=a.cash-BUF*R.total, want=d*R.total, amt=Math.max(0,Math.min(want,avail));
+   o.want=want; o.avail=avail; o.qty=Math.floor(div(amt,o.px)/100)*100; o.fee=fees(o.qty*o.px,false);
+   o.filled=r.m.yizi?0:o.qty; o.fail=r.m.yizi?'涨停买不进（一字涨停）':(o.qty<100?'资金不足一手':'');
+  } else {
+   o.side='卖'; var sellable=a.days>=1?a.q:0;
+   o.qty=r.target<=0?sellable:Math.min(sellable,Math.floor(div(-d*R.total,r.m.pc)/100)*100);
+   o.px=lim(r.m.pc,false); o.type='open · 挂跌停价，按开盘价成交';
+   o.fillPx=num(p.fill)||o.px; o.filled=o.qty; o.fee=fees(o.qty*o.fillPx,true); o.fail='';
+   o.pnl=(o.fillPx-a.c)*o.qty-o.fee.sum;
+  }
+  if(r.it.act==='buy'&&o.fail) r.why=o.fail;
+  R.orders.push(o);
+ });
+ return R;
+}
+var ACT={buy:'买',sell:'卖',hold:'持有',watch:'观望'};
+function emoS(e){return '恐惧 '+e.fear+' · 贪婪 '+e.greed+' · 后悔 '+e.regret+' · 怕踏空 '+e.fomo;}
+function intS(it){return MK[it.a].name+'：'+ACT[it.act]+(it.size?' / '+it.size:'')+(it.ex?'，execution '+it.ex:'')+'，理由 ['+it.rs.join(', ')+']'+(it.src&&it.src.length?'，source_post_ids [#'+it.src.join(', #')+']':'');}
+var STEPS=[
+function(p,R){return {k:'规则',t:'0 · 激活：今天醒不醒',
+ i:['示例日 T 盘前（08:00–09:15）','示例股份A 昨日涨跌 '+pct(MK.A.move),'个人异动阈值 '+pct(p.thr,0)+'（示例）'],
+ d:['持仓日涨跌超阈值：'+(R.trigMove?'是':'否'),'持仓在所在群里被讨论：'+(R.trigGroup?'是':'否'),'前晚"明日打算"为买或卖者盘前强制激活（本例三人前晚都没有买卖打算）','任一触发即激活；未触发时还可按 ν 随机抽中'],
+ o:[R.active?p.name+' 本时段被激活':p.name+' 未激活，保持持仓、不发帖'],
+ doc:'§3.4 日内时段与强制激活；§9.1 激活与调度'};},
+function(p,R){
+ var d=R.scores.map(function(x){return '#'+x.it.id+' '+x.it.chn+'：'+f(x.w,1)+'×'+x.it.m+'×'+f(x.rel,1)+'×'+f(x.dec,3)+'×'+f(x.it.sal,1)+' = '+f(x.s,3)+'，抽中概率 '+pct(x.pr,0);});
+ var o=[]; if(R.trigMove) o.push('必入：持仓异动"示例股份A 昨日 '+pct(MK.A.move)+'"');
+ R.seen.forEach(function(x){o.push('#'+x.it.id+' '+x.it.txt);});
+ return {k:'规则',t:'1 · 感知：只看 K = '+p.K+' 条',
+ i:['5 条候选信息（虚构）','渠道偏好 w：'+Object.keys(p.w).map(function(c){return c+' '+p.w[c];}).join('，'),'相关度 rel：持有 A '+p.rel.A+'，B '+p.rel.B+'，大盘 '+p.rel.mkt,'τ_d = '+TAU_D+' 小时，T = '+T_SOFT+'（示例）'],
+ d:d.concat(['剩余名额 '+R.slots+' 条；真实运行按 softmax 不放回随机抽，这里取概率最高的几条']),
+ o:o,doc:'§5.4 注意力预算；§13.4 顺序按种子打乱'};},
+function(p,R){return {k:'LLM',t:'2 · 第 1 次调用 · 解读 → BeliefUpdate',
+ i:['人设卡文字版（大五用描述语，不含 λ 等参数；不带风格示例帖）','检索到的记忆约 800 token','上一步看到的 '+(R.seen.length+(R.trigMove?1:0))+' 条信息'],
+ d:['LLM 按 JSON schema 约束解码，只输出分档；解读与下一步的意向在同一次调用里给出','解析失败换种子重试至多 2 次，仍失败记"未激活/解析失败"，不沿用上期','内心独白（仅审计）："'+p.mono+'"'],
+ o:p.views.concat(['情绪：'+emoS(p.emo),'政策信任 '+p.pt+'，想发帖 '+(p.wantPost?'是':'否')]),
+ doc:'§6.1 两次调用；§6.2 结构化输出与解析失败；§14.2 token'};},
+function(p,R){return {k:'LLM',t:'3 · 第 1 次调用 · 意向 → DecisionIntent',
+ i:['BeliefUpdate','账户摘要：总资产 '+yuan(R.total)+'，可用 '+yuan(p.acct.cash)+'，A 浮盈 '+pct(R.g)],
+ d:['意向来源：LLM（MVP 默认）；可换规则先验或 Jev','LLM 只选执行方式 execution（open / dip / chase），具体价格由内核第 6 步定','source_post_ids 最多填 2 条，照录不纠正'],
+ o:p.intent.map(intS).concat(['理由说明："'+p.rat+'"','FundingIntent：none']),
+ doc:'§6.3 DecisionIntent / FundingIntent；§6.6；§7.2'};},
+function(p,R){
+ var d=['γ(t) = γ '+f(p.kp.g,1)+' × (1 + η '+f(p.kp.eta,1)+' × 恐惧 '+p.emo.fear+') = '+f(R.gt,2)];
+ R.rows.forEach(function(r){
+  d.push(r.m.name+'：'+r.map+'，w^int = '+f(r.wint));
+  d.push('Δ = ('+p.kp.bh+'×'+r.m.H+' + '+p.kp.be+'×'+r.m.r5+' + '+p.kp.bl+'×'+r.m.L+') / ('+f(R.gt,2)+'×'+r.m.sig+'²) = '+f(r.nm,4)+' / '+f(R.gt*r.m.sig*r.m.sig,3)+' = '+f(r.dl,4));
+ });
+ return {k:'内核',t:'4 · 内核第 1–2 步：目标权重与偏差修正',
+ i:['当前 A 权重 '+f(R.wA)+'（'+yuan(R.vA)+' / '+yuan(R.total)+'）','A：H '+MK.A.H+'，R5d '+MK.A.r5+'，L '+MK.A.L+'，σ '+MK.A.sig,'B：H '+MK.B.H+'，R5d '+MK.B.r5+'，L '+MK.B.L+'，σ '+MK.B.sig,'仓位档映射与 s_i = κ 为演示假设'],
+ d:d,o:R.rows.map(function(r){return r.m.name+'：w* = clip('+f(r.wint)+' + '+f(r.dl,4)+', 0, w^max = 1（示例）) = '+f(r.ws);}),
+ doc:'§6.3 第 1–2 步'};},
+function(p,R){
+ var sells=R.rows.filter(function(r){return r.it.act==='sell';});
+ var d=[],o=[];
+ if(!sells.length){d.push('意向里没有卖出，本步不起作用');o.push('无变化');}
+ sells.forEach(function(r){
+  d.push('A 浮盈 g = '+f(MK.A.pc,2)+' / '+f(p.acct.c,2)+' − 1 = '+pct(R.g));
+  d.push('U_real = '+(R.g>0?'ρ×g = '+f(p.kp.r,1)+'×'+f(R.g,4):'−λρ|g| = −'+f(p.kp.l,1)+'×'+f(p.kp.r,1)+'×'+f(Math.abs(R.g),4))+' = '+f(r.U));
+  d.push('组合改善 '+f(p.imp,2)+'（演示假设）+ U_real = '+f(r.gate)+'，对比 τ = '+f(p.kp.tau,2));
+  o.push(r.pass?'过门槛：按 w* 卖出':'没过门槛：A 目标权重退回当前值，记"舍不得割"');
+ });
+ return {k:'内核',t:'5 · 内核第 3 步：处置效应门槛',
+ i:['持仓成本 '+f(p.acct.c,2)+'（券商式摊薄成本〔需复核〕）','现价 '+f(MK.A.pc,2)],
+ d:d,o:o,doc:'§6.3 第 3 步'};},
+function(p,R){return {k:'内核',t:'6 · 内核第 4 步：今天看不看盘',
+ i:['持仓异动 '+(R.trigMove?1:0)+'，最强情绪 '+R.emoMax+'（0–3）','ν = '+f(p.kp.nu,1)+'（演示值）'],
+ d:['注意力 a = 1 + 异动 '+(R.trigMove?1:0)+' + 情绪 '+R.emoMax+'/3 = '+f(R.att,2)+'（a_i(t) 形式为演示假设）','P(看盘) = 1 − exp(−ν·a) = '+f(R.pLook),'随机数 u₁ = '+f(p.u1,2)+'（示例种子）'],
+ o:[R.look?'看盘：u₁ < P，继续往下走；|w* − w| ≤ τ 的小调整忽略':'不看盘：所有调整作废，账户原样（意向仍写入决策表）'],
+ doc:'§6.3 第 4 步'};},
+function(p,R){
+ var o=[];
+ if(R.panic) o.push('触发恐慌：A 波动率 '+MK.A.sig+' > '+HIVOL+'，目标权重置 0，盖过第 3 步的"舍不得割"');
+ else if(R.flat) o.push('恐惧到顶但不脆弱：躺平，不动');
+ else o.push('未触发情绪分支');
+ if(R.amp) o.push('贪婪/怕踏空到顶：β^herd 与 β^lot 临时放大（倍数文档未定义）');
+ return {k:'内核',t:'7 · 内核第 5 步：情绪分支',
+ i:['恐惧 '+p.emo.fear+'，回撤 '+pct(p.dd,0)+'（阈值 '+pct(PANIC_DD,0)+'，演示）','神经质 '+p.N+(p.hurt?'，2015 年受过伤':'')],
+ d:['恐惧到顶且回撤超阈值：'+(R.fearTop?'是':'否'),'脆弱（高神经质或受过伤）：'+(R.fragile?'是':'否'),'u₂ = '+f(p.u2,2)+'，p_panic = '+P_PANIC+'（演示）','"情绪分支覆盖第 3 步"是本页的演示假设，文档未写先后'],
+ o:o,doc:'§6.3 第 5 步；§6.5 经历效应'};},
+function(p,R){
+ var d=[],o=[];
+ if(!R.orders.length){d.push('目标权重等于当前权重，不下单');o.push('无订单');}
+ R.orders.forEach(function(x){
+  if(x.side==='买'){
+   d.push('买 '+x.name+'：想买 '+yuan(x.want)+'，可用（扣 '+pct(BUF,0)+' 现金缓冲，比例为示例）'+yuan(x.avail)+' → '+x.qty+' 股 @ '+f(x.px,2)+'（整百股）');
+   d.push('费用估算 '+yuan(x.fee.sum)+'〔需复核〕');
+   o.push(x.filled?'成交 '+x.filled+' 股':'未成交，未执行原因记"'+(x.fail||'未成交')+'"');
+  } else {
+   d.push('卖 '+x.name+'：可卖 '+x.qty+' 股（持有满 T+1），'+x.type+' @ '+f(x.px,2));
+   d.push('费用：佣金 '+f(x.fee.com,2)+' + 印花税 '+f(x.fee.stamp,2)+' + 过户 '+f(x.fee.tr,2)+' + 经手 '+f(x.fee.ex,2)+' = '+yuan(x.fee.sum)+'〔需复核〕');
+   o.push('成交 '+x.filled+' 股 @ '+f(x.fillPx,2)+'（示例），已实现盈亏 '+yuan(x.pnl));
+  }
+ });
+ return {k:'市场',t:'8 · 内核第 6 步定价 + market 判定成交',
+ i:['A 昨收 '+f(MK.A.pc,2)+'，涨停 '+f(lim(MK.A.pc,true),2)+'，跌停 '+f(lim(MK.A.pc,false),2),'B 昨收 '+f(MK.B.pc,2)+'，今日'+(MK.B.yizi?'一字涨停':'正常交易'),'本例意向的 execution 都是 open：集合竞价单，按开盘价成交'],
+ d:d.concat(['一字涨停当日买单不成交；挂单当日有效，没成交记"挂单没成交"']),o:o,doc:'§6.3 第 6 步；§8.1 交易规则；§8.2 成交第 1、3 步；§8.4 费用'};},
+function(p,R){
+ var o=[],gap=0;
+ R.rows.forEach(function(r){
+  var ord=R.orders.filter(function(x){return x.a===r.it.a;})[0];
+  var ex=ord?ord.filled:0;
+  var tag=ex?'，内核改动原因"':'，not_executed_reason "';
+  o.push('决策表：'+r.m.name+' 意向 '+ACT[r.it.act]+(r.it.size?' '+r.it.size:'')+(r.it.ex?'，execution '+r.it.ex:'')+'，exec_qty '+ex+(r.why?tag+r.why+'"':''));
+  if(r.it.act!=='hold'&&(!ex||r.why)) gap++;
+ });
+ o.push('本日意向与成交不一致 '+gap+' 处（没成交或被内核改量都计入）');
+ return {k:'规则',t:'9 · 写回记忆与决策表',
+ i:['意向 vs 实际成交','未执行原因'],
+ d:['把"想做什么、实际做了什么、为什么没做成"写成一条情景记忆','这些结果也是下一步第 2 次调用的输入'],
+ o:o,doc:'§6.3 第 7 步；§6.4 记忆；§10.2；§10.3 决策表'};},
+function(p,R){
+ var g=p.post&&IN_GROUP[R.key]&&/群/.test(p.post.ch);
+ return {k:'LLM',t:'10 · 第 2 次调用 · 发帖 → Post 或不发',
+ i:['BeliefUpdate.want_to_post = '+(p.wantPost?'true':'false'),'与第 1 次共用的静态前缀（命中前缀缓存）','当日意向、实际成交与未执行原因','风格示例帖（只放这次）'],
+ d:p.post?['选渠道、写正文、决定回复谁；正文为自由文本，不进 JSON','帖子写在成交之后，正文与当日成交对照，言行不一照常测量'].concat(g?['群聊接话只走第 2 次调用，不重做第 1 次；当阶段交易决定不受群聊影响']:[]):['want_to_post 为 false，不发帖，跳过本步'],
+ o:p.post?['渠道：'+p.post.ch,'正文（虚构）："'+p.post.txt+'"','本例帖子内容与当日成交一致（示例数据）','进入 social 推荐流，下一时段他人可见；同时写入帖子表']:['无帖子'],
+ doc:'§6.1 两次调用；§7.1 群聊；§7.5 两条影响路径；§9.1 下一时段可见；§10.3 帖子表'};}
+];
+var KCLS={'规则':'data','LLM':'llm','内核':'sim','市场':'market'};
+function fill(ul,arr){
+ if(!ul) return; while(ul.firstChild) ul.removeChild(ul.firstChild);
+ (arr||[]).forEach(function(t){var li=document.createElement('li'); li.textContent=String(t); ul.appendChild(li);});
+}
+var who=$('ag-who'),dots=$('ag-dots'),cur=0,R=null,timer=null,N=STEPS.length;
+function stop(){ if(timer){clearInterval(timer); timer=null;} var b=$('ag-play'); if(b) b.textContent='自动播放'; }
+function draw(){
+ var key=who?who.value:'jie',p=P[key]; if(!p) return;
+ if(!R||R.key!==key) R=compute(key); if(!R) return;
+ cur=Math.max(0,Math.min(N-1,cur));
+ var s=STEPS[cur](p,R);
+ var kind=$('ag-kind');
+ if(kind){
+  while(kind.firstChild) kind.removeChild(kind.firstChild);
+  kind.appendChild(document.createElement('i'));
+  kind.appendChild(document.createTextNode(s.k));
+  kind.className='chip '+(KCLS[s.k]||'sim');
+ }
+ var t=$('ag-title'); if(t) t.textContent=s.t;
+ fill($('ag-in'),s.i); fill($('ag-do'),s.d); fill($('ag-out'),s.o);
+ var d=$('ag-doc'); if(d) d.textContent=s.doc;
+ var pos=$('ag-pos'); if(pos) pos.textContent='第 '+(cur+1)+' / '+N+' 步 · '+p.name+'（'+p.label+'）';
+ if(dots){ var bs=dots.querySelectorAll('button'); for(var i=0;i<bs.length;i++){ bs[i].className=i===cur?'on':''; bs[i].setAttribute('aria-current',i===cur?'step':'false'); } }
+ var pv=$('ag-prev'),nx=$('ag-next'); if(pv) pv.disabled=cur===0; if(nx) nx.disabled=cur===N-1;
+}
+if(dots){
+ for(var i=0;i<N;i++){(function(k){
+  var b=document.createElement('button'); b.type='button'; b.textContent=String(k);
+  b.setAttribute('aria-label','第 '+(k+1)+' 步');
+  b.addEventListener('click',function(){stop(); cur=k; draw();});
+  dots.appendChild(b);
+ })(i);}
+}
+if(who) who.addEventListener('change',function(){stop(); cur=0; R=null; draw();});
+var pv=$('ag-prev'),nx=$('ag-next'),pl=$('ag-play');
+if(pv) pv.addEventListener('click',function(){stop(); cur--; draw();});
+if(nx) nx.addEventListener('click',function(){stop(); cur++; draw();});
+if(pl) pl.addEventListener('click',function(){
+ if(timer){stop(); return;}
+ if(cur>=N-1) cur=0; draw();
+ pl.textContent='暂停';
+ timer=setInterval(function(){ if(cur>=N-1){stop(); return;} cur++; draw(); },3500);
+});
+if($('ag-stp')) draw();
+function rv(id){var e=$(id); return e?num(parseFloat(e.value)):0;}
+function setT(id,t){var e=$(id); if(e) e.textContent=t;}
+function calc(){
+ var out=$('ag-c-out'); if(!out) return;
+ var l=rv('ag-c-l'),r=rv('ag-c-r'),g=rv('ag-c-g'),im=rv('ag-c-i'),tau=rv('ag-c-t');
+ setT('ag-c-lv',f(l,2)); setT('ag-c-rv',f(r,2)); setT('ag-c-gv',pct(g)); setT('ag-c-iv',f(im,2)); setT('ag-c-tv',f(tau,2));
+ var U=g>0?r*g:-l*r*Math.abs(g), gate=im+U, sell=gate>tau;
+ while(out.firstChild) out.removeChild(out.firstChild);
+ var l1=document.createElement('div');
+ l1.textContent=g>0?'浮盈，U_real = ρ × g = '+f(r,2)+' × '+f(g,3)+' = '+f(U):(g<0?'浮亏，U_real = −λ × ρ × |g| = −'+f(l,2)+' × '+f(r,2)+' × '+f(Math.abs(g),3)+' = '+f(U):'不盈不亏，U_real = 0');
+ var l2=document.createElement('div');
+ l2.textContent='组合改善 + U_real = '+f(im,2)+' + ('+f(U)+') = '+f(gate)+'，'+(sell?'大于':'不大于')+' τ = '+f(tau,2);
+ var l3=document.createElement('div'), v=document.createElement('span');
+ v.className='ag-verdict '+(sell?'sell':'hold'); v.textContent=sell?'卖出':'持有：舍不得割';
+ l3.appendChild(document.createTextNode('判定：')); l3.appendChild(v);
+ if(!sell&&g<0&&r>0&&l>0){
+  var need=(im-tau)/(l*r);
+  var l4=document.createElement('div'); l4.className='ag-note';
+  l4.textContent=need>0?'在当前参数下，浮亏收窄到 '+pct(-need)+' 以内才会卖。':'在当前参数下，即使回本也不会因为这一项卖出。';
+  out.appendChild(l1); out.appendChild(l2); out.appendChild(l3); out.appendChild(l4); return;
+ }
+ out.appendChild(l1); out.appendChild(l2); out.appendChild(l3);
+}
+['ag-c-l','ag-c-r','ag-c-g','ag-c-i','ag-c-t'].forEach(function(id){var e=$(id); if(e) e.addEventListener('input',calc);});
+calc();
+})();
+</script>
+</body></html>

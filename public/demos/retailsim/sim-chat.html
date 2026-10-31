@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>群聊演示 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+.ch-app{display:grid;grid-template-columns:250px minmax(0,1fr) 230px;height:680px;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;background:#0e1621;box-shadow:var(--shadow);margin:14px 0}
+.ch-side{background:#17212b;border-right:1px solid #0b1118;display:flex;flex-direction:column;min-width:0}
+.ch-search{margin:10px;padding:7px 12px;border-radius:999px;background:#242f3d;color:var(--mute);font-size:13px}
+.ch-glist{overflow:auto;flex:1}
+.ch-gi{display:flex;gap:10px;align-items:center;padding:8px 10px;cursor:pointer;border:0;background:none;width:100%;text-align:left;color:var(--ink);font:inherit}
+.ch-gi:hover{background:#202b36}.ch-gi.on{background:#2b5278}
+.ch-av{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;font-size:15px}
+.ch-av.sm{width:30px;height:30px;font-size:12px}
+.ch-gi .t{flex:1;min-width:0}.ch-gi b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-gi small{display:block;color:#8a9aa9;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-gi .r{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:11px;color:#8a9aa9}
+.ch-badge{min-width:20px;padding:0 6px;border-radius:999px;background:#3e9ae0;color:#fff;font-size:11.5px;font-weight:700;line-height:20px;text-align:center}
+.ch-gi.on .ch-badge{display:none}
+.ch-main{display:flex;flex-direction:column;min-width:0;background-color:#0e1621;background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:18px 18px}
+.ch-head{display:flex;gap:10px;align-items:center;padding:8px 14px;background:#17212b;border-bottom:1px solid #0b1118}
+.ch-head b{font-size:15px}.ch-head small{display:block;color:#8a9aa9;font-size:12.5px}
+.ch-head .sp{flex:1}
+.ch-msgs{flex:1;overflow:auto;padding:10px 14px 16px;scroll-behavior:smooth}
+.ch-day{text-align:center;margin:12px 0 6px}
+.ch-day span{display:inline-block;padding:2px 12px;border-radius:999px;background:rgba(0,0,0,.45);color:#d5dde6;font-size:12px}
+.ch-turnsep{text-align:center;color:#6f8396;font-size:11.5px;margin:4px 0}
+.ch-row{display:flex;gap:8px;align-items:flex-end;margin:5px 0;transition:opacity .2s}
+.ch-row.me{flex-direction:row-reverse}
+.ch-row.dim{opacity:.22}
+.ch-row.new .ch-bub{animation:chPop .35s ease}
+@keyframes chPop{from{transform:translateY(8px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+.ch-bub{position:relative;max-width:min(520px,80%);padding:6px 10px 5px;border-radius:12px 12px 12px 4px;background:#182533;color:#e9eef3;cursor:pointer;border:1px solid transparent;min-width:0}
+.ch-row.me .ch-bub{background:#2b5278;border-radius:12px 12px 4px 12px}
+.ch-bub:hover{border-color:rgba(255,255,255,.12)}.ch-bub.sel{border-color:var(--social);box-shadow:0 0 0 2px rgba(244,114,182,.25)}
+.ch-bub .nm{font-size:13px;font-weight:700;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ch-bub .nm em{font-style:normal;font-weight:400;font-size:11px;color:#8a9aa9}
+.ch-role{font-size:10.5px;font-weight:600;padding:0 6px;border-radius:6px;background:rgba(251,191,36,.16);color:var(--market)}
+.ch-txt{font-size:14.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.ch-meta{display:flex;flex-wrap:wrap;gap:4px 6px;justify-content:flex-end;align-items:center;margin-top:3px;font-size:11px;color:#7d8e9e}
+.ch-pt{padding:0 6px;border-radius:5px;background:rgba(255,255,255,.07);color:#aeb9c6}
+.ch-tag{padding:0 6px;border-radius:5px;font-weight:700}
+.ch-tag.rm{background:rgba(248,113,113,.18);color:#fca5a5}.ch-tag.sh{background:rgba(251,146,60,.18);color:#fdba74}
+.ch-st{font-family:var(--mono)}.ch-st.p{color:var(--up)}.ch-st.m{color:var(--down)}
+.ch-hidemeta .ch-pt,.ch-hidemeta .ch-st,.ch-hidemeta .ch-tn{display:none}
+.ch-quote{border-left:3px solid var(--qc,#65aadd);padding:1px 8px;margin:3px 0 4px;background:rgba(255,255,255,.05);border-radius:4px;font-size:12.5px;color:#b8c4cf}
+.ch-quote b{display:block;color:var(--qc,#65aadd);font-size:12px}
+.ch-fwd{font-size:12px;color:#6ab3f3;margin-bottom:2px}
+.ch-news{border-left:3px solid var(--data);background:rgba(34,211,238,.07);padding:4px 8px;border-radius:4px;margin:3px 0;font-size:13px}
+.ch-news b{color:var(--data);font-size:12px;display:block}
+.ch-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 10px;background:#17212b;border-top:1px solid #0b1118}
+.ch-bar button{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid #2f3e4e;background:#202b36;color:#c9d4de;cursor:pointer}
+.ch-bar button.on{background:#3e9ae0;border-color:#3e9ae0;color:#fff}
+.ch-bar button.done{border-color:#3e9ae0}
+.ch-bar .sp{flex:1}
+.ch-bar label{font-size:12.5px;color:#9fb0bf;display:flex;gap:4px;align-items:center}
+.ch-mem{background:#17212b;border-left:1px solid #0b1118;overflow:auto;padding:10px 0;min-width:0}
+.ch-mem h5{margin:4px 14px 8px;font-size:12px;color:#8a9aa9;letter-spacing:.06em}
+.ch-mi{display:flex;gap:8px;align-items:center;padding:6px 12px;width:100%;border:0;background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.ch-mi:hover{background:#202b36}.ch-mi.on{background:#2b5278}
+.ch-mi .t{flex:1;min-width:0}.ch-mi b{font-size:13px;display:block}
+.ch-mi small{display:block;font-size:11.5px;color:#8a9aa9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-svg .fst{cursor:pointer}.ch-svg .fst rect{transition:stroke-width .2s}.ch-svg .fst.on rect{stroke-width:3}
+.ch-dot{width:8px;height:8px;border-radius:50%;background:#4b5966;flex:none}.ch-dot.on{background:#4ade80;box-shadow:0 0 6px #4ade80}
+.ch-note{margin:10px 14px;font-size:11.5px;color:#7d8e9e;line-height:1.55}
+@media(max-width:1100px){.ch-app{grid-template-columns:200px minmax(0,1fr)}.ch-mem{display:none}}
+@media(max-width:700px){.ch-app{grid-template-columns:minmax(0,1fr);height:auto}.ch-side{max-height:180px}.ch-msgs{height:460px;flex:none}}
+.ch-svg{width:100%;height:auto;display:block}
+.ch-svg .gnode{cursor:pointer}.ch-svg .gnode rect{transition:stroke-width .2s,opacity .2s}
+.ch-svg .gnode.on rect{stroke-width:3}
+.ch-svg .ed{transition:opacity .2s}.ch-svg.hl .ed{opacity:.12}.ch-svg.hl .ed.on{opacity:1}
+.ch-svg text{fill:var(--ink);font-size:12px}.ch-svg text.m{fill:var(--mute);font-size:11px}
+.ch-io{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1.1fr) 34px minmax(0,1fr);gap:8px;align-items:stretch;margin-top:14px}
+.ch-io .card{padding:14px 16px}.ch-io h4{margin:0 0 6px;font-size:14px}
+.ch-io ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink2)}.ch-io li{margin:4px 0}
+.ch-io .ch-core{border-color:rgba(244,114,182,.5);background:linear-gradient(160deg,rgba(244,114,182,.13),rgba(167,139,250,.04))}
+.ch-ar{display:flex;align-items:center;justify-content:center;color:var(--social);font-size:20px}
+.ch-pp{display:grid;grid-template-columns:230px minmax(0,1fr);gap:14px;margin-top:12px}
+.ch-pick{display:flex;flex-direction:column;gap:4px;max-height:520px;overflow:auto}
+.ch-pick button{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.ch-pick button.on{border-color:var(--social);background:rgba(244,114,182,.1)}
+.ch-pick button small{color:var(--mute);font-size:11.5px;display:block}
+.ch-pstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0}
+.ch-plist{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto;margin-top:8px}
+.ch-pmsg{padding:7px 10px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-size:13.5px}
+.ch-pmsg .h{font-size:11.5px;color:var(--mute);display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px}
+.ch-ptype{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.ch-sim{display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start}
+.ch-sim .ctls{display:flex;flex-direction:column;gap:10px}
+.ch-rounds{display:flex;flex-direction:column;gap:6px}
+.ch-rd{display:flex;gap:8px;align-items:center;padding:6px 10px;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-size:13px}
+.ch-rd .k{font:700 11px var(--mono);color:var(--social);min-width:52px}
+.ch-rd.skip{opacity:.5}
+.ch-seq{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.ch-seq span{padding:2px 8px;border-radius:999px;border:1px solid var(--line2);font-size:12px}
+.ch-seq span.act{border-color:var(--social);color:var(--social)}
+.ch-trust{display:grid;grid-template-columns:110px minmax(0,1fr) 54px;gap:8px;align-items:center;font-size:13px;margin:5px 0}
+.ch-trust .bar{height:10px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}
+.ch-trust .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--social),var(--orch));transition:width .5s}
+.ch-trust .d{font-family:var(--mono);font-size:12px;text-align:right}
+.ch-json{max-height:340px;overflow:auto}
+@media(max-width:860px){.ch-io,.ch-pp,.ch-sim{grid-template-columns:minmax(0,1fr)}.ch-ar{transform:rotate(90deg);height:24px}.ch-pstats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+  <div class="eyebrow"><i></i>演示 · 熟人群聊</div>
+  <h1>打开四个群，看<span class="grad">每个人说了什么</span></h1>
+  <p class="lead">一张示例事件卡（甲科技签下大合同，化名）在收盘后发布。家庭群、同事群、老股民群和一个付费荐股群从收盘后聊到次日晚间：有人转发新闻，有人喊单，有人把付费群的"内部消息"转进老股民群，最后被官方辟谣。点开任意一个人，看这个人在所有群里说过的话。</p>
+  <div class="meta">
+    <span class="chip data"><i></i>全部为示例数据 · 模拟生成</span>
+    <span class="chip social"><i></i>§7.1–7.5 渠道、网络与传播</span>
+    <span class="chip warn"><i></i>§7.1 群聊阶段内接话</span>
+    <span class="chip out"><i></i>§10.3 帖子表 group_id / turn</span>
+    <span class="chip"><i></i>人物均为化名</span>
+  </div>
+</header>
+
+<section id="s1" class="reveal"><h2><span class="num">01</span>群聊在系统里的位置</h2><p class="sub">熟人群聊是三类渠道之一，人少、信任高、传闻走得快。</p>
+<p>设计文档把社交层分成论坛（股吧、雪球风格）、熟人群聊、Tier-A 大V 与推荐流<span class="ref">§3.2</span>。熟人群聊对应微信群、QQ 群，5–50 人一群，同质性强，信任高，传闻扩散快，成员以中老年和亲友、同事圈为主<span class="ref">§7.1</span>。它在 Phase 1 MVP 范围内<span class="ref">§15.1</span>。</p>
+<p>群的生成方式：按职业、地域、年龄做随机块模型分配，每人 0–5 个群；家庭群、同事群、"老股民群"、付费荐股群的初始信任度不同<span class="ref">§7.2</span>。边权就是信任度，按"跟着他赚了/亏了"更新；每 20 个交易日按信任重连，只在持续运行和长于重连周期的情景中启用，短情景网络固定<span class="ref">§7.2</span>，见第 05 节。群内只有智能体，不模拟不炒股的家人同事<span class="ref">§7.1</span>。文档没有给出四类群的初始信任数值，下图只画相对高低。</p>
+<div class="card" style="padding:12px 14px">
+<svg class="ch-svg" id="chNet" viewBox="0 0 900 330" role="img" aria-label="四个示例群与成员关系图">
+<defs>
+<linearGradient id="chG1" x1="0" x2="1"><stop offset="0" stop-color="#f472b6"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+<linearGradient id="chG2" x1="0" x2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f87171"/></linearGradient>
+<marker id="chArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#f87171"/></marker>
+</defs>
+<g id="chNetEdges"></g>
+<g id="chNetGroups"></g>
+<g id="chNetPeople"></g>
+<path class="flowline" d="M580 250 C 540 285, 520 285, 502 252" fill="none" stroke="#f87171" stroke-width="2" marker-end="url(#chArr)"/>
+<path class="flowline" d="M580 250 C 480 312, 290 312, 207 252" fill="none" stroke="#f87171" stroke-width="2" marker-end="url(#chArr)"/>
+<text x="400" y="322" text-anchor="middle" class="m">传闻转发：付费群 → 老股民群（老马转）/ 家庭群（阿强转）</text>
+</svg>
+</div>
+<p class="ch-note" style="margin:6px 0 0">点击一个群，高亮它的成员；同一个人可以在多个群里（王阿姨同在家庭群和老股民群，小林同在同事群和付费群）。示例数据。</p>
+<div class="grid g3" style="margin-top:12px">
+<div class="card"><h4 style="margin:0 0 6px">为什么单列一个渠道</h4><p style="margin:0;font-size:13.5px;color:var(--ink2)">设计文档把熟人群聊列为单独渠道：5–50 人小群，同质性强、信任高、传闻扩散快，主要人群是中老年与亲友/同事圈<span class="ref">§7.1</span>。这类消息不在公开论坛里留痕，不建模这一层，"转发一篇文章就跟着买"的路径就缺了（本页解读）。</p></div>
+<div class="card"><h4 style="margin:0 0 6px">它防住什么</h4><p style="margin:0;font-size:13.5px;color:var(--ink2)">信任按真实盈亏更新<span class="ref">§7.2</span>，避免"群里谁说都信"的固定权重；帖子带"传闻/喊单"分类标签 rumor_shill_tag，帖子表保留这类内容，下游可按标签过滤<span class="ref">§16.2</span>。</p></div>
+<div class="card"><h4 style="margin:0 0 6px">证据有多强</h4><p style="margin:0;font-size:13.5px;color:var(--ink2)">群聊没有可对照的真实文本，V2 只能人工盲评，记为弱证据<span class="ref">§7.1</span><span class="ref">§12.1</span>。</p></div>
+</div>
+</section>
+
+
+<section id="s2" class="reveal"><h2><span class="num">02</span>群聊室</h2><p class="sub">左边选群，中间看消息，右边看成员。底部按时段推进，每条气泡都能点开看结构化字段。</p>
+<div class="callout info"><b class="t">怎么看</b>每条消息带三类附加信息：帖子类型（七类<span class="ref">§7.4</span>）、立场 stance −2…2 与情绪<span class="ref">§6.2</span>、群内轮次 turn<span class="ref">§7.1</span><span class="ref">§10.3</span>。帖子带"传闻/喊单"分类标签 rumor_shill_tag；L4 发布者的每条帖强制带"传闻"标签<span class="ref">§16.2</span><span class="ref">§5.6</span>。点击气泡会在下方显示这条消息对应的帖子表行；点击右侧成员，只看这个人的发言，其他人变淡。</div>
+<div class="ch-app" id="chApp">
+  <div class="ch-side">
+    <div class="ch-search">🔍 搜索（示例）</div>
+    <div class="ch-glist" id="chGlist"></div>
+  </div>
+  <div class="ch-main">
+    <div class="ch-head" id="chHead"></div>
+    <div class="ch-msgs" id="chMsgs"></div>
+    <div class="ch-bar" id="chBar"></div>
+  </div>
+  <div class="ch-mem" id="chMem"></div>
+</div>
+<div class="card" id="chDetail" style="padding:12px 14px">
+  <b style="font-size:13px;color:var(--mute)">选中消息的结构化字段</b>
+  <pre class="code" data-lang="json" id="chDetailPre" style="margin:8px 0 0">点击任意一条气泡</pre>
+</div>
+<p class="ch-note" style="margin:8px 0 0">全部为示例数据，模拟生成；人物、群名、公司均为化名。气泡下方的灰字依次是：帖子类型、立场、情绪最高项、轮次。</p>
+</section>
+
+<section id="s3" class="reveal"><h2><span class="num">03</span>按人看：一个人在所有群里说了什么</h2><p class="sub">选一个人，把这个人在四个群里的发言按时间排开，并统计帖子类型与立场变化。</p>
+<p>同一个智能体在不同群里说话的口吻可以不同，但立场与行为应当前后一致。下面的立场曲线把每个时段的发言立场和实际动作并排画出：老马在群里说"满仓干"，实际只买了半仓；老周、小美前一晚打算买，次日盘前改为观望（隔夜变卦）。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §6.1，来自架构讨论 A6）</b>说话与决策分两次 LLM 调用：第 1 次只出结构化的信念与意向，内核做约束与成交判定之后，第 2 次（发言）才写帖子，并且读得到自己的意向与实际成交；帖子与实际所为之差记为"言行不一"<span class="ref">§6.1</span>。前一晚的明日打算与次日盘前实际意向之差记为"隔夜变卦"，也是言行不一的一种<span class="ref">§3.4</span>。</div>
+<div class="ch-pp">
+  <div class="ch-pick" id="chPick"></div>
+  <div>
+    <div id="chPHead"></div>
+    <div class="ch-pstats" id="chPStats"></div>
+    <div class="ch-ptype" id="chPType"></div>
+    <div class="card" style="padding:10px 12px">
+      <b style="font-size:12.5px;color:var(--mute)">立场 stance 随时段变化（−2 强烈看空 … +2 强烈看多）<span class="ref">§6.2</span></b>
+      <svg class="ch-svg" id="chPSvg" viewBox="0 0 640 180" role="img" aria-label="立场折线图"></svg>
+    </div>
+    <div class="ch-plist" id="chPList"></div>
+  </div>
+</div>
+<p class="ch-note" style="margin:8px 0 0">"实际动作"一栏来自示例决策表（意向与成交），与发言并排是为了看言行是否一致。示例数据。</p>
+</section>
+
+<section id="s4" class="reveal"><h2><span class="num">04</span>群聊怎么生成：阶段内最多 M 轮</h2><p class="sub">一般帖子下一阶段才可见；群聊是唯一的例外，只限该群、只走发言调用。</p>
+<p>按 §9.1，同一阶段被激活的智能体并发运行，本阶段的帖子到下一阶段才可见<span class="ref">§9.1</span>。这样做的好处是结果与运行顺序无关，但群聊会变成"每人各说一句、没人接话"。所以 §9.1 留了唯一的例外：同群在阶段内顺序接话，只走发言调用，不影响当阶段交易<span class="ref">§9.1</span><span class="ref">§7.1</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §7.1、§9.1，来自架构讨论 A9）</b>某群当阶段有 ≥ 2 个被激活成员且有人发言时，在阶段内顺序进行最多 M 轮（如 4 轮）短对话，每轮由一个已激活成员接话，顺序由种子决定。接话只走第 2 次调用（发言），不重做第 1 次调用；当阶段交易决定不受群聊影响，影响留到下一次激活，保证结果与并发顺序无关。群内只有智能体，不模拟不炒股的家人同事；群主可以是 L3 发布者；付费荐股群由 L4 喊单号当群主，按其准确率喊单，跟单亏钱写入"被荐股群坑"记忆，并按 §7.2 扣信任。群聊 token 计入 social 成本，上限由 M 与每晚活跃群数控制<span class="ref">§7.1</span><span class="ref">§14.2</span>。</div>
+<div class="card" style="padding:12px 14px">
+<svg class="ch-svg" id="chFlow" viewBox="0 0 900 250" role="img" aria-label="群聊生成流程">
+<defs>
+<linearGradient id="chG3" x1="0" x2="1"><stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#f472b6"/></linearGradient>
+<marker id="chArr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker>
+</defs>
+<g class="fst" data-k="act"><rect x="10" y="30" width="150" height="66" rx="12" fill="rgba(56,189,248,.1)" stroke="#38bdf8"/><text x="85" y="58" text-anchor="middle">阶段开始</text><text x="85" y="78" text-anchor="middle" class="m">按 ν 抽中 / 事件 / 强制</text></g>
+<g class="fst" data-k="c1"><rect x="200" y="30" width="160" height="66" rx="12" fill="rgba(192,132,252,.1)" stroke="#c084fc"/><text x="280" y="58" text-anchor="middle">第 1 次调用（并发）</text><text x="280" y="78" text-anchor="middle" class="m">信念 / 意向 / 明日打算</text></g>
+<g class="fst" data-k="exec"><rect x="400" y="30" width="150" height="66" rx="12" fill="rgba(52,211,153,.1)" stroke="#34d399"/><text x="475" y="58" text-anchor="middle">内核与成交</text><text x="475" y="78" text-anchor="middle" class="m">群聊不改这一步</text></g>
+<g class="fst" data-k="c2"><rect x="590" y="30" width="150" height="66" rx="12" fill="rgba(192,132,252,.1)" stroke="#c084fc"/><text x="665" y="58" text-anchor="middle">第 2 次调用</text><text x="665" y="78" text-anchor="middle" class="m">首帖 turn=0</text></g>
+<g class="fst" data-k="gate"><rect x="590" y="150" width="150" height="66" rx="12" fill="rgba(251,191,36,.1)" stroke="#fbbf24"/><text x="665" y="178" text-anchor="middle">群内 ≥2 人激活?</text><text x="665" y="198" text-anchor="middle" class="m">且有人发言</text></g>
+<g class="fst" data-k="loop"><rect x="350" y="150" width="190" height="66" rx="12" fill="url(#chG3)" fill-opacity=".18" stroke="#f472b6"/><text x="445" y="178" text-anchor="middle">接话 turn=1…M</text><text x="445" y="198" text-anchor="middle" class="m">按种子轮流，只走发言调用</text></g>
+<g class="fst" data-k="next"><rect x="120" y="150" width="180" height="66" rx="12" fill="rgba(148,163,184,.08)" stroke="#94a3b8"/><text x="210" y="178" text-anchor="middle">下一次激活</text><text x="210" y="198" text-anchor="middle" class="m">群聊内容才进入决策</text></g>
+<path d="M160 63H198M360 63H398M550 63H588" stroke="#94a3b8" stroke-width="2" marker-end="url(#chArr2)"/>
+<path d="M665 96V148" stroke="#94a3b8" stroke-width="2" marker-end="url(#chArr2)"/>
+<path class="flowline" d="M590 183H542" stroke="#f472b6" stroke-width="2" marker-end="url(#chArr2)"/>
+<path class="flowline" d="M350 183H302" stroke="#f472b6" stroke-width="2" marker-end="url(#chArr2)"/>
+<path d="M445 216 C 445 245, 520 245, 520 218" fill="none" stroke="#f472b6" stroke-width="1.5" stroke-dasharray="3 3"/>
+<text x="560" y="243" class="m">最多 M 轮</text>
+</svg>
+<p class="ch-note" id="chFlowNote" style="margin:4px 0 0">悬停或点击一个方框，查看这一步的说明。</p>
+</div>
+<h3>轮次模拟器</h3>
+<p>调整被激活人数与 M，换一个种子，看谁在第几轮接话。规则照 §7.1：首帖之后每轮一个已激活成员接话<span class="ref">§7.1</span>；示意中同一人不连续说两轮，这一点文档没写，是本页的假设。</p>
+<div class="card ch-sim">
+  <div class="ctls">
+    <label class="ctl">群<select id="chSimG"></select></label>
+    <label class="ctl">被激活成员数 <b id="chSimNv"></b><input type="range" id="chSimN" min="1" max="5" value="3"></label>
+    <label class="ctl">最多轮数 M <b id="chSimMv"></b><input type="range" id="chSimM" min="0" max="8" value="4"></label>
+    <label class="ctl">种子 <b id="chSimSv"></b><input type="range" id="chSimS" min="1" max="99" value="7"></label>
+    <button class="btn pri" id="chSimGo" type="button">换一个种子</button>
+  </div>
+  <div>
+    <div class="ch-seq" id="chSimSeq"></div>
+    <div class="ch-rounds" id="chSimOut"></div>
+    <p class="ch-note" id="chSimCost" style="margin:8px 0 0"></p>
+  </div>
+</div>
+</section>
+
+<section id="s5" class="reveal"><h2><span class="num">05</span>一条传闻的来回：喊单、转发、辟谣、扣信任</h2><p class="sub">付费群里的"内部消息"被转进两个群，次日晚间官方澄清，转发人的信任被扣。</p>
+<p>传闻有两个来源：发布者层 L4 与低可信度事件卡；注入群聊或论坛后，智能体按轻信度决定是否相信、转发；之后可由官方渠道（L0）证实或辟谣（关联事件卡），用来研究"传闻—辟谣"周期<span class="ref">§7.4</span>。模拟传闻只存在于沙盒内，每条带"传闻"标签<span class="ref">§16.2</span>。</p>
+<div class="grid g2">
+<div class="timeline" id="chTl"></div>
+<div class="card">
+  <h4 style="margin:0 0 4px">信任边权（示意数值）</h4>
+  <p class="ch-note" style="margin:0 0 8px">点击左侧时间线的一步，看信任怎样变化。初始值与步长都是本页假设：文档只规定四类群初始信任不同<span class="ref">§7.2</span>，步长为人设参数、无真实数据可校准，报告中标为假设<span class="ref">§7.2</span>。</p>
+  <div id="chTrust"></div>
+  <div class="callout decide" style="margin-top:10px"><b class="t">已定（v0.3 §7.2，来自架构讨论 A9）</b>归因：<code>DecisionIntent.source_post_ids</code> 最多记 2 条影响决定的帖子<span class="ref">§6.3</span>，LLM 自报的归因照用不校正。更新时点：该笔持仓平仓时，或买入满 20 个交易日时按市值，用该笔收益的符号更新对所引作者的信任；群聊转来的消息同样更新对群与转发人的信任；被辟谣的传闻对转发人扣信任，不看盈亏。付费荐股群跟单亏钱写入"被荐股群坑"记忆并扣信任<span class="ref">§7.1</span>。重连：每 20 个交易日按信任重连，取关信任低于阈值的大 V，关注近期信息流里晒单赚钱的作者，只在持续运行和长于重连周期的情景中启用，短情景网络固定。大 V 粉丝数随战绩的变化作为描述性产出，持续运行中每 20 个交易日存一次信任网络快照<span class="ref">§7.2</span><span class="ref">§10.3</span>。</div>
+</div>
+</div>
+</section>
+
+<section id="s6" class="reveal"><h2><span class="num">06</span>落到表里是什么样</h2><p class="sub">群聊消息进帖子表；§10.3 的帖子表带 group_id 与 turn。</p>
+<p>帖子表字段：<code>post_id, activation_id, persona_id|publisher_id, event_id, run_id, sim_time, channel, group_id, turn, reply_to, text, asset, stance, emotion, post_type, rumor_shill_tag, source_event_ids, simulated</code><span class="ref">§10.3</span>。<code>simulated</code> 恒为真，正文另带隐式标识；帖子表只在内部使用，对外样例须显式标"模拟生成"<span class="ref">§10.3</span><span class="ref">§16.2</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §10.3，来自架构讨论 A11）</b>帖子表带 <code>group_id</code>、<code>turn</code>（群聊）、<code>source_event_ids</code>（L3 发布者帖须填依据的事件）与 <code>activation_id</code>。激活表是各表的行级元数据来源，每个智能体每个激活点一行，被抽中但缺席的也记；<code>phase</code> 取值盘前 / 盘中 / 收盘后 / 晚间，<code>trigger</code> 取值 ν 抽中 / 事件 / 强制 / 群聊，<code>absent_reason</code> 取值解析失败 / 拒答 / 超时，另记实际信息流长度 <code>feed_len</code><span class="ref">§10.3</span><span class="ref">§7.3</span>。</div>
+<div class="tabs">
+  <div class="tab-bar"><button data-t="tb">帖子表预览</button><button data-t="js">选中行 JSON</button><button data-t="ac">激活表</button></div>
+  <div class="tab-pane" data-t="tb">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0">
+      <label class="ctl" style="flex-direction:row;align-items:center">群<select id="chTbG"></select></label>
+      <label class="ctl" style="flex-direction:row;align-items:center"><input type="checkbox" id="chTbR"> 只看带传闻/喊单标签</label>
+      <span class="ch-note" id="chTbN" style="margin:0"></span>
+    </div>
+    <div class="tbl-wrap"><table class="tbl" id="chTb"><thead><tr><th>post_id</th><th>sim_time</th><th>group_id</th><th class="n">turn</th><th>作者</th><th>post_type</th><th class="n">stance</th><th>rumor_shill_tag</th><th>reply_to</th><th>text</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="tab-pane" data-t="js"><pre class="code ch-json" data-lang="json" id="chJson">点击上表任意一行</pre></div>
+  <div class="tab-pane" data-t="ac">
+    <div class="tbl-wrap"><table class="tbl" id="chAc"><thead><tr><th>sim_time</th><th>phase</th><th>persona</th><th>trigger</th><th>status</th><th>说明</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+<p class="ch-note" style="margin:6px 0 0">股海老船长（L3）、牛哥内参（L4）是发布者，不进入激活表（本页假设）。</p>
+<p class="ch-note" style="margin:6px 0 0">示例数据，模拟生成。字段名取自设计文档 §10.3；取值格式（如 id 的写法）是本页示意。</p>
+</section>
+
+<section id="s7" class="reveal"><h2><span class="num">07</span>接口：群聊用到什么、产出什么</h2><p class="sub">群聊归 social 模块管分发与轮次，写什么由 agents 的发言调用决定。</p>
+<div class="ch-io">
+<div class="card"><h4>输入</h4><ul>
+<li><b>population</b>：<code>PersonaCard</code> 的 <code>credulity</code>（轻信度）与 <code>voice_style</code>（说话风格簇）<span class="ref">§4.1</span></li>
+<li><b>events</b>：<code>EventCard</code>，含辟谣用的关联事件卡（<code>parent_id</code>）<span class="ref">§5.2</span></li>
+<li><b>social 发布者</b>：L3 群主、L4 喊单号的 <code>Post</code><span class="ref">§5.6</span></li>
+<li><b>orchestrator</b>：本阶段被激活的成员与 <code>trigger</code>，种子<span class="ref">§9.1</span><span class="ref">§10.3</span></li>
+<li><b>agents</b>：第 2 次调用所需的当日意向与成交<span class="ref">§6.1</span></li>
+</ul></div>
+<div class="ch-ar">→</div>
+<div class="card ch-core"><h4>social · 熟人群聊</h4><ul>
+<li>随机块模型分群，每人 0–5 个群<span class="ref">§7.2</span></li>
+<li>首帖 + 最多 M 轮接话，顺序由种子定<span class="ref">§7.1</span></li>
+<li>转发、传闻注入、打"传闻/喊单"标签<span class="ref">§7.4</span></li>
+<li>按盈亏与辟谣更新信任边权<span class="ref">§7.2</span></li>
+</ul></div>
+<div class="ch-ar">→</div>
+<div class="card"><h4>输出</h4><ul>
+<li><b>outputs</b>：帖子表行，<code>channel</code>=群聊，带 <code>group_id</code>、<code>turn</code>、<code>reply_to</code><span class="ref">§10.3</span></li>
+<li><b>agents</b>：下一次激活信息流里的 <code>FeedItem</code><span class="ref">§3.3</span></li>
+<li><b>agents 记忆</b>：如"被荐股群坑"<span class="ref">§7.1</span></li>
+<li><b>outputs</b>：信任网络快照，持续运行中每 20 个交易日一次<span class="ref">§10.3</span><span class="ref">§7.2</span></li>
+<li>级联指标：24 小时扩散深度与广度<span class="ref">§7.5</span></li>
+</ul></div>
+</div>
+<pre class="code" data-lang="python" style="margin-top:14px"><span class="c"># 示意，未实现：一次群聊阶段的轮次（§7.1）</span>
+<span class="k">def</span> <span class="f">run_group_phase</span>(group, activated, seed, M):
+    members = [a <span class="k">for</span> a <span class="k">in</span> activated <span class="k">if</span> a.persona_id <span class="k">in</span> group.members]
+    openers = [a <span class="k">for</span> a <span class="k">in</span> members <span class="k">if</span> a.belief.want_to_post]
+    <span class="k">if</span> <span class="f">len</span>(members) <span class="p">&lt;</span> <span class="n">2</span> <span class="k">or not</span> openers:
+        <span class="k">return</span> [a.<span class="f">speak</span>(group) <span class="k">for</span> a <span class="k">in</span> openers]   <span class="c"># 无接话，照常下一阶段可见</span>
+    posts = [a.<span class="f">speak</span>(group, turn=<span class="n">0</span>) <span class="k">for</span> a <span class="k">in</span> openers]
+    order = <span class="f">seeded_order</span>(members, seed)               <span class="c"># 顺序由种子决定</span>
+    <span class="k">for</span> turn <span class="k">in</span> <span class="f">range</span>(<span class="n">1</span>, M <span class="p">+</span> <span class="n">1</span>):
+        who = order[(turn <span class="p">-</span> <span class="n">1</span>) <span class="p">%</span> <span class="f">len</span>(order)]
+        posts.<span class="f">append</span>(who.<span class="f">speak</span>(group, turn=turn, thread=posts))  <span class="c"># 只走第 2 次调用</span>
+    <span class="k">return</span> posts                                       <span class="c"># 本阶段交易不受影响</span></pre>
+</section>
+
+<section id="s8" class="reveal"><h2><span class="num">08</span>相关页面</h2><p class="sub">群聊牵涉的模块与流程。</p>
+<div class="grid g3">
+<a class="card hover" href="mod-social.html"><b>social</b><p class="ch-note" style="margin:4px 0 0">渠道、网络生成、推荐流、传闻；群聊所属模块</p></a>
+<a class="card hover" href="mod-agents.html"><b>agents</b><p class="ch-note" style="margin:4px 0 0">两次调用：先决策、后发言（§6.1）</p></a>
+<a class="card hover" href="mod-outputs.html"><b>outputs</b><p class="ch-note" style="margin:4px 0 0">帖子表、激活表、信任网络快照（§10.3）</p></a>
+<a class="card hover" href="mod-orchestrator.html"><b>orchestrator</b><p class="ch-note" style="margin:4px 0 0">激活规则、阶段并发与可见性（§9.1）</p></a>
+<a class="card hover" href="flow-day.html"><b>一个交易日</b><p class="ch-note" style="margin:4px 0 0">盘前、盘中、收盘后与晚间各时段</p></a>
+<a class="card hover" href="flow-journey.html"><b>一条新闻的旅程</b><p class="ch-note" style="margin:4px 0 0">快讯如何变成帖子、态度与成交</p></a>
+<a class="card hover" href="sim-publishers.html"><b>发布者演示</b><p class="ch-note" style="margin:4px 0 0">L3 群主、L4 喊单号怎么发帖</p></a>
+<a class="card hover" href="sim-personas.html"><b>散户决策演示</b><p class="ch-note" style="margin:4px 0 0">小林、老周、王阿姨等人设的决策</p></a>
+<a class="card hover" href="mod-validation.html"><b>validation</b><p class="ch-note" style="margin:4px 0 0">V2 对群聊只能人工盲评</p></a>
+</div>
+</section>
+
+<section id="s9" class="reveal"><h2><span class="num">09</span>开放问题与待定</h2><p class="sub">群聊这一块里还没定、或者没有数据可校准的地方。</p>
+<div class="grid g2">
+<div class="callout todo"><b class="t">验收只有弱证据</b>熟人群聊拿不到真实聊天记录做对照，V2 只做人工盲评，记为弱证据<span class="ref">§7.1</span><span class="ref">§12.1</span>。本页的对话是否"像"真实群聊，目前没有可量化的检验。</div>
+<div class="callout todo"><b class="t">M 取多少</b>设计文档只给了"如 4 轮"<span class="ref">§7.1</span>。M 同时决定对话深度和 token 开销；成本估算把群聊接话列为主循环之外单独计量的项<span class="ref">§14.2</span>，M 的取值需要按每晚活跃群数算一遍再定。</div>
+<div class="callout todo"><b class="t">信任初值、步长与取关阈值</b>设计文档只说四类群的初始信任度不同<span class="ref">§7.2</span>，具体数值没有给出；盈亏更新步长是人设参数，无真实数据可校准，标为假设；重连时的取关阈值也没有数值<span class="ref">§7.2</span>。本页的信任条数字是示例数据。</div>
+<div class="callout todo"><b class="t">分群参数</b>随机块模型按职业、地域、年龄分块，每人 0–5 个群<span class="ref">§7.2</span>；块内外连边概率、各类群的规模分布尚未给出。</div>
+<div class="callout todo"><b class="t">接话顺序的细节</b>§7.1 只规定"每轮由一个已激活成员接话，顺序由种子决定"<span class="ref">§7.1</span>。本页模拟器另加了"同一人不连续两轮"，这是本页的假设，是否采纳待定。</div>
+<div class="callout todo"><b class="t">trigger=群聊 的含义</b>§10.3 的 trigger 枚举含"群聊"<span class="ref">§10.3</span>，但没说明群聊接话是另记一行激活，还是附在当次激活上。本页把接话另记一行（trigger＝群聊，只走第 2 次调用），activation_id 带群与轮次；收盘后"当日交易者"必激活<span class="ref">§3.4</span>，在 trigger 枚举里没有对应值，本页标"（待定）"。</div>
+<div class="callout todo"><b class="t">群帖的立场与情绪</b>接话只走第 2 次调用，帖子表里的 <code>stance</code>、<code>emotion</code> 是取当次结构化输出，还是对接话文本另行标注，尚未说明。本页取前者。</div>
+<div class="callout warn"><b class="t">内容留在沙盒</b>L4 喊单与传闻帖每条带"传闻"标签，只在沙盒内运行，不对外发布<span class="ref">§16.2</span>。本页所有对话均为模拟生成的示例数据，股票名为化名。</div>
+</div>
+</section>
+
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function () {
+// ===== 示例数据（模拟生成，人物、群、公司均为化名） =====
+const $ = (s, r) => (r || document).querySelector(s);
+const el = (t, c, txt) => { const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; };
+const SVGNS = 'http://www.w3.org/2000/svg';
+const sv = (t, a) => { const e = document.createElementNS(SVGNS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+// id: [名字, 头像字, 颜色, 一句话, 角色]  角色 r=散户智能体 L3=群主 L4=喊单号
+const P = {
+  wang: ['王阿姨', '王', '#e8833a', '62 岁退休教师，拿银行股和理财，看长线', 'r'],
+  chen: ['小陈', '陈', '#5aa5e6', '29 岁设计师，王阿姨的女儿，主要买基金', 'r'],
+  wangshu: ['王叔', '叔', '#c75b5b', '58 岁个体户，爱听消息，常开盘追', 'r'],
+  aqiang: ['阿强', '强', '#d4a72c', '35 岁销售，付费群会员，爱往家里群转消息', 'r'],
+  eryi: ['二姨', '姨', '#b77dd6', '55 岁，刚开户，定期到期想试试', 'r'],
+  lin: ['小林', '林', '#e05d9a', '2001 年生，打板短线，本金 6 万', 'r'],
+  ajie: ['阿杰', '杰', '#3fb68b', '31 岁程序员，常转雪球大V的帖子', 'r'],
+  xiaomei: ['小美', '美', '#f08fb0', '26 岁运营，只定投过基金', 'r'],
+  daliu: ['大刘', '刘', '#6f8bd6', '40 岁财务，做过几年波段，谨慎', 'r'],
+  zhou: ['老周', '周', '#8d99a6', '2015 年加杠杆被套，至今怕追高', 'r'],
+  laoma: ['老马', '马', '#c9824a', '60 岁退休工人，付费群会员，敢满仓', 'r'],
+  lige: ['李哥', '李', '#4fa3a0', '47 岁中层，习惯挂低价单等回踩', 'r'],
+  cz: ['股海老船长', '船', '#f59e0b', 'L3 发布者，老股民群群主，点评须标依据事件', 'L3'],
+  nb: ['牛哥内参', '牛', '#ef4444', 'L4 喊单号，付费群群主，按其准确率喊单', 'L4'],
+};
+// [id, 群名, 头像字, 颜色, 群主, 成员, 类型说明]
+const G = [
+  ['g_fam_017', '王家一家人', '家', '#e8833a', null, ['wang', 'chen', 'wangshu', 'aqiang', 'eryi'], '家庭群'],
+  ['g_col_042', '设计部摸鱼小分队', '同', '#3fb68b', null, ['lin', 'ajie', 'xiaomei', 'daliu'], '同事群'],
+  ['g_old_008', '老股民交流群', '老', '#f59e0b', 'cz', ['zhou', 'wang', 'laoma', 'lige'], '老股民群'],
+  ['g_vip_003', '金牛VIP内参群', '金', '#ef4444', 'nb', ['lin', 'laoma', 'aqiang'], '付费荐股群'],
+];
+const GI = {}; G.forEach(g => { GI[g[0]] = g; });
+// 时段：T-1 = 03-16，T = 03-17（示例日期）
+const PH = [
+  { k: 0, d: '2026-03-16', lab: 'T-1 收盘后', ph: '收盘后', note: '公告 ev_0417 收盘后发布；收盘后激活只出信念与"明日打算"，不下单（§3.4）' },
+  { k: 1, d: '2026-03-16', lab: 'T-1 晚间', ph: '晚间', note: '群聊发酵（§3.4）；付费群收盘后放出的"内部消息"被转进两个群' },
+  { k: 2, d: '2026-03-17', lab: 'T 盘前', ph: '盘前', note: '打算为买或卖的人强制激活，只有盘前激活下单（§3.4）；群聊不改本阶段交易（§7.1）' },
+  { k: 3, d: '2026-03-17', lab: 'T 收盘后', ph: '收盘后', note: '甲科技开 10.62、高 10.95、低 10.12、收 10.18（示例）；晒单、吐槽、写入记忆' },
+  { k: 4, d: '2026-03-17', lab: 'T 晚间', ph: '晚间', note: 'L0 澄清 ev_0419（parent_id = ev_0417）；被辟谣的传闻对转发人扣信任（§7.2）' },
+];
+const TYPES = ['观点', '晒单', '求助', '吐槽', '传闻', '喊单', '政策解读'];
+const EMO = ['fear', 'greed', 'regret', 'fomo'], EMOCN = { fear: '恐惧', greed: '贪婪', regret: '后悔', fomo: 'FOMO' };
+const NEWS = {
+  ev_0417: ['甲科技：关于签订重大合同的公告', 'L0 · 公司公告', '合同金额约为公司上一年度营收的 30%，分期执行（示例）'],
+  ev_0419: ['甲科技：澄清公告', 'L0 · 公司公告 · parent_id = ev_0417', '除已披露合同外，公司不存在应披露而未披露的其他订单（示例）'],
+};
+const FWD = { nb: '金牛VIP内参群 · 牛哥内参', laok: '雪球 · 老K（Tier-A 大V，非群成员）' };
+// 消息：[post_id, 群, 时段, 时刻, 轮次, 作者, post_type, stance(-2..2), 情绪"fgrm"(各 0–3), 正文, 可选{r 回复, f 转发来源, tag rm传闻/sh喊单, ev 事件, n 新闻卡}]
+const GK = { fam: 'g_fam_017', col: 'g_col_042', old: 'g_old_008', vip: 'g_vip_003' };
+const MR = [
+  // 家庭群
+  ['f1', 'fam', 0, '16:40', 0, 'wang', '观点', 1, '0100', '刚看到新闻，甲科技签了个大合同，咱家谁买了？', { n: 'ev_0417', ev: ['ev_0417'] }],
+  ['f2', 'fam', 0, '16:52', 1, 'chen', '观点', 0, '1000', '妈，合同是分几年确认收入的，明天别追高。', { r: 'f1', ev: ['ev_0417'] }],
+  ['f3', 'fam', 0, '17:05', 2, 'wangshu', '观点', 2, '0301', '这么大的单子，明天开盘就进一点。', { ev: ['ev_0417'] }],
+  ['f4', 'fam', 0, '17:20', 3, 'eryi', '求助', 1, '1102', '我那三万定期刚到期，能不能买点这个？', {}],
+  ['f5', 'fam', 0, '17:31', 4, 'chen', '观点', 0, '1000', '二姨，第一次买股票别全拿去，先少买点试试。', { r: 'f4' }],
+  ['f6', 'fam', 1, '21:12', 0, 'aqiang', '传闻', 2, '0302', '内部消息：还有第二笔订单，明天至少两个板。别外传！', { f: 'nb', tag: 'rm sh' }],
+  ['f7', 'fam', 1, '21:18', 1, 'wangshu', '观点', 2, '0303', '阿强靠谱！那我明天多买点。', { r: 'f6' }],
+  ['f8', 'fam', 1, '21:26', 2, 'wang', '观点', 0, '1000', '付费群里的话我不太信，有公告吗？', { r: 'f6' }],
+  ['f9', 'fam', 1, '21:40', 3, 'eryi', '求助', 1, '1103', '那我买一万块行不行？怎么挂单啊', {}],
+  ['f10', 'fam', 2, '08:51', 0, 'wangshu', '观点', 2, '0202', '挂了开盘价买 2000 股，等开盘。', {}],
+  ['f11', 'fam', 2, '08:58', 1, 'eryi', '观点', 1, '1101', '我听小陈的，挂了个低价单等回落。', {}],
+  ['f12', 'fam', 2, '09:03', 2, 'wang', '观点', 0, '0000', '我不动，你们悠着点。', {}],
+  ['f13', 'fam', 3, '15:20', 0, 'wangshu', '吐槽', -1, '2030', '10.62 进的，冲到 10.9 又砸下来，收 10.18。', {}],
+  ['f14', 'fam', 3, '15:34', 1, 'eryi', '观点', 0, '1000', '我的低价单没成交，还好还好。', {}],
+  ['f15', 'fam', 3, '15:41', 2, 'aqiang', '观点', 1, '1100', '洗盘而已，第二笔订单还没出来呢。', {}],
+  ['f16', 'fam', 3, '15:55', 3, 'chen', '观点', -1, '0000', '第二笔订单没人说得出出处，公告里也没有。', { r: 'f15' }],
+  ['f17', 'fam', 4, '19:40', 0, 'chen', '观点', -1, '0000', '公司发澄清了，没有别的订单。', { n: 'ev_0419', ev: ['ev_0419'] }],
+  ['f18', 'fam', 4, '19:52', 1, 'wangshu', '吐槽', -2, '1030', '阿强你这消息害我亏了快九百！', { r: 'f17' }],
+  ['f19', 'fam', 4, '20:03', 2, 'aqiang', '吐槽', -1, '2020', '我也套着呢，群里老师就这么说的……', {}],
+  ['f20', 'fam', 4, '20:15', 3, 'wang', '观点', 0, '0000', '以后转消息先问出处。', {}],
+  // 同事群
+  ['c1', 'col', 0, '16:20', 0, 'lin', '观点', 2, '0303', '甲科技这合同够硬，明天竞价直接打板。', { ev: ['ev_0417'] }],
+  ['c2', 'col', 0, '16:28', 1, 'xiaomei', '求助', 0, '0001', '打板是什么意思？', {}],
+  ['c3', 'col', 0, '16:35', 2, 'lin', '观点', 2, '0202', '就是挂涨停价买，抢在封板前拿到。', { r: 'c2' }],
+  ['c4', 'col', 0, '16:47', 3, 'daliu', '观点', -1, '1000', '我手上有一千股，高开就是卖点。', {}],
+  ['c5', 'col', 1, '21:30', 0, 'lin', '观点', 2, '0303', '付费群老师也让明天竞价进，稳了。', { tag: 'sh' }],
+  ['c6', 'col', 1, '21:37', 1, 'daliu', '观点', -1, '1000', '付费群的话你也信？', { r: 'c5' }],
+  ['c7', 'col', 1, '21:45', 2, 'xiaomei', '求助', 1, '1002', '要不我买一点点试试？', {}],
+  ['c8', 'col', 1, '21:52', 3, 'lin', '观点', 2, '0303', '冲，明早开盘挂单。', {}],
+  ['c9', 'col', 2, '08:47', 0, 'lin', '观点', 2, '0303', '竞价挂涨停价，先拿到筹码。', {}],
+  ['c10', 'col', 2, '08:55', 1, 'xiaomei', '观点', 0, '1000', '想了一晚上还是算了，继续定投基金。', {}],
+  ['c11', 'col', 2, '09:02', 2, 'daliu', '观点', -1, '0000', '高开就把那点卖了。', {}],
+  ['c13', 'col', 3, '15:20', 0, 'lin', '吐槽', -1, '1030', '冲高到 10.95 没走，现在套着。', {}],
+  ['c14', 'col', 3, '15:26', 1, 'daliu', '晒单', 0, '0000', '开盘 10.62 出了，落袋。', {}],
+  ['c12', 'col', 4, '19:30', 0, 'ajie', '晒单', 1, '0100', '老K：今天回落时已上车，仓位不重。', { f: 'laok' }],
+  ['c15', 'col', 4, '19:36', 1, 'lin', '观点', 1, '1110', '老K都上车了，我拿着。', { r: 'c12' }],
+  ['c16', 'col', 4, '19:45', 2, 'daliu', '观点', -1, '0000', '澄清出来了，没有第二笔订单。', { n: 'ev_0419', ev: ['ev_0419'] }],
+  ['c17', 'col', 4, '19:58', 3, 'lin', '吐槽', -2, '2030', '交了会员费，就给我这个？', {}],
+  ['c18', 'col', 4, '20:06', 4, 'xiaomei', '观点', 0, '0000', '幸好昨晚没买。', {}],
+  // 老股民群
+  ['o1', 'old', 0, '16:30', 0, 'cz', '观点', 1, '0000', '【船长点评】合同金额大但分期确认，业绩兑现要看后面。高开别追，回踩再看。', { ev: ['ev_0417'] }],
+  ['o2', 'old', 0, '16:44', 1, 'zhou', '观点', 0, '2020', '2015 年我就是听利好上的杠杆，这回先看看。', { r: 'o1' }],
+  ['o3', 'old', 0, '16:58', 2, 'lige', '观点', 1, '0100', '我挂个低一点的单，回踩接。', {}],
+  ['o4', 'old', 0, '17:10', 3, 'wang', '观点', 0, '0000', '家里群也在说这个。', {}],
+  ['o5', 'old', 1, '21:25', 0, 'laoma', '传闻', 2, '0303', '内部消息：还有第二笔订单，明天至少两个板。', { f: 'nb', tag: 'rm sh' }],
+  ['o6', 'old', 1, '21:31', 1, 'cz', '观点', 0, '0000', '没公告的消息不算数，别拿身家赌。', { r: 'o5', ev: ['ev_0417'] }],
+  ['o7', 'old', 1, '21:40', 2, 'zhou', '观点', 1, '1102', '要是真的……明早少买点？', { r: 'o5' }],
+  ['o8', 'old', 1, '21:48', 3, 'laoma', '观点', 2, '0303', '付费群老师说的，明早竞价进。', {}],
+  ['o9', 'old', 2, '08:49', 0, 'lige', '观点', 1, '0100', '挂了个低价单等回踩。', {}],
+  ['o10', 'old', 2, '08:53', 1, 'laoma', '观点', 2, '0303', '竞价进，满仓干！', {}],
+  ['o11', 'old', 2, '09:01', 2, 'zhou', '观点', 0, '1000', '睡了一觉想明白了，不追。', {}],
+  ['o12', 'old', 3, '15:08', 0, 'cz', '观点', -1, '0000', '【船长复盘】高开回落，利好兑现，量能跟不上。', { ev: ['ev_0417'] }],
+  ['o13', 'old', 3, '15:22', 1, 'lige', '吐槽', 0, '0010', '低价单没成交，白等一天。', {}],
+  ['o14', 'old', 3, '15:30', 2, 'laoma', '吐槽', -1, '2030', '10.62 买的，收盘亏了四个点。', {}],
+  ['o15', 'old', 3, '15:41', 3, 'zhou', '观点', 0, '0000', '还好没追。', {}],
+  ['o16', 'old', 4, '19:38', 0, 'cz', '观点', -1, '0000', '澄清公告出了，所谓第二笔订单是谣言。', { n: 'ev_0419', ev: ['ev_0419'] }],
+  ['o17', 'old', 4, '19:50', 1, 'laoma', '吐槽', -2, '2030', '付费群坑我，明天就走。', { r: 'o16' }],
+  ['o18', 'old', 4, '20:02', 2, 'wang', '观点', 0, '0000', '阿强也转过这条，得跟他说一声。', {}],
+  // 付费群
+  ['v1', 'vip', 0, '17:30', 0, 'nb', '喊单', 2, '0300', '【牛哥内参】甲科技重大合同，明天竞价进，目标 12 元。', { tag: 'sh', ev: ['ev_0417'] }],
+  ['v2', 'vip', 0, '17:36', 1, 'lin', '观点', 2, '0303', '收到老师！', { r: 'v1' }],
+  ['v3', 'vip', 0, '17:45', 2, 'nb', '传闻', 2, '0300', '内部消息：还有第二笔订单，明天至少两个板。仅限群内，勿外传。', { tag: 'rm sh' }],
+  ['v4', 'vip', 1, '21:06', 0, 'aqiang', '观点', 2, '0303', '我转家里人，一起吃肉。', { r: 'v3' }],
+  ['v5', 'vip', 1, '21:10', 1, 'laoma', '观点', 2, '0303', '跟了！', {}],
+  ['v6', 'vip', 1, '21:15', 2, 'lin', '观点', 2, '0303', '明早竞价挂涨停价。', {}],
+  ['v7', 'vip', 2, '08:40', 0, 'nb', '喊单', 2, '0300', '竞价积极参与，不要犹豫。', { tag: 'sh' }],
+  ['v8', 'vip', 2, '08:59', 1, 'aqiang', '观点', 2, '0303', '挂了，盘中追。', {}],
+  ['v9', 'vip', 3, '15:05', 0, 'nb', '喊单', 1, '0100', '主力洗盘，拿住，明天看反包。', { tag: 'sh' }],
+  ['v10', 'vip', 3, '15:16', 1, 'lin', '求助', -1, '2030', '老师，套了要不要割？', {}],
+  ['v11', 'vip', 3, '15:20', 2, 'nb', '喊单', 1, '0000', '拿住，别被洗下车。', { r: 'v10', tag: 'sh' }],
+  ['v12', 'vip', 4, '19:55', 0, 'lin', '吐槽', -2, '2030', '说好的第二笔订单呢？', { r: 'v3' }],
+  ['v13', 'vip', 4, '20:01', 1, 'aqiang', '吐槽', -2, '2030', '老师说话啊', {}],
+  ['v14', 'vip', 4, '20:30', 2, 'nb', '喊单', 1, '0100', '澄清是常规操作，不影响逻辑。明天给大家新标的。', { tag: 'sh' }],
+];
+const M = MR.map(a => ({ id: a[0], g: GK[a[1]], ph: a[2], t: a[3], turn: a[4], who: a[5], type: a[6], stance: a[7],
+  emo: Object.fromEntries(EMO.map((k, i) => [k, +a[8][i]])), text: a[9], ...a[10] }));
+const MI = {}; M.forEach(m => { MI[m.id] = m; });
+// 决策（§3.4、§10.3）：[时段, intent_kind, action, 执行方式, size, 结果, source_post_ids]
+const D = {
+  wangshu: [[0, 'plan', 'buy', '', '', '明日打算：买'], [1, 'plan', 'buy', '', '', '明日打算：买'], [2, 'order', 'buy', 'open', 'small', '成交 2000 股 @10.62', ['f6']], [3, 'plan', 'hold', '', '', '明日打算：持有'], [4, 'plan', 'sell', '', '', '明日打算：卖']],
+  eryi: [[0, 'plan', 'watch', '', '', '明日打算：观望'], [1, 'plan', 'buy', '', '', '明日打算：买'], [2, 'order', 'buy', 'dip', 'tiny', '未成交，撤单；"挂单没成交"写入记忆', ['f5']], [3, 'plan', 'watch', '', '', '明日打算：观望']],
+  aqiang: [[1, 'plan', 'buy', '', '', '明日打算：买'], [2, 'order', 'buy', 'chase', 'half', '成交 1000 股 @10.48（均价＋滑点）', ['v3', 'v1']], [3, 'plan', 'hold', '', '', '明日打算：持有'], [4, 'plan', 'hold', '', '', '明日打算：持有']],
+  wang: [[0, 'plan', 'watch', '', '', '明日打算：观望'], [1, 'plan', 'watch', '', '', '明日打算：观望'], [2, 'order', 'watch', '', '', '不下单'], [3, 'plan', 'watch', '', '', '明日打算：观望'], [4, 'plan', 'watch', '', '', '明日打算：观望']],
+  chen: [[0, 'plan', 'watch', '', '', '明日打算：观望'], [3, 'plan', 'watch', '', '', '明日打算：观望'], [4, 'plan', 'watch', '', '', '明日打算：观望']],
+  lin: [[0, 'plan', 'buy', '', '', '明日打算：买'], [1, 'plan', 'buy', '', '', '明日打算：买'], [2, 'order', 'buy', 'open', 'large', '成交 @10.62', ['v3', 'v1']], [3, 'plan', 'hold', '', '', '明日打算：持有'], [4, 'plan', 'sell', '', '', '明日打算：卖']],
+  xiaomei: [[0, 'plan', 'watch', '', '', '明日打算：观望'], [1, 'plan', 'buy', '', '', '明日打算：买'], [2, 'order', 'watch', '', '', '不下单（隔夜变卦：打算买 → 观望）']],
+  daliu: [[0, 'plan', 'sell', '', '', '明日打算：卖'], [1, 'plan', 'sell', '', '', '明日打算：卖'], [2, 'order', 'sell', 'open', 'all_in', '成交卖出 1000 股 @10.62']],
+  ajie: [[4, 'plan', 'watch', '', '', '明日打算：观望']],
+  zhou: [[0, 'plan', 'watch', '', '', '明日打算：观望'], [1, 'plan', 'buy', '', '', '明日打算：买'], [2, 'order', 'watch', '', '', '不下单（隔夜变卦：打算买 → 观望）']],
+  lige: [[0, 'plan', 'buy', '', '', '明日打算：买'], [2, 'order', 'buy', 'dip', 'small', '未成交，撤单；"挂单没成交"写入记忆', ['o1']]],
+  laoma: [[1, 'plan', 'buy', '', '', '明日打算：买'], [2, 'order', 'buy', 'open', 'half', '成交 @10.62（群里说满仓，实际半仓：言行不一）', ['v3', 'v1']], [3, 'plan', 'hold', '', '', '明日打算：持有'], [4, 'plan', 'sell', '', '', '明日打算：卖']],
+};
+const EXEC = { open: '开盘价（买入限价＝涨停价，卖出＝跌停价）', dip: '回落低吸（限价＝前收×(1−k)）', chase: '盘中追（均价＋滑点）' };
+const ACTCN = { buy: '买', sell: '卖', hold: '持有', watch: '观望' };
+// 激活（§10.3，节选）：[时段, persona, trigger, status, 说明]
+const AC = [
+  [0, 'wang', '事件', '成功', '读到 ev_0417；call 2 发 f1'], [0, 'wangshu', '事件', '成功', '明日打算：买'], [0, 'lin', '事件', '成功', '明日打算：买'],
+  [0, 'daliu', '事件', '成功', '明日打算：卖'], [0, 'lige', '事件', '成功', '明日打算：买'], [0, 'zhou', 'ν抽中', '成功', '明日打算：观望'],
+  [0, 'chen', '事件', '成功', '读到 ev_0417；明日打算：观望'], [0, 'chen', '群聊', '成功', '家庭群第 1 轮回复 f1（发 f2），只走 call 2'],
+  [0, 'eryi', 'ν抽中', '成功', '明日打算：观望'], [0, 'eryi', '群聊', '成功', '家庭群第 3 轮发 f4，只走 call 2'],
+  [0, 'chen', '群聊', '成功', '家庭群第 4 轮回复 f4（发 f5），只走 call 2'],
+  [1, 'aqiang', '事件', '成功', '群聊活跃者，事件触发（§3.4）；读到 v3；明日打算：买；发 v4 回复 v3，并转进家庭群（f6）'],
+  [1, 'wangshu', '事件', '成功', '群聊活跃者，事件触发（§3.4）；明日打算：买（维持收盘后打算）'],
+  [1, 'chen', '事件', '缺席', 'absent_reason＝解析失败（换种子重试 2 次仍不过，§6.2）；本次不补发言'],
+  [1, 'zhou', '事件', '成功', '群聊活跃者，事件触发（§3.4）；明日打算：买（o5 当阶段不可见，只在接话 o7 里回应）'],
+  [1, 'xiaomei', '事件', '成功', '群聊活跃者，事件触发（§3.4）；明日打算：买'],
+  [1, 'wang', '事件', '成功', '家庭群收到转发的 f6（群聊活跃者，§3.4）；明日打算：观望'], [1, 'wang', '群聊', '成功', '家庭群回复 f6'],
+  [2, 'wangshu', '强制', '成功', '打算买 → 下单 open'], [2, 'eryi', '强制', '成功', '打算买 → 下单 dip'], [2, 'aqiang', '强制', '成功', '打算买 → 下单 chase'],
+  [2, 'lin', '强制', '成功', '打算买 → 下单 open'], [2, 'xiaomei', '强制', '成功', '打算买 → 改为观望'], [2, 'daliu', '强制', '成功', '打算卖 → 下单 open'],
+  [2, 'zhou', '强制', '成功', '读到 o5、o6；打算买 → 改为观望'], [2, 'lige', '强制', '成功', '打算买 → 下单 dip'], [2, 'laoma', '强制', '成功', '打算买 → 下单 open'],
+  [2, 'wang', 'ν抽中', '成功', '观望，不下单'],
+  [3, 'wangshu', '（待定）', '成功', '当日交易者必激活（§3.4），§10.3 的 trigger 枚举无对应值'], [3, 'laoma', '（待定）', '成功', '当日交易者必激活（同上）；明日打算：持有'],
+  [4, 'ajie', 'ν抽中', '成功', '测量抽样；读到老K 收盘后的晒单并转发'],
+  [4, 'chen', '事件', '成功', '读到 ev_0419；call 2 发 f17'], [4, 'lin', '事件', '成功', '读到 ev_0419；明日打算：卖'],
+  [4, 'wangshu', '事件', '成功', '读到 ev_0419；明日打算：卖'], [4, 'wangshu', '群聊', '成功', '家庭群第 1 轮回复 f17（发 f18），只走 call 2'],
+  [4, 'wang', '事件', '成功', '读到 ev_0419；明日打算：观望'], [4, 'wang', '群聊', '成功', '家庭群第 3 轮发 f20，只走 call 2'],
+];
+// 信任边（初值为假设，示例）
+const TR = [['老马', '牛哥内参', 0.70], ['小林', '牛哥内参', 0.65], ['阿强', '牛哥内参', 0.60], ['王叔', '阿强', 0.75],
+  ['二姨', '阿强', 0.70], ['王叔', '家庭群', 0.80], ['老周', '老马', 0.50], ['王阿姨', '老马', 0.45]];
+const STEPS = [
+  ['T-1 17:30', '牛哥内参在付费群喊单 v1', '喊单本身不改信任；按收益符号的信任更新只在平仓或买入满 20 个交易日时发生，另有辟谣对转发人扣信任（§7.2）', {}],
+  ['T-1 17:45', '付费群放出"内部消息" v3', '小林、老马、阿强读到；source_post_ids 最多记 2 条（§6.3、§7.2）', {}],
+  ['T-1 21:12 / 21:25', '阿强、老马把 v3 转进家庭群和老股民群', '转发来的消息，后续同时更新对群和对转发人的信任（§7.2）', {}],
+  ['T 09:15 前', '盘前下单', '王叔、阿强、小林、老马成交；二姨、李哥的低价单没成交', {}],
+  ['T 15:00', '高开回落，收 10.18', '仓位都没平，也没满 20 个交易日，信任不变', {}],
+  ['T 晚间', 'L0 澄清 ev_0419，传闻被辟谣', '辟谣的传闻对转发人扣信任，与盈亏无关（§7.2）；扣分幅度为本页假设', { 3: -0.15, 4: -0.15, 6: -0.15, 7: -0.15 }],
+  ['T+1（示例，本页外）', '小林、王叔、老马亏损平仓', '按收益符号下调；小林写入"被荐股群坑"记忆（§7.1）；幅度为假设', { 0: -0.10, 1: -0.10, 3: -0.10, 5: -0.05 }],
+];
+// ===== 群聊室 =====
+const S = { g: 'g_fam_017', upto: 4, focus: null, sel: null, play: null, pi: 0 };
+const pName = id => P[id][0];
+const isPub = id => P[id][4] !== 'r';
+const members = g => (g[4] ? [g[4]] : []).concat(g[5]);
+const av = (txt, color, sm) => { const a = el('div', 'ch-av' + (sm ? ' sm' : ''), txt); a.style.background = color; return a; };
+const topEmo = m => { let k = null, v = 0; EMO.forEach(e => { if (m.emo[e] > v) { v = m.emo[e]; k = e; } }); return k ? EMOCN[k] + ' ' + v : '情绪平稳'; };
+const stTxt = s => (s > 0 ? '+' : s < 0 ? '−' : '±') + Math.abs(s);
+const tagCN = t => t === 'rm' ? '传闻' : '喊单';
+const vis = g => M.filter(m => m.g === g && m.ph <= S.upto);
+// 帖子表一行（字段名取自 §10.3；id 写法为本页示意）
+function rowOf(m) {
+  const pub = isPub(m.who), o = { post_id: 'p_' + m.id };
+  o[pub ? 'publisher_id' : 'persona_id'] = (pub ? 'pub_' : 'pa_') + m.who;
+  Object.assign(o, {
+    event_id: m.ev ? m.ev[0] : null, run_id: 'run_demo_01', sim_time: `${PH[m.ph].d}T${m.t}:00+08:00`, channel: '群聊',
+    group_id: m.g, turn: m.turn, reply_to: m.r ? 'p_' + m.r : null, text: m.text, asset: '甲科技（化名）',
+    stance: m.stance, emotion: m.emo, post_type: m.type, rumor_shill_tag: (m.tag || '').split(' ').filter(Boolean).map(tagCN),
+    simulated: true, source_event_ids: pub ? (m.ev || []) : undefined, activation_id: pub ? null : `act_${m.who}_ph${m.ph}` + (m.turn > 0 ? `_${m.g}_t${m.turn}` : ''),
+  });
+  return o;
+}
+function renderList() {
+  const box = $('#chGlist'); box.textContent = '';
+  G.forEach(g => {
+    const ms = vis(g[0]), last = ms[ms.length - 1];
+    const b = el('button', 'ch-gi' + (S.g === g[0] ? ' on' : '')); b.type = 'button';
+    const t = el('div', 't'); t.append(el('b', '', g[1]), el('small', '', last ? pName(last.who) + '：' + last.text : '暂无消息'));
+    const r = el('div', 'r'); r.append(el('span', '', last ? last.t : ''), el('span', 'ch-badge', String(ms.length)));
+    b.append(av(g[2], g[3]), t, r); b.onclick = () => selectGroup(g[0]); box.append(b);
+  });
+}
+function renderHead() {
+  const g = GI[S.g], h = $('#chHead'); h.textContent = '';
+  const t = el('div'); t.append(el('b', '', g[1]), el('small', '', `${members(g).length} 位成员 · ${g[6]} · ${g[0]}`));
+  const c = el('span', 'chip social'); c.append(el('i'), document.createTextNode('示例数据'));
+  h.append(av(g[2], g[3]), t, el('span', 'sp'), c);
+}
+function bubble(m, isNew) {
+  const p = P[m.who], f = S.focus;
+  const row = el('div', 'ch-row' + (f === m.who ? ' me' : '') + (f && f !== m.who ? ' dim' : '') + (isNew ? ' new' : ''));
+  const b = el('div', 'ch-bub' + (S.sel === m.id ? ' sel' : ''));
+  const nm = el('div', 'nm'); nm.style.color = p[2]; nm.append(document.createTextNode(p[0]));
+  if (GI[m.g][4] === m.who) nm.append(el('span', 'ch-role', '群主 · ' + p[4]));
+  b.append(nm);
+  if (m.f) b.append(el('div', 'ch-fwd', '转发自 ' + FWD[m.f]));
+  if (m.r && MI[m.r]) {
+    const q = MI[m.r], qe = el('div', 'ch-quote');
+    qe.style.setProperty('--qc', P[q.who][2]);
+    qe.append(el('b', '', pName(q.who)), document.createTextNode(q.text.length > 34 ? q.text.slice(0, 34) + '…' : q.text));
+    b.append(qe);
+  }
+  if (m.n) {
+    const n = NEWS[m.n], ne = el('div', 'ch-news'), bd = el('div', '', n[2]);
+    bd.style.cssText = 'color:var(--ink2);font-size:12.5px';
+    ne.append(el('b', '', n[1] + ' · ' + m.n), el('div', '', n[0]), bd); b.append(ne);
+  }
+  b.append(el('div', 'ch-txt', m.text));
+  const mt = el('div', 'ch-meta');
+  mt.append(el('span', 'ch-pt', m.type));
+  (m.tag || '').split(' ').filter(Boolean).forEach(t => mt.append(el('span', 'ch-tag ' + t, tagCN(t))));
+  mt.append(el('span', 'ch-st ' + (m.stance > 0 ? 'p' : m.stance < 0 ? 'm' : ''), '立场 ' + stTxt(m.stance)),
+    el('span', 'ch-tn', topEmo(m) + ' · turn ' + m.turn), el('span', '', m.t));
+  b.append(mt);
+  b.onclick = () => {
+    S.sel = m.id;
+    $('#chDetailPre').textContent = JSON.stringify(rowOf(m), null, 2);
+    document.querySelectorAll('#chMsgs .ch-bub.sel').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel');
+  };
+  row.append(av(p[1], p[2], true), b);
+  return row;
+}
+function renderMsgs(limit, newIdx) {
+  const box = $('#chMsgs'); box.textContent = '';
+  let ms = vis(S.g); if (limit != null) ms = ms.slice(0, limit);
+  let d = '', ph = -1;
+  ms.forEach((m, i) => {
+    if (PH[m.ph].d !== d) {
+      d = PH[m.ph].d;
+      const x = el('div', 'ch-day'); x.append(el('span', '', `${+d.slice(5, 7)}月${+d.slice(8)}日 · ${m.ph < 2 ? 'T-1' : 'T'}（示例日期）`)); box.append(x);
+    }
+    if (m.ph !== ph) { ph = m.ph; box.append(el('div', 'ch-turnsep', `— ${PH[ph].lab}：${PH[ph].note} —`)); }
+    box.append(bubble(m, i === newIdx));
+  });
+  if (!ms.length) box.append(el('div', 'ch-turnsep', limit === 0 ? '播放中…' : '到这个时段为止，群里还没人说话'));
+  box.scrollTop = box.scrollHeight;
+}
+function renderMem() {
+  const g = GI[S.g], box = $('#chMem'); box.textContent = '';
+  const ids = members(g), active = new Set(M.filter(m => m.g === S.g && m.ph === S.upto).map(m => m.who));
+  box.append(el('h5', '', `成员 · ${ids.length}`));
+  ids.forEach(id => {
+    const p = P[id], b = el('button', 'ch-mi' + (S.focus === id ? ' on' : '')); b.type = 'button'; b.title = p[3];
+    const t = el('div', 't'); t.append(el('b', '', p[0] + (g[4] === id ? ' · 群主' : '')), el('small', '', p[3]));
+    b.append(el('span', 'ch-dot' + (active.has(id) ? ' on' : '')), av(p[1], p[2], true), t);
+    b.onclick = () => { S.focus = S.focus === id ? null : id; renderAll(); };
+    box.append(b);
+  });
+  box.append(el('p', 'ch-note', '绿点：在当前时段的这个群里发过言。点一个成员只看这个人的发言（移到右侧），再点一次取消。群里只有智能体，不模拟不炒股的家人同事（§7.1）。'));
+}
+function selectGroup(g) {
+  stopPlay(); S.g = g; S.sel = null;
+  if (S.focus && !members(GI[g]).includes(S.focus)) S.focus = null;
+  renderAll();
+}
+function renderAll() { renderList(); renderHead(); renderMsgs(S.play ? S.pi : undefined); renderMem(); renderBar(); }
+// ===== 群与成员关系图 =====
+(function net() {
+  const svg = $('#chNet'), gE = $('#chNetEdges'), gG = $('#chNetGroups'), gP = $('#chNetPeople');
+  const GX = { g_fam_017: [130, 285], g_col_042: [305, 425], g_old_008: [445, 560], g_vip_003: [580, 740] };
+  const order = ['chen', 'eryi', 'wangshu', 'wang', 'aqiang', 'ajie', 'xiaomei', 'daliu', 'lin', 'zhou', 'lige', 'laoma', 'cz', 'nb'];
+  const pos = {};
+  order.forEach((id, i) => { pos[id] = [70 + i * 58, i % 2 ? 128 : 62]; });
+  const edges = [];
+  G.forEach(g => members(g).forEach(id => {
+    const [x0, x1] = GX[g[0]], tx = Math.max(x0 + 12, Math.min(x1 - 12, pos[id][0])), [px, py] = pos[id];
+    const e = sv('path', { class: 'ed', d: `M${px} ${py + 17} C ${px} ${py + 70}, ${tx} 150, ${tx} 195`, fill: 'none',
+      stroke: g[3], 'stroke-width': g[4] === id ? 2.4 : 1.4, 'stroke-dasharray': g[4] === id ? '5 4' : '', opacity: 0.75 });
+    e.dataset.g = g[0]; e.dataset.p = id; gE.append(e); edges.push(e);
+  }));
+  const gnodes = [];
+  function hl(gid, pid) {
+    svg.classList.toggle('hl', !!(gid || pid));
+    edges.forEach(e => e.classList.toggle('on', (gid && e.dataset.g === gid) || (pid && e.dataset.p === pid)));
+    gnodes.forEach(n => n.classList.toggle('on', n.dataset.g === gid));
+  }
+  let pinned = null;
+  G.forEach(g => {
+    const [x0, x1] = GX[g[0]], n = sv('g', { class: 'gnode' }); n.dataset.g = g[0];
+    n.append(sv('rect', { x: x0, y: 195, width: x1 - x0, height: 55, rx: 10, fill: g[3] + '22', stroke: g[3], 'stroke-width': 1.5 }));
+    const t1 = sv('text', { x: (x0 + x1) / 2, y: 218, 'text-anchor': 'middle' }); t1.textContent = g[1];
+    const t2 = sv('text', { x: (x0 + x1) / 2, y: 238, 'text-anchor': 'middle', class: 'm' });
+    t2.textContent = `${g[6]} · ${members(g).length} 人 · ${M.filter(m => m.g === g[0]).length} 条`;
+    n.append(t1, t2);
+    n.addEventListener('mouseenter', () => { if (!pinned) hl(g[0]); });
+    n.addEventListener('mouseleave', () => { if (!pinned) hl(); });
+    n.addEventListener('click', () => {
+      pinned = pinned === g[0] ? null : g[0]; hl(pinned);
+      if (pinned) { selectGroup(g[0]); }
+    });
+    gG.append(n); gnodes.push(n);
+  });
+  order.forEach(id => {
+    const p = P[id], [x, y] = pos[id], n = sv('g', { class: 'gnode' });
+    n.append(sv('circle', { cx: x, cy: y, r: 17, fill: p[2], stroke: p[4] === 'r' ? 'none' : 'url(#chG2)', 'stroke-width': 3 }));
+    const t = sv('text', { x, y: y + 4.5, 'text-anchor': 'middle', 'font-weight': 700 }); t.textContent = p[1]; t.style.fill = '#fff';
+    const nm = sv('text', { x, y: y < 100 ? y - 23 : y + 32, 'text-anchor': 'middle', class: 'm' }); nm.textContent = p[0];
+    const tip = sv('title', {}); tip.textContent = `${p[0]}：${p[3]}`;
+    n.append(tip, sv('circle', { cx: x, cy: y, r: 17, fill: 'none' }), t, nm);
+    n.querySelector('circle').style.cursor = 'pointer';
+    n.addEventListener('mouseenter', () => { if (!pinned) hl(null, id); });
+    n.addEventListener('mouseleave', () => { if (!pinned) hl(); });
+    n.addEventListener('click', () => { pickPerson(id); $('#s3').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    gP.append(n);
+  });
+})();
+// ===== 底部时段条与逐条播放 =====
+function stopPlay() {
+  if (S.play) { clearInterval(S.play); S.play = null; }
+}
+function renderBar() {
+  const bar = $('#chBar'); bar.textContent = '';
+  PH.forEach(p => {
+    const b = el('button', p.k === S.upto ? 'on' : p.k < S.upto ? 'done' : '', p.lab); b.type = 'button';
+    b.title = p.note;
+    b.onclick = () => { stopPlay(); S.upto = p.k; renderAll(); };
+    bar.append(b);
+  });
+  bar.append(el('span', 'sp'));
+  const play = el('button', S.play ? 'on' : '', S.play ? '■ 停止' : '▶ 逐条播放'); play.type = 'button';
+  play.onclick = () => (S.play ? (stopPlay(), renderAll()) : startPlay());
+  const lb = el('label'), cb = el('input'); cb.type = 'checkbox';
+  cb.checked = !$('#chApp').classList.contains('ch-hidemeta');
+  cb.onchange = () => $('#chApp').classList.toggle('ch-hidemeta', !cb.checked);
+  lb.append(cb, document.createTextNode('显示类型/立场/轮次'));
+  bar.append(play, lb);
+}
+function startPlay() {
+  stopPlay(); S.upto = PH.length - 1;
+  const total = vis(S.g).length; S.pi = 0;
+  renderList(); renderHead(); renderMem(); renderMsgs(0);
+  S.play = setInterval(() => {
+    S.pi += 1; renderMsgs(S.pi, S.pi - 1);
+    if (S.pi >= total) { stopPlay(); renderBar(); }
+  }, 900);
+  renderBar();
+}
+renderAll();
+// ===== 按人看 =====
+const PORDER = ['wang', 'chen', 'wangshu', 'aqiang', 'eryi', 'lin', 'ajie', 'xiaomei', 'daliu', 'zhou', 'laoma', 'lige', 'cz', 'nb'];
+const filled = d => d[1] === 'order' && d[5].startsWith('成交');
+function stat(v, l) { const s = el('div', 'stat'); s.style.padding = '10px 12px'; const x = el('div', 'v', String(v)); x.style.fontSize = '22px'; s.append(x, el('div', 'l', l)); return s; }
+function actTxt(d) {
+  if (!d) return null;
+  if (d[1] === 'plan') return d[5];
+  return `订单：${ACTCN[d[2]]}${d[3] ? ' · ' + EXEC[d[3]] : ''}${d[4] ? ' · ' + d[4] : ''} → ${d[5]}`;
+}
+function pickPerson(id) {
+  const p = P[id], ms = M.filter(m => m.who === id), ds = D[id] || [];
+  $('#chPick').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.p === id));
+  const h = $('#chPHead'); h.textContent = '';
+  const hb = el('div'); hb.style.cssText = 'display:flex;gap:10px;align-items:center';
+  const t = el('div'); t.append(el('b', '', p[0] + (p[4] === 'r' ? '' : ' · 发布者 ' + p[4])), el('div', 'ch-note', p[3]));
+  t.lastChild.style.margin = '0'; hb.append(av(p[1], p[2]), t); h.append(hb);
+  const gs = G.filter(g => members(g).includes(id));
+  const st = $('#chPStats'); st.textContent = '';
+  st.append(stat(ms.length, '条群消息'), stat(gs.length, '个群：' + gs.map(g => g[6]).join('、')),
+    stat(ms.filter(m => m.tag).length, '条带传闻/喊单标签'), stat(p[4] === 'r' ? ds.filter(filled).length : '—', p[4] === 'r' ? '笔实际成交' : '发布者不下单'));
+  const ty = $('#chPType'); ty.textContent = '';
+  TYPES.forEach(k => {
+    const n = ms.filter(m => m.type === k).length; if (!n) return;
+    const c = el('span', 'chip' + (k === '传闻' || k === '喊单' ? ' warn' : ' social')); c.append(el('i'), document.createTextNode(`${k} × ${n}`)); ty.append(c);
+  });
+  // 立场折线：每个时段取均值，无发言的时段断开
+  const svg = $('#chPSvg'); svg.textContent = '';
+  const X = k => 70 + k * 130, Y = s => 80 - s * 28;
+  [-2, -1, 0, 1, 2].forEach(s => {
+    svg.append(sv('line', { x1: 40, x2: 620, y1: Y(s), y2: Y(s), stroke: s ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.18)' }));
+    const tx = sv('text', { x: 30, y: Y(s) + 4, 'text-anchor': 'end', class: 'm' }); tx.textContent = (s > 0 ? '+' : '') + s; svg.append(tx);
+  });
+  let seg = [];
+  const flush = () => { if (seg.length > 1) svg.append(sv('polyline', { points: seg.join(' '), fill: 'none', stroke: p[2], 'stroke-width': 2.5 })); seg = []; };
+  PH.forEach(ph => {
+    const xs = ms.filter(m => m.ph === ph.k);
+    const lb = sv('text', { x: X(ph.k), y: 172, 'text-anchor': 'middle', class: 'm' }); lb.textContent = ph.lab; svg.append(lb);
+    if (!xs.length) { flush(); return; }
+    const mean = xs.reduce((a, m) => a + m.stance, 0) / xs.length;
+    seg.push(`${X(ph.k)},${Y(mean)}`);
+    xs.forEach((m, j) => svg.append(sv('circle', { cx: X(ph.k) + (j - (xs.length - 1) / 2) * 7, cy: Y(m.stance), r: 3, fill: p[2], opacity: 0.45 })));
+  });
+  flush();
+  PH.forEach(ph => {
+    const xs = ms.filter(m => m.ph === ph.k); if (!xs.length) return;
+    const mean = xs.reduce((a, m) => a + m.stance, 0) / xs.length;
+    svg.append(sv('circle', { cx: X(ph.k), cy: Y(mean), r: 5.5, fill: p[2], stroke: '#0b1020', 'stroke-width': 2 }));
+    const d = ds.find(x => x[0] === ph.k);
+    if (d) { const a = sv('text', { x: X(ph.k), y: 154, 'text-anchor': 'middle', class: 'm' }); a.textContent = (d[1] === 'order' ? '下单' : '打算') + ACTCN[d[2]]; a.style.fill = 'var(--ink2)'; svg.append(a); }
+  });
+  // 按时段列出发言与实际动作
+  const ls = $('#chPList'); ls.textContent = '';
+  PH.forEach(ph => {
+    const xs = ms.filter(m => m.ph === ph.k), d = ds.find(x => x[0] === ph.k);
+    if (!xs.length && !d) return;
+    ls.append(el('div', 'ch-turnsep', `— ${ph.lab} —`));
+    xs.forEach(m => {
+      const c = el('div', 'ch-pmsg'), hd = el('div', 'h');
+      hd.append(el('span', '', GI[m.g][1]), el('span', '', m.t), el('span', '', m.type), el('span', '', '立场 ' + stTxt(m.stance)), el('span', '', 'turn ' + m.turn));
+      if (m.tag) m.tag.split(' ').forEach(t => hd.append(el('span', 'ch-tag ' + t, tagCN(t))));
+      c.append(hd, document.createTextNode(m.text));
+      c.style.cursor = 'pointer'; c.title = '在群聊室里打开';
+      c.onclick = () => { S.upto = 4; S.focus = id; selectGroup(m.g); $('#s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+      ls.append(c);
+    });
+    if (d) {
+      const c = el('div', 'ch-pmsg'); c.style.borderStyle = 'dashed';
+      const hd = el('div', 'h'); hd.append(el('span', '', '实际动作（决策表，示例）'), el('span', '', 'intent_kind = ' + d[1]));
+      if (d[6]) hd.append(el('span', '', 'source_post_ids = ' + d[6].map(x => 'p_' + x).join(', ')));
+      c.append(hd, document.createTextNode(actTxt(d))); ls.append(c);
+    }
+  });
+}
+PORDER.forEach(id => {
+  const p = P[id], b = el('button'); b.type = 'button'; b.dataset.p = id;
+  const t = el('div'); t.append(document.createTextNode(p[0]), el('small', '', `${M.filter(m => m.who === id).length} 条 · ${p[4] === 'r' ? '散户' : p[4]}`));
+  b.append(av(p[1], p[2], true), t); b.onclick = () => pickPerson(id); $('#chPick').append(b);
+});
+pickPerson('aqiang');
+// ===== 生成流程说明 =====
+const FN = {
+  act: '每个阶段开始时，按 ν 抽中、事件触发或强制激活（打算买或卖的人在盘前强制激活）选出这一阶段要思考的人；激活表的 trigger 字段记下原因（§3.4、§9.1、§10.3）。',
+  c1: '第 1 次调用只产出结构化结果：信念、情绪、意向；收盘后与晚间只给"明日打算"，不下单（§6.1、§3.4）。同一阶段内各人并发调用。晚间激活由事件触发（§3.4）；非交易日 20:00 激活按 ν×周末系数抽中（§3.4），交易日晚间照此处理为本页假设。',
+  exec: '固定激活点里只有盘前下单（§3.4），事件触发的盘中检查点可下 chase 单（§3.4）；内核按 open / dip / chase 做成交判定，不自建撮合（§8）。群聊发生在这一步之后，所以本阶段的群聊不会改变本阶段的交易（§7.1）。',
+  c2: '第 2 次调用只负责说话：把第 1 次的结构化结果写成发言文本，作为本轮首帖（§6.1）；首帖记 turn = 0、接话记 1…M 是本页约定，§10.3 只规定有 turn 字段。',
+  gate: '同一个群里本阶段至少有 2 个成员被激活、且有人发了首帖，才进入群聊轮次；否则这个群本阶段就是一条或零条消息（§7.1）。',
+  loop: '每轮从已激活成员里按种子选一人接话，最多 M 轮；接话只走第 2 次调用，不重新做决策，激活表里另记一行，trigger 为"群聊"（§7.1、§10.3）。',
+  next: '群聊内容进入成员的记忆与信息流，下一次激活时才影响信念和决策（§7.1）。',
+};
+document.querySelectorAll('#chFlow .fst').forEach(g => {
+  const show = () => {
+    document.querySelectorAll('#chFlow .fst').forEach(x => x.classList.toggle('on', x === g));
+    $('#chFlowNote').textContent = FN[g.dataset.k];
+  };
+  g.addEventListener('mouseenter', show); g.addEventListener('click', show);
+});
+// ===== 轮次模拟器（示意） =====
+function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const sg = $('#chSimG'), sn = $('#chSimN'), sm = $('#chSimM'), ss = $('#chSimS');
+G.forEach(g => { const o = el('option', '', g[1]); o.value = g[0]; sg.append(o); });
+function sim() {
+  const g = GI[sg.value], mem = members(g);
+  sn.max = String(mem.length);
+  if (+sn.value > mem.length) sn.value = String(mem.length);
+  const N = +sn.value, Mx = +sm.value, seed = +ss.value, r = rng(seed * 7919 + 13);
+  $('#chSimNv').textContent = N; $('#chSimMv').textContent = Mx; $('#chSimSv').textContent = seed;
+  const pool = mem.slice();
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const act = pool.slice(0, N);
+  const seq = $('#chSimSeq'); seq.textContent = '';
+  seq.append(el('span', '', '本阶段被激活：'));
+  seq.lastChild.style.border = 'none';
+  mem.forEach(id => seq.append(el('span', act.includes(id) ? 'act' : '', pName(id))));
+  const out = $('#chSimOut'); out.textContent = '';
+  const row = (k, txt, cls) => { const d = el('div', 'ch-rd' + (cls ? ' ' + cls : '')); d.append(el('span', 'k', k), el('span', '', txt)); out.append(d); };
+  row('turn 0', `${pName(act[0])} 发首帖（第 2 次调用）`);
+  let calls = 0;
+  if (act.length < 2) {
+    row('—', '群内被激活的不足 2 人，本阶段不进入群聊轮次', 'skip');
+  } else if (!Mx) {
+    row('—', 'M = 0：只有首帖，没有接话', 'skip');
+  } else {
+    let prev = act[0];
+    for (let t = 1; t <= Mx; t++) {
+      const cand = act.filter(x => x !== prev), who = cand[Math.floor(r() * cand.length)];
+      const reply = t === 1 ? pName(act[0]) : pName(prev);
+      row('turn ' + t, `${pName(who)} 接话，回复 ${reply}`);
+      prev = who; calls++;
+    }
+  }
+  $('#chSimCost').textContent = calls
+    ? `接话共 ${calls} 次第 2 次调用，不含首帖。按 §14.2 第 2 次调用约 3.6k 输入 / 300 输出 token 粗估，上限约 ${(calls * 3.6).toFixed(1)}k 输入、${calls * 300} 输出；接话不做第 1 次调用，其中 3.0k 前缀与第 1 次共用，可命中前缀缓存（§14.2）。群聊接话在 §14.2 主表之外单独计量。同一种子重跑得到同样的轮次（示意）。`
+    : '没有接话调用，本阶段这个群只多出首帖。';
+}
+[sg, sn, sm, ss].forEach(x => x.addEventListener('input', sim));
+$('#chSimGo').onclick = () => { ss.value = String((+ss.value * 37 + 11) % 99 + 1); sim(); };
+sim();
+// ===== 传闻与信任时间线 =====
+const tl = $('#chTl');
+function trustAt(k) {
+  const v = TR.map(t => t[2]), last = STEPS[k][3];
+  for (let i = 0; i <= k; i++) for (const j in STEPS[i][3]) v[j] = Math.max(0, v[j] + STEPS[i][3][j]);
+  const box = $('#chTrust'); box.textContent = '';
+  TR.forEach((t, i) => {
+    const r = el('div', 'ch-trust'), bar = el('div', 'bar'), fill = el('i');
+    fill.style.width = (v[i] * 100).toFixed(0) + '%'; bar.append(fill);
+    const d = last[i] ? `${v[i].toFixed(2)} (${last[i] > 0 ? '+' : '−'}${Math.abs(last[i]).toFixed(2)})` : v[i].toFixed(2);
+    const dv = el('span', 'd', d); if (last[i]) dv.style.color = last[i] < 0 ? 'var(--warn)' : 'var(--ok)';
+    r.append(el('span', '', `${t[0]} → ${t[1]}`), bar, dv); box.append(r);
+  });
+  tl.querySelectorAll('.tl-item').forEach((x, i) => { x.style.opacity = i <= k ? '1' : '.45'; x.classList.toggle('on', i === k); });
+}
+STEPS.forEach((s, i) => {
+  const it = el('div', 'tl-item'); it.style.cursor = 'pointer'; it.tabIndex = 0;
+  const w = el('div', 'what'); w.append(el('b', '', s[1]), el('p', '', s[2]));
+  w.lastChild.style.cssText = 'margin:2px 0 0;font-weight:400;color:var(--ink2);font-size:13.5px';
+  it.append(el('div', 'when', s[0]), w);
+  it.onclick = () => trustAt(i);
+  it.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); trustAt(i); } };
+  tl.append(it);
+});
+trustAt(0);
+// ===== 帖子表与激活表 =====
+const tg = $('#chTbG'), tr = $('#chTbR');
+[['', '全部']].concat(G.map(g => [g[0], g[1]])).forEach(([v, n]) => { const o = el('option', '', n); o.value = v; tg.append(o); });
+function td(txt, cls) { return el('td', cls || '', txt == null ? '—' : String(txt)); }
+function renderTb() {
+  const rows = M.filter(m => (!tg.value || m.g === tg.value) && (!tr.checked || m.tag));
+  const tb = $('#chTb tbody'); tb.textContent = '';
+  rows.forEach(m => {
+    const r = el('tr'); r.style.cursor = 'pointer';
+    const txt = td(m.text.length > 28 ? m.text.slice(0, 28) + '…' : m.text); txt.title = m.text;
+    r.append(td('p_' + m.id), td(`${PH[m.ph].d.slice(5)} ${m.t}`), td(m.g), td(m.turn, 'n'), td(pName(m.who)), td(m.type),
+      td(stTxt(m.stance), 'n' + (m.stance > 0 ? ' up' : m.stance < 0 ? ' down' : '')),
+      td((m.tag || '').split(' ').filter(Boolean).map(tagCN).join('、') || '—'), td(m.r ? 'p_' + m.r : null), txt);
+    r.onclick = () => {
+      $('#chJson').textContent = JSON.stringify(rowOf(m), null, 2);
+      const b = document.querySelector('#s6 .tab-bar button[data-t="js"]'); if (b) b.click();
+    };
+    tb.append(r);
+  });
+  $('#chTbN').textContent = `${rows.length} / ${M.length} 条 · 点击一行看完整 JSON`;
+}
+[tg, tr].forEach(x => x.addEventListener('change', renderTb));
+renderTb();
+const AT = ['15:30', '20:45', '08:30', '15:00', '19:30'];
+const ab = $('#chAc tbody');
+AC.forEach(a => {
+  const r = el('tr');
+  r.append(td(`${PH[a[0]].d.slice(5)} ${AT[a[0]]}`), td(PH[a[0]].ph), td(P[a[1]][0]), td(a[2]), td(a[3]), td(a[4]));
+  if (a[3] === '缺席') r.style.color = 'var(--warn)';
+  ab.append(r);
+});
+})();
+</script>
+</body>
+</html>

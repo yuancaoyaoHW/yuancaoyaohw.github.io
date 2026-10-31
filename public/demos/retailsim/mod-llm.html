@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llm · 统一 LLM 网关 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* mod-llm 私有样式，前缀 ll- */
+.ll-io{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1.1fr) 34px minmax(0,1fr);gap:8px;align-items:stretch;margin-top:14px}
+.ll-io .card{padding:14px 16px}
+.ll-io h4{margin:0 0 6px;font-size:14px}
+.ll-io ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink2)}
+.ll-io li{margin:4px 0}
+.ll-io .ll-core{border-color:rgba(192,132,252,.55);background:linear-gradient(160deg,rgba(192,132,252,.14),rgba(34,211,238,.04))}
+.ll-ar{display:flex;align-items:center;justify-content:center;color:var(--llm);font-size:20px}
+@media(max-width:860px){.ll-io{grid-template-columns:minmax(0,1fr)}.ll-ar{transform:rotate(90deg);height:24px}}
+h3.ll-h{font-size:16px;margin:28px 0 8px;color:var(--ink)}
+h3.ll-h .ll-k{font:700 12px var(--mono);color:var(--llm);margin-right:8px}
+.ll-svg{border:1px solid var(--line);border-radius:var(--r);background:rgba(5,8,20,.55);padding:8px;margin:14px 0 8px}
+.ll-svg svg{display:block;width:100%;height:auto}
+.ll-svg text{font-family:var(--sans);pointer-events:none}
+.ll-node{cursor:pointer}
+.ll-node rect{fill:rgba(192,132,252,.08);stroke:rgba(192,132,252,.55);stroke-width:1.4;transition:fill .2s,stroke .2s,opacity .2s}
+.ll-node.ok rect{fill:rgba(52,211,153,.08);stroke:rgba(52,211,153,.6)}
+.ll-node.bad rect{fill:rgba(248,113,113,.08);stroke:rgba(248,113,113,.6)}
+.ll-node.ext rect{fill:rgba(34,211,238,.07);stroke:rgba(34,211,238,.55);stroke-dasharray:5 4}
+.ll-node:hover rect,.ll-node:focus rect{fill:rgba(192,132,252,.2)}
+.ll-node.on rect{stroke-width:2.6;fill:rgba(192,132,252,.3);stroke:var(--llm)}
+.ll-node:focus{outline:none}
+.ll-svg.ll-dim .ll-node rect{opacity:.35}
+.ll-svg.ll-dim .ll-node.lit rect{opacity:1}
+.ll-t1{fill:var(--ink);font-size:14px;font-weight:700}
+.ll-t2{fill:var(--mute);font-size:11px}
+.ll-edge{stroke:rgba(148,163,184,.65);stroke-width:1.6;fill:none}
+.ll-edge.ll-e-ok{stroke:rgba(52,211,153,.75)}
+.ll-edge.ll-e-bad{stroke:rgba(248,113,113,.75)}
+.ll-el{fill:var(--mute);font-size:11px}
+.ll-paths{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.ll-paths button[aria-pressed="true"]{background:var(--llm);color:#120a1f;border-color:var(--llm)}
+.ll-info{border:1px solid rgba(192,132,252,.4);border-radius:var(--r);padding:12px 16px;background:rgba(192,132,252,.05);min-height:84px}
+.ll-info b.ll-it{display:block;font-size:15px;margin-bottom:4px}
+.ll-info p{margin:0;font-size:13.5px;color:var(--ink2)}
+.ll-info .ll-ir{display:block;margin-top:6px;font:12px var(--mono);color:var(--llm)}
+.ll-calc{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(max-width:700px){.ll-calc{grid-template-columns:minmax(0,1fr)}}
+.ll-calc label.ctl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;min-width:0}
+.ll-calc select,.ll-calc input,.ll-calc textarea{width:100%;box-sizing:border-box;background:var(--panel2);color:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:6px 8px;font:12.5px var(--mono)}
+.ll-calc .ll-wide{grid-column:1/-1}
+.ll-key{margin-top:12px;font:12.5px/1.6 var(--mono);color:var(--ink2);overflow-wrap:anywhere;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel)}
+.ll-key b{color:var(--llm)}
+.ll-verdict{margin-top:8px;font-size:13.5px;padding:8px 12px;border-radius:10px;border:1px solid var(--line2)}
+.ll-verdict.hit{border-color:rgba(52,211,153,.6);color:var(--ok)}
+.ll-verdict.miss{border-color:rgba(251,191,36,.6);color:var(--warn)}
+.ll-verdict.err{border-color:rgba(248,113,113,.7);color:var(--down)}
+.ll-demo{border:1px solid rgba(192,132,252,.35);border-radius:var(--r);padding:16px;background:rgba(192,132,252,.04)}
+.ll-dots{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
+.ll-dots button{border:1px solid var(--line2);background:var(--panel);color:var(--ink2);font:600 12px var(--mono);border-radius:999px;padding:3px 10px;cursor:pointer}
+.ll-dots button.on{background:var(--llm);color:#120a1f;border-color:var(--llm)}
+.ll-dots button.done{border-color:rgba(192,132,252,.6);color:var(--llm)}
+.ll-st{font-size:15px;font-weight:700;margin:0 0 4px}
+.ll-quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+@media(max-width:700px){.ll-quad{grid-template-columns:minmax(0,1fr)}}
+.ll-quad>div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);font-size:13px;color:var(--ink2);min-width:0}
+.ll-quad b.ll-qt{display:block;font:700 11px var(--mono);color:var(--llm);margin-bottom:4px;letter-spacing:.05em}
+.ll-quad pre{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 var(--mono);color:var(--ink)}
+.ll-quad ul{margin:0;padding-left:16px}
+.ll-state{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-top:10px}
+@media(max-width:700px){.ll-state{grid-template-columns:minmax(0,1fr)}}
+.ll-state>div{border:1px dashed var(--line2);border-radius:10px;padding:10px 12px;min-width:0}
+.ll-state b.ll-qt{display:block;font:700 11px var(--mono);color:var(--ink2);margin-bottom:6px}
+.ll-rows{font:12px/1.6 var(--mono);color:var(--ink2);overflow-wrap:anywhere}
+.ll-rows div{padding:2px 0;border-bottom:1px solid var(--line)}
+.ll-rows div.ll-new{color:var(--llm)}
+.ll-rows .ll-empty{color:var(--mute);border:0}
+.ll-ex{display:inline-block;font:700 11px var(--mono);color:var(--warn);border:1px dashed rgba(251,191,36,.6);border-radius:6px;padding:1px 7px}
+.ll-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.ll-ctl .ll-pos{font:600 12.5px var(--mono);color:var(--ink2);margin-left:auto}
+.ll-tbl td:first-child{white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow">模块页 · llm</div>
+<h1><span class="grad">llm</span> · 统一 LLM 网关</h1>
+<p class="lead">所有模型调用都从这一层出入：它决定一次请求能不能复用缓存、坏输出怎么重试、拒答怎么记账，并把每一次调用写进调用日志。</p>
+<div class="meta">
+<span class="chip llm"><i></i>产物：调用日志</span>
+<span class="chip warn"><i></i>重放未命中即报错</span>
+<span class="chip val"><i></i>解析失败、拒答、超时分开记</span>
+<span class="chip orch"><i></i>自写薄网关，不用 LiteLLM</span>
+</div>
+</header>
+<section id="s1" class="reveal">
+<h2><span class="num">01</span>职责一览</h2>
+<p class="sub">一句话：llm 是全系统唯一跟模型厂商打交道的地方，负责路由、缓存、批处理、结构化输出和成本计量，产物是调用日志。<span class="ref">§3.3</span></p>
+<p>"网关"在这里指一层很薄的转发代码：上游模块把"要问模型什么"交给它，它决定这次请求要不要真的发出去、发给谁、怎样检查回来的 JSON，最后把结果交回上游，并把过程记一笔账。agents、events、social 等模块都不直接调用厂商 SDK。设计文档还规定，Jev 这类分类器 API 也经此调用。<span class="ref">§3.3</span><span class="ref">§6.6</span></p>
+<div class="ll-io">
+<div class="card">
+<h4>输入</h4>
+<ul>
+<li>完整消息：由 <a href="mod-prompts.html">prompts</a> 的模板渲染，调用方是 <a href="mod-agents.html">agents</a>（每次激活的第 1 次调用"解读 + 意向"、第 2 次调用"发帖"，以及低频的反思）、<a href="mod-events.html">events</a>（抽取与改写）、<a href="mod-social.html">social</a>（发布者 L2–L4 的帖子、群聊接话）、<a href="mod-validation.html">validation</a>（V3 硅基调查）<span class="ref">§6.1</span><span class="ref">§7.1</span><span class="ref">§12.1</span></li>
+<li>输出 schema：<a href="mod-schemas.html">schemas</a> 用 Pydantic v2 导出的 JSON schema，例如 <code>BeliefUpdate</code>、<code>DecisionIntent</code>、<code>FundingIntent</code><span class="ref">§3.3</span><span class="ref">§14.4</span></li>
+<li>调用参数：底座模型（由运行配置统一指定，全体智能体同一个）、人设卡里生成时绑定的采样温度 <code>temperature</code>、种子、运行模式（录制 / 重放）<span class="ref">§4.1</span><span class="ref">§6.6</span><span class="ref">§14.4</span></li>
+</ul>
+</div>
+<div class="ll-ar">→</div>
+<div class="card ll-core">
+<h4>llm 网关</h4>
+<ul>
+<li>算缓存键，查共享响应缓存<span class="ref">§14.4</span></li>
+<li>未命中时：录制模式调用厂商；重放模式直接报错<span class="ref">§14.4</span></li>
+<li>按 schema 校验回来的 JSON；解析失败换种子重试，拒答单独记账<span class="ref">§6.2</span></li>
+<li>并发与批量发送<span class="ref">§9.1</span><span class="ref">§14.3</span></li>
+<li>按 <code>run_id</code> 与 <code>persona_id</code> 计量 token，Jev 按分类器类型单独计量<span class="ref">§14.4</span></li>
+</ul>
+</div>
+<div class="ll-ar">→</div>
+<div class="card">
+<h4>输出</h4>
+<ul>
+<li>校验通过的结构化对象，交回调用方（例如 agents 拿到 <code>BeliefUpdate</code>）<span class="ref">§6.2</span></li>
+<li>"未激活"标记与原因（解析失败 / 拒答 / 超时），交回调用方与 <a href="mod-orchestrator.html">orchestrator</a>，写进激活表的 <code>absent_reason</code><span class="ref">§6.2</span><span class="ref">§9.1</span><span class="ref">§10.3</span></li>
+<li>调用日志：缓存命中率、token 用量、解析失败率、拒答率与超时率写入运行清单 <code>RunManifest</code><span class="ref">§9.4</span></li>
+<li>Jev 分类结果，交给 <a href="mod-validation.html">validation</a> 做立场、事后视角等检测<span class="ref">§12.1</span></li>
+</ul>
+</div>
+</div>
+<p>llm 不拼 prompt，也不定义输出类型。prompt 文本归 prompts，类型归 schemas，什么时候调用归 orchestrator 的激活机制<span class="ref">§9.1</span>。llm 只保证同一份请求得到同一份可追溯的回答。</p>
+</section>
+<section id="s2" class="reveal">
+<h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">模拟要能重放、要能分叉、要能算清楚花了多少，这三件事都只能在"调用模型"这一个口子上做。</p>
+<p><b>可重放。</b>设计文档的第 5 条原则是：事件溯源、LLM 响应缓存、固定种子、锁定模型版本合在一起，任何一个交易日都可以重放和分叉。<span class="ref">§3.1</span>同一份运行清单重放必须得到完全相同的结果。<span class="ref">§5.5</span>厂商 API 本身不保证确定性，同一请求今天和下个月可能回答不同；厂商的别名（例如 DeepSeek）还会悄悄指向新版本。<span class="ref">§14.4</span><span class="ref">§13.4</span>能让某个交易日再跑一遍还一字不差的，只有把当时的回答存下来，重放时只读存档。这件事必须在所有调用共同经过的地方做，否则漏掉一个模块，整次重放就不可信。</p>
+<p><b>可分叉。</b>反事实实验从某个交易日分叉出去，比如"假如那天没有这条政策"。分叉点之前的每一次调用都应该命中缓存，不花一分钱、不改一个字。<span class="ref">§14.3</span><span class="ref">§14.4</span>所以缓存跨运行共享，不放在单次运行目录里。<span class="ref">§3.3</span></p>
+<p><b>可计量、可监控。</b>MVP 单次运行一个交易日，第 1 次调用约 3.3M 输入 token，加上第 2 次调用的全员发帖上限共约 7.26M（全员激活的上限口径），多种子、多底座时还要乘以种子数 × 底座数，Phase 1 的 3 × 2 即 6 倍<span class="ref">§14.2</span>。token 用量、缓存命中率、解析失败率、拒答率与超时率都要进运行清单<span class="ref">§9.4</span>，超阈值要告警<span class="ref">§14.4</span>。拒答会集中出现在政策类新闻上，不能当随机缺失处理<span class="ref">§13.3</span>，这要求每次拒答都被单独记下并能按话题切片。API 密钥只放环境变量或密钥服务，调用日志脱敏后落盘<span class="ref">§16.4</span>，这些规则也只需要在一处执行。</p>
+<div class="callout warn"><b class="t">反例：每个模块各自调用 SDK</b>
+设想 agents 和 events 各自 <code>import openai</code> 直接发请求。events 那边忘了把结构化输出后端写进缓存键，后端升级以后回答变了，重放时却照样"命中"旧的存档，没有任何报错；agents 那边解析失败时悄悄填了默认值，失败率没进清单；两边的 token 各记各的，对不上总数。设计文档列出的五项测试里，"重放一致性测试"和"token 用量、解析失败率、拒答率与超时率超阈值告警"<span class="ref">§14.4</span>在这种结构下没有地方挂。（反例为本页构造，用来说明集中一处的必要性。）</div>
+</section>
+<section id="s3" class="reveal">
+<h2><span class="num">03</span>机制详解</h2>
+<p class="sub">一次调用从进门到出门要经过：算缓存键 → 查缓存 → 按模式分流 → 调厂商 → 判别回复 → 写缓存与日志 → 计量。下图可以点节点，也可以按路径高亮。</p>
+<div class="ll-svg" id="llFlow">
+<svg viewBox="0 0 960 450" role="img" aria-label="llm 网关请求流程图">
+<defs><marker id="llArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="rgba(148,163,184,.85)"/></marker></defs>
+<g class="ll-edges">
+<path class="ll-edge" d="M170 58H198" marker-end="url(#llArr)"/>
+<path class="ll-edge" d="M350 58H378" marker-end="url(#llArr)"/>
+<path class="ll-edge ll-e-ok flowline" d="M530 58H758" marker-end="url(#llArr)"/>
+<text class="ll-el" x="620" y="50">命中</text>
+<path class="ll-edge" d="M455 86V148" marker-end="url(#llArr)"/>
+<text class="ll-el" x="462" y="124">未命中</text>
+<path class="ll-edge ll-e-bad" d="M380 178H352" marker-end="url(#llArr)"/>
+<text class="ll-el" x="352" y="168">重放</text>
+<path class="ll-edge" d="M530 178H558" marker-end="url(#llArr)"/>
+<text class="ll-el" x="528" y="168">录制</text>
+<path class="ll-edge" d="M635 206V268" marker-end="url(#llArr)"/>
+<path class="ll-edge ll-e-ok" d="M710 298H758" marker-end="url(#llArr)"/>
+<text class="ll-el" x="712" y="290">通过</text>
+<path class="ll-edge ll-e-bad" d="M560 298H532" marker-end="url(#llArr)"/>
+<text class="ll-el" x="545" y="262" text-anchor="middle">解析失败</text>
+<path class="ll-edge ll-e-bad flowline" d="M455 270V238H590V208" marker-end="url(#llArr)"/>
+<text class="ll-el" x="466" y="232">换种子，最多 2 次</text>
+<path class="ll-edge ll-e-bad" d="M455 326V368" marker-end="url(#llArr)"/>
+<text class="ll-el" x="462" y="352">仍失败</text>
+<path class="ll-edge ll-e-bad" d="M635 326V368" marker-end="url(#llArr)"/>
+<text class="ll-el" x="642" y="352">拒答</text>
+<path class="ll-edge" d="M850 326V368" marker-end="url(#llArr)"/>
+<path class="ll-edge" d="M940 66H953V390H942" marker-end="url(#llArr)"/>
+</g>
+<g class="ll-node ext" data-n="caller" tabindex="0" role="button" aria-label="调用方"><rect x="20" y="30" width="150" height="56" rx="10"/><text class="ll-t1" x="95" y="55" text-anchor="middle">调用方</text><text class="ll-t2" x="95" y="74" text-anchor="middle">agents / events / social</text></g>
+<g class="ll-node" data-n="key" tabindex="0" role="button" aria-label="构建缓存键"><rect x="200" y="30" width="150" height="56" rx="10"/><text class="ll-t1" x="275" y="55" text-anchor="middle">构建缓存键</text><text class="ll-t2" x="275" y="74" text-anchor="middle">七项字段取哈希</text></g>
+<g class="ll-node" data-n="cache" tabindex="0" role="button" aria-label="查共享缓存"><rect x="380" y="30" width="150" height="56" rx="10"/><text class="ll-t1" x="455" y="55" text-anchor="middle">查共享缓存</text><text class="ll-t2" x="455" y="74" text-anchor="middle">跨运行共享</text></g>
+<g class="ll-node ok" data-n="hit" tabindex="0" role="button" aria-label="返回缓存结果"><rect x="760" y="30" width="180" height="56" rx="10"/><text class="ll-t1" x="850" y="55" text-anchor="middle">返回缓存结果</text><text class="ll-t2" x="850" y="74" text-anchor="middle">不发请求，不耗 token</text></g>
+<g class="ll-node" data-n="mode" tabindex="0" role="button" aria-label="看运行模式"><rect x="380" y="150" width="150" height="56" rx="10"/><text class="ll-t1" x="455" y="175" text-anchor="middle">看运行模式</text><text class="ll-t2" x="455" y="194" text-anchor="middle">录制 / 重放</text></g>
+<g class="ll-node bad" data-n="replay" tabindex="0" role="button" aria-label="重放未命中报错"><rect x="200" y="150" width="150" height="56" rx="10"/><text class="ll-t1" x="275" y="175" text-anchor="middle">报错停止</text><text class="ll-t2" x="275" y="194" text-anchor="middle">不静默重调</text></g>
+<g class="ll-node ext" data-n="vendor" tabindex="0" role="button" aria-label="调用厂商"><rect x="560" y="150" width="150" height="56" rx="10"/><text class="ll-t1" x="635" y="175" text-anchor="middle">调用厂商</text><text class="ll-t2" x="635" y="194" text-anchor="middle">openai SDK + base_url</text></g>
+<g class="ll-node" data-n="check" tabindex="0" role="button" aria-label="判别回复"><rect x="560" y="270" width="150" height="56" rx="10"/><text class="ll-t1" x="635" y="295" text-anchor="middle">判别回复</text><text class="ll-t2" x="635" y="314" text-anchor="middle">Pydantic 校验</text></g>
+<g class="ll-node ok" data-n="write" tabindex="0" role="button" aria-label="写缓存与日志"><rect x="760" y="270" width="180" height="56" rx="10"/><text class="ll-t1" x="850" y="295" text-anchor="middle">写缓存与日志</text><text class="ll-t2" x="850" y="314" text-anchor="middle">失败的尝试也写</text></g>
+<g class="ll-node bad" data-n="retry" tabindex="0" role="button" aria-label="换种子重试"><rect x="380" y="270" width="150" height="56" rx="10"/><text class="ll-t1" x="455" y="295" text-anchor="middle">换种子重试</text><text class="ll-t2" x="455" y="314" text-anchor="middle">种子进缓存键</text></g>
+<g class="ll-node bad" data-n="absent" tabindex="0" role="button" aria-label="记未激活"><rect x="380" y="370" width="150" height="56" rx="10"/><text class="ll-t1" x="455" y="395" text-anchor="middle">记"未激活"</text><text class="ll-t2" x="455" y="414" text-anchor="middle">原因：解析失败</text></g>
+<g class="ll-node bad" data-n="refuse" tabindex="0" role="button" aria-label="拒答单独记账"><rect x="560" y="370" width="150" height="56" rx="10"/><text class="ll-t1" x="635" y="395" text-anchor="middle">拒答单独记账</text><text class="ll-t2" x="635" y="414" text-anchor="middle">不重试，当日缺席</text></g>
+<g class="ll-node" data-n="meter" tabindex="0" role="button" aria-label="计量"><rect x="760" y="370" width="180" height="56" rx="10"/><text class="ll-t1" x="850" y="395" text-anchor="middle">计量</text><text class="ll-t2" x="850" y="414" text-anchor="middle">run_id × persona_id</text></g>
+</svg>
+</div>
+<div class="ll-paths" id="llPaths" role="group" aria-label="按路径高亮">
+<button class="btn" type="button" data-p="hit" aria-pressed="false">缓存命中</button>
+<button class="btn" type="button" data-p="rec" aria-pressed="false">录制：未命中后调用</button>
+<button class="btn" type="button" data-p="retry" aria-pressed="false">解析失败，重试成功</button>
+<button class="btn" type="button" data-p="absent" aria-pressed="false">两次重试仍失败</button>
+<button class="btn" type="button" data-p="refuse" aria-pressed="false">拒答</button>
+<button class="btn" type="button" data-p="replay" aria-pressed="false">重放：未命中</button>
+<button class="btn" type="button" data-p="" aria-pressed="false">清除高亮</button>
+</div>
+<div class="ll-info" id="llInfo" aria-live="polite"><b class="ll-it">点一个节点或一条路径</b><p>每个节点的说明会显示在这里，并给出对应的文档条目。</p></div>
+
+<h3 class="ll-h"><span class="ll-k">3.1</span>自写薄网关</h3>
+<p>"薄"的意思是：网关只做下面几件事，不做 prompt 编排、不做智能体记忆、不做重试以外的容错策略。设计文档技术栈表的网关一行写的是"自写薄网关，官方 <code>openai</code> SDK 换 <code>base_url</code>；不用 LiteLLM"。<span class="ref">§14.4</span></p>
+<div class="callout decide"><b class="t">已定（v0.3 §14.4，来自架构讨论 A4）</b>
+网关自写薄层，不用 LiteLLM。国内厂商走 OpenAI 兼容接口，用官方 <code>openai</code> SDK 换 <code>base_url</code> 调用，不兼容的厂商单写适配器。缓存键定义、重放未命中报错、失败尝试入缓存（§6.2）、按 <code>run_id</code> 与 <code>persona_id</code> 计量都自己实现。Jev 经同一网关，按分类器类型单独计量。</div>
+<p>为什么自写，§14.4 写了两条理由。第一，网关最要紧的几件事，即缓存键怎么定义、重放未命中时报错、失败的尝试也写入缓存、按 <code>run_id</code> 与 <code>persona_id</code> 计量，用现成框架也都得自己实现。第二，国内厂商走 OpenAI 兼容接口，官方 <code>openai</code> SDK 换 <code>base_url</code> 就能调用，少一个大依赖，锁版本和复现都更容易。设计文档对整个技术栈的总体判断也是"核心自己写薄的一层"，因为现成框架没有一个同时满足日频步进、事件溯源、响应缓存与可重放。<span class="ref">§14.4</span><span class="ref">§2.4</span></p>
+<p>网关的职责边界来自 §3.3 的模块表：路由、缓存、批处理、结构化输出、成本计量，Jev 等分类器 API 也经它调用，产物是调用日志。<span class="ref">§3.3</span>本页把这五项按一次请求的先后顺序展开，见上图与下面几小节。</p>
+<p>谁负责：设计文档给 Phase 0 排了 2–3 周，内容之一就是搭 LLM 网关<span class="ref">§15.1</span>；人员配置里 1–2 名平台工程师负责调度、LLM 网关与数据层<span class="ref">§15.3</span>。</p>
+<h3 class="ll-h"><span class="ll-k">3.2</span>缓存键：哪些东西变了就算"另一次请求"</h3>
+<p>缓存键是一次请求的指纹。设计文档规定：缓存键 = 哈希（模型 ID 与带日期的版本号、推理引擎版本、结构化输出后端、schema、采样参数、种子、完整消息）。<span class="ref">§14.4</span>七项里任何一项不同，就是另一次请求，不能复用旧回答。</p>
+<div class="tbl-wrap"><table class="tbl ll-tbl">
+<thead><tr><th>字段</th><th>为什么要进键</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>模型 ID 与带日期的版本号</td><td>厂商别名会切到新版本，所以记带日期的版本，不记别名</td><td><span class="ref">§13.4</span><span class="ref">§14.4</span></td></tr>
+<tr><td>推理引擎版本</td><td>设计文档把它列为键的一项，没有单独说明理由；本页推断是因为自部署时引擎（vLLM 0.32.0 或 SGLang 0.5.22）及其版本可能影响输出〔推断〕。MVP 全走国内厂商 API、不自部署<span class="ref">§14.4</span>，这一项此时记什么，文档未定义</td><td><span class="ref">§14.4</span></td></tr>
+<tr><td>结构化输出后端</td><td>官方文档提示更换结构化输出后端会改变输出，所以后端要锁定（另：vLLM 自 v0.12.0 起移除 <code>guided_json</code>，改用 structured outputs 接口）</td><td><span class="ref">§14.4</span></td></tr>
+<tr><td>schema</td><td>约束解码按 schema 走，字段一变，合法输出的集合就变</td><td><span class="ref">§6.2</span></td></tr>
+<tr><td>采样参数</td><td>温度写在人设卡的 <code>temperature</code> 里，生成时绑定、运行期不变；温度只调到输出不重复为止，不靠高温制造差异</td><td><span class="ref">§4.1</span><span class="ref">§13.2</span></td></tr>
+<tr><td>种子</td><td>解析失败重试时换新种子，新种子进键，所以每次重试都有自己的存档</td><td><span class="ref">§6.2</span><span class="ref">§14.4</span></td></tr>
+<tr><td>完整消息</td><td>同一模板渲染出的文本，只要今日信息或记忆不同就是不同请求</td><td><span class="ref">§14.4</span></td></tr>
+</tbody></table></div>
+<p>哈希用什么算法，设计文档没有定义。下面的计算器用 FNV-1a 只为演示"字段一变、键就变"，<span class="ll-ex">示意，未实现</span>。可以先点"记为已录制"，再改一个字段，看录制模式和重放模式分别怎么处理。</p>
+<div class="card" id="llCalc">
+<div class="ll-calc">
+<label class="ctl">模型 ID 与带日期的版本号<select id="llcModel"><option>qwen-示例-2026-09-15</option><option>deepseek-示例-2026-08-21</option><option>deepseek-chat（厂商别名，无日期）</option></select></label>
+<label class="ctl">推理引擎 / 厂商<select id="llcEngine"><option>厂商 API</option><option>vLLM 0.32.0</option><option>SGLang 0.5.22</option></select></label>
+<label class="ctl">结构化输出后端<select id="llcBackend"><option>厂商 JSON schema</option><option>xgrammar 0.2.8</option></select></label>
+<label class="ctl">schema<select id="llcSchema"><option>BeliefUpdate</option><option>DecisionIntent</option><option>FundingIntent</option></select></label>
+<label class="ctl">温度（示例）<input id="llcTemp" type="number" step="0.1" min="0" max="2" value="0.7"></label>
+<label class="ctl">种子（示例）<input id="llcSeed" type="number" step="1" value="20260930"></label>
+<label class="ctl ll-wide">完整消息（示例，人设为化名）<textarea id="llcMsg" rows="3">[规则] … [人设卡] 老周，退休教师，持有银行股 … [今日信息] 快讯：某部门发布支持资本市场的政策 … [输出 schema] BeliefUpdate</textarea></label>
+<label class="ctl">运行模式<select id="llcMode"><option value="rec">录制</option><option value="replay">重放</option></select></label>
+</div>
+<div class="ll-key" id="llcKey">缓存键：计算中…</div>
+<div class="ll-verdict" id="llcVerdict" aria-live="polite">—</div>
+<div class="ll-ctl"><button class="btn pri" type="button" id="llcSave">记为已录制</button><button class="btn" type="button" id="llcClear">清空缓存</button><span class="ll-pos" id="llcCount">缓存条目：0</span></div>
+</div>
+<details class="acc"><summary>为什么键里记带日期的模型版本，不记厂商别名</summary><div class="body">设计文档把"模型静默更新"列为风险，应对是锁定带日期的模型版本，并把响应缓存作为可重放的存档。<span class="ref">§13.4</span>厂商别名（例如 DeepSeek）会切到新版本，所以运行清单写带日期的版本号，缓存键也用它。<span class="ref">§14.4</span>如果键里只记别名，别名切换后旧缓存仍会"命中"，回答却已经和新模型对不上。MVP 全走 API，做不到确定性重执行，重放只靠响应缓存存档。<span class="ref">§14.4</span></div></details>
+<details class="acc"><summary>为什么 run_id 不在缓存键里</summary><div class="body">缓存跨运行共享，分叉与重放都要复用它。<span class="ref">§3.3</span><span class="ref">§14.4</span>分叉出来的新运行有新的 <code>run_id</code>，但分叉点之前的请求和原运行完全一样，应该命中原运行的存档。<span class="ref">§14.3</span>如果把 <code>run_id</code> 放进键，每个分叉都会从零开始调用。<code>run_id</code> 用在计量上<span class="ref">§14.4</span>，不用在键上。</div></details>
+<details class="acc"><summary>为什么键里放完整消息，不放模板 ID</summary><div class="body">同一模板每天渲染出的文本不同：今日信息、检索到的记忆、信息流的顺序都在变，信息流还按种子为每个智能体打乱。<span class="ref">§13.4</span>模板内容的哈希另外写进运行清单。<span class="ref">§9.4</span>两处各管一件事：清单说明"用了哪版模板"，缓存键保证"这一字一句的请求对应这一份回答"。</div></details>
+<details class="acc"><summary>为什么推理引擎版本与结构化输出后端也要进键</summary><div class="body">设计文档写明，官方文档提示更换结构化输出后端会改变输出，所以后端要锁定。另一条相关事实是 vLLM 自 v0.12.0 起移除了 <code>guided_json</code>，改用 structured outputs 接口，接口本身也会随版本变。<span class="ref">§14.4</span>自部署时还可以打开 vLLM 的 batch invariance 或 SGLang 的 deterministic inference，速度代价未核实。<span class="ref">§14.4</span>这说明"同一模型、同一消息"不足以保证同一回答，所以引擎与后端要一起进键（引擎一项的理由为本页推断）。</div></details>
+<p>嵌入模型不走厂商 API：设计文档定为本地运行开源中文嵌入模型（如 BGE 系列），锁定权重版本，结果按文本哈希缓存，版本号写入运行清单与缓存键。<span class="ref">§14.4</span><span class="ref">§9.4</span>记忆检索、背景故事多样性检查与同质化诊断共用它。<span class="ref">§6.4</span>嵌入调用是否也经本网关、与 LLM 响应缓存是否同一套存储，文档未定义。</p>
+
+<h3 class="ll-h"><span class="ll-k">3.3</span>重放只读缓存，未命中即报错</h3>
+<p>网关有两种运行模式。<b>录制</b>：未命中就真的调用厂商，回答写进缓存。<b>重放</b>：只从缓存读，未命中就报错，不静默重调。<span class="ref">§14.4</span>（设计文档只写了"重放只读缓存"，"录制"是本页为正常运行起的称呼，文档未定义这个模式名。）</p>
+<p>为什么不"未命中就补调一次"：补调得到的是今天的模型对这条请求的回答，和当时的回答可能不同。补调后整次重放看起来跑通了，其实混进了一条新回答，后续的帖子、信念和成交都可能因此偏离。报错能让人立刻发现"缓存键漏记了什么字段"或"消息构建有不确定性"，这正是设计文档要求的重放一致性测试要抓的问题。<span class="ref">§14.4</span></p>
+<p>API 模型做不到确定性，只能靠缓存；自部署可以打开确定性推理，但 MVP 不自部署<span class="ref">§14.4</span>，所以 MVP 的可重放性完全由缓存承担。<span class="ref">§14.4</span>反事实分叉时，分叉点之前的请求全部命中缓存；分叉点之后的请求是新的，需要真正调用。<span class="ref">§9.3</span><span class="ref">§14.3</span><span class="ref">§14.4</span>分叉运行在网关里对应哪种模式，文档未定义。</p>
+<h3 class="ll-h"><span class="ll-k">3.4</span>解析失败、拒答与超时：三种缺席，分开记</h3>
+<p>厂商回来的东西先过一道判别。<b>解析失败</b>指回答到了，但用 Pydantic 按 schema 校验不通过，比如 <code>stance</code> 超出 -2..2，或者 <code>reasons</code> 超过 3 个。<span class="ref">§6.2</span><b>拒答</b>指模型不肯写，例如对政策话题回一句"无法讨论"。两者的成因可能不同（本页解读，文档未写这条理由）：前者多半是随机的格式错误，换个种子再采一次就可能通过；后者是模型的内容策略，再采几次大概率还是拒。设计文档写明拒答集中在政策与政治类新闻上，不能当作随机缺失直接丢弃。<span class="ref">§13.3</span></p>
+<p>校验方式：输出由 Pydantic 校验，推理框架支持时再加 JSON schema 约束解码。<span class="ref">§6.2</span>MVP 全走厂商 API<span class="ref">§14.4</span>，约束解码是否可用取决于厂商，所以网关在回答到手后一律用同一份 Pydantic 类型再校验一次。字段约束本身来自 schemas：例如 <code>stance</code> 是 <code>Literal[-2, -1, 0, 1, 2]</code>，<code>reasons</code> 是 <code>Field(max_length=3)</code>。<span class="ref">§6.2</span></p>
+<div class="callout decide"><b class="t">已定（v0.3 §6.2、§9.1，来自架构讨论 A4）</b>
+<ul>
+<li><b>解析失败</b>（Pydantic 校验不通过）：换新种子重试，种子进缓存键，最多 2 次；仍失败，该智能体当日记"未激活"、原因"解析失败"，不填默认值，也不沿用上期信念。</li>
+<li><b>拒答</b>：单独记类，不重试，当日同样记缺席；拒答率按话题与人群切片，作为底座选型扣分（§13.3）。</li>
+<li><b>超时</b>：持续运行中盘前调用到 09:15 仍未完成的智能体，当日记为未激活、原因"超时"，不推迟下单（§9.1）。</li>
+<li>失败的尝试也写入缓存，重放时复现同一重试序列。解析失败率、拒答率与超时率写入运行清单并告警（§9.4、§14.4）；检查缺席是否集中在某些人群或行情日，结果放进 V1、V3 报告。</li>
+<li>三种缺席都照样记入激活表，<code>status</code> 与 <code>absent_reason</code>（解析失败 / 拒答 / 超时）两列区分（§9.1、§10.3）。</li>
+</ul></div>
+<p>为什么不沿用上期信念（本页解读，文档未写这条理由）：沿用等于替智能体编了一份"今天没变"的回答，下游会把它当成真实的态度，失败多的日子里人群情绪曲线会被人为压平。记"未激活"与 orchestrator 的激活机制口径一致：未激活者保持持仓，不发帖。<span class="ref">§9.1</span>缺席是可见的，能被统计、能被检查是否集中。</p>
+<p>为什么拒答不重试：设计文档规定不用越狱提示，遵守厂商政策。<span class="ref">§13.3</span>本页的解读是，反复重试等于"试到它写为止"，还会把拒答率算低，而拒答率要计入选型扣分。<span class="ref">§6.2</span>设计文档引用过一个先例：用 2,000 个中国人设做民意模拟时，DeepSeek-R1 有 1,618 个无效输出（推理过长或疑似审查）。<span class="ref">§13.3</span><span class="ref">§2.3</span>拒答集中在政策与政治类新闻上，恰好是本平台最关心的输入，所以要按话题切片；某类事件拒答率高的模型不参与该类事件的情景实验。<span class="ref">§13.3</span></p>
+<p>为什么失败的尝试也要写进缓存：设计文档的理由是重放时复现同一重试序列。<span class="ref">§6.2</span><span class="ref">§14.4</span>具体过程是：重放时同一条请求第一次读到的仍是那份坏 JSON，网关照样判它失败、照样换同一个新种子、照样读到第二次的存档。重放与录制走的是同一条路径。如果只存成功回答，重放时第一次请求就会未命中报错。</p>
+<p>超时这条只对持续运行规定，持续运行的各激活点按真实时间运行<span class="ref">§3.4</span><span class="ref">§9.1</span>；历史推演是否也设截止，文档没有写。09:15 的截止由谁执行（网关取消请求，还是 orchestrator 到点不再等待），文档未定义。</p>
+<p>拒答怎么识别（关键词、厂商返回的拒绝标记，还是分类器），文档未定义〔需复核〕。设计文档另外要求按模型、按事件类别监控拒答率、无效输出率、免责声明率与说教率。<span class="ref">§13.3</span></p>
+
+<h3 class="ll-h"><span class="ll-k">3.5</span>批处理与并发</h3>
+<p>每次激活最多两次调用：第 1 次（全员）解读并给出意向，只要结构化字段；第 2 次只对想发帖的智能体，写帖子正文。<span class="ref">§6.1</span>网关按激活点分步处理：先并发或批量发送该激活点全部第 1 次调用并校验 JSON；再由内核统一做约束与成交判定；最后对发帖者发送第 2 次调用；群聊接话在其后按种子顺序进行。<span class="ref">§14.4</span><span class="ref">§6.3</span><span class="ref">§8.2</span><span class="ref">§7.1</span>第 2 次调用要等内核跑完，因为它的输入里有当日意向与实际成交（含未执行原因）。<span class="ref">§6.1</span>同一阶段内的激活者并发执行（异步批量调用 LLM）；阶段之间严格按时钟推进，本阶段发的帖子下一阶段才可见，所以并发结果与执行顺序无关；唯一例外是群聊，同群在阶段内顺序进行最多 M 轮接话，只走发言调用。<span class="ref">§9.1</span>这对网关的含义是：同一批第 1 次调用之间没有依赖，可以一起发出去、一起收回来，回答的先后不影响结果，也不影响缓存键；第 2 次调用同理。群聊接话有先后依赖，要按种子顺序逐条发。并发层 MVP 用 asyncio，规模化后用 Ray。<span class="ref">§14.4</span></p>
+<p>省钱的办法里有几条落在网关。<span class="ref">§14.3</span>批处理："回放模式不要求实时，可走厂商批处理接口或离线批推理"（第 4 条）。文档没有展开"回放模式"，本页理解为在历史行情上跑、不需要当日出结果的运行；它和上文"只读缓存的重放"是两件事，后者根本不发请求。响应缓存：重放或分叉时，分叉点之前的调用全部命中（第 5 条）。前缀缓存：prompt 按"规则说明 → 人设卡 → 长期信念 → 检索到的记忆 → 当日信息 → 输出 schema"排列，静态在前、动态在后，同一激活的两次调用共用静态前缀（第 3 条）。<span class="ref">§6.1</span>第 2 次调用的约 3.0k 前缀与第 1 次相同，可命中前缀缓存。<span class="ref">§14.2</span>自部署推理引擎会自动复用共享前缀，但只加速预填充；API 侧的缓存有最小长度与过期时间限制，收益取决于复用间隔。<span class="ref">§14.3</span></p>
+<p>各家厂商的组合限制不同：阿里云百炼（DashScope）的批处理不能与上下文缓存叠加；Anthropic 的缓存读取可以与批处理折扣叠加；DeepSeek 没有批处理接口（2026-10 的厂商文档），成本测算按实际组合计。<span class="ref">§14.4</span>schema 保持扁平：一次厂商测试（8B 模型）中，嵌套 schema 让结构化输出的开销在 vLLM 上达到 +42%、SGLang 上 +6%，扁平 schema 为 +6% 与 +2%；同一来源的吞吐测试（70B FP8、1×H100、50 并发、80% 共享前缀）为 vLLM 1,850 tok/s、开前缀缓存后 2,100，SGLang 2,550。都是单次测试，选型前要在自己的负载上重测。<span class="ref">§14.4</span>后两组数只在自部署时用得上。</p>
+<h3 class="ll-h"><span class="ll-k">3.6</span>计量：每一次调用记在谁的账上</h3>
+<p>设计文档规定按 <code>run_id</code> 与 <code>persona_id</code> 计量，Jev 按分类器类型单独计量。<span class="ref">§14.4</span>运行清单里与网关相关的几项是缓存命中率、token 用量、解析失败率、拒答率与超时率，另有事后视角命中率、嵌入模型版本与意向来源。<span class="ref">§9.4</span></p>
+<p>按 <code>persona_id</code> 计量是为了回答"钱花在哪类人身上"：Tier-A 深度智能体有完整记忆与反思、每个激活点都激活<span class="ref">§14.1</span>，单人 token 自然多；按人汇总后能看出缺席是否集中在某些人群<span class="ref">§6.2</span>。token 用量、解析失败率、拒答率与超时率超阈值时告警<span class="ref">§14.4</span>，阈值是多少，文档未定义。§14.2 还列了几类要单独计量、不在主表内的调用：盘中检查点激活、群聊接话、发布者层 L2–L4 的帖子、反思、事件抽取与改写、V3 硅基调查、Jev 评估分类器。<span class="ref">§14.2</span>它们在计量里怎么分类（例如按调用用途打标签），文档未定义。如果 token 用量持续超预算、缓存命中率已无提升空间，止损动作是降低 Tier-A 比例。<span class="ref">§15.2</span></p>
+<p>调用日志落盘前脱敏，API 密钥只放在环境变量或密钥服务里，不进仓库、不进日志。<span class="ref">§16.4</span>调用日志具体有哪些字段，文档未定义。</p>
+
+<h3 class="ll-h"><span class="ll-k">3.7</span>底座模型怎么选</h3>
+<p>"底座"指智能体背后的那个基础模型。底座由运行配置统一指定，同一底座内全体智能体用同一个模型；人设卡只带生成时绑定的采样温度 <code>temperature</code>，运行期不变。<span class="ref">§4.1</span><span class="ref">§6.6</span>同一批人设在不同底座下的行为差异是 V5 稳健性检验的对象。<span class="ref">§6.6</span></p>
+<div class="tbl-wrap"><table class="tbl ll-tbl">
+<thead><tr><th>优先级</th><th>标准</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td class="n">1</td><td>中文口语与网络语体能力</td><td>股吧帖子要像股吧，V2 判别器与盲评会检验<span class="ref">§12.1</span></td></tr>
+<tr><td class="n">2</td><td>政策话题拒答率低</td><td>拒答计入选型扣分；某类事件拒答率高就不用于该类情景实验<span class="ref">§13.3</span></td></tr>
+<tr><td class="n">3</td><td>风格多样性</td><td>防止人群同质化<span class="ref">§13.2</span></td></tr>
+<tr><td class="n">4</td><td>成本</td><td>排最后</td></tr>
+<tr><td>次要</td><td>训练截止日</td><td>只影响哪些历史事件可用于验收<span class="ref">§13.1</span></td></tr>
+</tbody></table></div>
+<p>以上顺序见 §13.3 第 1 条。同节还规定：按模型、按事件类别统计拒答率、无效输出率、免责声明率和说教率，说教率与免责声明率是 V2 扣分项，拒答记为选型扣分（第 4 条）；风格微调不进 MVP，先用提示词加少样本，V2 不达标时再用仿真起点之前的匿名帖训练 LoRA（第 7 条）。<span class="ref">§13.3</span></p>
+<div class="callout decide"><b class="t">已定（v0.3 §14.4、§14.1、§6.6，来自架构讨论 A4）</b>
+<ul>
+<li><b>部署</b>：MVP 全走国内厂商 API，不自部署。两个底座都从有开源权重的模型中选（如 Qwen、DeepSeek 系列），以后转自部署时可用同一权重做确定性重放和 LoRA 风格微调；闭源模型只作对比，不作主底座。具体型号在 Phase 0 按 §13.3 选型标准与记忆探针（§13.1）测完再定；团队若有 GPU，Phase 0 可加一个自部署底座对比。</li>
+<li><b>分层与模型</b>：同一底座内 Tier-A 与 Tier-B 用同一个模型，分层只体现在记忆深度、反思频率与激活频率，避免人设差异与模型大小混淆。"2 个底座"即两个模型，跨底座比较时全体一起换。小模型延到 Phase 2 扩规模时再用，切换前在开发事件上用同一批 Tier-B 人设对比大小模型，V2 文风指标与 V5 一致性不退化才切。</li>
+</ul></div>
+<p>海外模型的位置：§13.3 第 2 条做跨厂商对照，用同一批事件卡比较国产底座与海外闭源对比模型的 policy_trust 与恐惧分布，系统性差异超过阈值就记为模型偏差，按模型分别报告。<span class="ref">§13.3</span>海外模型在这里只作对比，不作主底座。§13.2 第 4 条也写明，模型差异体现为跨底座的结果差，计入 V5，不在单次运行内混用。<span class="ref">§13.2</span>对网关来说，一次运行只连一个底座；对照模型的调用同样经网关、同样进缓存与计量（本页理解，文档未单列）。</p>
+<h3 class="ll-h"><span class="ll-k">3.8</span>token 估算</h3>
+<p>每次激活最多两次调用，两次的输入大小不同。<span class="ref">§6.1</span><span class="ref">§14.2</span></p>
+<div class="tbl-wrap"><table class="tbl ll-tbl">
+<thead><tr><th>输入组成</th><th class="n">第 1 次调用（全员）</th><th class="n">第 2 次调用（仅发帖者）</th></tr></thead>
+<tbody>
+<tr><td>人设与背景故事</td><td class="n">600</td><td class="n" rowspan="4">3,000（与第 1 次共用的前缀）</td></tr>
+<tr><td>记忆</td><td class="n">800</td></tr>
+<tr><td>信息流</td><td class="n">1,400</td></tr>
+<tr><td>规则</td><td class="n">200</td></tr>
+<tr><td>当日意向与成交</td><td class="n">—</td><td class="n">100</td></tr>
+<tr><td>风格示例帖</td><td class="n">—</td><td class="n">500</td></tr>
+<tr><td><b>输入合计（约）</b></td><td class="n"><b>3,000</b></td><td class="n"><b>3,600</b></td></tr>
+<tr><td><b>输出（约）</b></td><td class="n">200（结构化字段）</td><td class="n">300（帖子正文）</td></tr>
+</tbody></table></div>
+<p>按 MVP 550 个智能体 × 每个交易日 2 个激活点、每年 242 个交易日与 123 个非交易日算<span class="ref">§14.2</span>：</p>
+<div class="tbl-wrap"><table class="tbl ll-tbl">
+<thead><tr><th>配置</th><th class="n">每日输入 / 输出</th><th class="n">每年输入 / 输出</th></tr></thead>
+<tbody>
+<tr><td>交易日，第 1 次调用</td><td class="n">3.3M / 0.22M</td><td class="n">≈ 8.0 亿 / 0.53 亿</td></tr>
+<tr><td>交易日，第 2 次调用（全员发帖上限）</td><td class="n">3.96M / 0.33M</td><td class="n">≈ 9.6 亿 / 0.80 亿</td></tr>
+<tr><td>交易日合计（上限）</td><td class="n">7.26M / 0.55M</td><td class="n">≈ 17.6 亿 / 1.33 亿</td></tr>
+<tr><td>非交易日 20:00 激活点（全员激活且发帖上限）</td><td class="n">3.63M / 0.28M</td><td class="n">≈ 4.5 亿 / 0.34 亿</td></tr>
+<tr><td>交易日合计，回放 5 年</td><td class="n">—</td><td class="n">≈ 87.8 亿 / 6.7 亿</td></tr>
+</tbody></table></div>
+<p>这些数是<b>单次运行、全员每个激活点都激活且每次都发帖</b>的上限。<span class="ref">§14.2</span>第 2 次调用的实际量 = 上限 × 发帖率，发帖率在 Phase 0 探针中测量；第 2 次调用的 3.0k 前缀可命中前缀缓存。<span class="ref">§14.2</span><span class="ref">§14.3</span>激活本身也是按需的：日常激活按个人频率抽样，触发激活要等持仓单日波动超过个人阈值、媒介接触到量级 ≥ 3 的事件、群里讨论其持仓或所持标的涨跌停<span class="ref">§9.1</span>；文档举的例子是每日激活比例从 100% 降到 30%，调用量同比下降<span class="ref">§14.3</span>；非交易日还要乘 ν_i × 周末系数<span class="ref">§14.2</span>。作为对照，OASIS 每次动作约 3.4k 输入 / 170 输出，核心用户激活概率 0.1、普通用户 0.01。<span class="ref">§14.2</span></p>
+<p>放大因子：N 个种子 × M 个底座，用量乘 N·M，Phase 1 是 3 × 2 即 6 倍；假设情景的三档价格路径再乘 3；其他调用另计。<span class="ref">§14.2</span><span class="ref">§15.1</span>设计文档写明"单价以各厂商定价页为准，本文不做费用估算"<span class="ref">§14.2</span>，本页也不换算成金额。</p>
+</section>
+<section id="s4" class="reveal">
+<h2><span class="num">04</span>走一遍示例</h2>
+<p class="sub">一个激活点里，网关先后收到几个智能体的第 1 次调用（解读 + 意向）。逐步看缓存和调用日志怎么变化。全部为 <span class="ll-ex">示例数据</span>，人设为化名，键值为示意。</p>
+<p>场景：录制模式，底座为一个带日期的示例模型。化名"老周"的第 1 次调用此前录制过；"阿杰""小林""梅姐""大刘"今天是第一次请求。最后切到重放模式，看重试序列如何复现、新请求如何报错。每一步列出输入、网关的处理、输出和对应的文档条目。</p>
+<div class="ll-demo" id="llDemo">
+<div class="ll-dots" id="llDots" role="tablist" aria-label="步骤"></div>
+<p class="ll-st" id="llStT">—</p>
+<p id="llStD" style="margin:0;font-size:13.5px;color:var(--ink2)">—</p>
+<div class="ll-quad">
+<div><b class="ll-qt">输入</b><pre id="llQIn">—</pre></div>
+<div><b class="ll-qt">处理</b><ul id="llQDo"></ul></div>
+<div><b class="ll-qt">输出</b><pre id="llQOut">—</pre></div>
+<div><b class="ll-qt">对应文档条目</b><ul id="llQRef"></ul></div>
+</div>
+<div class="ll-state">
+<div><b class="ll-qt">响应缓存（跨运行共享）</b><div class="ll-rows" id="llCache"></div></div>
+<div><b class="ll-qt">调用日志</b><div class="ll-rows" id="llLog"></div></div>
+</div>
+<div class="ll-ctl">
+<button class="btn" type="button" id="llPrev">上一步</button>
+<button class="btn pri" type="button" id="llNext">下一步</button>
+<button class="btn" type="button" id="llAuto" aria-pressed="false">自动播放</button>
+<span class="ll-pos" id="llPos">0 / 0</span>
+</div>
+</div>
+<p>这一串步骤说明了两件事。其一，缓存里除了成功的回答，还存着失败的尝试，所以重放能走回同一条重试路径。其二，"未激活"与"拒答"在日志里是两种原因，后者还带话题标签，供拒答率切片使用<span class="ref">§6.2</span>。持续运行里还有第三种原因"超时"：盘前调用 09:15 前未完成，同样记未激活，不补发订单<span class="ref">§9.1</span>。三种原因都写进激活表的 <code>absent_reason</code><span class="ref">§10.3</span>。</p>
+</section>
+<section id="s5" class="reveal">
+<h2><span class="num">05</span>接口与数据结构</h2>
+<p class="sub">llm 自己不定义业务类型，它读写的结构分三类：缓存键、运行清单里的计量字段、调用方要的输出 schema。表里只列文档出现过的字段，没有定义的写"文档未定义"。</p>
+<div class="tbl-wrap"><table class="tbl ll-tbl">
+<thead><tr><th>结构</th><th>字段</th><th>含义</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>缓存键</td><td>模型 ID 与带日期的版本号、推理引擎版本、结构化输出后端、schema、采样参数、种子、完整消息</td><td>七项取哈希；种子在重试时更换</td><td><span class="ref">§14.4</span></td></tr>
+<tr><td>缓存键</td><td>哈希算法</td><td>文档未定义</td><td>—</td></tr>
+<tr><td>缓存条目</td><td>条目结构、是否带"失败"标记</td><td>文档未定义；只规定失败的尝试也写入</td><td><span class="ref">§6.2</span><span class="ref">§14.4</span></td></tr>
+<tr><td>RunManifest</td><td>模型及版本、嵌入模型版本、采样参数、种子、prompt 模板哈希、意向来源</td><td>决定一次运行能否复现</td><td><span class="ref">§9.4</span></td></tr>
+<tr><td>RunManifest</td><td>缓存命中率、token 用量、解析失败率、拒答率与超时率、事后视角命中率</td><td>网关汇总的监控指标；拒答率按话题与人群切片</td><td><span class="ref">§9.4</span><span class="ref">§6.2</span></td></tr>
+<tr><td>计量维度</td><td><code>run_id</code>、<code>persona_id</code>；Jev 按分类器类型</td><td>每次调用记在谁名下</td><td><span class="ref">§14.4</span></td></tr>
+<tr><td>调用日志</td><td>每条记录的字段</td><td>文档未定义；只规定落盘前脱敏</td><td><span class="ref">§16.4</span></td></tr>
+<tr><td>激活表</td><td><code>status</code>、<code>absent_reason</code>（解析失败 / 拒答 / 超时）</td><td>缺席逐条记在激活表；重试次数的字段文档未定义</td><td><span class="ref">§10.3</span><span class="ref">§6.2</span><span class="ref">§9.1</span></td></tr>
+<tr><td>告警</td><td>token 用量、解析失败率、拒答率与超时率阈值</td><td>要求告警；阈值文档未定义</td><td><span class="ref">§14.4</span></td></tr>
+<tr><td>输出 schema（例）</td><td><code>BeliefUpdate</code>：<code>views</code>、<code>emotion</code>、<code>policy_trust</code>、<code>want_to_post</code>、<code>monologue</code></td><td>由 schemas 导出 JSON schema，Pydantic 校验，框架支持时约束解码</td><td><span class="ref">§6.2</span><span class="ref">§14.4</span></td></tr>
+<tr><td>第 1 次调用的输出</td><td>盘前 / 盘中：<code>BeliefUpdate</code> + <code>DecisionIntent[]</code> + <code>FundingIntent</code>；盘后 / 晚间：<code>BeliefUpdate</code> + 明日打算</td><td>只出结构化字段；明日打算写入记忆，不下单；意向来源为规则先验或 Jev 时只做解读</td><td><span class="ref">§6.1</span></td></tr>
+<tr><td>第 2 次调用的输出</td><td>帖子文本</td><td>只在 <code>want_to_post</code> 为真时调用；自由文本，风格示例帖只在这次出现</td><td><span class="ref">§6.1</span></td></tr>
+<tr><td>输出 schema（例）</td><td><code>AssetView</code>：<code>asset</code>、<code>horizon</code>、<code>stance</code>、<code>ret_bucket</code>、<code>confidence</code>、<code>reasons</code></td><td>LLM 只输出分档，数值由内核映射</td><td><span class="ref">§6.2</span></td></tr>
+</tbody></table></div>
+<p>下面是一次第 1 次调用的解读部分通过校验后交回 agents 的对象。字段与取值范围来自 §6.2：<code>horizon</code> 取 1d/1w/1m，<code>stance</code> 取 -2..2，<code>confidence</code> 取 1–5，<code>reasons</code> 最多 3 个，<code>emotion</code> 四项各取 0–3，<code>policy_trust</code> 取 -1/0/1，<code>monologue</code> 最长 120 字且只用于审计。<span class="ref">§6.2</span></p>
+<pre class="code" data-lang="json 示意，未实现"><span class="c">// 示意，未实现。化名"老周"的 BeliefUpdate，取值为示例数据</span>
+{
+  <span class="k">"views"</span>: [
+    { <span class="k">"asset"</span>: <span class="s">"银行板块"</span>, <span class="k">"horizon"</span>: <span class="s">"1w"</span>, <span class="k">"stance"</span>: <span class="n">1</span>,
+      <span class="k">"ret_bucket"</span>: <span class="s">"0~2%"</span>, <span class="k">"confidence"</span>: <span class="n">3</span>,
+      <span class="k">"reasons"</span>: [<span class="s">"policy"</span>, <span class="s">"national_team"</span>] }
+  ],
+  <span class="k">"emotion"</span>: { <span class="k">"fear"</span>: <span class="n">1</span>, <span class="k">"greed"</span>: <span class="n">1</span>, <span class="k">"regret"</span>: <span class="n">0</span>, <span class="k">"fomo"</span>: <span class="n">2</span> },
+  <span class="k">"policy_trust"</span>: <span class="n">1</span>,
+  <span class="k">"want_to_post"</span>: <span class="n">true</span>,
+  <span class="k">"monologue"</span>: <span class="s">"政策来了，先拿着，别追高。"</span>
+}</pre>
+<p>调用日志的字段文档没有定义。下例只用来说明一条日志至少要能回答哪些问题（记在谁名下、命中没有、第几次尝试、结果属于哪一类），字段名均为示意命名。</p>
+<pre class="code" data-lang="json 示意，未实现"><span class="c">// 示意，未实现。字段名为示意命名，文档未定义</span>
+{
+  <span class="k">"run_id"</span>: <span class="s">"run-示例-01"</span>, <span class="k">"persona_id"</span>: <span class="s">"p-阿杰"</span>,
+  <span class="k">"purpose"</span>: <span class="s">"call1"</span>, <span class="k">"schema"</span>: <span class="s">"BeliefUpdate"</span>,
+  <span class="k">"cache_key"</span>: <span class="s">"9f3a…（示意）"</span>, <span class="k">"cache"</span>: <span class="s">"miss"</span>,
+  <span class="k">"attempt"</span>: <span class="n">2</span>, <span class="k">"seed"</span>: <span class="s">"（重试时的新种子）"</span>,
+  <span class="k">"outcome"</span>: <span class="s">"ok"</span>,  <span class="c">// ok / parse_fail / refusal / timeout（示意）</span>
+  <span class="k">"tokens_in"</span>: <span class="s">"（示例）"</span>, <span class="k">"tokens_out"</span>: <span class="s">"（示例）"</span>
+}</pre>
+</section>
+<section id="s6" class="reveal">
+<h2><span class="num">06</span>设计取舍与已定决定</h2>
+<p class="sub">每一项写清选了什么、放弃了什么、为什么。已定决定按设计文档 v0.3 的章节引用。</p>
+<div class="tbl-wrap"><table class="tbl ll-tbl">
+<thead><tr><th>取舍</th><th>选了</th><th>放弃了</th><th>为什么</th></tr></thead>
+<tbody>
+<tr><td>网关实现</td><td>自写薄网关</td><td>LiteLLM 现成的多厂商适配</td><td>少一个大依赖，便于锁版本与复现；国内厂商可用官方 <code>openai</code> SDK 换 <code>base_url</code><span class="ref">§14.4</span></td></tr>
+<tr><td>调用拆分</td><td>每次激活两次调用：第 1 次解读 + 意向，第 2 次发帖</td><td>一次调用同时出结构化字段与帖子</td><td>风格示例帖只进第 2 次，不干扰结构化字段；帖子在成交之后写，能写进实际成交与未执行原因；两次共用静态前缀<span class="ref">§6.1</span><span class="ref">§14.3</span></td></tr>
+<tr><td>重放未命中</td><td>报错停止</td><td>"补调一次也能跑完"的便利</td><td>补调会混入新回答，重放结果不再可信<span class="ref">§14.4</span><span class="ref">§5.5</span></td></tr>
+<tr><td>缓存位置</td><td>跨运行共享</td><td>每次运行目录自包含</td><td>分叉与重放都要复用分叉点之前的回答<span class="ref">§3.3</span><span class="ref">§9.3</span></td></tr>
+<tr><td>解析失败</td><td>换种子重试 ≤ 2 次，仍失败记"未激活"</td><td>沿用上期信念或填默认值</td><td>不替智能体编回答，缺席可统计、可检查是否集中<span class="ref">§6.2</span></td></tr>
+<tr><td>拒答</td><td>不重试，单独归类</td><td>多采几次"试到它写"</td><td>不越狱、遵守厂商政策；重试会把拒答率算低，而拒答率要计入选型扣分<span class="ref">§6.2</span><span class="ref">§13.3</span></td></tr>
+<tr><td>失败的尝试</td><td>也写入缓存</td><td>只存成功回答、省存储</td><td>重放时复现同一重试序列<span class="ref">§14.4</span></td></tr>
+<tr><td>部署</td><td>MVP 全走国内厂商 API</td><td>自部署的确定性推理开关与前缀缓存控制</td><td>MVP 可完全跑在 API 上，API 做不到确定性重执行，靠响应缓存兜底<span class="ref">§14.4</span>；Phase 2 扩规模时 Tier-B 可换小模型或自部署<span class="ref">§15.3</span></td></tr>
+<tr><td>分层用模型</td><td>Tier-A/B 同一模型</td><td>大模型 / 小模型分工</td><td>避免人设差异与模型大小混在一起；小模型留到 Phase 2，须先通过 V2/V5 对比<span class="ref">§14.1</span><span class="ref">§6.6</span></td></tr>
+<tr><td>schema 形状</td><td>扁平</td><td>嵌套结构的表达力</td><td>一次厂商测试（8B 模型）：嵌套 schema 让结构化输出的开销在 vLLM 上达到 +42%、SGLang 上 +6%，扁平为 +6% 与 +2%<span class="ref">§14.4</span></td></tr>
+</tbody></table></div>
+<div class="callout decide"><b class="t">已定（v0.3 §14.4、§6.2、§14.1，来自架构讨论 A4）</b>
+与网关有关的决定：自写薄网关、不用 LiteLLM；国内厂商用 <code>openai</code> SDK 换 <code>base_url</code>；按 <code>run_id</code> 与 <code>persona_id</code> 计量，Jev 经同一网关、按分类器类型单独计量；解析失败换种子重试最多 2 次，仍失败记"未激活"、不填默认值；拒答单独归类、不重试；失败的尝试也写入缓存；解析失败率、拒答率与超时率进运行清单并告警；MVP 全走国内厂商 API，两个底座都从开源权重家族中选，Tier-A/B 同一模型。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §6.1、§14.4，来自架构讨论 A6）</b>
+每次激活两次调用，帖子在成交之后写。每个激活点按顺序执行：全部第 1 次调用并发或批量发出并校验，内核统一做约束与成交判定，再对发帖者发第 2 次调用，群聊接话最后按种子顺序进行。对网关来说，同一激活点会出现两批请求，第二批依赖内核的结果，不能与第一批合并发出。</div>
+</section>
+<section id="s7" class="reveal">
+<h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">llm 处在所有"要问模型"的模块下游、厂商上游。它依赖 prompts 与 schemas 的产物，由 orchestrator 接线，结果交回调用方，监控数据交给运行清单与验证。<span class="ref">§3.3</span></p>
+<div class="tbl-wrap"><table class="tbl ll-tbl">
+<thead><tr><th>模块</th><th>与 llm 的关系</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td><a href="mod-prompts.html">prompts</a></td><td>提供全部模板；模板内容哈希进运行清单；每个用途 2–3 个等价模板，作 V5 稳健性维度。llm 收到的是渲染好的完整消息</td><td><span class="ref">§9.4</span><span class="ref">§13.4</span></td></tr>
+<tr><td><a href="mod-schemas.html">schemas</a></td><td>导出 JSON schema 供约束解码，也是 Pydantic 校验的依据；schemas 不依赖任何包</td><td><span class="ref">§3.3</span><span class="ref">§14.4</span></td></tr>
+<tr><td><a href="mod-agents.html">agents</a></td><td>最大的调用方：每次激活的第 1 次调用（解读 + 意向）、第 2 次调用（发帖）和反思经网关发出；拿回 <code>BeliefUpdate</code>、<code>DecisionIntent</code>、<code>FundingIntent</code> 等，或"未激活"标记。意向来源可替换（LLM / 规则先验 / Jev），走规则先验或 Jev 时第 1 次调用只做解读</td><td><span class="ref">§6.1</span><span class="ref">§6.6</span></td></tr>
+<tr><td><a href="mod-events.html">events</a></td><td>新闻抽取成事件卡、L0/L1 改写都经网关；抽取模型与 prompt 版本锁定、结果缓存</td><td><span class="ref">§5.2</span></td></tr>
+<tr><td><a href="mod-social.html">social</a></td><td>发布者 L2–L4 的 <code>Post</code> 经网关生成；群聊接话只走第 2 次调用，不重做第 1 次</td><td><span class="ref">§5.3</span><span class="ref">§5.6</span><span class="ref">§7.1</span></td></tr>
+<tr><td><a href="mod-orchestrator.html">orchestrator</a></td><td>决定谁在哪个激活点被激活，按"第 1 次调用 → 内核 → 第 2 次调用 → 群聊"的顺序分批发出；管种子、分叉与 <code>RunManifest</code>；缓存不放在单次运行目录里</td><td><span class="ref">§3.3</span><span class="ref">§9.1</span><span class="ref">§9.4</span><span class="ref">§14.4</span></td></tr>
+<tr><td><a href="mod-validation.html">validation</a></td><td>经网关调用 Jev 做立场、事后视角等分类；V3 硅基调查的旁路调用形式同第 1 次调用，单独缓存，答案不写回记忆；读取解析失败率、拒答率与超时率，检查缺席是否集中</td><td><span class="ref">§12.1</span><span class="ref">§6.2</span><span class="ref">§14.4</span></td></tr>
+<tr><td><a href="mod-population.html">population</a></td><td>人设卡决定每个智能体所在的 Tier，进而决定记忆深度与激活频率，也就决定了 token 主要花在哪</td><td><span class="ref">§14.1</span></td></tr>
+</tbody></table></div>
+<p>相关流程页：<a href="flow-day.html">一个交易日</a>里每个激活点的两次调用如何分批发出；<a href="flow-run.html">一次运行</a>里录制、重放与分叉如何复用缓存；<a href="sim-personas.html">不同人设的决策</a>里每一次意向背后都是一次第 1 次调用；<a href="sim-publishers.html">发布者</a>页的帖子同样经网关生成。</p>
+</section>
+<section id="s8" class="reveal">
+<h2><span class="num">08</span>开放问题</h2>
+<p class="sub">下面这些在设计文档 v0.3 里仍未定或标了〔需复核〕，实现网关前要逐项落实。</p>
+<div class="callout todo"><b class="t">待定事项</b>
+<ul>
+<li><b>具体型号</b>：两个底座的型号在 Phase 0 按 §13.3 选型标准与记忆探针（§13.1）测完再定；是否加一个自部署底座对比，取决于团队有没有 GPU<span class="ref">§14.4</span>。</li>
+<li><b>拒答怎么识别</b>：关键词、厂商返回标记还是分类器，文档未定义〔需复核〕。</li>
+<li><b>告警阈值</b>：token 用量、解析失败率、拒答率与超时率超过多少告警，文档未定义<span class="ref">§14.4</span>。</li>
+<li><b>数据结构</b>：哈希算法、缓存条目结构、调用日志字段、重试次数的字段，文档未定义（缺席原因已有激活表的 <code>absent_reason</code>，<span class="ref">§10.3</span>）。</li>
+<li><b>国产 API 下"推理引擎版本"一项记什么</b>：缓存键要求这一项<span class="ref">§14.4</span>，MVP 不自部署<span class="ref">§14.4</span>，取值规则未定。</li>
+<li><b>真实激活比例与发帖率</b>：§14.2 的 token 数是全员激活、每次都发帖的上限；第 2 次调用的实际量 = 上限 × 发帖率，发帖率在 Phase 0 探针中测量<span class="ref">§14.2</span>。</li>
+<li><b>厂商缓存与批处理组合</b>：各家前缀缓存、批处理能否叠加以截至 2026-10 的厂商文档为准<span class="ref">§14.4</span>，选定型号后要复查。</li>
+<li><b>确定性推理的速度代价</b>：仅在自部署时相关，速度代价未核实<span class="ref">§14.4</span>。</li>
+<li><b>Jev 验证</b>：中文与股吧黑话、数值与长信息流误差都要先验证；输入去标识化后才能发往境外 API<span class="ref">§6.6</span><span class="ref">§16.4</span>。</li>
+<li><b>09:15 超时由谁执行</b>：持续运行里盘前调用 09:15 前未完成记"超时"<span class="ref">§9.1</span>，由网关、orchestrator 还是 agents 判定与取消请求，文档未定义。</li>
+<li><b>嵌入是否经网关</b>：嵌入模型本地运行、结果按文本哈希缓存、版本号写入清单与缓存键<span class="ref">§14.4</span>；这份缓存是否与 LLM 响应缓存共用、是否经网关计量，文档未定义。</li>
+<li><b>单列计量的分类口径</b>：盘中检查点、群聊、发布者 L2–L4、反思与抽取、V3 调查、Jev 要另行计量<span class="ref">§14.2</span>，计量时按什么标签区分，文档未定义。</li>
+<li><b>缺席集中检查</b>：按人群与行情日检查"未激活"是否集中，用什么检验、多集中算问题，文档未定义（§14.4 只规定结果写进 V1/V3 报告）。</li>
+</ul></div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+/* 组件 1：请求流程图 */
+var NODE={
+caller:['调用方','agents 的第 1 次调用（解读 + 意向）、第 2 次调用（发帖）与反思，events 的抽取与 L0/L1 改写，social 的发布者 L2–L4 与群聊接话，validation 的 Jev 分类与 V3 调查。它们把渲染好的完整消息和目标 schema 交给网关。','§3.3 · §6.1 · §7.1 · §12.1'],
+key:['构建缓存键','缓存键 = 哈希（模型 ID 与带日期的版本号、推理引擎版本、结构化输出后端、schema、采样参数、种子、完整消息）。哈希算法文档未定义。','§14.4 约定 1'],
+cache:['查共享缓存','缓存跨运行共享，分叉与重放复用，不放在单次运行目录里。','§3.3 · §14.4'],
+hit:['返回缓存结果','命中就直接返回存档的回答，不发请求。反事实分叉点之前的调用全部走这里。','§14.3 第 5 条'],
+mode:['看运行模式','录制模式：未命中就调用厂商。重放模式：只读缓存。','§14.4 约定 1'],
+replay:['报错停止','重放未命中即报错，不静默重调。补调会混入今天的模型回答，重放结果不再可信。','§14.4 约定 1 · §5.5'],
+vendor:['调用厂商','国内厂商走 OpenAI 兼容接口，用官方 openai SDK 换 base_url；不兼容的单写适配器。同一激活点的第 1 次调用并发或批量发出，第 2 次调用等内核判定成交后再发。','§9.1 · §14.4'],
+check:['判别回复','用 Pydantic 按 schema 校验。校验不过是解析失败；模型不肯写是拒答。框架支持时用约束解码。拒答怎么识别，文档未定义。','§6.2'],
+write:['写缓存与日志','回答写入缓存，调用写入日志。失败的尝试也写入缓存，重放时复现同一重试序列。日志落盘前脱敏。','§6.2 · §14.4 · §16.4'],
+retry:['换种子重试','换新种子再采一次，新种子进缓存键，最多 2 次。','§6.2'],
+absent:['记"未激活"','两次重试仍失败：该智能体当日记"未激活"，原因"解析失败"，不填默认值，也不沿用上期信念；原因写入激活表 absent_reason。持续运行里盘前调用 09:15 前未完成，同样记未激活，原因"超时"。','§6.2 · §9.1 · §10.3'],
+refuse:['拒答单独记账','不重试，当日同样缺席；拒答率按话题与人群切片，计入底座选型扣分。','§6.2 · §13.3'],
+meter:['计量','按 run_id 与 persona_id 计量，Jev 按分类器类型单独计量；缓存命中率、token 用量、解析失败率、拒答率与超时率进运行清单，超阈值告警（阈值文档未定义）。','§9.4 · §14.4']
+};
+var PATH={
+hit:['缓存命中',['caller','key','cache','hit','meter']],
+rec:['录制：未命中后调用',['caller','key','cache','mode','vendor','check','write','meter']],
+retry:['解析失败，重试成功',['caller','key','cache','mode','vendor','check','retry','write','meter']],
+absent:['两次重试仍失败',['caller','key','cache','mode','vendor','check','retry','absent','write','meter']],
+refuse:['拒答',['caller','key','cache','mode','vendor','check','refuse','write','meter']],
+replay:['重放：未命中',['caller','key','cache','mode','replay']]
+};
+var flow=document.getElementById('llFlow'),info=document.getElementById('llInfo'),pathBox=document.getElementById('llPaths');
+function setInfo(title,body,ref){
+  if(!info)return;
+  while(info.firstChild)info.removeChild(info.firstChild);
+  var b=document.createElement('b');b.className='ll-it';b.textContent=title;
+  var p=document.createElement('p');p.textContent=body;
+  info.appendChild(b);info.appendChild(p);
+  if(ref){var r=document.createElement('span');r.className='ll-ir';r.textContent='出处：'+ref;info.appendChild(r);}
+}
+if(flow){
+  var nodes=flow.querySelectorAll('.ll-node');
+  var pick=function(g){
+    var id=g.getAttribute('data-n'),d=NODE[id];
+    for(var i=0;i<nodes.length;i++)nodes[i].classList.toggle('on',nodes[i]===g);
+    if(d)setInfo(d[0],d[1],d[2]);
+  };
+  for(var i=0;i<nodes.length;i++){
+    (function(g){
+      g.addEventListener('click',function(){pick(g);});
+      g.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(g);}});
+    })(nodes[i]);
+  }
+  if(pathBox){
+    var btns=pathBox.querySelectorAll('button');
+    for(var j=0;j<btns.length;j++){
+      btns[j].addEventListener('click',function(){
+        var k=this.getAttribute('data-p')||'',pd=PATH[k];
+        for(var m=0;m<btns.length;m++)btns[m].setAttribute('aria-pressed',btns[m]===this&&pd?'true':'false');
+        flow.classList.toggle('ll-dim',!!pd);
+        for(var n=0;n<nodes.length;n++){
+          var lit=!!pd&&pd[1].indexOf(nodes[n].getAttribute('data-n'))>=0;
+          nodes[n].classList.toggle('lit',lit);nodes[n].classList.remove('on');
+        }
+        if(pd){
+          var names=[];
+          for(var q=0;q<pd[1].length;q++){var x=NODE[pd[1][q]];if(x)names.push(x[0]);}
+          setInfo('路径：'+pd[0],names.join(' → '),'');
+        }else setInfo('点一个节点或一条路径','每个节点的说明会显示在这里，并给出对应的文档条目。','');
+      });
+    }
+  }
+}
+/* 组件 2：缓存键计算器（示意，FNV-1a 仅作演示，文档未定义哈希算法） */
+function fnv(str){
+  var h=0x811c9dc5;
+  for(var i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}
+  var s=h.toString(16);
+  while(s.length<8)s='0'+s;
+  return s;
+}
+var calc=document.getElementById('llCalc');
+if(calc){
+  var F=['llcModel','llcEngine','llcBackend','llcSchema','llcTemp','llcSeed','llcMsg'];
+  var LBL=['模型','引擎','后端','schema','温度','种子','消息'];
+  var el={};
+  for(var a=0;a<F.length;a++)el[F[a]]=document.getElementById(F[a]);
+  var modeEl=document.getElementById('llcMode'),keyEl=document.getElementById('llcKey'),
+      vEl=document.getElementById('llcVerdict'),cntEl=document.getElementById('llcCount'),
+      saveBtn=document.getElementById('llcSave'),clrBtn=document.getElementById('llcClear');
+  var store={},storeN=0,cur='';
+  var val=function(id){
+    var e=el[id];if(!e)return '';
+    var v=String(e.value==null?'':e.value);
+    if(id==='llcTemp'||id==='llcSeed'){var n=parseFloat(v);v=isFinite(n)?String(n):'（无效）';}
+    return v;
+  };
+  var render=function(){
+    var parts=[],segs=[];
+    for(var i=0;i<F.length;i++){var v=val(F[i]);parts.push(v);segs.push([LBL[i],fnv(v).slice(0,4)]);}
+    cur=fnv(parts.join('␟'));
+    if(keyEl){
+      while(keyEl.firstChild)keyEl.removeChild(keyEl.firstChild);
+      keyEl.appendChild(document.createTextNode('各字段片段：'));
+      for(var j=0;j<segs.length;j++){
+        keyEl.appendChild(document.createTextNode((j?' · ':'')+segs[j][0]+'='));
+        var b=document.createElement('b');b.textContent=segs[j][1];keyEl.appendChild(b);
+      }
+      keyEl.appendChild(document.createElement('br'));
+      keyEl.appendChild(document.createTextNode('缓存键（示意）：'));
+      var k=document.createElement('b');k.textContent=cur;keyEl.appendChild(k);
+    }
+    var mode=modeEl?modeEl.value:'rec',hit=Object.prototype.hasOwnProperty.call(store,cur);
+    if(vEl){
+      var msg,cls;
+      if(hit){cls='hit';msg='命中：直接返回存档回答，不发请求（§14.4）。';}
+      else if(mode==='replay'){cls='err';msg='重放模式未命中：报错停止，不静默重调（§14.4）。';}
+      else{cls='miss';msg='录制模式未命中：将调用厂商，回答写入缓存（§14.4）。';}
+      if(val('llcModel').indexOf('别名')>=0)msg+=' 注意：别名会切到新版本，键里应记带日期的版本（§13.4、§14.4）。';
+      vEl.className='ll-verdict '+cls;vEl.textContent=msg;
+    }
+    if(cntEl)cntEl.textContent='缓存条目：'+storeN;
+  };
+  for(var c=0;c<F.length;c++){if(el[F[c]]){el[F[c]].addEventListener('input',render);el[F[c]].addEventListener('change',render);}}
+  if(modeEl)modeEl.addEventListener('change',render);
+  if(saveBtn)saveBtn.addEventListener('click',function(){
+    if(!Object.prototype.hasOwnProperty.call(store,cur)){store[cur]=1;storeN++;}
+    render();
+  });
+  if(clrBtn)clrBtn.addEventListener('click',function(){store={};storeN=0;render();});
+  render();
+}
+/* 组件 3：分步演示（示例数据，键值为示意） */
+var C0=['k-7a1c · 老周 · 第 1 次调用 · 种子 s1 → 成功（此前录制）'];
+var S=[
+{t:'① 缓存命中：老周',d:'老周的第 1 次调用和此前录制的那次七项字段完全相同，键一致，直接返回存档。',
+in:'persona: p-老周（化名）\nschema: BeliefUpdate\n种子: s1\n模式: 录制',
+do:['按七项字段算缓存键 → k-7a1c','查共享缓存：命中','不发请求，不耗 token'],
+out:'BeliefUpdate（来自缓存）\n交回 agents',
+ref:['§14.4 约定 1：缓存键','§14.3 第 5 条：响应缓存'],
+cache:[],log:['老周 · 命中 · 厂商调用 0 次']},
+{t:'② 未命中，调用厂商：阿杰',d:'阿杰今天第一次请求，缓存里没有。录制模式下网关调用厂商，校验通过后写缓存。',
+in:'persona: p-阿杰（化名）\nschema: BeliefUpdate\n种子: s1\n模式: 录制',
+do:['算键 → k-2b90，查缓存：未命中','录制模式：经 openai SDK（换 base_url）调用厂商','Pydantic 校验通过','写缓存、写日志、计量'],
+out:'BeliefUpdate（新生成）\n交回 agents',
+ref:['§14.4 约定 1：录制与重放','§14.4：openai SDK 换 base_url','§6.2：BeliefUpdate 字段'],
+cache:['k-2b90 · 阿杰 · 种子 s1 → 成功'],log:['阿杰 · 未命中 · 尝试 1 · 成功']},
+{t:'③ 解析失败，换种子重试成功：小林',d:'第一次回答里 stance 写成 3，超出 -2..2，校验不过。换新种子 s2 再采一次，通过。两次尝试都写进缓存。',
+in:'persona: p-小林（化名）\nschema: BeliefUpdate\n种子: s1 → s2\n模式: 录制',
+do:['尝试 1：键 k-5d04，回答 stance=3，校验失败','换种子 s2，新种子进键 → k-e311','尝试 2：校验通过','两次尝试都写入缓存'],
+out:'BeliefUpdate（尝试 2）\n交回 agents',
+ref:['§6.2：换种子重试，最多 2 次','§14.4 约定 1：失败的尝试也写入缓存','§6.2：stance 取 -2..2'],
+cache:['k-5d04 · 小林 · 种子 s1 → 解析失败','k-e311 · 小林 · 种子 s2 → 成功'],
+log:['小林 · 尝试 1 · 解析失败（stance 越界）','小林 · 尝试 2 · 成功']},
+{t:'④ 两次重试仍失败，记"未激活"：梅姐',d:'梅姐的三次尝试（首次 + 2 次重试）都校验不过，例如 reasons 给了 5 个，超过上限 3。网关不再重试，也不填默认值。',
+in:'persona: p-梅姐（化名）\nschema: BeliefUpdate\n种子: s1 → s2 → s3\n模式: 录制',
+do:['尝试 1、2、3 均校验失败','已达重试上限 2 次','该智能体当日记"未激活"，原因"解析失败"','不沿用上期信念，不填默认值'],
+out:'未激活（原因：解析失败）\n交回 agents 与 orchestrator\n当日持仓不变、不发帖',
+ref:['§6.2：仍失败记未激活，不沿用上期信念','§10.3：激活表 absent_reason','§9.1：未激活者持仓不变、不发帖','§6.2：reasons 最多 3 个'],
+cache:['k-91aa · 梅姐 · 种子 s1 → 解析失败','k-3f07 · 梅姐 · 种子 s2 → 解析失败','k-c64e · 梅姐 · 种子 s3 → 解析失败'],
+log:['梅姐 · 尝试 1–3 · 解析失败','梅姐 · 未激活 · 原因：解析失败']},
+{t:'⑤ 拒答：大刘',d:'今日信息里有一条政策快讯，模型回复"无法讨论"。这属于拒答：不重试，单独归类，带上话题标签。',
+in:'persona: p-大刘（化名）\nschema: BeliefUpdate\n种子: s1\n今日信息含政策快讯\n模式: 录制',
+do:['算键 → k-0d58，未命中，调用厂商','判别为拒答（识别方法文档未定义）','不重试','记缺席，原因"拒答"，话题标签：政策'],
+out:'缺席（原因：拒答）\n拒答率按话题与人群切片\n计入底座选型扣分',
+ref:['§6.2：拒答单独记类，不重试','§13.3 第 4 条：按模型、按事件类别统计拒答率','§13.3 第 6 条：不越狱'],
+cache:['k-0d58 · 大刘 · 种子 s1 → 拒答（拒答是否入缓存 §6.2 未单列，这里按"失败的尝试"处理〔需复核〕）'],
+log:['大刘 · 尝试 1 · 拒答 · 话题：政策']},
+{t:'⑥ 重放：小林的重试序列原样复现',d:'切到重放模式重跑这一阶段。小林的第一次请求读到的仍是那份失败回答，网关照样换种子 s2，再读到成功回答。',
+in:'persona: p-小林（化名）\n种子: s1 → s2\n模式: 重放',
+do:['读 k-5d04 → 解析失败','换种子 s2 → 读 k-e311 → 成功','全程不调用厂商'],
+out:'与录制时相同的 BeliefUpdate',
+ref:['§14.4 约定 1：重放时复现同一重试序列','§5.5：同一清单重放结果相同','§14.4 约定 6：重放一致性测试'],
+cache:[],log:['[重放] 小林 · 命中 k-5d04 · 解析失败','[重放] 小林 · 命中 k-e311 · 成功']},
+{t:'⑦ 重放未命中：报错',d:'假设消息构建里混进了一个每次都会变的字段，阿杰的完整消息与录制时差一个字，键变成 k-77f2。重放模式不补调，直接报错。',
+in:'persona: p-阿杰（化名）\n完整消息与录制时不同\n模式: 重放',
+do:['算键 → k-77f2','查缓存：未命中','重放模式：报错停止，不静默重调'],
+out:'错误：重放未命中 k-77f2\n提示检查消息构建的不确定性',
+ref:['§14.4 约定 1：未命中即报错','§14.4 约定 6：重放一致性测试'],
+cache:[],log:['[重放] 阿杰 · 未命中 k-77f2 · 报错停止']},
+{t:'⑧ 计量汇总',d:'录制阶段的 5 个智能体，按 persona_id 汇总厂商调用次数与结果。比率的分母口径文档未定义，这里按示例人数算。',
+in:'run_id: run-示例-01\n录制阶段的调用日志',
+do:['按 run_id × persona_id 汇总','缓存命中率、解析失败率、拒答率与超时率写入运行清单','超阈值告警（阈值文档未定义）'],
+out:'厂商调用：老周 0 · 阿杰 1 · 小林 2 · 梅姐 3 · 大刘 1\n未激活（解析失败）1/5 · 拒答 1/5\n（示例数据）',
+ref:['§14.4：按 run_id 与 persona_id 计量','§9.4：缓存命中率、token 用量、解析失败率、拒答率与超时率','§14.4 约定 6：告警'],
+cache:[],log:['汇总：run-示例-01 · 5 人 · 厂商调用 7 次']}
+];
+var demo=document.getElementById('llDemo');
+if(demo&&S.length){
+  var $=function(id){return document.getElementById(id);};
+  var dots=$('llDots'),stT=$('llStT'),stD=$('llStD'),qIn=$('llQIn'),qDo=$('llQDo'),qOut=$('llQOut'),qRef=$('llQRef'),
+      cBox=$('llCache'),lBox=$('llLog'),prev=$('llPrev'),next=$('llNext'),auto=$('llAuto'),pos=$('llPos');
+  var idx=0,timer=null,dotBtns=[];
+  var clear=function(e){if(e)while(e.firstChild)e.removeChild(e.firstChild);};
+  var fillList=function(e,arr){clear(e);if(!e)return;for(var i=0;i<(arr||[]).length;i++){var li=document.createElement('li');li.textContent=arr[i];e.appendChild(li);}};
+  var fillRows=function(e,old,fresh){
+    clear(e);if(!e)return;
+    if(!old.length&&!fresh.length){var em=document.createElement('div');em.className='ll-empty';em.textContent='（空）';e.appendChild(em);return;}
+    for(var i=0;i<old.length;i++){var d=document.createElement('div');d.textContent=old[i];e.appendChild(d);}
+    for(var j=0;j<fresh.length;j++){var n=document.createElement('div');n.className='ll-new';n.textContent='+ '+fresh[j];e.appendChild(n);}
+  };
+  for(var i=0;i<S.length;i++){
+    (function(k){
+      var b=document.createElement('button');b.type='button';b.textContent=String(k+1);
+      b.setAttribute('aria-label','第 '+(k+1)+' 步');
+      b.addEventListener('click',function(){stop();show(k);});
+      if(dots)dots.appendChild(b);dotBtns.push(b);
+    })(i);
+  }
+  var show=function(k){
+    if(!isFinite(k))k=0;
+    idx=Math.max(0,Math.min(S.length-1,k));
+    var s=S[idx],oldC=C0.slice(),oldL=[];
+    for(var i=0;i<idx;i++){oldC=oldC.concat(S[i].cache||[]);oldL=oldL.concat(S[i].log||[]);}
+    if(stT)stT.textContent=s.t||'';
+    if(stD)stD.textContent=s.d||'';
+    if(qIn)qIn.textContent=s['in']||'—';
+    fillList(qDo,s['do']);
+    if(qOut)qOut.textContent=s.out||'—';
+    fillList(qRef,s.ref);
+    fillRows(cBox,oldC,s.cache||[]);
+    fillRows(lBox,oldL,s.log||[]);
+    for(var j=0;j<dotBtns.length;j++){
+      dotBtns[j].classList.toggle('on',j===idx);dotBtns[j].classList.toggle('done',j<idx);
+      dotBtns[j].setAttribute('aria-selected',j===idx?'true':'false');
+    }
+    if(pos)pos.textContent=(idx+1)+' / '+S.length;
+    if(prev)prev.disabled=idx===0;
+    if(next)next.disabled=idx===S.length-1;
+  };
+  var stop=function(){
+    if(timer){clearInterval(timer);timer=null;}
+    if(auto){auto.setAttribute('aria-pressed','false');auto.textContent='自动播放';}
+  };
+  if(prev)prev.addEventListener('click',function(){stop();show(idx-1);});
+  if(next)next.addEventListener('click',function(){stop();show(idx+1);});
+  if(auto)auto.addEventListener('click',function(){
+    if(timer){stop();return;}
+    if(idx>=S.length-1)show(0);
+    auto.setAttribute('aria-pressed','true');auto.textContent='暂停';
+    timer=setInterval(function(){if(idx>=S.length-1){stop();return;}show(idx+1);},3200);
+  });
+  show(0);
+}
+})();
+</script>
+</body>
+</html>

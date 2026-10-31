@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>prompts · 提示词分层、版本与缓存 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* mod-prompts 私有样式，前缀 pp- */
+.pp-io{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:14px;align-items:stretch}
+@media(max-width:860px){.pp-io{grid-template-columns:minmax(0,1fr)}}
+.pp-io ul{margin:6px 0 0;padding-left:18px;font-size:13.5px;line-height:1.7;color:var(--ink2)}
+.pp-io .pp-mid{border-color:var(--llm)}
+.pp-io code{font-size:12.5px}
+.pp-svg{width:100%;height:auto;display:block}
+.pp-svg text{font-family:var(--sans);fill:var(--ink)}
+.pp-svg .lb{font-size:14px;font-weight:700}
+.pp-svg .sm{font-size:11.5px;fill:var(--mute)}
+.pp-svg .tk{font-size:12px;font-family:var(--mono);fill:var(--ink2)}
+.pp-lay{cursor:pointer}
+.pp-lay rect.box{transition:stroke .2s,stroke-width .2s}
+.pp-lay:hover rect.box,.pp-lay.on rect.box{stroke:#fff;stroke-width:2.2}
+.pp-lay:focus{outline:none}
+.pp-lay:focus rect.box{stroke:#fff;stroke-width:2.2}
+.pp-lay text{pointer-events:none}
+.pp-det{margin-top:12px;min-height:120px}
+.pp-det h4{margin:0 0 6px;color:var(--llm)}
+.pp-det p{margin:6px 0;font-size:14px;color:var(--ink2)}
+.pp-f{font-family:var(--mono);font-size:13.5px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px;margin:8px 0;overflow-x:auto;white-space:nowrap;color:var(--ink)}
+.pp-demo{border:1px dashed var(--warn);color:var(--warn);font-size:12px;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.pp-stp-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.pp-dots{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.pp-dots button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line2);background:var(--panel2);color:var(--ink2);font-size:12px;cursor:pointer;padding:0}
+.pp-dots button.on{background:var(--llm);color:#120a1f;border-color:var(--llm);font-weight:700}
+.pp-stp-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin:4px 0 10px}
+.pp-stp-h b{font-size:17px}
+.pp-blk{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(max-width:860px){.pp-blk{grid-template-columns:minmax(0,1fr)}}
+.pp-blk>div{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px;min-width:0}
+.pp-blk h5{margin:0 0 6px;font-size:12.5px;color:var(--mute);letter-spacing:.06em}
+.pp-blk ul{margin:0;padding-left:16px;font-size:13.5px;line-height:1.65;color:var(--ink2);overflow-wrap:anywhere}
+.pp-blk li{margin:2px 0}
+.pp-ref{margin-top:10px;font-size:13px;color:var(--mute)}
+.pp-asm{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px;margin-top:14px}
+@media(max-width:860px){.pp-asm{grid-template-columns:minmax(0,1fr)}}
+.pp-prev{background:#03060f;border:1px solid var(--line);border-radius:12px;font:12px/1.65 var(--mono);color:#b7c1dc;max-height:380px;overflow:auto;padding:10px 12px;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.pp-seg{display:block;border-left:3px solid var(--line2);padding:2px 0 6px 10px;margin:0 0 8px}
+.pp-seg.new{background:rgba(192,132,252,.08)}
+.pp-seg b{display:block;font:700 11px var(--mono);letter-spacing:.5px;margin-bottom:2px}
+.pp-stack{display:flex;height:16px;border-radius:8px;overflow:hidden;border:1px solid var(--line);margin:8px 0 6px;background:var(--panel2)}
+.pp-stack span{height:100%;transition:width .4s}
+.pp-tot{font:600 13px var(--mono);color:var(--ink2)}
+.pp-leg{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink2);margin-top:8px}
+.pp-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.pp-out{font-family:var(--mono);font-size:12.5px;margin-top:10px;color:var(--ink2);overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>基础层 · prompts 模块</div>
+<h1>提示词：<span class="grad">分层、版本与缓存</span></h1>
+<p class="lead">所有发给大模型的提示词都由这个包里的模板拼出来：静态内容在前、动态内容在后，模板按内容算哈希写进运行清单，每个用途并列 2–3 个等价模板，用来检验结论是否依赖措辞。</p>
+<div class="meta">
+<span class="chip llm"><i></i>六层顺序 §6.1</span>
+<span class="chip llm"><i></i>两次调用共用前缀 §6.1</span>
+<span class="chip llm"><i></i>第 1 次调用约 3.0k 输入 token §14.2</span>
+<span class="chip val"><i></i>等价模板 = V5 维度 §13.4</span>
+</div>
+</header>
+
+<section id="s1" class="reveal">
+<h2><span class="num">01</span>职责一览</h2>
+<p class="sub">一句话：保管全项目所有 prompt 模板，提供唯一的读取入口，并按模板内容算出哈希写进运行清单。<span class="ref">§3.3</span></p>
+<p>"prompt"指发给大模型的整段输入文字。本项目里大模型要做的事很多：从新闻里抽事件卡、把同一事件改写成不同渠道的说法、散户每次激活的两次调用（第 1 次解读并给出意向，第 2 次发帖）和低频的反思、生成人设时的预置记忆、V3 硅基调查的旁路调用。<span class="ref">§6.1</span> <span class="ref">§12.1</span> 用途清单的基本项来自 <code>prompts</code> 模块的文档字符串；这些模板全部放在 <code>prompts</code> 包里，作为包数据按用途分目录存放，只能经这个包的加载器读取。<span class="ref">§3.3</span></p>
+<div class="pp-io">
+<div class="card">
+<b>输入（调用方带来）</b>
+<ul>
+<li>人设卡 <code>PersonaCard</code> 的文字版，来自 population <span class="ref">§4.1</span></li>
+<li>长期信念与检索到的记忆，来自 agents <span class="ref">§6.4</span></li>
+<li>当日信息流（K<sub>i</sub> 条），由 agents 的注意力预算从候选池里选出；候选来自 events 的改写版本、social 的推荐流与群聊、行情异动 <span class="ref">§5.4</span> <span class="ref">§3.3</span></li>
+<li>新闻原文 / <code>EventCard</code>，来自 events <span class="ref">§5.2</span></li>
+<li>输出结构的 JSON schema，来自 schemas <span class="ref">§6.2</span></li>
+<li>第 2 次调用追加的当日意向与实际成交（含未执行原因），由内核约束与成交判定之后给出 <span class="ref">§6.1</span> <span class="ref">§6.3</span></li>
+</ul>
+</div>
+<div class="card pp-mid">
+<b>本模块 prompts</b>
+<ul>
+<li>按用途分目录的模板文件（包数据）<span class="ref">§3.3</span></li>
+<li>每个用途 2–3 个等价模板 <span class="ref">§13.4</span></li>
+<li>唯一的加载器：读模板、按内容计算哈希 <span class="ref">§9.4</span></li>
+<li>规定各层的先后顺序：静态在前、动态在后 <span class="ref">§6.1</span></li>
+</ul>
+</div>
+<div class="card">
+<b>输出（交给谁）</b>
+<ul>
+<li>拼好的消息文本，经 llm 网关发给模型；网关负责缓存键与重试 <span class="ref">§14.4</span></li>
+<li>模板哈希，写进运行清单 <code>RunManifest</code> <span class="ref">§9.4</span></li>
+<li>使用方：agents（两次调用、反思）<span class="ref">§6.1</span>、events（事件卡抽取，改写只出 L0/L1 两类不带立场的版本）<span class="ref">§5.2</span> <span class="ref">§5.3</span>、population（预置记忆、背景故事改写）<span class="ref">§4.4</span>、social（发布者以 <code>Post</code> 产出 L2–L4 帖子，群聊接话）<span class="ref">§5.6</span> <span class="ref">§7.1</span>、validation（V3 硅基调查）<span class="ref">§12.1</span></li>
+</ul>
+</div>
+</div>
+<p>上游是 schemas（只通过它共享类型，业务模块之间不互相引用类型），下游是 llm 网关和运行清单；把各模块接起来的是 orchestrator。<span class="ref">§3.3</span> 文档没有规定"填空"这一步由加载器完成还是由调用方完成，本页按"模板与顺序归 prompts，填进去的数据归调用方"来讲。</p>
+</section>
+
+<section id="s2" class="reveal">
+<h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">提示词的措辞会改变结论，也决定花多少钱、能不能复现、会不会泄露未来信息，所以要单独管。</p>
+<p><b>措辞会改结果。</b>已有研究发现，只改提示词里的格式和措辞，模型输出就会明显变化（Sclar et al. 2024）。设计文档的对策是给模板做版本、把哈希记进运行清单，并且每个用途准备 2–3 个说法不同、意思相同的等价模板，和随机种子、基座模型一起作为稳健性检验的维度。验证项 V5 要求"结论不取决于种子、模型、模板"。<span class="ref">§13.4</span> <span class="ref">§12.1</span></p>
+<p><b>要能复现。</b>每一行帖子、信念、成交都要能追到一份运行清单，清单里记着模板哈希。<span class="ref">§9.4</span> 回放时只读缓存，未命中直接报错，不会偷偷重新调用模型。<span class="ref">§14.4</span> 如果模板散落在各模块的代码里，改了一个字也不会在清单里留下痕迹。</p>
+<p><b>要省钱。</b>MVP 是 550 个散户、交易日 2 个激活点；每次激活最多两次调用，第 1 次全员约 3.0k 输入 token，第 2 次只有发帖者调用，约 3.6k 输入，其中 3.0k 是和第 1 次共用的前缀。按 242 个交易日算，一年交易日输入的上限约 17.6 亿 token（第 1 次约 8.0 亿，第 2 次按全员发帖上限约 9.6 亿）。<span class="ref">§14.2</span> 把每次都一样的内容放在最前面，同一激活的两次调用才能共用前缀，推理引擎和 API 的前缀缓存才有机会复用。<span class="ref">§6.1</span> <span class="ref">§14.3</span> 顺序由谁定必须统一，否则一个模块把日期写在开头，整段前缀就每次都不同。</p>
+<p><b>要防泄露。</b>在提示词里写"只用某日期之前的信息"挡不住模型用训练时见过的未来知识。<span class="ref">§13.1</span> 能做的是控制喂进去的东西：风格示例帖只取模拟起点之前的，验收事件的真实帖子不进示例池，并且扫描每段提示词里有没有晚于模拟时钟的日期。<span class="ref">§4.4</span> <span class="ref">§5.5</span> 模板集中在一处，这些检查才有一个统一的地方做。</p>
+<div class="callout warn"><b class="t">反例（假想情形，用来说明问题）</b>agents 的同事为了让帖子更口语化，直接在代码里把"请以散户身份发言"改成"你是一个老股民，随便聊聊"。跑出来的情绪分布变了，但运行清单里的模板哈希没变，没人知道两次结果为什么不同；同时他把当天日期挪到了提示词第一行，之后每次调用的前缀都不一样，前缀缓存全部失效。</div>
+</section>
+
+<section id="s3" class="reveal">
+<h2><span class="num">03</span>机制详解</h2>
+<p class="sub">按"越稳定越靠前"的顺序把六层内容叠起来，两次调用共用这段前缀；哪些东西不准进提示词、示例帖放在哪次调用、改模板后缓存怎么变，都在这一层规定。</p>
+<h3>3.1 六层顺序：静态在前、动态在后</h3>
+<p>设计文档规定的顺序是：规则说明 → 人设卡 → 长期信念 → 检索到的记忆 → 当日信息 → 输出 schema。<span class="ref">§6.1</span> 这样排的目的是让前缀缓存多命中：模型服务端会把"和上次调用开头一模一样的那一段"直接复用，开头越稳定，能复用的越长。<span class="ref">§14.3</span> 常见的 system / persona / memory / feed / task 五段叫法可以对上这六层，但设计文档本身没用 system、task 这两个词，下图括号里的对应只是帮助理解。</p>
+<p>每次激活最多两次调用，帖子在成交判定之后写。<span class="ref">§6.1</span> <b>第 1 次调用</b>（全员）做解读和意向，只出结构化字段，约 3.0k 输入 token：规则 200、人设与背景故事 600、记忆 800、信息流 1,400；输出约 200 token。<b>第 2 次调用</b>（只在 <code>want_to_post = True</code> 时）写帖子，约 3.6k 输入：与第 1 次共用的 3.0k 前缀，加当日意向与成交 100、风格示例帖 500；输出约 300 token，是自由文本。<span class="ref">§14.2</span> <span class="ref">§6.1</span> 输出 schema 这一层的长度文档没有单列。点图中任意一层看它装什么、从哪来。</p>
+<svg class="pp-svg" viewBox="0 0 640 510" role="img" aria-label="prompt 六层结构、两次调用共用的前缀与第 2 次调用追加部分">
+<text class="sm" x="150" y="18">提示词开头（最先发送）</text>
+<g class="pp-lay" data-k="rules" tabindex="0" role="button" aria-label="规则说明层">
+<text class="sm" x="140" y="56" text-anchor="end">全体共用</text>
+<rect class="box" x="150" y="28" width="330" height="54" rx="10" style="fill:rgba(192,132,252,.14);stroke:var(--llm)"/>
+<text class="lb" x="164" y="51">① 规则说明（≈system）</text><text class="sm" x="164" y="70">研究模拟声明、发言规则</text>
+<text class="tk" x="468" y="51" text-anchor="end">≈200</text></g>
+<g class="pp-lay" data-k="persona" tabindex="0" role="button" aria-label="人设卡层">
+<text class="sm" x="140" y="120" text-anchor="end">每人整场固定</text>
+<rect class="box" x="150" y="92" width="330" height="54" rx="10" style="fill:rgba(56,189,248,.12);stroke:var(--sim)"/>
+<text class="lb" x="164" y="115">② 人设卡（persona）</text><text class="sm" x="164" y="134">性格描述、背景故事；不含风格示例帖</text>
+<text class="tk" x="468" y="115" text-anchor="end">≈600</text></g>
+<g class="pp-lay" data-k="belief" tabindex="0" role="button" aria-label="长期信念层">
+<text class="sm" x="140" y="178" text-anchor="end">反思后才更新</text>
+<rect class="box" x="150" y="156" width="330" height="54" rx="10" style="fill:rgba(251,191,36,.10);stroke:var(--acct)"/>
+<text class="lb" x="164" y="179">③ 长期信念（memory）</text><text class="sm" x="164" y="198">反思得到的教训，带置信度</text>
+<text class="tk" x="468" y="179" text-anchor="end">未单列</text></g>
+<g class="pp-lay" data-k="memory" tabindex="0" role="button" aria-label="检索到的记忆层">
+<text class="sm" x="140" y="242" text-anchor="end">每次激活检索</text>
+<rect class="box" x="150" y="220" width="330" height="54" rx="10" style="fill:rgba(251,191,36,.06);stroke:var(--acct);stroke-dasharray:5 4"/>
+<text class="lb" x="164" y="243">④ 检索到的记忆（memory）</text><text class="sm" x="164" y="262">情景记忆、账户摘要</text>
+<text class="tk" x="468" y="243" text-anchor="end">≈800</text></g>
+<g class="pp-lay" data-k="feed" tabindex="0" role="button" aria-label="当日信息层">
+<text class="sm" x="140" y="306" text-anchor="end">每次激活不同</text>
+<rect class="box" x="150" y="284" width="330" height="54" rx="10" style="fill:rgba(244,114,182,.10);stroke:var(--social)"/>
+<text class="lb" x="164" y="307">⑤ 当日信息（feed）</text><text class="sm" x="164" y="326">K_i 条帖子 / 新闻，按种子打乱</text>
+<text class="tk" x="468" y="307" text-anchor="end">≈1,400</text></g>
+<g class="pp-lay" data-k="schema" tabindex="0" role="button" aria-label="输出 schema 层">
+<text class="sm" x="140" y="370" text-anchor="end">第 1 次调用</text>
+<rect class="box" x="150" y="348" width="330" height="54" rx="10" style="fill:rgba(129,140,248,.10);stroke:var(--orch)"/>
+<text class="lb" x="164" y="371">⑥ 输出 schema（≈task）</text><text class="sm" x="164" y="390">只许填分档和标签，不许填数字</text>
+<text class="tk" x="468" y="371" text-anchor="end">未单列</text></g>
+<g class="pp-lay" data-k="post" tabindex="0" role="button" aria-label="第 2 次调用追加部分">
+<text class="sm" x="140" y="440" text-anchor="end">第 2 次调用</text>
+<rect class="box" x="150" y="418" width="330" height="54" rx="10" style="fill:rgba(125,211,252,.08);stroke:#7dd3fc;stroke-dasharray:5 4"/>
+<text class="lb" x="164" y="441">⑦ 追加：意向与成交 + 风格示例帖</text><text class="sm" x="164" y="460">仅发帖者；接在 ①–⑤ 共用前缀之后</text>
+<text class="tk" x="468" y="441" text-anchor="end">≈100+500</text></g>
+<path d="M496 30 h8 v306 h-8" fill="none" style="stroke:var(--ok)" stroke-width="2"/>
+<text class="lb" x="512" y="150" style="fill:var(--ok)">共用前缀</text>
+<text class="tk" x="512" y="168">≈3.0k</text>
+<text class="sm" x="512" y="188">第 1、2 次调用</text><text class="sm" x="512" y="203">开头完全相同</text>
+<text class="sm" x="512" y="226">①② 跨激活</text><text class="sm" x="512" y="241">也不变</text>
+<path class="flowline" d="M496 352 h8 v116 h-8" fill="none" style="stroke:var(--warn)" stroke-width="2"/>
+<text class="lb" x="512" y="404" style="fill:var(--warn)">两次调用</text>
+<text class="sm" x="512" y="422">在这里分开</text>
+<text class="sm" x="150" y="498">提示词结尾 → 模型开始输出（第 1 次出 JSON，第 2 次出帖子正文）</text>
+</svg>
+<div class="card pp-det" id="pp-det" aria-live="polite"><h4>点上图某一层</h4><p>这里显示该层的内容、数据来源和不许出现的东西。</p></div>
+<h3>3.2 哪些东西不进提示词</h3>
+<p>人设卡里有很多字段是给内核或验证用的，大模型看不到。本页把下表概括为一条原则（概括是本页的，各条依据见出处）：模型只看到能写成文字的自我描述，涉及计算的事交给确定性代码（下称"内核"）。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>内容</th><th>进提示词的形式</th><th>为什么</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>大五人格</td><td>描述性短语，如"做事谨慎，遇到下跌容易睡不着"；不给分数</td><td>文档未写明理由；量化影响挂在内核的连续分数上（§3.1）</td><td><span class="ref">§4.1</span></td></tr>
+<tr><td>MBTI 类型名</td><td>不进。只有 <code>self_reported_mbti = True</code> 的人（偏年轻、一二线城市）会在帖子里自己提到类型</td><td>文档未写明理由；本页推断与 §13.2 的刻板化风险有关</td><td><span class="ref">§4.2</span></td></tr>
+<tr><td>内核参数 <code>kernel</code></td><td>不进，模型不知道自己的损失厌恶系数 λ</td><td>偏差的矫正由内核负责</td><td><span class="ref">§4.1</span> <span class="ref">§3.1</span></td></tr>
+<tr><td>盈亏、成本等数字</td><td>由内核算好后写成文字，如"浮亏 12.3%"；成本价用券商 App 显示的摊薄成本〔需复核〕</td><td>不让模型自己做算术</td><td><span class="ref">§13.4</span> <span class="ref">§8.4</span></td></tr>
+<tr><td>事件的 <code>direction_hint</code></td><td>永不给散户看</td><td>智能体只读改写后的文本、自己形成解读；否则抽取模型的一次解读会被复制给所有人，群体退化成 B1（单 LLM 无人设）。字段只用于路由与监控</td><td><span class="ref">§5.2</span></td></tr>
+<tr><td>"只用 X 日之前的信息"之类的指令</td><td>可以写，但不当作防泄露手段</td><td>Lopez-Lira, Tang &amp; Zhu (2025) 发现这类指令挡不住泄露</td><td><span class="ref">§13.1</span></td></tr>
+</tbody></table></div>
+<p>神经质会同时影响两处：模型说出的恐惧程度，以及内核里恐惧对仓位的影响强度 η，两者要一起校准。<span class="ref">§4.1</span> <span class="ref">§12.2</span> 如果群体意见还是太集中，调的是内核映射的斜率和噪声，不靠在提示词里加花样硬拉开。<span class="ref">§13.2</span></p>
+<h3>3.3 风格示例帖（few-shot）的规则</h3>
+<p>few-shot 指在提示词里放几条示例，让模型照着写。本项目用它控制发帖文风：先把脱敏后的公开股吧、雪球帖子按句长、口语词、表情和黑话、情绪强度、话题偏好聚成若干文风簇，每个散户按人设绑定一个簇（字段 <code>voice_style</code>），提示词里放这个簇的少量示例帖（字段 <code>voice_examples</code>）。<span class="ref">§4.4</span> 示例帖只放在第 2 次调用（发帖）里，第 1 次调用只出结构化字段，不带示例帖；这样意向和信念不受文风示例牵引，帖子又能照着示例写。<span class="ref">§6.1</span>（后半句的理由是本页的理解，文档只写了做法。）股吧和雪球机制相同，但示例池分开。<span class="ref">§7.1</span></p>
+<ol>
+<li><b>时间：</b>只取模拟起点之前的帖子，否则示例本身就带进了未来信息。<span class="ref">§4.4</span> <span class="ref">§13.1</span></li>
+<li><b>脱敏：</b>去掉用户名和可识别信息，不照抄某个具体用户。<span class="ref">§4.4</span> 发往境外 API 前必须先脱敏，并核对厂商的数据条款。<span class="ref">§16.4</span></li>
+<li><b>隔离验收：</b>验收事件的真实帖子既不进校准目标，也不进示例池。否则 V2（文风与真实帖子对比）就成了拿考题当范文。<span class="ref">§11.3</span> <span class="ref">§12.2</span></li>
+<li><b>只管文风：</b>内核只矫正结构化字段，不改帖子正文；文风靠示例帖和模型选择去接近真实。<span class="ref">§13.3</span></li>
+<li><b>可消融：</b>消融实验里有一项就是去掉少样本示例帖，看结果差多少。<span class="ref">§11.2</span></li>
+</ol>
+<p>示例帖放几条，文档只写了"少量 / 若干"，本页不给具体数字。示例帖能否算版权上的合理使用，还在等法务意见。<span class="ref">§16.1</span> 雪球不自行采集，雪球文风示例池只能靠授权数据。<span class="ref">§16.1</span></p>
+<h3>3.4 按用途分目录，每个用途 2–3 个等价模板</h3>
+<p><code>prompts</code> 模块的文档字符串列出的用途有：事件卡抽取、分渠道改写、认知循环各步、反思、预置记忆。<span class="ref">§3.3</span> 分渠道改写在 events 里只产出 L0、L1 两类不带立场的版本，L2–L4 的文本是观点，由 social 的发布者以 <code>Post</code> 产出，相应模板归发布者使用。<span class="ref">§5.3</span> <span class="ref">§5.6</span> 认知循环里用到大模型的有三类：</p>
+<ul>
+<li><b>第 1 次调用（解读 + 意向）</b>：全员，只出结构化字段，不带风格示例帖。盘前和盘中输出 <code>BeliefUpdate</code> + <code>DecisionIntent[]</code> + <code>FundingIntent</code>；收盘后和晚间输出 <code>BeliefUpdate</code> + 明日打算（买 / 卖 / 持有 / 观望 + 标的），写入记忆、不出订单。意向来源换成规则先验或 Jev 时，这次调用只剩解读。<span class="ref">§6.1</span> <span class="ref">§6.6</span></li>
+<li><b>第 2 次调用（发帖）</b>：只在 <code>want_to_post = True</code> 时调用，输入加上当日意向与实际成交（含未执行原因），风格示例帖只放在这次，正文是自由文本、不进 JSON。群聊接话只走这一次调用，不重做第 1 次。<span class="ref">§6.1</span> <span class="ref">§7.1</span></li>
+<li><b>反思</b>：低频，每周一次（Tier-A 放在周末激活点）或大盈亏后触发，产出记忆。<span class="ref">§6.1</span></li>
+</ul>
+<p>感知（perceive）和约束与成交（constrain + fill）由内核代码完成，不用模板。<span class="ref">§6.1</span> 帖子与实际所为之差就是"言行不一"；收盘后的明日打算与次日盘前实际意向之差叫"隔夜变卦"。两者都要能测，所以第 2 次调用必须看到真实成交，晚间的第 1 次调用必须把明日打算写进记忆。<span class="ref">§6.1</span> <span class="ref">§3.4</span></p>
+<p>模板里还有随时段变化的任务说明：长假前最后一个交易日的盘前 prompt 写明"明天起休市 N 天"；非交易日只有 20:00 晚间激活点，调用同收盘后激活，不出订单。<span class="ref">§3.4</span> V3 硅基调查是旁路调用：从调查时点的日终快照出发，形式同第 1 次调用，不放风格示例帖，每个调查时点一次，单独缓存，答案不写回记忆。<span class="ref">§12.1</span></p>
+<p>"等价模板"是同一用途下说法不同、要求相同的 2–3 份模板。一次实验固定用其中一份，换一份重跑，看结论变不变；它和种子、基座模型并列，是 V5 稳健性检验的三个维度之一。<span class="ref">§13.4</span> <span class="ref">§12.1</span> 目录名、文件格式文档都没有规定。</p>
+<h3>3.5 模板版本和缓存键是什么关系</h3>
+<p>两件事要分开看。<b>模板哈希</b>由加载器按模板内容算出，写进运行清单，用来回答"这次实验用的是哪一版模板"。<span class="ref">§9.4</span> <b>缓存键</b>由 llm 网关算，决定一次调用能不能直接拿缓存里的旧回答：</p>
+<pre class="code" data-lang="示意，未实现"><span class="f">cache_key</span> <span class="p">=</span> <span class="f">hash</span><span class="p">(</span>模型 ID 与带日期的版本号<span class="p">,</span> 推理引擎版本<span class="p">,</span> 结构化输出后端<span class="p">,</span>
+                 schema<span class="p">,</span> 采样参数<span class="p">,</span> 种子<span class="p">,</span> 完整 messages<span class="p">)</span>   <span class="c">// §14.4 第 1 条</span></pre>
+<p>模板本身不单独进缓存键。改了模板，拼出来的完整 messages 就变了，缓存键随之变化，旧回答自然不再命中。所以改一个字有两个后果：清单里的模板哈希变了（可追溯），缓存全部未命中（要重新花钱调用）。反过来，回放旧实验时只读缓存，未命中就报错，不会悄悄用新模板重跑。<span class="ref">§14.4</span> 解析失败的那几次尝试也写入缓存，重试用的新种子在缓存键里，所以回放能复现同样的重试序列。<span class="ref">§6.2</span> <span class="ref">§14.4</span> 同一次激活的两次调用共用静态前缀，第 2 次调用的前缀部分可以命中第 1 次调用留下的前缀缓存。<span class="ref">§14.3</span></p>
+<p>同理，模型要用带日期的版本号，结构化输出后端也要锁版本，因为换后端本身就会改变输出。<span class="ref">§14.4</span> schema 尽量扁平：一份厂商实测（8B 模型）里嵌套 schema 的额外开销在 vLLM 上是 +42%、SGLang 上 +6%，扁平的只有 +6% / +2%。<span class="ref">§14.4</span></p>
+<h3>3.6 规则说明层写什么</h3>
+<p>规则说明如实告诉模型：这是研究用的模拟，输出不会发布，请按人设表达真实情绪；不用越狱提示词，遵守各厂商的使用政策。<span class="ref">§13.3</span> <span class="ref">§16</span> 内容尺度放开，但不许威胁、人肉或捏造对具名真人的指控。<span class="ref">§16.2</span> 拒答率、无效输出率、免责声明率和说教率按模型、按事件类别监控。<span class="ref">§13.3</span></p>
+<h3>3.7 生成环节的防泄露：模板管住"让模型写什么"</h3>
+<p>前视泄露在本项目里主要表现为逼真度污染：历史推演的帖子带上当时散户不可能知道的结局，或者模型背过当年的帖子，让 V2 虚高。<span class="ref">§13.1</span> 除了散户每天的提示词，生成人设和记忆的那几类模板也会把未来信息带进来，设计文档对它们分别做了规定：</p>
+<ol>
+<li><b>预置记忆：事实填模板，模型只润色。</b>预置记忆的事实部分（哪段行情里多大仓位、加没加杠杆、亏了多少）由经历向量填进模板，大模型只改语气，生成后扫描有没有起点之后的日期与事件。这样模型没有机会"顺手"补上它从训练数据里知道的后续走势。<span class="ref">§13.1</span> <span class="ref">§6.5</span> <span class="ref">§6.4</span></li>
+<li><b>背景故事：只改写、不新增事实。</b>背景故事是 200–300 字的第一人称叙述，由大模型把人生骨架里的事实改写而成，不得新增事实、日期和数字；生成后与人设卡逐项比对（年龄、职业、入市年份、盈亏方向），并扫描起点之后的日期与事件，不一致就重写。<span class="ref">§4.4</span></li>
+<li><b>反思：不得出现模拟时钟之后的日期。</b>反思模板读的是模拟自己的经历，产出语义记忆；反思 prompt 里出现晚于模拟时钟的日期即违规。<span class="ref">§6.4</span></li>
+<li><b>事件卡抽取：抽取模型也算进截止日表。</b>抽取模型给量级时可能受"已知结局"影响，所以它和散户用的底座一样要查训练截止日。<span class="ref">§13.1</span> <span class="ref">§5.2</span> 抽取 prompt 还要遮去专有的时期叫法（如"9·24"），只按文本写明的政策力度、发布机构级别、是否超预期打分；历史验收事件的量级由团队人工标定，LLM 打分只作参考。<span class="ref">§5.2</span></li>
+<li><b>统一扫描。</b>数据层的泄漏测试里有一条是扫描所有 prompt，查找晚于仿真时钟的日期；模板集中在本模块，扫描才能覆盖全部用途。<span class="ref">§5.5</span></li>
+</ol>
+<p>这些规则都放在"喂进去什么"上，因为在提示词里写"只用某日之前的信息"已被证明挡不住泄露（见 3.2 表）。<span class="ref">§13.1</span></p>
+</section>
+
+<section id="s4" class="reveal">
+<h2><span class="num">04</span>走一遍示例</h2>
+<p class="sub">以一位化名散户某个交易日的盘前激活为例，一层一层拼出第 1 次调用的提示词，发出、校验、处理失败；内核判定成交后，再在同一前缀后追加意向、成交和示例帖，拼出第 2 次调用。</p>
+<p>下面所有人名、股票、帖子、数字都是<span class="pp-demo">示例数据</span>，只用来演示拼装过程；各层的 token 数取设计文档的预算值。<span class="ref">§14.2</span> 每一步列出这一步的输入、做了什么、产出什么，以及对应的文档条目。右侧色条是到当前这步为止累计的输入长度。</p>
+<div class="card glow" id="pp-stp">
+<div class="pp-stp-top">
+<span class="pp-demo">示例数据</span>
+<span class="chip sim"><i></i>化名散户：老周</span>
+<span class="chip llm"><i></i>用途：盘前第 1 次调用 + 第 2 次调用（发帖）</span>
+</div>
+<div class="pp-dots" id="pp-dots"></div>
+<div class="pp-stp-h"><span class="chip llm" id="pp-kind"><i></i>步骤</span><b id="pp-title">（需要启用脚本）</b></div>
+<div class="pp-blk">
+<div><h5>输入</h5><ul id="pp-in"></ul></div>
+<div><h5>处理</h5><ul id="pp-proc"></ul></div>
+<div><h5>输出</h5><ul id="pp-outl"></ul></div>
+</div>
+<div class="pp-ref">对应文档条目：<span id="pp-refs"></span></div>
+<div class="pp-asm">
+<div><b style="font-size:13px">拼装中的提示词 <span class="pp-demo">示例数据</span></b>
+<div class="pp-prev" id="pp-prev" aria-live="polite"></div></div>
+<div><b style="font-size:13px">累计输入长度</b>
+<div class="pp-stack" id="pp-stack"></div>
+<div class="pp-tot" id="pp-tot">—</div>
+<div class="pp-leg" id="pp-leg"></div>
+<div class="pp-out" id="pp-res"></div></div>
+</div>
+<div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap">
+<button class="btn" id="pp-prevb" type="button">上一步</button>
+<button class="btn pri" id="pp-next" type="button">下一步</button>
+<button class="btn" id="pp-play" type="button">自动播放</button>
+</div>
+</div>
+</section>
+
+<section id="s5" class="reveal">
+<h2><span class="num">05</span>接口与数据结构</h2>
+<p class="sub">只列设计文档里出现过的字段；模板文件本身的格式、目录名和加载器接口，文档都还没定义。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>所在结构</th><th>字段</th><th>类型 / 取值</th><th>和提示词的关系</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td rowspan="6"><code>PersonaCard</code></td><td><code>voice_style</code></td><td>str，文风簇 ID</td><td>决定取哪个簇的示例帖</td><td><span class="ref">§4.1</span> <span class="ref">§4.4</span></td></tr>
+<tr><td><code>voice_examples</code></td><td>list[str]</td><td>只进第 2 次调用（第 ⑦ 层追加部分）；只含模拟起点前、已脱敏的帖子</td><td><span class="ref">§4.1</span></td></tr>
+<tr><td><code>big5</code></td><td>人格分数</td><td>转成描述短语进提示词，分数不进</td><td><span class="ref">§4.1</span></td></tr>
+<tr><td><code>mbti_type</code> / <code>self_reported_mbti</code></td><td>str / bool</td><td>类型名不进；后者决定帖子里会不会自报类型</td><td><span class="ref">§4.2</span></td></tr>
+<tr><td><code>kernel</code></td><td><code>KernelParams</code></td><td>不进</td><td><span class="ref">§4.1</span></td></tr>
+<tr><td><code>temperature</code></td><td>float，生成时绑定，运行期不变；底座模型由运行配置统一指定，人设卡里没有模型字段</td><td>不进提示词；属于缓存键里的采样参数</td><td><span class="ref">§4.1</span> <span class="ref">§6.6</span> <span class="ref">§14.4</span></td></tr>
+<tr><td rowspan="5"><code>BeliefUpdate</code></td><td><code>views</code></td><td>list[AssetView]：horizon 1d/1w/1m，stance −2..2，ret_bucket 六档，confidence 1..5，reasons ≤3</td><td>第 ⑥ 层要求的输出结构</td><td><span class="ref">§6.2</span></td></tr>
+<tr><td><code>emotion</code></td><td>fear / greed / regret / fomo → 0..3</td><td>同上</td><td><span class="ref">§6.2</span></td></tr>
+<tr><td><code>policy_trust</code></td><td>−1 / 0 / 1</td><td>同上</td><td><span class="ref">§6.2</span></td></tr>
+<tr><td><code>want_to_post</code></td><td>bool</td><td>为 True 才进入第 2 次调用（发帖）</td><td><span class="ref">§6.1</span> <span class="ref">§6.2</span></td></tr>
+<tr><td><code>monologue</code></td><td>≤120 字</td><td>只供审计</td><td><span class="ref">§6.2</span></td></tr>
+<tr><td><code>DecisionIntent</code></td><td>asset、action、size、execution、reasons、source_post_ids、rationale</td><td>action buy/sell/hold/watch；size tiny/small/half/large/all_in；execution open/dip/chase；reasons ≤3；source_post_ids ≤2；rationale ≤120 字</td><td>盘前、盘中第 1 次调用的输出（列表）；第 2 次调用里作为"当日意向"回填</td><td><span class="ref">§6.3</span></td></tr>
+<tr><td>明日打算（<code>NextDayPlan</code>）</td><td>asset、action、rationale</td><td>action 同上；rationale ≤60 字</td><td>收盘后、晚间第 1 次调用的输出，写入记忆，不出订单</td><td><span class="ref">§6.3</span> <span class="ref">§3.4</span></td></tr>
+<tr><td><code>FundingIntent</code></td><td>action、size、reason</td><td>action deposit/withdraw/none；size tiny/small/half/large/all；reason ≤60 字</td><td>盘前、盘中第 1 次调用的输出</td><td><span class="ref">§6.3</span></td></tr>
+<tr><td>第 2 次调用追加内容</td><td>当日意向、实际成交（含未执行原因）、风格示例帖</td><td>文档未定义字段</td><td>接在共用前缀之后；输出是自由文本帖子</td><td><span class="ref">§6.1</span></td></tr>
+<tr><td rowspan="3"><code>RunManifest</code></td><td>prompt 模板哈希、意向来源</td><td>文档未定义类型</td><td>本模块的主要产物；意向来源决定第 1 次调用是否带意向</td><td><span class="ref">§9.4</span></td></tr>
+<tr><td>模型与版本、嵌入模型版本、采样参数、种子</td><td>文档未定义类型</td><td>与缓存键的组成部分对应</td><td><span class="ref">§9.4</span> <span class="ref">§6.4</span></td></tr>
+<tr><td>缓存命中率、token 用量、解析失败率、拒答率、超时率、事后视角命中率</td><td>文档未定义类型</td><td>监控提示词的效果与成本；失败率与拒答率超阈告警</td><td><span class="ref">§9.4</span> <span class="ref">§6.2</span> <span class="ref">§13.1</span></td></tr>
+<tr><td>模板文件</td><td>目录名、文件格式、版本号格式、哈希算法、加载器接口</td><td>文档未定义</td><td>—</td><td><span class="ref">§3.3</span></td></tr>
+</tbody></table></div>
+<p>下面是运行清单里与模板相关部分的样子。字段名、哈希值全是编的，只为说明"每个用途记下用了哪一份等价模板和它的哈希"。</p>
+<pre class="code" data-lang="JSON · 示意，未实现"><span class="p">{</span>
+  <span class="s">"prompt_templates"</span><span class="p">:</span> <span class="p">{</span>
+    <span class="s">"agent/call1"</span><span class="p">:</span> <span class="p">{</span> <span class="s">"variant"</span><span class="p">:</span> <span class="n">1</span><span class="p">,</span> <span class="s">"hash"</span><span class="p">:</span> <span class="s">"示例-3f9c…"</span> <span class="p">},</span>
+    <span class="s">"agent/post"</span><span class="p">:</span> <span class="p">{</span> <span class="s">"variant"</span><span class="p">:</span> <span class="n">1</span><span class="p">,</span> <span class="s">"hash"</span><span class="p">:</span> <span class="s">"示例-a07e…"</span> <span class="p">},</span>
+    <span class="s">"events/extract"</span><span class="p">:</span>  <span class="p">{</span> <span class="s">"variant"</span><span class="p">:</span> <span class="n">2</span><span class="p">,</span> <span class="s">"hash"</span><span class="p">:</span> <span class="s">"示例-51bd…"</span> <span class="p">}</span>
+  <span class="p">},</span>
+  <span class="s">"model"</span><span class="p">:</span> <span class="s">"示例模型-2026-xx-xx"</span><span class="p">,</span>
+  <span class="s">"intent_source"</span><span class="p">:</span> <span class="s">"llm"</span><span class="p">,</span>
+  <span class="s">"cache_hit_rate"</span><span class="p">:</span> <span class="s">"运行后填写"</span><span class="p">,</span>
+  <span class="s">"parse_failure_rate"</span><span class="p">:</span> <span class="s">"运行后填写"</span><span class="p">,</span>
+  <span class="s">"refusal_rate"</span><span class="p">:</span> <span class="s">"运行后填写"</span><span class="p">,</span>
+  <span class="s">"timeout_rate"</span><span class="p">:</span> <span class="s">"运行后填写"</span>
+<span class="p">}</span></pre>
+</section>
+
+<section id="s6" class="reveal">
+<h2><span class="num">06</span>设计取舍与已定决定</h2>
+<p class="sub">每条写清选了什么、放弃了什么、为什么；来自 2026-10-30 架构讨论、已并入设计文档 v0.3 的决定单独标出。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>取舍点</th><th>选了</th><th>放弃了</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>各层顺序</td><td>静态在前、动态在后 <span class="ref">§6.1</span></td><td>按"先交代任务再给材料"的自然阅读顺序</td><td>前缀缓存只认开头相同的部分。自建引擎复用前缀只加速预填充；API 侧缓存有最短长度和过期时间，收益取决于前缀多快被再次用到 <span class="ref">§14.3</span></td></tr>
+<tr><td>输出形式</td><td>分档和标签 <span class="ref">§6.2</span></td><td>模型直接给收益率、仓位比例等连续数字</td><td>数值输出校准差、容易扎堆在整数，所以只让模型给分档，分档到数值的映射由内核按人设完成；输出由 Pydantic 校验，推理框架支持时加 JSON schema 约束解码 <span class="ref">§6.2</span> <span class="ref">§13.4</span></td></tr>
+<tr><td>调用拆分</td><td>每次激活最多两次调用：第 1 次只出结构化字段，第 2 次在成交判定之后写帖子 <span class="ref">§6.1</span></td><td>一次调用同时给出信念、意向和帖子</td><td>帖子要看到实际成交（含涨停买不进、挂单没成交等未执行原因）才能写，言行不一照常测量；不发帖的人省掉第 2 次调用；两次共用静态前缀，第 2 次的前缀可命中缓存 <span class="ref">§6.1</span> <span class="ref">§14.2</span> <span class="ref">§14.3</span></td></tr>
+<tr><td>文风控制</td><td>提示词 + 示例帖 <span class="ref">§13.3</span></td><td>MVP 阶段的文风微调</td><td>示例帖成本低、可消融；V2 不过关再用模拟起点前的匿名帖训练 LoRA <span class="ref">§15.2</span></td></tr>
+<tr><td>模板数量</td><td>每个用途 2–3 个等价模板 <span class="ref">§13.4</span></td><td>只维护一份精调过的模板</td><td>多一个稳健性维度要多跑几轮，但能说明结论不来自某种措辞</td></tr>
+<tr><td>规则说明的写法</td><td>如实说明研究用途，不用越狱提示词 <span class="ref">§13.3</span></td><td>用角色扮演技巧压低拒答</td><td>遵守厂商政策；拒答率等按模型、事件类别监控，出了问题看得见</td></tr>
+<tr><td>人格信息</td><td>只给描述短语，不给类型名和分数 <span class="ref">§4.1</span> <span class="ref">§4.2</span></td><td>直接写"你是 INTJ""神经质 0.8"</td><td>量化影响挂在连续分数上、交给内核 <span class="ref">§3.1</span> <span class="ref">§4.2</span>；类型名不进的理由文档没写，刻板化风险见 §13.2（本页推断）</td></tr>
+</tbody></table></div>
+<div class="callout decide"><b class="t">已定（v0.3 §6.1，来自架构讨论 A6）</b>
+<p>每次激活最多两次 LLM 调用，帖子在成交判定之后写。第 1 次调用只出结构化字段，不带风格示例帖；第 2 次调用只在 <code>want_to_post = True</code> 时发生，在共用前缀之后追加当日意向、实际成交和风格示例帖，正文是自由文本。群聊接话只走第 2 次调用。对本模块而言，同一用途要维护两份模板（第 1 次调用、第 2 次调用），两者前缀必须逐字相同。<span class="ref">§6.1</span> <span class="ref">§7.1</span></p></div>
+<div class="callout decide"><b class="t">已定（v0.3 §6.2、§14.4，来自架构讨论 A4）</b>
+<p>MVP 只用国内厂商 API，底座为开放权重模型，闭源模型只作对照；同一底座下 Tier-A 与 Tier-B 用同一模型；网关是基于 openai SDK 的自写薄层，不用 LiteLLM。<span class="ref">§14.4</span> <span class="ref">§6.6</span></p>
+<p>解析失败：Pydantic 校验不过就换新种子重试（种子进缓存键），最多 2 次；仍失败，该散户当天记为"未激活"，原因"解析失败"，不填默认值，也不沿用上期信念。拒答单独记一类，不重试，当天按缺席处理，拒答率按话题与人群切片、作为底座选型扣分。失败的尝试也写入缓存，回放时复现同一重试序列。<span class="ref">§6.2</span> <span class="ref">§13.3</span></p></div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.2、§5.3，来自架构讨论 A3）</b>
+<p>事件卡抽取 prompt 遮去专有的时期叫法（如"9·24"），只按文本写明的政策力度、发布机构级别、是否超预期打分。<span class="ref">§5.2</span> events 只产出 <code>EventCard</code> 及 L0/L1 版本；L2–L4 的文字由 social 的发布者以 <code>Post</code> 产出，夸张程度和确定性是发布者参数；L3 可以歪曲，但必须标注所依据的事件；L4 传闻另立 <code>origin="rumor"</code> 的事件卡。<span class="ref">§5.3</span> <span class="ref">§5.6</span> 对本模块而言，events 只保留 L0/L1 改写模板，L2–L4 的模板归发布者。</p></div>
+<div class="callout decide"><b class="t">已定（v0.3 §16.1，来自架构讨论 A2）</b>
+<p>雪球不自行采集，雪球的 V2 对照与文风示例池依赖授权数据；没有授权来源之前，雪球 V2 记为"无对照"。<span class="ref">§16.1</span></p></div>
+</section>
+
+<section id="s7" class="reveal">
+<h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">prompts 只提供模板和顺序；数据由各业务模块填进来，发送、缓存、重试归 llm 网关。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>页面</th><th>关系</th></tr></thead>
+<tbody>
+<tr><td><a href="mod-schemas.html">schemas</a></td><td>提供输出结构的 JSON schema（第 ⑥ 层），也是各模块共享类型的唯一途径 <span class="ref">§3.3</span></td></tr>
+<tr><td><a href="mod-agents.html">agents</a></td><td>第 1 次调用（解读 + 意向）、第 2 次调用（发帖）和反思的使用方；记忆检索的结果填进第 ③④ 层，晚间的明日打算写回记忆 <span class="ref">§6.1</span> <span class="ref">§6.4</span> <span class="ref">§3.4</span></td></tr>
+<tr><td><a href="mod-population.html">population</a></td><td>生成人设卡；背景故事改写和预置记忆用本模块的模板 <span class="ref">§4.4</span></td></tr>
+<tr><td><a href="sim-personas.html">不同类型散户怎么决策</a></td><td>看人设卡里的哪些差异真正进了提示词，哪些只留在内核</td></tr>
+<tr><td><a href="mod-events.html">events</a></td><td>事件卡抽取模板的使用方，抽取模型和提示词版本锁定并缓存 <span class="ref">§5.2</span></td></tr>
+<tr><td><a href="mod-social.html">social</a></td><td>提供推荐流与群聊里的帖子（<code>FeedItem</code>）作为候选；每人当天的 K<sub>i</sub> 条由 agents 的注意力预算选出，填进第 ⑤ 层 <span class="ref">§3.3</span> <span class="ref">§5.4</span>；群聊接话只走第 2 次调用 <span class="ref">§7.1</span></td></tr>
+<tr><td><a href="sim-publishers.html">动态发布者</a></td><td>L2–L4 的渠道文字由发布者以 <code>Post</code> 产出，夸张程度、确定性是发布者参数，相应模板归发布者使用 <span class="ref">§5.3</span> <span class="ref">§5.6</span></td></tr>
+<tr><td><a href="mod-llm.html">llm</a></td><td>接收拼好的消息，算缓存键、调用、校验、重试 <span class="ref">§14.4</span></td></tr>
+<tr><td><a href="mod-orchestrator.html">orchestrator</a></td><td>把各模块接起来，每个激活点分步执行：先并发发送全部第 1 次调用并校验，再由内核统一约束与成交判定，然后对发帖者发送第 2 次调用，群聊接话在其后按种子顺序进行 <span class="ref">§14.4</span>；运行清单 <code>RunManifest</code> 和运行目录归它写，模板哈希由本模块的加载器提供 <span class="ref">§3.3</span> <span class="ref">§9.4</span></td></tr>
+<tr><td><a href="mod-collect.html">collect</a></td><td>采集示例帖的原始帖子，采集规则见 <span class="ref">§16.1</span></td></tr>
+<tr><td><a href="mod-outputs.html">outputs</a></td><td>交付三张主表（帖子、态度、决策）与账户类表，每一行都能追溯到唯一的运行清单 <span class="ref">§9.4</span></td></tr>
+<tr><td><a href="mod-validation.html">validation</a></td><td>V5 拿等价模板做稳健性维度；V3 硅基调查调用同第 1 次调用的形式、不放风格示例帖；泄露扫描、回放一致性、schema 契约测试 <span class="ref">§12.1</span> <span class="ref">§14.4</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="s8" class="reveal">
+<h2><span class="num">08</span>开放问题</h2>
+<p class="sub">下面这些设计文档还没定，本页也没有替它们编答案。</p>
+<div class="callout todo"><b class="t">待定</b>
+<ul>
+<li>模板文件格式、目录名、版本号格式、哈希算法、加载器接口都未定义；填空由加载器做还是由调用方做也没写明。<span class="ref">§3.3</span></li>
+<li>每个散户放几条风格示例帖：文档只写"少量 / 若干"。<span class="ref">§4.4</span></li>
+<li>人设文字的长度：§4.1 写约 500 token，§14.2 的预算表写"人设与背景故事 600"，需要统一。</li>
+<li>信息流的长度：§5.4 写约 1,500 token，§14.2 的预算表写 1,400，需要统一。</li>
+<li>长期信念是否计入 §6.4 / §14.2 的 800 token 记忆预算，文档没有明说。</li>
+<li>输出 schema 层占多少 token，预算表没有单列。<span class="ref">§14.2</span></li>
+<li>输出 schema 放在最后，文档没说明原因；它本身不变，若挪到动态内容之前能否多命中缓存，值得实测。<span class="ref">§6.1</span></li>
+<li>提示词里的成本价用券商 App 的摊薄成本〔需复核〕。<span class="ref">§8.4</span></li>
+<li>API 侧前缀缓存的最短长度和过期时间、缓存折扣能否与批量折扣叠加，按各厂商文档确认。<span class="ref">§14.3</span> <span class="ref">§14.4</span></li>
+<li>示例帖是否属于版权合理使用，等法务意见。<span class="ref">§16.1</span></li>
+<li>输出 schema 是否属于两次调用的共用前缀：§6.1 的排列把 schema 放在当日信息之后，§14.2 的 3.0k 共用前缀分项里也没有 schema 层；第 2 次调用要不要带上第 1 次调用的 schema，文档没写。<span class="ref">§6.1</span> <span class="ref">§14.2</span></li>
+<li>§3.3 模块表仍写 events "按渠道改写（官媒 / 财经快讯 / 传闻）"，与 §5.3"events 只产出 L0/L1"的写法不一致，改写模板的归属以 §5.3 为准，模块表待改。<span class="ref">§3.3</span> <span class="ref">§5.3</span></li>
+<li>第 2 次调用追加的"意向与成交"部分（约 100 token）的具体格式，文档没有定义。<span class="ref">§6.1</span> <span class="ref">§14.2</span></li>
+</ul></div>
+</section>
+
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+/* 交互一：六层结构图点选 */
+var LAY={
+rules:{h:'① 规则说明（约 200 token）',p:['如实说明这是研究用的模拟、输出不发布，请按人设表达真实情绪；不用越狱提示词。','全体散户共用同一段，是最容易命中前缀缓存的部分。'],r:['§6.1','§13.3','§14.2']},
+persona:{h:'② 人设卡（约 600 token）',p:['人设文字：年龄、职业、家庭、入市经历、交易风格、媒体习惯、200–300 字背景故事；大五人格只给描述短语。','风格示例帖不在这一层，只在第 2 次调用里追加（见第 ⑦ 层），所以第 1 次调用的结构化输出不受示例帖影响。','不进：MBTI 类型名、人格分数、内核参数。同一散户整场不变。§4.1 写人设文字约 500 token，§14.2 预算表写人设与背景故事 600，本页取后者。'],r:['§4.1','§4.2','§6.1','§14.2']},
+belief:{h:'③ 长期信念（长度未单列）',p:['本页把长期信念对应到语义记忆：反思得出的教训，每条带置信度和来源情景记忆的 id。这个对应是本页的理解。','§6.4 写"每次 prompt 的记忆预算约 800 token"，§14.2 写"记忆 800"；长期信念是否算在这 800 里，文档没有明说。','反思每周一次或大盈亏后才跑，两次反思之间这一层内容不变，所以前缀有时能延伸到这里（本页推断）。'],r:['§6.1','§6.4','§14.2']},
+memory:{h:'④ 检索到的记忆（约 800 token）',p:['情景记忆按"时近性 + 重要度 + 相关性"打分检索（Generative Agents 的做法）；预置记忆带 seeded 标签。','账户摘要约 100 token 也算在这份预算里，数字由内核算好写成文字，如"浮亏 12.3%"。','记忆只能来自模拟自己的历史和预置经历；反思 prompt 不得出现晚于模拟时钟的日期。'],r:['§6.4','§13.4']},
+feed:{h:'⑤ 当日信息（约 1,400 token）',p:['agents 的注意力预算从候选池选出的 K_i 条（3–15 条）；候选来自事件改写版本、social 的推荐流与群聊、行情异动。持仓异动必进，其余按 softmax(score/T_i) 无放回抽取。','每个散户按自己的种子打乱顺序，用探针测顺序敏感度；direction_hint 永不展示；真实帖子注入开关默认关闭。','§5.4 写这一层约 1,500 token，§14.2 预算表写 1,400，本页取后者。'],r:['§5.4','§13.4','§5.2','§5.7','§14.2']},
+schema:{h:'⑥ 输出 schema（第 1 次调用，长度未单列）',p:['盘前、盘中：BeliefUpdate（观点分档、情绪 0..3、政策信任 −1/0/1、是否想发帖、≤120 字独白）+ DecisionIntent[] + FundingIntent。','收盘后、晚间：BeliefUpdate + 明日打算（买 / 卖 / 持有 / 观望 + 标的），写入记忆，不出订单。意向来源换成规则先验或 Jev 时只剩 BeliefUpdate。','输出由 Pydantic 校验，推理框架支持时加 JSON schema 约束解码；schema 尽量扁平，嵌套会增加解码开销。'],r:['§6.1','§6.2','§6.3','§14.4']},
+post:{h:'⑦ 第 2 次调用追加：意向与成交 + 风格示例帖（约 100 + 500 token）',p:['只在 want_to_post = True 时调用。接在 ①–⑤ 的共用前缀之后，追加当日意向、实际成交（含未执行原因）和风格示例帖；输入合计约 3.6k token，输出约 300 token。','示例帖按 voice_style 取该文风簇的少量帖子，只用模拟起点前、已脱敏的；验收事件的真实帖子不进。','输出是自由文本帖子，不进 JSON。群聊接话也只走这一次调用。'],r:['§6.1','§4.4','§7.1','§14.2']}
+};
+var det=document.getElementById('pp-det');
+function showLay(k){
+var d=LAY[k];if(!d||!det)return;
+while(det.firstChild)det.removeChild(det.firstChild);
+var h=document.createElement('h4');h.textContent=d.h;det.appendChild(h);
+d.p.forEach(function(t){var p=document.createElement('p');p.textContent=t;det.appendChild(p);});
+var r=document.createElement('p');r.textContent='出处：';
+d.r.forEach(function(x){var s=document.createElement('span');s.className='ref';s.textContent=x;r.appendChild(s);r.appendChild(document.createTextNode(' '));});
+det.appendChild(r);
+document.querySelectorAll('.pp-lay').forEach(function(g){g.classList.toggle('on',g.getAttribute('data-k')===k);});
+}
+document.querySelectorAll('.pp-lay').forEach(function(g){
+var k=g.getAttribute('data-k');
+g.addEventListener('click',function(){showLay(k);});
+g.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();showLay(k);}});
+});
+/* 交互二：逐步拼装示例（全部为示例数据） */
+var C={rules:'var(--llm)',persona:'var(--sim)',ex:'#7dd3fc',belief:'var(--acct)',feed:'var(--social)',schema:'var(--orch)',post:'var(--warn)'};
+var S=[
+{t:'读入模板并记下哈希',k:'加载器',in:['用途：盘前激活的第 1 次调用（解读 + 意向）与第 2 次调用（发帖）','本次实验选用的等价模板：第 1 份（共 2–3 份）'],pr:['加载器从包数据里读出两份模板文件','按模板内容分别计算哈希'],out:['模板文本（各层的标题与固定说明）','模板哈希，写入运行清单（示例值 3f9c…、a07e…）'],r:['§3.3','§6.1','§9.4','§13.4'],seg:null},
+{t:'第 ① 层：规则说明',k:'静态 · 全体共用',in:['模板里的固定说明文字'],pr:['原样放在最前面，不插任何日期或个人信息'],out:['约 200 token，所有散户都相同'],r:['§6.1','§13.3','§14.2'],
+seg:{k:'rules',l:'① 规则说明',c:C.rules,n:200,x:'这是一个研究用的股市散户模拟，你的回答不会公开发布。请以下面这位散户的身份，用他自己的口吻和真实情绪回应。'}},
+{t:'第 ② 层：人设卡',k:'静态 · 每人固定',in:['PersonaCard：出生年、职业、入市年份、交易风格、媒体习惯、big5、背景故事'],pr:['big5 分数转成描述短语','删去 mbti_type、kernel 等不进提示词的字段','不放风格示例帖（只在第 2 次调用里放）'],out:['人设与背景故事，约 600 token'],r:['§4.1','§4.2','§6.1','§14.2'],
+seg:{k:'persona',l:'② 人设卡',c:C.persona,n:600,x:'你叫老周（化名），1968 年生，工厂退休技术员，2007 年入市。做事谨慎，遇到下跌容易睡不着；平时看股吧和电视财经节目，偏爱银行和消费股。（背景故事 200–300 字，此处省略）'}},
+{t:'第 ③④ 层：长期信念与记忆',k:'动态 · 每次检索',in:['语义记忆（反思得出的教训）','情景记忆与 seeded 预置记忆','内核算好的账户数字'],pr:['按时近性 + 重要度 + 相关性检索情景记忆','数字写成文字；检查没有晚于模拟时钟的日期'],out:['信念与记忆合计按约 800 token 演示，含约 100 token 账户摘要（长期信念是否计入 800，文档未明说）'],r:['§6.4','§13.4','§5.5'],
+seg:{k:'belief',l:'③④ 信念与记忆',c:C.belief,n:800,x:'你的长期看法：涨多了就要跌，追高吃过亏（置信度：中）。\n你记得：[seeded] 多年前一次满仓被套，亏了三成。\n你昨晚的打算：示例股A 跌下来就补一点。\n账户：持有示例股A，浮亏 12.3%，现金约两成。'}},
+{t:'第 ⑤ 层：当日信息',k:'动态 · 每天不同',in:['agents 的注意力预算选出的 K_i 条信息（本例 K=8，范围 3–15）'],pr:['按该散户的种子打乱顺序','去掉 direction_hint'],out:['当日信息流，约 1,400 token；到这里是两次调用的共用前缀，约 3.0k token'],r:['§5.4','§13.4','§5.2','§6.1','§14.2'],
+seg:{k:'feed',l:'⑤ 当日信息',c:C.feed,n:1400,x:'今天你看到：\n1. [股吧] 示例股A 又跌了，谁还拿着？\n2. [新闻] 某部门发布一项支持政策（示例事件）\n3. [股吧] 割了，不玩了\n……（共 8 条）'}},
+{t:'第 ⑥ 层：输出 schema（第 1 次调用）',k:'固定 · 放在最后',in:['schemas 提供的 BeliefUpdate、DecisionIntent、FundingIntent 的 JSON schema'],pr:['附上输出要求：只许填分档和标签','同一份 schema 交给网关校验；框架支持时做约束解码'],out:['第 1 次调用的完整提示词；输入约 3.0k token，输出约 200 token（schema 长度未单列）'],r:['§6.1','§6.2','§6.3','§14.2'],
+seg:{k:'schema',l:'⑥ 输出 schema',c:C.schema,n:0,x:'请按结构回答：belief{views[…], emotion{fear, greed, regret, fomo: 0..3}, policy_trust −1/0/1, want_to_post, monologue ≤120 字}，intents[asset, action buy/sell/hold/watch, size, execution open/dip/chase, reasons ≤3, source_post_ids ≤2, rationale ≤120 字]，funding{action deposit/withdraw/none, size, reason ≤60 字}。'}},
+{t:'第 1 次调用：发出、校验、处理失败',k:'交给 llm 网关',in:['完整 messages','带日期的模型版本、引擎版本、结构化输出后端、schema、采样参数、种子'],pr:['算缓存键：命中就直接用旧回答；回放时未命中即报错','Pydantic 校验不过换新种子重试，最多 2 次；失败的尝试也写入缓存','拒答单独记一类，不重试'],out:['合法的 BeliefUpdate + DecisionIntent[] + FundingIntent','或当天"未激活"，原因"解析失败"（不填默认值，不沿用上期信念）；拒答当天记缺席'],r:['§6.2','§6.3','§14.4'],seg:null,
+res:'{"belief":{"views":[{"asset":"示例股A","horizon":"1w","stance":-1,"ret_bucket":"-2~0%","confidence":2,"reasons":["fear","breakeven"]}],"emotion":{"fear":2,"greed":0,"regret":1,"fomo":0},"policy_trust":0,"want_to_post":true,"monologue":"又跌了，跌下来补一点摊低成本（示例）"},"intents":[{"asset":"示例股A","action":"buy","size":"small","execution":"dip","reasons":["breakeven"],"source_post_ids":[],"rationale":"补一点摊低成本"}],"funding":{"action":"none","size":"tiny","reason":""}}'},
+{t:'内核：约束与成交判定',k:'代码 · 不用模板',in:['DecisionIntent：买入示例股A，small，dip','人设参数 dip_k（先验 1%–3%，本例取 2%）','当日行情（示例：前收 10.00，最低 9.86）'],pr:['dip 买入限价 = 前收 × (1 − k_i) = 9.80','盘中限价单：买入限价不低于当日最低价才可能成交；9.80 低于 9.86'],out:['未成交，原因"挂单没成交"；结果写回记忆'],r:['§6.3','§8.2'],seg:null},
+{t:'第 2 次调用：追加意向与成交',k:'动态 · 接在共用前缀后',in:['want_to_post = True','当日意向与实际成交（含未执行原因）'],pr:['原样复用 ①–⑤ 的共用前缀，可命中前缀缓存','在前缀之后追加意向与成交','第 1 次调用的输出 schema 要不要留在第 2 次调用里，文档没写（见第 8 节）；拼装预览仍列出它，只为显示拼装顺序'],out:['追加约 100 token'],r:['§6.1','§14.2','§14.3'],
+seg:{k:'post',l:'⑦ 意向与成交',c:C.post,n:100,x:'你今天的打算：示例股A 回调到 9.80 补一点。\n实际结果：最低只到 9.86，挂单没成交。'}},
+{t:'第 2 次调用：风格示例帖，发出',k:'只在第 2 次调用里',in:['voice_style：该散户绑定的文风簇 ID','该簇的示例帖池'],pr:['取少量示例帖，确认都在模拟起点之前、已脱敏、不是验收事件的真实帖子','发出，经同一网关缓存'],out:['输入合计约 3.6k token，输出约 300 token 的自由文本帖子，不进 JSON'],r:['§4.4','§6.1','§14.2'],
+seg:{k:'ex',l:'⑦ 风格示例帖',c:C.ex,n:500,x:'你平时这样发帖：\n· 又绿了，拿着吧，跑也跑不了\n· 这位置还不加仓，等什么呢\n· 老规矩，回本就走'},
+res:'帖子正文（示例数据）：挂了个低价想补点，差几分钱没接到，算了，拿着吧，跑也跑不了。'}
+];
+var BUDGET=3600;/* §14.2 第 2 次调用输入约 3.6k token（3.0k 共用前缀 + 意向与成交 100 + 风格示例帖 500） */
+var $=function(id){return document.getElementById(id);};
+var box=$('pp-stp');
+if(box){
+var cur=0,timer=null,N=S.length;
+function clear(el){while(el&&el.firstChild)el.removeChild(el.firstChild);}
+function fillList(id,arr){var el=$(id);clear(el);(arr||[]).forEach(function(t){var li=document.createElement('li');li.textContent=t;el.appendChild(li);});}
+var dots=$('pp-dots');
+S.forEach(function(s,i){var b=document.createElement('button');b.type='button';b.textContent=String(i+1);b.setAttribute('aria-label','第 '+(i+1)+' 步：'+s.t);b.addEventListener('click',function(){stop();go(i);});dots.appendChild(b);});
+function go(i){
+if(typeof i!=='number'||isNaN(i))i=0;
+cur=Math.max(0,Math.min(N-1,i));
+var s=S[cur];
+$('pp-title').textContent=(cur+1)+' / '+N+'　'+s.t;
+var kind=$('pp-kind');clear(kind);kind.appendChild(document.createElement('i'));kind.appendChild(document.createTextNode(s.k));
+fillList('pp-in',s.in);fillList('pp-proc',s.pr);fillList('pp-outl',s.out);
+var refs=$('pp-refs');clear(refs);
+s.r.forEach(function(x){var sp=document.createElement('span');sp.className='ref';sp.textContent=x;refs.appendChild(sp);refs.appendChild(document.createTextNode(' '));});
+Array.prototype.forEach.call(dots.children,function(b,j){b.classList.toggle('on',j===cur);});
+/* 预览与累计长度 */
+var prev=$('pp-prev'),stack=$('pp-stack'),leg=$('pp-leg');clear(prev);clear(stack);clear(leg);
+var sum=0,any=false;
+for(var j=0;j<=cur;j++){
+var g=S[j].seg;if(!g)continue;any=true;
+var n=Number(g.n);if(!isFinite(n)||n<0)n=0;sum+=n;
+var d=document.createElement('span');d.className='pp-seg'+(j===cur?' new':'');d.style.borderLeftColor=g.c;
+var b=document.createElement('b');b.style.color=g.c;b.textContent=g.l+(n>0?'　≈'+n+' token':'　长度未单列');
+d.appendChild(b);d.appendChild(document.createTextNode(g.x));prev.appendChild(d);
+if(n>0){var w=BUDGET>0?Math.min(100,n/BUDGET*100):0;var sp=document.createElement('span');sp.style.width=w.toFixed(2)+'%';sp.style.background=g.c;sp.title=g.l;stack.appendChild(sp);}
+var li=document.createElement('div');var dot=document.createElement('i');dot.style.background=g.c;li.appendChild(dot);li.appendChild(document.createTextNode(g.l+'：'+(n>0?n:'未单列')));leg.appendChild(li);
+}
+if(!any){var e=document.createElement('span');e.className='pp-seg';e.textContent='（还没有任何一层，模板刚读入）';prev.appendChild(e);}
+var pct=BUDGET>0?Math.round(sum/BUDGET*100):0;
+$('pp-tot').textContent='累计 ≈ '+sum.toLocaleString('en-US')+' / '+BUDGET.toLocaleString('en-US')+' token（'+pct+'%）';
+var res=$('pp-res');clear(res);
+if(s.res){var t=document.createElement('div');t.textContent='模型回答（示例数据）：';var c=document.createElement('div');c.textContent=s.res;res.appendChild(t);res.appendChild(c);}
+$('pp-prevb').disabled=cur===0;$('pp-next').disabled=cur===N-1;
+}
+function stop(){if(timer){clearInterval(timer);timer=null;}$('pp-play').textContent='自动播放';}
+function play(){
+if(timer){stop();return;}
+if(cur>=N-1)go(0);
+$('pp-play').textContent='暂停';
+timer=setInterval(function(){if(cur>=N-1){stop();return;}go(cur+1);},2600);
+}
+$('pp-prevb').addEventListener('click',function(){stop();go(cur-1);});
+$('pp-next').addEventListener('click',function(){stop();go(cur+1);});
+$('pp-play').addEventListener('click',play);
+go(0);
+}
+})();
+</script>
+</body>
+</html>

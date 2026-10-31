@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>散户决策演示 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+  .sp-ctl { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin: 14px 0; }
+  .sp-ctl label.ctl { min-width: 0; }
+  .sp-ctl select { max-width: 100%; }
+  .sp-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sp-steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; padding: 0; list-style: none; }
+  .sp-steps button { font: inherit; font-size: 12.5px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line2); background: var(--panel); color: var(--ink2); cursor: pointer; }
+  .sp-steps button.done { border-color: var(--sim); color: var(--ink); }
+  .sp-steps button.on { background: var(--sim); border-color: var(--sim); color: #fff; }
+  .sp-stage { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .sp-box { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 12px 14px; min-width: 0; }
+  .sp-box > h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: .04em; color: var(--mute); }
+  .sp-box.sp-in > h4 { color: var(--data); }
+  .sp-box.sp-pr > h4 { color: var(--sim); }
+  .sp-box.sp-out > h4 { color: var(--out); }
+  .sp-box.sp-ref > h4 { color: var(--val); }
+  .sp-box p { margin: 6px 0; font-size: 14px; }
+  .sp-kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 0; font-size: 13.5px; }
+  .sp-kv dt { color: var(--mute); font-family: var(--mono); font-size: 12.5px; }
+  .sp-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .sp-json { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; margin: 6px 0; }
+  .sp-list { margin: 4px 0; padding-left: 18px; font-size: 13.5px; }
+  .sp-list li { margin: 3px 0; }
+  .sp-ok { color: var(--ok); font-weight: 600; }
+  .sp-no { color: var(--warn); font-weight: 600; }
+  .sp-tag { display: inline-block; font-size: 11.5px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line2); color: var(--ink2); margin-right: 4px; }
+  .sp-tag.r { border-color: var(--warn); color: var(--warn); }
+  .sp-title { font-weight: 600; margin: 4px 0 10px; }
+  .sp-note { font-size: 12.5px; color: var(--mute); }
+  .sp-svg { width: 100%; height: auto; display: block; }
+  .sp-person { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sp-person button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--panel); color: var(--ink2); cursor: pointer; }
+  .sp-person button.on { border-color: var(--sim); color: var(--ink); box-shadow: inset 0 0 0 1px var(--sim); }
+  @media (max-width: 720px) { .sp-stage { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+  <div class="eyebrow"><i></i>演示 · 散户决策</div>
+  <h1>同一条消息，<span class="grad">六类散户</span>怎样做决定</h1>
+  <p class="lead">选一个示例人设和一种行情，按步骤看他从读到消息、形成看法、给出意向，到内核把意向改成能成交的订单或拒单，再把结果写回记忆。内核七步在浏览器里实时计算。</p>
+  <div class="meta">
+    <span class="chip data"><i></i>全部为示例数据</span>
+    <span class="chip llm"><i></i>§6.1–6.6 决策循环</span>
+    <span class="chip market"><i></i>§8.1–8.2 交易规则与成交</span>
+    <span class="chip"><i></i>示例人设，均为化名</span>
+  </div>
+</header>
+
+<section id="s1" class="reveal">
+  <h2><span class="num">01</span>这个演示模拟什么</h2>
+  <p class="sub">一个散户智能体（下文简称"智能体"）每次被激活，都要从"看到什么"走到"下了什么单"。本页把这一圈拆开，用六个示例人设对照着看。</p>
+  <p>设计文档把这一圈叫认知循环 <span class="ref">§6.1</span>。每次激活最多两次 LLM 调用，帖子在成交判定之后写：感知（perceive）拿到 K 条信息；第 1 次调用同时做解读（interpret）和意向（intend），只输出结构化的 BeliefUpdate 与 DecisionIntent；然后内核做约束与成交判定（constrain + fill）；第 2 次调用只在想发帖时才有，由 LLM 写帖子（post），输入里含当日意向和实际成交；最后是低频的反思（reflect）。意向默认由 LLM 给出，但来源可以换成规则先验或 Jev 分类器 <span class="ref">§6.6</span>，第 7 节专门讲。约束这一步不用 LLM，由确定性的程序完成，文档叫它"内核"。</p>
+  <p>内核做两件事。第一件是行为偏差修正：把 LLM 给出的"买一半""全仓"这类分档意向换算成目标仓位，再按人设参数加上从众、追涨、彩票偏好、处置效应这些可以校准的偏差。第二件是硬约束与执行：现金够不够、今天买的能不能卖（T+1）、是不是整手、涨跌停能不能成交、有没有交易权限 <span class="ref">§6.3 第 6 步</span> <span class="ref">§8.1</span>。LLM 只选执行方式（开盘就买卖 open、挂单等回调 dip、盘中追 chase），不报数字价格，限价由内核按执行方式算出 <span class="ref">§6.3</span>。经过这两步，意向才变成订单，订单再按行情判定成交或不成交 <span class="ref">§8.2</span>。</p>
+  <p>这样分工的理由是：LLM 擅长读懂消息、写出像人的帖子和理由，但输出连续数字时校准差、容易扎堆在整数上 <span class="ref">§6.2</span>；交易规则和资金约束必须一条不错，交给程序。分工的副产品是"言行不一"：意向和实际成交分别记录，两者之差可以测量 <span class="ref">§6.3 第 7 步</span> <span class="ref">§12</span>。</p>
+  <svg class="sp-svg" viewBox="0 0 720 210" role="img" aria-label="认知循环示意：两次 LLM 调用夹着内核与成交判定">
+    <defs><marker id="sp-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--mute)"/></marker></defs>
+    <g style="font-size:13px;font-family:var(--sans)">
+      <rect x="6" y="30" width="124" height="54" rx="10" style="fill:var(--panel2);stroke:var(--data)"/>
+      <text x="68" y="54" text-anchor="middle" style="fill:var(--ink)">感知</text><text x="68" y="72" text-anchor="middle" style="fill:var(--mute);font-size:11px">K 条信息 §5.4</text>
+      <rect x="148" y="30" width="130" height="54" rx="10" style="fill:var(--panel2);stroke:var(--llm)"/>
+      <text x="213" y="54" text-anchor="middle" style="fill:var(--ink)">第 1 次调用 LLM</text><text x="213" y="72" text-anchor="middle" style="fill:var(--mute);font-size:11px">BeliefUpdate + 意向</text>
+      <rect x="296" y="30" width="124" height="54" rx="10" style="fill:var(--panel2);stroke:var(--sim)"/>
+      <text x="358" y="54" text-anchor="middle" style="fill:var(--ink)">约束 内核</text><text x="358" y="72" text-anchor="middle" style="fill:var(--mute);font-size:11px">OrderIntent[] §6.3</text>
+      <rect x="438" y="30" width="124" height="54" rx="10" style="fill:var(--panel2);stroke:var(--market)"/>
+      <text x="500" y="54" text-anchor="middle" style="fill:var(--ink)">成交判定</text><text x="500" y="72" text-anchor="middle" style="fill:var(--mute);font-size:11px">Fill 或未成交 §8.2</text>
+      <rect x="580" y="30" width="134" height="54" rx="10" style="fill:var(--panel2);stroke:var(--llm)"/>
+      <text x="647" y="54" text-anchor="middle" style="fill:var(--ink)">第 2 次调用 LLM</text><text x="647" y="72" text-anchor="middle" style="fill:var(--mute);font-size:11px">Post（看到成交）</text>
+      <path d="M130 57 H146 M278 57 H294 M420 57 H436 M562 57 H578" style="stroke:var(--mute);fill:none" marker-end="url(#sp-ar)"/>
+      <rect x="250" y="138" width="226" height="50" rx="10" style="fill:var(--panel2);stroke:var(--val)"/>
+      <text x="363" y="160" text-anchor="middle" style="fill:var(--ink)">写回记忆 · 反思 LLM（低频）</text><text x="363" y="178" text-anchor="middle" style="fill:var(--mute);font-size:11px">情景记忆 §6.4 · 决策表 §10</text>
+      <path d="M647 84 V163 H478" style="stroke:var(--mute);fill:none" marker-end="url(#sp-ar)"/>
+      <path d="M250 163 H68 V86" style="stroke:var(--mute);fill:none;stroke-dasharray:4 4" marker-end="url(#sp-ar)"/>
+      <text x="150" y="156" text-anchor="middle" style="fill:var(--mute);font-size:11px">下次激活时读入</text>
+    </g>
+  </svg>
+  <p class="sp-note">图中"成交判定"在真实系统里属于市场层（<a href="mod-market.html">mod-market.html</a>），本页为了走完一圈把它画在一起。第 2 次调用只在 <code>want_to_post = True</code> 时发生 <span class="ref">§6.1</span>。</p>
+  <p>本页所有人设、新闻、价格和参数都是示例数据，人物和公司均为化名。设计文档给出数值的有损失厌恶 λ 的先验中位数 2.25、挂单回调幅度 k<sub>i</sub> 的先验 1%–3% <span class="ref">§6.3</span>、封板成交概率 p 的三档 0.1 / 0.3 / 0.5 <span class="ref">§8.2</span> 和交易规则 <span class="ref">§8.1</span>；其余参数只按文档参数表的方向取了示例值，标在第 2 节。</p>
+</section>
+
+<section id="s2" class="reveal">
+  <h2><span class="num">02</span>六个示例人设</h2>
+  <p class="sub">六个示例人设覆盖资金量、风格、性格和经历的几种典型组合。人设卡字段名照 §4.1，内核参数取值是示例，只保证方向与 §6.3 参数表一致。</p>
+  <p>人设卡（PersonaCard）是一个智能体的静态描述 <span class="ref">§4.1</span>：出生年份 <code>birth_year</code>、入市年份 <code>entry_year</code>、账户资产 <code>account_assets</code>、交易风格 <code>style</code>（day 日内 / swing 波段 / long 长线 / fund 基金为主 / limit_up 打板）、已开通权限 <code>permissions</code>、大五人格 <code>big5</code>、MBTI 类型 <code>mbti_type</code>、金融素养 <code>fin_literacy</code>（0–3）、发言风格 <code>voice_style</code> 等。另有一组内核参数 <code>kernel</code>，只给内核用，不放进 prompt，所以 LLM 不知道自己的 λ 是多少；MBTI 类型名同样不进 prompt <span class="ref">§4.1</span>。</p>
+  <p>六个示例人设如下（全部为示例人设，化名）：</p>
+  <ul>
+    <li><b>小林 · 打板短线新手</b>：2001 年生，2024 年入市，账户 6 万（RT1），风格 limit_up，高神经质，MBTI 属 SP 组。资金不到 10 万，达不到创业板"前 20 个交易日日均资产 ≥ 10 万元"的门槛〔需复核〕<span class="ref">§8.1</span>，没有创业板权限。</li>
+    <li><b>老周 · 2015 年杠杆受伤的老股民</b>：2007 年入市，2015 年两融被强平，账户约 77 万（RT3），高神经质，已开通创业板和两融，手里的票长期被套。两融门槛是前 20 个交易日日均资产 ≥ 50 万且交易满 6 个月〔需复核〕<span class="ref">§8.4</span>，老周达标；场外配资 <code>offbook_leverage</code> 为空 <span class="ref">§4.1</span>，本页示例也不实际融资。</li>
+    <li><b>王阿姨 · 退休长线</b>：退休教师，账户 40 万（RT2），风格 long，尽责性高、神经质低，SJ 组。</li>
+    <li><b>小陈 · 基金为主</b>：设计师，账户 20 万，其中基金 17 万，个股只用 3 万现金试水；神经质偏高，NF 组。按账户总资产 20 万、2020 年入市算已达创业板门槛（场外基金是否计入"日均资产"〔需复核〕）但没开通，用来说明"达标不等于开通" <span class="ref">§8.1</span>。</li>
+    <li><b>赵先生 · 高净值波段</b>：企业主，账户 1500 万（RT5），风格 swing，神经质低，NT 组，金融素养 3，已开通两融（门槛〔需复核〕<span class="ref">§8.4</span>）。</li>
+    <li><b>老K · Tier-A 大 V</b>：自由职业，账户约 300 万（RT4），风格 day，粉丝多、常晒操作。Tier-A 大 V 本身是会交易的散户，计入人群统计，他发帖说的和实际做的可以对比 <span class="ref">§5.6</span>；只发帖不交易的发布者见 <a href="sim-publishers.html">sim-publishers.html</a>。人设卡字段 <code>tier</code> 取 <code>A_bigv</code>，其余五人是 <code>B</code> <span class="ref">§4.1</span>。</li>
+  </ul>
+  <p>资产分档 RT1–RT5 的界限照 §2.1：RT1 &lt; 10 万、RT2 10–50 万、RT3 50–300 万、RT4 300–1000 万、RT5 &gt; 1000 万。下表是六人的内核参数示例值（示例数据）。β 三项的单位是 10⁻⁴，这样修正项 Δ 只有几个百分点，对应文档"β 的先验以小值为中心" <span class="ref">§6.3</span>；w_max 是单票仓位上限，p_panic 是第 5 步恐慌概率，两者文档都没给数值。dip_k 是"挂单等回调"的幅度 k_i，文档先验 1%–3% <span class="ref">§4.1</span> <span class="ref">§6.3</span>，示例值落在这个区间里。</p>
+  <div class="tbl-wrap"><table class="tbl" id="sp-ptab"></table></div>
+  <p>取值方向的依据如下。参数表只给了方向（"某特征越高，参数越高"），最终以 §12 校准为准；示例值只是按方向排了序。</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>参数</th><th>§6.3 的方向</th><th>示例怎样体现</th></tr></thead>
+    <tbody>
+      <tr><td>γ 风险厌恶</td><td>年龄、神经质 ↑ → ↑</td><td>王阿姨、老周最高；小林、老K 最低</td></tr>
+      <tr><td>λ 损失厌恶</td><td>先验中位数 2.25；神经质 ↑ → ↑</td><td>高神经质三人（小林、老周、小陈）高于 2.25，低神经质三人低于 2.25</td></tr>
+      <tr><td>ρ 实现效用</td><td>金融素养 ↓ → ↑</td><td>素养 1 的小林、老周最高，素养 3 的赵先生最低</td></tr>
+      <tr><td>κ 过度自信</td><td>男性、牛市入市、短线 → ↑</td><td>老K、小林、赵先生高；王阿姨、小陈低</td></tr>
+      <tr><td>β^herd 从众</td><td>宜人性 ↑、新手 → ↑</td><td>新手小林最高，宜人性高的王阿姨次之</td></tr>
+      <tr><td>β^ext 外推</td><td>入市年限短 → ↑；§2.2：RT4、RT5 反向交易</td><td>小林、小陈为正且大；老K（RT4）、赵先生（RT5）为负</td></tr>
+      <tr><td>β^lot 彩票偏好</td><td>小资金、低收入 → ↑；§2.2：MAX 载荷 RT1–4 为正、RT5 为负</td><td>小林最高；只有赵先生（RT5）为负</td></tr>
+      <tr><td>ν 活跃度</td><td>外向性 ↑、短线、退休有闲 → ↑</td><td>老K 最高，王阿姨（退休）次之，外向性低的小陈最低</td></tr>
+      <tr><td>τ 惯性阈值</td><td>尽责性 ↑ → ↑</td><td>尽责性高的王阿姨最高，尽责性低的小林和日内风格的老K 最低</td></tr>
+      <tr><td>η 情绪敏感</td><td>神经质 ↑ → ↑</td><td>老周、小林最高</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="s3" class="reveal">
+  <h2><span class="num">03</span>同一条消息，三种行情</h2>
+  <p class="sub">六个人设面对同一条示例公告、同一个信息候选池；变化的只有行情情景（大涨 / 震荡 / 大跌）和标的所在版块（主板 / 创业板）。</p>
+  <p>示例事件：化名公司"甲科技"盘前公告中标一个大型项目，合同金额约占上年营收三成。前收盘价设为 10.00 元（示例数据）。同一条公告在三种情景下走出三种价格路径，用来看同一个人在不同行情下的决策差异。价格是示例数据，不来自任何真实股票。</p>
+  <ul>
+    <li><b>大涨</b>：开盘即一字涨停，全天价格不变。按 §8.2，一字涨停时买单不成交，打板的人在这里买不到。</li>
+    <li><b>震荡</b>：高开后回落，围绕平盘上下波动。限价单能否成交取决于限价是否落在当日最高最低价之间。</li>
+    <li><b>大跌</b>：利好兑现后低开，收盘封在跌停，盘中曾在跌停价之上成交。按 §8.2，这种"盘中有更低成交、收盘封板"的情形，跌停价的卖单按概率 p 成交；没有分钟线时 p 固定取 0.1 / 0.3 / 0.5 三档做敏感性分析，每笔订单整笔成交或整笔不成交 <span class="ref">§8.2</span>。</li>
+  </ul>
+  <p>主板涨跌幅限制 10%，创业板 20% <span class="ref">§8.1</span>，所以同一情景在两个版块的价格不同。下图每根柱画出开盘、最高、最低、收盘，虚线是涨跌停价，圆点是当日均价，也就是 chase 执行方式的成交参考（示例）。常规订单只在盘前激活（08:00–09:15）产生，按 T 日行情判定成交 <span class="ref">§3.4</span>，所以智能体做决定时还看不到这根柱子，只看得到前收和盘前信息。</p>
+  <div id="sp-pxsvg"></div>
+  <h3>信息流：谁看到哪几条</h3>
+  <p>候选池里有 13 条示例信息：公告原文（L0）、快讯（L1）、分析（L2）、煽动帖（L3）、传闻（L4），以及大 V、论坛散户、群聊和行情异动。L0–L4 的分级与发布者见 <a href="sim-publishers.html">sim-publishers.html</a>。每个智能体按自己的媒介习惯给每条打分 <span class="ref">§5.4</span>：</p>
+  <pre class="code" data-lang="§5.4"><span class="t">score</span> = w_i(渠道) · m(量级) · rel_i(资产) · exp(−Δt / τ_d) · sal</pre>
+  <p>w_i(渠道) 是人设的媒介习惯（字段 <code>media_diet</code>），例如老周偏官方公告和群聊，小林偏论坛和大 V；m 是消息量级；rel_i 是与自己持仓和关注的重合度；Δt 是信息发出到现在的分钟数，τ_d 是衰减常数（本例取 120 分钟，示例）；sal 是显著性，比如涨跌停、上热榜。持仓股的行情异动必入；其余按 softmax(score / T_i) 无放回抽取，保留随机性，好让同一人设的两个智能体看到的不完全相同 <span class="ref">§5.4</span>。本演示为了结果可复现，直接取分数最高的前 K 条，这一点与文档不同。</p>
+  <p>K 是每人一次能看的条数，文档规定 3–15 条，约 1,500 token <span class="ref">§5.4</span>。示例里王阿姨只看 4 条，小陈 3 条，老K 15 条。看到的条目里，内核只统计"别人在买还是在卖"的行为帖（晒单、"已上车"、"割了"），算出净比例 H_j ∈ [−1, 1]；纯观点帖不计入 H_j，只通过 LLM 影响看法 <span class="ref">§7.5</span> <span class="ref">§6.3</span>。没被看到的信息不会消失，可能稍后经群聊或大 V 转述到达 <span class="ref">§5.4</span>，本页只演示一次激活，不展示转述。</p>
+  <p>下表是当前情景（跟随第 4 节的选择）下的候选池，最后一列是行为方向：+1 买、−1 卖、0 观点。</p>
+  <div class="tbl-wrap"><table class="tbl" id="sp-pool"></table></div>
+</section>
+
+<section id="s4" class="reveal">
+  <h2><span class="num">04</span>分步走一遍</h2>
+  <p class="sub">选人设、情景和版块，然后一步一步往下走。每一步都分四栏：这一步的输入、做了什么处理、输出了什么、对应设计文档哪一条。</p>
+  <p>七步依次是：人设卡要点 → 看到的 K 条信息 → 第 1 次调用 LLM，一次给出 BeliefUpdate 和意向 DecisionIntent → 内核第 1–5 步（数值化、偏差修正、实现效用、看盘、情绪分支）→ 内核第 6 步硬约束、按执行方式定价与成交判定 → 第 2 次调用 LLM 发帖，这时已看到成交结果 → 写回记忆与言行不一 <span class="ref">§6.1</span>。第 3、6 步的 JSON 和帖子文本是事先写好的示例，用来模拟 LLM 的输出；第 2、4、5、7 步是浏览器按公式现算的，换人设或换情景，数字会跟着变。随机数用人设、情景和版块拼成的字符串做哈希得到，所以同一组选择每次结果相同。</p>
+  <div class="callout info"><b class="t">读法</b>全部为示例数据和示例人设。公式照 §6.3 原文；公式里的函数形式（仓位档怎样映射、关注度 a_i(t) 怎样构成）文档没有规定，本页的写法是示例，在第 5 节逐条说明。</div>
+  <div class="card">
+    <div class="sp-person" id="sp-pp" role="group" aria-label="选择示例人设"></div>
+    <div class="sp-ctl">
+      <label class="ctl">行情情景<select id="sp-sc"><option value="u">大涨（一字涨停）</option><option value="f" selected>震荡</option><option value="d">大跌（收盘跌停）</option></select></label>
+      <label class="ctl">标的版块<select id="sp-bd"><option value="main" selected>主板（±10%）</option><option value="gem">创业板（±20%）</option></select></label>
+      <label class="ctl">封板成交概率 p（§8.2 三档）<select id="sp-p"><option value="0.1">0.1</option><option value="0.3" selected>0.3</option><option value="0.5">0.5</option></select></label>
+      <div class="sp-btns">
+        <button class="btn" id="sp-prev" type="button">上一步</button>
+        <button class="btn pri" id="sp-next" type="button">下一步</button>
+        <button class="btn" id="sp-auto" type="button">自动播放</button>
+      </div>
+    </div>
+    <ol class="sp-steps" id="sp-steps"></ol>
+    <div class="sp-title" id="sp-stitle" aria-live="polite"></div>
+    <div class="sp-stage">
+      <div class="sp-box sp-in"><h4>输入</h4><div id="sp-b-in"></div></div>
+      <div class="sp-box sp-pr"><h4>处理</h4><div id="sp-b-pr"></div></div>
+      <div class="sp-box sp-out"><h4>输出</h4><div id="sp-b-out"></div></div>
+      <div class="sp-box sp-ref"><h4>对应文档条目</h4><div id="sp-b-ref"></div></div>
+    </div>
+  </div>
+  <p>几个值得试的组合：主板大涨下的小林（盘前挂 open 单排板，一字板买不进）；大跌下的老周（恐慌分支，chase 方式清仓，碰上收盘封跌停，按 p 决定卖不卖得出，可以切换 p 的三档看结果）和王阿姨（躺平分支）；震荡下的老周（想卖但浮亏，第 3 步判为"舍不得割"）；主板震荡下的小林（dip 方式挂低价，当日没回调到就记"挂单没成交"）；任一情景下的老K（发帖和实际成交对不上）；创业板下的小林（没开通创业板权限，买单在第 6 步被拒）。</p>
+</section>
+
+<section id="s5" class="reveal">
+  <h2><span class="num">05</span>内核七步逐条讲</h2>
+  <p class="sub">内核七步是第 4 节里数字的来源。每一步先引 §6.3 原文，再说明本演示怎样把它落成可计算的形式；凡是文档没规定的函数形式和数值，都标为示例。</p>
+  <p>先约定记号。w 是标的当前占账户总资产的比例（当前仓位）；账户总资产 A = 可用资金 + 其他资产（基金等）+ 持仓市值。盘前激活时还没有 T 日价格，持仓按前收估值；老K 的盘中检查点本应用检查点时的现价，本演示用当日均价代替（示例简化）。w^int 是意向折算出的目标仓位，w* 是偏差修正后的目标仓位。g = p/c − 1 是浮盈，c 是成本价，p 是现价 <span class="ref">§6.3</span>。</p>
+  <h3>第 1 步 意向数值化</h3>
+  <p>原文："仓位档按人设映射成目标权重 w^int_ij；映射斜率 s_i 随过度自信程度 κ_i 增大（过度自信者映射得更极端）。" <span class="ref">§6.3</span></p>
+  <p>文档没给映射函数。本演示取 s_i = 1 + κ_i，每个仓位档先对应一个基准比例 b（tiny 0.05、small 0.15、half 0.4、large 0.7、all_in 1，示例），实际比例 f = min(1, s_i · b)。买入时 w^int = w + f · (w_max − w)，卖出时 w^int = w · (1 − f)，持有和观望时 w^int = w。同样说"买一半"（half），κ 高的老K 折算出的比例 f 是 0.8，王阿姨是 0.48。</p>
+  <pre class="code" data-lang="示意，未实现"><span class="c"># 示例映射：文档只规定 s_i 随 κ_i 增大</span>
+s_i = <span class="n">1</span> + κ_i
+f   = min(<span class="n">1</span>, s_i · b[size])
+w_int = w + f·(w_max − w)   <span class="c"># buy</span>
+w_int = w · (<span class="n">1</span> − f)          <span class="c"># sell</span></pre>
+  <h3>第 2 步 行为偏差修正</h3>
+  <p>原文公式 <span class="ref">§6.3</span>：</p>
+  <pre class="code" data-lang="§6.3">w*_ij = clip( w^int_ij + Δ_ij, <span class="n">0</span>, w_i^max )
+Δ_ij  = (β_i^herd · H_j + β_i^ext · R_j^(5d) + β_i^lot · L_j) / (γ_i(t) · σ_j²)
+γ_i(t) = γ_i · (<span class="n">1</span> + η_i · fear_i(t))</pre>
+  <p>H_j 是该智能体看到的"别人在买 vs 在卖"净比例，来自第 2 步看到的 K 条；R_j^(5d) 是近 5 日收益，代表追涨杀跌的外推；L_j 是彩票特征（近期涨停、高 MAX、低价）；σ_j 是标的近期波动。文档特别说明，LLM 的意向里已经带了一部分从众和外推，修正项只校准剩下的部分，所以 β 的先验以小值为中心，由 V4 行为矩定 <span class="ref">§6.3</span> <span class="ref">§12.2</span>。分母里的 γ_i(t) 让恐惧放大风险厌恶：越怕，修正项越小。</p>
+  <p>三种情景的 R^(5d)、σ、L 取示例值：大涨 0.12、0.035、0.8；震荡 0.01、0.02、0.2；大跌 −0.10、0.04、0.1。本演示另加两条示例处理：没有持仓且意向是观望时不做修正；修正不能把卖出意向反转成买入，反之亦然。组合层约束（总仓位 ≤ 1 + 杠杆上限、持股数 ≤ N_i^max、现金缓冲）因为只有一只标的，没有演示。</p>
+  <h3>第 3 步 实现效用</h3>
+  <p>原文：卖出时额外计入 U_real，"只有'组合改善 + U_real'超过阈值 τ_i 才卖出" <span class="ref">§6.3</span>，来源是 Barberis &amp; Xiong (2012)。</p>
+  <pre class="code" data-lang="§6.3">U_real = ρ_i · g              <span class="c"># g &gt; 0，落袋为安</span>
+U_real = −λ_i · ρ_i · |g|      <span class="c"># g &lt; 0，割肉之痛；λ 先验中位数 2.25</span>
+卖出条件：组合改善 + U_real &gt; τ_i</pre>
+  <p>λ 是损失厌恶，先验中位数 2.25 来自 Tversky &amp; Kahneman (1992)，这是本页唯一取自文档的参数数值。浮亏越深，割肉之痛越大，卖出越难；浮亏回到 0 附近时这一项消失，压着的卖出意愿集中释放，这就是"卖盈持亏"和"回本就卖" <span class="ref">§6.3</span>。文档没定义"组合改善"怎样计算，本演示用计划减掉的仓位 w − w* 代替（示例）。没过阈值的改为持有，原因记"舍不得割"。文档对所有没过阈值的卖出意向都记"舍不得割"；本页在浮盈情形另记"浮盈不够落袋"，只为读者区分两种情况，属示例措辞。</p>
+  <h3>第 4 步 看盘与惯性</h3>
+  <p>原文："当日是否查看组合 ~ Bernoulli(1 − exp(−ν_i · a_i(t)))，a_i(t) 随注意力事件、持仓波动与情绪上升；即便查看了，也只在 |w* − w| &gt; τ_i 时调仓。" <span class="ref">§6.3</span></p>
+  <p>文档没给 a_i(t) 的形式。本演示取 a = 0.5（基础）+ 1（当日有公告）+ 10 · |R^(5d)|（近期波动）+ 0.3 · fear（示例）。盘前看不到当日价格，所以用近 5 日收益代替当日涨跌。抽到的随机数小于看盘概率就算看了盘；没看盘的当天不交易，记"当日未看盘"。看了盘但调仓幅度不超过 τ_i 的也不交易，这是惯性：尽责性高的王阿姨 τ 最大，最不容易动。</p>
+  <h3>第 5 步 情绪分支</h3>
+  <p>原文："fear 到最高档且回撤超阈值时分两路。高神经质、在过往杠杆踩踏中受过伤的，以概率 p_panic 清掉高波动持仓（割肉）；低神经质或长期被套的，进入'躺平'（若干天不再激活）。greed/fomo 到最高档时，β^herd 与 β^lot 临时放大。" <span class="ref">§6.3</span></p>
+  <p>文档没给回撤阈值、p_panic、放大倍数和躺平天数。本演示取：回撤 = max(0, −R^(5d))，阈值 7%（示例）；p_panic 按人设取示例值（老周 0.6）；放大倍数 1.5；躺平写成"数日"，不给具体天数。恐慌分支直接把目标仓位设为 0，执行方式改为 chase（尽快卖出）；躺平分支当天不交易。大跌情景里老周和王阿姨的 fear 都到了最高档，前者走恐慌，后者走躺平，这是同一行情下两种完全不同的反应。老周走恐慌分支有文档依据：经历向量里，2015 年被强平过的智能体杠杆上限低、恐慌阈值低 <span class="ref">§6.5</span>；本页用较低的 w_max 和较高的 p_panic 示意这一点，数值是示例。</p>
+  <h3>第 6 步 硬约束与执行</h3>
+  <p>原文列了要检查的项目：现金、T+1、整手、涨跌停可成交性、交易权限、两融额度与维持担保比例、佣金/印花税/过户费，输出 <code>OrderIntent</code> <span class="ref">§6.3</span>。检查顺序照 §8.1：交易时段 → 权限 → T+1 可卖量 → 整手与单笔上限 → 涨跌幅与价格笼子 → 风险警示股买入上限 → 资金与两融额度。示例标的不是风险警示股，示例人设也不用融资，所以这两项只显示不展开。</p>
+  <ul>
+    <li><b>交易时段</b>：常规订单只在盘前激活（08:00–09:15）产生，按 T 日行情判定成交；盘中检查点（10:00、11:30、14:00）只由量级 ≥ 3 的事件触发，执行方式限 chase <span class="ref">§3.4</span>。本演示里只有老K 在盘中检查点再激活一次（示例设定）。</li>
+    <li><b>T+1</b>：当日买入的股票次日才能卖 <span class="ref">§8.1</span>。老K 盘前挂 open 单在开盘买入，盘中检查点又想 chase 卖出做 T，就卡在这一项。</li>
+    <li><b>整手与单笔上限</b>：买入须为 100 股整数倍；零股只能一次性卖出；单笔上限 100 万股，创业板限价单 30 万股 <span class="ref">§8.1</span>。</li>
+    <li><b>权限</b>：创业板需开通权限，门槛为资产 10 万且交易经验 24 个月〔需复核〕<span class="ref">§8.1</span>。没权限的智能体照样看得到消息，只是买单被拒；卖出不受权限限制（示例处理）。</li>
+    <li><b>执行方式定价</b>：LLM 只选执行方式，不报数字价格，内核按执行方式定价 <span class="ref">§6.3</span>。open：买入限价取涨停价、卖出取跌停价，在开盘集合竞价成交。dip：买入限价 = 前收 × (1 − k_i)，卖出 = 前收 × (1 + k_i)。chase：按当日均价加滑点成交。集合竞价没有价格笼子；dip 的限价离前收只有 1%–3%，落在连续竞价笼子"买入 ≤ max(基准价 × 102%, 基准价 + 10 个最小价位)"之内 <span class="ref">§8.1</span>。</li>
+    <li><b>费用</b>〔需复核〕：印花税 0.05% 仅卖出收取；经手费 0.00341%、证管费 0.002%、过户费 0.001% 双向；佣金上限 0.3%，散户常见万一到万三、最低 5 元 <span class="ref">§8.1</span>。本演示佣金取万 2.5（示例）。</li>
+  </ul>
+  <p>成交按 §8.2 脚本化路径判定 <span class="ref">§8.2</span>。第 1 步，竞价单（open）在买入限价 ≥ 开盘价时按开盘价成交。第 2 步，盘中限价单（dip）在买入限价 ≥ 当日最低价时成交，价格为 min(限价, 最高价)；卖单在限价 ≤ 当日最高价时成交，价格为 max(限价, 最低价)；chase 按当日均价加滑点。第 3 步，一字涨停的买单一律不成交；收盘封涨停但盘中有更低成交的，按概率 p 成交，无分钟线时 p 取 0.1 / 0.3 / 0.5 三档，每笔整笔成交或整笔不成交，用带种子的随机数独立抽取；跌停卖单对称。第 4 步，个体成交不按 w_cap 缩放；只有单个智能体的订单超过当日真实成交额一定比例（文档写"如 1%"）时超出部分不成交，本演示没有成交额数据，不演示这一条。订单当日有效，收盘未成交的撤单，写入记忆"挂单没成交" <span class="ref">§6.3</span>。本演示的 chase 滑点取 0.5%（示例）；p 可以在第 4 节切换。</p>
+  <div class="callout warn"><b class="t">本演示把两层合在了一起</b>真实系统里，内核第 6 步只负责产出 OrderIntent；市场层收到订单后按 §8.1 的顺序再检查一遍，不合规的直接拒单并记录原因，不会替智能体自动改单 <span class="ref">§8.1</span>。成交判定也在市场层 <span class="ref">§8.2</span>。本页为了走完一圈，把两者放在第 6 步里一起显示。</div>
+  <h3>第 7 步 写回记忆</h3>
+  <p>原文："内核改动意向（缩量、取消、挂单没成交、涨停买不进、T+1 卖不出、权限不足、舍不得割）时，实际执行结果与未执行原因写入情景记忆（§6.4），后续发言与之自洽。意向与实际成交分别进入决策表（§10），两者之差即'言行不一'。" <span class="ref">§6.3</span></p>
+  <p>写回记忆的作用是让智能体"记得"自己没买到。下次激活时，检索到的记忆会放进 prompt，智能体就不会在帖子里说自己昨天打到了板。v0.3 里发帖在成交之后：第 2 次调用的输入就有当日意向和实际成交（含未执行原因），帖子里会说"挂了个低价没成交"这类话 <span class="ref">§6.1</span> <span class="ref">§6.3</span>。看到了成交，帖子仍然可以与之不符，比如老K 的晒单带夸大成分 <span class="ref">§6.4</span>。本演示检查三种不一致：意向和成交不一致；帖子声称的动作和意向不一致；帖子声称的动作当天没有对应成交。本页示例里老K 会出现后两种。这些是示例设定，文档没有说哪类人群最常见。V4 要测言行不一率及其原因分布（涨停买不进、挂单没成交、T+1、权限、舍不得割等）<span class="ref">§10.2</span>；这类指标没有真实对照，V4 只报告并做合理性检查，不设及格线 <span class="ref">§12.1</span>。另一种言行不一是"隔夜变卦"：收盘后给出的明日打算与次日盘前实际意向之差，靠决策表的 <code>plan_ref</code> 链起来 <span class="ref">§3.4</span> <span class="ref">§10.3</span>；本页只演示一次盘前激活，不演示前一晚。文档还要求记录帖子里的"口头战绩"与账户实际战绩之差，用来检验夸大是否集中在过度自信者、大 V 等合理人群，而不是随机出现 <span class="ref">§6.4</span>；这需要多日记录，本页不演示。</p>
+  <p>战绩也会反过来改参数。每月末（Tier-A 每周）把本期与累计收益、相对沪深 300 的超额、最大回撤等写成情景记忆；内核侧做慢变量更新：自我归因使近期盈利后过度自信 κ 上调、亏损时下调幅度更小（Gervais &amp; Odean 2001），赌场资金效应使盈利后风险厌恶 γ 下降，深套时"等回本"倾向增强（Thaler &amp; Johnson 1990）。更新步长取小值，由 V4 的战绩与行为矩定；LLM 读记忆后的语气变化与这条内核通路要一起校准，不能重复计入 <span class="ref">§6.4</span>。本页只演示单日，参数在演示中不变。</p>
+</section>
+
+<section id="s6" class="reveal">
+  <h2><span class="num">06</span>六个人设并排对比</h2>
+  <p class="sub">同一情景、同一版块下，六个人设的意向、内核结果和实际成交放在一张表里。情景和版块与第 4 节联动，在这里改也会同步过去。</p>
+  <p>表的列对应设计文档的决策表字段 <span class="ref">§10.3</span>：意向动作 <code>intent_action</code>、仓位档 <code>intent_size</code>、执行方式 <code>execution</code>、理由标签 <code>intent_reasons</code>、引用的帖子 <code>source_post_ids</code>、实际成交股数 <code>exec_qty</code>、成交价 <code>exec_price</code>、未执行原因 <code>not_executed_reason</code>。另加两列帮助理解：内核算出的最终目标仓位（当前仓位 → 目标仓位），以及本演示检查出的言行不一。</p>
+  <div class="sp-ctl">
+    <label class="ctl">行情情景<select id="sp-sc2"><option value="u">大涨（一字涨停）</option><option value="f" selected>震荡</option><option value="d">大跌（收盘跌停）</option></select></label>
+    <label class="ctl">标的版块<select id="sp-bd2"><option value="main" selected>主板（±10%）</option><option value="gem">创业板（±20%）</option></select></label>
+  </div>
+  <div class="tbl-wrap"><table class="tbl" id="sp-cmp"></table></div>
+  <p class="sp-note">示例数据。点表里的人设名可以跳到第 4 节，从第一步看这个人设。</p>
+  <p>读这张表时可以注意几点。第一，意向相同的人结果可能不同：主板大涨情景里小林和老K 都想买，都因为一字涨停买不进；主板大跌里小林用 dip 挂低价抄底买到了，换成创业板就因为没有开通创业板权限被拒。第二，有些人意向是卖、结果是不卖，原因各不相同：老周是浮亏太深"舍不得割"，老K 是开盘刚买的股票在盘中检查点受 T+1 限制。第三，意向是持有或观望的人也可能出现在"未执行原因"一列，比如王阿姨在大跌里躺平。这些差异都由第 5 节的公式和 §8 的规则直接算出，不需要 LLM 额外解释。</p>
+  <p>表里没有的是"多次运行的分布"。真实系统里同一人设会有多个智能体，信息流抽样和看盘、恐慌都是随机的，统计口径是比例和分布 <span class="ref">§12</span>；本页每个人设只有一个、随机数固定，只能看个例。</p>
+</section>
+
+<section id="s7" class="reveal">
+  <h2><span class="num">07</span>意向来源可以替换</h2>
+  <p class="sub">第 4 节第 3 步里的 DecisionIntent 默认由 LLM 给出，但这个位置做成了可替换接口。内核和后面各步不关心意向从哪里来。</p>
+  <p>设计文档给了三种实现 <span class="ref">§6.6</span>：</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>来源</th><th>做法</th><th>定位</th></tr></thead>
+    <tbody>
+      <tr><td>LLM</td><td>解读之后同一底座输出意向与理由；v0.3 里解读和意向在同一次调用（第 1 次调用）里输出 <span class="ref">§6.1</span></td><td>MVP 默认</td></tr>
+      <tr><td>规则先验</td><td>由观点分档、情绪与人设参数按规则给出意向，不调用 LLM</td><td>对照与降本备选</td></tr>
+      <tr><td>Jev</td><td>TypeSafe 的校准型决策模型：输入状态（文本或 JSON）与预定义选项，输出各选项概率，不生成文本</td><td>候选，须通过 Phase 0 对比试验</td></tr>
+    </tbody>
+  </table></div>
+  <p>换来源只改第 3 步里的意向部分（第 1 次调用输出的 DecisionIntent）。比如换成 Jev，它拿到的输入是这个智能体当前的 BeliefUpdate、持仓和人设要点，选项是预定义的意向选项（例如 action 四选一与 size 五选一，示例），输出每个选项的概率，再按概率抽一个意向；帖子和理由仍由 LLM 写，言行自洽靠写回记忆 <span class="ref">§6.6</span>。这时第 1 次调用只剩解读，输出 BeliefUpdate <span class="ref">§6.1</span>。换成规则先验，则完全不调用 LLM，适合做对照组或在预算紧时降本。本页的意向是事先写好的示例，没有实现任何一种来源。</p>
+  <p>怎样决定用哪种：Phase 0 做意向对比试验，在开发事件 <span class="ref">§11.3</span> 上用三种来源分别跑同一批人设，比较 V4 行为矩误差 <span class="ref">§12.1</span> 和同质化诊断 <span class="ref">§13.2</span>。Jev 胜出，Phase 1 就由它给出意向分布并抽样；否则 Jev 只保留评估分类器的用途 <span class="ref">§6.6</span>。Jev 用之前还要验证几件事：能否理解中文和股吧黑话；数值和长信息流下的误差；它的校准是相对自己的训练分布，不等于对 A 股散户校准，必须过 V4；历史推演同样要过记忆探针 <span class="ref">§13.1</span>；它是境外 API，输入要先按 §16.4 去标识化。</p>
+  <div class="callout info"><b class="t">Jev 在 MVP 主线里的用途</b>MVP 主线先把 Jev 用作评估分类器，例如帖子立场分类（用于 V2 立场分布）<span class="ref">§13.2</span> 和事后视角检测 <span class="ref">§13.1</span>，以及在去标识化文本上抽取风格线索 <span class="ref">§4.4</span>。它经 LLM 网关调用，按分类器类型单独计量 <span class="ref">§14.4</span>。</div>
+  <p>还有一种写法只作对照：让 LLM 直接输出 OrderIntent，不经内核修正，这是 TwinMarket、StockAgent 等项目的做法。设计文档只把它用作消融实验 <span class="ref">§11.2</span>，不进主线，因为那样就测不出本页第 6 节里的那些"想做没做成"。另外，每个智能体的采样温度在生成时绑定，运行期间不变 <span class="ref">§4.1</span>；底座模型由运行配置统一指定，同一底座内全体智能体（Tier-A 与 Tier-B）用同一个模型，跨底座比较时全体一起换。同一批人设在不同底座下的行为差异是 V5 稳健性检验的对象 <span class="ref">§6.6</span>。</p>
+  <div class="callout decide"><b class="t">已定（v0.3 §6.2 · §6.6 · §14.4，来自架构讨论 A4）</b>MVP 全部走国内厂商 API，不自部署；两个底座都从有开源权重的模型中选，闭源模型只作对比 <span class="ref">§14.4</span>。解析失败与拒答分开处理：解析失败时换种子重试，最多 2 次，仍失败则该智能体当日记为"未激活"、原因"解析失败"，不填默认值，也不沿用上期信念；拒答单独记类、不重试，当日同样记缺席；失败尝试也进缓存，重放时复现同样的重试序列 <span class="ref">§6.2</span>。Tier-A 与 Tier-B 用同一模型，分层只体现在记忆深度、反思频率与激活频率 <span class="ref">§6.6</span>。Jev 经同一个自写的薄网关调用，按分类器类型单独计量 <span class="ref">§14.4</span>。</div>
+</section>
+
+<section id="s8" class="reveal">
+  <h2><span class="num">08</span>本页没讲的内容与开放问题</h2>
+  <p class="sub">为了把一天、一只股票、六个人讲清楚，本页省掉了不少东西。下面列出省掉的部分和去哪里看，再列出设计文档里还没有定下来的数。</p>
+  <p>本页只演示单日、单标的、一次决策。下面这些设计文档里有，本页没有展开：</p>
+  <ul>
+    <li>出入金意向 FundingIntent 和银证转账，账户跨日连续、休眠 <span class="ref">§6.3 · §8.4</span>，见 <a href="mod-accounts.html">账户模块</a>。</li>
+    <li>三层记忆、记忆预算约 800 token、低频反思，以及战绩回灌：每月末（Tier-A 每周）把战绩摘要写成情景记忆 <span class="ref">§6.4</span>，见 <a href="mod-agents.html">智能体模块</a>。</li>
+    <li>口头战绩与账户战绩之差也算一类言行不一 <span class="ref">§6.4 · §10.2</span>。本页第 7 步只比较了意向、帖子声称和当日成交。</li>
+    <li>组合层约束：总仓位上限、持股数 ≤ N<sub>i</sub><sup>max</sup>、现金缓冲 <span class="ref">§6.3</span>；两融额度、维持担保比例与强平 <span class="ref">§8.4</span>。本页每人只有一只股票，也不使用融资。</li>
+    <li>信息流的完整做法：持仓异动必进，其余按 softmax(score/T<sub>i</sub>) 无放回抽样，未看到的消息可能稍后经群聊或大 V 转述到达 <span class="ref">§5.4</span>。本页为了可复现，直接按分数取前 K 条。</li>
+    <li>帖子怎样生成、文风与说话风格绑定 <span class="ref">§4.4 · §7.4</span>，见 <a href="sim-publishers.html">发布者演示</a>。</li>
+    <li>六个人设在真实运行里由合成人口按目标边际抽出，不是手写 <span class="ref">§4.3</span>，见 <a href="mod-population.html">人口模块</a>。</li>
+    <li>规则引擎、费率按生效日、成交判定的分工 <span class="ref">§8</span>，见 <a href="mod-market.html">市场模块</a>。本页把内核第 6 步和市场层合在一起演示。</li>
+  </ul>
+  <div class="callout todo"><b class="t">设计文档里尚未给出的数与定义</b>
+    <ul>
+      <li>p_panic、触发情绪分支的回撤阈值、躺平持续天数：§6.3 只给了做法，没有数。本页用 7% 与人设各自的示例概率。</li>
+      <li>仓位档到目标权重的映射、斜率 s<sub>i</sub> 与 κ<sub>i</sub> 的函数形式、a<sub>i</sub>(t) 的形式、"组合改善"的定义：§6.3 没有写。本页的 s = 1 + κ、a 的组合和"组合改善 = 仓位降幅"都是示例。</li>
+      <li>β、γ、ρ、κ、ν、τ、η 的数值由 V4 行为矩校准 <span class="ref">§12.2</span>；文档只给了 λ 的先验中位数 2.25 和挂单回调幅度 k<sub>i</sub> 的先验 1%–3% <span class="ref">§6.3 · §4.1</span>，本页其余参数值都是示例。</li>
+      <li>成交判定里还有几个文档没定死的数 <span class="ref">§8.2</span>：chase 的滑点没有给值，本页用的是示例；个人原始订单超过该股真实成交额"一定比例（如 1%）"才截断，比例未定；有分钟线时的排队折扣是假设参数；没有分钟线时 p 只按 0.1 / 0.3 / 0.5 三档做敏感性，"散户涨停买不进率"没有真实数据，只标为假设、不作校准目标。</li>
+      <li>OrderIntent 与 Fill 在 §3.3 模块划分里只有类型名，没有字段定义；本页第 7 步按 §10.3 决策表与交易流水的字段展示。</li>
+      <li>费率与权限门槛在文档中标了〔需复核〕；权限的真实开通率缺数据，先设为参数 <span class="ref">§8.1</span>。两融开户条件和维持担保比例 130% 同样标了〔需复核〕 <span class="ref">§8.4</span>。</li>
+    </ul>
+  </div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function () {
+  'use strict';
+  // ===== 示例数据：情景、版块、信息流、人设（全部为示例，非设计参数） =====
+  const PC = 10; // 前收盘价（示例）
+  const SC = {
+    u: { n: '大涨', R5: 0.12, sig: 0.035, L: 0.8, idx: '大盘小幅上涨' },
+    f: { n: '震荡', R5: 0.01, sig: 0.02, L: 0.2, idx: '大盘窄幅震荡' },
+    d: { n: '大跌', R5: -0.10, sig: 0.04, L: 0.1, idx: '大盘普跌' }
+  };
+  const BD = { main: { n: '主板', lim: 0.10, perm: null }, gem: { n: '创业板', lim: 0.20, perm: 'chinext' } };
+  // [开, 高, 低, 收, 当日均价]（示例）；均价是 chase 的成交参考，也代替盘中检查点的现价
+  const PX = {
+    main: { u: [11, 11, 11, 11, 11], f: [10.10, 10.45, 9.80, 10.05, 10.20], d: [9.40, 9.50, 9.00, 9.00, 9.05] },
+    gem: { u: [12, 12, 12, 12, 12], f: [10.20, 10.90, 9.60, 10.10, 10.40], d: [8.80, 9.00, 8.00, 8.00, 8.10] }
+  };
+  const TIER = { tiny: 0.05, small: 0.15, half: 0.4, large: 0.7, all_in: 1 };
+  // 信息流候选池：ch 渠道，lv 级别，m 量级权重，sal 显著度，age 发出后分钟数，act 买卖行为（+1 买 / -1 卖 / 0 观点），t 文本
+  const POOL = [
+    { id: 'a', ch: 'pub', lv: 'L0', m: 1.0, sal: 1.0, age: 30, act: [0, 0, 0], t: '【示例·L0】甲科技（化名）公告：中标某大型项目，合同金额约占上年营收三成。' },
+    { id: 'b', ch: 'pub', lv: 'L1', m: 0.9, sal: 0.9, age: 20, act: [0, 0, 0], t: '【示例·L1】快讯｜甲科技（化名）中标大单，券商点评称订单可见度提升。' },
+    { id: 'c', ch: 'news', lv: '行情', m: 0.9, sal: 1.2, age: 5, act: [0, 0, 0], hold: 1,
+      t: ['【示例·行情】甲科技开盘即一字涨停，封单巨大。', '【示例·行情】甲科技高开后回落，围绕平盘震荡。', '【示例·行情】甲科技利好兑现低开，盘中逼近跌停。'] },
+    { id: 'd', ch: 'kol', lv: '大V', m: 0.7, sal: 1.0, age: 15, act: [1, 1, 1],
+      t: ['〔化名·趋势阿杰〕订单落地，中线逻辑硬，已上车。', '〔化名·趋势阿杰〕回落是给机会，我又低吸了一笔。', '〔化名·趋势阿杰〕错杀就是机会，我在跌停附近接了一点。'] },
+    { id: 'e', ch: 'pub', lv: 'L2', m: 0.7, sal: 0.8, age: 40, act: [0, 0, 0], t: '【示例·L2】订单是利好，但估值不便宜，追高要谨慎。' },
+    { id: 'f', ch: 'pub', lv: 'L3', m: 0.5, sal: 1.1, age: 10, act: [0, 0, 0],
+      t: ['【示例·L3】明天还有板，打板资金已经抢疯了！', '【示例·L3】主力在洗盘，别被甩下车。', '【示例·L3】利好出尽是利空，主力在出货。'] },
+    { id: 'g', ch: 'pub', lv: 'L4', m: 0.4, sal: 1.3, age: 25, act: [0, 0, 0], rumor: 1, t: '【示例·L4·传闻】听说还有更大的订单没公告。' },
+    { id: 'h', ch: 'forum', lv: '散户', m: 0.5, sal: 0.9, age: 8, act: [1, -1, -1],
+      t: ['〔化名·股友A〕挂单排板了，能不能排上看运气。', '〔化名·股友A〕冲高做了个 T，先出一半。', '〔化名·股友A〕割了，不玩了。'] },
+    { id: 'i', ch: 'forum', lv: '散户', m: 0.5, sal: 0.8, age: 12, act: [1, 1, 1],
+      t: ['〔化名·股友B〕昨天低吸的，今天躺赚。', '〔化名·股友B〕回落低吸了一点。', '〔化名·股友B〕抄底一手，亏了认。'] },
+    { id: 'j', ch: 'forum', lv: '散户', m: 0.5, sal: 0.7, age: 18, act: [0, 0, -1],
+      t: ['〔化名·股友C〕一字板谁追谁接盘。', '〔化名·股友C〕没量，没意思。', '〔化名·股友C〕跌停封死了，卖都卖不掉。'] },
+    { id: 'k', ch: 'group', lv: '群聊', m: 0.6, sal: 1.0, age: 6, act: [1, 0, -1],
+      t: ['〔群友〕我今天开盘就排了。', '〔群友〕先拿着看看。', '〔群友〕我先跑了，你们随意。'] },
+    { id: 'l', ch: 'group', lv: '群聊', m: 0.6, sal: 0.9, age: 35, act: [0, 0, 0], t: '〔老股民群〕别忘了 2015 年，利好也能跌停。' },
+    { id: 'm', ch: 'news', lv: '行情', m: 0.4, sal: 0.6, age: 3, act: [0, 0, 0], macro: 1, t: '' }
+  ];
+  const TAU_D = 120; // 时间衰减常数，分钟（示例）
+  // 信念与意向（示例，模拟 LLM 输出）：情绪 [fear,greed,regret,fomo]、policy_trust、stance、ret_bucket、confidence、reasons、帖子、帖子声称的动作、action、size、意向理由、rationale、独白
+  function B(e, pt, st, rb, cf, rs, post, claim, ac, sz, irs, ra, mono) {
+    return { emo: { fear: e[0], greed: e[1], regret: e[2], fomo: e[3] }, pt, st, rb, cf, rs, post, claim, ac, sz, irs, ra, mono };
+  }
+  const PER = [
+    { id: 'n', nm: '打板短线新手', alias: '小林', tier: 'B', N: '高', hurt: 0, trapped: 0,
+      card: { birth_year: 2001, gender: '男', occupation: '互联网公司职员', city_tier: 2, entry_year: 2024, account_assets: '6 万（RT1）', style: 'limit_up', permissions: '{}（资产不满 10 万）', big5: '外向高、尽责低、神经质高', mbti_type: 'ESTP-T（SP 组）', fin_literacy: 1, experience: '只经历过 2024-09-24 后的上涨', voice_style: '短句、黑话多、爱晒截图' },
+      k: { g: 2.0, lam: 2.6, rho: 1.2, kap: 0.8, bh: 3, be: 12, bl: 2.5, nu: 1.2, tau: 0.04, eta: 0.6, wmax: 1.0, pp: 0.5 },
+      diet: { pub: 0.6, news: 0.8, forum: 1.0, group: 0.7, kol: 1.0 }, K: 8, rel: 0.9, cash: 60000, other: 0, pos: () => ({ q: 0, c: 0, tq: 0 }),
+      bel: {
+        u: B([0, 3, 1, 3], 0, 2, '>5%', 4, ['trend', 'kol', 'herd'], '一字板，全仓排板也没买到，明天再来！', null, 'buy', 'all_in', ['trend', 'lottery', 'herd'], '利好加连板预期，全仓排板', '怕踏空'),
+        f: B([1, 2, 0, 2], 0, 1, '2~5%', 3, ['news', 'kol'], '', null, 'buy', 'half', ['news', 'trend'], '利好还没炒完，先半仓上车', '回落正好上车'),
+        d: B([2, 1, 1, 1], 0, 1, '0~2%', 2, ['news', 'lottery'], '跌停就是机会，挂了个低价抄底试试。', null, 'buy', 'small', ['news', 'lottery'], '利好被错杀，小仓位抄底', '万一明天反包呢') } },
+    { id: 'v', nm: '2015 年杠杆受伤的老股民', alias: '老周', tier: 'B', N: '高', hurt: 1, trapped: 1,
+      card: { birth_year: 1968, gender: '男', occupation: '国企职工（已内退）', city_tier: 3, entry_year: 2007, account_assets: '约 77 万（RT3）', style: 'swing', permissions: '{"chinext","margin"}', big5: '尽责中、神经质高', mbti_type: 'ISFJ-T（SJ 组）', fin_literacy: 1, experience: '2007 年入市；2015 年两融被强平', voice_style: '爱讲往事、常提国家队' },
+      k: { g: 4.0, lam: 2.8, rho: 1.5, kap: 0.4, bh: 1.5, be: 4, bl: 1.0, nu: 0.9, tau: 0.06, eta: 0.7, wmax: 0.6, pp: 0.6 },
+      diet: { pub: 1.0, news: 0.9, forum: 0.6, group: 1.0, kol: 0.4 }, K: 6, rel: 1, cash: 570000, other: 0, pos: () => ({ q: 20000, c: 11.5, tq: 0 }),
+      bel: {
+        u: B([1, 1, 2, 0], 1, 1, '2~5%', 2, ['news', 'breakeven'], '', null, 'sell', 'all_in', ['breakeven'], '利好高开就走，不想再被套', '套了这么多年'),
+        f: B([2, 0, 2, 0], 0, -1, '-2~0%', 2, ['fear', 'breakeven'], '', null, 'sell', 'half', ['fear'], '利好都涨不动，先减一半', '又是这样'),
+        d: B([3, 0, 3, 0], -1, -2, '<-5%', 3, ['fear', 'national_team'], '利好跌停，跟 2015 年一个味道，先跑为敬。', 'sell', 'sell', 'all_in', ['fear', 'national_team'], '和 2015 年一样，先跑', '睡不着') } },
+    { id: 'r', nm: '退休长线', alias: '王阿姨', tier: 'B', N: '低', hurt: 0, trapped: 0,
+      card: { birth_year: 1962, gender: '女', occupation: '退休教师', city_tier: 2, entry_year: 2007, account_assets: '40 万（RT2）', style: 'long', permissions: '{"chinext"}', big5: '尽责高、宜人高、神经质低', mbti_type: 'ISFJ-A（SJ 组）', fin_literacy: 2, experience: '2007 年入市，经历过多轮牛熊', voice_style: '语气平和、常在家庭群转文章' },
+      k: { g: 5.0, lam: 2.0, rho: 1.0, kap: 0.2, bh: 2, be: 3, bl: 0.5, nu: 1.5, tau: 0.10, eta: 0.2, wmax: 0.4, pp: 0.1 },
+      diet: { pub: 1.0, news: 0.8, forum: 0.3, group: 1.0, kol: 0.3 }, K: 4, rel: 1, cash: 300000, other: 0, pos: () => ({ q: 10000, c: 8.5, tq: 0 }),
+      bel: {
+        u: B([0, 1, 0, 0], 1, 1, '2~5%', 3, ['fundamental', 'news'], '', null, 'hold', 'small', ['fundamental'], '好公司拿着，不追不卖', '挺好'),
+        f: B([0, 0, 0, 0], 1, 0, '0~2%', 3, ['fundamental'], '', null, 'hold', 'small', ['fundamental'], '没什么变化，继续拿着', '平常心'),
+        d: B([3, 0, 1, 0], 1, 0, '-2~0%', 2, ['fear', 'fundamental'], '', null, 'hold', 'small', ['fundamental'], '长期拿着，这几天不看了', '眼不见心不烦') } },
+    { id: 'fd', nm: '基金为主', alias: '小陈', tier: 'B', N: '高', hurt: 0, trapped: 0,
+      card: { birth_year: 1990, gender: '女', occupation: '设计师', city_tier: 1, entry_year: 2020, account_assets: '20 万（RT2，其中基金 17 万）', style: 'fund', permissions: '{}（达门槛未开通）', big5: '开放高、外向低、神经质偏高', mbti_type: 'INFP-T（NF 组）', fin_literacy: 2, experience: '2020 年买基金入市，2021 年后回撤', voice_style: '偶尔在雪球风格论坛长文复盘' },
+      k: { g: 3.5, lam: 2.4, rho: 0.6, kap: 0.2, bh: 1.5, be: 6, bl: 0.8, nu: 0.4, tau: 0.08, eta: 0.5, wmax: 0.2, pp: 0.2 },
+      diet: { pub: 1.0, news: 0.7, forum: 0.8, group: 0.4, kol: 0.6 }, K: 3, rel: 0.6, cash: 30000, other: 170000, pos: () => ({ q: 0, c: 0, tq: 0 }),
+      bel: {
+        u: B([0, 1, 1, 1], 0, 0, '0~2%', 2, ['valuation'], '', null, 'watch', 'tiny', ['valuation'], '一字板追不上，看看就好', '算了'),
+        f: B([0, 1, 0, 1], 0, 1, '0~2%', 2, ['news'], '', null, 'buy', 'tiny', ['news'], '小仓位试一下个股', '就一点点'),
+        d: B([2, 0, 0, 0], 0, -1, '-2~0%', 2, ['fear'], '', null, 'watch', 'tiny', ['fear'], '个股太刺激，还是拿基金', '还好没买') } },
+    { id: 'h', nm: '高净值波段', alias: '赵先生', tier: 'B', N: '低', hurt: 0, trapped: 0,
+      card: { birth_year: 1978, gender: '男', occupation: '企业主', city_tier: 1, entry_year: 2005, account_assets: '1500 万（RT5）', style: 'swing', permissions: '{"chinext","star","margin"}', big5: '开放高、尽责中、神经质低', mbti_type: 'ENTJ-A（NT 组）', fin_literacy: 3, experience: '2005 年入市，经历 2007、2015 两轮牛熊', voice_style: '少发帖，偶尔写估值分析' },
+      k: { g: 3.0, lam: 1.9, rho: 0.3, kap: 0.7, bh: 0.8, be: -2, bl: -0.3, nu: 1.0, tau: 0.06, eta: 0.2, wmax: 0.5, pp: 0.1 },
+      diet: { pub: 1.0, news: 1.0, forum: 0.3, group: 0.5, kol: 0.5 }, K: 10, rel: 1, cash: 9000000, other: 3000000, pos: () => ({ q: 300000, c: 9.2, tq: 0 }),
+      bel: {
+        u: B([0, 2, 0, 0], 1, 1, '2~5%', 4, ['fundamental', 'valuation'], '', null, 'sell', 'half', ['valuation'], '订单在预期内，涨停先兑现一半', '按计划来'),
+        f: B([0, 1, 0, 0], 1, 1, '0~2%', 3, ['fundamental'], '', null, 'hold', 'small', ['fundamental'], '逻辑没变，拿着', '正常波动'),
+        d: B([1, 0, 1, 0], 0, 0, '-2~0%', 3, ['valuation', 'flow'], '', null, 'sell', 'half', ['flow'], '资金在跑，先降一半仓位', '控制回撤') } },
+    { id: 'k', nm: 'Tier-A 大 V', alias: '老K', tier: 'A_bigv', N: '低', hurt: 0, trapped: 0,
+      card: { birth_year: 1985, gender: '男', occupation: '自由职业', city_tier: 1, entry_year: 2014, account_assets: '约 300 万（RT4）', style: 'day', permissions: '{"chinext","star","margin"}', big5: '外向高、开放高、神经质低', mbti_type: 'ENTP-A（NT 组）', fin_literacy: 2, experience: '2015 年牛市积累粉丝', voice_style: '口号式短帖，常晒操作' },
+      k: { g: 2.5, lam: 2.0, rho: 0.5, kap: 1.0, bh: 1.0, be: -1, bl: 1.5, nu: 2.0, tau: 0.03, eta: 0.3, wmax: 0.8, pp: 0.2 },
+      diet: { pub: 0.9, news: 1.0, forum: 1.0, group: 0.6, kol: 0.8 }, K: 15, rel: 1, cash: 3000000, other: 0,
+      // 盘前挂 open 单，开盘价买入 5 万股（示例）；大涨情景一字板没买到。震荡、大跌两种情景另有一次盘中检查点激活
+      pos: (sk, o) => sk === 'u' ? { q: 0, c: 0, tq: 0 } : { q: 50000, c: o, tq: 50000, bought: 1 },
+      bel: {
+        u: B([0, 3, 0, 3], 1, 2, '>5%', 5, ['fundamental', 'kol'], '订单落地，中线逻辑硬，已上车，兄弟们稳住！', 'buy', 'buy', 'large', ['fundamental', 'trend'], '排板加仓', '粉丝在看'),
+        f: B([1, 1, 1, 0], 0, 1, '0~2%', 3, ['technical'], '早上开盘上车，冲高已经做 T 出来了，晚上复盘。', 'sell', 'sell', 'half', ['technical'], '冲高没力，做 T 先出一半', '得给粉丝一个交代'),
+        d: B([2, 0, 3, 0], 0, -1, '<-5%', 3, ['fear', 'technical'], '错杀！明天反包，我继续加仓。', 'buy', 'sell', 'all_in', ['fear', 'technical'], '早盘抄底被埋，先止损', '不能让粉丝看出来') } }
+  ];
+  // 执行方式（示例，模拟 LLM 在第 1 次调用里的选择）与 dip 幅度 k_i（示例，落在 §4.1 先验 1%–3% 内）
+  const EXM = { n: ['open', 'dip', 'dip'], v: ['open', 'dip', 'chase'], r: ['dip', 'dip', 'dip'], fd: ['dip', 'dip', 'dip'], h: ['dip', 'dip', 'open'], k: ['open', 'chase', 'chase'] };
+  const DK = { n: 0.03, v: 0.02, r: 0.02, fd: 0.01, h: 0.03, k: 0.02 };
+  PER.forEach(P => { P.k.dk = DK[P.id]; P.ex = { u: EXM[P.id][0], f: EXM[P.id][1], d: EXM[P.id][2] }; P.intra = P.id === 'k' ? (sk => sk !== 'u') : (() => false); });
+  const RT_NOTE = 'RT1 < 10 万、RT2 10–50 万、RT3 50–300 万、RT4 300–1000 万、RT5 > 1000 万（§2.1）';
+  // ===== 计算：信息流选取 + 内核七步（公式照 §6.3；映射函数与阈值为示例） =====
+  const clip = (x, a, b) => Math.min(b, Math.max(a, isFinite(x) ? x : 0));
+  const r2 = x => Math.round(x * 100) / 100;
+  function draw(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; }
+  const SKI = { u: 0, f: 1, d: 2 };
+  function feed(P, sk, holds) {
+    const i = SKI[sk];
+    const items = POOL.map(it => {
+      const t = it.macro ? '【示例·行情】指数：' + SC[sk].idx + '。' : (Array.isArray(it.t) ? it.t[i] : it.t);
+      const w = P.diet[it.ch] || 0, rel = it.macro ? 0.5 : (holds ? 1 : P.rel);
+      const score = w * it.m * rel * Math.exp(-it.age / TAU_D) * it.sal;
+      return { id: it.id, ch: it.ch, lv: it.lv, rumor: !!it.rumor, act: it.act[i], t, score, force: !!(it.hold && holds) };
+    });
+    items.sort((a, b) => (b.force - a.force) || (b.score - a.score));
+    const K = clip(P.K, 3, 15);
+    const seen = items.slice(0, K);
+    let nb = 0, ns = 0; seen.forEach(x => { if (x.act > 0) nb++; else if (x.act < 0) ns++; });
+    return { seen, K, nb, ns, H: (nb + ns) ? (nb - ns) / (nb + ns) : 0 };
+  }
+  function fees(amt, sell) {
+    const comm = Math.max(5, amt * 0.00025), stamp = sell ? amt * 0.0005 : 0;
+    const other = amt * (0.0000341 + 0.00002 + 0.00001);
+    return { comm: r2(comm), stamp: r2(stamp), other: r2(other), total: r2(comm + stamp + other) };
+  }
+  function run(P, sk, bk) {
+    const S = SC[sk], Bd = BD[bk], px = PX[bk][sk], be = P.bel[sk], k = P.k;
+    const intra = P.intra(sk); // 盘中检查点激活（仅老K，示例）；其余为盘前激活
+    const ref = intra ? px[4] : PC, up = r2(PC * (1 + Bd.lim)), dn = r2(PC * (1 - Bd.lim));
+    const pos = P.pos(sk, px[0]);
+    const cash = P.cash - (pos.bought ? pos.q * pos.c : 0);
+    const A = Math.max(1, cash + P.other + pos.q * ref);
+    const w = pos.q * ref / A;
+    const fear = be.emo.fear, fd = feed(P, sk, pos.q > 0);
+    const src = fd.seen.filter(x => x.ch === 'forum' || x.ch === 'group' || x.ch === 'kol').slice(0, 2).map(x => 'demo-post-' + x.id);
+    const R = { P, sk, bk, px, ref, up, dn, pos, cash, A, w, fd, be, intra, src, ex: intra ? 'chase' : P.ex[sk], dk: k.dk, notes: [] };
+    // 1 意向数值化
+    const s = 1 + k.kap, b0 = TIER[be.sz] || 0, f1 = Math.min(1, s * b0);
+    let wint = w;
+    if (be.ac === 'buy') wint = clip(w + f1 * (k.wmax - w), 0, k.wmax);
+    else if (be.ac === 'sell') wint = w * (1 - f1);
+    R.s1 = { s, b0, f1, wint };
+    // 2 行为偏差修正（贪婪/错失恐惧满档时 β^herd、β^lot 临时放大，见第 5 步）
+    const amp = (be.emo.greed === 3 || be.emo.fomo === 3) ? 1.5 : 1;
+    const bh = k.bh * 1e-4 * amp, bex = k.be * 1e-4, bl = k.bl * 1e-4 * amp;
+    const gt = k.g * (1 + k.eta * fear), sig2 = Math.max(S.sig * S.sig, 1e-4);
+    const num = bh * fd.H + bex * S.R5 + bl * S.L;
+    const skip = be.ac === 'watch' && pos.q === 0;
+    const D = skip ? 0 : num / (gt * sig2);
+    let ws = clip(wint + D, 0, k.wmax);
+    if (be.ac === 'sell') ws = Math.min(ws, w); // 卖出意向不被修正项反转为买入（示例处理）
+    if (be.ac === 'buy') ws = Math.max(ws, w);
+    R.s2 = { amp, bh, bex, bl, gt, sig2, num, D, ws, skip };
+    // 3 实现效用
+    R.s3 = { on: false };
+    if (ws < w - 1e-9 && pos.q > 0) {
+      const g = ref / pos.c - 1, U = g > 0 ? k.rho * g : -k.lam * k.rho * Math.abs(g), imp = w - ws, pass = imp + U > k.tau;
+      R.s3 = { on: true, g, U, imp, pass };
+      if (!pass) { ws = w; R.notes.push(g < 0 ? '舍不得割' : '浮盈不够落袋'); }
+    }
+    // 4 看盘
+    const a = 0.5 + 1 + 10 * Math.abs(S.R5) + 0.3 * fear, pw = 1 - Math.exp(-k.nu * a), u4 = draw(P.id + '|' + sk + '|' + bk + '|look');
+    const look = u4 < pw, big = Math.abs(ws - w) > k.tau;
+    R.s4 = { a, pw, u4, look, big };
+    // 5 情绪分支
+    const dd = Math.max(0, -S.R5);
+    R.s5 = { dd, branch: 'none', amp };
+    if (fear === 3 && dd > 0.07 && pos.q > 0) {
+      const u5 = draw(P.id + '|' + sk + '|' + bk + '|p');
+      if (P.N === '高' && P.hurt && u5 < k.pp) R.s5 = { dd, branch: 'panic', u5, amp };
+      else if (P.N === '低' || P.trapped) R.s5 = { dd, branch: 'flat', u5, amp };
+      else R.s5 = { dd, branch: 'none', u5, amp };
+    }
+    let wfin = w, why = '';
+    if (R.s5.branch === 'panic') { wfin = 0; R.ex = 'chase'; }
+    else if (R.s5.branch === 'flat') { why = '躺平（数日不激活）'; }
+    else if (!look) { why = be.ac === 'watch' ? '' : '当日未看盘'; }
+    else if (!big) { why = R.notes.length ? R.notes[0] : (be.ac === 'buy' || be.ac === 'sell' ? '调仓幅度未超过 τ' : ''); }
+    else wfin = ws;
+    R.wfin = wfin;
+    return step6(R, why);
+  }
+  // 6 硬约束：按 §8.1 的检查顺序（时段 → 权限 → T+1 可卖量 → 整手与单笔上限 → 涨跌幅与价格笼子 → 资金）；按执行方式定价（§6.3）；成交按 §8.2 脚本化路径判定
+  const SLIP = 0.005; // chase 滑点（示例，文档未给值）
+  const OT = { open: 'auction_limit', dip: 'limit', chase: 'market' }; // order_type 取值为示例
+  function step6(R, why) {
+    const { P, bk, px, ref, up, dn, pos, cash, A, w, wfin, ex, dk } = R;
+    const dqRaw = (wfin - w) * A / Math.max(ref, 0.01);
+    const side = dqRaw > 0.5 ? 'buy' : (dqRaw < -0.5 ? 'sell' : '');
+    const ck = []; let rej = why || '', order = null, fill = null, qty = 0, lim = null;
+    const ok = () => !rej;
+    if (!side && ok()) rej = (R.be.ac === 'buy' || R.be.ac === 'sell') ? '目标仓位与当前一致' : '';
+    if (side && ok()) {
+      ck.push(['时段', R.intra ? '盘中检查点（示例：量级 ≥ 3 事件触发），执行方式限 chase（§3.4）' : '盘前激活（08:00–09:15），订单按 T 日行情判定（§3.4）', true]);
+      const perm = BD[bk].perm, has = !perm || P.card.permissions.indexOf('"' + perm + '"') >= 0;
+      const pass = has || side === 'sell';
+      ck.push(['权限', perm ? (has ? '已开通 ' + perm : '未开通 ' + perm + (side === 'sell' ? '（卖出不受限）' : '，看得见、买不了')) : '主板无需单独权限', pass]);
+      if (!pass) rej = '权限不足';
+    }
+    if (side && ok()) {
+      if (ex === 'open') lim = side === 'buy' ? up : dn;
+      else if (ex === 'dip') lim = side === 'buy' ? r2(PC * (1 - dk)) : r2(PC * (1 + dk));
+    }
+    if (side === 'sell' && ok()) {
+      const sellable = Math.max(0, pos.q - pos.tq);
+      ck.push(['T+1 可卖量', '持仓 ' + pos.q + ' 股，其中今日买入 ' + pos.tq + ' 股，可卖 ' + sellable + ' 股', sellable > 0]);
+      if (sellable <= 0) rej = 'T+1 卖不出';
+      else {
+        qty = Math.min(Math.round(-dqRaw), sellable);
+        if (qty < sellable) qty = Math.floor(qty / 100) * 100;
+        ck.push(['整手与单笔上限', '卖出取整到 100 股，零股随清仓一次卖出：' + qty + ' 股', qty > 0]);
+        if (qty <= 0) rej = '不足一手';
+      }
+    }
+    if (side === 'buy' && ok()) {
+      ck.push(['T+1 可卖量', '买入不检查；今日买入的部分次日才可卖', true]);
+      qty = Math.floor(dqRaw / 100) * 100;
+      const cap = bk === 'gem' ? 300000 : 1000000;
+      if (qty > cap) qty = cap;
+      ck.push(['整手与单笔上限', '买入取整到 100 股：' + Math.max(0, qty) + ' 股；单笔上限 ' + cap + ' 股', qty >= 100]);
+      if (qty < 100) rej = '不足一手';
+    }
+    if (side && ok()) {
+      const band = '涨跌停区间 [' + dn.toFixed(2) + ', ' + up.toFixed(2) + ']';
+      const txt = ex === 'open' ? '执行方式 open：限价取' + (side === 'buy' ? '涨停价 ' : '跌停价 ') + lim.toFixed(2) + '，参加开盘集合竞价，集合竞价不设价格笼子；' + band
+        : ex === 'dip' ? '执行方式 dip：限价 = 前收 × (1 ' + (side === 'buy' ? '− ' : '+ ') + 'k_i) = ' + lim.toFixed(2) + '（k_i = ' + dk + '），在价格笼子内；' + band
+        : '执行方式 chase：不报价格，按当日均价加滑点成交；' + band;
+      ck.push(['涨跌幅与价格笼子', txt, lim == null || (lim >= dn && lim <= up)]);
+      if (side === 'buy') ck.push(['风险警示股买入上限', '示例标的不是风险警示股，不适用', true]);
+    }
+    if (side === 'buy' && ok()) {
+      const est = lim != null ? lim : Math.min(up, px[4] * (1 + SLIP));
+      const afford = Math.floor(Math.max(0, cash - 5) / (est * 1.0003) / 100) * 100;
+      const pass = afford >= 100;
+      if (qty > afford) qty = afford;
+      ck.push(['资金与两融额度', '可用资金 ' + Math.round(cash) + ' 元，按 ' + est.toFixed(2) + ' 元冻结可买 ' + afford + ' 股；本例不使用融资', pass]);
+      if (!pass) rej = '资金不足一手';
+    }
+    if (side && ok()) {
+      order = { side, qty, execution: ex, price: lim == null ? null : r2(lim), order_type: OT[ex] };
+      const oneUp = px[1] === px[2] && px[1] === up, sealUp = px[3] === up && px[2] < up;
+      const oneDn = px[1] === px[2] && px[2] === dn, sealDn = px[3] === dn && px[1] > dn;
+      const u6 = draw(P.id + '|' + R.sk + '|' + bk + '|q');
+      const clip = x => Math.min(up, Math.max(dn, x));
+      if (side === 'buy') {
+        if (oneUp) rej = '涨停买不进';
+        else if (ex === 'open') fill = { price: px[0] };
+        else if (ex === 'dip') { if (lim >= px[2]) fill = { price: r2(Math.min(lim, px[1])) }; else rej = '挂单没成交'; }
+        else if (sealUp) { if (u6 < ST.p) fill = { price: up }; else rej = '涨停买不进'; }
+        else fill = { price: clip(r2(px[4] * (1 + SLIP))) };
+      } else {
+        if (oneDn) rej = '跌停卖不出';
+        else if (ex === 'open') fill = { price: px[0] };
+        else if (ex === 'dip') { if (lim <= px[1]) fill = { price: r2(Math.max(lim, px[2])) }; else rej = '挂单没成交'; }
+        else if (sealDn) { if (u6 < ST.p) fill = { price: dn }; else rej = '跌停卖不出'; }
+        else fill = { price: clip(r2(px[4] * (1 - SLIP))) };
+      }
+      R.u6 = { u6, p: ST.p, oneUp, sealUp, oneDn, sealDn, ex };
+    }
+    if (fill) {
+      const amt = fill.price * qty, f = fees(amt, side === 'sell');
+      fill.qty = qty; fill.amt = r2(amt); fill.f = f;
+      fill.pnl = side === 'sell' ? r2((fill.price - pos.c) * qty - f.total) : null;
+    }
+    R.s6 = { side, dqRaw, ck, order, fill, rej };
+    return step7(R);
+  }
+  // 7 写回记忆 + 言行不一（意向 vs 成交；帖子声称 vs 成交）
+  function step7(R) {
+    const { be, s6 } = R, gap = [];
+    const done = s6.fill ? s6.side : '';
+    const reason = s6.rej || (R.s5.branch === 'panic' ? '恐慌清仓' : '');
+    const CN = { buy: '买入', sell: '卖出', hold: '持有', watch: '观望' };
+    if ((be.ac === 'buy' || be.ac === 'sell') && done !== be.ac) gap.push('意向' + CN[be.ac] + '，实际' + (done ? CN[done] : '未成交') + (reason ? '（' + reason + '）' : ''));
+    if ((be.ac === 'hold' || be.ac === 'watch') && done) gap.push('意向' + CN[be.ac] + '，实际' + CN[done] + (reason ? '（' + reason + '）' : ''));
+    if (be.claim && be.claim !== be.ac) gap.push('帖子声称' + CN[be.claim] + '，意向却是' + CN[be.ac]);
+    if (be.claim && done !== be.claim) gap.push('帖子声称' + CN[be.claim] + '，当日没有对应成交');
+    const mem = [];
+    if (reason) mem.push('未按意向执行，原因：' + reason);
+    if (s6.fill) mem.push((s6.side === 'buy' ? '买入 ' : '卖出 ') + s6.fill.qty + ' 股，成交价 ' + s6.fill.price.toFixed(2));
+    if (R.s5.branch === 'flat') mem.push('进入躺平，若干天不再激活');
+    if (!mem.length) mem.push('当日无改动，不写情景记忆');
+    R.s7 = { gap, mem, reason, done };
+    return R;
+  }
+  // ===== 渲染：分步演示的七个阶段 =====
+  const $ = id => document.getElementById(id);
+  function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = String(txt); return e; }
+  const num = (x, d) => (typeof x === 'number' && isFinite(x)) ? x.toFixed(d) : '—';
+  const pct = x => (typeof x === 'number' && isFinite(x)) ? (x * 100).toFixed(1) + '%' : '—';
+  const yuan = x => (typeof x === 'number' && isFinite(x)) ? Math.round(x).toLocaleString('zh-CN') + ' 元' : '—';
+  const CNA = { buy: '买入', sell: '卖出', hold: '持有', watch: '观望' };
+  const CHN = { pub: '公开媒体', news: '行情新闻', forum: '论坛', group: '群聊', kol: '大V' };
+  function kv(pairs) {
+    const dl = el('dl', 'sp-kv');
+    pairs.forEach(p => { dl.appendChild(el('dt', '', p[0])); dl.appendChild(el('dd', '', p[1])); });
+    return dl;
+  }
+  function json(o, lang) {
+    const w = el('div');
+    const pre = el('pre', 'code sp-json'); pre.setAttribute('data-lang', lang || '示意，未实现');
+    pre.textContent = JSON.stringify(o, null, 2); w.appendChild(pre); return w;
+  }
+  function list(items) {
+    const ul = el('ul', 'sp-list');
+    items.forEach(x => {
+      const li = el('li');
+      if (Array.isArray(x)) { li.appendChild(el('span', x[1] ? 'sp-ok' : 'sp-no', x[1] ? '通过 ' : '不通过 ')); li.appendChild(document.createTextNode(x[0])); }
+      else li.textContent = x;
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+  const para = t => el('p', '', t);
+  const note = t => el('p', 'sp-note', t);
+  const STEPS = ['人设卡与账户', '信息流', '第 1 次调用：解读与意向', '内核第 1–5 步', '内核第 6 步', '第 2 次调用：发帖', '写回记忆'];
+  function stage(i, R) {
+    const P = R.P, be = R.be, fd = R.fd, S = SC[R.sk];
+    if (i === 0) return {
+      t: '人设卡与账户：' + P.alias + '（' + P.nm + '，示例人设）',
+      inn: [json(Object.assign({ persona_id: 'demo-' + P.id, tier: P.tier }, P.card), '示意，未实现 · PersonaCard 节选')],
+      pr: [para('人设卡、长期信念、记忆和当日信息按固定顺序拼进 prompt。内核参数 kernel 和 MBTI 类型名不进 prompt，LLM 不知道自己的 λ。'),
+        kv([['可用资金', yuan(R.cash)], ['其他资产', yuan(P.other)], ['持仓', R.pos.q + ' 股' + (R.pos.q ? '，成本 ' + num(R.pos.c, 2) : '')], ['其中今日买入', R.pos.tq + ' 股'], ['估值价', num(R.ref, 2) + ' 元（' + (R.intra ? '盘中检查点：当日均价代替现价' : '盘前：前收') + '，示例）'], ['总资产 A', yuan(R.A)], ['当前仓位 w', pct(R.w)]])],
+      out: [list(['规则说明', '人设卡', '长期信念', '检索到的记忆（本例为空）', '当日信息（下一步）', '输出 schema']), note('prompt 按“静态在前、动态在后”排列，两次调用共用同一段静态前缀，以提高前缀缓存命中。账户摘要约 100 token，计入记忆预算。')],
+      ref: ['§4.1 人设卡字段', '§6.1 prompt 顺序', '§6.4 记忆预算约 800 token，含账户摘要', '§14 前缀缓存', '§2.1 RT 分档']
+    };
+    if (i === 1) {
+      const rows = fd.seen.map(x => (x.force ? '［持仓异动必进］' : '') + '［' + (CHN[x.ch] || x.ch) + ' · ' + x.lv + '］score ' + num(x.score, 3) + (x.act ? (x.act > 0 ? ' · 买' : ' · 卖') : '') + '：' + x.t);
+      return {
+        t: '信息流：' + P.alias + ' 从 13 条候选里看到 ' + fd.K + ' 条（' + S.n + '情景）',
+        inn: [kv([['候选条数', String(POOL.length)], ['K', String(fd.K)], ['持仓', R.pos.q > 0 ? '有，持仓异动必进' : '无'], ['媒介习惯 w_i', Object.keys(P.diet).map(c => CHN[c] + ' ' + P.diet[c]).join('，')], ['关注重合 rel_i', String(P.rel)]])],
+        pr: [para('每条按 score = w_i(渠道) · m · rel_i · exp(−Δt/τ_d) · sal 打分，τ_d = 120 分钟（示例）。持仓股行情异动必进，其余本页按分数取前 K 条；文档是 softmax 无放回抽样。'),
+          para('只数行为帖：买 ' + fd.nb + ' 条，卖 ' + fd.ns + ' 条，H_j = (买 − 卖) / (买 + 卖) = ' + num(fd.H, 2) + '。观点帖不进 H_j。')],
+        out: [list(rows)],
+        ref: ['§5.4 注意力预算与打分', '§7.5 H_j 只统计行为', '§5.6 L0–L4 分级']
+      };
+    }
+    if (i === 2) {
+      const bu = { views: [{ asset: '甲科技', horizon: '1d', stance: be.st, ret_bucket: be.rb, confidence: be.cf, reasons: be.rs }],
+        emotion: be.emo, policy_trust: be.pt, want_to_post: !!be.post, monologue: be.mono };
+      const di = { asset: '甲科技', action: be.ac, size: be.sz, execution: R.ex, reasons: be.irs, source_post_ids: R.src, rationale: be.ra };
+      return {
+        t: '第 1 次调用：解读并给出意向（示例输出）',
+        inn: [para('人设卡、记忆，以及上一步看到的 ' + fd.K + ' 条信息。'), note('本页的 LLM 输出是事先写好的示例。风格示例帖只放进第 2 次调用，这一次不带。')],
+        pr: [para('LLM 按 JSON schema 约束解码，一次输出 BeliefUpdate 与 DecisionIntent（盘前和盘中另有 FundingIntent，本例省略）。stance 取 −2..2，ret_bucket 六档，confidence 1–5，reasons 最多 3 个理由标签，emotion 四项各 0–3；action 四选一，size 五档。'),
+          para('execution 从 open / dip / chase 里选：' + ({ open: 'open，参加开盘集合竞价', dip: 'dip，按前收挂一个低吸或高抛的限价', chase: 'chase，按均价加滑点追' }[R.ex]) + '。' + (R.intra ? '本例是盘中检查点，只允许 chase。' : '') + 'LLM 只选方式，价格由内核第 6 步算。source_post_ids 最多 2 条，指向促成这次意向的帖子：' + (R.src.length ? R.src.join('、') : '本例没有') + '。'),
+          note('解析失败：换种子重试最多 2 次，仍失败当日记"未激活"、原因"解析失败"，不填默认值，也不沿用上期信念；拒答单独记类、不重试。')],
+        out: [json(bu, '示意，未实现 · BeliefUpdate'), json(di, '示意，未实现 · DecisionIntent')],
+        ref: ['§6.1 第 1 次调用', '§6.2 BeliefUpdate、解析失败与拒答', '§6.3 DecisionIntent 与执行方式', '§3.4 盘前激活与盘中检查点', '§6.6 意向来源']
+      };
+    }
+    return stage2(i, R);
+  }
+  function stage2(i, R) {
+    const P = R.P, be = R.be, k = P.k, S = SC[R.sk], s1 = R.s1, s2 = R.s2, s3 = R.s3, s4 = R.s4, s5 = R.s5, s6 = R.s6, s7 = R.s7;
+    if (i === 3) {
+      const pr = [];
+      pr.push(para('第 1 步 意向数值化：s = 1 + κ = ' + num(s1.s, 2) + '，档位 ' + be.sz + ' 基准 b = ' + num(s1.b0, 2) + '，f = min(1, s·b) = ' + num(s1.f1, 2) + '，w^int = ' + pct(s1.wint) + '。'));
+      pr.push(para('第 2 步 偏差修正：γ(t) = γ·(1 + η·fear) = ' + num(s2.gt, 2) + '，σ² = ' + num(s2.sig2, 4) + '；分子 β^herd·H + β^ext·R5 + β^lot·L = ' + num(s2.num * 1e4, 2) + '×10⁻⁴' + (s2.amp > 1 ? '（greed/fomo 满档，β^herd、β^lot × 1.5）' : '') + '；Δ = ' + (s2.skip ? '0（空仓观望，不修正）' : pct(s2.D)) + '，w* = clip(w^int + Δ, 0, w_max) = ' + pct(s2.ws) + '。'));
+      if (s3.on) pr.push(para('第 3 步 实现效用：浮盈 g = ' + pct(s3.g) + '，U_real = ' + (s3.g > 0 ? 'ρ·g' : '−λ·ρ·|g|') + ' = ' + num(s3.U, 3) + '；组合改善（示例：计划减仓幅度）= ' + num(s3.imp, 3) + '；合计 ' + num(s3.imp + s3.U, 3) + (s3.pass ? ' > ' : ' ≤ ') + 'τ = ' + num(k.tau, 2) + '，' + (s3.pass ? '可以卖。' : '不卖，改为持有。')));
+      else pr.push(para('第 3 步 实现效用：' + (R.pos.q > 0 ? '目标仓位不低于当前仓位，不涉及卖出，跳过。' : '没有持仓，跳过。')));
+      pr.push(para('第 4 步 看盘：a = ' + num(s4.a, 2) + '，P(看盘) = 1 − exp(−ν·a) = ' + num(s4.pw, 2) + '，随机数 ' + num(s4.u4, 2) + (s4.look ? '，看了盘' : '，没看盘') + '；|w* − w| ' + (s4.big ? '> ' : '≤ ') + 'τ。'));
+      pr.push(para('第 5 步 情绪分支：fear = ' + be.emo.fear + '，回撤 ' + pct(s5.dd) + '（阈值 7%，示例）→ ' + ({ panic: '恐慌清仓（随机数 ' + num(s5.u5, 2) + ' < p_panic ' + k.pp + '）', flat: '躺平', none: '不触发' }[s5.branch] || '不触发') + '。'));
+      return {
+        t: '内核第 1–5 步：把意向折成目标仓位',
+        inn: [kv([['意向', CNA[be.ac] + ' · ' + be.sz], ['当前仓位 w', pct(R.w)], ['w_max', pct(k.wmax)], ['κ γ η', k.kap + ' / ' + k.g + ' / ' + k.eta], ['β herd/ext/lot ×10⁻⁴', k.bh + ' / ' + k.be + ' / ' + k.bl], ['ρ λ τ ν', k.rho + ' / ' + k.lam + ' / ' + k.tau + ' / ' + k.nu], ['H R5 L σ', num(R.fd.H, 2) + ' / ' + S.R5 + ' / ' + S.L + ' / ' + S.sig]]), note('参数和情景特征均为示例数据。')],
+        pr,
+        out: [kv([['w^int', pct(s1.wint)], ['w*', pct(s2.ws)], ['最终目标仓位', pct(R.wfin)], ['分支', { panic: '恐慌', flat: '躺平', none: '无' }[s5.branch] || '无'], ['不调仓原因', (R.s6 && R.s6.rej && !R.s6.side) ? R.s6.rej : (R.notes[0] || '—')]])],
+        ref: ['§6.3 第 1–5 步原文与参数表', '§12.2 β 由 V4 行为矩校准', 'λ 先验中位数 2.25（Tversky & Kahneman 1992）']
+      };
+    }
+    if (i === 4) {
+      const out = [];
+      if (s6.order) out.push(json(s6.order, '示意，未实现 · 订单'));
+      if (s6.fill) out.push(kv([['成交', CNA[s6.side] + ' ' + s6.fill.qty + ' 股 @ ' + num(s6.fill.price, 2)], ['成交额', yuan(s6.fill.amt)], ['佣金（万 2.5，最低 5 元，示例）', num(s6.fill.f.comm, 2)], ['印花税（仅卖出）', num(s6.fill.f.stamp, 2)], ['经手费 + 证管费 + 过户费', num(s6.fill.f.other, 2)], ['费用合计', num(s6.fill.f.total, 2) + ' 元']]));
+      if (s6.fill && s6.fill.pnl != null) out.push(note('已实现盈亏约 ' + yuan(s6.fill.pnl) + '（按成本 ' + num(R.pos.c, 2) + '，扣费后）。'));
+      if (s6.rej) out.push(el('p', 'sp-no', (s6.side ? '未成交：' : '不下单：') + s6.rej));
+      if (!s6.side && !s6.rej) out.push(note('目标仓位与当前一致，不下单。'));
+      const pr = [];
+      if (s6.ck.length) pr.push(list(s6.ck.map(c => [c[0] + '：' + c[1], c[2]])));
+      else pr.push(para('没有需要执行的订单，硬约束不检查。'));
+      if (R.u6) pr.push(note('成交判定（§8.2 脚本化路径，执行方式 ' + R.u6.ex + '）：' + (R.u6.oneUp ? '一字涨停，买单不成交；' : '') + (R.u6.sealUp ? '收盘封涨停，盘中有更低成交；' : '') + (R.u6.oneDn ? '一字跌停；' : '') + (R.u6.sealDn ? '收盘封跌停，盘中有更高成交；' : '') + ({ open: 'open 走第 1 步，按开盘价成交；', dip: 'dip 走第 2 步，限价碰到当日高低区间才成交；', chase: 'chase 按当日均价加滑点（滑点 ' + (SLIP * 100) + '% 为示例）；' }[R.u6.ex]) + '封板时 p = ' + R.u6.p + '（§8.2 三档之一，无分钟线时固定；跌停卖单按同样方式处理是本页的示例简化），随机数 ' + num(R.u6.u6, 2) + '。全有或全无，不按比例部分成交。'));
+      return {
+        t: '内核第 6 步：硬约束、执行方式定价与成交判定',
+        inn: [kv([['目标仓位 − 当前仓位', pct(R.wfin - R.w)], ['折合股数', num(s6.dqRaw, 0)], ['执行方式', R.ex + (R.ex === 'dip' ? '（k_i = ' + R.dk + '）' : '')], ['当日 开/高/低/收/均价', R.px.map(x => num(x, 2)).join(' / ')], ['涨跌停价', num(R.dn, 2) + ' / ' + num(R.up, 2)], ['持仓 / 今日买入', R.pos.q + ' / ' + R.pos.tq + ' 股'], ['可用资金', yuan(R.cash)], ['已开通权限', P.card.permissions]])],
+        pr,
+        out,
+        ref: ['§8.1 检查顺序、T+1、整手、涨跌幅、价格笼子、费用〔需复核〕', '§8.2 成交判定第 1–4 步', '§6.3 第 6 步 执行方式定价', '§3.4 盘前与盘中激活', '本页把内核与市场层合并显示']
+      };
+    }
+    if (i === 5) {
+      const out = [];
+      if (be.post) {
+        const pb = el('div', 'card'); pb.appendChild(el('div', 'sp-note', '帖子（示例）' + (be.claim ? '，帖子声称的动作：' + CNA[be.claim] : '')));
+        pb.appendChild(el('p', '', be.post)); out.push(pb);
+      } else out.push(note('want_to_post 为 false，本次不发帖，不做第 2 次调用。'));
+      return {
+        t: '第 2 次调用：' + (be.post ? '发帖' : '不发帖'),
+        inn: [kv([['意向', CNA[be.ac] + ' · ' + be.sz + ' · ' + R.ex], ['成交', s6.fill ? CNA[s6.side] + ' ' + s6.fill.qty + ' 股 @ ' + num(s6.fill.price, 2) : '无'], ['未执行原因', s7.reason || '—'], ['want_to_post', String(!!be.post)]])],
+        pr: [para('只有 want_to_post 为 true 才调用。输入是第 1 次调用的意向和内核给出的成交结果（含未执行原因），风格示例帖只在这一次出现，让帖子按人设的说话风格写。'),
+          note('帖子是事后写的，但声称的动作仍可能和成交不一致（吹牛、嘴硬），第 7 步会检查。')],
+        out,
+        ref: ['§6.1 第 2 次调用', '§7.4 帖子类型', '§6.4 记忆与自洽']
+      };
+    }
+    const dec = { activation_id: 'demo-act', persona_id: 'demo-' + P.id, event_id: 'demo-evt', run_id: 'demo', sim_date: '示例日', asset: '甲科技', intent_kind: 'order', intent_action: be.ac, intent_size: be.sz, execution: R.ex, intent_reasons: be.irs, source_post_ids: R.src, rationale: be.ra, plan_ref: null, exec_qty: s6.fill ? s6.fill.qty : 0, exec_price: s6.fill ? s6.fill.price : null, not_executed_reason: s7.reason || null, liquidity_flag: false };
+    const out = [json(dec, '示意，未实现 · 决策表一行（§10.3 字段）')];
+    if (s6.fill) out.push(json({ trade_id: 'demo-1', persona_id: 'demo-' + P.id, run_id: 'demo', sim_time: '示例时点', asset: '甲科技', side: s6.side, qty: s6.fill.qty, price: s6.fill.price, fee: r2(s6.fill.f.total - s6.fill.f.stamp), stamp_tax: s6.fill.f.stamp, order_type: s6.order.order_type, decision_ref: 'demo-dec', forced: false, realized_pnl: s6.fill.pnl }, '示意，未实现 · 交易流水一行（§10.3 字段）'));
+    return {
+      t: '第 7 步：写回记忆，记录言行不一',
+      inn: [kv([['意向', CNA[be.ac] + ' · ' + be.sz], ['帖子声称', be.claim ? CNA[be.claim] : '（无）'], ['实际', s7.done ? CNA[s7.done] + ' ' + s6.fill.qty + ' 股' : '无成交'], ['原因', s7.reason || '—']])],
+      pr: [para('内核改动了意向（缩量、取消、挂单没成交、涨停买不进、T+1 卖不出、权限不足、舍不得割）时，把实际结果和原因写进情景记忆，之后的发言要与之自洽。收盘后的激活另输出明日打算（intent_kind = plan），次日盘前意向用 plan_ref 链回，隔夜变卦由此算出；本例是当日订单，plan_ref 为空。'), el('h4', '', '写入情景记忆（示例）'), list(s7.mem), el('h4', '', '言行不一'), s7.gap.length ? list(s7.gap) : note('本次没有检查出不一致。')],
+      out,
+      ref: ['§6.3 第 7 步', '§6.4 情景记忆', '§10.3 决策表与交易流水字段', '§10.2 言行不一原因分布', '§12.1 言行不一率只报告、无及格线']
+    };
+  }
+  // ===== 交互：状态、控件、表格、价格图 =====
+  const ST = { pid: 'n', sk: 'f', bk: 'main', st: 0, p: 0.3, timer: null };
+  const per = () => PER.find(p => p.id === ST.pid) || PER[0];
+  function fill(box, nodes) { const b = $(box); if (!b) return; b.textContent = ''; (nodes || []).forEach(n => b.appendChild(typeof n === 'string' ? para(n) : n)); }
+  function render() {
+    let R = null;
+    try { R = run(per(), ST.sk, ST.bk); } catch (e) { R = null; }
+    const bar = $('sp-steps');
+    if (bar) {
+      bar.textContent = '';
+      STEPS.forEach((n, i) => {
+        const li = el('li'), b = el('button', i === ST.st ? 'on' : (i < ST.st ? 'done' : ''), (i + 1) + ' ' + n);
+        b.type = 'button'; b.setAttribute('aria-pressed', i === ST.st ? 'true' : 'false');
+        b.addEventListener('click', () => { stop(); ST.st = i; render(); });
+        li.appendChild(b); bar.appendChild(li);
+      });
+    }
+    document.querySelectorAll('#sp-pp button').forEach(b => { const on = b.dataset.pid === ST.pid; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    if (!R) { fill('sp-b-in', ['计算出错。']); return; }
+    const g = stage(ST.st, R);
+    const t = $('sp-stitle'); if (t) t.textContent = '第 ' + (ST.st + 1) + ' / 7 步 · ' + g.t;
+    fill('sp-b-in', g.inn); fill('sp-b-pr', g.pr); fill('sp-b-out', g.out);
+    fill('sp-b-ref', [list(g.ref)]);
+    const pv = $('sp-prev'), nx = $('sp-next');
+    if (pv) pv.disabled = ST.st === 0;
+    if (nx) nx.disabled = ST.st === STEPS.length - 1;
+    pool(); cmp(); pxsvg();
+  }
+  function stop() { if (ST.timer) { clearInterval(ST.timer); ST.timer = null; } const a = $('sp-auto'); if (a) a.textContent = '自动播放'; }
+  function setSel(sk, bk) {
+    if (sk) ST.sk = sk; if (bk) ST.bk = bk;
+    ['sp-sc', 'sp-sc2'].forEach(id => { const s = $(id); if (s) s.value = ST.sk; });
+    ['sp-bd', 'sp-bd2'].forEach(id => { const s = $(id); if (s) s.value = ST.bk; });
+    render();
+  }
+  function ptab() {
+    const tb = $('sp-ptab'); if (!tb) return;
+    tb.textContent = '';
+    const cols = [['γ', 'g'], ['λ', 'lam'], ['ρ', 'rho'], ['κ', 'kap'], ['β^herd', 'bh'], ['β^ext', 'be'], ['β^lot', 'bl'], ['ν', 'nu'], ['τ', 'tau'], ['η', 'eta'], ['w_max', 'wmax'], ['p_panic', 'pp'], ['dip_k', 'dk']];
+    const th = el('thead'), hr = el('tr'); hr.appendChild(el('th', '', '人设（示例）'));
+    cols.forEach(c => hr.appendChild(el('th', '', c[0]))); hr.appendChild(el('th', '', 'K')); th.appendChild(hr); tb.appendChild(th);
+    const bd = el('tbody');
+    PER.forEach(P => { const tr = el('tr'); tr.appendChild(el('td', '', P.alias + ' · ' + P.nm)); cols.forEach(c => tr.appendChild(el('td', '', String(P.k[c[1]])))); tr.appendChild(el('td', '', String(P.K))); bd.appendChild(tr); });
+    tb.appendChild(bd);
+  }
+  function pool() {
+    const tb = $('sp-pool'); if (!tb) return;
+    const P = per(), fd = feed(P, ST.sk, P.pos(ST.sk, PX[ST.bk][ST.sk][0]).q > 0), seen = {};
+    fd.seen.forEach(x => { seen[x.id] = 1; });
+    const all = feed(Object.assign({}, P, { K: 15 }), ST.sk, P.pos(ST.sk, PX[ST.bk][ST.sk][0]).q > 0).seen;
+    tb.textContent = '';
+    const th = el('thead'), hr = el('tr');
+    ['条目（示例）', '渠道 · 级别', 'score（' + P.alias + '）', P.alias + ' 是否看到', '行为方向'].forEach(h => hr.appendChild(el('th', '', h)));
+    th.appendChild(hr); tb.appendChild(th);
+    const bd = el('tbody');
+    all.slice(0, POOL.length).forEach(x => {
+      const tr = el('tr'); tr.appendChild(el('td', '', x.t)); tr.appendChild(el('td', '', (CHN[x.ch] || x.ch) + ' · ' + x.lv + (x.rumor ? ' · 传闻' : '')));
+      tr.appendChild(el('td', '', num(x.score, 3))); tr.appendChild(el('td', seen[x.id] ? 'sp-ok' : '', seen[x.id] ? (x.force ? '看到（必进）' : '看到') : '—'));
+      tr.appendChild(el('td', '', x.act > 0 ? '+1' : (x.act < 0 ? '−1' : '0'))); bd.appendChild(tr);
+    });
+    tb.appendChild(bd);
+  }
+  function cmp() {
+    const tb = $('sp-cmp'); if (!tb) return;
+    tb.textContent = '';
+    const th = el('thead'), hr = el('tr');
+    ['人设', 'intent_action', 'intent_size', 'execution', 'intent_reasons', 'source_post_ids', '仓位 w → 目标', 'exec_qty', 'exec_price', 'not_executed_reason', '言行不一'].forEach(h => hr.appendChild(el('th', '', h)));
+    th.appendChild(hr); tb.appendChild(th);
+    const bd = el('tbody');
+    PER.forEach(P => {
+      let R = null; try { R = run(P, ST.sk, ST.bk); } catch (e) { R = null; }
+      const tr = el('tr'), td = el('td'), b = el('button', 'btn', P.alias);
+      b.type = 'button'; b.title = '在第 4 节从第一步查看';
+      b.addEventListener('click', () => { stop(); ST.pid = P.id; ST.st = 0; render(); const s = $('s4'); if (s && s.scrollIntoView) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+      td.appendChild(b); tr.appendChild(td);
+      if (!R) { tr.appendChild(el('td', '', '计算出错')); bd.appendChild(tr); return; }
+      const f = R.s6.fill;
+      [CNA[R.be.ac], R.be.sz, R.ex, R.be.irs.join(', '), R.src.length ? R.src.join(', ') : '—', pct(R.w) + ' → ' + pct(R.wfin), f ? String(f.qty) : '0', f ? num(f.price, 2) : '—', R.s7.reason || '—', R.s7.gap.length ? R.s7.gap.join('；') : '—'].forEach(v => tr.appendChild(el('td', '', v)));
+      bd.appendChild(tr);
+    });
+    tb.appendChild(bd);
+  }
+  function pxsvg() {
+    const host = $('sp-pxsvg'); if (!host) return;
+    const NS = 'http://www.w3.org/2000/svg', W = 640, H = 270, top = 20, bot = 230, lo = 7.6, hi = 12.4;
+    const y = v => top + (hi - v) / (hi - lo) * (bot - top);
+    const mk = (tag, at, txt) => { const e = document.createElementNS(NS, tag); Object.keys(at).forEach(a => e.setAttribute(a, at[a])); if (txt != null) e.textContent = txt; return e; };
+    host.textContent = '';
+    const svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'sp-svg', role: 'img', 'aria-label': '示例价格路径：主板与创业板各三种情景的开高低收' });
+    svg.appendChild(mk('title', {}, '示例价格路径（示例数据）'));
+    [8, 9, 10, 11, 12].forEach(v => {
+      svg.appendChild(mk('line', { x1: 44, x2: W - 8, y1: y(v), y2: y(v), style: 'stroke:var(--line);stroke-width:1' }));
+      svg.appendChild(mk('text', { x: 38, y: y(v) + 4, 'text-anchor': 'end', style: 'fill:var(--mute);font-size:11px' }, v.toFixed(0)));
+    });
+    svg.appendChild(mk('line', { x1: 44, x2: W - 8, y1: y(PC), y2: y(PC), style: 'stroke:var(--mute);stroke-width:1.2' }));
+    ['main', 'gem'].forEach((bk, gi) => {
+      const x0 = 60 + gi * 290, up = r2(PC * (1 + BD[bk].lim)), dn = r2(PC * (1 - BD[bk].lim));
+      [up, dn].forEach(v => { if (v >= lo && v <= hi) svg.appendChild(mk('line', { x1: x0 - 8, x2: x0 + 268, y1: y(v), y2: y(v), style: 'stroke:var(--warn);stroke-width:1;stroke-dasharray:4 3' })); });
+      svg.appendChild(mk('text', { x: x0 + 130, y: H - 8, 'text-anchor': 'middle', style: 'fill:var(--ink2);font-size:12px' }, BD[bk].n + '（±' + Math.round(BD[bk].lim * 100) + '%）'));
+      ['u', 'f', 'd'].forEach((sk, si) => {
+        const px = PX[bk][sk], cx = x0 + 40 + si * 90, cur = bk === ST.bk && sk === ST.sk;
+        const col = px[3] >= px[0] ? 'var(--bad, #d64545)' : 'var(--ok, #2f9e6a)';
+        if (cur) svg.appendChild(mk('rect', { x: cx - 36, y: top - 8, width: 72, height: bot - top + 16, rx: 6, style: 'fill:var(--sim);opacity:.10' }));
+        svg.appendChild(mk('line', { x1: cx, x2: cx, y1: y(px[1]), y2: y(px[2]), style: 'stroke:' + col + ';stroke-width:2' }));
+        const yt = Math.min(y(px[0]), y(px[3])), hh = Math.max(2, Math.abs(y(px[0]) - y(px[3])));
+        svg.appendChild(mk('rect', { x: cx - 10, y: yt, width: 20, height: hh, style: 'fill:' + col }));
+        svg.appendChild(mk('circle', { cx: cx + 18, cy: y(px[4]), r: 3.5, style: 'fill:var(--sim)' }));
+        svg.appendChild(mk('text', { x: cx, y: bot + 16, 'text-anchor': 'middle', style: 'fill:var(--ink2);font-size:11.5px;font-weight:' + (cur ? '700' : '400') }, SC[sk].n));
+      });
+    });
+    svg.appendChild(mk('text', { x: W - 8, y: 12, 'text-anchor': 'end', style: 'fill:var(--mute);font-size:11px' }, '虚线：涨跌停价 · 圆点：当日均价（chase 参考） · 示例数据'));
+    host.appendChild(svg);
+  }
+  function init() {
+    const pp = $('sp-pp');
+    if (pp) PER.forEach(P => { const b = el('button', '', P.alias + ' · ' + P.nm); b.type = 'button'; b.dataset.pid = P.id; b.addEventListener('click', () => { stop(); ST.pid = P.id; ST.st = 0; render(); }); pp.appendChild(b); });
+    [['sp-sc', 'sk'], ['sp-sc2', 'sk'], ['sp-bd', 'bk'], ['sp-bd2', 'bk']].forEach(a => {
+      const s = $(a[0]); if (!s) return;
+      s.addEventListener('change', () => { stop(); if (a[1] === 'sk') setSel(s.value in SC ? s.value : 'f', null); else setSel(null, s.value in BD ? s.value : 'main'); });
+    });
+    const sp = $('sp-p');
+    if (sp) sp.addEventListener('change', () => { stop(); const v = parseFloat(sp.value); ST.p = [0.1, 0.3, 0.5].indexOf(v) >= 0 ? v : 0.3; render(); });
+    const pv = $('sp-prev'), nx = $('sp-next'), au = $('sp-auto');
+    if (pv) pv.addEventListener('click', () => { stop(); if (ST.st > 0) { ST.st--; render(); } });
+    if (nx) nx.addEventListener('click', () => { stop(); if (ST.st < STEPS.length - 1) { ST.st++; render(); } });
+    if (au) au.addEventListener('click', () => {
+      if (ST.timer) { stop(); return; }
+      if (ST.st >= STEPS.length - 1) { ST.st = 0; render(); }
+      au.textContent = '暂停';
+      ST.timer = setInterval(() => { if (ST.st >= STEPS.length - 1) { stop(); return; } ST.st++; render(); }, 2500);
+    });
+    ptab();
+    setSel(ST.sk, ST.bk);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>发布者演示 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+.pb-L0{--c:var(--data)}.pb-L1{--c:var(--sim)}.pb-L2{--c:var(--market)}.pb-L3{--c:var(--out)}.pb-L4{--c:var(--warn)}.pb-RT{--c:var(--mute)}
+.pb-badge{display:inline-block;font:700 11px/1.6 var(--mono);padding:0 7px;border-radius:6px;color:#06101f;background:var(--c,var(--sim))}
+.pb-tag{display:inline-block;font-size:11px;padding:0 7px;border-radius:6px;border:1px solid var(--line2);color:var(--ink2);margin-left:4px}
+.pb-tag.rumor{border-color:var(--warn);color:var(--warn);background:rgba(248,113,113,.1)}
+.pb-tag.iv{border-color:var(--orch);color:var(--orch)}
+.pb-ev{border-left:3px solid var(--data)}
+.pb-ev dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:8px 0 0;font-size:13px}
+.pb-ev dt{color:var(--mute);font-family:var(--mono)}.pb-ev dd{margin:0;overflow-wrap:anywhere}
+.pb-pubs{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.pb-pub{border-left:3px solid var(--c);padding:14px 16px}
+.pb-pub h4{margin:0 0 2px;color:var(--ink);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pb-pub .who{font-size:12px;color:var(--mute);margin-bottom:8px}
+.pb-pub label.ctl{margin:6px 0}
+.pb-pub .lock{font-size:12.5px;color:var(--mute);border:1px dashed var(--line2);border-radius:8px;padding:6px 9px;margin-top:6px}
+.pb-pub output{font-family:var(--mono);color:var(--ink)}
+.pb-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.pb-clock{font:700 20px var(--mono);color:var(--accent);min-width:150px}
+.pb-stage{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:860px){.pb-stage{grid-template-columns:minmax(0,1fr)}}
+.pb-feed{max-height:560px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}
+.pb-feed .empty{color:var(--mute);font-size:13px;padding:20px;text-align:center;border:1px dashed var(--line2);border-radius:12px}
+.pb-post{border:1px solid var(--line);border-left:3px solid var(--c);border-radius:12px;background:var(--panel);padding:10px 13px;cursor:pointer;animation:fadeUp .35s ease}
+.pb-post:hover{background:var(--panel2)}.pb-post.sel{box-shadow:0 0 0 1px var(--c) inset}
+.pb-post .hd{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--mute)}
+.pb-post .hd b{color:var(--ink);font-size:13px}
+.pb-post .tx{margin:6px 0 4px;font-size:14px;overflow-wrap:anywhere}
+.pb-post .ft{font:11.5px var(--mono);color:var(--mute);overflow-wrap:anywhere}
+.pb-step h4{margin-top:0}
+.pb-step dl{margin:0;display:grid;gap:8px}
+.pb-step dt{font:600 11.5px var(--mono);color:var(--accent);letter-spacing:1px}
+.pb-step dd{margin:0;font-size:13.5px;color:var(--ink2);overflow-wrap:anywhere}
+.pb-wbar{height:6px;border-radius:4px;background:var(--c,var(--sim));min-width:2px}
+.pb-chart{width:100%;height:auto;display:block}
+.pb-chart text{fill:var(--mute);font:11px var(--sans)}
+.pb-node rect{transition:.2s}.pb-node:hover rect{stroke:var(--ink);stroke-width:1.6}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<span class="eyebrow"><i></i>演示 · 发布者层</span>
+<h1>同一条消息，<span class="grad">五种发布者</span>怎样说</h1>
+<p class="lead">发布者是信息流里"只发帖、不交易"的账户。本页用一条示例事件，看 L0–L4 五级发布者按各自的延迟和参数逐条出帖、进入推荐流，再看插入一条 L4 传闻会怎样改变示例态度曲线。</p>
+<div class="meta"><span class="chip warn"><i></i>全部为示例数据</span><span class="chip social"><i></i>§5.6 发布者层</span><span class="chip market"><i></i>§5.3 分工</span><span class="chip warn"><i></i>L4 仅沙盒</span></div>
+</header>
+<section id="s1" class="reveal"><h2><span class="num">01</span>发布者层是什么</h2>
+<p class="sub">发布者是模拟信息流里的信息生产者：它们读行情和事件卡，按自己的级别和参数发帖，但不下单、不持仓，也不进入任何人群统计。</p>
+<p>散户在股吧、雪球里读到的内容，大部分来自"只发帖"的账户：官方媒体转发通稿，财经快讯报数字，大 V 写解读，中小博主和群主转述带节奏，还有喊单号放小道消息。设计文档把这类账户统一建成发布者层，分五级 L0–L4，由实时行情和新闻事件卡驱动 <span class="ref">§5.6</span>。事件卡（EventCard）是 events 模块把一组相似新闻聚类后抽取出的结构化记录，带事件编号 <code>event_id</code>、量级 <code>magnitude</code>（1–5）和一段中性摘要 <code>summary</code> <span class="ref">§5.2</span>。</p>
+<p>为什么要单独建这一层。如果没有它，智能体的信息流里只有其他模拟散户的帖子和原始新闻，缺少"标题党转述"和"传闻"这两类真实市场里最常见的扭曲信息。设计文档把夸张度和确定性设为发布者参数，目的就是单独研究标题党对群体情绪的作用 <span class="ref">§5.3</span> <span class="ref">§5.6</span>；又允许手工插入消息作为情景干预，比较有无某条传闻时散户声音与态度的差别 <span class="ref">§5.6</span>。消融实验里也有一项"关闭发布者层" <span class="ref">§11.2</span>，用来看这一层本身贡献了多少。</p>
+<p>为什么发布者不交易、不计入统计。发布者代表的是信息供给，不是某一类投资者。若把它们算进人群，V1 人群可信度（模拟人群与真实投资者结构的分布距离）和态度、决策切片都会被这批"不是散户的账户"污染。所以设计文档规定：发布者帖子进 posts 表，但不进任何人群统计 <span class="ref">§10.1</span>，V1 与态度、决策切片都排除发布者 <span class="ref">§5.6</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>级别</th><th>定位 <span class="ref">§5.6</span></th><th>相对延迟 <span class="ref">§5.3</span></th><th>风格 <span class="ref">§5.3</span></th></tr></thead>
+<tbody>
+<tr><td><span class="pb-badge pb-L0">L0</span></td><td>官方 / 权威媒体：只转述事件卡，不加观点</td><td>0（即时）</td><td>正式，仅转述</td></tr>
+<tr><td><span class="pb-badge pb-L1">L1</span></td><td>财经媒体与券商观点摘要：快讯与带数字的点评</td><td>0–10 分钟</td><td>短，带数字</td></tr>
+<tr><td><span class="pb-badge pb-L2">L2</span></td><td>大 V：立场固定、有粉丝的观点帖</td><td>随传播</td><td>由发布者或智能体生成（§7）</td></tr>
+<tr><td><span class="pb-badge pb-L3">L3</span></td><td>中小博主 / 群主：情绪化转述、标题党、带节奏</td><td>数小时</td><td>情绪化，简化叙事</td></tr>
+<tr><td><span class="pb-badge pb-L4">L4</span></td><td>小道消息 / 喊单号：传闻、喊单、"内部消息"</td><td>不定</td><td>煞有介事、带"内部消息"；仅沙盒，每帖标"传闻"</td></tr>
+</tbody></table></div>
+<p>下图是一条事件从事件卡到散户眼前的路径。按设计文档的分工，L0/L1 版本由 events 产出，L2–L4 由 social 的发布者读事件卡与 L0/L1 版本后以帖子 <code>Post</code> 产出 <span class="ref">§5.3</span> <span class="ref">§5.6</span>（详见第 6 节）；所有内容进推荐流后按级别加权排序，每个散户只看其中 K 条 <span class="ref">§5.4</span>。悬停方块可看说明。</p>
+<div class="card"><svg class="pb-chart" viewBox="0 0 900 290" role="img" aria-label="事件卡经 events 与 social 发布者进入推荐流，再到散户的 K 条">
+<defs><marker id="pbArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#7f8aa8"/></marker>
+<linearGradient id="pbG1" x1="0" x2="1"><stop offset="0" stop-color="#22d3ee" stop-opacity=".25"/><stop offset="1" stop-color="#60a5fa" stop-opacity=".12"/></linearGradient>
+<linearGradient id="pbG2" x1="0" x2="1"><stop offset="0" stop-color="#f472b6" stop-opacity=".25"/><stop offset="1" stop-color="#fb923c" stop-opacity=".12"/></linearGradient></defs>
+<g fill="none" stroke="#7f8aa8" stroke-width="1.5" marker-end="url(#pbArr)">
+<path class="flowline" d="M170,140 C195,140 195,70 222,70"/><path class="flowline" d="M170,150 C195,150 195,210 222,210"/>
+<path class="flowline" d="M400,70 C430,70 430,135 462,135"/><path class="flowline" d="M400,210 C430,210 430,155 462,155"/>
+<path class="flowline" d="M560,250 L560,182"/><path class="flowline" d="M660,145 L702,145"/></g>
+<g class="pb-node"><title>EventCard：events 聚类新闻后抽取的结构化事件，带 event_id、magnitude、summary（§5.2）</title>
+<rect x="20" y="105" width="150" height="80" rx="12" fill="url(#pbG1)" stroke="#22d3ee"/>
+<text x="95" y="138" text-anchor="middle" style="fill:var(--ink);font-size:14px;font-weight:700">EventCard</text>
+<text x="95" y="160" text-anchor="middle">events 产出 · §5.2</text></g>
+<g class="pb-node"><title>§5.3：events 只产出 L0 官媒转述与 L1 快讯版本，不带立场，按 summary 做事实一致性校验</title>
+<rect x="222" y="35" width="178" height="70" rx="12" fill="url(#pbG1)" stroke="#60a5fa"/>
+<text x="311" y="64" text-anchor="middle" style="fill:var(--ink);font-size:13.5px;font-weight:700">L0 / L1 版本</text>
+<text x="311" y="86" text-anchor="middle">events · 无立场 · §5.3</text></g>
+<g class="pb-node"><title>§5.3：L2–L4 文本由 social 发布者以 Post 产出；L2、L3 须标注依据的 event_id；L4 另立 origin="rumor" 事件卡，只在沙盒运行</title>
+<rect x="222" y="175" width="178" height="70" rx="12" fill="url(#pbG2)" stroke="#f472b6"/>
+<text x="311" y="204" text-anchor="middle" style="fill:var(--ink);font-size:13.5px;font-weight:700">L2 / L3 / L4 Post</text>
+<text x="311" y="226" text-anchor="middle">social 发布者 · §5.3</text></g>
+<g class="pb-node"><title>推荐流：时近性 × 热度 × 兴趣相似度 × 关注关系打分；热度用原始点赞与回复数，发布者帖按级别加权（§7.3、§5.6）</title>
+<rect x="462" y="108" width="198" height="74" rx="12" fill="rgba(244,114,182,.10)" stroke="#f472b6"/>
+<text x="561" y="139" text-anchor="middle" style="fill:var(--ink);font-size:13.5px;font-weight:700">推荐流 FeedItem</text>
+<text x="561" y="161" text-anchor="middle">按级别加权 · §7.3</text></g>
+<g class="pb-node"><title>模拟散户（智能体）自己发的帖子与 Tier-A 大 V 帖也进同一个推荐流（§7.3）</title>
+<rect x="470" y="250" width="180" height="34" rx="10" fill="rgba(255,255,255,.04)" stroke="#7f8aa8"/>
+<text x="560" y="272" text-anchor="middle">模拟散户帖 · §7.3</text></g>
+<g class="pb-node"><title>注意力预算：每人 K 条，3–15 条（§5.4）；没看到的帖子之后可能经群聊或大 V 转述到达</title>
+<rect x="702" y="108" width="178" height="74" rx="12" fill="rgba(96,165,250,.12)" stroke="#60a5fa"/>
+<text x="791" y="139" text-anchor="middle" style="fill:var(--ink);font-size:13.5px;font-weight:700">散户看到 K 条</text>
+<text x="791" y="161" text-anchor="middle">K = 3–15 · §5.4</text></g>
+</svg></div>
+<p>相关页面：模块职责见 <a href="mod-social.html">social</a> 与 <a href="mod-events.html">events</a>，一条快讯怎样一路变成帖子和成交见 <a href="flow-journey.html">一条新闻的旅程</a>，散户读到这些帖子之后怎样决策见 <a href="sim-personas.html">散户决策演示</a>。</p>
+</section>
+<section id="s2" class="reveal"><h2><span class="num">02</span>示例事件与五个发布者</h2>
+<p class="sub">全页用同一条示例事件和同一组示例发布者。改这里的参数，第 3–5 节的帖子文本、推荐流排序和示例态度曲线会一起变。</p>
+<p>先看事件卡。下面这张卡是虚构的示例，主体用化名，字段名取自设计文档 <span class="ref">§5.2</span>。时间轴从 T0 开始：T0 是事件卡的 <code>available_at</code>，即信息最早公开可得的时刻，也是点时（PIT，只用当时已公开的信息）检索的键。这条示例事件是行业政策、作用于板块，按 §5.2 的量级表记为 3（板块级）。<code>direction_hint</code> 只用于路由和监测，不给智能体看 <span class="ref">§5.2</span>。</p>
+<div class="card pb-ev"><h4 style="margin:0">示例事件卡 <span class="pb-tag">示例数据 · 化名主体</span> <span class="pb-tag">示意，未实现</span></h4>
+<dl>
+<dt>event_id</dt><dd>EV-DEMO-0001</dd>
+<dt>origin</dt><dd>"real"（示例中假设它是真实事件；"rumor" 与 "counterfactual" 只在沙盒里出现 <span class="ref">§5.2</span>）</dd>
+<dt>available_at</dt><dd>T0（示例：某交易日 09:40）</dd>
+<dt>source_tier</dt><dd>official</dd>
+<dt>category / scope</dt><dd>industry_policy / sector</dd>
+<dt>assets</dt><dd>["示例板块·储能", "青川电池（化名）"]</dd>
+<dt>magnitude</dt><dd>3（板块级 <span class="ref">§5.2</span>）</dd>
+<dt>direction_hint</dt><dd>1（仅路由，不给智能体看）</dd>
+<dt>credibility</dt><dd>1.0</dd>
+<dt>summary</dt><dd>示例：主管部门发布储能产业支持文件，提出扩大装机规模与补贴方向，具体细则尚未公布。</dd>
+</dl></div>
+<p>再看发布者参数。设计文档给每个发布者五项参数：立场（多 / 空 / 摇摆）、动机（流量、带货、引流到付费群等）、准确率、夸张度与确定性 <span class="ref">§5.6</span>。文档只列了参数名，没有写每项怎样作用于帖子；本页按字面理解来演示：立场决定往哪边解读；动机决定帖子想把读者引向哪里，流量号要点赞转发，带货号要卖课或卖软件，引流号要把人拉进付费群；准确率决定转述事实时走不走样。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.3、§5.6，来自架构讨论 A3）</b>夸张度、确定性不再是改写参数，改为发布者参数，与立场、动机、准确率并列，可以单独研究"标题党"对群体情绪的影响 <span class="ref">§5.3</span>。本页卡片据此把这两项放在发布者上；它们的含义（夸张度是语气有多冲，确定性是用"可能、或许"还是"必然"）同样是本页的理解，文档未定义。</div>
+<p>设计文档没有给任何一个参数的数值。下面卡片里的默认值都是为演示设的示例值，不是设计参数。L0 与 L1 的参数是锁定的：L0 只转述事件卡、不加观点 <span class="ref">§5.6</span>，而 L0/L1 版本由 events 产出、不带立场、要按 <code>summary</code> 做事实一致性校验 <span class="ref">§5.3</span>，所以这两级的卡片上没有可调的立场与夸张度。</p>
+<div id="pbPubs" class="pb-pubs"></div>
+<p class="ref" style="margin-top:10px">示例数据：发布者名称均为化名，参数默认值均为示例。帖子文本由本页的模板拼接生成，拼接规则只为演示参数方向，真实系统由 LLM 按提示词生成并带结构化字段 <span class="ref">§7.4</span>。</p>
+</section>
+<section id="s3" class="reveal"><h2><span class="num">03</span>播放：信息流逐条出帖</h2>
+<p class="sub">按 §5.3 的相对延迟，五级发布者在 T0 之后先后出帖，中间夹着模拟散户自己发的帖子。可以自动播放，也可以一条一条走，右侧说明每条帖子的输入、处理、输出和对应的文档条目。</p>
+<p>设计文档只给了各级的相对延迟区间：L0 即时，L1 在 0–10 分钟内，L2 "随传播"，L3 "数小时"，L4 "不定" <span class="ref">§5.3</span>。演示需要一个具体时刻才能播放，所以本页在区间内取了示例值：L1 取 T0+6 分钟，L2 取 T0+40 分钟（等快讯扩散后才出解读），L3 取 T0+3 小时，L4 取 T0+5 小时。这些分钟数都是示例。</p>
+<p>演示用连续时钟只是为了好看懂。真实系统的 MVP 只有"盘前 + 收盘后"两个固定激活点（非交易日为 20:00 晚间激活点），盘中检查点在 10:00 / 11:30 / 14:00，只由量级 ≥ 3 的盘中事件触发，盘中下单只限 <code>chase</code> <span class="ref">§3.4</span>。示例事件在 09:40 公开、量级 3，按这条规则会在其后最近的 10:00 检查点激活接触到它的智能体 <span class="ref">§3.4</span>。散户智能体被激活的条件是按活跃度抽中，或被触发；"媒介接触到量级 ≥ 3 的事件"是触发条件之一。同一阶段内发的帖子到下一阶段才可见，避免同一时刻的循环依赖 <span class="ref">§9.1</span>；唯一例外是群聊，某群当阶段有 ≥ 2 个被激活成员且有人发言时，可在阶段内进行最多 M 轮短对话 <span class="ref">§7.1</span>。发布者在哪些阶段发帖，文档没有单独规定。所以真实运行里帖子会按激活阶段成批出现，而不是逐分钟出现。</p>
+<p>每一级帖子的来源不同，点开信息流里的帖子可以逐条核对。发布者层整体由实时行情与新闻事件卡驱动 <span class="ref">§5.6</span>。L0 只读事件卡的 <code>summary</code> 做转述；L1 在此之上加上当时的行情数字，两者都由 events 产出、要过事实一致性校验 <span class="ref">§5.3</span>。设计文档规定 L0、L1 每个"事件 × 渠道"改写 1–3 个版本，量级越高版本越多，避免所有人读到同一段文字 <span class="ref">§5.3</span>。本页每级只演示一个版本。L2–L4 是 social 的发布者帖：L2 是有固定立场与粉丝面的观点帖，L3 是情绪化转述、标题党、带节奏，L4 是传闻、荐股、"内部消息" <span class="ref">§5.6</span>。L2–L4 发布者读事件卡与 L0、L1 版本后发帖 <span class="ref">§5.6</span>；本页让 L3 还读到 L2 的帖子，这是演示的安排，文档只写了"随传播""数小时"。</p>
+<div class="card">
+<div class="pb-bar"><span class="pb-clock" id="pbClock">T0+00:00</span>
+<button type="button" class="btn pri" id="pbPlay">播放</button>
+<button type="button" class="btn" id="pbPrev">上一条</button>
+<button type="button" class="btn" id="pbNext">下一条</button>
+<button type="button" class="btn" id="pbReset">重置</button>
+<label class="ctl" style="flex-direction:row;align-items:center;gap:6px">速度<select id="pbSpeed"><option value="2">慢</option><option value="5" selected>中</option><option value="12">快</option></select></label>
+<span class="ref">示例数据 · 加速的模拟时钟</span></div>
+<div class="pb-stage">
+<div class="pb-feed" id="pbFeed" aria-live="polite"></div>
+<div class="card pb-step" id="pbStep"></div>
+</div></div>
+<p>帖子文本怎样随参数变化。本页模板的规则是：夸张度决定开头语气（低档"关注一下"，高档"炸了"）；确定性低时插入"可能""或许"一类保留词，高时换成"必然"；立场决定解读方向；动机决定结尾把人引向哪里；准确率低于 0.5 时，转述会把"细则尚未公布"说成"补贴已经落地"。这套规则只是演示参数的方向，设计文档没有规定文本生成规则，真实帖子由 LLM 生成。</p>
+<p>注意 L3 的歪曲。设计文档允许 L3 歪曲、不做事实校验，但它必须标注所依据的 <code>event_id</code> <span class="ref">§5.3</span>，所以即使正文说错了，下游也能追到原始事件卡去比对。L4 的帖子依据的是另一张 <code>origin="rumor"</code> 的事件卡，每条都带"传闻"标签，只在沙盒运行 <span class="ref">§5.3</span> <span class="ref">§16.2</span>。</p>
+<p>发布者也能当群主。L3 可以当熟人群的群主；L4 喊单号可以当"付费荐股群"的群主，按自己的准确率喊单 <span class="ref">§5.6</span> <span class="ref">§7.1</span>。散户跟单亏了钱，会写入"被荐股群坑"的记忆，并按 §7.2 扣信任 <span class="ref">§7.1</span>。被辟谣的传闻对转发人扣信任，不看盈亏；信任更新的归因来自 <code>DecisionIntent.source_post_ids</code>，最多 2 条 <span class="ref">§7.2</span>。本页的播放只演示论坛信息流，没有演示群聊。</p>
+</section>
+<section id="s4" class="reveal"><h2><span class="num">04</span>推荐流加权与"前 K 条"</h2>
+<p class="sub">推荐流决定一个散户在当前时刻能看到哪些帖子。发布者帖子和模拟散户帖进入同一个推荐流，按得分排序，散户只读前 K 条。</p>
+<p>设计文档的推荐流借鉴 OASIS（一个大规模社交媒体智能体模拟框架）：候选帖子按 时近性 × 热度（赞、转、评）× 兴趣相似度（持仓与自选的重叠、文本嵌入相似度）× 关注关系 打分，另有"热榜"放大头部内容；推荐参数是实验变量 <span class="ref">§7.3</span>。发布者帖子在此之上"按级别加权"进入推荐流 <span class="ref">§5.6</span> <span class="ref">§7.3</span>，但文档没有给出各级权重是多少。</p>
+<p>推荐流的候选来源有四类：模拟散户帖、Tier-A 大 V、发布者层 L0–L4、新闻与公告 <span class="ref">§7.3</span>。热度用智能体之间原始的点赞与回复数，不按人头权重 <code>w_head</code> 放大 <span class="ref">§7.3</span>。帖子不够时信息流就变短，不让 LLM 补写填充帖；实际读到的条数 <code>feed_len</code> 记入激活表与运行清单 <span class="ref">§7.3</span> <span class="ref">§10.3</span>。下面的排序表里，候选少于 K 时散户看到的就只有候选那么多条。</p>
+<p>本页用下面的示意公式把这几项乘起来。级别权重、时近性衰减常数、热度和兴趣的取值都是示例：</p>
+<pre class="code" data-lang="示意，未实现"><span class="f">score</span> = <span class="t">w_level</span>            <span class="c"># 级别权重，示例值见下表</span>
+      × <span class="f">exp</span>(−Δt / <span class="t">τ</span>)       <span class="c"># 时近性，Δt 为发帖至今的分钟数，τ 取示例 90 分钟</span>
+      × <span class="t">热度</span>               <span class="c"># 示例假设：夸张度越高，赞转评越多</span>
+      × <span class="t">兴趣</span>               <span class="c"># 帖子资产与示例散户持仓重叠时为 1.0，否则 0.6</span>
+      × <span class="t">关注</span>               <span class="c"># 示例散户关注了 L2 大 V，则 1.3，否则 1.0</span></pre>
+<p>示例散户：持有"青川电池（化名）"，关注了 L2 大 V"山海观潮（化名）"。散户一次能读多少条由注意力预算 K 决定，人设里设定，范围 3–15 条，约 1,500 token <span class="ref">§5.4</span>。拖动 K 看入选集合怎样变；把时钟播放到不同时刻，时近性会让早期帖子逐渐掉出前 K。</p>
+<div class="card">
+<div class="pb-bar">
+<label class="ctl" style="min-width:200px;flex:1">注意力预算 K（示例值，范围 3–15 <span class="ref">§5.4</span>）：<output id="pbKv">6</output><input type="range" id="pbK" min="3" max="15" step="1" value="6"></label>
+<label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="pbNoLv">关闭级别加权（各级权重取 1）</label>
+<label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="pbNoPub">关闭发布者层（消融 <span class="ref">§11.2</span>）</label>
+</div>
+<p class="ref" id="pbFeedNote" style="margin:0 0 6px"></p>
+<div class="tbl-wrap"><table class="tbl" id="pbRank"><thead><tr><th class="n">#</th><th>帖子</th><th class="n">级别权重</th><th class="n">时近</th><th class="n">热度</th><th class="n">兴趣×关注</th><th class="n">得分</th><th>前 K</th></tr></thead><tbody></tbody></table></div>
+<p class="ref" style="margin:6px 0 0">示例数据。级别权重示例：L0 1.2 · L1 1.0 · L2 1.5 · L3 1.1 · L4 0.8 · 模拟散户帖 0.7（文档未给数值）。</p>
+</div>
+<p>这里用"按得分取前 K 条"是为了直观。设计文档的注意力预算更细：持仓异动（单日涨跌超过个人阈值、涨跌停）必入，其余按 softmax(score / T_i) 无放回抽取，T_i 是每个智能体的温度参数（文档未给取值）；保留随机性，是为了让同一人设的两个智能体看到的信息也不完全相同。没被看到的信息不会消失，之后可能经群聊或大 V 转述到达 <span class="ref">§5.4</span>。同一时段候选越多，每条被看到的概率越低，对应注意力竞争的文献结论（Hirshleifer, Lim &amp; Teoh 2009）<span class="ref">§5.4</span>。勾选"关闭发布者层"可以看到，推荐流里只剩模拟散户帖时，示例散户读到的几乎全是其他散户的情绪表达。</p>
+<p>设计文档里有两个打分式，作用的范围不同。§7.3 的推荐流打分只给帖子排序。§5.4 的注意力打分作用于整个候选池，候选池包括媒介习惯覆盖的渠道里的事件改写版本、推荐流与群聊、持仓与自选的行情异动，打分式是：</p>
+<pre class="code" data-lang="§5.4 原式"><span class="f">score</span> = <span class="t">w_i</span>(渠道) · <span class="t">m</span>(量级) · <span class="t">rel_i</span>(资产) · <span class="f">exp</span>(−Δt / <span class="t">τ_d</span>) · <span class="t">sal</span></pre>
+<p>其中 <code>w_i(渠道)</code> 是由人设生成的媒介习惯，例如中老年偏官媒与群聊，年轻人偏论坛与自媒体博主，专业背景偏快讯与雪球；<code>rel_i</code> 是与持仓、自选、关注行业的重合度；Δt 是信息发布至今的时长，τ_d 是衰减时间常数；<code>sal</code> 是显著性，如涨跌停、上热榜、大 V 转发 <span class="ref">§5.4</span>。文档没有写明推荐流得分怎样并进这个式子，也没有给 <code>m</code>、τ_d 的数值。本页的排序表把两层合成一张：级别权重代替发布者的"按级别加权"，热度、兴趣、关注三项对应 §7.3，时近项对应两式共有的时间衰减；渠道权重 <code>w_i</code>、量级 <code>m</code> 和"热榜"放大没有演示。</p>
+</section>
+<section id="s5" class="reveal"><h2><span class="num">05</span>情景干预：插入一条 L4 传闻</h2>
+<p class="sub">情景干预是手工往模拟里插入一条消息，比较"有它"和"没有它"时散户声音与态度的差别 <span class="ref">§5.6</span>。这里插入的是一条 L4 传闻。</p>
+<p>传闻在系统里有两个来源：发布者 L4，以及低可信度的事件卡 <span class="ref">§7.4</span>。L4 传闻要另立一张 <code>origin="rumor"</code> 的事件卡 <span class="ref">§5.3</span>，卡上的 <code>credibility</code> 小于 1，被证实或辟谣后再更新 <span class="ref">§5.2</span>。传闻注入群聊或论坛后，每个智能体按自己的轻信度决定信不信、转不转 <span class="ref">§7.4</span>。之后 L0 可以发一张关联事件卡辟谣，关联卡的 <code>parent_id</code> 指回传闻卡，这样就能研究"传闻 → 发酵 → 辟谣"的完整周期 <span class="ref">§7.4</span>。</p>
+<div class="card">
+<div class="pb-bar">
+<label class="ctl" style="min-width:220px;flex:1">插入时刻 T（示例）：<output id="pbTv">T0+2:00</output><input type="range" id="pbT" min="30" max="420" step="10" value="120"></label>
+<button type="button" class="btn pri" id="pbIns">在时刻 T 插入 L4 传闻</button>
+<label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="pbDeny">L0 在 T+60 分钟辟谣（示例）</label>
+</div>
+<div class="grid g2" style="margin-top:6px">
+<div><svg class="pb-chart" id="pbCurve" viewBox="0 0 520 260" role="img" aria-label="有无传闻两条示例态度曲线"></svg>
+<p class="ref" style="margin:4px 0 0">示例数据：态度指数是为演示设的 −1 到 1 的示意量，曲线形状由本页公式生成，不是模拟结果。</p></div>
+<div><h4 style="margin-top:0">传闻事件卡 <span class="pb-tag rumor">传闻</span> <span class="pb-tag">示意，未实现</span></h4>
+<pre class="code" data-lang="json" id="pbRumorCard"></pre>
+<p id="pbIvNote" style="font-size:13.5px;color:var(--ink2)"></p></div>
+</div></div>
+<p>这两条曲线只用来说明"对照"这件事的形状。真实系统里，对照是两次运行：从同一天的快照分叉，一次注入传闻事件卡，一次不注入，其余设置相同 <span class="ref">§5.6</span> <span class="ref">§9.3</span>。假设情景要跑 N 个种子 × M 个底座模型 <span class="ref">§9.3</span>；态度与决策的聚合值同时记录跨种子均值与标准差，情景结果输出分布而非点估计，跨种子方差大的切片在报告中标注；种子、模型版本等写入 RunManifest <span class="ref">§9.4</span>。按本页的理解，两组运行的差异要明显超出种子间的波动，才宜读作传闻的效应；文档没有规定具体的判定标准。本页的曲线没有随机性，也没有置信带，不能当作效应大小来读。</p>
+<p>插入传闻后回到第 3 节重新播放，信息流里会在时刻 T 多出一条带"传闻"和"干预"标签的 L4 帖子；第 4 节的排序表也会把它算进候选。L4 只在沙盒里运行 <span class="ref">§5.6</span>，这类干预同样只在沙盒里做。</p>
+</section>
+<section id="s6" class="reveal"><h2><span class="num">06</span>分工：events 与 social 各产出什么</h2>
+<p class="sub">同一条事件的五级文本，由两个模块分头产出：事实留在 events，观点交给 social 的发布者 <span class="ref">§5.3</span>。</p>
+<p>v0.2 时 §5.3 的写法是：events 负责全部"按渠道改写"，渠道表从官方媒体一直列到小道消息、喊单号，夸张度和确定性写在 L3 的改写参数一栏。v0.3 按架构讨论 A3 改成下面的分工 <span class="ref">§5.3</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.3、§5.6，来自架构讨论 A3）</b>
+events 只产出 <code>EventCard</code> 与 L0、L1 两类不带立场的版本，每个"事件 × 渠道"按量级改写 1–3 个版本；可以省略细节，但不得编造事实，结果与 <code>summary</code> 做事实一致性校验，不一致的丢弃重写。L2–L4 的文本都是观点，由 social 的发布者读事件卡与 L0、L1 版本后以 <code>Post</code> 产出。L2 须标注依据的 <code>event_id</code>；L3 可以歪曲、不做事实校验，但同样须标注 <code>event_id</code>；L4 另立 <code>origin="rumor"</code> 事件卡，带"传闻"标签，只在沙盒运行。夸张度、确定性改为发布者参数。L2–L4 的成本归入 social 估算 <span class="ref">§5.3</span> <span class="ref">§5.6</span>。</div>
+<p>为什么这样分。v0.3 的原则是"改写按事实与观点分开" <span class="ref">§5.3</span>：忠实转述留在 events，可以严格做事实校验；有立场、会走样的发帖交给 social 的发布者，用参数控制走样程度，再用 <code>event_id</code> 和传闻事件卡保证可追溯。从文本上看，v0.2 的写法里 L3 既要"情绪化、标题党"，又要通过"不能编造事实"的校验，L4 传闻按定义就与事实不一致；现在的切分让这两处不再互相冲突。最后这一句是本页的解读，设计文档没有展开理由。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th></th><th>events <span class="ref">§5.3</span></th><th>social 发布者 <span class="ref">§5.3</span> <span class="ref">§5.6</span></th></tr></thead>
+<tbody>
+<tr><td>产出</td><td><code>EventCard</code>；L0、L1 文本版本</td><td>L2、L3、L4 的 <code>Post</code></td></tr>
+<tr><td>立场</td><td>无</td><td>多 / 空 / 摇摆 <span class="ref">§5.6</span></td></tr>
+<tr><td>参数</td><td>按量级每类 1–3 个版本</td><td>立场、动机、准确率、夸张度、确定性 <span class="ref">§5.6</span></td></tr>
+<tr><td>事实校验</td><td>按 <code>summary</code> 校验，不一致重写</td><td>L2 标注 <code>event_id</code>；L3 不校验但须标 <code>event_id</code>；L4 依据 <code>origin="rumor"</code> 事件卡</td></tr>
+<tr><td>成本归属</td><td>事件抽取与 L0/L1 改写，按事件计 <span class="ref">§14.3</span></td><td>L2–L4 归入 social 估算 <span class="ref">§5.3</span></td></tr>
+</tbody></table></div>
+<p>成本上，事件抽取是每个聚类调用一次 LLM，成本随事件数增长，不随智能体数增长 <span class="ref">§5.2</span>；抽取与改写按事件计、不按人计，是降本手段之一 <span class="ref">§14.3</span>。§14.2 的 token 表只列散户智能体的两次调用，没有给发布者层的 token 数；群聊 token 计入 social 成本 <span class="ref">§7.1</span>。模块职责细节见 <a href="mod-events.html">events</a> 与 <a href="mod-social.html">social</a>。</p>
+</section>
+<section id="s7" class="reveal"><h2><span class="num">07</span>边界：发布者不是大 V，也不是真实帖</h2>
+<p class="sub">发布者层容易和三样东西混淆：会交易的 Tier-A 大 V、用作验收对照的真实帖子，以及可以对外展示的内容。这一节把边界逐条写清。</p>
+<p>先说大 V。Tier-A 是深度层智能体，有完整记忆与反思、每个激活点都激活，MVP 规模 50 个，用途包括大 V <span class="ref">§14.1</span>。在渠道表里，"大 V"渠道同时容纳 Tier-A 大 V 和发布者 L2 <span class="ref">§7.1</span>，两者在信息流里看起来都像大 V 解读帖，但身份完全不同：</p>
+<div class="callout decide"><b class="t">已定（v0.3 §14.1，来自架构讨论 A4）</b>MVP 同一底座内 Tier-A 与 Tier-B 用同一模型，分层只体现在记忆深度、反思频率与激活频率，避免人设差异与模型大小混淆；小模型延到 Phase 2 扩规模时再用 <span class="ref">§14.1</span>。所以 Tier-A 大 V 和普通散户的差别在记忆与激活频率上，与发布者 L2 的差别在会不会交易、进不进人群统计上。</div>
+<div class="grid g2">
+<div class="card pb-pub pb-L2"><h4>发布者 L2（以及 L0–L4）</h4><p style="font-size:13.5px;margin:6px 0 0">只发帖，不下单、不持仓、没有账户。立场、动机、准确率等是外部设定的参数 <span class="ref">§5.6</span>。不进入人群统计，V1 与态度、决策切片都排除 <span class="ref">§5.6</span>；帖子进 posts 表但不进任何人群统计 <span class="ref">§10.1</span>。</p></div>
+<div class="card pb-pub pb-RT"><h4>Tier-A 大 V</h4><p style="font-size:13.5px;margin:6px 0 0">本身就是散户智能体：会交易，计入人群统计，言行不一可测 <span class="ref">§5.6</span>。文档把文本声明与实际成交之差记为"言行不一"<span class="ref">§3.1</span>，例如帖子里喊多、账户里却在卖（示例）。它的帖子来自自身认知循环，决策过程见 <a href="sim-personas.html">散户决策演示</a>。</p></div>
+</div>
+<p>再说 V2。V2 声音可信度拿模拟帖和同期真实股吧、雪球帖子比，看判别器能否分辨 <span class="ref">§12.1</span>。发布者帖子也是模型生成的，不能替代真实帖子作为 V2 的对照 <span class="ref">§5.6</span>。真实帖子注入智能体信息流的开关默认关闭，验收运行强制关闭，开关状态写入 RunManifest；默认情况下智能体只读模拟散户帖、发布者 L0–L4、新闻、公告和行情 <span class="ref">§5.7</span>。</p>
+<p>最后是合规。模拟帖子、传闻、喊单涉及真实标的和真实事件，流出后可能被当作真实信息；《证券法》第五十六条禁止"编造、传播虚假信息或者误导性信息，扰乱证券市场" <span class="ref">§16.2</span>。因此帖子表只在团队内部及内部下游项目之间流转；每条模拟帖带 <code>simulated</code> 字段和正文隐式标识，对外展示样例时另加"模拟生成"显式标识；帖子带"传闻 / 喊单"分类标签 <code>rumor_shill_tag</code>，下游可按标签过滤；L4 只在沙盒运行，每条都标"传闻"；不生成针对具名真实个人的威胁、人肉与捏造指控，改用化名 <span class="ref">§16.2</span>。《人工智能生成合成内容标识办法》（2025-09-01 施行）及 GB 45438-2025 要求显式与隐式标识，内部研究不一定适用，对外分享时按其执行 <span class="ref">§16.2</span>。本页所有帖子都用化名，并标"示例"。</p>
+<p>下面是一条 L3 帖子写进 posts 表时的样子，字段取自 §10.3。发布者帖用 <code>publisher_id</code> 代替 <code>persona_id</code>，<code>activation_id</code> 为空；L3 帖子必须带 <code>event_id</code> <span class="ref">§5.3</span> <span class="ref">§10.3</span>。<code>activation_id</code> 置空、<code>group_id</code> 与 <code>turn</code> 在论坛帖里为空是本页的理解。</p>
+<pre class="code" data-lang="json · 示意，未实现" id="pbPostJson"></pre>
+<div class="callout todo"><b class="t">开放问题</b>
+<ul style="margin:4px 0 0;padding-left:20px">
+<li>推荐流里各级发布者的权重是多少，文档未定义；§7.3 只说推荐参数是实验变量。</li>
+<li>发布者账户有多少个、每级几个、粉丝规模如何设定，文档未定义。</li>
+<li>立场、动机、准确率、夸张度、确定性的取值范围与分布，文档未定义。</li>
+<li>L2 发布者和 Tier-A 大 V 同在"大 V"渠道 <span class="ref">§7.1</span>，推荐流是否区别对待两者，文档未定义。</li>
+<li>§3.3 模块划分表与 events 模块文档字符串仍写"按渠道改写（官媒 / 财经快讯 / 传闻）"，与 §5.3 只产出 L0、L1 的写法不一致〔需复核〕。</li>
+<li>发布者在哪些激活阶段发帖，L3"数小时"的延迟如何落到激活阶段上 <span class="ref">§3.4</span> <span class="ref">§9.1</span>，文档未写明。</li>
+<li>发布者层的 token 量与成本，§14.2 没有单列；§5.3 只说归入 social 估算。</li>
+<li>L2"随传播"的延迟由什么决定（转发量、关注关系还是固定滞后），文档未定义；本页用示例分钟数代替。</li>
+<li>"准确率"作用在什么上（L3 歪曲的比例、L4 传闻事后被证实的比例，还是别的），文档未定义；§7.1 只说付费荐股群的群主"按其准确率喊单"。夸张度、确定性的含义同样未定义。</li>
+<li>推荐流得分（§7.3）怎样并入注意力打分（§5.4），以及 <code>m</code>、τ_d、T_i 的取值，文档未定义。</li>
+</ul></div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function () {
+'use strict';
+/* 示例数据：发布者、模拟散户帖、模板。全部是示例值，设计文档未给数值。 */
+const $ = id => document.getElementById(id);
+const PUBS = [
+  { lv: 'L0', name: '示例官媒', who: '官方 / 权威媒体', t: 0, lock: 'L0 只转述事件卡、不加观点（§5.6）；由 events 产出，按 summary 做事实一致性校验（§5.3）。' },
+  { lv: 'L1', name: '示例快讯台', who: '财经快讯 / 券商观点摘要', t: 6, lock: 'L1 短讯带数字、无立场；由 events 产出（§5.3）。延迟取示例 6 分钟（区间 0–10，§5.3）。' },
+  { lv: 'L2', name: '山海观潮（化名）', who: '大 V · 立场固定、有粉丝', t: 40, p: { stance: '多', motive: '流量', acc: 0.7, exa: 0.4, cer: 0.6 } },
+  { lv: 'L3', name: '短线老猫（化名）', who: '中小博主 / 群主', t: 180, p: { stance: '多', motive: '引流到付费群', acc: 0.4, exa: 0.8, cer: 0.7 } },
+  { lv: 'L4', name: '内参小灵通（化名）', who: '小道消息 / 喊单号 · 仅沙盒', t: 300, p: { stance: '多', motive: '带货', acc: 0.2, exa: 0.9, cer: 0.9 } }
+];
+const RETAIL = [
+  { t: 15, name: '散户·阿明（化名）', text: '早上看到储能的文件了，挂了个单试试。', hold: true },
+  { t: 55, name: '散户·老周（化名）', text: '又是政策，每次都高开低走，不追。', hold: false },
+  { t: 95, name: '散户·小鹿（化名）', text: '青川电池（化名）拿着呢，今天能不能封板？', hold: true },
+  { t: 150, name: '散户·铁头（化名）', text: '利好兑现就跑，别恋战。', hold: false },
+  { t: 240, name: '散户·夏天（化名）', text: '看了好几个博主都说要大涨，有点慌，要不要加仓。', hold: true },
+  { t: 360, name: '散户·木木（化名）', text: '收盘前再看看，不急。', hold: false }
+];
+const LVW = { L0: 1.2, L1: 1.0, L2: 1.5, L3: 1.1, L4: 0.8, RT: 0.7 }; // 示例级别权重
+const TAU = 90, TMAX = 480;
+const S = { now: 0, sel: null, playing: false, timer: 0, K: 6, noLv: false, noPub: false, ivOn: false, ivT: 120, deny: false };
+const num = (v, d) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const fmt = m => { m = Math.max(0, Math.round(num(m, 0))); return 'T0+' + Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); };
+const lvl = (x, a, b, c) => x < 0.34 ? a : x < 0.67 ? b : c;
+
+function gen(lv, p) {
+  const open = lvl(p.exa, '关注一下：', '重磅！', '炸了！！');
+  const hedge = lvl(p.cer, '可能', '大概率', '必然');
+  const fact = p.acc >= 0.5 ? '细则还没出' : '补贴已经落地';
+  const view = { '多': '储能' + hedge + '迎来一波行情', '空': hedge + '是利好出尽，小心冲高回落', '摇摆': '多空都有道理，' + hedge + '先看量能再说' }[p.stance] || '';
+  const tail = { '流量': '觉得有用点个赞。', '带货': '完整逻辑在我的课里。', '引流到付费群': '具体标的群里说，进群看主页。' }[p.motive] || '';
+  if (lv === 'L2') return open + '储能文件解读：' + fact + '，' + view + '。' + tail;
+  if (lv === 'L3') return open + fact + '！青川电池（化名）' + ({ '多': '要起飞', '空': '快跑', '摇摆': '先别动' }[p.stance] || '') + '，' + view + '。' + tail;
+  const rum = { '多': '进了补贴名单首批，' + hedge + '连板', '空': '没进补贴名单，' + hedge + '要砸盘', '摇摆': '补贴名单还在博弈，' + hedge + '有大资金进出' }[p.stance] || '';
+  return open + '内部消息：青川电池（化名）' + rum + '。' + tail;
+}
+const hot = p => p ? 0.6 + 0.8 * num(p.exa, 0.5) : 0.8;
+function pdesc(p) { return '立场 ' + p.stance + '、动机 ' + p.motive + '、准确率 ' + p.acc.toFixed(2) + '、夸张度 ' + p.exa.toFixed(2) + '、确定性 ' + p.cer.toFixed(2); }
+function buildPosts() {
+  const out = [];
+  PUBS.forEach(u => {
+    const o = { id: u.lv, lv: u.lv, name: u.name, t: u.t, tags: [], hot: hot(u.p), interest: 1, follow: u.lv === 'L2' ? 1.3 : 1, pub: true, p: u.p };
+    if (u.lv === 'L0') {
+      o.text = '【转发】主管部门发布储能产业支持文件，提出扩大装机规模与补贴方向，具体细则尚未公布。';
+      o.foot = 'event_id: EV-DEMO-0001 · events 产出（§5.3）';
+      o.step = ['EventCard EV-DEMO-0001 的 summary（中性摘要）', '只转述、不带观点；与 summary 做事实一致性校验，不一致丢弃重写（§5.3）', 'L0 文本版本，延迟 0（即时）', '§5.6 L0 定位 · §5.3 延迟 0 与分工'];
+    } else if (u.lv === 'L1') {
+      o.text = '快讯｜储能产业支持文件发布：提出扩大装机规模与补贴方向，细则待出。示例板块·储能盘中 +2.1%（示例数据）。';
+      o.foot = 'event_id: EV-DEMO-0001 · events 产出（§5.3）';
+      o.step = ['EventCard 的 summary + 当时行情（示例涨幅）', '压成短讯、带数字，不带立场；同样做事实一致性校验（§5.3）', 'L1 文本版本，示例延迟 6 分钟（区间 0–10 分钟）', '§5.3 L1 行 · §5.6 L1 定位'];
+    } else {
+      o.text = gen(u.lv, u.p);
+      const distort = u.p.acc < 0.5;
+      if (u.lv === 'L2') {
+        o.foot = 'publisher_id: PUB-L2-01 · event_id: EV-DEMO-0001 · stance=' + u.p.stance;
+        o.step = ['EventCard + 已扩散的 L0/L1 + 发布者参数（' + pdesc(u.p) + '）', '发布者按参数写观点帖（真实系统由 LLM 生成，本页用模板）；' + (distort ? '准确率低于 0.5，本条把细则说成已落地' : '本条转述的事实与 summary 一致'), 'Post（social 发布者产出），示例延迟 40 分钟（"随传播"）', '§5.6 L2 · §5.3 随传播、标注 event_id · 参数归发布者（§5.6）'];
+      } else if (u.lv === 'L3') {
+        o.foot = 'publisher_id: PUB-L3-01 · event_id: EV-DEMO-0001（L3 必须标注，§5.3）';
+        o.step = ['EventCard + 已读到的 L0–L2 帖 + 发布者参数（' + pdesc(u.p) + '）', '情绪化转述、标题党；可以歪曲，不做事实校验，但必须标 event_id（§5.3）。' + (distort ? '本条把"细则尚未公布"说成了"补贴已经落地"' : '本条没有歪曲事实'), 'Post，示例延迟 3 小时（"数小时"）', '§5.6 L3 · §5.3 数小时'];
+      } else {
+        o.tags = ['传闻'];
+        o.foot = 'publisher_id: PUB-L4-01 · 依据 EV-DEMO-R000（origin="rumor"）· rumor_shill_tag=传闻';
+        o.step = ['另立的传闻事件卡 EV-DEMO-R000（origin="rumor"，credibility < 1）+ 发布者参数（' + pdesc(u.p) + '）', '言之凿凿的"内部消息"；每帖标"传闻"，只在沙盒运行（§5.6、§16.2）', 'Post，rumor_shill_tag=传闻，示例延迟 5 小时（"不定"）', '§5.6 L4 · §5.3 不定、另立传闻卡 · §16.2'];
+      }
+    }
+    out.push(o);
+  });
+  RETAIL.forEach((r, i) => out.push({ id: 'RT' + i, lv: 'RT', name: r.name, t: r.t, text: r.text, tags: ['模拟散户'], hot: 0.5, interest: r.hold ? 1 : 0.6, follow: 1, pub: false,
+    foot: 'persona_id: PS-DEMO-' + String(i + 1).padStart(3, '0') + ' · 非发布者',
+    step: ['这个散户智能体自己看到的信息流与持仓', '散户智能体的认知循环发帖，不属于发布者层（§5.7）', 'Post，带 persona_id，计入人群统计', '§5.7 默认信息来源 · §10.3 posts 表；决策过程见散户决策演示'] }));
+  if (S.ivOn) {
+    out.push({ id: 'IV', lv: 'L4', name: '内参小灵通（化名）', t: S.ivT, tags: ['传闻', '干预'], hot: hot({ exa: 0.9 }), interest: 1, follow: 1, pub: true,
+      text: '内部消息：青川电池（化名）将获大额补贴订单，明天必然涨停，速上车。',
+      foot: '依据 EV-DEMO-R001（origin="rumor"，手工插入）· rumor_shill_tag=传闻',
+      step: ['手工插入的传闻事件卡 EV-DEMO-R001（origin="rumor"）', '情景干预：在时刻 ' + fmt(S.ivT) + ' 注入论坛与群聊，智能体按轻信度决定信不信、转不转（§7.4）', 'L4 Post，带"传闻"标签', '§5.6 情景干预 · §7.4 传闻 · §5.3 传闻卡'] });
+    if (S.deny) out.push({ id: 'DN', lv: 'L0', name: '示例官媒', t: S.ivT + 60, tags: ['辟谣'], hot: 0.8, interest: 1, follow: 1, pub: true,
+      text: '【辟谣】网传"青川电池（化名）将获大额补贴订单"无官方依据，请以正式文件为准。',
+      foot: '关联事件卡 parent_id: EV-DEMO-R001',
+      step: ['L0 关联事件卡，parent_id 指回 EV-DEMO-R001', '辟谣；传闻卡的 credibility 随之下调（数值为示例）', 'L0 文本版本', '§7.4 辟谣周期 · §5.2 parent_id 与 credibility'] });
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function badge(lv) { const b = el('span', 'pb-badge pb-' + lv, lv === 'RT' ? '散户' : lv); return b; }
+function tagEl(t) { return el('span', 'pb-tag' + (t === '传闻' ? ' rumor' : t === '干预' ? ' iv' : ''), t); }
+const PARAMS = [['acc', '准确率'], ['exa', '夸张度'], ['cer', '确定性']];
+const OPTS = { stance: ['多', '空', '摇摆'], motive: ['流量', '带货', '引流到付费群'] };
+function buildPubCards() {
+  const host = $('pbPubs'); if (!host) return;
+  host.textContent = '';
+  PUBS.forEach(u => {
+    const c = el('div', 'card pb-pub pb-' + u.lv);
+    const h = el('h4'); h.appendChild(badge(u.lv)); h.appendChild(el('span', null, u.name)); h.appendChild(tagEl('示例默认值'));
+    c.appendChild(h); c.appendChild(el('div', 'who', u.who + ' · 延迟 ' + fmt(u.t) + '（示例）'));
+    if (!u.p) { c.appendChild(el('div', 'lock', '参数锁定：' + u.lock)); host.appendChild(c); return; }
+    [['stance', '立场'], ['motive', '动机']].forEach(([k, n]) => {
+      const lb = el('label', 'ctl', n); const s = el('select');
+      OPTS[k].forEach(v => { const o = el('option', null, v); o.value = v; if (u.p[k] === v) o.selected = true; s.appendChild(o); });
+      s.addEventListener('change', () => { u.p[k] = s.value; render(); });
+      lb.appendChild(s); c.appendChild(lb);
+    });
+    PARAMS.forEach(([k, n]) => {
+      const lb = el('label', 'ctl'); const head = el('span', null, n + '：'); const out = el('output', null, u.p[k].toFixed(2));
+      head.appendChild(out); lb.appendChild(head);
+      const r = el('input'); r.type = 'range'; r.min = '0'; r.max = '1'; r.step = '0.05'; r.value = String(u.p[k]);
+      r.addEventListener('input', () => { u.p[k] = clamp(num(r.value, 0.5), 0, 1); out.textContent = u.p[k].toFixed(2); render(); });
+      lb.appendChild(r); c.appendChild(lb);
+    });
+    host.appendChild(c);
+  });
+}
+function renderFeed(posts) {
+  const f = $('pbFeed'); if (!f) return;
+  const vis = posts.filter(p => p.t <= S.now).reverse();
+  f.textContent = '';
+  if (!vis.length) { f.appendChild(el('div', 'empty', '按"播放"或"下一条"开始。T0 时刻 L0 先出帖。')); }
+  vis.forEach(p => {
+    const d = el('div', 'pb-post pb-' + p.lv + (S.sel === p.id ? ' sel' : ''));
+    d.tabIndex = 0; d.setAttribute('role', 'button');
+    const hd = el('div', 'hd'); hd.appendChild(badge(p.lv)); hd.appendChild(el('b', null, p.name)); hd.appendChild(el('span', null, fmt(p.t)));
+    p.tags.forEach(t => hd.appendChild(tagEl(t)));
+    d.appendChild(hd); d.appendChild(el('div', 'tx', p.text)); d.appendChild(el('div', 'ft', p.foot || ''));
+    const pick = () => { S.sel = p.id; renderFeed(posts); renderStep(posts); };
+    d.addEventListener('click', pick);
+    d.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+    f.appendChild(d);
+  });
+}
+function renderStep(posts) {
+  const box = $('pbStep'); if (!box) return;
+  const vis = posts.filter(p => p.t <= S.now);
+  let p = vis.find(x => x.id === S.sel) || vis[vis.length - 1];
+  box.textContent = '';
+  if (!p) { box.appendChild(el('h4', null, '这一步在做什么')); box.appendChild(el('p', null, '还没有帖子。时钟从 T0 开始，事件卡在 T0 可见（available_at）。')); return; }
+  const h = el('h4'); h.appendChild(badge(p.lv)); h.appendChild(document.createTextNode(' ' + p.name + ' · ' + fmt(p.t)));
+  box.appendChild(h);
+  const dl = el('dl');
+  ['输入', '处理', '输出', '对应文档'].forEach((n, i) => { dl.appendChild(el('dt', null, n)); dl.appendChild(el('dd', null, (p.step && p.step[i]) || '')); });
+  box.appendChild(dl);
+  box.appendChild(el('p', 'ref', '示例数据 · 点信息流里任一条帖子可查看它的这四项'));
+}
+function stopPlay() { S.playing = false; clearInterval(S.timer); S.timer = 0; const b = $('pbPlay'); if (b) b.textContent = S.now >= TMAX ? '重新播放' : '播放'; }
+function setNow(m) { S.now = clamp(num(m, 0), 0, TMAX); S.sel = null; render(); }
+function initClock() {
+  const play = $('pbPlay'), sp = $('pbSpeed');
+  if (play) play.addEventListener('click', () => {
+    if (S.playing) { stopPlay(); return; }
+    if (S.now >= TMAX) setNow(0);
+    S.playing = true; play.textContent = '暂停';
+    S.timer = setInterval(() => {
+      const step = clamp(num(sp && sp.value, 5), 1, 60);
+      S.now = Math.min(TMAX, S.now + step); S.sel = null; render();
+      if (S.now >= TMAX) stopPlay();
+    }, 100);
+  });
+  const times = () => [...new Set(buildPosts().map(p => p.t))].sort((a, b) => a - b);
+  const nx = $('pbNext'), pv = $('pbPrev'), rs = $('pbReset');
+  if (nx) nx.addEventListener('click', () => { stopPlay(); const t = times().find(x => x > S.now); setNow(t == null ? TMAX : t); });
+  if (pv) pv.addEventListener('click', () => { stopPlay(); const ts = times().filter(x => x < S.now); setNow(ts.length ? ts[ts.length - 1] : 0); });
+  if (rs) rs.addEventListener('click', () => { stopPlay(); setNow(0); });
+}
+function renderRank(posts) {
+  const tb = document.querySelector('#pbRank tbody'), note = $('pbFeedNote'); if (!tb) return;
+  const cand = posts.filter(p => p.t <= S.now && (!S.noPub || !p.pub)).map(p => {
+    const w = S.noLv ? 1 : num(LVW[p.lv], 1), rec = Math.exp(-Math.max(0, S.now - p.t) / TAU);
+    return { p, w, rec, sc: w * rec * num(p.hot, 0.8) * num(p.interest, 1) * num(p.follow, 1) };
+  }).sort((a, b) => b.sc - a.sc);
+  const K = clamp(Math.round(num(S.K, 6)), 3, 15), max = cand.length ? Math.max(1e-9, cand[0].sc) : 1;
+  if (note) note.textContent = '示例数据 · 当前时刻 ' + fmt(S.now) + ' · 候选 ' + cand.length + ' 条 · 散户看到前 ' + Math.min(K, cand.length) + ' 条（feed_len，§7.3）' + (S.noPub ? ' · 发布者层已关闭' : '') + (S.noLv ? ' · 级别加权已关闭' : '');
+  tb.textContent = '';
+  if (!cand.length) { const tr = el('tr'); const td = el('td', null, '当前时刻还没有可排序的帖子。'); td.colSpan = 8; tr.appendChild(td); tb.appendChild(tr); return; }
+  cand.forEach((c, i) => {
+    const tr = el('tr'), inK = i < K; if (!inK) tr.style.opacity = '.45';
+    tr.appendChild(el('td', 'n', String(i + 1)));
+    const td = el('td'); td.appendChild(badge(c.p.lv)); c.p.tags.filter(t => t !== '模拟散户').forEach(t => td.appendChild(tagEl(t)));
+    td.appendChild(el('div', null, c.p.name + ' · ' + fmt(c.p.t)));
+    const bar = el('div', 'pb-wbar pb-' + c.p.lv); bar.style.width = clamp(c.sc / max * 100, 2, 100) + '%'; td.appendChild(bar);
+    tr.appendChild(td);
+    [c.w, c.rec, num(c.p.hot, 0.8), num(c.p.interest, 1) * num(c.p.follow, 1), c.sc].forEach(v => tr.appendChild(el('td', 'n', v.toFixed(2))));
+    tr.appendChild(el('td', null, inK ? '看到' : '未进入'));
+    tb.appendChild(tr);
+  });
+}
+const SG = { '多': 1, '空': -1, '摇摆': 0 };
+function curveVals() {
+  let a = 0.15;
+  PUBS.forEach(u => { if (u.p && (u.lv === 'L2' || u.lv === 'L3')) a += 0.12 * num(SG[u.p.stance], 0) * (0.5 + num(u.p.exa, 0.5)); });
+  const A = clamp(a, -0.9, 0.9), B = 0.35, T = S.ivT, base = [], rum = [];
+  for (let t = 0; t <= TMAX; t += 5) {
+    const b = A * (1 - Math.exp(-t / 40)) * Math.exp(-t / 600);
+    let r = 0;
+    if (t >= T) { const d = t - T; r = B * (1 - Math.exp(-d / 20)) * Math.exp(-d / 180); if (S.deny && t >= T + 60) r *= Math.exp(-(t - T - 60) / 40); }
+    base.push([t, clamp(b, -1, 1)]); rum.push([t, clamp(b + r, -1, 1)]);
+  }
+  return { base, rum };
+}
+const NS = 'http://www.w3.org/2000/svg';
+function sv(tag, at, txt) { const e = document.createElementNS(NS, tag); Object.keys(at).forEach(k => e.setAttribute(k, String(at[k]))); if (txt != null) e.textContent = txt; return e; }
+const X = t => 40 + clamp(num(t, 0), 0, TMAX) / TMAX * 470, Y = v => 125 - clamp(num(v, 0), -1, 1) * 105;
+function renderCurve() {
+  const g = $('pbCurve'); if (!g) return;
+  while (g.firstChild) g.removeChild(g.firstChild);
+  [-1, 0, 1].forEach(v => { g.appendChild(sv('line', { x1: 40, x2: 510, y1: Y(v), y2: Y(v), stroke: 'rgba(255,255,255,' + (v ? .08 : .2) + ')' })); g.appendChild(sv('text', { x: 34, y: Y(v) + 4, 'text-anchor': 'end' }, String(v))); });
+  [0, 120, 240, 360, 480].forEach(t => g.appendChild(sv('text', { x: X(t), y: 248, 'text-anchor': 'middle' }, fmt(t))));
+  const mark = (t, c, lab) => { g.appendChild(sv('line', { x1: X(t), x2: X(t), y1: 20, y2: 230, stroke: c, 'stroke-dasharray': '4 4' })); g.appendChild(sv('text', { x: X(t) + 4, y: 32, style: 'fill:' + c }, lab)); };
+  mark(S.ivT, '#f87171', 'T 传闻');
+  if (S.deny && S.ivT + 60 <= TMAX) mark(S.ivT + 60, '#22d3ee', '辟谣');
+  if (S.now > 0) g.appendChild(sv('line', { x1: X(S.now), x2: X(S.now), y1: 20, y2: 230, stroke: 'rgba(255,255,255,.35)' }));
+  const { base, rum } = curveVals();
+  const path = pts => pts.map((p, i) => (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join('');
+  g.appendChild(sv('path', { d: path(base), fill: 'none', stroke: '#60a5fa', 'stroke-width': 2 }));
+  g.appendChild(sv('path', { d: path(rum), fill: 'none', stroke: '#f87171', 'stroke-width': 2, 'stroke-dasharray': S.ivOn ? '' : '6 4' }));
+  g.appendChild(sv('rect', { x: 330, y: 196, width: 12, height: 3, fill: '#60a5fa' })); g.appendChild(sv('text', { x: 348, y: 201 }, 'run A：无传闻'));
+  g.appendChild(sv('rect', { x: 330, y: 212, width: 12, height: 3, fill: '#f87171' })); g.appendChild(sv('text', { x: 348, y: 217 }, 'run B：有传闻'));
+  g.appendChild(sv('text', { x: 44, y: 14 }, '示例态度指数（示例数据）'));
+}
+function renderJson(posts) {
+  const rc = $('pbRumorCard');
+  if (rc) {
+    const card = { event_id: 'EV-DEMO-R001', origin: 'rumor', available_at: fmt(S.ivT), source: '示例小道消息', source_tier: 'unverified', category: 'corporate', scope: 'stock', assets: ['青川电池（化名）'], magnitude: 2, direction_hint: 1, credibility: S.deny ? 0.05 : 0.3, parent_id: null, summary: '示例传闻：青川电池（化名）将获大额补贴订单。' };
+    let txt = JSON.stringify(card, null, 2);
+    if (S.deny) txt += '\n// 辟谣后另有一张 L0 关联事件卡\n' + JSON.stringify({ event_id: 'EV-DEMO-0002', origin: 'real', available_at: fmt(S.ivT + 60), source_tier: 'official', parent_id: 'EV-DEMO-R001', summary: '示例：官方称该传闻无依据。' }, null, 2);
+    rc.textContent = txt;
+  }
+  const n = $('pbIvNote');
+  if (n) n.textContent = (S.ivOn ? '传闻已插入信息流，时刻 ' + fmt(S.ivT) + '。' : '传闻尚未插入信息流；红色虚线是预览。') + 'magnitude、credibility 的数值为示例，文档只规定传闻 credibility < 1、证实或辟谣后更新（§5.2）。' + (S.deny ? '辟谣卡用 parent_id 指回传闻卡。' : '');
+  const pj = $('pbPostJson'), p = posts.find(x => x.lv === 'L3'), u = PUBS[3];
+  if (pj && p && u.p) pj.textContent = JSON.stringify({ post_id: 'PO-DEMO-0003', activation_id: null, publisher_id: 'PUB-L3-01', event_id: 'EV-DEMO-0001', run_id: 'RUN-DEMO', sim_time: fmt(p.t), channel: '论坛', group_id: null, turn: null, reply_to: null, text: p.text, asset: '青川电池（化名）', stance: u.p.stance, emotion: '兴奋', post_type: '观点', rumor_shill_tag: null, source_event_ids: ['EV-DEMO-0001'], simulated: true }, null, 2);
+}
+function render() { const posts = buildPosts(); const c = $('pbClock'); if (c) c.textContent = fmt(S.now); renderFeed(posts); renderStep(posts); renderRank(posts); renderCurve(); renderJson(posts); }
+function on(id, ev, fn) { const e = $(id); if (e) e.addEventListener(ev, () => fn(e)); }
+on('pbK', 'input', e => { S.K = clamp(Math.round(num(e.value, 6)), 3, 15); const o = $('pbKv'); if (o) o.textContent = String(S.K); render(); });
+on('pbNoLv', 'change', e => { S.noLv = e.checked; render(); });
+on('pbNoPub', 'change', e => { S.noPub = e.checked; render(); });
+on('pbT', 'input', e => { S.ivT = clamp(Math.round(num(e.value, 120)), 30, 420); const o = $('pbTv'); if (o) o.textContent = fmt(S.ivT); render(); });
+on('pbIns', 'click', e => { S.ivOn = !S.ivOn; e.textContent = S.ivOn ? '撤回传闻' : '在时刻 T 插入 L4 传闻'; render(); });
+on('pbDeny', 'change', e => { S.deny = e.checked; render(); });
+buildPubCards(); initClock(); render();
+})();
+</script>
+</body>
+</html>

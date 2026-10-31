@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>outputs · 产出与导出 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* mod-outputs 私有样式，前缀 ou- */
+.ou-io{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr);gap:12px;align-items:stretch}
+@media(max-width:860px){.ou-io{grid-template-columns:minmax(0,1fr)}}
+.ou-io .card ul{margin:6px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink2)}
+.ou-io .card li{margin:4px 0}
+.ou-core{border-color:rgba(251,146,60,.5)!important;background:linear-gradient(160deg,rgba(251,146,60,.13),rgba(251,146,60,.02))!important}
+.ou-lbl{font:700 11.5px var(--mono);color:var(--out);letter-spacing:1px;margin-bottom:4px}
+.ou-h3{margin:26px 0 8px;font-size:17px}
+.ou-h3 small{font-weight:400;color:var(--mute);font-size:12.5px;margin-left:6px}
+.ou-tag{display:inline-block;font:600 10.5px var(--mono);padding:1px 7px;border-radius:6px;background:rgba(251,191,36,.14);color:var(--warn);margin-left:6px;vertical-align:middle}
+/* 表关系图 */
+.ou-svg{width:100%;height:auto;display:block}
+.ou-svg .ou-node{cursor:pointer}
+.ou-svg .ou-node rect{fill:var(--panel2);stroke:var(--line2);stroke-width:1.4;transition:stroke .15s,fill .15s,opacity .15s}
+.ou-svg .ou-node.main rect{stroke:rgba(251,146,60,.6)}
+.ou-svg .ou-node.acct rect{stroke:rgba(52,211,153,.55)}
+.ou-svg .ou-node.side rect{stroke-dasharray:5 4}
+.ou-svg .ou-node.on rect{stroke:var(--out);stroke-width:2.6;fill:rgba(251,146,60,.16)}
+.ou-svg .ou-node.dim{opacity:.38}
+.ou-svg .ou-node:focus{outline:none}
+.ou-svg .ou-node:focus rect{stroke:var(--out);stroke-width:2.6}
+.ou-svg text{fill:var(--ink);font:600 13.5px var(--sans);pointer-events:none}
+.ou-svg .ou-t2{fill:var(--mute);font:500 11px var(--mono)}
+.ou-svg .ou-ln{fill:none;stroke:var(--line2);stroke-width:1.5;transition:stroke .15s,opacity .15s}
+.ou-svg .ou-ln.hot{stroke:var(--out);stroke-width:2.4}
+.ou-svg .ou-ln.dim{opacity:.25}
+.ou-svg .ou-key{fill:var(--out);font:600 11px var(--mono)}
+.ou-svg .ou-grp{fill:var(--mute);font:700 11px var(--mono);letter-spacing:1px}
+.ou-info{min-height:96px;margin-top:10px}
+.ou-info .ou-flds{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.ou-info .ou-flds code{font-size:12px;padding:2px 7px;border-radius:6px;background:var(--panel2);border:1px solid var(--line)}
+.ou-info .ou-flds code.k{border-color:var(--out);color:var(--out)}
+/* 步进演示 */
+.ou-stepbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 14px}
+.ou-stepbar .ou-pos{margin-left:auto;font:600 12.5px var(--mono);color:var(--mute)}
+.ou-dots{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.ou-dots button{width:30px;height:24px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--mute);font:600 11px var(--mono);cursor:pointer}
+.ou-dots button.on{background:var(--out);color:#1a0d02;border-color:var(--out)}
+.ou-dots button.past{color:var(--ink2);border-color:rgba(251,146,60,.45)}
+.ou-step{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:14px}
+@media(max-width:900px){.ou-step{grid-template-columns:minmax(0,1fr)}}
+.ou-ipo{display:grid;gap:8px;align-content:start}
+.ou-ipo .card{padding:12px 14px}
+.ou-ipo p{margin:0;font-size:13.5px;color:var(--ink2)}
+.ou-view .tbl td,.ou-view .tbl th{font-size:12.5px;padding:6px 8px;white-space:nowrap}
+.ou-view .tbl tr.ex td{opacity:.42;text-decoration:line-through}
+.ou-view .tbl tr.hl td{background:rgba(251,146,60,.08)}
+.ou-res{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}
+.ou-res div{border:1px solid var(--line);border-radius:9px;padding:7px 9px;text-align:center;min-width:0}
+.ou-res div.hot{border-color:var(--out);box-shadow:0 0 0 1px rgba(251,146,60,.3) inset}
+.ou-res b{display:block;font:700 15px var(--mono);overflow-wrap:anywhere}
+.ou-res span{font-size:11px;color:var(--mute)}
+.ou-bar{display:grid;grid-template-columns:96px minmax(0,1fr) 46px;gap:8px;align-items:center;font-size:12.5px;margin:4px 0}
+.ou-bar .tr{height:10px;border-radius:5px;background:var(--panel2);overflow:hidden}
+.ou-bar .tr i{display:block;height:100%;background:var(--out)}
+.ou-bar.bear .tr i{background:var(--down)}
+.ou-bar b{font:600 12px var(--mono);text-align:right}
+.ou-note{font-size:12.5px;color:var(--mute);margin-top:8px}
+.ou-view pre.code{margin-top:8px;max-height:300px;overflow:auto}
+.ou-ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px;font-size:13px}
+.ou-ctl select{background:var(--panel2);color:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:4px 8px}
+.ou-cmp .card h4{margin:0 0 6px;font-size:15px}
+.ou-cmp .card p{margin:4px 0;font-size:13.5px;color:var(--ink2)}
+.ou-cmp .card p b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+  <div class="eyebrow"><i></i>MODULE · OUTPUTS</div>
+  <h1>outputs <span class="grad">产出与导出</span></h1>
+  <p class="lead">把每个模拟散户的帖子、态度、决策和账户流水整理成可关联的 Parquet 交付表，再按人头与资金两套权重、按人群切片聚合成群体态度指标。</p>
+  <div class="meta">
+    <span class="chip out"><i></i>产出层 · outputs</span>
+    <span class="chip"><i></i>§10 §10.3</span>
+    <span class="chip warn"><i></i>描述模拟人群，不测量真实市场</span>
+    <span class="chip ok"><i></i>帖子表 simulated 恒为真</span>
+  </div>
+</header>
+
+<section id="s1" class="reveal">
+  <h2><span class="num">01</span>职责一览</h2>
+  <p class="sub">一句话：outputs 负责“交货”，把散落在各模块里的个体产出整理成可关联的表，按统一口径聚合，打好标记后导出。</p>
+  <p>设计文档的模块表把它写成：帖子、态度、决策三张主表，账户类表，态度切片聚合，群体态度指标，导出；产物是交付表（Parquet） <span class="ref">§3.3 §10.3</span>。v0.3 的交付表在三张主表之外还有激活表、调查表和信任网络快照，均以 <code>persona_id</code>、<code>event_id</code>、<code>run_id</code> 关联，四张账户类表另以 <code>sim_date</code> 关联，持续运行中按日追加 <span class="ref">§10.3</span>。激活表是各表的行级元数据来源：每个智能体每个激活点一行，其余各表带 <code>activation_id</code>，时点、版本线、补跑、预热等字段从激活表取 <span class="ref">§10.3</span>。本模块不生成任何内容：帖子由 agents 与 social 写出，态度和决策由 agents 写出，成交和账户状态由 market 与 accounts 产生。outputs 只做整理、聚合、标记和导出。</p>
+  <div class="ou-io">
+    <div class="card">
+      <div class="ou-lbl">输入</div>
+      <ul>
+        <li><code>Post</code>：模拟散户的帖子来自 <a href="mod-agents.html">agents</a>，发布者层的帖子来自 <a href="mod-social.html">social</a> <span class="ref">§5.6 §7.4</span></li>
+        <li><code>BeliefUpdate</code>：结构化态度、情绪、理由标签 <span class="ref">§6.2</span></li>
+        <li><code>DecisionIntent</code> 与执行结果：意向来自 agents，成交与未执行原因来自 <a href="mod-market.html">market</a> 与内核 <span class="ref">§6.3</span>；收盘后与晚间激活的 <code>NextDayPlan</code>（明日打算）也进决策表 <span class="ref">§6.3 §10.3</span></li>
+        <li>激活记录：每个激活点谁被激活、因何激活、是否缺席，来自 <a href="mod-orchestrator.html">orchestrator</a> 的调度 <span class="ref">§9.1 §10.3</span></li>
+        <li>调查回答：V3 硅基调查的旁路调用结果，从调查时点的日终快照出发作答，不写回记忆 <span class="ref">§12.1 §10.3</span></li>
+        <li>信任网络：<code>trust</code> 与 <code>follow</code>，来自 social <span class="ref">§7.2</span></li>
+        <li><code>Fill</code>、<code>CashFlow</code>、账户与持仓快照、战绩：来自 <a href="mod-accounts.html">accounts</a> 的事件日志 <span class="ref">§8.4</span></li>
+        <li><code>PersonaCard</code> 的非敏感字段与 <code>w_head</code>、<code>w_cap</code>：来自 <a href="mod-population.html">population</a> <span class="ref">§4.1 §4.3</span></li>
+        <li><code>RunManifest</code>：来自 <a href="mod-orchestrator.html">orchestrator</a> <span class="ref">§9.4</span></li>
+      </ul>
+    </div>
+    <div class="card ou-core">
+      <div class="ou-lbl">本模块 outputs</div>
+      <ul>
+        <li>三张主表：帖子、态度、决策</li>
+        <li>激活表、调查表、信任网络快照</li>
+        <li>四张账户类表：交易流水、出入金、账户快照、持仓快照与战绩</li>
+        <li>附表：人设表、运行清单</li>
+        <li>聚合：两套权重、两种态度口径、<code>n_attend</code>、人群切片</li>
+        <li>描述性产出：群体态度指标、理由分解、言行不一（含隔夜变卦）、战绩轨迹、情景条件分布</li>
+        <li>标记：<code>info_cutoff</code>、<code>warmup</code>、<code>backfilled</code>、<code>simulated</code>、<code>seeded</code>、<code>rumor_shill_tag</code>、<code>liquidity_flag</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="ou-lbl">输出</div>
+      <ul>
+        <li>交付表（Parquet），写在运行目录 <code>/runs/&lt;run_id&gt;/</code> 下，与运行清单、事件日志、快照同处 <span class="ref">§3.3</span></li>
+        <li>聚合结果与群体态度指标，跨种子给均值与标准差 <span class="ref">§9.4</span></li>
+        <li>下游：<a href="mod-validation.html">validation</a> 用这些表做 V1–V5；团队内部研究按 <code>persona_id</code> 等键自行关联 <span class="ref">§12 §16.2</span></li>
+      </ul>
+    </div>
+  </div>
+  <p>所有表的字段类型都定义在 <a href="mod-schemas.html">schemas</a>，本模块不导入其他业务模块的类型，由 orchestrator 把产出交过来 <span class="ref">§3.3</span>。</p>
+</section>
+
+<section id="s2" class="reveal">
+  <h2><span class="num">02</span>为什么需要它</h2>
+  <p class="sub">个体产出本身没法直接用：它们分散在不同模块和不同运行里，口径各不相同，也很容易被误读成“真实散户在想什么”。outputs 负责把这三件事处理掉。</p>
+  <p>第一个原因是要能对上号。同一个模拟散户在某个事件后发了什么帖、心里怎么看、打算怎么做、实际成交了多少、账户因此怎么变，分别由 agents、market、accounts 产生。下游要研究“说的和做的对不对得上”，就必须能用同一组键把它们拼起来。设计文档规定各表用 <code>persona_id</code>、<code>event_id</code>、<code>run_id</code> 关联，账户表再加 <code>sim_date</code>，主表另带 <code>activation_id</code> 指回激活表 <span class="ref">§10.3</span>；各交付表的每一行经激活表都能追溯到唯一的运行清单 <span class="ref">§9.4</span>。</p>
+  <p>第二个原因是聚合口径必须统一。模拟人群是按切片保底抽出来的，每格 5 人、Tier-B 共 500 人 <span class="ref">§4.3</span>，人数比例和真实投资者差得很远：RT1 账户占 58.7%，持股市值只占 1% <span class="ref">§2.1</span>；RT4–5 只占账户的 1.8%，却贡献约 32% 的成交额 <span class="ref">§4.3</span>。同样一批态度，按人头加权和按资金加权会得出不同的“市场情绪”。哪类指标用哪套权重、哪些人进分母、多少人才够出数，要在一个地方定死，否则每个下游各算各的。</p>
+  <p>第三个原因是要防止误用。帖子是模型生成的文本，必须恒带 <code>simulated</code> 标记 <span class="ref">§16.2</span>；发布者层只发帖不交易，不能混进人群统计 <span class="ref">§5.6</span>；预跑的账户历史不能和仿真期混在一起 <span class="ref">§10.3</span>；每一行只使用 <code>available_at</code> 不晚于激活表里该行 <code>info_cutoff</code> 的信息 <span class="ref">§10.3</span>。这些标记在导出时统一打上，下游才不会把模拟当测量，或把未来信息混进历史。</p>
+  <div class="callout warn"><b class="t">反例：直接把所有帖子的立场取平均</b>假设某天一个喊单号（发布者层 L4）连发多条强烈看多的帖子，又有一批智能体根本没注意到这只股票。如果把帖子表里所有帖子的立场直接平均，喊单号的帖子会把“散户看多程度”抬上去；如果把没注意到的人当成中性计入分母，又会把真实的分歧冲淡。设计文档的做法是：发布者的帖子进帖子表但不进任何人群统计 <span class="ref">§10.1</span>；对某标的的态度只在注意到它的智能体上聚合，同时报出覆盖人数 <code>n_attend</code> <span class="ref">§10.1</span>。</div>
+</section>
+
+<section id="s3" class="reveal">
+  <h2><span class="num">03</span>机制详解</h2>
+  <p class="sub">按“有哪些表、怎么关联 → 怎么聚合 → 产出哪些描述性指标 → 每行带哪些标记”的顺序讲。先看一张表关系图，点任一张表可看它的粒度、键和字段。</p>
+
+  <h3 class="ou-h3">3.1 十张交付表与两张附表<small>§10.3</small></h3>
+  <p>交付物分四组。三张主表记录“说、想、做”：帖子表是智能体和发布者写出的文本及其元数据，态度表是 <code>BeliefUpdate</code> 里的结构化看法，决策表是 <code>DecisionIntent</code> 与明日打算，加上实际执行结果 <span class="ref">§10.3</span>。激活表记录“谁在什么时点被叫起来”：每个智能体每个激活点一行，被抽中但缺席的也记，其余各表的时点、版本线、补跑、预热等字段都从它取 <span class="ref">§10.3</span>。调查表与信任网络快照是两张旁路表：前者存 V3 硅基调查的作答 <span class="ref">§12.1</span>，后者在持续运行中每 20 个交易日存一次信任网络 <span class="ref">§7.2 §10.3</span>。四张账户类表记录“钱怎么动”：交易流水、出入金、账户快照、持仓快照与战绩，它们全部由 accounts 的事件日志生成，任何一张都能由日志重算 <span class="ref">§8.4 §10.3</span>。两张附表提供解释所需的背景：人设表把 <code>persona_id</code> 映射到人设卡的非敏感字段和两套权重，运行清单记录这次运行的版本、种子和各类计数 <span class="ref">§10.3 §9.4</span>。</p>
+  <div class="card">
+    <svg class="ou-svg" id="ouMap" viewBox="0 0 760 570" role="img" aria-label="交付表关系图：三张主表、激活表、调查表、信任网络快照、四张账户类表、人设表与运行清单">
+      <text class="ou-grp" x="20" y="70">附表</text>
+      <text class="ou-grp" x="245" y="18">三张主表</text>
+      <text class="ou-grp" x="560" y="18">四张账户类表 · 另加 sim_date</text>
+      <text class="ou-grp" x="20" y="470">旁路表</text>
+      <path class="ou-ln" data-n="persona manifest post att dec trade flow snap hold act survey trust" d="M185 125 H212 M185 307 H212 M212 74 V410 H538 V65 M212 74 H245 M212 202 H245 M212 330 H245 M538 65 H560 M538 161 H560 M538 257 H560 M538 353 H560 M212 410 V520 H185 M212 502 H245 M538 410 V520 H560"/>
+      <text class="ou-key" x="225" y="428">persona_id · run_id（所有表）</text>
+      <path class="ou-ln" data-n="act post att dec" d="M450 502 H470 V74 H450 M470 202 H450 M470 330 H450"/>
+      <text class="ou-key" x="0" y="0" transform="translate(484 452) rotate(-90)">activation_id</text>
+      <path class="ou-ln" data-n="post att" d="M347 120 V156"/>
+      <text class="ou-key" x="355" y="142">event_id · persona_id</text>
+      <path class="ou-ln" data-n="att dec" d="M347 248 V284"/>
+      <text class="ou-key" x="355" y="270">event_id · persona_id</text>
+      <path class="ou-ln" data-n="dec trade" d="M450 300 H490 V50 H560"/>
+      <text class="ou-key" x="0" y="0" transform="translate(505 230) rotate(-90)">decision_ref</text>
+      <path class="ou-ln" data-n="trade flow snap hold" d="M735 65 H748 V353 H735 M735 161 H748 M735 257 H748"/>
+      <g class="ou-node side" data-k="persona" tabindex="0"><rect x="20" y="80" width="165" height="90" rx="10"/><text x="32" y="106">人设表</text><text class="ou-t2" x="32" y="128">persona_id</text><text class="ou-t2" x="32" y="146">w_head · w_cap</text></g>
+      <g class="ou-node side" data-k="manifest" tabindex="0"><rect x="20" y="262" width="165" height="90" rx="10"/><text x="32" y="288">运行清单</text><text class="ou-t2" x="32" y="310">run_id</text><text class="ou-t2" x="32" y="328">版本 · 种子 · 失败率</text></g>
+      <g class="ou-node main" data-k="post" tabindex="0"><rect x="245" y="28" width="205" height="92" rx="10"/><text x="257" y="54">帖子表</text><text class="ou-t2" x="257" y="76">post_id · 作者 id</text><text class="ou-t2" x="257" y="94">channel · stance · simulated</text></g>
+      <g class="ou-node main" data-k="att" tabindex="0"><rect x="245" y="156" width="205" height="92" rx="10"/><text x="257" y="182">态度表</text><text class="ou-t2" x="257" y="204">asset · horizon · stance</text><text class="ou-t2" x="257" y="222">reasons · emotion</text></g>
+      <g class="ou-node main" data-k="dec" tabindex="0"><rect x="245" y="284" width="205" height="92" rx="10"/><text x="257" y="310">决策表</text><text class="ou-t2" x="257" y="332">intent_action · intent_size</text><text class="ou-t2" x="257" y="350">exec_qty · not_exec…</text></g>
+      <g class="ou-node acct" data-k="trade" tabindex="0"><rect x="560" y="28" width="175" height="74" rx="10"/><text x="572" y="52">交易流水表</text><text class="ou-t2" x="572" y="72">side · qty · price</text><text class="ou-t2" x="572" y="88">fee · forced</text></g>
+      <g class="ou-node acct" data-k="flow" tabindex="0"><rect x="560" y="124" width="175" height="74" rx="10"/><text x="572" y="148">出入金表</text><text class="ou-t2" x="572" y="168">direction · amount</text><text class="ou-t2" x="572" y="184">source</text></g>
+      <g class="ou-node acct" data-k="snap" tabindex="0"><rect x="560" y="220" width="175" height="74" rx="10"/><text x="572" y="244">账户快照表</text><text class="ou-t2" x="572" y="264">total_assets · cash</text><text class="ou-t2" x="572" y="280">dormant</text></g>
+      <g class="ou-node acct" data-k="hold" tabindex="0"><rect x="560" y="316" width="175" height="74" rx="10"/><text x="572" y="340">持仓快照与战绩表</text><text class="ou-t2" x="572" y="360">qty · cost_basis</text><text class="ou-t2" x="572" y="376">twr · mwr</text></g>
+      <g class="ou-node main" data-k="act" tabindex="0"><rect x="245" y="460" width="205" height="84" rx="10"/><text x="257" y="486">激活表</text><text class="ou-t2" x="257" y="508">activation_id · phase</text><text class="ou-t2" x="257" y="526">status · info_cutoff</text></g>
+      <g class="ou-node side" data-k="survey" tabindex="0"><rect x="20" y="478" width="165" height="84" rx="10"/><text x="32" y="504">调查表</text><text class="ou-t2" x="32" y="526">question_id</text><text class="ou-t2" x="32" y="544">survey_date · answer</text></g>
+      <g class="ou-node side" data-k="trust" tabindex="0"><rect x="560" y="478" width="175" height="84" rx="10"/><text x="572" y="504">信任网络快照</text><text class="ou-t2" x="572" y="526">src · dst · trust</text><text class="ou-t2" x="572" y="544">每 20 个交易日</text></g>
+    </svg>
+    <div class="ou-info" id="ouInfo"><p class="ou-note">点击或用键盘聚焦图中任一张表，这里显示它的粒度、关联键、来源模块和全部字段。</p></div>
+  </div>
+  <p>关联键分三层。<code>persona_id</code> 和 <code>run_id</code> 出现在所有表里：前者把一个人在各表中的行串起来，后者把一次运行（包括同一历史起点的不同情景分叉）隔开。<code>event_id</code> 在三张主表里，用来回答“这条帖、这个看法、这个决定是冲着哪个事件来的”。<code>activation_id</code> 把主表的行挂到激活表上的一次激活，时点、版本线 <code>line_id</code>、<code>backfilled</code>、<code>warmup</code> 等元数据只在激活表存一份 <span class="ref">§10.3</span>。账户类表按日结算，所以另以 <code>sim_date</code> 关联，持续运行中按日追加 <span class="ref">§10.3</span>。决策表和交易流水之间，设计文档给了 <code>decision_ref</code> 字段，从成交指回产生它的决策；它具体引用决策表的哪一行，文档未定义（决策表有 <code>activation_id</code>，但一次激活可有多条意向，没有行主键字段）。帖子表的作者字段写作“<code>persona_id</code> 或 <code>publisher_id</code>”，发布者的帖子用后者，这也是聚合时把它们挡在人群统计之外的依据 <span class="ref">§10.3 §5.6</span>。</p>
+  <p>各表的时间粒度不同。激活表、帖子表和态度表用 <code>sim_time</code>，因为一天里有盘前、盘中、收盘后等多个激活点，前一阶段的帖子在后一阶段才可见 <span class="ref">§9.1</span>；决策表用 <code>sim_date</code>，同一天的订单意向和明日打算靠 <code>intent_kind</code> 区分 <span class="ref">§10.3</span>。交易流水用 <code>sim_time</code>，其他账户类表和信任网络快照都用 <code>sim_date</code>，调查表用 <code>survey_date</code>，战绩表另有 <code>period</code>，对应月度汇总等区间 <span class="ref">§10.2 §10.3</span>。</p>
+
+  <h3 class="ou-h3">3.2 聚合规则：两套权重、两种口径<small>§10.1 §4.3</small></h3>
+  <p>每个智能体带两个权重。<code>w_head</code> 是它代表的真实投资者人数，由 IPF 校准得到；<code>w_cap</code> = <code>w_head</code> × 该智能体的账户资产，各账户档的 <code>w_cap</code> 合计对齐 §2.1 的持股市值占比 <span class="ref">§4.3</span>。设计文档规定的默认用法是：态度与情绪用人头加权，回答“多少投资者这么想”；决策中的资金流用资金加权，回答“多少钱这么动” <span class="ref">§10.1</span>。两个数字可以方向相反：一批小户普遍看多、少数大户看空时，人头口径偏多，资金口径偏空。</p>
+  <p>权重只用在全市场口径。人群口径看格内原始样本，不加权 <span class="ref">§10.1 §4.3</span>。原因在于抽样方式：主切片是年龄段（5）× 账户规模（RT1–RT5）× MBTI 气质组（NT / NF / SJ / SP）共 100 格，每格保底 5 人 <span class="ref">§4.3</span>，格内样本本来就是为了“这类人怎么想”而补足的，再加权只会把少数几个人的意见放大。也因为每格只有 5 人左右，格内结果只作描述，跨人群比较要合并到气质组或年龄段一级 <span class="ref">§10.1</span>；统计功效的估算也给出同样结论 <span class="ref">§11.4</span>。可用的切片维度有年龄段、账户规模、MBTI 气质组、入市年限、交易风格、渠道 <span class="ref">§10.1</span>。</p>
+  <p>对某个标的的态度只在“注意到该标的”的智能体上聚合。<code>BeliefUpdate.views</code> 本来就只填注意到的标的 <span class="ref">§6.2</span>，每人每次激活注意力预算只有 K<sub>i</sub> = 3–15 条信息 <span class="ref">§5.4</span>，所以大多数人对大多数个股没有看法。把没看法的人当成中性计入，会系统性地把立场拉向 0。聚合时同时输出覆盖人数 <code>n_attend</code>，覆盖太少时置空 <span class="ref">§10.1</span>；“太少”的阈值文档未定义。</p>
+  <p>发布者层 L0–L4 的帖子进入帖子表，但不进入任何人群统计 <span class="ref">§10.1 §5.6</span>。Tier-A 的大 V 不同，他们是会交易的散户，照常进入人群统计 <span class="ref">§5.6</span>，大 V 的言行不一也照常测量 <span class="ref">§4.3</span>。</p>
+  <div class="callout decide"><b class="t">已定（v0.3 §4.3，来自架构讨论 A5）</b>Tier-A 与 Tier-B 一起做 IPF 得 <code>w_head</code>，进入全市场口径；人群切片默认只用 Tier-B，Tier-A 单列。人群口径结论附“不同种子数 / 借种比例”；种子稀少的格（人设卡标 <code>seed_sparse</code>）只作描述、不做显著性检验；完全无种子的格留空并在报告中写明 <span class="ref">§4.3</span>。</div>
+  <p>态度指标另有两种口径，<code>n_attend</code> 规则不变、两种口径分别计算 <span class="ref">§10.1</span>：</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>口径</th><th>取谁的态度</th><th>权重</th><th>用在哪里</th></tr></thead>
+    <tbody>
+      <tr><td>全体持有者口径（默认）</td><td>每个智能体取最近一次态度，未激活者沿用上次值；超过 20 个交易日未更新者不计入，另输出平均“陈旧天数”</td><td><code>w_head</code></td><td>V3 对照真实调查</td></tr>
+      <tr><td>发声者口径</td><td>只统计当日发帖的智能体</td><td>原始样本，不加权</td><td>V2 立场分布对照真实帖</td></tr>
+    </tbody>
+  </table></div>
+  <p>两种口径之差本身是一项描述性产出，回答“沉默的大多数与发声者差多少”；报告要注明真实世界没有直接对照 <span class="ref">§10.1</span>。全体持有者口径里的“沿用上次值”只发生在聚合层：态度表里没有新行，聚合时取这个人最近一行，并按它离当日多少个交易日算陈旧天数。</p>
+  <h3 class="ou-h3">3.3 描述性产出<small>§10.2</small></h3>
+  <p>在三张主表和账户表之上，outputs 再算五类描述性产出。它们都描述“模拟人群的状态”，不是对真实市场的测量 <span class="ref">§10.2 §10.4</span>。</p>
+  <p><b>群体态度指标</b>按日给出，分全市场、分板块、分人群三种口径，并按 §10.1 的全体持有者与发声者两种态度口径分别给出：恐惧/贪婪、政策托底信任度、杠杆意愿、新入场意愿、分歧度 <span class="ref">§10.2</span>。它们的原料是态度表里的 <code>emotion</code>（fear / greed / regret / fomo 各 0–3）、<code>policy_trust</code>（−1 / 0 / 1）和 <code>stance</code>（−2 到 2） <span class="ref">§6.2</span>，以及决策和出入金意向。每个指标由哪些字段按什么公式合成，文档未定义。其中分歧度最依赖“LLM 生成的分歧是否真实”，报告时要附同质化诊断，并与真实帖子的立场离散度对照 <span class="ref">§10.2 §13.2</span>；同质化诊断里 DR = 模拟标准差 / 真实标准差，0.7 是经验设定的警戒线 <span class="ref">§13.2</span>。</p>
+  <p><b>理由分解</b>统计看多者和看空者中各理由标签的占比，例如“政策驱动的看多占比”“恐慌驱动的看空占比” <span class="ref">§10.2</span>。理由标签是 16 个枚举值（policy、macro、overseas、fundamental、valuation、technical、trend、flow、national_team、news、rumor、kol、herd、fear、breakeven、lottery），每条看法最多 3 个，按重要性排序 <span class="ref">§6.2</span>。它有两个用途：解释某天态度变化来自哪类理由；检验人设一致性，例如老股民应更多提到 national_team，短线新手应更多提到 trend 和 kol <span class="ref">§6.2</span>。一条看法有多个理由时怎么计数（只算第一个，还是按排序加权），文档未定义。</p>
+  <p><b>言行不一</b>有三种。第一种是决策意向与实际成交不一致的比例及原因分布，原因包括缩量、取消、挂单没成交、涨停买不进、T+1 卖不出、权限不足、舍不得割 <span class="ref">§6.3 §10.2</span>，原料是决策表的 <code>exec_qty</code> 与 <code>not_executed_reason</code>；意向带执行方式 <code>execution</code>（open / dip / chase），挂单等回调（dip）当日没成交就撤单，记为“挂单没成交” <span class="ref">§6.3</span>。第二种是隔夜变卦：收盘后或晚间激活写下的“明日打算”与次日盘前实际意向之差 <span class="ref">§3.4 §10.2</span>，决策表的 <code>plan_ref</code> 把次日盘前的订单意向链回前晚那条 <code>intent_kind = plan</code> 的行，变卦由此算出 <span class="ref">§10.3</span>。第三种是帖子里的口头战绩与账户实际战绩之差，帖子里允许夸大，差值本身就是要观察的对象 <span class="ref">§6.4 §10.2</span>。</p>
+  <p><b>战绩与账户轨迹</b>分人群给日频快照和月度汇总：累计与年化收益、相对沪深 300 的超额、最大回撤、胜率与盈亏比、换手率、平均持有期、处置效应 PGR/PLR、亏损账户占比、仓位与杠杆分布、出入金净额，以及时间加权与资金加权收益之差（TWR − MWR，即“高位入金、低位离场”的择时损失） <span class="ref">§10.2 §8.4</span>。长期运行时还给个体轨迹，把同一智能体的资产曲线、仓位、出入金和它的帖子、态度按时间对齐 <span class="ref">§10.2</span>。战绩是模拟结果，不能当作“哪类散户更会赚钱”的证据 <span class="ref">§10.2 §16.5</span>。</p>
+  <p><b>情景条件分布</b>对每类事件（降准降息、印花税、关税、地产政策、国家队入场等）输出 R[人群, 渠道, 期限] 的声音、态度与决策响应分布；假设情景按乐观、中性、悲观三档价格路径分别给出 <span class="ref">§10.2 §8.2</span>。跨种子要给均值与标准差，跨种子方差大的切片要标出 <span class="ref">§9.4</span>。</p>
+  <h3 class="ou-h3">3.4 每行带的标记<small>§10.3 §16.2 §9.2 §9.3</small></h3>
+  <p>导出时 outputs 给行打上几类标记，作用都是让下游知道“这一行能拿来做什么、不能拿来做什么”。凡是激活层面的标记都只存在激活表里，其余各表经 <code>activation_id</code> 取用 <span class="ref">§10.3</span>。</p>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>标记</th><th>打在哪里</th><th>规则</th><th>出处</th></tr></thead>
+    <tbody>
+      <tr><td><code>info_cutoff</code></td><td>激活表，各表经 <code>activation_id</code> 取用</td><td>该行只使用 <code>available_at</code> ≤ <code>info_cutoff</code> 的信息；盘前激活看 09:15 前可得的信息，收盘后激活看当日收盘</td><td><span class="ref">§10.3 §3.4 §5.5</span></td></tr>
+      <tr><td><code>status</code>、<code>absent_reason</code></td><td>激活表</td><td>被抽中但缺席的也记一行，原因取解析失败、拒答、超时；缺席者当日在态度表、决策表没有行</td><td><span class="ref">§10.3 §6.2 §9.1</span></td></tr>
+      <tr><td><code>warmup</code></td><td>激活表</td><td>正式测量前预热 20–60 个交易日，预热期产出标记，不进入 V2–V4 验收</td><td><span class="ref">§9.2 §10.3</span></td></tr>
+      <tr><td><code>backfilled</code></td><td>激活表</td><td>漏跑日按 PIT 补跑的产出标真，不算 V2 前向证据，只作开发与校准样本；补跑日占比写进 V2 报告</td><td><span class="ref">§9.3 §10.3</span></td></tr>
+      <tr><td><code>simulated</code></td><td>帖子表</td><td>恒为真；正文另带隐式标识；对外展示样例时另加“模拟生成”显式标识</td><td><span class="ref">§10.3 §16.2</span></td></tr>
+      <tr><td><code>rumor_shill_tag</code></td><td>帖子表</td><td>“传闻 / 喊单”分类标签；帖子表保留这类内容，下游可按标签过滤；发布者 L4 的每条帖带“传闻”标签</td><td><span class="ref">§16.2 §5.6</span></td></tr>
+      <tr><td><code>liquidity_flag</code></td><td>决策表</td><td>“需求与流动性不匹配”标记，来自群体资金流诊断；同一标记也写进运行清单</td><td><span class="ref">§8.2 §10.3</span></td></tr>
+      <tr><td><code>seeded</code></td><td>账户类表</td><td>预跑得到的起点之前的账户历史单独存放并标记，不与仿真期混在一起</td><td><span class="ref">§10.3</span></td></tr>
+      <tr><td><code>dormant</code></td><td>账户快照表</td><td>不再交易的账户标记休眠并保留，避免幸存者偏差</td><td><span class="ref">§8.4 §10.3</span></td></tr>
+      <tr><td><code>forced</code></td><td>交易流水表</td><td>强平标记</td><td><span class="ref">§10.3</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>可得时点这条最容易被忽视。outputs 不重新计算任何内容，但它决定每行在什么时刻“落地”：激活表里的 <code>info_cutoff</code> 是这次激活能看到的信息截止点，<code>sim_time</code> 是生成时刻，账户快照是日终结算后才有。如果下游拿 t 日收盘后才生成的态度去解释 t 日盘中的成交，就把未来信息带了进去。持续运行时数据当日落盘、只追加不重算，这是最终证据 <span class="ref">§11.3 §9.3</span>。</p>
+  <p>帖子表只在团队内部及内部下游项目之间流转，不接入任何对外渠道 <span class="ref">§16.2</span>。模拟帖子与人群态度是模型产物，对外引用须注明；战绩不得作为投资建议展示 <span class="ref">§16.5</span>。</p>
+  <div class="callout decide"><b class="t">已定（v0.3 §5.5，来自架构讨论 A1）</b>智能体看到的价格按 <code>asof</code> 当天现算前复权，与当年券商软件显示一致；收益与战绩计算统一用后复权。日线从 2005 年起 <span class="ref">§5.5</span>。对 outputs 的影响：战绩表里的 <code>twr</code>、<code>mwr</code>、超额等按后复权算；帖子里口头说的价格和收益是智能体按前复权看到的数字，比较“口头战绩与实际战绩之差”时两边口径不同，文档没有给换算规则。</div>
+  <div class="callout decide"><b class="t">已定（v0.3 §6.2 §10.1，来自架构讨论 A4）</b>解析失败换种子重试最多 2 次，仍失败则该智能体当日记为“未激活”、原因“解析失败”，不填默认值，也不沿用上期信念；拒答单独记类、不重试，当日同样记缺席 <span class="ref">§6.2</span>。这些缺席都在激活表留一行（<code>status</code>、<code>absent_reason</code>），态度表、决策表当日没有这个人的行 <span class="ref">§10.3</span>。聚合时，发声者口径不含缺席者；全体持有者口径照常取他最近一次态度，超过 20 个交易日未更新才剔除；两种口径的 <code>n_attend</code> 各自计算 <span class="ref">§10.1</span>。失败率、拒答率与超时率写入运行清单并告警；检查缺席是否集中在某些人群或行情日，结果放进 V1/V3 报告 <span class="ref">§6.2 §9.4</span>。</div>
+</section>
+
+<section id="s4" class="reveal">
+  <h2><span class="num">04</span>走一遍示例</h2>
+  <p class="sub">一个示例事件之后，一个人群切片里几条帖子和态度记录，怎样一步步变成一行切片指标。每一步的数都由页面脚本按 §10.1 的规则现场算出。</p>
+  <p>场景：示例事件 E1（某行业政策，虚构）发布后的收盘后激活。切片取“SJ 气质组”，这是设计文档允许做跨人群比较的合并层级 <span class="ref">§10.1</span>；真实切片会有上百人，这里只放 6 个化名智能体和 1 个发布者，标的是虚构的“示例股A”，看法期限取 1w。所有人名、资产、权重、立场、理由都是<b>示例数据</b>，权重数值只为让计算可核对，不是校准结果。理由占比的计数口径（每个提到的标签各计一次）和 <code>n_attend</code> 阈值文档都没有给，示例里是演示参数。</p>
+  <div class="card glow">
+    <div class="ou-stepbar">
+      <button class="btn" id="ouPrev" type="button">上一步</button>
+      <button class="btn pri" id="ouNext" type="button">下一步</button>
+      <button class="btn" id="ouPlay" type="button">自动播放</button>
+      <span class="ou-pos" id="ouPos">0 / 0</span>
+    </div>
+    <div class="ou-dots" id="ouDots"></div>
+    <h3 style="margin:0 0 10px;font-size:16px" id="ouStepTitle">（页面脚本未运行）</h3>
+    <div class="ou-step">
+      <div class="ou-ipo">
+        <div class="card"><div class="ou-lbl">输入</div><p id="ouIn">—</p></div>
+        <div class="card"><div class="ou-lbl">处理</div><p id="ouProc">—</p></div>
+        <div class="card"><div class="ou-lbl">输出</div><p id="ouOut">—</p></div>
+        <div class="card"><div class="ou-lbl">对应文档条目</div><p id="ouRef">—</p></div>
+      </div>
+      <div class="ou-view">
+        <div class="ou-lbl">当前数据<span class="ou-tag">示例数据</span></div>
+        <div id="ouView"></div>
+        <div class="ou-ctl">
+          <label class="ctl" for="ouThr">示例 <code>n_attend</code> 置空阈值（演示参数，文档未定义）</label>
+          <select id="ouThr"><option value="3" selected>3</option><option value="5">5</option><option value="6">6</option><option value="8">8</option></select>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p>这个例子里最值得看的是第 4 步：同一批 5 条看法，人群口径（不加权）、人头加权、资金加权三个均值可以差得很远，甚至符号相反。原因是示例里看多的是三个小户，看空的是一个中户和一个大户。设计文档规定态度默认人头加权、资金流默认资金加权 <span class="ref">§10.1</span>，资金加权的态度均值在这里只作对照。还要注意，两套权重只用在全市场口径，真实计算时是对全体智能体加权，这里为了对比才把同一批人放在一起算 <span class="ref">§4.3</span>。示例只用了这一次激活里出了看法的人；按全体持有者口径，没被激活的人也要按最近一次态度计入，超过 20 个交易日未更新的剔除 <span class="ref">§10.1</span>。</p>
+</section>
+
+<section id="s5" class="reveal">
+  <h2><span class="num">05</span>接口与数据结构</h2>
+  <p class="sub">字段名照抄设计文档 §10.3 的表；取值范围能在 §6.2、§6.3、§7.4、§8.4 找到的就写上，找不到的写“文档未定义”。字段类型、分区方式、文件路径（运行目录以下）设计文档都没有给。</p>
+  <div class="tabs">
+    <div class="tab-bar"><button data-t="main" class="on">主表与激活表</button><button data-t="acct">四张账户类表</button><button data-t="side">旁路表与附表</button><button data-t="json">示例行</button></div>
+    <div class="tab-pane on" data-t="main">
+      <p>帖子表 <span class="ref">§10.3 §7.4 §16.2</span></p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>字段</th><th>含义 / 取值</th></tr></thead>
+        <tbody>
+          <tr><td><code>post_id</code></td><td>帖子标识；生成规则文档未定义</td></tr>
+          <tr><td><code>activation_id</code></td><td>产生这条帖的激活，指向激活表；时点、版本线、补跑、预热从激活表取 <span class="ref">§10.3</span>。发布者帖子是否也有激活记录，文档未写明</td></tr>
+          <tr><td><code>persona_id</code> 或 <code>publisher_id</code></td><td>作者；发布者层的帖子用 <code>publisher_id</code>，不进人群统计 <span class="ref">§5.6</span></td></tr>
+          <tr><td><code>event_id, run_id</code></td><td>关联键</td></tr>
+          <tr><td><code>sim_time</code></td><td>模拟时刻（激活点）</td></tr>
+          <tr><td><code>channel</code></td><td>渠道；MVP 有公开论坛（股吧、雪球两种风格）与熟人群聊 <span class="ref">§7.1</span>，发布者帖子也进本表 <span class="ref">§5.6</span></td></tr>
+          <tr><td><code>group_id, turn</code></td><td>群聊帖所在的群与阶段内接话轮次；同群在阶段内顺序进行最多 M 轮（如 4 轮） <span class="ref">§7.1 §9.1</span></td></tr>
+          <tr><td><code>reply_to</code></td><td>回复关系</td></tr>
+          <tr><td><code>text</code></td><td>正文，带隐式标识 <span class="ref">§16.2</span></td></tr>
+          <tr><td><code>asset, stance, emotion</code></td><td>帖子元数据 <span class="ref">§7.4</span>；帖子的 <code>stance</code> 与 <code>emotion</code> 取值范围是否与态度表一致，文档未定义</td></tr>
+          <tr><td><code>post_type</code></td><td>观点、晒单、求助、吐槽、传闻、喊单、政策解读 <span class="ref">§7.4</span></td></tr>
+          <tr><td><code>rumor_shill_tag</code></td><td>“传闻 / 喊单”分类标签 <span class="ref">§16.2</span></td></tr>
+          <tr><td><code>source_event_ids</code></td><td>帖子所依据的事件卡；L3 发布者帖必须填 <span class="ref">§10.3 §5.3</span></td></tr>
+          <tr><td><code>simulated</code></td><td>恒为真 <span class="ref">§10.3</span></td></tr>
+        </tbody>
+      </table></div>
+      <p>态度表 <span class="ref">§10.3 §6.2</span>（每人每次激活、每个注意到的标的与期限一行；行粒度是按此推断，文档未明写）</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>字段</th><th>含义 / 取值</th></tr></thead>
+        <tbody>
+          <tr><td><code>activation_id, persona_id, event_id, run_id, sim_time</code></td><td>激活、关联键与模拟时刻；缺席的激活在本表没有行 <span class="ref">§10.3 §6.2</span></td></tr>
+          <tr><td><code>asset</code></td><td>只含智能体注意到的标的</td></tr>
+          <tr><td><code>horizon</code></td><td><code>1d | 1w | 1m</code></td></tr>
+          <tr><td><code>stance</code></td><td>−2 到 2</td></tr>
+          <tr><td><code>ret_bucket</code></td><td><code>&lt;-5% | -5~-2% | -2~0% | 0~2% | 2~5% | &gt;5%</code></td></tr>
+          <tr><td><code>confidence</code></td><td>1–5</td></tr>
+          <tr><td><code>reasons</code></td><td>最多 3 个 ReasonTag，按重要性排序</td></tr>
+          <tr><td><code>emotion</code></td><td>fear / greed / regret / fomo，各 0–3</td></tr>
+          <tr><td><code>policy_trust</code></td><td>−1 / 0 / 1</td></tr>
+        </tbody>
+      </table></div>
+      <p class="ou-note"><code>BeliefUpdate</code> 里的 <code>monologue</code>（内心独白）只作审计，不对外交付 <span class="ref">§6.2</span>；<code>want_to_post</code> 也不在态度表字段里。</p>
+      <p>决策表 <span class="ref">§10.3 §6.3</span>（盘前与盘中激活产出订单意向，收盘后与晚间激活产出明日打算，两类同表，按 <code>intent_kind</code> 区分 <span class="ref">§3.4 §6.1</span>）</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>字段</th><th>含义 / 取值</th></tr></thead>
+        <tbody>
+          <tr><td><code>activation_id, persona_id, event_id, run_id, sim_date</code></td><td>激活、关联键与模拟日</td></tr>
+          <tr><td><code>intent_kind</code></td><td><code>order</code>（订单，来自 <code>DecisionIntent</code>）/ <code>plan</code>（明日打算，来自 <code>NextDayPlan</code>，不产生订单）</td></tr>
+          <tr><td><code>asset</code></td><td>标的</td></tr>
+          <tr><td><code>intent_action</code></td><td><code>buy | sell | hold | watch</code></td></tr>
+          <tr><td><code>intent_size</code></td><td><code>tiny | small | half | large | all_in</code>；<code>NextDayPlan</code> 没有仓位字段，<code>plan</code> 行这一列怎么填文档未写明</td></tr>
+          <tr><td><code>execution</code></td><td><code>open | dip | chase</code>：开盘就买卖 / 挂单等回调或反弹 / 盘中追；盘中激活限 <code>chase</code>。LLM 只选执行方式，不报数字价格，挂单价由内核按 <code>dip_k</code> 算 <span class="ref">§6.3</span></td></tr>
+          <tr><td><code>intent_reasons</code></td><td>最多 3 个 ReasonTag</td></tr>
+          <tr><td><code>source_post_ids</code></td><td>当次信息流中影响决定的帖子，最多 2 条 <span class="ref">§6.3 §7.2</span></td></tr>
+          <tr><td><code>rationale</code></td><td>一句话理由；订单意向 ≤120 字，明日打算 ≤60 字 <span class="ref">§6.3</span></td></tr>
+          <tr><td><code>plan_ref</code></td><td>次日盘前的订单意向链回前晚的明日打算，隔夜变卦由此算出 <span class="ref">§10.3 §3.4</span></td></tr>
+          <tr><td><code>exec_qty, exec_price</code></td><td>实际成交数量与价格；部分成交、多笔成交如何汇总，文档未定义</td></tr>
+          <tr><td><code>not_executed_reason</code></td><td>缩量、取消、挂单没成交、涨停买不进、T+1 卖不出、权限不足、舍不得割 <span class="ref">§6.3</span></td></tr>
+          <tr><td><code>liquidity_flag</code></td><td>“需求与流动性不匹配”标记 <span class="ref">§8.2</span></td></tr>
+        </tbody>
+      </table></div>
+      <p>激活表 <span class="ref">§10.3 §9.1</span>（每个智能体每个激活点一行，被抽中但缺席的也记）</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>字段</th><th>含义 / 取值</th></tr></thead>
+        <tbody>
+          <tr><td><code>activation_id, persona_id, run_id, line_id</code></td><td>激活标识、关联键与版本线 <span class="ref">§9.3</span></td></tr>
+          <tr><td><code>sim_time, phase</code></td><td>激活时刻与阶段：盘前 / 盘中 / 收盘后 / 晚间 <span class="ref">§3.4</span></td></tr>
+          <tr><td><code>trigger</code></td><td>ν 抽中 / 事件 / 强制 / 群聊 <span class="ref">§9.1</span></td></tr>
+          <tr><td><code>status, absent_reason</code></td><td>是否缺席；缺席原因取解析失败 / 拒答 / 超时 <span class="ref">§6.2 §9.1</span></td></tr>
+          <tr><td><code>info_cutoff</code></td><td>信息截止点，本次激活只用 <code>available_at</code> ≤ 它的信息</td></tr>
+          <tr><td><code>feed_len</code></td><td>信息流长度；其分布进运行清单 <span class="ref">§7.3 §9.4</span></td></tr>
+          <tr><td><code>backfilled, warmup</code></td><td>补跑与预热标记 <span class="ref">§9.3 §9.2</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="tab-pane" data-t="acct">
+      <p>四张账户类表都由 accounts 的事件日志生成，日频快照只是缓存，可由日志重算 <span class="ref">§8.4 §10.3</span>。关联键 <code>persona_id, run_id, sim_date</code>（交易流水用 <code>sim_time</code>，战绩用 <code>period</code>）。</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>表</th><th>字段</th><th>文档给出的口径</th></tr></thead>
+        <tbody>
+          <tr><td>交易流水</td><td><code>trade_id, persona_id, run_id, sim_time, asset, side, qty, price, fee, stamp_tax, order_type, decision_ref, forced, realized_pnl</code></td><td><code>forced</code> 为强平标记；<code>realized_pnl</code> 按先进先出计成本；费用由 market 按生效日费率算好 <span class="ref">§8.4 §3.3</span></td></tr>
+          <tr><td>出入金</td><td><code>flow_id, persona_id, run_id, sim_date, direction, amount, source, reason, intent_amount</code></td><td><code>source</code> 取计划性 / 行情驱动 / 情景注入；<code>intent_amount</code> 按字段名应是意向金额，它与实际 <code>amount</code> 的关系文档未解释（内核按场外资金余额、现金缓冲与人设参数约束金额） <span class="ref">§8.4 §10.3</span></td></tr>
+          <tr><td>账户快照</td><td><code>persona_id, run_id, sim_date, total_assets, cash, available_cash, withdrawable_cash, market_value, margin_debt, maintenance_ratio, position_ratio, n_holdings, outside_funds, dormant</code></td><td>日终结算后生成；可用资金 = 现金 − 当日冻结买单金额；卖出所得当日可再买、次日才可转出；平仓线券商常见 130%〔需复核〕 <span class="ref">§8.4</span></td></tr>
+          <tr><td>持仓快照</td><td><code>persona_id, run_id, sim_date, asset, qty, sellable_qty, cost_basis, market_price, unrealized_pnl, holding_days</code></td><td>T+1：当日买入只增加 <code>qty</code>，次一交易日开盘前转入 <code>sellable_qty</code>；<code>cost_basis</code> 用哪种成本（FIFO 还是摊薄）文档未定义，prompt 里给智能体看的是摊薄成本〔需复核〕 <span class="ref">§8.4</span></td></tr>
+          <tr><td>战绩</td><td><code>persona_id, run_id, period, twr, mwr, excess_vs_csi300, max_drawdown, win_rate, profit_loss_ratio, turnover, realized_pnl, net_flow</code></td><td>TWR 剔除出入金影响，MWR 反映择时；基准为沪深 300 与中证全指 <span class="ref">§8.4</span>；表里只列了相对沪深 300 的超额</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="tab-pane" data-t="side">
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>表</th><th>字段</th><th>文档给出的口径</th></tr></thead>
+        <tbody>
+          <tr><td>调查表</td><td><code>survey_id, question_id, wording_version, persona_id, run_id, survey_date, answer, option_order</code></td><td>V3 硅基调查的旁路调用：从调查时点的日终快照出发，带当时的人设与记忆答题；答案不写回记忆、不影响后续运行，单独缓存。调用形式同第 1 次调用，不放风格示例帖 <span class="ref">§12.1 §10.3</span></td></tr>
+          <tr><td>信任网络快照</td><td><code>run_id, sim_date, src, dst, trust, follow</code></td><td>持续运行中每 20 个交易日一次 <span class="ref">§10.3 §7.2</span></td></tr>
+        </tbody>
+      </table></div>
+      <p>人设表：<code>persona_id</code> 到人设卡的非敏感字段，以及 <code>w_head</code>、<code>w_cap</code> <span class="ref">§10.3</span>。哪些人设卡字段算“非敏感”，文档未逐一列出；切片要用的年龄段、账户规模、MBTI 气质组、入市年限、交易风格都来自人设卡的 <code>birth_year</code>、<code>account_assets</code>、<code>mbti_type</code>、<code>entry_year</code>、<code>style</code> <span class="ref">§4.1 §10.1</span>；Tier-A 单列要用 <code>tier</code>，借种比例要用 <code>seed_flags</code> <span class="ref">§4.1 §4.3</span>。</p>
+      <p>运行清单 <code>RunManifest</code> <span class="ref">§9.4</span>：代码版本、版本线 <code>line_id</code>、数据快照、人口版本、模型与版本、嵌入模型版本、采样参数、种子、prompt 模板哈希、意向来源、真实帖子注入开关、场外配资开关、涨停成交概率档位与脚本化残差日期块、各底座的内核校准修正量、缓存命中率、token 用量、解析失败率、拒答率与超时率、补跑日占比、信息流长度分布与事后视角命中率。各交付表的每一行经激活表都能追溯到唯一的运行清单。</p>
+    </div>
+    <div class="tab-pane" data-t="json">
+      <div class="callout warn"><b class="t">示意，未实现</b>下面是按 §10.3 字段名拼出的示例行，用 JSON 写只是为了好读，实际是 Parquet 的一行。人名、标的、数值均为示例数据；字段的具体类型和编码文档未定义。</div>
+<pre class="code" data-lang="json"><span class="c">// 激活表一行（示意，未实现；示例数据）</span>
+{
+  <span class="k">"activation_id"</span>: <span class="s">"a-000045"</span>, <span class="k">"persona_id"</span>: <span class="s">"示例-老周"</span>,
+  <span class="k">"run_id"</span>: <span class="s">"示例run"</span>, <span class="k">"line_id"</span>: <span class="s">"示例line"</span>,
+  <span class="k">"sim_time"</span>: <span class="s">"示例日 15:00"</span>, <span class="k">"phase"</span>: <span class="s">"收盘后"</span>, <span class="k">"trigger"</span>: <span class="s">"事件"</span>,
+  <span class="k">"status"</span>: <span class="s">"ok"</span>, <span class="k">"absent_reason"</span>: <span class="n">null</span>,
+  <span class="k">"info_cutoff"</span>: <span class="s">"示例日 15:00"</span>, <span class="k">"feed_len"</span>: <span class="n">8</span>,
+  <span class="k">"backfilled"</span>: <span class="n">false</span>, <span class="k">"warmup"</span>: <span class="n">false</span>
+}
+<span class="c">// 帖子表一行（示意，未实现；示例数据）</span>
+{
+  <span class="k">"post_id"</span>: <span class="s">"p-000123"</span>, <span class="k">"activation_id"</span>: <span class="s">"a-000045"</span>,
+  <span class="k">"persona_id"</span>: <span class="s">"示例-老周"</span>,
+  <span class="k">"event_id"</span>: <span class="s">"E1"</span>, <span class="k">"run_id"</span>: <span class="s">"示例run"</span>,
+  <span class="k">"sim_time"</span>: <span class="s">"示例日 15:00"</span>,
+  <span class="k">"channel"</span>: <span class="s">"论坛·股吧风格"</span>, <span class="k">"group_id"</span>: <span class="n">null</span>, <span class="k">"turn"</span>: <span class="n">null</span>, <span class="k">"reply_to"</span>: <span class="n">null</span>,
+  <span class="k">"text"</span>: <span class="s">"政策都出来了，示例股A这回该有人托底了吧"</span>,
+  <span class="k">"asset"</span>: <span class="s">"示例股A"</span>, <span class="k">"stance"</span>: <span class="n">2</span>,
+  <span class="k">"emotion"</span>: <span class="s">"文档未定义"</span>,
+  <span class="k">"post_type"</span>: <span class="s">"观点"</span>, <span class="k">"rumor_shill_tag"</span>: <span class="n">null</span>,
+  <span class="k">"source_event_ids"</span>: [<span class="s">"E1"</span>], <span class="k">"simulated"</span>: <span class="n">true</span>
+}
+<span class="c">// 态度表一行（示意，未实现；示例数据）</span>
+{
+  <span class="k">"activation_id"</span>: <span class="s">"a-000045"</span>,
+  <span class="k">"persona_id"</span>: <span class="s">"示例-老周"</span>, <span class="k">"event_id"</span>: <span class="s">"E1"</span>, <span class="k">"run_id"</span>: <span class="s">"示例run"</span>,
+  <span class="k">"sim_time"</span>: <span class="s">"示例日 15:00"</span>, <span class="k">"asset"</span>: <span class="s">"示例股A"</span>, <span class="k">"horizon"</span>: <span class="s">"1w"</span>,
+  <span class="k">"stance"</span>: <span class="n">2</span>, <span class="k">"ret_bucket"</span>: <span class="s">"2~5%"</span>, <span class="k">"confidence"</span>: <span class="n">4</span>,
+  <span class="k">"reasons"</span>: [<span class="s">"policy"</span>, <span class="s">"national_team"</span>],
+  <span class="k">"emotion"</span>: {<span class="k">"fear"</span>: <span class="n">0</span>, <span class="k">"greed"</span>: <span class="n">2</span>, <span class="k">"regret"</span>: <span class="n">0</span>, <span class="k">"fomo"</span>: <span class="n">1</span>},
+  <span class="k">"policy_trust"</span>: <span class="n">1</span>
+}
+<span class="c">// 决策表一行：同一次收盘后激活写下的明日打算（示意，未实现；示例数据）</span>
+{
+  <span class="k">"activation_id"</span>: <span class="s">"a-000045"</span>, <span class="k">"persona_id"</span>: <span class="s">"示例-老周"</span>,
+  <span class="k">"event_id"</span>: <span class="s">"E1"</span>, <span class="k">"run_id"</span>: <span class="s">"示例run"</span>, <span class="k">"sim_date"</span>: <span class="s">"示例日"</span>,
+  <span class="k">"intent_kind"</span>: <span class="s">"plan"</span>, <span class="k">"asset"</span>: <span class="s">"示例股A"</span>, <span class="k">"intent_action"</span>: <span class="s">"buy"</span>,
+  <span class="k">"intent_size"</span>: <span class="s">"文档未定义"</span>, <span class="k">"execution"</span>: <span class="n">null</span>,
+  <span class="k">"intent_reasons"</span>: <span class="s">"文档未定义"</span>, <span class="k">"source_post_ids"</span>: [],
+  <span class="k">"rationale"</span>: <span class="s">"明早开盘看看，不低开就上一点"</span>, <span class="k">"plan_ref"</span>: <span class="n">null</span>,
+  <span class="k">"exec_qty"</span>: <span class="n">null</span>, <span class="k">"exec_price"</span>: <span class="n">null</span>, <span class="k">"not_executed_reason"</span>: <span class="n">null</span>,
+  <span class="k">"liquidity_flag"</span>: <span class="n">false</span>
+}</pre>
+      <p class="ou-note">明日打算行只有 <code>NextDayPlan</code> 的三个字段（<code>asset</code>、<code>action</code>、<code>rationale</code>），其余列怎么填文档未写明，示例里写“文档未定义”或 null。次日盘前老周的订单意向行会用 <code>plan_ref</code> 指回这一行；<code>plan_ref</code> 取什么值（这一行没有行主键）文档也未定义。聚合后的切片指标表（第 4 节最后一步输出的那一行）不在 §10.3 的表之内，设计文档没有给它的字段名；第 4 节里那一行的字段是本页为演示起的名字。</p>
+    </div>
+  </div>
+</section>
+
+<section id="s6" class="reveal">
+  <h2><span class="num">06</span>设计取舍与已定决定</h2>
+  <p class="sub">每条写选了什么、放弃了什么、为什么。卡片来自设计文档和 2026-10-29 的讨论记录；下方是 2026-10-30 架构讨论中与本模块有关、已并入设计文档 v0.3 的决定。</p>
+  <div class="grid g2 ou-cmp">
+    <div class="card"><h4>交付描述性的表，不交付因子</h4>
+      <p><b>选了：</b>帖子、态度、决策三张主表，激活表，调查表与信任网络快照，四张账户类表，群体态度指标作为描述性产出 <span class="ref">§10.3 §10.2</span>。</p>
+      <p><b>放弃了：</b>候选因子表、Qlib / alphalens 导出，“市场状态指标”改名“群体态度指标”（讨论记录第 8 项）。</p>
+      <p><b>为什么：</b>项目定位是模拟散户的声音、态度和决策。输出是模拟不是测量，本项目不对预测力负责；下游若用来构造因子或交易，检验与合规由下游负责 <span class="ref">§10.4 §16.3</span>。</p></div>
+    <div class="card"><h4>人群口径不加权</h4>
+      <p><b>选了：</b>全市场口径用 <code>w_head</code> / <code>w_cap</code> 加权，人群口径看格内原始样本 <span class="ref">§10.1 §4.3</span>。</p>
+      <p><b>放弃了：</b>在切片内部也按权重加总。</p>
+      <p><b>为什么：</b>切片保底抽样就是为了让大户和小众人群有样本；格内再加权，少数高权重个体会主导结果。代价是格内结论只能描述，比较要合并到气质组或年龄段 <span class="ref">§10.1 §11.4</span>。</p></div>
+    <div class="card"><h4>态度只在注意到的人上聚合</h4>
+      <p><b>选了：</b>分母只含注意到该标的的智能体，同时输出 <code>n_attend</code>，覆盖太少置空 <span class="ref">§10.1</span>。</p>
+      <p><b>放弃了：</b>把没看法的人当中性（立场 0）计入。</p>
+      <p><b>为什么：</b>注意力预算只有 3–15 条 <span class="ref">§5.4</span>，绝大多数人对多数个股没有看法，计作 0 会把所有个股的立场拉向中性。代价是冷门股的指标常常为空，阈值还没定。</p></div>
+    <div class="card"><h4>发布者进帖子表，不进人群统计</h4>
+      <p><b>选了：</b>L0–L4 的帖子留在帖子表里，带 <code>publisher_id</code> 和标签，人群统计排除 <span class="ref">§10.1 §5.6</span>。</p>
+      <p><b>放弃了：</b>把发布者当成普通智能体，或干脆不导出它们的帖子。</p>
+      <p><b>为什么：</b>发布者只发帖不交易，是信息环境的一部分。保留它们的帖子，下游才能研究“散户在什么信息环境下说了什么”；不进统计，散户态度才不被喊单号拉偏。发布者帖子也不能代替真实帖子做 V2 对照 <span class="ref">§5.6</span>。</p></div>
+    <div class="card"><h4>账户类表从事件日志生成</h4>
+      <p><b>选了：</b>四张账户类表都由 accounts 的只追加事件日志重放得到，日频快照只是缓存 <span class="ref">§8.4 §10.3</span>。</p>
+      <p><b>放弃了：</b>由 market、agents 各自把账户状态直接写进交付表。</p>
+      <p><b>为什么：</b>战绩要能核对、重放和分叉；休眠账户要保留，否则战绩有幸存者偏差 <span class="ref">§8.4</span>。预跑历史单独标 <code>seeded</code>，避免和仿真期战绩混算 <span class="ref">§10.3</span>。</p></div>
+    <div class="card"><h4>验收不过时停交付相应的表</h4>
+      <p><b>选了：</b>V2 不过且风格微调后仍不过，帖子降为内部参考，对外只交付态度与决策；V4 不过，修内核并暂停交付决策表与账户类表 <span class="ref">§15.2</span>。</p>
+      <p><b>放弃了：</b>验收结果只写进报告、表照常交付。</p>
+      <p><b>为什么：</b>帖子表靠 V2 撑腰，决策表与账户类表靠 V4。V2 管文本像不像，V4 管行为与战绩对不对 <span class="ref">§12.1</span>；证据不足的表继续交付，下游会把它当成可用数据。</p></div>
+  </div>
+  <div class="callout decide"><b class="t">已定（v0.3 §5.3 §5.6，来自架构讨论 A3）</b>events 只产出 L0、L1 两类无立场版本；L2–L4 的文本由 social 的发布者以 <code>Post</code> 产出 <span class="ref">§5.3</span>。L3 可以歪曲，不做事实校验，但须标注所依据的 <code>event_id</code>，落到帖子表就是 <code>source_event_ids</code> 必填 <span class="ref">§5.3 §10.3</span>；L4 传闻另立 <code>origin="rumor"</code> 的事件卡，带“传闻”标签，只在沙盒运行 <span class="ref">§5.3 §16.2</span>。对 outputs 的影响：L4 帖子的 <code>event_id</code> 指向一张传闻事件卡，下游按事件统计时要能区分 <code>origin</code>，而 <code>origin</code> 在事件卡上，不在帖子表字段里。</div>
+  <p>A1（前复权给智能体看、后复权算战绩，§5.5）和 A4（解析失败两次后记“未激活”、不沿用上期信念，§6.2）也已并入，对 outputs 的影响见第 3.4 节。A5（Tier-A 单列、借种标记，§4.3）见第 3.2 节。A2 讲前向采集，和本模块没有直接关系。</p>
+</section>
+
+<section id="s7" class="reveal">
+  <h2><span class="num">07</span>与其他模块的关系</h2>
+  <p class="sub">outputs 处在链条末端：几乎每个业务模块都往里送东西，它不往回写任何模块。类型都经 schemas 共享，由 orchestrator 串起来 <span class="ref">§3.3</span>。</p>
+  <div class="grid g3">
+    <div class="card"><div class="ou-lbl">上游：内容与行为</div>
+      <p style="margin:0;font-size:13.5px;color:var(--ink2)"><a href="mod-agents.html">agents</a>：散户的 <code>Post</code>、<code>BeliefUpdate</code>、<code>DecisionIntent</code> 与 <code>NextDayPlan</code> <span class="ref">§3.3 §6.3</span>。<br><a href="mod-social.html">social</a>：发布者帖子与回复关系 <span class="ref">§5.6 §7.4</span>。<br><a href="mod-market.html">market</a>：<code>Fill</code>，填决策表的成交字段 <span class="ref">§3.3</span>。<br><a href="mod-events.html">events</a>：<code>EventCard</code> 提供 <code>event_id</code>。</p></div>
+    <div class="card"><div class="ou-lbl">上游：账户、人口与运行</div>
+      <p style="margin:0;font-size:13.5px;color:var(--ink2)"><a href="mod-accounts.html">accounts</a>：事件日志与快照，生成四张账户类表 <span class="ref">§8.4 §10.3</span>。<br><a href="mod-population.html">population</a>：人设卡、<code>w_head</code>、<code>w_cap</code>，以及切片要用的 <code>tier</code> 与 <code>seed_flags</code> <span class="ref">§4.1 §4.3</span>。<br><a href="mod-orchestrator.html">orchestrator</a>：激活记录（填激活表）、<code>RunManifest</code> 与 <code>/runs/&lt;run_id&gt;/</code> 目录布局，交付表也放在这里 <span class="ref">§3.3 §9.1 §9.4</span>。</p></div>
+    <div class="card"><div class="ou-lbl">下游与边界</div>
+      <p style="margin:0;font-size:13.5px;color:var(--ink2)"><a href="mod-validation.html">validation</a>：V2–V4 要用帖子、态度、决策与账户类表，验收不过时这里暂停交付相应的表 <span class="ref">§12.1 §15.2</span>。<br>内部下游项目：只在团队内部流转 <span class="ref">§16.2</span>。<br>边界：不生成内容、不判成交、不记账；类型定义在 <a href="mod-schemas.html">schemas</a>。</p></div>
+  </div>
+  <p>outputs 和 accounts 的分界最容易混。accounts 维护事件日志、做日终结算、生成每日快照和战绩 <span class="ref">§3.3 §8.4</span>；outputs 只把这些整理成交付表，补上 <code>run_id</code>、<code>activation_id</code> 和 <code>seeded</code> 标记，不重新计算任何账户数字。同理，帖子正文由 agents 和 social 生成，outputs 不改写，只确认 <code>simulated</code> 为真、<code>rumor_shill_tag</code> 有值 <span class="ref">§16.2</span>。</p>
+  <p>和 population 的关系体现在切片上：切片维度（年龄段、账户规模、气质组、入市年限、交易风格、渠道）都来自人设卡 <span class="ref">§10.1</span>，权重也来自 population 的 IPF。§4.3 规定人群切片默认只用 Tier-B，Tier-A 单列，并附“不同种子数 / 借种比例”，种子稀少格只作描述，所以 outputs 要能从人设表读到 <code>tier</code> 和 <code>seed_flags</code>（<code>seed_borrowed</code>、<code>seed_sparse</code>）<span class="ref">§4.1 §4.3</span>。</p>
+  <p>想看这些表在一次运行里什么时候写出，读 <a href="flow-day.html">一天的流程</a> 和 <a href="flow-run.html">一次运行</a>。发布者帖子为什么进表不进统计，<a href="sim-publishers.html">发布者模拟</a> 用 L0–L4 的例子演示了它们在信息流里的作用。不同人设对同一事件为什么说法和做法不同，从而让理由分解和言行不一有内容可统计，见 <a href="sim-personas.html">人设模拟</a>。</p>
+</section>
+
+<section id="s8" class="reveal">
+  <h2><span class="num">08</span>开放问题</h2>
+  <p class="sub">文档里还没定的数字和口径，v0.3 并入架构讨论后留下的口径问题，以及标了〔需复核〕的条目。本页凡是写“文档未定义”的地方都在这里。</p>
+  <div class="callout todo"><b class="t">未定的数字与口径</b>
+  <ul>
+    <li><code>n_attend</code> “覆盖太少时置空”的阈值没有数 <span class="ref">§10.1</span>；第 4 节演示里的阈值选项只是示例。</li>
+    <li>群体态度指标（恐惧/贪婪、政策托底信任度、杠杆意愿、新入场意愿、分歧度）各自由哪些字段、按什么公式算出 <span class="ref">§10.2</span>。</li>
+    <li>理由分解的计数口径：一条态度带多个理由标签时每个标签计一次还是按比例分摊；第 4 节用的是“每个标签计一次”，属演示约定。</li>
+    <li>“注意到该标的”的判定：是被注意力预算抽中的信息里提到该标的，还是只要持仓或自选就算 <span class="ref">§5.4 §10.1</span>。</li>
+    <li>交易流水表的 <code>decision_ref</code> 指向哪一行，决策表没有主键字段 <span class="ref">§10.3</span>。</li>
+    <li>一条意向分多笔成交时，决策表的 <code>exec_qty</code>、<code>exec_price</code> 怎么汇总（合计、成交均价）。</li>
+    <li>切片结果放哪张表、表结构是什么；跨种子均值与标准差 <span class="ref">§9.4</span> 怎么存。</li>
+    <li>Parquet 的字段类型、分区方式、文件路径（<code>/runs/&lt;run_id&gt;/</code> 以下）；人设表“非敏感字段”具体是哪些 <span class="ref">§10.3</span>。</li>
+    <li>帖子表的 <code>stance</code>、<code>emotion</code> 取值范围是否与态度表一致，由谁打（生成时自带还是事后分类）。</li>
+  </ul>
+  <b class="t" style="margin-top:10px">v0.3 留下的口径问题</b>
+  <ul>
+    <li>口头战绩与实际战绩之差 <span class="ref">§10.2</span> 按哪个价格口径比：智能体看前复权，战绩用后复权 <span class="ref">§5.5</span>，文档没有换算规则；持仓快照的 <code>cost_basis</code> 是 FIFO、摊薄成本还是复权后的成本，也未定义 <span class="ref">§8.4</span>。</li>
+    <li>L4 传闻帖的 <code>event_id</code> 指向 <code>origin="rumor"</code> 的事件卡 <span class="ref">§5.3</span>；帖子表是否另加字段区分，还是下游自行关联事件卡。</li>
+    <li>“不同种子数 / 借种比例” <span class="ref">§4.3</span> 作为切片表的列还是单独报告。</li>
+    <li>决策表里明日打算行的 <code>intent_size</code>、<code>intent_reasons</code> 怎么填：<code>NextDayPlan</code> 只有 <code>asset</code>、<code>action</code>、<code>rationale</code> <span class="ref">§6.3 §10.3</span>；<code>plan_ref</code> 引用前晚哪一行，同样缺行主键。</li>
+    <li>发布者帖子有没有 <code>activation_id</code>：激活表按智能体记，发布者不在其中 <span class="ref">§10.3 §5.6</span>，发布者帖子的时点、版本线从哪里取文档未写明。</li>
+    <li>激活表用 <code>sim_time</code>，决策表用 <code>sim_date</code>；同一天盘前与盘中两次激活的订单意向要靠 <code>activation_id</code> 区分 <span class="ref">§10.3</span>。</li>
+  </ul>
+  <b class="t" style="margin-top:10px">〔需复核〕</b>
+  <ul>
+    <li>智能体在提示词里看到的成本价按券商 App 摊薄成本显示〔需复核〕 <span class="ref">§8.4</span>。</li>
+    <li>出入金群体总量对照证券交易结算资金与银证转账数据〔需复核〕 <span class="ref">§8.4 §12.1</span>。</li>
+    <li>两融平仓线按券商常见 130%〔需复核〕，影响交易流水表 <code>forced</code> 的出现频率 <span class="ref">§8.4</span>。</li>
+  </ul>
+  </div>
+</section>
+
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=String(txt);return e;}
+function clear(n){while(n&&n.firstChild)n.removeChild(n.firstChild);}
+function fin(x){return typeof x==='number'&&isFinite(x);}
+function fmt(x,d){return fin(x)?x.toFixed(d):'—';}
+function ratio(a,b){return fin(a)&&fin(b)&&b!==0?a/b:null;}
+
+/* ---------- 3.1 表关系图 ---------- */
+var T={
+ persona:{n:'人设表',g:'每个智能体一行',src:'population',tm:'无（随人口版本）',k:['persona_id'],
+  f:['persona_id','人设卡非敏感字段（文档未定义）','tier','seed_flags','w_head','w_cap'],note:'§4.3：人群切片默认只用 Tier-B，Tier-A 单列；人群结论附不同种子数与借种比例，seed_flags 含 seed_sparse 的格只作描述。tier、seed_flags 是人设卡字段，是否列入非敏感字段文档未写明。',r:'§10.3 §4.1 §4.3'},
+ manifest:{n:'运行清单',g:'每次运行一份',src:'orchestrator',tm:'无',k:['run_id'],
+  f:['代码版本','版本线 line_id','数据快照','人口版本','模型与版本','嵌入模型版本','采样参数','种子','prompt 模板哈希','意向来源','真实帖子注入开关','场外配资开关','涨停成交概率档位与脚本化残差日期块','内核校准修正量','缓存命中率','token 用量','解析失败率、拒答率与超时率','补跑日占比','信息流长度分布','事后视角命中率'],note:'这里是文档列出的内容项，除 line_id 外字段名文档未定义。各交付表的每一行经激活表都能追溯到唯一的运行清单。',r:'§9.4'},
+ act:{n:'激活表',g:'每个智能体每个激活点一行，缺席也记',src:'orchestrator（激活与缺席），agents（解析失败、拒答）',tm:'sim_time',k:['activation_id','persona_id','run_id','line_id'],
+  f:['activation_id','persona_id','run_id','line_id','sim_time','phase','trigger','status','absent_reason','info_cutoff','feed_len','backfilled','warmup'],note:'phase：盘前 / 盘中 / 收盘后 / 晚间；trigger：ν 抽中 / 事件 / 强制 / 群聊；absent_reason：解析失败 / 拒答 / 超时。时点、版本线、补跑、预热等行级元数据只在这里存一份，其余各表经 activation_id 取用。',r:'§10.3 §9.1 §9.2 §9.3'},
+ post:{n:'帖子表',g:'每条帖子一行',src:'agents（散户帖）、social（发布者帖）',tm:'sim_time',k:['post_id','activation_id','persona_id','publisher_id','event_id','run_id','reply_to'],
+  f:['post_id','activation_id','persona_id','publisher_id','event_id','run_id','sim_time','channel','group_id','turn','reply_to','text','asset','stance','emotion','post_type','rumor_shill_tag','source_event_ids','simulated'],note:'作者字段二选一；发布者帖子进本表、不进人群统计，是否有 activation_id 文档未写明。group_id、turn 记群聊轮次；L3 发布者帖必须填 source_event_ids。simulated 恒为真，只在内部流转。',r:'§10.3 §5.3 §5.6 §16.2'},
+ att:{n:'态度表',g:'文档未明说；按字段看，每人每次激活对每个标的、期限一条看法',src:'agents（BeliefUpdate）',tm:'sim_time',k:['activation_id','persona_id','event_id','run_id'],
+  f:['activation_id','persona_id','event_id','run_id','sim_time','asset','horizon','stance','ret_bucket','confidence','reasons','emotion','policy_trust'],note:'只对注意到的标的有行；缺席的激活没有行。全体持有者口径与发声者口径都从这张表算，前者对没被激活的人沿用最近一次的行。',r:'§10.3 §6.2 §10.1'},
+ dec:{n:'决策表',g:'文档未明说；按字段看，每条订单意向或明日打算一行',src:'agents（意向与明日打算），market 与内核（成交、未执行原因）',tm:'sim_date',k:['activation_id','persona_id','event_id','run_id','plan_ref'],
+  f:['activation_id','persona_id','event_id','run_id','sim_date','intent_kind','asset','intent_action','intent_size','execution','intent_reasons','source_post_ids','rationale','plan_ref','exec_qty','exec_price','not_executed_reason','liquidity_flag'],note:'intent_kind 区分订单意向（order）和明日打算（plan）；plan_ref 把次日盘前的意向链回前晚的打算，用来算隔夜变卦。liquidity_flag 对应 §8.2 第 4 步。意向和实际成交放在同一行，言行不一率直接按行统计。',r:'§10.3 §6.3 §3.4'},
+ trade:{n:'交易流水表',g:'每笔成交一行',src:'accounts（事件日志）',tm:'sim_time',k:['trade_id','persona_id','run_id','decision_ref'],
+  f:['trade_id','persona_id','run_id','sim_time','asset','side','qty','price','fee','stamp_tax','order_type','decision_ref','forced','realized_pnl'],note:'decision_ref 从成交指回决策，指向决策表哪一行文档未定义（决策表没有主键字段）。forced 为强平标记，realized_pnl 按 FIFO。',r:'§10.3 §8.4'},
+ flow:{n:'出入金表',g:'每笔银证转账一行',src:'accounts（事件日志）',tm:'sim_date',k:['flow_id','persona_id','run_id'],
+  f:['flow_id','persona_id','run_id','sim_date','direction','amount','source','reason','intent_amount'],note:'source 取计划性、行情驱动、情景注入三类。',r:'§10.3 §8.4'},
+ snap:{n:'账户快照表',g:'每人每日一行',src:'accounts（日终快照）',tm:'sim_date',k:['persona_id','run_id','sim_date'],
+  f:['persona_id','run_id','sim_date','total_assets','cash','available_cash','withdrawable_cash','market_value','margin_debt','maintenance_ratio','position_ratio','n_holdings','outside_funds','dormant'],note:'休眠账户保留，dormant 标记；预跑历史单独存放并标 seeded。',r:'§10.3 §8.4'},
+ hold:{n:'持仓快照与战绩表',g:'持仓：每人每股每日一行；战绩：每人每期一行',src:'accounts',tm:'sim_date；战绩另有 period',k:['persona_id','run_id','sim_date','period'],
+  f:['persona_id','run_id','sim_date','asset','qty','sellable_qty','cost_basis','market_price','unrealized_pnl','holding_days','period','twr','mwr','excess_vs_csi300','max_drawdown','win_rate','profit_loss_ratio','turnover','realized_pnl','net_flow'],note:'cost_basis 用哪种成本口径文档未定义；TWR 与 MWR 之差即择时损失。',r:'§10.3 §8.4'},
+ survey:{n:'调查表',g:'文档未明说；按字段看，每人每题每次调查一行',src:'validation（V3 硅基调查的旁路调用）',tm:'survey_date',k:['survey_id','question_id','persona_id','run_id'],
+  f:['survey_id','question_id','wording_version','persona_id','run_id','survey_date','answer','option_order'],note:'旁路调用取调查时点的日终快照，作答不写入记忆、单独缓存；wording_version 与 option_order 记措辞版本和选项顺序。',r:'§10.3 §12.1'},
+ trust:{n:'信任网络快照',g:'每条有向边每次快照一行',src:'social（信任网络）',tm:'sim_date',k:['run_id','src','dst'],
+  f:['run_id','sim_date','src','dst','trust','follow'],note:'持续运行中每 20 个交易日存一次。src、dst 是否限于 persona_id 文档未写明。',r:'§10.3 §7.2'}
+};
+var map=document.getElementById('ouMap'),info=document.getElementById('ouInfo');
+function line(lbl,val){var p=el('p','');p.style.margin='2px 0';p.style.fontSize='13.5px';var b=el('b','',lbl+'：');p.appendChild(b);p.appendChild(document.createTextNode(val));return p;}
+function showTable(k){
+ var d=T[k];if(!d||!map||!info)return;
+ var nodes=map.querySelectorAll('.ou-node'),lns=map.querySelectorAll('.ou-ln'),near={};near[k]=1;
+ Array.prototype.forEach.call(lns,function(ln){
+  var ks=(ln.getAttribute('data-n')||'').split(/\s+/),hit=ks.indexOf(k)>=0;
+  ln.classList.toggle('hot',hit);ln.classList.toggle('dim',!hit);
+  if(hit&&(ks.length<4||ks[0]==='act'||k==='persona'||k==='manifest'))ks.forEach(function(x){near[x]=1;});
+ });
+ Array.prototype.forEach.call(nodes,function(nd){var kk=nd.getAttribute('data-k');nd.classList.toggle('on',kk===k);nd.classList.toggle('dim',!near[kk]);});
+ clear(info);
+ var h=el('h4','',d.n);h.style.margin='0 0 4px';info.appendChild(h);
+ info.appendChild(line('粒度',d.g));info.appendChild(line('关联键',d.k.join(' · ')));
+ info.appendChild(line('来源模块',d.src));info.appendChild(line('时间字段',d.tm));
+ var fl=el('div','ou-flds');d.f.forEach(function(f){fl.appendChild(el('code',d.k.indexOf(f)>=0?'k':'',f));});info.appendChild(fl);
+ var nt=el('p','ou-note',d.note+' ');nt.appendChild(el('span','ref',d.r));info.appendChild(nt);
+}
+if(map){Array.prototype.forEach.call(map.querySelectorAll('.ou-node'),function(nd){
+ var k=nd.getAttribute('data-k');
+ nd.addEventListener('click',function(){showTable(k);});
+ nd.addEventListener('focus',function(){showTable(k);});
+ nd.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();showTable(k);}});
+});}
+/* ---------- 4 步进演示（示例数据） ---------- */
+var A=[
+ {n:'老周',t:'RT1',as:8,wh:52000,st:2,rs:['policy','national_team'],post:true},
+ {n:'王姐',t:'RT2',as:25,wh:30000,st:1,rs:['policy','trend']},
+ {n:'小陈',t:'RT1',as:5,wh:61000,st:1,rs:['kol','herd'],post:true},
+ {n:'赵叔',t:'RT3',as:120,wh:9000,st:-1,rs:['valuation','fear'],post:true},
+ {n:'钱总',t:'RT5',as:1500,wh:600,st:-2,rs:['fundamental','valuation']},
+ {n:'孙阿姨',t:'RT2',as:18,wh:34000,st:null,rs:[],na:true}
+];
+var PUB={n:'某喊单号（发布者 L4）',st:2,tag:'传闻'};
+A.forEach(function(a){a.wc=fin(a.wh)&&fin(a.as)?a.wh*a.as/10000:null;});/* 亿元；w_cap = w_head × 资产，演示约定 */
+function getThr(){var s=document.getElementById('ouThr');var v=s?parseInt(s.value,10):NaN;return fin(v)&&v>0?v:3;}
+function sgn(x){return fin(x)?(x>0?'+':'')+x:'无';}
+function calc(){
+ var rows=A.filter(function(a){return !a.na&&fin(a.st);}),n=rows.length,thr=getThr();
+ var s=0,sh=0,wh=0,sc=0,wc=0,all=0;
+ rows.forEach(function(a){s+=a.st;if(fin(a.wh)){sh+=a.wh*a.st;wh+=a.wh;}if(fin(a.wc)){sc+=a.wc*a.st;wc+=a.wc;}});
+ A.forEach(function(a){all+=fin(a.st)?a.st:0;});
+ var ok=n>=thr;
+ return {rows:rows,n:n,thr:thr,ok:ok,u:ok?ratio(s,n):null,h:ok?ratio(sh,wh):null,c:ok?ratio(sc,wc):null,
+  wrong:ratio(all,A.length),uRaw:ratio(s,n),whSum:wh,wcSum:wc,shSum:sh,scSum:sc};
+}
+function reasons(rows,bull){
+ var g=rows.filter(function(a){return bull?a.st>0:a.st<0;}),cnt={},out=[];
+ g.forEach(function(a){a.rs.forEach(function(r){cnt[r]=(cnt[r]||0)+1;});});
+ Object.keys(cnt).forEach(function(r){out.push({r:r,c:cnt[r],p:ratio(cnt[r],g.length)});});
+ out.sort(function(x,y){return y.c-x.c;});return {n:g.length,list:out};
+}
+function table(head,rows){
+ var w=el('div','tbl-wrap'),t=el('table','tbl'),th=el('thead'),tr=el('tr');
+ head.forEach(function(h){tr.appendChild(el('th','',h));});th.appendChild(tr);t.appendChild(th);
+ var tb=el('tbody');rows.forEach(function(r){var x=el('tr',r.cls||'');r.c.forEach(function(v){x.appendChild(el('td','',v));});tb.appendChild(x);});
+ t.appendChild(tb);w.appendChild(t);return w;
+}
+function note(txt){return el('p','ou-note',txt);}
+var S=[];
+S.push({ti:'第 1 步：收集这个切片里与示例股A 有关的原始行',
+ i:'帖子表 4 行（3 条散户帖、1 条发布者帖），态度表里 E1 之后对示例股A、期限 1w 的看法 5 行。孙阿姨这次激活没注意到示例股A，所以没有看法行。',
+ p:'按 event_id = E1、asset = 示例股A、horizon = 1w 取行，用 persona_id 连到人设表，拿到账户档和两个权重。',
+ o:'7 个来源：6 个智能体，1 个发布者。',
+ r:'§10.3 三张主表以 persona_id、event_id、run_id 关联；§6.2 views 只对注意到的标的输出。',
+ v:function(){
+  var rows=A.map(function(a){return {c:[a.n,a.t,a.as+' 万',a.na?'无看法行':sgn(a.st),a.na?'—':a.rs.join(', '),a.post?'有':'无']};});
+  rows.push({c:[PUB.n,'—','—',sgn(PUB.st)+'（帖子自带）','—','有，带“'+PUB.tag+'”标签']});
+  var b=el('div');b.appendChild(table(['来源','账户档','资产','立场','理由标签','帖子'],rows));
+  b.appendChild(note('立场取 −2 到 +2，理由标签取 §6.2 的固定枚举，每条至多 3 个。'));return b;}});
+S.push({ti:'第 2 步：去掉发布者和没注意到的人',
+ i:'第 1 步的 7 个来源。',
+ p:'发布者帖子留在帖子表，但不进任何人群统计。态度只在注意到该标的的智能体上聚合，孙阿姨不计入分母，也不当作立场 0。',
+ o:'',
+ r:'§10.1 发布者层的帖子不进入人群统计；态度只在“注意到该标的”的智能体上聚合。§5.6',
+ v:function(){
+  var c=calc();this.o='留下 '+c.n+' 条看法，n_attend = '+c.n+'。';
+  var rows=A.map(function(a){return {cls:a.na?'ex':'hl',c:[a.n,a.na?'剔除：没注意到':'保留',sgn(a.st)]};});
+  rows.push({cls:'ex',c:[PUB.n,'剔除：发布者',sgn(PUB.st)]});
+  var b=el('div');b.appendChild(table(['来源','处理','立场'],rows));
+  b.appendChild(note('如果把孙阿姨记作 0，不加权均值会从 '+fmt(c.uRaw,3)+' 变成 '+fmt(c.wrong,3)+'；全市场成千只个股都这样算，立场会整体被拉向中性。'));return b;}});
+S.push({ti:'第 3 步：检查覆盖人数 n_attend',
+ i:'第 2 步留下的看法条数。',
+ p:'覆盖太少时置空。阈值文档没有给，下方选择框里的值是演示参数，可以改了看结果。',
+ o:'',
+ r:'§10.1 同时输出覆盖人数 n_attend，覆盖太少时置空。',
+ v:function(){
+  var c=calc();this.o=c.ok?'n_attend = '+c.n+' ≥ 阈值 '+c.thr+'，继续计算。':'n_attend = '+c.n+' < 阈值 '+c.thr+'，本切片的立场指标置空，只输出 n_attend。';
+  var b=el('div'),r=el('div','ou-res');
+  var d1=el('div',c.ok?'':'hot');d1.appendChild(el('b','',c.n));d1.appendChild(el('span','','n_attend'));
+  var d2=el('div');d2.appendChild(el('b','',c.thr));d2.appendChild(el('span','','示例阈值'));
+  var d3=el('div',c.ok?'hot':'');d3.appendChild(el('b','',c.ok?'计算':'置空'));d3.appendChild(el('span','','结果'));
+  r.appendChild(d1);r.appendChild(d2);r.appendChild(d3);b.appendChild(r);
+  b.appendChild(note('置空和“立场为 0”不同：0 表示有人看、看法中性，置空表示样本不够，不给数。'));return b;}});
+S.push({ti:'第 4 步：同一批看法，三种算法',
+ i:'5 条看法和每人的 w_head、w_cap。',
+ p:'人群口径看格内原始样本，直接平均。另外两个是全市场口径的算法，放在这里只为对比：人头加权 = Σ w_head·立场 / Σ w_head，资金加权同理。',
+ o:'',
+ r:'§10.1 态度与情绪默认人头加权，资金流默认资金加权；人群口径看格内原始样本。§4.3',
+ v:function(){
+  var c=calc();
+  this.o=c.ok?'本切片输出不加权均值 '+fmt(c.u,3)+'。人头加权 '+fmt(c.h,3)+'，资金加权 '+fmt(c.c,3)+'，'+(fin(c.c)&&fin(c.u)&&c.c*c.u<0?'资金加权连符号都和不加权相反。':'三个数差得很远。'):'n_attend 不足阈值，三个均值都置空。';
+  var rows=c.rows.map(function(a){return {c:[a.n,sgn(a.st),fin(a.wh)?a.wh.toLocaleString('zh-CN'):'—',fmt(a.wc,1)]};});
+  rows.push({cls:'hl',c:['合计','—',c.whSum.toLocaleString('zh-CN'),fmt(c.wcSum,1)]});
+  var b=el('div');b.appendChild(table(['智能体','立场','w_head（人）','w_cap（亿元）'],rows));
+  var r=el('div','ou-res');
+  [[c.u,'不加权（本切片）',true],[c.h,'人头加权（对照）',false],[c.c,'资金加权（对照）',false]].forEach(function(x){
+   var d=el('div',x[2]?'hot':'');d.appendChild(el('b','',c.ok?fmt(x[0],3):'置空'));d.appendChild(el('span','',x[1]));r.appendChild(d);});
+  b.appendChild(r);
+  b.appendChild(note('人头加权：'+c.shSum.toLocaleString('zh-CN')+' / '+c.whSum.toLocaleString('zh-CN')+'；资金加权：'+fmt(c.scSum,1)+' / '+fmt(c.wcSum,1)+'。看多的是三个小户，人头多；看空的有一个 RT5 大户，资金多。'));
+  return b;}});
+S.push({ti:'第 5 步：理由分解',
+ i:'5 条看法的 reasons 标签。',
+ p:'把看多者和看空者分开，分别统计每个理由标签出现在多少人的理由里，除以该组人数。每个标签计一次是演示约定，文档没有给计数口径。',
+ o:'',
+ r:'§10.2 理由分解：看多者与看空者中各理由标签的占比；标签枚举见 §6.2。',
+ v:function(){
+  var c=calc(),bu=reasons(c.rows,true),be=reasons(c.rows,false),b=el('div');
+  this.o='看多 '+bu.n+' 人，最常见 '+(bu.list[0]?bu.list[0].r:'无')+'；看空 '+be.n+' 人，最常见 '+(be.list[0]?be.list[0].r:'无')+'。'+(c.ok?'':'n_attend 不足阈值，实际输出时这组占比置空。');
+  [[bu,'看多者',false],[be,'看空者',true]].forEach(function(g){
+   b.appendChild(el('div','ou-lbl',g[1]+'（'+g[0].n+' 人）'));
+   if(!g[0].list.length){b.appendChild(note('无'));return;}
+   g[0].list.forEach(function(x){
+    var row=el('div','ou-bar'+(g[2]?' bear':'')),tr=el('div','tr'),i=el('i'),pct=fin(x.p)?Math.max(0,Math.min(1,x.p)):0;
+    i.style.width=(pct*100).toFixed(0)+'%';tr.appendChild(i);
+    row.appendChild(el('span','',x.r));row.appendChild(tr);row.appendChild(el('b','',fin(x.p)?(x.p*100).toFixed(0)+'%':'—'));b.appendChild(row);});
+  });
+  b.appendChild(note('一人最多 3 个标签，所以同组占比加起来可以超过 100%。'));return b;}});
+S.push({ti:'第 6 步：写出一行切片结果',
+ i:'第 3 到第 5 步的结果，加上运行信息。',
+ p:'带上 run_id 和这批行所在激活的 info_cutoff：收盘后激活只用当日收盘前可得的信息。本例只用了这次激活里出了看法的人（发声者样本）。跨种子运行时还要记均值与标准差。',
+ o:'',
+ r:'§10.3 info_cutoff 在激活表，各表经 activation_id 取用；§10.1 两种态度口径；§9.4 聚合值同时记录跨种子均值与标准差，每行经激活表可追溯到唯一运行清单。',
+ v:function(){
+  var c=calc(),bu=reasons(c.rows,true),be=reasons(c.rows,false);
+  this.o=c.ok?'一行结果，立场均值 '+fmt(c.u,3)+'。':'一行结果，立场均值为 null，只保留 n_attend。';
+  function sh(g){var o={};g.list.forEach(function(x){o[x.r]=fin(x.p)?Number(x.p.toFixed(3)):null;});return o;}
+  var row={slice:'SJ 气质组',event_id:'E1',asset:'示例股A',horizon:'1w',run_id:'<示例 run_id>',n_attend:c.n,
+   stance_mean:c.ok&&fin(c.u)?Number(c.u.toFixed(3)):null,
+   reason_share_bull:c.ok?sh(bu):null,reason_share_bear:c.ok?sh(be):null,info_cutoff:'示例日 15:00'};
+  var b=el('div');b.appendChild(el('div','ou-lbl','示意，未实现 · 字段名为演示用，切片表结构文档未定义'));
+  b.appendChild(el('pre','code',JSON.stringify(row,null,2)));
+  b.appendChild(note('跨种子标准差的存法文档未定义，这里没有列出。'));return b;}});
+var $=function(id){return document.getElementById(id);};
+var ui={prev:$('ouPrev'),next:$('ouNext'),play:$('ouPlay'),pos:$('ouPos'),dots:$('ouDots'),ti:$('ouStepTitle'),
+ i:$('ouIn'),p:$('ouProc'),o:$('ouOut'),r:$('ouRef'),v:$('ouView'),thr:$('ouThr')};
+var cur=0,timer=null;
+function setTxt(n,t){if(n)n.textContent=t==null?'':String(t);}
+function render(){
+ if(!S.length)return;
+ if(!fin(cur)||cur<0)cur=0;if(cur>S.length-1)cur=S.length-1;
+ var s=S[cur],view=null;
+ try{view=s.v.call(s);}catch(e){view=note('这一步渲染失败。');}
+ setTxt(ui.ti,s.ti);setTxt(ui.i,s.i);setTxt(ui.p,s.p);setTxt(ui.o,s.o||'—');setTxt(ui.r,s.r);
+ setTxt(ui.pos,(cur+1)+' / '+S.length);
+ if(ui.v){clear(ui.v);if(view)ui.v.appendChild(view);}
+ if(ui.dots){Array.prototype.forEach.call(ui.dots.children,function(d,j){d.classList.toggle('on',j===cur);d.classList.toggle('past',j<cur);d.setAttribute('aria-current',j===cur?'step':'false');});}
+ if(ui.prev)ui.prev.disabled=cur===0;
+ if(ui.next)ui.next.disabled=cur===S.length-1;
+}
+function stop(){if(timer){clearInterval(timer);timer=null;}setTxt(ui.play,'自动播放');}
+function go(j){cur=j;render();}
+if(ui.dots){clear(ui.dots);S.forEach(function(s,j){
+ var d=el('button','',j+1);d.type='button';d.setAttribute('aria-label','第 '+(j+1)+' 步');
+ d.addEventListener('click',function(){stop();go(j);});ui.dots.appendChild(d);});}
+if(ui.prev)ui.prev.addEventListener('click',function(){stop();if(cur>0)go(cur-1);});
+if(ui.next)ui.next.addEventListener('click',function(){stop();if(cur<S.length-1)go(cur+1);});
+if(ui.play)ui.play.addEventListener('click',function(){
+ if(timer){stop();return;}
+ if(cur>=S.length-1)go(0);
+ setTxt(ui.play,'暂停');
+ timer=setInterval(function(){if(cur<S.length-1){go(cur+1);}else{stop();}},2800);
+});
+if(ui.thr)ui.thr.addEventListener('change',render);
+if(ui.v)render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>social · 社交与传播层 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* mod-social 私有样式，前缀 so- */
+.so-io{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1.1fr) 34px minmax(0,1fr);gap:8px;align-items:stretch;margin-top:14px}
+.so-io .card{padding:14px 16px}
+.so-io h4{margin:0 0 6px;font-size:14px}
+.so-io ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink2)}
+.so-io li{margin:4px 0}
+.so-io .so-core{border-color:rgba(244,114,182,.5);background:linear-gradient(160deg,rgba(244,114,182,.13),rgba(167,139,250,.04))}
+.so-ar{display:flex;align-items:center;justify-content:center;color:var(--social);font-size:20px}
+@media(max-width:860px){.so-io{grid-template-columns:minmax(0,1fr)}.so-ar{transform:rotate(90deg);height:24px}}
+.so-svg{border:1px solid var(--line);border-radius:var(--r);background:rgba(5,8,20,.55);padding:8px;margin:14px 0}
+.so-svg svg{display:block;width:100%;height:auto}
+.so-svg text{font-family:var(--sans)}
+h3.so-h{font-size:16px;margin:26px 0 8px;color:var(--ink)}
+h3.so-h .so-k{font:700 12px var(--mono);color:var(--social);margin-right:8px}
+.so-row{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;margin:10px 0}
+.so-row label.ctl{min-width:160px;flex:1}
+.so-chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);cursor:pointer}
+.so-rank{list-style:none;margin:10px 0;padding:0}
+.so-rank li{display:grid;grid-template-columns:28px minmax(0,1fr) minmax(70px,130px);gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin:6px 0;font-size:13px}
+.so-rank li.in{background:rgba(244,114,182,.09);border-color:rgba(244,114,182,.45)}
+.so-rank li.out{opacity:.5}
+.so-rank .so-i{font:700 12px var(--mono);color:var(--mute)}
+.so-rank .so-m{display:block;font:11px var(--mono);color:var(--mute);margin-top:2px;overflow-wrap:anywhere}
+.so-bar{height:7px;border-radius:4px;background:var(--line);overflow:hidden}
+.so-bar b{display:block;height:100%;background:var(--social);transition:width .3s}
+.so-lv{display:inline-block;font:700 10.5px var(--mono);padding:0 6px;border-radius:5px;background:var(--social);color:#06101f;margin-right:4px}
+.so-tag{display:inline-block;font-size:11px;padding:0 6px;border-radius:5px;border:1px solid rgba(248,113,113,.6);color:var(--warn);margin-left:4px}
+.so-demo{border:1px solid rgba(244,114,182,.35);border-radius:var(--r);padding:16px;background:rgba(244,114,182,.04)}
+.so-dots{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
+.so-dots button{border:1px solid var(--line2);background:var(--panel);color:var(--ink2);font:600 12px var(--mono);border-radius:999px;padding:3px 10px;cursor:pointer}
+.so-dots button.on{background:var(--social);color:#06101f;border-color:var(--social)}
+.so-dots button.done{border-color:rgba(244,114,182,.6);color:var(--social)}
+.so-st{font-size:15px;font-weight:700;margin:0 0 4px}
+.so-quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+@media(max-width:700px){.so-quad{grid-template-columns:minmax(0,1fr)}}
+.so-quad>div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);font-size:13px;color:var(--ink2);min-width:0}
+.so-quad b.so-qt{display:block;font:700 11px var(--mono);color:var(--social);margin-bottom:4px;letter-spacing:.05em}
+.so-quad pre{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 var(--mono);color:var(--ink)}
+.so-quad ul{margin:0;padding-left:16px}
+.so-ex{display:inline-block;font:700 11px var(--mono);color:var(--warn);border:1px dashed rgba(248,113,113,.6);border-radius:6px;padding:1px 7px}
+.so-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.so-ctl .so-pos{font:600 12.5px var(--mono);color:var(--ink2);margin-left:auto}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>模块页 · social</div>
+<h1>社交与传播层：<span class="grad">一条帖子怎样进到散户眼前</span></h1>
+<p class="lead">social 管"人发出的内容"：发布者和散户智能体发的帖子，经论坛、熟人群聊、关注网络和推荐流排序，最后变成每个散户每次激活时看到的那几条。</p>
+<div class="meta">
+<span class="chip social"><i></i>产物 Post · FeedItem</span>
+<span class="chip llm"><i></i>L2–L4 文本归 social §5.3</span>
+<span class="chip warn"><i></i>真实帖子注入默认关闭</span>
+<span class="chip sim"><i></i>短视频延到 Phase 3</span>
+</div>
+</header>
+
+<section id="s1" class="reveal"><h2><span class="num">01</span>职责一览</h2>
+<p class="sub">一句话：social 生成发布者帖子、承接散户发帖、按网络与推荐流把帖子分发出去，并为每个散户整理出可读的信息条目。</p>
+<p>设计文档的模块表把 social 的职责写成"发布者层、关注网络、群组、推荐流、帖子与传闻传播、真实帖子注入接口（默认关闭）"，产物是 <code>Post</code> 与 <code>FeedItem</code><span class="ref">§3.3</span>。它和其他业务模块之间只通过 <code>schemas</code> 里的共享类型交换数据，互相不导入对方的类型，由 orchestrator 负责把各模块接起来<span class="ref">§3.3</span>。</p>
+<div class="so-io">
+<div class="card"><h4>输入</h4><ul>
+<li><b>events</b>：<code>EventCard</code> 及其 L0、L1 两类版本<span class="ref">§5.3</span></li>
+<li><b>agents</b>：第 2 次调用（发言）的产出 <code>Post</code>，只在 <code>BeliefUpdate.want_to_post</code> 为真时调用<span class="ref">§6.1</span><span class="ref">§6.2</span>；群聊接话也只走这一次调用<span class="ref">§7.1</span></li>
+<li><b>population</b>：<code>PersonaCard</code> 的 <code>media_diet</code>、<code>attention_k</code>、<code>credulity</code>、<code>voice_style</code><span class="ref">§4.1</span></li>
+<li><b>实时行情</b>：驱动发布者发帖<span class="ref">§5.6</span>；由哪个模块提供，文档未写明</li>
+<li><b>orchestrator</b>：激活阶段，以及 <code>RunManifest</code> 里的真实帖子注入开关<span class="ref">§9.4</span></li>
+</ul></div>
+<div class="so-ar">→</div>
+<div class="card so-core"><h4>social</h4><ul>
+<li>发布者层 L0–L4 发帖<span class="ref">§5.6</span></li>
+<li>生成并更新关注网络与群组<span class="ref">§7.2</span></li>
+<li>论坛与群聊的帖子分发、转发、传闻传播<span class="ref">§7.4</span></li>
+<li>推荐流打分排序<span class="ref">§7.3</span></li>
+<li>真实帖子注入接口，默认关闭<span class="ref">§5.7</span></li>
+</ul></div>
+<div class="so-ar">→</div>
+<div class="card"><h4>输出</h4><ul>
+<li><b>agents</b>：<code>FeedItem</code>，进入感知步骤的候选池，最后每人抽 K_i 条<span class="ref">§5.4</span></li>
+<li><b>outputs</b>：<code>Post</code> 写入帖子表，发布者帖子入表但不进人群统计<span class="ref">§10.1</span></li>
+<li><b>validation</b>：帖子文本与发帖量曲线供 V2 使用<span class="ref">§12.1</span></li>
+</ul></div>
+</div>
+</section>
+
+<section id="s2" class="reveal"><h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">没有社交层，所有散户读到的是同一批事件卡，人群会变成同一个人的复制品，帖子这一项核心产出也无从谈起。</p>
+<p>第一个原因是信息异质。设计文档把"信息异质"列为对抗智能体同质化的第一条对策：每人只看注意力预算内的几条，而这几条又取决于他的关注网络和所在的群<span class="ref">§13.2</span>。同一条公告，有人在官媒转述里读到，有人在群主的情绪化转述里读到，有人根本没看到，后面的解读和决策自然分开。</p>
+<p>第二个原因是帖子文本本身就是产出。2026-10-28 的讨论把帖子从"只用于传播"改为进入测量与评估的核心产出<span class="ref">讨论第 6 项</span>；帖子表<span class="ref">§10.3</span>是 V2"声音可信"的对照对象，论坛帖是 V2 最强的证据<span class="ref">§12.1</span>。帖子要有人发、发在哪、谁看到，这些都由 social 决定。</p>
+<p>第三个原因是从众。内核里的从众项 <code>β_i^herd · H_j</code> 用到 <code>H_j ∈ [−1, 1]</code>，即该散户在信息流和群聊里看到的净买入比例<span class="ref">§6.3</span>。没有社交层，<code>H_j</code> 就没有来源。</p>
+<div class="callout info"><b class="t">反例：基线 B4 无社交层</b>设计文档专门留了一个对照基线 B4，关掉帖子、群聊和推荐流<span class="ref">§11.1</span>，另有消融"关闭发布者层"<span class="ref">§11.2</span>。B4 下散户只凭事件卡和行情决策，传闻从放出到辟谣的周期、同一标的讨论的扩散深度和广度<span class="ref">§7.5</span>都不存在。拿它和完整运行比，才能说清社交层到底带来了多少差异。</div>
+</section>
+
+<section id="s3" class="reveal"><h2><span class="num">03</span>机制详解</h2>
+<p class="sub">按一条帖子的生命周期讲：谁在哪个渠道发帖，网络怎么生成，推荐流怎么排序，帖子怎么转发扩散，最后怎么挤进某个散户的 K_i 条。</p>
+<p>先看全貌。下图是一条帖子从发出到被某个散户读到的路径。帖子先落到渠道里（个股吧板块、发帖人的关注者、所在的群），再被推荐流打分；推荐流的结果和事件改写、持仓异动一起进入该散户的候选池；候选池按注意力打分抽样，留下 K_i 条，交给智能体的解读步骤。</p>
+<div class="so-svg"><svg viewBox="0 0 900 360" role="img" aria-label="帖子从发布到进入一个散户 top-K 的路径">
+<defs><marker id="soArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#f472b6"/></marker></defs>
+<g fill="none" stroke="#f472b6" stroke-width="1.8" marker-end="url(#soArr)">
+<path class="flowline" d="M160,70 L218,70"/><path class="flowline" d="M160,180 L218,100"/>
+<path class="flowline" d="M330,85 L388,50"/><path class="flowline" d="M330,85 L388,115"/><path class="flowline" d="M330,85 L388,180"/>
+<path class="flowline" d="M520,50 L578,105"/><path class="flowline" d="M520,115 L578,115"/><path class="flowline" d="M520,180 L578,125"/>
+<path class="flowline" d="M690,135 L690,183"/><path class="flowline" d="M690,255 L690,283"/>
+<path class="flowline" d="M610,300 L540,300"/><path class="flowline" d="M440,300 L380,300"/>
+</g>
+<g font-size="12.5" text-anchor="middle">
+<rect x="20" y="45" width="140" height="50" rx="10" fill="#2a1630" stroke="#f472b6"/><text x="90" y="66" fill="#fff">发布者 L0–L4</text><text x="90" y="84" fill="#b9c2da" font-size="11">只发帖不交易 §5.6</text>
+<rect x="20" y="155" width="140" height="50" rx="10" fill="#132036" stroke="#60a5fa"/><text x="90" y="176" fill="#fff">散户 / Tier-A 大V</text><text x="90" y="194" fill="#b9c2da" font-size="11">第 2 次调用（发言）§6.1</text>
+<rect x="220" y="60" width="110" height="50" rx="10" fill="#1c1a3a" stroke="#a78bfa"/><text x="275" y="82" fill="#fff">Post</text><text x="275" y="99" fill="#b9c2da" font-size="11">帖子表 §10.3</text>
+<rect x="390" y="30" width="130" height="40" rx="10" fill="#101a30" stroke="#7f8aa8"/><text x="455" y="55" fill="#e8ecf7">关注网络 §7.2</text>
+<rect x="390" y="95" width="130" height="40" rx="10" fill="#101a30" stroke="#7f8aa8"/><text x="455" y="120" fill="#e8ecf7">论坛板块 + 热榜</text>
+<rect x="390" y="160" width="130" height="40" rx="10" fill="#2a2410" stroke="#fbbf24"/><text x="455" y="185" fill="#fde68a">熟人群聊 §7.2</text>
+<rect x="580" y="85" width="220" height="50" rx="10" fill="#2a1630" stroke="#f472b6"/><text x="690" y="106" fill="#fff">推荐流打分 §7.3</text><text x="690" y="124" fill="#b9c2da" font-size="11">时近 × 热度 × 兴趣 × 关注，发布者按级加权</text>
+<rect x="560" y="185" width="260" height="70" rx="10" fill="#101a30" stroke="#22d3ee"/><text x="690" y="208" fill="#fff">候选池 §5.4</text><text x="690" y="226" fill="#b9c2da" font-size="11">事件改写（按 media_diet 渠道）+ 推荐流 + 群聊</text><text x="690" y="243" fill="#b9c2da" font-size="11">+ 持仓 / 自选价格异动</text>
+<rect x="612" y="285" width="160" height="40" rx="10" fill="#1c1a3a" stroke="#c084fc"/><text x="692" y="310" fill="#fff">softmax(score/T_i)</text>
+<rect x="442" y="280" width="96" height="44" rx="10" fill="#2a1630" stroke="#f472b6"/><text x="490" y="300" fill="#fff">top K_i</text><text x="490" y="316" fill="#b9c2da" font-size="11">3–15 条</text>
+<rect x="200" y="275" width="178" height="56" rx="10" fill="#132a22" stroke="#34d399"/><text x="289" y="297" fill="#fff">散户 #甲 解读（LLM）</text><text x="289" y="316" fill="#b9c2da" font-size="11">观点路径 / H_j 行为路径 §7.5</text>
+</g>
+<text x="25" y="300" fill="#7f8aa8" font-size="11">本阶段发的帖子</text><text x="25" y="316" fill="#7f8aa8" font-size="11">下一阶段才可见 §9.1</text><text x="25" y="332" fill="#7f8aa8" font-size="11">群聊例外 §7.1</text>
+</svg></div>
+<h3 class="so-h"><span class="so-k">3.1</span>渠道：帖子发在哪里</h3>
+<p>MVP 有四类渠道：公开论坛、熟人群聊、大V、发布者层；短视频不进 MVP<span class="ref">§7.1</span>。原先单列的"官方媒体（仅信息源）"已并入发布者层 L0<span class="ref">讨论 Q2</span>。每个散户对各渠道的偏好写在人设卡的 <code>media_diet</code> 里，记作 <code>w_i(渠道)</code><span class="ref">§4.1</span>，后面候选池打分会用到。点选项卡看每类渠道的机制。</p>
+<div class="tabs">
+<div class="tab-bar"><button data-t="forum">公开论坛</button><button data-t="group">熟人群聊</button><button data-t="kol">大V</button><button data-t="pub">发布者层</button><button data-t="video">短视频</button></div>
+<div class="tab-pane" data-t="forum"><p>对应东方财富股吧和雪球。结构是"按个股分板块 + 关注 + 推荐流 / 热榜"，特点是匿名、情绪化、喊单和晒单多，人人都在用，短线客尤其多<span class="ref">§7.1</span>。</p><p>MVP 做股吧、雪球两种风格，<b>机制相同</b>，只换文风示例池和用户构成<span class="ref">§7.1</span>。文风示例来自去标识化的真实帖子，只取模拟起点之前的，验收事件的真实帖不进示例池<span class="ref">§4.4</span>。</p><p><b>开哪些吧。</b>模拟论坛的吧与采集名单一致：上证指数吧、创业板吧，加当日热门 30 只个股吧和固定跟踪的 10 只个股吧，约 42 个；其余股票的讨论并入"综合吧"<span class="ref">§7.1</span><span class="ref">§16.1</span>。这样每个吧都有真实帖可做 V2 对照。固定跟踪的 10 只名单未定<span class="ref">§16.1</span>。</p><p>雪球不自采，其 V2 对照与文风示例池靠授权数据；授权来源落实前，雪球风格的 V2 结论记为"无对照"<span class="ref">§16.1</span>。</p></div>
+<div class="tab-pane" data-t="group"><p>对应微信群、QQ 群。群规模 5–50 人，成员同质、信任高、传闻传得快，用户多是中老年人和亲友、同事圈子<span class="ref">§7.1</span>。</p><p><b>群里有谁。</b>群内只有智能体，不模拟不炒股的家人同事；群主可以是 L3 发布者。"付费荐股群"由 L4 喊单号当群主，按其准确率喊单；跟单亏钱的人写入"被荐股群坑"记忆，并扣信任<span class="ref">§7.1</span><span class="ref">§7.2</span>。</p><p><b>阶段内接话。</b>某群当阶段有 ≥ 2 个被激活成员且有人发言时，在阶段内顺序进行最多 M 轮（如 4 轮）短对话，每轮由一个已激活成员接话，顺序由种子决定。接话只走第 2 次调用（发言），不重做决策，当阶段交易不受群聊影响，影响留到下一次激活<span class="ref">§7.1</span>。这是"本阶段帖子下一阶段才可见"的唯一例外，只限该群<span class="ref">§9.1</span>。群聊 token 计入 social 成本，上限由 M 与每晚活跃群数控制<span class="ref">§7.1</span><span class="ref">§14.2</span>。逐轮对话的演示见 <a href="sim-chat.html">熟人群聊演示页</a>。</p><p>群聊没有真实文本可比，V2 只能人工盲评，记为弱证据<span class="ref">§7.1</span><span class="ref">§12.1</span>。"群内讨论其持仓"是智能体被激活的触发条件之一<span class="ref">§9.1</span>；日内时间线把"群聊发酵"放在晚间 / 隔夜时段（T−1 19:00 到 T 08:00），MVP 的固定激活点是盘前与收盘后，非交易日为 20:00 晚间激活点<span class="ref">§3.4</span>。</p></div>
+<div class="tab-pane" data-t="kol"><p>对应雪球、微博、公众号上的大V。一对多传播，粉丝数呈幂律分布，常做政策解读、带节奏<span class="ref">§7.1</span>。</p><p>MVP 里大V有两种身份。<b>Tier-A 大V</b> 是会交易的散户智能体，计入人群统计，可以测他"说的和做的"差多少；<b>发布者 L2</b> 只发帖、不交易，不计入统计<span class="ref">§5.6</span>。两者都发帖，区别在有没有账户。</p></div>
+<div class="tab-pane" data-t="pub"><p>发布者层是"只发帖、不交易"的信息生产者，由实时行情和事件卡驱动，按级别加权进入推荐流<span class="ref">§5.6</span><span class="ref">§7.3</span>。所有人都会看到，权重随人设不同<span class="ref">§7.1</span>。分级和参数见 3.2。</p></div>
+<div class="tab-pane" data-t="video"><p>抖音、小红书、B站一类，算法分发，年轻用户多。不进 MVP，延到 Phase 3<span class="ref">§7.1</span>。设计文档 §5.3 的渠道表里"短视频口播"一行同样标为 Phase 3<span class="ref">§5.3</span>。</p></div>
+</div>
+<h3 class="so-h"><span class="so-k">3.2</span>发布者层 L0–L4 与 Tier-A 大V</h3>
+<p>发布者按可信程度和动机分五级<span class="ref">§5.6</span>。他们发的帖子入帖子表，但不进人群统计，V1、态度切片和决策切片都把发布者排除在外<span class="ref">§5.6</span><span class="ref">§10.1</span>。发布者帖子也不能替代真实帖子做 V2 对照<span class="ref">§5.6</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>级别</th><th>是谁</th><th>发什么</th><th>文本由谁产出<span class="ref">§5.3</span></th><th>约束</th></tr></thead>
+<tbody>
+<tr><td><span class="so-lv">L0</span></td><td>官方 / 权威媒体</td><td>只转述事件卡</td><td>events，不带立场</td><td>与 summary 做事实一致性校验</td></tr>
+<tr><td><span class="so-lv">L1</span></td><td>财经媒体、券商观点摘要</td><td>快讯，带数字</td><td>events，不带立场</td><td>同上；相对延迟 0–10 分钟<span class="ref">§5.3</span></td></tr>
+<tr><td><span class="so-lv">L2</span></td><td>大V</td><td>固定立场的解读，有粉丝覆盖</td><td>social 发布者，<code>Post</code></td><td>随传播出现；标注依据的 <code>event_id</code><span class="ref">§5.3</span></td></tr>
+<tr><td><span class="so-lv">L3</span></td><td>中小博主、群主</td><td>情绪化转述、标题党、带节奏</td><td>social 发布者，<code>Post</code></td><td>数小时<span class="ref">§5.3</span>；可歪曲，不做事实校验，但须标注依据的 <code>event_id</code><span class="ref">§5.3</span>，即帖子表的 <code>source_event_ids</code><span class="ref">§10.3</span>；可当群主<span class="ref">§5.6</span></td></tr>
+<tr><td><span class="so-lv">L4</span></td><td>小道消息、喊单号</td><td>传闻、荐股、"内部消息"</td><td>social 发布者，<code>Post</code></td><td>不定<span class="ref">§5.3</span>；只在沙盒运行，逐条带"传闻"标签<span class="ref">§16.2</span>；另立 <code>origin="rumor"</code> 的事件卡<span class="ref">§5.3</span>；可当付费荐股群群主<span class="ref">§7.1</span></td></tr>
+</tbody></table></div>
+<p>每个发布者有五项固定属性：<b>立场</b>（多、空、摇摆）、<b>动机</b>（流量、带货、引流到付费群等）、<b>准确率</b>、<b>夸张度</b>（说得多夸张）和<b>确定性</b>（说得多笃定）<span class="ref">§5.6</span>。夸张度、确定性原是事件改写参数，现在改为发布者参数，可以单独研究"标题党"对群体情绪的影响<span class="ref">§5.3</span>。五项参数的取值范围和类型，文档都没有给出。</p>
+<p>发布者帖子还可以人工插入，作为情景干预，例如"L4 在某时点放出某传闻"，再比较放与不放两次运行的差别<span class="ref">§5.6</span>。每个发布者具体怎么发帖、不同参数组合写出来是什么样，见 <a href="sim-publishers.html">发布者模拟页</a>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.3，来自架构讨论 A3）</b>改写按事实与观点分开：events 只产出 <code>EventCard</code> 与 L0、L1 两类不带立场的版本，每个"事件 × 渠道"改写 1–3 个版本，量级越高版本越多；L2–L4 文本都是观点，由 social 的发布者以 <code>Post</code> 产出，成本归入 social 估算<span class="ref">§5.3</span><span class="ref">§14.2</span>。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §4.3，来自架构讨论 A5）</b>Tier-A 50 人拆为大V 20 人与深度样本 30 人。大V 条件抽样（入市 ≥ 8 年、金融素养 ≥ 2、外向性偏高、账户偏中大档），粉丝数按幂律分配，说话风格绑定真实帖中高互动帖的风格簇；这些条件是假设，报告中标注。大V 的言行不一照常测量<span class="ref">§4.3</span>。对 social 来说，这 20 个 Tier-A 大V 就是关注网络里入度最高的散户节点，与发布者 L2 并存<span class="ref">§5.6</span><span class="ref">§7.2</span>。</div>
+<h3 class="so-h"><span class="so-k">3.3</span>网络生成：谁连着谁</h3>
+<p>social 在运行开始时生成两张网，运行中再慢慢改<span class="ref">§7.2</span>。</p>
+<p><b>关注网络</b>是有向图。入度（被多少人关注）服从幂律，可以用 BA 模型（新节点优先连向已有高入度节点）或配置模型（按给定度序列随机连边）生成；另加按年龄、城市、投资风格的同质连边，物以类聚。大V的入度最高<span class="ref">§7.2</span>。</p>
+<p><b>群组</b>用随机块模型生成：按职业、地区、年龄把人分块，块内成员更容易同群。每人加入 0–5 个群。家庭群、同事群、"老股民群"、付费荐股群的初始信任各不相同<span class="ref">§7.2</span>，具体数值文档未定义。</p>
+<p><b>边权就是信任</b>，按下面三条规则更新<span class="ref">§7.2</span>：</p>
+<ul>
+<li><b>归因。</b>决策意向的 <code>source_post_ids</code> 最多记 2 条影响决定的帖子<span class="ref">§6.3</span>。LLM 自报的归因可能是事后找理由，真实散户同样会错误归因，照用不校正<span class="ref">§7.2</span>。</li>
+<li><b>更新时点。</b>该笔持仓平仓时，或买入满 20 个交易日时按市值，用该笔收益的符号更新对所引作者的信任；步长是人设参数，无真实数据可校准，报告中标为假设。群聊转来的消息同样更新对群与转发人的信任。被辟谣的传闻对转发人扣信任，不看盈亏<span class="ref">§7.2</span>。</li>
+<li><b>重连。</b>每 20 个交易日按信任重连一次：取关信任低于阈值的大V，关注近期信息流里晒单赚钱的作者。只在持续运行和长于重连周期的情景中启用，短情景网络固定<span class="ref">§7.2</span>。</li>
+</ul>
+<p>大V 粉丝数随战绩的变化作为描述性产出，落在信任网络快照里，持续运行中每 20 个交易日一次<span class="ref">§7.2</span><span class="ref">§10.3</span>。信任网络等状态需要预热 20–60 个交易日才稳定<span class="ref">§9.2</span>。</p>
+
+<h3 class="so-h"><span class="so-k">3.4</span>推荐流与注意力：从很多条到 K_i 条</h3>
+<p>这一步分两段。第一段是 social 的推荐流（借鉴 OASIS）：每个候选帖子按四个因子相乘打分，另有"热榜"放大头部内容；发布者帖子按级别加权进入<span class="ref">§7.3</span><span class="ref">§5.6</span>。推荐流参数本身是实验变量，用来研究"算法放大"<span class="ref">§7.3</span>。</p>
+<ul>
+<li><b>来源。</b>模拟散户帖、Tier-A 大V、发布者层 L0–L4、新闻与公告；每人每次激活最多读 K_i 条<span class="ref">§7.3</span><span class="ref">§5.4</span>。</li>
+<li><b>不补写。</b>帖子不够时信息流变短，不让 LLM 补写填充帖；实际信息流长度 <code>feed_len</code> 记入激活表与运行清单<span class="ref">§7.3</span><span class="ref">§10.3</span>。</li>
+<li><b>热度口径。</b>热度用智能体之间原始的点赞与回复数，不按 <code>w_head</code> 放大<span class="ref">§7.3</span>。</li>
+<li><b>真实帖子。</b>注入只留接口，默认关闭，验收运行强制关闭<span class="ref">§7.3</span><span class="ref">§5.7</span>，见 3.6。</li>
+</ul>
+<pre class="code" data-lang="text"><span class="c"># 推荐流打分（§7.3），因子相乘；各因子的具体算法与权重文档未定义</span>
+feed_score = <span class="f">时近性</span> × <span class="f">热度</span>(赞/转/评，原始计数) × <span class="f">兴趣相似度</span>(持仓与自选重合、文本嵌入相似) × <span class="f">关注关系</span>
+<span class="c"># 发布者帖子再乘级别权重（§5.6），权重数值文档未定义；热榜放大头部内容</span></pre>
+<p>第二段是智能体的感知步骤。候选池由三部分合成：该散户媒体偏好里各渠道的事件改写，推荐流与群聊的内容，持仓和自选股的价格异动<span class="ref">§5.4</span>。每条候选再打一次注意力分：</p>
+<pre class="code" data-lang="text">score = w_i(渠道) · m(量级) · rel_i(资产) · exp(−Δt / τ_d) · sal
+<span class="c"># sal 是显著性：涨跌停、上热榜、大V转发等（§5.4）</span>
+<span class="c"># 持仓异动必入；其余按 softmax(score / T_i) 无放回抽样，最多 K_i 条；候选不够就少读，不补写（§7.3）</span></pre>
+<p><code>K_i</code> 是注意力预算，取值 3–15，对应约 1,500 token 的信息流长度<span class="ref">§5.4</span>；成本表里第 1 次调用约 3.0k 输入 token，其中信息流占 1,400<span class="ref">§14.2</span>。<code>τ_d</code>（时间衰减常数）和 <code>T_i</code>（抽样温度）的取值文档没有给出。这次没抽中的条目，之后还可能经群聊或大V转述再次出现<span class="ref">§5.4</span>。这套设计的依据是注意力竞争的文献（Hirshleifer, Lim &amp; Teoh 2009）<span class="ref">§5.4</span>。</p>
+<p><b>必入条目怎么认定。</b>"持仓异动"指持仓股单日涨跌超过个人阈值，或涨跌停；这类条目不参加抽样，直接占用 K_i 的名额<span class="ref">§5.4</span>。个人阈值的取值文档未定义。其余条目按 softmax 抽，而不是按分数取前 K 条，目的是让同一人设的两个智能体看到的信息也不完全相同<span class="ref">§5.4</span>。</p>
+<p><b>注意力竞争的后果。</b>K_i 是固定预算，同一时段候选越多，每条被看到的概率越低；节后首个交易日积压的信息尤其如此<span class="ref">§5.4</span>。周末与节假日只有信息与社交、没有交易，节后跳空由此产生<span class="ref">§3.4</span>。所以 social 产出的帖子数量本身会改变散户读到的内容构成：帖子越多，单条帖子越难被看到。</p>
+<p>下面的小工具用 6 条候选帖子演示推荐流的排序。四个因子的分值和级别权重全部是<span class="so-ex">示例数据</span>，不是设计参数。</p>
+<div class="card" id="so-fw">
+<div class="so-row">
+<label class="so-chk"><input type="checkbox" id="so-fw-hot"> 打开热榜（热度前 2 名再放大，示例 ×1.5）</label>
+<label class="so-chk"><input type="checkbox" id="so-fw-lv" checked> 发布者帖子按级加权</label>
+<label class="so-chk"><input type="checkbox" id="so-fw-fol" checked> 计入关注关系因子</label>
+<label class="ctl">进入候选池的条数（示例）<b id="so-fw-n-v">3</b><input type="range" id="so-fw-n" min="1" max="6" step="1" value="3"></label>
+</div>
+<ol class="so-rank" id="so-fw-list"></ol>
+<p class="sub" style="margin:0">高亮的几条进入散户 #甲 的候选池，再和事件改写、持仓异动一起参加 §5.4 的注意力抽样。</p>
+</div>
+<h3 class="so-h"><span class="so-k">3.5</span>传播：帖子怎样扩散</h3>
+<p><b>谁会发帖。</b>每次激活最多两次 LLM 调用<span class="ref">§6.1</span>。第 1 次调用只出结构化字段，其中 <code>BeliefUpdate.want_to_post</code> 表示想不想发言<span class="ref">§6.2</span>；内核做完约束与成交判定之后，只有 <code>want_to_post</code> 为真的人才走第 2 次调用（发言），输出 <code>Post</code>。第 2 次调用的输入含当日意向与实际成交（含未执行原因），风格示例帖只放在这一次，正文是自由文本，不进 JSON<span class="ref">§6.1</span>。所以帖子在成交之后才写，读得到自己的意向和成交结果。没被激活的智能体不发帖<span class="ref">§9.1</span>。帖子类型有观点、晒单、求助、吐槽、传闻、喊单、政策解读七种<span class="ref">§7.4</span>。</p>
+<p><b>文风。</b>每个智能体绑定一种说话风格（人设卡的 <code>voice_style</code>，是风格聚类的编号），并用去标识化的真实帖子做少样本示例，压住"LLM腔"<span class="ref">§7.4</span><span class="ref">§4.1</span>。</p>
+<p><b>什么时候可见。</b>本阶段发的帖子，下一阶段才可见<span class="ref">§9.1</span>。这样同一阶段内智能体之间没有循环依赖，结果也不受执行顺序影响。唯一例外是群聊：同群在阶段内顺序进行最多 M 轮接话，只走发言调用，不影响当阶段交易<span class="ref">§9.1</span><span class="ref">§7.1</span>。</p>
+<p><b>转发与传闻。</b>传闻有两个来源：L4 发布者，和可信度低的事件卡（<code>credibility</code> 小于 1<span class="ref">§5.2</span>）。传闻被投进群聊或论坛后，每个看到它的智能体按自己的轻信度 <code>credulity</code> 决定信不信、转不转<span class="ref">§7.4</span>。文档只写了"按轻信度决定"，没有给出转发概率公式。现实依据是轻信度与新手、小账户正相关（Titman, Wei &amp; Zhao 2022）<span class="ref">§2.2</span>。之后 L0 可以发一张关联到原事件的事件卡（<code>parent_id</code> 指向原事件<span class="ref">§5.2</span>）去证实或辟谣，用来研究"传闻—辟谣"的周期<span class="ref">§7.4</span>。</p>
+<p><b>两条影响路径。</b>帖子影响散户有两条路，各管一件事，避免重复计数<span class="ref">§7.5</span>：</p>
+<div class="grid g2">
+<div class="card"><h4>观点路径（LLM）</h4><p style="font-size:13.5px;color:var(--ink2);margin:0">解读步骤读帖子原文，帖子的说法影响信念更新。理由标签里有 <code>rumor</code>、<code>kol</code>、<code>herd</code><span class="ref">§6.2</span>。</p></div>
+<div class="card"><h4>行为路径（内核）</h4><p style="font-size:13.5px;color:var(--ink2);margin:0">内核的 <code>H_j</code> 只统计看到的买卖行为，如晒单、"已上车"、"割了"，不统计观点<span class="ref">§7.5</span>，再经 <code>β_i^herd · H_j</code> 进入从众项<span class="ref">§6.3</span>。看到的买卖信号少于 n 条（如 3）时 <code>H_j</code> 记为 0，内核日志标"信号不足"<span class="ref">§7.5</span>。</p></div>
+</div>
+<p><b>级联指标。</b>同一标的的讨论在 24 小时内扩散的深度（转发层数）和广度（覆盖人数），连同事件后的发帖量曲线，作为描述性产出并用于 V2<span class="ref">§7.5</span>。发帖量只比形状，即事件后各时段占事件窗口总量的比例，不比绝对量；报告注明模拟论坛规模比真实平台小几个数量级<span class="ref">§7.5</span>。</p>
+
+<h3 class="so-h"><span class="so-k">3.6</span>真实帖子注入开关</h3>
+<p>"注入"指把真实的股吧、雪球帖子混进智能体的信息流。MVP 只留接口和开关，<b>默认关闭</b><span class="ref">§5.7</span>。默认情况下智能体只读模拟散户帖子、发布者层 L0–L4、新闻、公告和行情。用于验收的运行<b>强制关闭</b>，否则生成的帖子可能只是在复述真实帖子，V2 对照就失效了。开关状态写入运行清单 <code>RunManifest</code><span class="ref">§5.7</span><span class="ref">§9.4</span>。</p>
+<div class="callout warn"><b class="t">合规边界</b>帖子表只在内部使用；每条帖子 <code>simulated</code> 恒为真并带正文隐式标识，对外展示样例另加"模拟生成"显式标识；传闻和喊单带 <code>rumor_shill_tag</code>；L4 只在沙盒运行；不对具名真实个人做威胁、人肉或捏造指控，一律用化名<span class="ref">§16.2</span>。</div>
+</section>
+
+<section id="s4" class="reveal"><h2><span class="num">04</span>走一遍示例</h2>
+<p class="sub">跟着一条示例帖子走完全程：从事件进来、L3 博主发帖、散户转发到群里，到推荐流排序，最后被散户 #乙 读到。</p>
+<p>示例里的公司、人物、帖子和所有数字都是<span class="so-ex">示例数据</span>，公司用化名"甲新能"，散户用编号。每一步列出输入、处理、输出和对应的文档条目。文档没有定义的数值（如级别权重、转发概率、τ_d、T_i）在示例里只是为了让步骤能走通，不代表设计取值。</p>
+<div class="so-demo" id="so-demo">
+<div class="so-dots" id="so-dots" role="tablist" aria-label="示例步骤"></div>
+<p class="so-st" id="so-d-title"></p>
+<p style="margin:0;font-size:13.5px;color:var(--ink2)" id="so-d-desc"></p>
+<div class="so-quad">
+<div><b class="so-qt">输入</b><div id="so-d-in"></div></div>
+<div><b class="so-qt">处理</b><div id="so-d-do"></div></div>
+<div><b class="so-qt">输出</b><div id="so-d-out"></div></div>
+<div><b class="so-qt">对应文档条目</b><div id="so-d-ref"></div></div>
+</div>
+<div class="so-ctl">
+<button class="btn" id="so-d-prev">上一步</button>
+<button class="btn pri" id="so-d-next">下一步</button>
+<button class="btn" id="so-d-play">自动播放</button>
+<span class="so-pos" id="so-d-pos"></span>
+</div>
+</div>
+</section>
+
+<section id="s5" class="reveal"><h2><span class="num">05</span>接口与数据结构</h2>
+<p class="sub">设计文档定义了帖子表的列，没有定义 <code>Post</code> 与 <code>FeedItem</code> 的 schema 字段；下表只列文档写明的内容。</p>
+<p><code>Post</code> 的字段以帖子表的列为准<span class="ref">§10.3</span>，结构化元数据的含义见 §7.4。字段类型文档没有写，表里统一标"文档未定义"。<code>FeedItem</code> 只在模块表里作为产物出现<span class="ref">§3.3</span>，字段文档未定义。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>字段（帖子表）</th><th>含义</th><th>类型</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td><code>post_id</code></td><td>帖子编号</td><td>文档未定义</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td><code>activation_id</code></td><td>产出这条帖子的那次激活，关联激活表；发布者帖子没有激活记录（示意中记为空）</td><td>文档未定义</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td><code>persona_id</code> 或 <code>publisher_id</code></td><td>发帖人：散户智能体或发布者，二选一</td><td>文档未定义</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td><code>event_id</code></td><td>所关联的事件</td><td>文档未定义</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td><code>run_id</code></td><td>所属运行</td><td>文档未定义</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td><code>sim_time</code></td><td>模拟时间</td><td>文档未定义</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td><code>channel</code></td><td>渠道（论坛两种风格、群聊等）</td><td>文档未定义</td><td><span class="ref">§10.3</span> <span class="ref">§7.1</span></td></tr>
+<tr><td><code>group_id</code></td><td>群聊帖所在的群</td><td>文档未定义</td><td><span class="ref">§10.3</span> <span class="ref">§7.1</span></td></tr>
+<tr><td><code>turn</code></td><td>群聊帖在阶段内的轮次（最多 M 轮）</td><td>文档未定义</td><td><span class="ref">§10.3</span> <span class="ref">§7.1</span></td></tr>
+<tr><td><code>reply_to</code></td><td>回复或转发的上游帖子</td><td>文档未定义</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td><code>text</code></td><td>帖子正文，自由文本</td><td>文档未定义</td><td><span class="ref">§10.3</span> <span class="ref">§6.1</span></td></tr>
+<tr><td><code>asset</code></td><td>标的</td><td>文档未定义</td><td><span class="ref">§10.3</span> <span class="ref">§7.4</span></td></tr>
+<tr><td><code>stance</code></td><td>立场</td><td>文档未定义</td><td><span class="ref">§10.3</span> <span class="ref">§7.4</span></td></tr>
+<tr><td><code>emotion</code></td><td>情绪</td><td>文档未定义</td><td><span class="ref">§10.3</span> <span class="ref">§7.4</span></td></tr>
+<tr><td><code>post_type</code></td><td>观点、晒单、求助、吐槽、传闻、喊单、政策解读</td><td>文档未定义</td><td><span class="ref">§7.4</span><span class="ref">§10.3</span></td></tr>
+<tr><td><code>rumor_shill_tag</code></td><td>"传闻 / 喊单"标签</td><td>文档未定义</td><td><span class="ref">§10.3</span> <span class="ref">§16.2</span></td></tr>
+<tr><td><code>source_event_ids</code></td><td>帖子所依据的事件卡；L3 发布者帖须填</td><td>文档未定义</td><td><span class="ref">§10.3</span> <span class="ref">§5.3</span></td></tr>
+<tr><td><code>simulated</code></td><td>"模拟生成"标识，恒为真，另加隐式水印</td><td>布尔，恒为 true</td><td><span class="ref">§10.3</span></td></tr>
+</tbody></table></div>
+<p>social 读取的人设字段：<code>media_diet: dict[Channel, float]</code>（渠道偏好 w_i）、<code>attention_k: int</code>（K_i）、<code>credulity: float</code>（轻信度）、<code>voice_style: str</code>（风格聚类编号）、<code>voice_examples: list[str]</code>（文风示例）<span class="ref">§4.1</span>。发布者的立场、动机、准确率、夸张度、确定性<span class="ref">§5.6</span>没有字段定义。</p>
+<pre class="code" data-lang="json"><span class="c">// 示意，未实现：一条 L3 发布者帖子写入帖子表的样子；内容为示例数据</span>
+{
+  <span class="k">"post_id"</span>: <span class="s">"p-000123"</span>,
+  <span class="k">"activation_id"</span>: <span class="n">null</span>,
+  <span class="k">"publisher_id"</span>: <span class="s">"pub-L3-07"</span>,
+  <span class="k">"event_id"</span>: <span class="s">"ev-demo-01"</span>,
+  <span class="k">"run_id"</span>: <span class="s">"run-demo"</span>,
+  <span class="k">"sim_time"</span>: <span class="s">"T−1 收盘后"</span>,
+  <span class="k">"channel"</span>: <span class="s">"股吧风格论坛"</span>,
+  <span class="k">"group_id"</span>: <span class="n">null</span>,
+  <span class="k">"turn"</span>: <span class="n">null</span>,
+  <span class="k">"reply_to"</span>: <span class="n">null</span>,
+  <span class="k">"text"</span>: <span class="s">"甲新能预增翻倍！这波主升浪稳了"</span>,
+  <span class="k">"asset"</span>: <span class="s">"甲新能（化名）"</span>,
+  <span class="k">"stance"</span>: <span class="s">"多"</span>,
+  <span class="k">"emotion"</span>: <span class="s">"兴奋"</span>,
+  <span class="k">"post_type"</span>: <span class="s">"观点"</span>,
+  <span class="k">"rumor_shill_tag"</span>: <span class="n">null</span>,
+  <span class="k">"source_event_ids"</span>: [<span class="s">"ev-demo-01"</span>],
+  <span class="k">"simulated"</span>: <span class="n">true</span>
+}</pre>
+</section>
+
+<section id="s6" class="reveal"><h2><span class="num">06</span>设计取舍与已定决定</h2>
+<p class="sub">每项取舍写清选了什么、放弃了什么、为什么；来自架构讨论、已写进设计文档 v0.3 的决定单独列出，并注明章节。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>问题</th><th>选了</th><th>放弃了</th><th>为什么</th></tr></thead>
+<tbody>
+<tr><td>推荐流从哪来</td><td>借鉴 OASIS 的推荐流与按小时激活，只移植需要的代码或单开环境<span class="ref">§2.4</span><span class="ref">§14.4</span></td><td>直接依赖 camel-oasis 包</td><td>camel-oasis 0.2.5 要求 Python 低于 3.12，项目用 3.12<span class="ref">§14.4</span></td></tr>
+<tr><td>两种论坛风格</td><td>股吧、雪球同一套机制，只换文风示例池和用户构成<span class="ref">§7.1</span></td><td>为两个平台各做一套传播规则</td><td>少一套机制要调；平台差异主要体现在文风和人群</td></tr>
+<tr><td>群聊要不要做</td><td>进 MVP，V2 记为弱证据<span class="ref">§7.1</span><span class="ref">§12.1</span></td><td>等有真实群聊文本再做</td><td>中老年、亲友圈的信息主要在群里，缺了它人群信息结构不完整；但没有真实文本，只能人工盲评</td></tr>
+<tr><td>社交怎样影响行为</td><td>观点走 LLM 解读，买卖行为走内核 H_j<span class="ref">§7.5</span></td><td>让 LLM 同时处理观点和从众</td><td>避免同一条帖子被计两次</td></tr>
+<tr><td>帖子何时可见</td><td>本阶段发、下一阶段可见；群聊例外，同群阶段内最多 M 轮接话<span class="ref">§9.1</span><span class="ref">§7.1</span></td><td>同一阶段内即时可见</td><td>没有循环依赖，结果与执行顺序无关；群聊接话只走发言调用、不影响当阶段交易，所以这个例外不破坏顺序无关</td></tr>
+<tr><td>信息流不够长</td><td>信息流变短，记 <code>feed_len</code><span class="ref">§7.3</span></td><td>让 LLM 补写填充帖</td><td>补写的帖子没有发帖人，会混进智能体读到的内容；记下长度，便于事后看哪些人信息少（理由为本页推断，文档只写了做法）</td></tr>
+<tr><td>热度怎么算</td><td>智能体之间原始的点赞与回复数<span class="ref">§7.3</span></td><td>按 <code>w_head</code> 放大</td><td><code>w_head</code> 是 IPF 得到的统计口径权重<span class="ref">§4.3</span>，不是模拟论坛里的人数；放大后热度会偏离模拟里实际发生的互动（理由为本页推断）</td></tr>
+<tr><td>发布者算不算人群</td><td>只发帖不交易，不进人群统计<span class="ref">§5.6</span></td><td>把发布者也做成交易账户</td><td>发布者是信息源；要测"说一套做一套"，交给 Tier-A 大V</td></tr>
+<tr><td>真实帖子注入</td><td>只留接口，默认关闭，验收强制关闭<span class="ref">§5.7</span></td><td>用真实帖子增加信息流的真实感</td><td>真实帖子混入后，生成帖子可能只是复述，V2 对照失效</td></tr>
+</tbody></table></div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.3、§5.6，来自架构讨论 A3）</b>
+<p style="margin:6px 0">改写按事实与观点分开。events 只产出 <code>EventCard</code> 与 L0、L1 版本，不带立场，与 <code>summary</code> 做事实一致性校验，不一致的丢弃重写<span class="ref">§5.3</span>。L2–L4 文本都由 social 发布者以 <code>Post</code> 产出：L2 标注依据的 <code>event_id</code>；L3 可歪曲、不做事实校验，但须填 <code>source_event_ids</code>；L4 传闻另立 <code>origin="rumor"</code> 的事件卡并带"传闻"标签<span class="ref">§5.3</span><span class="ref">§10.3</span>。夸张度、确定性改为发布者参数，与立场、动机、准确率并列<span class="ref">§5.6</span>。L2–L4 成本归入 social 估算<span class="ref">§5.3</span>。</p>
+<p style="margin:6px 0">选这种分法的好处：事实类文本可以校验，观点类文本跟着发布者的立场与动机走，研究"标题党"时只动发布者参数，不必重写事件改写。</p></div>
+<p>设计文档内部还有一处没跟上：模块表把 events 写成"按渠道改写（官媒 / 财经快讯 / 传闻）"<span class="ref">§3.3</span>，分层视图写成"事件卡抽取 + 分渠道改写"<span class="ref">§3.2</span>，读起来传闻仍是 events 的改写渠道。以 §5.3 为准：传闻文本由 L4 发布者以 <code>Post</code> 产出，events 只为它另立 <code>origin="rumor"</code> 的事件卡。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §16.1，来自架构讨论 A2）</b>雪球不自采：robots 禁止相关路径，用户协议禁止用于开发 AI 系统和建存档数据集。雪球风格仍留在 MVP，其 V2 对照与文风示例池靠授权数据；授权来源落实前，雪球风格的 V2 结论记为"无对照"<span class="ref">§16.1</span>。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §14.4、§14.2，来自架构讨论 A4）</b>LLM 网关自写薄层，做响应缓存，按 <code>run_id</code> 与 <code>persona_id</code> 计量<span class="ref">§14.4</span>。成本估算把发布者层 L2–L4 的帖子与群聊接话列为主循环之外单独计量的项，量级都小于主循环<span class="ref">§14.2</span>；群聊 token 计入 social 成本<span class="ref">§7.1</span>。发布者帖子在帖子表里用 <code>publisher_id</code>，网关按什么键计量发布者调用，文档没有写，见第 8 节。</div>
+</section>
+
+<section id="s7" class="reveal"><h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">social 夹在事件、人设与智能体之间：它不解读事件、不做决策，只决定谁说了什么、谁能看到。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>模块</th><th>方向</th><th>交换什么</th><th>边界</th></tr></thead>
+<tbody>
+<tr><td><a href="mod-events.html">events</a></td><td>上游</td><td><code>EventCard</code>，L0、L1 版本</td><td>events 只做事实类文本；观点类 L2–L4 归 social<span class="ref">§5.3</span></td></tr>
+<tr><td><a href="mod-population.html">population</a></td><td>上游</td><td>人设卡里的渠道偏好、K_i、轻信度、文风</td><td>人设怎么生成归 population；social 只读<span class="ref">§4.1</span></td></tr>
+<tr><td><a href="mod-agents.html">agents</a></td><td>上下游</td><td>收 <code>Post</code>，送回 <code>FeedItem</code></td><td>发不发、写什么由智能体的第 2 次调用（发言）决定，群聊接话也只走这一次<span class="ref">§6.1</span><span class="ref">§7.1</span>；social 管分发与排序。注意力抽样属于智能体的感知步骤<span class="ref">§5.4</span><span class="ref">§6.1</span></td></tr>
+<tr><td><a href="mod-orchestrator.html">orchestrator</a></td><td>上游</td><td>激活阶段、运行清单里的注入开关</td><td>"下一阶段可见"的时序与群聊轮次由编排保证<span class="ref">§9.1</span></td></tr>
+<tr><td><a href="mod-collect.html">collect</a></td><td>上游</td><td>去标识化的真实帖子</td><td>只在注入开关打开时进信息流；文风示例经 population 使用<span class="ref">§4.4</span></td></tr>
+<tr><td><a href="mod-llm.html">llm</a></td><td>依赖</td><td>发布者发帖的 LLM 调用</td><td>缓存与计量在网关<span class="ref">§14.4</span></td></tr>
+<tr><td><a href="mod-outputs.html">outputs</a></td><td>下游</td><td>帖子表</td><td>发布者帖子入表但不进人群统计<span class="ref">§10.1</span></td></tr>
+<tr><td><a href="mod-validation.html">validation</a></td><td>下游</td><td>帖子文本、发帖量曲线、级联指标</td><td>V2 声音可信<span class="ref">§12.1</span>；基线 B4 关掉本模块<span class="ref">§11.1</span></td></tr>
+</tbody></table></div>
+<p>相关页面：<a href="sim-publishers.html">发布者模拟</a>（每级发布者具体怎么发帖）、<a href="sim-personas.html">人设模拟</a>（不同类型散户看到什么、怎么决策）、<a href="flow-day.html">一天的流程</a>、<a href="mod-schemas.html">schemas</a>（共享类型）。</p>
+</section>
+
+<section id="s8" class="reveal"><h2><span class="num">08</span>开放问题</h2>
+<p class="sub">以下事项在设计文档 v0.3 里还没有定下来，实现前需要补齐。</p>
+<p>设计文档 v0.3 里与 social 相关的章节（§5.3–§5.7、§7、§10.3）没有〔需复核〕标记；唯一相关的〔需复核〕在 §16.1 的合规条款里，列在最后一条。其余是缺口：文档提到了机制，但没给出数值或定义。</p>
+<div class="callout todo"><b class="t">待定事项</b><ul style="margin:6px 0 0;padding-left:18px">
+<li><code>Post</code> 与 <code>FeedItem</code> 的 schema 字段与类型；目前只有帖子表的列<span class="ref">§10.3</span>。</li>
+<li>推荐流四个因子的具体算法和组合权重，发布者级别权重的数值，热榜的大小与放大倍数<span class="ref">§7.3</span><span class="ref">§5.6</span>。</li>
+<li>注意力打分里 <code>τ_d</code> 与 <code>T_i</code> 的取值<span class="ref">§5.4</span>。</li>
+<li>发布者五项参数（立场、动机、准确率、夸张度、确定性）的取值范围；每级发布者的数量。</li>
+<li>按轻信度决定"信不信、转不转"的具体公式<span class="ref">§7.4</span>。</li>
+<li>各类群的初始信任数值；信任更新步长是人设参数，无真实数据可校准，报告中标为假设；取关用的信任阈值<span class="ref">§7.2</span>。</li>
+<li>群聊轮数 M 与"信号不足"门槛 n 的取值，文档只给了"如 4 轮""如 3 条"<span class="ref">§7.1</span><span class="ref">§7.5</span>。</li>
+<li>固定跟踪的 10 只个股吧名单未定<span class="ref">§16.1</span>。</li>
+<li>雪球的授权数据来源<span class="ref">§16.1</span>；落实前雪球风格 V2 无对照。</li>
+<li>发布者 LLM 调用的计量键（网关只写了按 <code>run_id</code> 与 <code>persona_id</code> 计量<span class="ref">§14.4</span>）。</li>
+<li>级联指标（24 小时内扩散深度与广度<span class="ref">§7.5</span>）由哪个模块计算，文档未写明。</li>
+<li>驱动发布者的实时行情由哪个模块提供，文档未写明<span class="ref">§5.6</span>。</li>
+<li>相关的合规条款：《反不正当竞争法》数据条款〔条号与原文需复核〕<span class="ref">§16.1</span>，影响真实帖子来源。</li>
+</ul></div>
+</section>
+
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function el(tag, cls, text){
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = String(text);
+    return e;
+  }
+  function num(v, d){ var x = Number(v); return isFinite(x) ? x : d; }
+
+  /* ---------- 推荐流排序小工具（示例数据） ---------- */
+  var POSTS = [
+    {who:'L3 博主（化名）', lv:'L3', txt:'甲新能预增翻倍！主升浪稳了', r:0.9, h:0.8, s:0.9, f:0.6},
+    {who:'散户 #丙', lv:'', txt:'已上车甲新能，先拿着', r:0.8, h:0.5, s:0.9, f:1.0},
+    {who:'L1 快讯', lv:'L1', txt:'甲新能发布业绩预告，预计净利润同比增长', r:1.0, h:0.6, s:0.9, f:0.3},
+    {who:'L2 大V"老K"（化名）', lv:'L2', txt:'预增早有预期，别追高', r:0.7, h:0.9, s:0.8, f:0.9},
+    {who:'散户 #丁', lv:'', txt:'乙银行又跌了，割不割', r:0.6, h:0.3, s:0.4, f:0.5},
+    {who:'L4 传闻号（化名）', lv:'L4', txt:'听说甲新能要被并购，内部消息', r:0.5, h:0.7, s:0.9, f:0.2, rumor:true}
+  ];
+  var LVW = {L0:1.2, L1:1.2, L2:1.0, L3:0.8, L4:0.5}; /* 示例数据，文档未定义 */
+  function renderFeed(){
+    var list = $('so-fw-list'); if (!list) return;
+    var hot = $('so-fw-hot'), lv = $('so-fw-lv'), fol = $('so-fw-fol'), nIn = $('so-fw-n'), nV = $('so-fw-n-v');
+    var useHot = !!(hot && hot.checked), useLv = !!(lv && lv.checked), useF = !!(fol && fol.checked);
+    var n = Math.max(1, Math.min(POSTS.length, Math.round(num(nIn && nIn.value, 3))));
+    if (nV) nV.textContent = String(n);
+    var byHot = POSTS.map(function(p, i){ return {i:i, h:p.h}; }).sort(function(a, b){ return b.h - a.h; });
+    var hotSet = {}; if (useHot) { hotSet[byHot[0].i] = 1; hotSet[byHot[1].i] = 1; }
+    var rows = POSTS.map(function(p, i){
+      var w = (useLv && p.lv) ? num(LVW[p.lv], 1) : 1;
+      var f = useF ? p.f : 1;
+      var boost = hotSet[i] ? 1.5 : 1;
+      var sc = p.r * p.h * boost * p.s * f * w;
+      return {p:p, sc:num(sc, 0), w:w, f:f, boost:boost};
+    }).sort(function(a, b){ return b.sc - a.sc; });
+    var max = rows.length ? rows[0].sc : 0;
+    while (list.firstChild) list.removeChild(list.firstChild);
+    rows.forEach(function(row, k){
+      var li = el('li', k < n ? 'in' : 'out');
+      li.appendChild(el('span', 'so-i', '#' + (k + 1)));
+      var mid = el('div');
+      if (row.p.lv) mid.appendChild(el('span', 'so-lv', row.p.lv));
+      mid.appendChild(document.createTextNode(row.p.who + '：' + row.p.txt));
+      if (row.p.rumor) mid.appendChild(el('span', 'so-tag', '传闻 · 仅沙盒'));
+      var meta = '时近 ' + row.p.r.toFixed(1) + ' × 热度 ' + row.p.h.toFixed(1) + (row.boost > 1 ? '×1.5' : '') +
+        ' × 兴趣 ' + row.p.s.toFixed(1) + ' × 关注 ' + row.f.toFixed(1) + (row.w !== 1 ? ' × 级权 ' + row.w.toFixed(1) : '');
+      mid.appendChild(el('span', 'so-m', meta));
+      li.appendChild(mid);
+      var right = el('div');
+      var bar = el('div', 'so-bar'), b = el('b');
+      var pct = max > 0 ? Math.max(2, Math.round(row.sc / max * 100)) : 0;
+      b.style.width = pct + '%'; bar.appendChild(b); right.appendChild(bar);
+      right.appendChild(el('span', 'so-m', '得分 ' + row.sc.toFixed(3)));
+      li.appendChild(right);
+      list.appendChild(li);
+    });
+  }
+  ['so-fw-hot', 'so-fw-lv', 'so-fw-fol', 'so-fw-n'].forEach(function(id){
+    var e = $(id); if (e) e.addEventListener('input', renderFeed);
+    if (e) e.addEventListener('change', renderFeed);
+  });
+  renderFeed();
+
+  /* ---------- 走一遍示例（示例数据） ---------- */
+  var STEPS = [
+    {t:'事件进来：events 产出事实类版本', d:'T−1 收盘后，化名公司"甲新能"发布业绩预告。events 把它做成事件卡，再写出不带立场的 L0、L1 版本。',
+     i:['EventCard ev-demo-01（示例）：甲新能发布业绩预告，净利润同比预增', 'origin="real"，source_tier="official"，magnitude=2（示例；§5.2 量级 2 为个股级，如业绩大幅超预期）'],
+     p:['events 生成 L0 官媒转述、L1 快讯两类版本，不带立场', '与 summary 做事实一致性校验，不一致的丢弃重写；每个"事件 × 渠道"1–3 个版本，量级越高越多'],
+     o:'L1 快讯（示例）：\n甲新能：预计年度净利润同比增长',
+     r:['§5.2 EventCard 字段', '§5.3 events 只产出 EventCard 与 L0、L1 版本', '§5.3 L2–L4 文本由 social 发布者产出']},
+    {t:'L3 博主据此发帖', d:'social 的一位 L3 发布者（中小博主，化名）读到快讯，按自己的参数写一条情绪化转述。',
+     i:['L1 快讯文本、行情', '发布者 pub-L3-07 参数（示例）：立场=多，动机=引流到付费群，夸张度=高，确定性=高，准确率=低'],
+     p:['LLM 按参数写帖，文风取股吧风格', '不做事实校验，可以夸大，但须填 source_event_ids', '生成 Post，simulated=true'],
+     o:'Post p-000123（示例）\nchannel: 股吧风格论坛\nevent_id: ev-demo-01\nsource_event_ids: [ev-demo-01]\ntext: 甲新能预增翻倍！这波主升浪稳了\nstance: 多  post_type: 观点',
+     r:['§5.6 发布者参数：立场、动机、准确率、夸张度、确定性', '§5.3 L3 可歪曲，须标依据的 event_id', '§7.4 帖子类型', '§10.3 帖子表 source_event_ids']},
+    {t:'帖子落到渠道', d:'这条帖子进入甲新能的个股吧板块，同时推给这位博主的关注者。它在 T−1 收盘后发出，要到下一阶段 T 盘前才可见。',
+     i:['Post p-000123', '关注网络：pub-L3-07 的关注者（示例 40 人，含散户 #甲）'],
+     p:['进入个股吧板块，成为推荐流候选', '进入关注者的推荐流候选', '可见时间定为下一阶段'],
+     o:'分发目标（示例）：\n甲新能吧板块；关注者 40 人\n可见于：T 盘前',
+     r:['§7.1 公开论坛：按个股分板块 + 关注 + 推荐流', '§7.2 关注网络', '§9.1 本阶段发的帖子下一阶段才可见（群聊例外，§7.1）']},
+    {t:'散户 #甲 下单后转进家庭群', d:'散户 #甲（示例：持有甲新能，轻信度高）在 T 盘前被激活，读到这条帖子，先做决策，成交判定之后才写帖子。',
+     i:['#甲 的 K_i 条信息里有 p-000123', '人设（示例）：credulity=0.8，media_diet 偏论坛与群聊'],
+     p:['第 1 次调用（LLM）只出结构化字段：BeliefUpdate（want_to_post=true）与买入意向，source_post_ids 记 p-000123', '内核做约束与成交判定：示例按开盘价成交', '第 2 次调用（LLM，发言）读到自己的意向与成交，写一句发到家庭群', '是否相信、是否转发按轻信度决定，具体公式文档未定义；家庭群本阶段只有 #甲 一人被激活，不到 2 人，不进入群聊轮次'],
+     o:'Post p-000150（示例）\nactivation_id: act-甲-T盘前\nchannel: 熟人群聊（家庭群）\ngroup_id: g-家庭-01  turn: 0（示例）\nreply_to: p-000123\ntext: 看到这个，我已经上车了\npost_type: 晒单',
+     r:['§6.1 两次调用，帖子在成交判定之后写', '§6.2 want_to_post', '§6.3 source_post_ids 最多 2 条', '§7.1 群聊轮次需 ≥ 2 个被激活成员', '§7.4 按轻信度决定是否相信、转发']},
+    {t:'推荐流为散户 #乙 排序', d:'到了 T 收盘后，散户 #乙（示例：#甲 的家人，同在家庭群，也关注那位博主）被激活。social 先给他的论坛候选帖打分。',
+     i:['论坛候选（示例）：p-000123（L3）、p-000131（L2 大V"老K"：别追高）、p-000140（散户 #丁 吐槽）'],
+     p:['feed_score = 时近性 × 热度 × 兴趣相似度 × 关注关系', '热度用智能体之间原始的点赞与回复数，不按 w_head 放大', '发布者帖子乘级别权重（示例：L2=1.0，L3=0.8）', '热榜放大头部内容'],
+     o:'推荐流结果（示例分值）：\n1 p-000131  0.45\n2 p-000123  0.31\n3 p-000140  0.04',
+     r:['§7.3 推荐流（借鉴 OASIS）', '§7.3 热度用原始计数', '§5.6 按级加权进入推荐流', '级别权重数值：文档未定义']},
+    {t:'合成候选池并打注意力分', d:'推荐流结果、家庭群里的消息、按 #乙 媒体偏好选出的事件改写，加上持仓异动，合成候选池。每条再算一次注意力分。',
+     i:['推荐流 3 条；家庭群 p-000150；L1 快讯；#乙 持仓"乙银行"（化名）当日下跌（示例）'],
+     p:['score = w_i(渠道) · m(量级) · rel_i(资产) · exp(−Δt/τ_d) · sal', '持仓异动标记为必入', 'τ_d 的取值文档未定义，示例分值不对应任何具体取值'],
+     o:'候选池（示例分值）：\n乙银行异动   必入\np-000150     0.62\np-000131     0.48\nL1 快讯      0.41\np-000123     0.35\np-000140     0.05',
+     r:['§5.4 候选池构成与打分公式', '§4.1 media_diet 即 w_i(渠道)']},
+    {t:'注意力抽样：留下 K_i 条', d:'#乙 的注意力预算 K_i=5（示例）。持仓异动先入，其余按 softmax(score/T_i) 无放回抽 4 条。',
+     i:['候选池 6 条及分值', 'K_i=5（示例，文档范围 3–15）；T_i 取值文档未定义'],
+     p:['持仓异动必入，占 1 条', '其余 5 条按 softmax 概率无放回抽 4 条', '没抽中的条目以后可能经群聊或大V转述再出现'],
+     o:'#乙 的 top K（示例）：\n乙银行异动\np-000150（家庭群：已上车）\np-000131（大V：别追高）\nL1 快讯\np-000123（L3：主升浪稳了）\n未抽中：p-000140',
+     r:['§5.4 softmax(score/T_i) 无放回抽样', '§5.4 K_i 3–15，约 1,500 token']},
+    {t:'#乙 读到之后：两条路径', d:'解读步骤读这 5 条原文，内核另外统计其中的买卖行为。',
+     i:['#乙 的 K_i 条信息'],
+     p:['观点路径：LLM 读 L3"主升浪稳了"和大V"别追高"，更新信念，理由标签（ReasonTag）可能含 kol', '行为路径：只有 p-000150"已上车"算买入行为，L3 与大V的观点不计入 H_j', '看到的买卖信号只有 1 条，少于 n 条（文档给的例子是 3），H_j 记为 0，内核日志标"信号不足"'],
+     o:'买卖信号 1 条 < n = 3（示例取文档的"如 3"）\nH_j = 0，内核日志：信号不足\nBeliefUpdate.views[].reasons 含 kol（示例）\nwant_to_post = false（示例）',
+     r:['§7.5 两条路径，避免重复计数', '§7.5 信号少于 n 条时 H_j 记 0', '§6.3 β_i^herd · H_j，H_j ∈ [−1, 1]', '§6.2 ReasonTag']},
+    {t:'入表与级联统计', d:'两条帖子都写进帖子表；对甲新能的讨论记一次级联。',
+     i:['p-000123、p-000150'],
+     p:['写入帖子表，simulated=true，正文带隐式标识', '发布者帖子入表但不计入人群统计', '统计 24 小时内同一标的讨论的扩散深度与广度；发帖量只比形状，不比绝对量'],
+     o:'级联（示例）：\n深度 = 1 层转发（p-000123 → p-000150）\n广度 = 看到过的人数（示例 47 人）',
+     r:['§10.3 帖子表', '§10.1 发布者不进人群统计', '§7.5 级联指标', '§12.1 V2']}
+  ];
+  var cur = 0, timer = null;
+  var dots = $('so-dots');
+  function list(arr){
+    var ul = el('ul');
+    (arr || []).forEach(function(t){ ul.appendChild(el('li', null, t)); });
+    return ul;
+  }
+  function fill(id, node){
+    var box = $(id); if (!box) return;
+    while (box.firstChild) box.removeChild(box.firstChild);
+    if (node) box.appendChild(node);
+  }
+  function show(i){
+    if (!STEPS.length) return;
+    cur = Math.max(0, Math.min(STEPS.length - 1, i));
+    var s = STEPS[cur];
+    var t = $('so-d-title'); if (t) t.textContent = '第 ' + (cur + 1) + ' 步 · ' + s.t;
+    var d = $('so-d-desc'); if (d) d.textContent = s.d;
+    fill('so-d-in', list(s.i));
+    fill('so-d-do', list(s.p));
+    var pre = el('pre', null, s.o); fill('so-d-out', pre);
+    fill('so-d-ref', list(s.r));
+    var pos = $('so-d-pos'); if (pos) pos.textContent = (cur + 1) + ' / ' + STEPS.length + ' · 示例数据';
+    if (dots) Array.prototype.forEach.call(dots.children, function(b, k){
+      b.className = k === cur ? 'on' : (k < cur ? 'done' : '');
+      b.setAttribute('aria-selected', k === cur ? 'true' : 'false');
+    });
+    var pv = $('so-d-prev'), nx = $('so-d-next');
+    if (pv) pv.disabled = cur === 0;
+    if (nx) nx.disabled = cur === STEPS.length - 1;
+  }
+  function stop(){
+    if (timer) { clearInterval(timer); timer = null; }
+    var pl = $('so-d-play'); if (pl) pl.textContent = '自动播放';
+  }
+  if (dots) STEPS.forEach(function(s, k){
+    var b = el('button', null, String(k + 1));
+    b.type = 'button'; b.setAttribute('role', 'tab'); b.title = s.t;
+    b.addEventListener('click', function(){ stop(); show(k); });
+    dots.appendChild(b);
+  });
+  var prev = $('so-d-prev'), next = $('so-d-next'), play = $('so-d-play');
+  if (prev) prev.addEventListener('click', function(){ stop(); show(cur - 1); });
+  if (next) next.addEventListener('click', function(){ stop(); show(cur + 1); });
+  if (play) play.addEventListener('click', function(){
+    if (timer) { stop(); return; }
+    if (cur >= STEPS.length - 1) show(0);
+    play.textContent = '暂停';
+    timer = setInterval(function(){
+      if (cur >= STEPS.length - 1) { stop(); return; }
+      show(cur + 1);
+    }, 3800);
+  });
+  show(0);
+})();
+</script>
+</body>
+</html>

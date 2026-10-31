@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>events · 信息与事件层 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* mod-events 私有样式，前缀 ev- */
+.ev-io{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1.1fr) 34px minmax(0,1fr);gap:8px;align-items:stretch;margin-top:14px}
+.ev-io .card{padding:14px 16px}
+.ev-io h4{margin:0 0 6px;font-size:14px}
+.ev-io ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink2)}
+.ev-io li{margin:4px 0}
+.ev-io .ev-core{border-color:rgba(34,211,238,.5);background:linear-gradient(160deg,rgba(34,211,238,.13),rgba(192,132,252,.04))}
+.ev-ar{display:flex;align-items:center;justify-content:center;color:var(--data);font-size:20px}
+@media(max-width:860px){.ev-io{grid-template-columns:minmax(0,1fr)}.ev-ar{transform:rotate(90deg);height:24px}}
+h3.ev-h{font-size:16px;margin:26px 0 8px;color:var(--ink)}
+h3.ev-h .ev-k{font:700 12px var(--mono);color:var(--data);margin-right:8px}
+.ev-svg{border:1px solid var(--line);border-radius:var(--r);background:rgba(5,8,20,.55);padding:8px;margin:14px 0 8px}
+.ev-svg svg{display:block;width:100%;height:auto}
+.ev-svg text{font-family:var(--sans);pointer-events:none}
+.ev-node{cursor:pointer}
+.ev-node rect{fill:rgba(34,211,238,.08);stroke:rgba(34,211,238,.55);stroke-width:1.4;transition:fill .2s,stroke .2s}
+.ev-node.llm rect{fill:rgba(192,132,252,.1);stroke:rgba(192,132,252,.65)}
+.ev-node.out rect{fill:rgba(244,114,182,.08);stroke:rgba(244,114,182,.55);stroke-dasharray:5 4}
+.ev-node:hover rect,.ev-node:focus rect{fill:rgba(34,211,238,.2)}
+.ev-node.on rect{fill:rgba(34,211,238,.28);stroke:var(--data);stroke-width:2.4}
+.ev-node.llm.on rect{fill:rgba(192,132,252,.3);stroke:var(--llm)}
+.ev-node:focus{outline:none}
+.ev-t1{fill:var(--ink);font-size:15px;font-weight:700}
+.ev-t2{fill:var(--mute);font-size:11.5px}
+.ev-edge{stroke:rgba(148,163,184,.7);stroke-width:1.6;fill:none}
+.ev-loop{stroke:var(--warn);stroke-width:1.4;fill:none;stroke-dasharray:4 4}
+.ev-tl{fill:var(--warn);font-size:11px}
+.ev-info{border:1px solid rgba(34,211,238,.4);border-radius:var(--r);padding:12px 16px;background:rgba(34,211,238,.05);min-height:84px}
+.ev-info b.ev-it{display:block;font-size:15px;margin-bottom:4px}
+.ev-info p{margin:0;font-size:13.5px;color:var(--ink2)}
+.ev-info .ev-ir{display:block;margin-top:6px;font:12px var(--mono);color:var(--data)}
+.ev-demo{border:1px solid rgba(34,211,238,.35);border-radius:var(--r);padding:16px;background:rgba(34,211,238,.04)}
+.ev-dots{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
+.ev-dots button{border:1px solid var(--line2);background:var(--panel);color:var(--ink2);font:600 12px var(--mono);border-radius:999px;padding:3px 10px;cursor:pointer}
+.ev-dots button.on{background:var(--data);color:#06101f;border-color:var(--data)}
+.ev-dots button.done{border-color:rgba(34,211,238,.6);color:var(--data)}
+.ev-st{font-size:15px;font-weight:700;margin:0 0 4px}
+.ev-quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+@media(max-width:700px){.ev-quad{grid-template-columns:minmax(0,1fr)}}
+.ev-quad>div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);font-size:13px;color:var(--ink2);min-width:0}
+.ev-quad b.ev-qt{display:block;font:700 11px var(--mono);color:var(--data);margin-bottom:4px;letter-spacing:.05em}
+.ev-quad pre{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 var(--mono);color:var(--ink)}
+.ev-quad ul{margin:0;padding-left:16px}
+.ev-ex{display:inline-block;font:700 11px var(--mono);color:var(--warn);border:1px dashed rgba(248,113,113,.6);border-radius:6px;padding:1px 7px}
+.ev-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.ev-ctl .ev-pos{font:600 12.5px var(--mono);color:var(--ink2);margin-left:auto}
+.ev-cmp td:first-child{white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>模块页 · events</div>
+<h1>信息与事件层：<span class="grad">一条新闻怎样变成事件卡</span></h1>
+<p class="lead">events 把新闻、政策和公告去重后抽成统一格式的事件卡，给出量级与相关资产，再写出不带立场的官媒转述和快讯两类文本，交给注意力与社交层使用。</p>
+<div class="meta">
+<span class="chip data"><i></i>产物 EventCard</span>
+<span class="chip llm"><i></i>按事件调用 LLM，与人数无关</span>
+<span class="chip warn"><i></i>量级防记忆污染 §5.2</span>
+<span class="chip social"><i></i>L2–L4 文本归 social §5.3</span>
+</div>
+</header>
+
+<section id="s1" class="reveal"><h2><span class="num">01</span>职责一览</h2>
+<p class="sub">一句话：events 把同一件事的多条新闻合成一张事件卡（<code>EventCard</code>），定下何时可见、多大、涉及哪些资产，再写出官媒和快讯两类中性文本。</p>
+<p>设计文档的模块表写的是"新闻、政策、公告 → 事件卡；按渠道改写（官媒 / 财经快讯 / 传闻）"，产物是 <code>EventCard</code><span class="ref">§3.3</span>。§5.3 把改写按事实与观点分开：events 只产出 <code>EventCard</code> 与 L0（官媒转述）、L1（快讯）两类不带立场的版本；L2–L4 的观点帖、情绪帖和传闻帖由 social 的发布者以 <code>Post</code> 产出<span class="ref">§5.3</span>。模块表里的"传闻"，在 §5.3 里对应 L4 另立的 <code>origin="rumor"</code> 事件卡，见 3.4。</p>
+<p>和其他业务模块一样，events 只通过 <code>schemas</code> 里的共享类型与外界交换数据，不导入别的模块的类型，由 orchestrator 把它和上下游串起来<span class="ref">§3.3</span>。</p>
+<div class="ev-io">
+<div class="card"><h4>输入</h4><ul>
+<li><b>原始条目</b>：新闻、政策发布、公告、宏观数据、海外市场等<span class="ref">§5.1</span>；历史新闻源随数据源一起待定<span class="ref">§5.5</span></li>
+<li><b>collect</b>：前向存档的新闻快讯<span class="ref">§3.3</span>；东财 7x24 快讯从 Phase 0 起每日采集<span class="ref">§5.5</span><span class="ref">§16.1</span></li>
+<li><b>data</b>：指数、行业成分的历史快照与授权来源的题材成分，供资产映射；全部经 <code>pit.query</code> 读取<span class="ref">§5.5</span></li>
+<li><b>llm / prompts</b>：抽取与改写的模型调用和模板<span class="ref">§3.3</span></li>
+</ul></div>
+<div class="ev-ar">→</div>
+<div class="card ev-core"><h4>events</h4><ul>
+<li>聚类去重，每个事件簇 1 次 LLM 抽取<span class="ref">§5.2</span></li>
+<li>遮蔽专有时间叫法后打量级<span class="ref">§5.2</span></li>
+<li>定 <code>available_at</code>、范围与资产<span class="ref">§5.2</span></li>
+<li>写 L0、L1 版本并做事实一致性校验<span class="ref">§5.3</span></li>
+</ul></div>
+<div class="ev-ar">→</div>
+<div class="card"><h4>输出</h4><ul>
+<li><b>agents</b>：L0、L1 版本按 <code>available_at</code> 进入感知候选池，参与注意力抽取<span class="ref">§5.4</span></li>
+<li><b>social</b>：<code>EventCard</code> 驱动发布者写 L2–L4 的 <code>Post</code><span class="ref">§5.3</span><span class="ref">§5.6</span></li>
+<li><b>orchestrator</b>：量级 ≥ 3 的事件是激活触发条件之一，交易时段内的事件在其后最近的盘中检查点激活<span class="ref">§3.4</span><span class="ref">§9.1</span></li>
+<li><b>outputs</b>：<code>event_id</code> 是帖子、态度、决策三张主表的关联键<span class="ref">§10.3</span></li>
+</ul></div>
+</div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.3，来自架构讨论 A3）</b>
+<ul>
+<li>events 只产出 <code>EventCard</code> 与 L0、L1 两类不带立场的版本，版本与 <code>summary</code> 做事实一致性校验<span class="ref">§5.3</span>。</li>
+<li>L2–L4 的文本是观点，由 social 的发布者以 <code>Post</code> 产出；夸张度、确定性改为发布者参数，L2–L4 的成本归入 social 估算<span class="ref">§5.3</span><span class="ref">§14.2</span>。</li>
+<li>抽取量级时遮去专有时间叫法，V2 历史验收事件的量级由团队人工标定<span class="ref">§5.2</span>。</li>
+</ul>
+仍待定的是数据源：历史新闻源与授权题材来源随数据源一起定<span class="ref">§5.5</span>，见第 08 节。</div>
+</section>
+
+<section id="s2" class="reveal"><h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">散户每次激活只看几条信息，系统得先知道"今天发生了几件事、各有多大、谁该关心"。events 把杂乱的新闻流整理成这样一份清单，并且只做一次、所有人共用。</p>
+<p>第一个原因是成本。同一条政策新闻会被官网、通讯社、快讯平台各发一遍，如果让每个智能体自己去读、自己去理解，LLM 调用量就和人数成正比。设计文档把抽取和改写定成"事件级调用"：先聚类去重，每个事件簇只调 1 次 LLM，成本随事件数增长，与智能体数无关<span class="ref">§5.2</span><span class="ref">§14.3</span>。MVP 有 550 个智能体<span class="ref">§14.1</span>，这一条省下的调用是按倍数算的。</p>
+<p>第二个原因是时间。回放历史时，智能体只能看到那个时刻已经公开的信息。事件卡的 <code>available_at</code> 记的是最早可公开获取的时间，不是事件发生的时间；夜间、周末发布的事件进入下一个激活点的候选池<span class="ref">§5.2</span>。数据层再强制 <code>available_at ≤ clock</code><span class="ref">§5.5</span>。没有这一步，"晚上九点的新闻"可能被下午三点收盘时的智能体读到。</p>
+<p>第三个原因是调度要用一个统一的尺度。谁被唤醒、谁先看到什么，取决于事件的量级：媒介接触到量级 ≥ 3 的事件是激活条件之一<span class="ref">§9.1</span>，注意力打分里也有一项 m(量级)<span class="ref">§5.4</span>。量级必须在事件进入仿真之前就定好，而且只看文本。</p>
+<p>第四个原因是保住分歧。抽取模型会顺手判断利好还是利空，这个判断记在 <code>direction_hint</code> 里，只用于路由与监控，不给智能体看<span class="ref">§5.2</span>。智能体读的是改写后的文本，每类文本还有 1–3 个版本，避免所有人读到同一段话<span class="ref">§5.3</span>。</p>
+<div class="callout warn"><b class="t">反例：让每个智能体直接读原始新闻</b>
+<ul>
+<li>同一事件的 5 条重复报道会挤占 K_i 条的注意力预算（K_i 取 3–15<span class="ref">§5.4</span>），有人一次激活只看到同一件事。</li>
+<li>理解新闻的调用乘以 550 人，而且每人理解的"这件事有多大"各不相同，激活规则无从下手。</li>
+<li>如果改成把抽取模型的一句"利好"直接附在新闻后面，所有人继承同一个解读，群体退化成基线 B1（单 LLM 无人设）<span class="ref">§5.2</span><span class="ref">§11.1</span>。</li>
+<li>如果量级按事后涨跌回填，大涨日的事件量级偏高、激活人数偏多，未来收益就漏进了激活模式<span class="ref">§5.2</span>。</li>
+</ul></div>
+</section>
+
+<section id="s3" class="reveal"><h2><span class="num">03</span>机制详解</h2>
+<p class="sub">一条新闻要经过去重、遮蔽、抽取、打量级、映射资产、写 L0/L1 版本、一致性校验七道工序，才进入智能体的候选池。下图每个方框都可以点开看说明。紫色框是设计文档明确写了要调用 LLM 的步骤；其余方框文档没有逐一说明由规则、LLM 还是人工完成（例如量级本身是抽取字段之一，验收事件再加人工标定）。</p>
+<div class="ev-svg">
+<svg id="evPipe" viewBox="0 0 640 400" role="img" aria-label="events 处理管线图">
+<defs><marker id="evArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="rgba(148,163,184,.85)"/></marker></defs>
+<g class="ev-edges">
+<path class="ev-edge flowline" d="M200,49 H228" marker-end="url(#evArr)"/>
+<path class="ev-edge flowline" d="M410,49 H438" marker-end="url(#evArr)"/>
+<path class="ev-edge flowline" d="M530,78 V118" marker-end="url(#evArr)"/>
+<path class="ev-edge flowline" d="M440,149 H412" marker-end="url(#evArr)"/>
+<path class="ev-edge flowline" d="M230,149 H202" marker-end="url(#evArr)"/>
+<path class="ev-edge flowline" d="M110,178 V218" marker-end="url(#evArr)"/>
+<path class="ev-edge flowline" d="M200,249 H228" marker-end="url(#evArr)"/>
+<path class="ev-edge flowline" d="M410,249 H438" marker-end="url(#evArr)"/>
+<path class="ev-edge flowline" d="M530,278 V318" marker-end="url(#evArr)"/>
+<path class="ev-edge flowline" d="M110,278 V318" marker-end="url(#evArr)"/>
+<path class="ev-loop" d="M490,220 C490,196 370,196 370,218" marker-end="url(#evArr)"/>
+<text class="ev-tl" x="430" y="194" text-anchor="middle">不一致 → 丢弃重写</text>
+</g>
+<g class="ev-node" data-k="raw" tabindex="0" role="button"><rect x="20" y="20" width="180" height="58" rx="10"/><text class="ev-t1" x="110" y="45" text-anchor="middle">原始条目</text><text class="ev-t2" x="110" y="64" text-anchor="middle">新闻 · 政策 · 公告 §5.1</text></g>
+<g class="ev-node" data-k="clu" tabindex="0" role="button"><rect x="230" y="20" width="180" height="58" rx="10"/><text class="ev-t1" x="320" y="45" text-anchor="middle">聚类去重</text><text class="ev-t2" x="320" y="64" text-anchor="middle">嵌入相似度 + 时间窗 §5.2</text></g>
+<g class="ev-node" data-k="mask" tabindex="0" role="button"><rect x="440" y="20" width="180" height="58" rx="10"/><text class="ev-t1" x="530" y="45" text-anchor="middle">遮蔽时间叫法</text><text class="ev-t2" x="530" y="64" text-anchor="middle">如"9·24" · §5.2</text></g>
+<g class="ev-node llm" data-k="ext" tabindex="0" role="button"><rect x="440" y="120" width="180" height="58" rx="10"/><text class="ev-t1" x="530" y="145" text-anchor="middle">LLM 抽取</text><text class="ev-t2" x="530" y="164" text-anchor="middle">每簇 1 次调用 §5.2</text></g>
+<g class="ev-node" data-k="mag" tabindex="0" role="button"><rect x="230" y="120" width="180" height="58" rx="10"/><text class="ev-t1" x="320" y="145" text-anchor="middle">量级 1–5</text><text class="ev-t2" x="320" y="164" text-anchor="middle">量级表 · 人工标定 §5.2</text></g>
+<g class="ev-node" data-k="asset" tabindex="0" role="button"><rect x="20" y="120" width="180" height="58" rx="10"/><text class="ev-t1" x="110" y="145" text-anchor="middle">资产映射</text><text class="ev-t2" x="110" y="164" text-anchor="middle">指数 · 行业 · 题材 · 个股</text></g>
+<g class="ev-node" data-k="card" tabindex="0" role="button"><rect x="20" y="220" width="180" height="58" rx="10"/><text class="ev-t1" x="110" y="245" text-anchor="middle">EventCard</text><text class="ev-t2" x="110" y="264" text-anchor="middle">锁版本 · 缓存 §5.2</text></g>
+<g class="ev-node llm" data-k="rw" tabindex="0" role="button"><rect x="230" y="220" width="180" height="58" rx="10"/><text class="ev-t1" x="320" y="245" text-anchor="middle">写 L0 / L1</text><text class="ev-t2" x="320" y="264" text-anchor="middle">每类 1–3 版 §5.3</text></g>
+<g class="ev-node" data-k="chk" tabindex="0" role="button"><rect x="440" y="220" width="180" height="58" rx="10"/><text class="ev-t1" x="530" y="245" text-anchor="middle">事实一致性校验</text><text class="ev-t2" x="530" y="264" text-anchor="middle">对照 summary §5.3</text></g>
+<g class="ev-node out" data-k="soc" tabindex="0" role="button"><rect x="20" y="320" width="180" height="58" rx="10"/><text class="ev-t1" x="110" y="345" text-anchor="middle">social 发布者</text><text class="ev-t2" x="110" y="364" text-anchor="middle">L2–L4 写 Post §5.3</text></g>
+<g class="ev-node out" data-k="pool" tabindex="0" role="button"><rect x="440" y="320" width="180" height="58" rx="10"/><text class="ev-t1" x="530" y="345" text-anchor="middle">感知候选池</text><text class="ev-t2" x="530" y="364" text-anchor="middle">注意力抽 K_i 条 §5.4</text></g>
+</svg>
+</div>
+<div class="ev-info" id="evPipeInfo" aria-live="polite"><b class="ev-it">点上图任一方框</b><p>这里会显示该步骤做什么、由谁负责、依据哪一节。</p></div>
+<h3 class="ev-h"><span class="ev-k">3.1</span>聚类去重与抽取</h3>
+<p>原始条目覆盖时政与政策、宏观数据、市场、公司、国际五类来源<span class="ref">§5.1</span>（第六类真实帖子默认不进入智能体信息流<span class="ref">§5.7</span>）。同一件事往往有多条报道，events 先按"嵌入相似度 + 时间窗"把它们聚成一个事件簇，再对每个簇调用 1 次 LLM，抽成一张 <code>EventCard</code><span class="ref">§5.2</span>。"嵌入"是把一段文本变成一串数字向量，意思相近的文本向量也相近；时间窗保证隔了很久的相似报道不会被并到一起。相似度阈值和时间窗长度，设计文档没有给出。</p>
+<p>抽取出来的字段里，有三个需要特别小心。<code>available_at</code> 取最早可公开获取的时间，夜间、周末的事件顺延到下一个激活点<span class="ref">§5.2</span>；MVP 的固定激活点是盘前和收盘后，交易时段内量级 ≥ 3 的事件另在其后最近的盘中检查点触发激活<span class="ref">§3.4</span>。这个时间从哪来，§2.5 给了两条原则：自建存档同时保存源时间戳与入库时间，以二者较晚者为可见时间；事后回补的历史数据只有源时间戳，加保守延迟（文档举例 15 分钟）后使用，并标记 <code>backfilled</code>，以便比较两类数据上的结果是否一致。政策文件用发布日期而不是成文日期，19:00 播出的新闻联播归入下一交易日<span class="ref">§2.5</span>。<code>direction_hint</code>（−1、0、1）只用于路由与监控，不展示给智能体<span class="ref">§5.2</span>。<code>credibility</code> 默认 1.0，传闻小于 1，证实或辟谣后更新；后续报道、证实、辟谣通过 <code>parent_id</code> 指回原事件<span class="ref">§5.2</span><span class="ref">§7.4</span>。<code>origin</code> 取 real、rumor、counterfactual 三值，后两类只存在于沙盒<span class="ref">§5.2</span><span class="ref">§16.2</span>。抽取模型与 prompt 版本锁定，结果缓存，同一份输入重放时得到同一张卡<span class="ref">§5.2</span>。</p>
+
+<h3 class="ev-h"><span class="ev-k">3.2</span>量级：五档表、打分依据与防记忆污染</h3>
+<p>量级 <code>magnitude</code> 是 1 到 5 的整数，按下表判断<span class="ref">§5.2</span>。它在下游有两处用途：媒介接触到量级 ≥ 3 的事件是激活条件之一<span class="ref">§9.1</span>；注意力打分里的 m(量级) 也由它而来<span class="ref">§5.4</span>。量级打偏，被唤醒的人数和每个人看到什么都会跟着偏。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>量级</th><th>含义</th><th>例</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>例行信息</td><td>日常公告、符合预期的月度数据</td></tr>
+<tr><td>2</td><td>个股或细分行业级</td><td>业绩大幅超预期、行业标准发布</td></tr>
+<tr><td>3</td><td>板块级，或明显超预期的宏观信息</td><td>行业重大政策、PMI 大幅偏离预期</td></tr>
+<tr><td>4</td><td>全市场级政策</td><td>降准降息、印花税调整、重要会议定调</td></tr>
+<tr><td>5</td><td>历史级冲击</td><td>2024-09-24 政策组合、2025-04 关税冲击</td></tr>
+</tbody></table></div>
+<p>设计文档的规则是：量级只依据文本做事前判断，绝不用事后市场反应回填<span class="ref">§5.2</span>。但还有一种更隐蔽的泄漏。抽取模型的训练数据里装着历史，看到"降准 + 互换便利"就知道这是 2024-09-24，也知道后来涨了多少，打分可能受"已知结局"影响。所以挑选验收事件时，截止日表要覆盖所有用到的模型，包括智能体底座、事件抽取、改写和嵌入模型<span class="ref">§13.1</span>，聚类用的嵌入模型和写 L0/L1 的改写模型也在其中；匿名化只能减轻、消除不了这种泄漏，因为宏观事件一看便知<span class="ref">§13.1</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.2，来自架构讨论 A3）</b>
+<ul>
+<li><b>遮蔽</b>：抽取 prompt 遮去专有时间叫法（如"9·24"），只依据文本写明的三样东西打分：政策力度、发布机构级别、是否超预期。</li>
+<li><b>人工标定</b>：V2 历史验收事件的量级由团队按 §5.2 量级表人工标定，LLM 打分只作参考。</li>
+<li><b>一致性检查</b>：在模型截止日之后的事件上比较 LLM 与人工打分的一致性，结果记入运行清单（<code>RunManifest</code>，<span class="ref">§9.4</span>）。</li>
+<li><b>适用范围</b>：开发事件与持续运行只做遮蔽与一致性检查，不做人工标定。</li>
+<li><b>可复现</b>：抽取模型与 prompt 版本锁定、结果缓存；定期人工抽检量级与资产映射。</li>
+</ul></div>
+<p>这三层的分工是：遮蔽挡住最显眼的线索，人工标定保证验收用的那几个事件量级可信，一致性检查告诉团队在没人工标定的日常运行里，LLM 打分能信几分。开发事件和验收事件的划分见<span class="ref">§11.3</span>：开发事件是某个底座截止日之前的事件，或被探针判为泄漏的事件，只用于调通管线、文风与校准；验收事件优先取所有底座截止日之后的事件，并须通过记忆探针与帖子补全探针；第三类是前向持续运行，逐日累积、只追加不重算。开发事件和持续运行没有人工标签，§5.2 说的"一致性检查"在这两类事件上具体比对什么，原文没有展开；一致性用什么指标衡量、多低算不合格，也没有给出。</p>
+<h3 class="ev-h"><span class="ev-k">3.3</span>范围与资产映射</h3>
+<p>每张卡有一个 <code>scope</code>（market 全市场、sector 板块、stock 个股）和一个 <code>assets</code> 列表，列表里是映射到点时的指数、行业、题材、个股代码<span class="ref">§5.2</span>。"映射到点时"的意思是：用事件 <code>available_at</code> 那一刻的成分快照，不用今天的成分。指数与申万行业成分用历史快照，股票池包含退市股<span class="ref">§5.5</span>。</p>
+<p>资产列表的下游用途是注意力打分里的 rel_i：信息与某个智能体的持仓、自选、关注行业重合越多，越容易被看到<span class="ref">§5.4</span>。映射错了，事件会推给不相关的人，或者漏掉真正持有的人，所以设计文档要求定期人工抽检资产映射<span class="ref">§5.2</span>。具体用什么方法把文本映射到代码（规则、词表还是 LLM 抽取时一并给出），设计文档没有写。</p>
+<p>题材维度有个硬约束。题材 / 概念板块成分若拿不到历史快照，只能从某天起逐日存档，存档之前的区间不使用题材维度<span class="ref">§5.5</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.2、§5.5，来自架构讨论 A2、A3）</b>东财题材成分接口受 robots 禁止，不采<span class="ref">§16.1</span>；题材 / 概念板块成分改用授权来源（如 Tushare 同花顺概念成分或数据商）<span class="ref">§5.5</span>。资产映射里的题材维度等授权题材来源落实后再用<span class="ref">§5.2</span>。授权来源具体选哪家，随数据源一起定<span class="ref">§5.5</span>。</div>
+
+<h3 class="ev-h"><span class="ev-k">3.4</span>分渠道改写：事实归 events，观点归 social</h3>
+<p>同一事件在不同渠道的面貌不同，智能体读到哪个版本取决于其媒介习惯<span class="ref">§5.4</span>。渠道与发布者层的级别一一对应<span class="ref">§5.6</span>。§5.3 把改写按事实与观点分开：events 只写不带立场的 L0、L1 两类版本，L2–L4 的文本都是观点，由 social 的发布者以 <code>Post</code> 产出<span class="ref">§5.3</span>。下表是 §5.3 的渠道表。</p>
+<div class="tbl-wrap"><table class="tbl ev-cmp">
+<thead><tr><th>渠道 · 层级</th><th>产出方</th><th>相对延迟与文风</th><th>校验</th></tr></thead>
+<tbody>
+<tr><td>官方媒体 · L0</td><td>events</td><td>0；正式、政策话语，只转述</td><td>与 <code>summary</code> 事实一致</td></tr>
+<tr><td>财经快讯、券商观点摘要 · L1</td><td>events</td><td>0–10 分钟；简短、带数字</td><td>与 <code>summary</code> 事实一致</td></tr>
+<tr><td>大 V 解读 · L2 及 Tier-A 大 V</td><td>social</td><td>随传播；由发布者或智能体自己生成（§7）</td><td>标注依据的 <code>event_id</code></td></tr>
+<tr><td>中小博主、群主转述 · L3</td><td>social</td><td>数小时；情绪化、标题党、叙事简化</td><td>可歪曲，不做事实校验，须标注依据的 <code>event_id</code></td></tr>
+<tr><td>小道消息、喊单号 · L4</td><td>social</td><td>不定；煞有介事、带"内部消息"</td><td>另立 <code>origin="rumor"</code> 事件卡，带"传闻"标签，只在沙盒运行（§16.2）</td></tr>
+<tr><td>短视频口播</td><td>—</td><td>数小时；情绪化、口语</td><td>Phase 3 再加入</td></tr>
+</tbody></table></div>
+<p>§5.3 对 L0、L1 改写有三条规则<span class="ref">§5.3</span>：每个"事件 × 渠道"改写 1–3 个版本，量级越高版本越多，避免所有人读到同一段文字，改写成本随事件数增长；改写可以省略细节，但不得编造事实，也不带立场，结果与 <code>summary</code> 做事实一致性校验，不一致的丢弃重写；夸张度、确定性不再是改写参数，改为发布者参数，可以单独研究"标题党"对群体情绪的影响。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.3，来自架构讨论 A3）</b>
+events 只产出 <code>EventCard</code> 与 L0（官媒转述）、L1（快讯）两类版本，不带立场，与 <code>summary</code> 做事实一致性校验，按量级每类 1–3 个版本。L2–L4 文本全部由 social 的发布者以 <code>Post</code> 产出：L2、L3 须标注依据的 <code>event_id</code>，帖子表里 L3 发布者帖须填 <code>source_event_ids</code><span class="ref">§10.3</span>；L4 另立 <code>origin="rumor"</code> 的事件卡，带"传闻"标签，只在沙盒运行<span class="ref">§16.2</span>。L2–L4 的成本归入 social 估算<span class="ref">§14.2</span>。</div>
+<p>发布者拿到什么、怎样写，由 §5.6 规定。每个发布者有五个参数：立场（多 / 空 / 摇摆）、动机（流量、带货、引流到付费群等）、准确率、夸张度与确定性；按级别加权进入推荐流<span class="ref">§5.6</span>。L2–L4 发布者读事件卡与 L0、L1 版本后发帖；L3 可当群主，L4 喊单号可当"付费荐股群"群主<span class="ref">§5.6</span><span class="ref">§7.1</span>。发布者层只发帖、不交易，也不进入人群统计<span class="ref">§5.6</span>。所以同一张事件卡在 L3 群主手里可能被写成"明天涨停"，这类歪曲是实验要研究的对象，与 events 的事实校验无关。</p>
+<p>为什么这样拆：事实一致性校验只对"转述"有意义。L3 的标题党本来就要渲染歪曲，用 summary 去校验它，要么全部不通过，要么校验形同虚设。把观点类文本放到 social，夸张度、确定性就和发布者的立场、动机放在同一处调，"标题党对群体情绪的影响"这类实验<span class="ref">§5.3</span>只改一个模块的参数。L4 另立事件卡，是因为传闻之后可能被 L0 证实或辟谣，需要一张卡来挂 <code>parent_id</code> 与 <code>credibility</code><span class="ref">§7.4</span>。</p>
+<p>传闻在设计文档里有两个来源：发布者层 L4 与低可信度事件卡。它们注入群聊或论坛，智能体按轻信度决定是否相信、转发；之后可由 L0 证实或辟谣，辟谣以关联事件卡的形式出现，用来研究"传闻—辟谣"周期<span class="ref">§7.4</span>。在事件卡上，这个周期体现为三件事：传闻卡 <code>credibility</code> 小于 1；证实或辟谣后更新 <code>credibility</code>；后续的证实、辟谣卡用 <code>parent_id</code> 指回传闻卡<span class="ref">§5.2</span>。模拟传闻只存在于沙盒内，每条带"传闻"标签<span class="ref">§7.4</span><span class="ref">§16.2</span>。</p>
+<p>成本上，抽取与改写按事件计，不按人计<span class="ref">§14.3</span>。§14.2 的 token 表按智能体激活估算，把"反思、事件抽取与改写"和"发布者层 L2–L4 的帖子"都列为单独计量、不在表内的项目，量级小于主循环<span class="ref">§14.2</span>。L2–L4 的成本归入 social 估算<span class="ref">§5.3</span>，events 剩下的只有抽取和 L0、L1 两类改写。</p>
+<p>一个 L0 或 L1 版本由哪种 schema 类型承载（独立类型、<code>Post</code>，还是卡上的字段），设计文档没有定义；每档量级具体几个版本、一致性校验用什么方法，也没有给出。L4 的传闻卡由 events 还是 social 生成，§5.3 没有写明；§3.3 模块表把"传闻"列在 events 的改写里，可读作由 events 出卡。</p>
+<h3 class="ev-h"><span class="ev-k">3.5</span>分发：可见时间与注意力抽取</h3>
+<p>events 写完版本之后，事情交给感知步骤。每次激活，智能体从候选池里看到 K_i 条信息；候选池包括其媒介习惯覆盖的渠道里的事件改写版本、推荐流与群聊、持仓与自选的行情异动<span class="ref">§5.4</span>。每条候选的打分是</p>
+<pre class="code" data-lang="公式 §5.4">score = w_i(渠道) · m(量级) · rel_i(资产) · exp(−Δt / τ_d) · sal</pre>
+<p>其中 w_i 是由人设生成的媒介习惯（例如中老年偏官媒与群聊，专业背景偏快讯与雪球），m 来自事件卡的量级，rel_i 来自事件卡的资产列表与个人持仓、自选、关注行业的重合度，Δt 是信息发布至今的时长，τ_d 是衰减时间常数，sal 是显著性（涨跌停、上热榜、大 V 转发）<span class="ref">§5.4</span>。可以看出，events 填的是 m 和 rel_i 的原料，以及 Δt 的起点。设计文档没有给出 τ_d、w 的取值，也没写 m(量级) 是怎样从 1–5 换成乘数的。</p>
+<p>持仓异动必入；其余按 softmax(score / T_i) 无放回抽取，保留随机性，让同一人设的两个智能体看到的信息也不完全相同<span class="ref">§5.4</span>。K_i 取 3–15 条，对应约 1,500 token 的信息流预算<span class="ref">§5.4</span>。没被看到的信息不会消失，它可能稍后经群聊或大 V 转述到达；同一时段候选越多，每条被看到的概率越低（Hirshleifer, Lim &amp; Teoh 2009），节后首个交易日积压的信息尤其如此<span class="ref">§5.4</span>。</p>
+<p>可见时间由两道闸控制。第一道是事件卡自己的 <code>available_at</code>。第二道是数据层：所有读取都经 <code>pit.query(table, asof=clock)</code>，强制 <code>available_at ≤ clock</code>，智能体不直接访问数据<span class="ref">§5.5</span>。泄漏测试会注入未来时间戳的"金丝雀"记录并断言不可见<span class="ref">§5.5</span>。另外，同一阶段里发的帖子下一阶段才可见<span class="ref">§9.1</span>，所以 social 基于事件卡写出的 L2–L4 帖子，最早也要到下一个阶段才进入散户的候选池。</p>
+<p>交易时段里出现的大事件另有一条路径。量级 ≥ 3 且 <code>available_at</code> 落在交易时段的事件卡，在其后最近的盘中检查点（10:00 / 11:30 / 14:00）激活接触到该事件的智能体<span class="ref">§3.4</span><span class="ref">§9.1</span>。这时数据层只为事件日的指数与被激活者持仓补分钟线，智能体只看到检查点之前的分钟数据；可以下单，执行方式限 <code>chase</code><span class="ref">§3.4</span><span class="ref">§5.5</span>。拿不到分钟线的事件日，该次激活只出态度与帖子，交易意向转为"明日打算"，运行清单标"盘中无行情"<span class="ref">§3.4</span>。盘中激活的 token 单独计量<span class="ref">§3.4</span><span class="ref">§14.2</span>。所以事件卡的 <code>available_at</code> 和 <code>magnitude</code> 两个字段，共同决定一件事是在盘中检查点被读到，还是顺延到下一个固定激活点。</p>
+<p>L1 相对 L0 的 0–10 分钟延迟<span class="ref">§5.3</span>在以日线为主的粒度下怎样体现，文档没有说明；行情粒度以日线为主，分钟线只补盘中事件日与封板判定所需的两类<span class="ref">§5.5</span>。</p>
+</section>
+
+<section id="s4" class="reveal"><h2><span class="num">04</span>走一遍示例</h2>
+<p class="sub">下面用一条虚构的行业政策快讯，从三条原始报道一路走到交给 agents 和 social。每一步都列出输入、处理、输出和对应的文档条目。</p>
+<p>演示里的机构、公司、代码、时间和文字全部是 <span class="ev-ex">示例数据</span>，"示例科技"和"示例储能"行业是化名，不对应任何真实公司或行业。量级、版本数等数值只是为了演示走向，不是设计参数；设计文档里有出处的规则，会在"对应文档条目"里标出章节。</p>
+<div class="ev-demo" id="evDemo">
+<div class="ev-dots" id="evDots" role="tablist" aria-label="演示步骤"></div>
+<p class="ev-st" id="evStTitle">载入中</p>
+<p class="ev-sd" id="evStDesc" style="margin:0;font-size:13.5px;color:var(--ink2)"></p>
+<div class="ev-quad">
+<div><b class="ev-qt">输入</b><pre id="evIn"></pre></div>
+<div><b class="ev-qt">处理</b><ul id="evProc"></ul></div>
+<div><b class="ev-qt">输出</b><pre id="evOut"></pre></div>
+<div><b class="ev-qt">对应文档条目</b><ul id="evRef"></ul></div>
+</div>
+<div class="ev-ctl">
+<button class="btn" type="button" id="evPrev">上一步</button>
+<button class="btn pri" type="button" id="evNext">下一步</button>
+<button class="btn" type="button" id="evAuto" aria-pressed="false">自动播放</button>
+<span class="ev-pos" id="evPos">0 / 0</span>
+</div>
+</div>
+<p>演示里有两个容易忽略的点。第一，快讯在晚上发布，事件卡的 <code>available_at</code> 落在当晚，但第一次被大批智能体读到是在次日盘前的激活点<span class="ref">§3.4</span><span class="ref">§5.2</span>。20:05 落在"晚间/隔夜"阶段（T−1 19:00 → T 08:00），该阶段只由事件触发、激活时政敏感者与群聊活跃者<span class="ref">§3.4</span>；MVP 的固定激活点只有盘前和收盘后，晚间阶段在 MVP 里是否按事件触发运行，文档没有写明。第二，L1 的第二个版本加了一句原文没有的"预计带动板块涨停"，事实一致性校验发现后丢弃重写<span class="ref">§5.3</span>；同样的话如果出现在 social 的 L3 帖子里，不做事实校验，只要求标注依据的 <code>event_id</code><span class="ref">§5.3</span>。如果同一条政策在交易时段发布，量级 3 的事件会在其后最近的盘中检查点触发激活<span class="ref">§3.4</span>，不必等到次日盘前。</p>
+</section>
+
+<section id="s5" class="reveal"><h2><span class="num">05</span>接口与数据结构</h2>
+<p class="sub"><code>EventCard</code> 是 events 唯一在设计文档里有完整定义的产物，类型放在 <code>schemas</code>（Pydantic v2）<span class="ref">§3.3</span>。下表逐个字段写出取值和用途；文档没有定义的写"文档未定义"。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>字段</th><th>类型 / 取值</th><th>含义与用途</th></tr></thead>
+<tbody>
+<tr><td><code>event_id</code></td><td>str</td><td>事件主键；帖子、态度、决策三张主表都以它关联<span class="ref">§10.3</span>；L2、L3 帖子须标注所依据的 <code>event_id</code><span class="ref">§5.3</span>，帖子表里 L3 发布者帖填 <code>source_event_ids</code><span class="ref">§10.3</span>。生成规则：文档未定义</td></tr>
+<tr><td><code>origin</code></td><td>"real" · "rumor" · "counterfactual"</td><td>后两类只存在于沙盒<span class="ref">§5.2</span>；假设情景注入假设事件卡<span class="ref">§9.3</span>；L4 传闻另立 <code>origin="rumor"</code> 的卡，带"传闻"标签<span class="ref">§5.3</span></td></tr>
+<tr><td><code>available_at</code></td><td>datetime</td><td>最早可公开获取的时间，PIT 键<span class="ref">§5.2</span></td></tr>
+<tr><td><code>occurred_at</code></td><td>datetime | None</td><td>事件发生时间，可为空<span class="ref">§5.2</span></td></tr>
+<tr><td><code>source</code></td><td>str</td><td>发布机构 / 媒体<span class="ref">§5.2</span>；取值格式：文档未定义</td></tr>
+<tr><td><code>source_tier</code></td><td>"official" · "mainstream" · "self_media" · "unverified"</td><td>来源层级<span class="ref">§5.2</span>；具体如何使用：文档未定义</td></tr>
+<tr><td><code>category</code></td><td>monetary · fiscal · regulation · industry_policy · macro_data · geopolitics · trade · overseas_market · corporate · other</td><td>事件类别<span class="ref">§5.2</span>；§10.2 的情景条件分布按"每类事件"输出，但举的是降准降息、印花税、关税等事件类型，是否直接按本字段分组：文档未定义</td></tr>
+<tr><td><code>scope</code></td><td>"market" · "sector" · "stock"</td><td>影响范围<span class="ref">§5.2</span></td></tr>
+<tr><td><code>assets</code></td><td>list[str]</td><td>映射到点时的指数 / 行业 / 题材 / 个股代码<span class="ref">§5.2</span>；供注意力的 rel_i<span class="ref">§5.4</span></td></tr>
+<tr><td><code>magnitude</code></td><td>1–5</td><td>量级，按 §5.2 表事前判断；用于激活与注意力<span class="ref">§5.4</span><span class="ref">§9.1</span>；≥ 3 且落在交易时段时触发盘中检查点<span class="ref">§3.4</span></td></tr>
+<tr><td><code>direction_hint</code></td><td>−1 · 0 · 1</td><td>仅用于路由与监控，不展示给智能体<span class="ref">§5.2</span></td></tr>
+<tr><td><code>credibility</code></td><td>float，默认 1.0</td><td>传闻小于 1，证实或辟谣后更新<span class="ref">§5.2</span>；更新时是改原卡还是新建卡：文档未定义</td></tr>
+<tr><td><code>parent_id</code></td><td>str | None</td><td>后续报道、证实或辟谣指回原事件<span class="ref">§5.2</span><span class="ref">§7.4</span></td></tr>
+<tr><td><code>is_repeat</code></td><td>bool，默认 False</td><td>已知事件的重复报道<span class="ref">§5.2</span>；判定规则、与聚类去重的关系：文档未定义</td></tr>
+<tr><td><code>summary</code></td><td>str，最长 200 字</td><td>中性摘要，各渠道改写的底稿，也是事实一致性校验的对照<span class="ref">§5.2</span><span class="ref">§5.3</span></td></tr>
+<tr><td>L0 / L1 版本</td><td>文档未定义</td><td>§5.3 规定 events 产出这两类版本，但承载它们的类型名与字段，设计文档没有定义</td></tr>
+</tbody></table></div>
+<p>下面是一张卡序列化后的样子，对应第 04 节的演示事件。它只用来说明字段长什么样。</p>
+<pre class="code" data-lang="JSON · 示意，未实现 · 示例数据"><span class="p">{</span>
+  <span class="k">"event_id"</span>: <span class="s">"evt-示例-0001"</span>,
+  <span class="k">"origin"</span>: <span class="s">"real"</span>,
+  <span class="k">"available_at"</span>: <span class="s">"2026-03-18T20:05:00+08:00"</span>,
+  <span class="k">"occurred_at"</span>: <span class="s">"2026-03-18T20:05:00+08:00"</span>,
+  <span class="k">"source"</span>: <span class="s">"示例部委官网"</span>,
+  <span class="k">"source_tier"</span>: <span class="s">"official"</span>,
+  <span class="k">"category"</span>: <span class="s">"industry_policy"</span>,
+  <span class="k">"scope"</span>: <span class="s">"sector"</span>,
+  <span class="k">"assets"</span>: [<span class="s">"示例储能行业"</span>, <span class="s">"000000（示例科技）"</span>],
+  <span class="k">"magnitude"</span>: <span class="n">3</span>,
+  <span class="k">"direction_hint"</span>: <span class="n">1</span>,
+  <span class="k">"credibility"</span>: <span class="n">1.0</span>,
+  <span class="k">"parent_id"</span>: <span class="k">null</span>,
+  <span class="k">"is_repeat"</span>: <span class="k">false</span>,
+  <span class="k">"summary"</span>: <span class="s">"示例部委发布储能产业支持措施，含项目补贴与审批简化，力度高于此前征求意见稿。"</span>
+<span class="p">}</span></pre>
+</section>
+
+<section id="s6" class="reveal"><h2><span class="num">06</span>设计取舍与已定决定</h2>
+<p class="sub">events 的设计取舍集中在三件事上：花多少钱、防多少泄漏、文本由谁写。每一项都写出选了什么、放弃了什么，以及理由。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>取舍</th><th>选了什么</th><th>放弃了什么</th><th>为什么</th></tr></thead>
+<tbody>
+<tr><td>按事件还是按人理解新闻</td><td>聚类去重后每簇 1 次 LLM 抽取<span class="ref">§5.2</span></td><td>每个智能体从原始报道独立"读懂"事件的过程</td><td>成本随事件数增长，与智能体数无关<span class="ref">§14.3</span>；解读留给智能体读改写文本时自己完成<span class="ref">§5.2</span></td></tr>
+<tr><td>方向判断给不给智能体</td><td><code>direction_hint</code> 不展示<span class="ref">§5.2</span></td><td>一个现成的"利好 / 利空"信号</td><td>否则抽取模型的一次解读被复制给所有人，群体退化成 B1<span class="ref">§5.2</span></td></tr>
+<tr><td>量级怎么定</td><td>只依据文本事前判断<span class="ref">§5.2</span></td><td>用事后涨跌校正量级的"准确性"</td><td>量级决定激活与注意力，回填会把未来收益泄漏进激活模式<span class="ref">§5.2</span></td></tr>
+<tr><td>改写几个版本</td><td>每类 1–3 个，量级越高越多<span class="ref">§5.3</span></td><td>每类只写一版的低成本</td><td>避免所有人读到同一段文字<span class="ref">§5.3</span></td></tr>
+<tr><td>可复现</td><td>抽取模型与 prompt 版本锁定、结果缓存<span class="ref">§5.2</span></td><td>随时换用更新的抽取模型</td><td>重放时同一输入得到同一张卡；模型更新要记入运行清单<span class="ref">§13.1</span></td></tr>
+<tr><td>验收事件的量级谁定</td><td>团队按量级表人工标定，LLM 打分只作参考<span class="ref">§5.2</span></td><td>量级完全由模型自动给出的省力做法</td><td>抽取模型可能记得历史结局；人工标定让验收事件的量级不依赖这种记忆<span class="ref">§5.2</span><span class="ref">§13.1</span></td></tr>
+<tr><td>观点文本由谁写</td><td>events 只写 L0、L1，L2–L4 归 social 发布者<span class="ref">§5.3</span></td><td>一个模块管所有渠道文本的集中度</td><td>事实校验只对转述有意义；夸张度、确定性和立场、动机放在同一处调<span class="ref">§5.3</span><span class="ref">§5.6</span></td></tr>
+</tbody></table></div>
+
+<h3 class="ev-h"><span class="ev-k">6.1</span>量级防记忆污染：遮蔽、人工标定与一致性检查</h3>
+<p>截止日检查把抽取模型也算在内，验收事件优先取所有模型截止日之后的事件<span class="ref">§13.1</span>；匿名化降为辅助检验，主设定使用真实名称，匿名化只用来检验开发事件的结果在多大程度上依赖记忆<span class="ref">§13.1</span>。§5.2 在抽取这一步再加三层防护。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.2，来自架构讨论 A3）</b>
+抽取 prompt 遮去专有时间叫法（如"9·24"），只按政策力度、发布机构级别、是否超预期打分。V2 历史验收事件的量级由团队按 §5.2 量级表人工标定，LLM 打分只作参考；在模型截止日之后的事件上比较 LLM 与人工打分的一致性，记入运行清单<span class="ref">§9.4</span>。开发事件与持续运行只做遮蔽与一致性检查。</div>
+<p>遮蔽与"主设定使用真实名称"并不矛盾：§13.1 说的真实名称针对智能体读到的内容，§5.2 的遮蔽写在抽取 prompt 上。L0、L1 改写文本是否同样遮蔽，文档没有说。这一项的代价是团队人工，且只覆盖验收事件。</p>
+
+<h3 class="ev-h"><span class="ev-k">6.2</span>改写归属：事实与观点分开</h3>
+<p>v0.3 的 §5.3 把改写拆成两半：events 写 L0、L1，产物都能对照 <code>summary</code> 校验；social 写 L2–L4，产物都带立场、动机、准确率、夸张度与确定性参数<span class="ref">§5.3</span><span class="ref">§5.6</span>。放弃的是"一个模块管所有文本"的集中度，events 的成本估算也随之变小；换来的是 L3 的歪曲不再被当成改写失败，"标题党"实验只改 social 一处的发布者参数<span class="ref">§5.3</span>。§3.3 模块表的 events 一行仍写"按渠道改写（官媒 / 财经快讯 / 传闻）"，与 §5.3 的分工对照，"传闻"一项落在 L4 的传闻事件卡上。</p>
+</section>
+
+<section id="s7" class="reveal"><h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">events 上游接数据和模型，下游喂给注意力、发布者和调度。下面按"它从谁那里拿什么、交给谁什么"逐个说明。</p>
+<p><b>上游。</b><a href="mod-collect.html">collect</a> 负责前向存档新闻快讯，这类数据只能从今天起逐日积累<span class="ref">§3.3</span>；东财 7x24 快讯接口可采，从 Phase 0 起每日采集<span class="ref">§5.5</span><span class="ref">§16.1</span>。<a href="mod-data.html">data</a> 是 PIT 数据湖，提供指数、行业成分的历史快照和授权来源的题材成分，资产映射要用；盘中事件日的分钟线也由它补<span class="ref">§5.5</span>；所有读取经 <code>pit.query</code><span class="ref">§5.5</span>。<a href="mod-llm.html">llm</a> 是统一网关，抽取和 L0/L1 改写都经它调用并缓存<span class="ref">§3.3</span>；<a href="mod-prompts.html">prompts</a> 存放抽取与改写模板，模板哈希写入运行清单<span class="ref">§3.3</span>。<a href="mod-schemas.html">schemas</a> 定义 <code>EventCard</code> 类型本身。</p>
+<p><b>下游。</b><a href="mod-agents.html">agents</a> 的感知步骤把 L0、L1 版本放进候选池，按 §5.4 的打分抽 K_i 条。<a href="mod-social.html">social</a> 的发布者层由实时行情与新闻事件卡驱动<span class="ref">§5.6</span>，负责写全部 L2–L4 的 <code>Post</code><span class="ref">§5.3</span>；不同发布者面对同一张事件卡怎样各写各的，可以在 <a href="sim-publishers.html">发布者演示</a> 页里动态看到。<a href="mod-orchestrator.html">orchestrator</a> 管时钟、激活与运行清单<span class="ref">§3.3</span>：媒介接触到量级 ≥ 3 的事件是激活条件之一，交易时段内的事件在最近的盘中检查点激活<span class="ref">§9.1</span><span class="ref">§3.4</span>；LLM 与人工打分的一致性也记进运行清单<span class="ref">§5.2</span>。<a href="mod-outputs.html">outputs</a> 用 <code>event_id</code> 关联三张主表<span class="ref">§10.3</span>，并对每类事件输出情景条件分布<span class="ref">§10.2</span>。<a href="mod-validation.html">validation</a> 的 B6 事件错配基线把 A 事件的生成帖与 B 事件的真实帖对照<span class="ref">§11.1</span>，依赖事件卡把帖子准确归到事件上。</p>
+<div class="callout info"><b class="t">一条边界提醒</b>
+events 不判断"谁会看到"，也不写观点。前者是 agents 的注意力预算，后者归 social<span class="ref">§5.3</span>。events 交出去的只有事实层面的东西：发生了什么、什么时候能看到、多大、关系到哪些资产。</div>
+</section>
+
+<section id="s8" class="reveal"><h2><span class="num">08</span>开放问题</h2>
+<p class="sub">下面这些问题，设计文档 v0.3 要么明确写了"待定"，要么没有给出具体做法。它们不影响理解 events 的机制，但写代码之前必须定下来。</p>
+<div class="callout todo"><b class="t">历史新闻源未定</b>数据源、各表 <code>available_at</code> 的取值规则与存储格式待定，历史新闻源随数据源一起定<span class="ref">§5.5</span>。§2.5 列出的候选各有问题：Tushare 快讯的时间戳是发布时间还是抓取时间未确认；AKShare 新闻类接口多数只返回最近 20–200 条，不能回补；GDELT 2.0 对境内 A 股新闻覆盖薄〔需复核〕<span class="ref">§2.5</span>。</div>
+<div class="callout todo"><b class="t">授权题材来源未落实</b>题材成分用授权来源（如 Tushare 同花顺概念成分或数据商），具体来源随数据源一起定<span class="ref">§5.5</span>。落实之前，资产映射只能用指数、行业、个股三个维度；拿不到历史快照的区间不使用题材维度<span class="ref">§5.2</span><span class="ref">§5.5</span>。</div>
+<div class="callout todo"><b class="t">L0 / L1 版本的承载类型与传闻卡的出卡方</b>§5.3 规定 events 产出 L0、L1 两类版本，但没有定义它们用什么 schema 类型表示，也没有说是否复用 <code>Post</code>；版本文本是否进入帖子表，文档未写明。L4 的 <code>origin="rumor"</code> 传闻卡由 events 还是 social 生成，§5.3 也没有写明，§3.3 模块表把"传闻"列在 events 名下。</div>
+<div class="callout todo"><b class="t">没有给出数值的参数</b>聚类的相似度阈值与时间窗长度<span class="ref">§5.2</span>；每档量级对应几个版本（只知道 1–3、量级越高越多<span class="ref">§5.3</span>）；事实一致性校验的方法与判定标准<span class="ref">§5.3</span>；m(量级) 的换算、τ_d 与 w_i 的取值<span class="ref">§5.4</span>；L1 的 0–10 分钟相对延迟在日线粒度下如何体现；夜间事件所在的"晚间/隔夜"阶段在 MVP 交易日里是否按事件触发运行<span class="ref">§3.4</span>。</div>
+<div class="callout todo"><b class="t">一致性检查的口径</b>§5.2 要求在模型截止日之后的事件上比较 LLM 与人工打分的一致性并记入运行清单，但没有给出衡量指标与合格线；开发事件与持续运行"只做遮蔽与一致性检查"，在没有人工标定的事件上具体比对什么，也未展开。</div>
+<div class="callout todo"><b class="t">遮蔽范围</b>§5.2 的遮蔽写在抽取 prompt 上；L0、L1 改写 prompt 以及智能体读到的文本是否同样遮去"9·24"一类叫法，文档没有说。§13.1 第 6 条的立场是主设定使用真实名称。</div>
+<div class="callout todo"><b class="t">资产映射与传闻卡的细节</b>文本怎样映射到代码（规则、词表还是由抽取 LLM 一并给出）未定义；<code>credibility</code> 在证实或辟谣后是改写原卡还是新建一张以 <code>parent_id</code> 关联的卡，<code>is_repeat</code> 的判定规则，<code>event_id</code> 的生成规则，都未定义<span class="ref">§5.2</span>。</div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+/* 管线图：点击方框显示说明 */
+var PIPE = {
+  raw: ['原始条目', '新闻、政策、公告、宏观数据、海外市场等进入候选。前向存档由 collect 写入，历史数据由 data 导入；自建存档同时存源时间戳与入库时间，取较晚者为可见时间。', '§5.1 · §2.5 · §3.3'],
+  clu: ['聚类去重', '按嵌入相似度加时间窗把同一件事的多条报道聚成一个事件簇。阈值与时间窗长度文档未给出。', '§5.2'],
+  mask: ['遮蔽专有时间叫法', '抽取 prompt 遮去"9·24"一类专有时间叫法，让量级只依据文本写明的政策力度、发布机构级别、是否超预期。', '§5.2'],
+  ext: ['LLM 抽取', '每个事件簇调用 1 次 LLM，抽成 EventCard。抽取模型与 prompt 版本锁定、结果缓存；成本随事件数增长，与智能体数无关。', '§5.2 · §14.3'],
+  mag: ['量级 1–5', '按五档量级表做事前判断，绝不用事后市场反应回填。V2 历史验收事件由团队人工标定，LLM 打分只作参考，截止日之后的事件上比较二者一致性，结果记入运行清单。', '§5.2 · §9.4'],
+  asset: ['范围与资产映射', '定 scope（全市场 / 板块 / 个股）和 assets（指数、行业、题材、个股代码），用 available_at 时点的成分快照。题材维度等授权题材来源落实。', '§5.2 · §5.5'],
+  card: ['EventCard', '一张卡包含可见时间、来源层级、类别、范围、资产、量级、方向提示（不给智能体看）、可信度、父事件与中性摘要。social 的发布者读卡与 L0、L1 版本后写 L2–L4。', '§5.2 · §5.6'],
+  rw: ['写 L0 / L1 版本', 'events 只写官媒转述（L0）与快讯（L1）两类不带立场的版本，按量级每类 1–3 个版本，避免所有人读到同一段文字。', '§5.3'],
+  chk: ['事实一致性校验', '每个版本与 summary 对照，不得编造事实；不一致的丢弃重写。L3 帖子归 social，不做这项校验，只须标注依据的 event_id。', '§5.3'],
+  soc: ['social 发布者', 'L2 大 V、L3 中小博主、L4 传闻号的文本全部由 social 以 Post 产出；发布者参数是立场、动机、准确率、夸张度与确定性；L4 传闻另立 origin="rumor" 的事件卡，只在沙盒运行；发布者不交易。', '§5.3 · §5.6 · §16.2'],
+  pool: ['感知候选池', '按 available_at 进入下一个激活点的候选池，再按 w_i · m · rel_i · 时间衰减 · 显著性打分，softmax 无放回抽 K_i 条（3–15）。', '§5.4 · §5.5']
+};
+var pipe = document.getElementById('evPipe');
+var info = document.getElementById('evPipeInfo');
+function showPipe(g){
+  if (!pipe || !info || !g) return;
+  var k = g.getAttribute('data-k');
+  var d = PIPE[k];
+  if (!d) return;
+  var nodes = pipe.querySelectorAll('.ev-node');
+  for (var i = 0; i < nodes.length; i++) nodes[i].classList.remove('on');
+  g.classList.add('on');
+  while (info.firstChild) info.removeChild(info.firstChild);
+  var t = document.createElement('b'); t.className = 'ev-it'; t.textContent = d[0];
+  var p = document.createElement('p'); p.textContent = d[1];
+  var r = document.createElement('span'); r.className = 'ev-ir'; r.textContent = '出处：' + d[2];
+  info.appendChild(t); info.appendChild(p); info.appendChild(r);
+}
+if (pipe) {
+  var gs = pipe.querySelectorAll('.ev-node');
+  for (var j = 0; j < gs.length; j++) {
+    (function(g){
+      g.addEventListener('click', function(){ showPipe(g); });
+      g.addEventListener('keydown', function(e){
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showPipe(g); }
+      });
+    })(gs[j]);
+  }
+}
+/* 分步演示：全部为示例数据 */
+var STEPS = [
+ { t: '1 · 原始条目进入', d: '晚上陆续出现四条条目（部委官网、通讯社、两条快讯），其中三条说的是同一项储能政策（示例数据）。',
+   i: '[20:05 示例部委官网] 关于促进储能产业发展的若干措施：对新建储能项目给予补贴，简化项目审批流程……\n[20:12 示例通讯社] 示例部委发布储能支持措施，业内称"3·18 新政"，力度高于此前征求意见稿。\n[20:15 示例快讯平台] 示例海外市场收盘综述……\n[20:20 示例快讯平台] 储能利好！示例部委出台措施，示例科技（000000）等公司或受益。',
+   p: ['collect 前向存档快讯，data 提供历史导入的数据', '每条同时记源时间戳与入库时间，取较晚者为可见时间', '政策文件用发布日期，不用成文日期'],
+   o: '4 条候选条目，各带可见时间',
+   r: ['§5.1 信息源五类', '§2.5 两点原则', '§3.3 collect / data 分工', '§16.1 东财 7x24 快讯可采'] },
+ { t: '2 · 聚类去重', d: '按嵌入相似度加时间窗聚类，三条储能报道并成一个簇，海外收盘综述单独成簇。',
+   i: '4 条候选条目',
+   p: ['计算每条文本的嵌入向量', '相似且在时间窗内的条目归入同一簇', '阈值、时间窗长度：文档未给出'],
+   o: '簇 A：储能政策（3 条，20:05 / 20:12 / 20:20）\n簇 B：海外市场收盘（1 条，下文不再跟踪）',
+   r: ['§5.2 嵌入相似度 + 时间窗聚类去重'] },
+ { t: '3 · 遮蔽专有时间叫法', d: '抽取之前，把"3·18 新政"这类专有时间叫法遮掉，防止模型凭记忆判断事件多大。',
+   i: '……业内称"3·18 新政"，力度高于此前征求意见稿。',
+   p: ['识别专有时间叫法（真实例子如"9·24"）', '替换为占位符，保留政策内容本身', '只留下政策力度、发布机构级别、是否超预期这三类依据'],
+   o: '……业内称"〔时间叫法已遮去〕新政"，力度高于此前征求意见稿。',
+   r: ['§5.2 抽取 prompt 遮去专有时间叫法', '§13.1 第 1 条：截止日表包含事件抽取模型', '§13.1 第 6 条：匿名化减轻但消除不了泄漏'] },
+ { t: '4 · LLM 抽取', d: '簇 A 调用 1 次 LLM，得到事件卡的基础字段。三条报道只花一次调用。',
+   i: '簇 A 的 3 条文本（已遮蔽）',
+   p: ['抽取模型与 prompt 版本锁定，结果缓存', 'available_at 取三条中最早的公开时间 20:05', '写中性摘要 summary（≤ 200 字）', 'direction_hint 记为 1，只用于路由与监控'],
+   o: 'event_id: evt-示例-0001\navailable_at: 20:05\nsource_tier: official\ncategory: industry_policy\ndirection_hint: 1（不展示给智能体）\nsummary: 示例部委发布储能产业支持措施，含项目补贴与审批简化，力度高于此前征求意见稿。',
+   r: ['§5.2 每簇 1 次 LLM 调用', '§5.2 available_at、direction_hint 规则', '§14.3 第 2 条 事件级调用'] },
+ { t: '5 · 量级打分', d: '对照五档量级表，这是一项行业重大政策，示例中判为 3 级（示例数据，不是标定结果）。',
+   i: '遮蔽后的文本与 summary',
+   p: ['政策力度：补贴 + 审批简化', '发布机构级别：部委', '是否超预期：高于征求意见稿', '只看文本，不看次日涨跌', '若是 V2 验收事件：团队人工标定，LLM 分数只作参考', '若在交易时段发布：量级 ≥ 3 触发其后最近的盘中检查点'],
+   o: 'magnitude: 3（示例）\n量级 ≥ 3：可触发接触到它的智能体被激活',
+   r: ['§5.2 量级表 3 级 = 板块级', '§5.2 不得事后回填', '§5.2 人工标定与一致性检查', '§9.1 量级 ≥ 3 的激活条件'] },
+ { t: '6 · 范围与资产映射', d: '用 20:05 那一刻的成分快照，把事件映射到行业和个股。题材维度暂不使用。',
+   i: '文本中的"储能""示例科技（000000）"',
+   p: ['经 pit.query 读取 asof = 20:05 的成分快照', '映射到行业与个股代码', '题材维度：等授权题材来源落实', '映射方法：文档未定义'],
+   o: 'scope: sector\nassets: [示例储能行业, 000000（示例科技）]',
+   r: ['§5.2 assets 映射到点时', '§5.5 PIT 与题材存档约束', '§5.2 题材维度等授权来源', '§5.4 rel_i 用到 assets'] },
+ { t: '7 · 写 L0 / L1 版本', d: 'events 只写不带立场的官媒转述和快讯。量级 3 在示例里各写 2 个版本（示例数据）。',
+   i: 'summary + magnitude 3',
+   p: ['L0：正式、只转述', 'L1：简短、带数字', '每类 1–3 个版本，量级越高越多'],
+   o: 'L0-a 示例部委发布《关于促进储能产业发展的若干措施》，明确对新建储能项目给予补贴，并简化审批流程。\nL0-b 据示例部委官网消息，储能产业支持措施今日发布，内容包括项目补贴与审批简化。\nL1-a 【快讯】示例部委出台储能支持措施：新建项目补贴 + 审批简化，力度高于征求意见稿。\nL1-b 【快讯】储能支持措施落地，补贴加码，预计带动板块涨停。',
+   r: ['§5.3 渠道表 L0、L1 两行', '§5.3 每个事件 × 渠道 1–3 个版本', '§5.3 events 只写 L0 / L1'] },
+ { t: '8 · 事实一致性校验', d: 'L1-b 多了一句 summary 里没有的判断，被丢弃重写。',
+   i: 'L1-b 【快讯】储能支持措施落地，补贴加码，预计带动板块涨停。',
+   p: ['逐个版本对照 summary', '"预计带动板块涨停"不在 summary 中 → 不通过', '丢弃并重写', '校验方法与判定标准：文档未给出'],
+   o: 'L0-a 通过 · L0-b 通过 · L1-a 通过\nL1-b 不通过 → 重写为：\n【快讯】储能支持措施发布，涉及项目补贴与审批流程简化。',
+   r: ['§5.3 不得编造事实，不一致的丢弃重写', '§5.3 L0 / L1 与 summary 做校验'] },
+ { t: '9 · 交给下游', d: '20:05 的事件在次日盘前激活点第一次被大批智能体读到；social 的发布者同时拿到事件卡。',
+   i: 'EventCard evt-示例-0001 + 4 个通过校验的版本',
+   p: ['agents：版本进入次日盘前候选池，按注意力打分抽 K_i 条', 'orchestrator：接触到量级 ≥ 3 事件的智能体可被激活', 'social：发布者读卡与 L0 / L1 版本写 L2–L4 的 Post，L3 须标注 event_id', '本阶段发的帖子下一阶段才可见'],
+   o: '→ agents：L0 / L1 版本\n→ social：EventCard（L2–L4 由发布者写）\n→ outputs：event_id 作为关联键',
+   r: ['§3.4 夜间事件进下一激活点', '§5.4 注意力抽取', '§9.1 激活与阶段可见性', '§5.3 · §5.6 发布者层'] }
+];
+var dotsEl = document.getElementById('evDots');
+var elT = document.getElementById('evStTitle'), elD = document.getElementById('evStDesc');
+var elI = document.getElementById('evIn'), elP = document.getElementById('evProc');
+var elO = document.getElementById('evOut'), elR = document.getElementById('evRef');
+var bPrev = document.getElementById('evPrev'), bNext = document.getElementById('evNext');
+var bAuto = document.getElementById('evAuto'), elPos = document.getElementById('evPos');
+var cur = 0, timer = null, N = STEPS.length;
+function fillList(ul, arr) {
+  if (!ul) return;
+  while (ul.firstChild) ul.removeChild(ul.firstChild);
+  (arr || []).forEach(function (s) {
+    var li = document.createElement('li'); li.textContent = String(s); ul.appendChild(li);
+  });
+}
+function setText(el, s) { if (el) el.textContent = s == null ? '' : String(s); }
+var dotBtns = [];
+if (dotsEl) {
+  STEPS.forEach(function (s, k) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('role', 'tab');
+    b.textContent = String(k + 1);
+    b.setAttribute('aria-label', s.t);
+    b.addEventListener('click', function () { stopAuto(); go(k); });
+    dotsEl.appendChild(b); dotBtns.push(b);
+  });
+}
+function go(k) {
+  k = parseInt(k, 10);
+  if (isNaN(k)) k = 0;
+  if (k < 0) k = 0;
+  if (k > N - 1) k = N - 1;
+  cur = k;
+  var s = STEPS[k];
+  if (!s) return;
+  setText(elT, s.t); setText(elD, s.d);
+  setText(elI, s.i); setText(elO, s.o);
+  fillList(elP, s.p); fillList(elR, s.r);
+  setText(elPos, (k + 1) + ' / ' + N);
+  dotBtns.forEach(function (b, j) {
+    b.classList.toggle('on', j === k);
+    b.classList.toggle('done', j < k);
+    b.setAttribute('aria-selected', j === k ? 'true' : 'false');
+  });
+  if (bPrev) bPrev.disabled = k === 0;
+  if (bNext) bNext.disabled = k === N - 1;
+}
+function stopAuto() {
+  if (timer) { clearInterval(timer); timer = null; }
+  if (bAuto) { bAuto.setAttribute('aria-pressed', 'false'); bAuto.textContent = '自动播放'; }
+}
+function startAuto() {
+  if (timer) { clearInterval(timer); timer = null; }
+  if (cur >= N - 1) go(0);
+  if (bAuto) { bAuto.setAttribute('aria-pressed', 'true'); bAuto.textContent = '暂停'; }
+  timer = setInterval(function () {
+    if (cur >= N - 1) { stopAuto(); return; }
+    go(cur + 1);
+    if (cur >= N - 1) stopAuto();
+  }, 3200);
+}
+if (bPrev) bPrev.addEventListener('click', function () { stopAuto(); go(cur - 1); });
+if (bNext) bNext.addEventListener('click', function () { stopAuto(); go(cur + 1); });
+if (bAuto) bAuto.addEventListener('click', function () { if (timer) stopAuto(); else startAuto(); });
+if (elT) go(0);
+})();
+</script>
+</body>
+</html>

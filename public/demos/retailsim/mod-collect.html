@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>collect · 前向采集 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* mod-collect 私有样式，前缀 co- */
+.co-io{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1.1fr) 34px minmax(0,1fr);gap:8px;align-items:stretch;margin-top:14px}
+.co-io .card{padding:14px 16px}
+.co-io h4{margin:0 0 6px;font-size:14px}
+.co-io ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink2)}
+.co-io li{margin:4px 0}
+.co-io .co-core{border-color:rgba(34,211,238,.5);background:linear-gradient(160deg,rgba(34,211,238,.13),rgba(52,211,153,.04))}
+.co-ar{display:flex;align-items:center;justify-content:center;color:var(--data);font-size:20px}
+@media(max-width:860px){.co-io{grid-template-columns:minmax(0,1fr)}.co-ar{transform:rotate(90deg);height:24px}}
+h3.co-h{font-size:16px;margin:26px 0 8px;color:var(--ink)}
+h3.co-h .co-k{font:700 12px var(--mono);color:var(--data);margin-right:8px}
+.co-svg{border:1px solid var(--line);border-radius:var(--r);background:rgba(5,8,20,.55);padding:8px;margin:14px 0 8px}
+.co-svg svg{display:block;width:100%;height:auto}
+.co-svg text{font-family:var(--sans)}
+.co-nb{fill:rgba(34,211,238,.08);stroke:rgba(34,211,238,.55);stroke-width:1.4}
+.co-nb.raw{fill:rgba(248,113,113,.08);stroke:rgba(248,113,113,.6)}
+.co-nb.ok{fill:rgba(52,211,153,.08);stroke:rgba(52,211,153,.6)}
+.co-nb.no{fill:rgba(127,138,168,.06);stroke:rgba(127,138,168,.5);stroke-dasharray:5 4}
+.co-t1{fill:var(--ink);font-size:14px;font-weight:700}
+.co-t2{fill:var(--mute);font-size:11px}
+.co-tw{fill:var(--warn);font-size:11px}
+.co-edge{stroke:rgba(148,163,184,.7);stroke-width:1.6;fill:none}
+.co-bound{fill:none;stroke:rgba(248,113,113,.5);stroke-width:1.2;stroke-dasharray:6 5}
+.co-yes{color:var(--ok);font-weight:700;white-space:nowrap}
+.co-no{color:var(--warn);font-weight:700;white-space:nowrap}
+.co-hold{color:var(--market);font-weight:700;white-space:nowrap}
+.co-demo{border:1px solid rgba(34,211,238,.35);border-radius:var(--r);padding:16px;background:rgba(34,211,238,.04)}
+.co-dots{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
+.co-dots button{border:1px solid var(--line2);background:var(--panel);color:var(--ink2);font:600 12px var(--mono);border-radius:999px;padding:3px 10px;cursor:pointer}
+.co-dots button.on{background:var(--data);color:#06101f;border-color:var(--data)}
+.co-dots button.done{border-color:rgba(34,211,238,.6);color:var(--data)}
+.co-st{font-size:15px;font-weight:700;margin:0 0 4px}
+.co-quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+@media(max-width:700px){.co-quad{grid-template-columns:minmax(0,1fr)}}
+.co-quad>div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);font-size:13px;color:var(--ink2);min-width:0}
+.co-quad b.co-qt{display:block;font:700 11px var(--mono);color:var(--data);margin-bottom:4px;letter-spacing:.05em}
+.co-quad pre{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 var(--mono);color:var(--ink)}
+.co-quad ul{margin:0;padding-left:16px}
+.co-fields{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.co-f{font:600 11.5px var(--mono);border-radius:6px;padding:2px 7px;border:1px solid var(--line2);color:var(--ink2);background:var(--panel)}
+.co-f.del{color:var(--warn);border-color:rgba(248,113,113,.55);text-decoration:line-through}
+.co-f.hsh{color:var(--market);border-color:rgba(251,191,36,.55)}
+.co-f.add{color:var(--ok);border-color:rgba(74,222,128,.55)}
+.co-ex{display:inline-block;font:700 11px var(--mono);color:var(--warn);border:1px dashed rgba(248,113,113,.6);border-radius:6px;padding:1px 7px}
+.co-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.co-ctl .co-pos{font:600 12.5px var(--mono);color:var(--ink2);margin-left:auto}
+.co-ret{display:grid;grid-template-columns:repeat(36,minmax(0,1fr));gap:2px;margin:10px 0 6px}
+.co-ret i{display:block;height:14px;border-radius:2px;background:rgba(127,138,168,.15)}
+.co-ret i.r{background:rgba(248,113,113,.65)}
+.co-ret i.d{background:rgba(52,211,153,.6)}
+.co-retv{font:600 12.5px var(--mono);color:var(--ink2)}
+.co-tbl td:first-child{white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>模块页 · collect</div>
+<h1>前向采集：<span class="grad">从上线当天开始攒真实帖子和快讯</span></h1>
+<p class="lead">collect 每天抓取股吧帖子和财经快讯，入库前先去掉用户身份信息，再写成带两个时间戳的存档，交给 data 读取。它是项目里唯一碰原始语料的模块。</p>
+<div class="meta">
+<span class="chip data"><i></i>前向存档，Phase 0 起每日运行</span>
+<span class="chip acct"><i></i>入库即去标识化</span>
+<span class="chip warn"><i></i>原始件 90 天到期自动删除（§16.1）</span>
+<span class="chip warn"><i></i>雪球不自采（§16.1）</span>
+</div>
+</header>
+
+<section id="s1" class="reveal"><h2><span class="num">01</span>职责一览</h2>
+<p class="sub">一句话：collect 从 Phase 0 起每天把股吧帖子和新闻快讯抓下来，入库时去掉用户身份信息，记下来源时间和入库时间，存成前向存档，供 data 只读使用。东财题材成分接口不采，题材成分改用授权来源。</p>
+<p>"前向存档"指从上线当天开始、按日历时间一天天往后攒的数据，和"回填"（事后去补抓过去的数据）相对。设计文档的模块表写 collect 的产物是"去标识化帖子、新闻与题材成分存档"<span class="ref">§3.3</span>。"去标识化"指把能认出具体用户的字段删掉或换成哈希值，存下来的数据只保留研究需要的内容<span class="ref">§16.1</span>。</p>
+<p>collect 和其他业务模块一样，只通过 <code>schemas</code> 的共享类型与外界交换数据，由 orchestrator 串起来<span class="ref">§3.3</span>。不同的是，模块表没有给它的产物起类型名，data 那一行只写了"前向存档由 collect 写入，本模块只读"<span class="ref">§3.3</span>。原始语料放在仓库之外，只有 collect 能访问<span class="ref">§3.3</span><span class="ref">§16.1</span>。</p>
+<div class="co-io">
+<div class="card"><h4>输入</h4><ul>
+<li><b>股吧</b>：指数吧和个股吧的列表页、帖子正文页，2026-10-30 实测可采<span class="ref">§16.1</span></li>
+<li><b>东财 7x24 快讯</b>：无 robots 限制，游标翻页<span class="ref">§16.1</span></li>
+<li><b>热门股名单</b>：上证指数吧、创业板吧，前一交易日股吧发帖量前 30 只个股吧，另固定跟踪 10 只<span class="ref">§16.1</span></li>
+<li><b>授权数据源</b>：题材成分改用授权来源，随数据源一起定<span class="ref">§5.5</span><span class="ref">§16.1</span></li>
+</ul></div>
+<div class="co-ar">→</div>
+<div class="card co-core"><h4>collect</h4><ul>
+<li>遵守 robots 与用户协议、限速，不绕过登录和验证码<span class="ref">§16.1</span></li>
+<li>按吧过滤、按截止时间停翻页、按帖号去重<span class="ref">§16.1</span></li>
+<li>入库即去标识化<span class="ref">§16.1</span></li>
+<li>同时记来源时间戳和入库时间<span class="ref">§2.5</span></li>
+</ul></div>
+<div class="co-ar">→</div>
+<div class="card"><h4>输出</h4><ul>
+<li><b>data</b>：去标识化帖子、新闻、题材成分存档，只读<span class="ref">§3.3</span></li>
+<li><b>validation</b>：V2 对照用的同期真实帖子<span class="ref">§12.1</span></li>
+<li><b>population</b>：说话风格聚类与风格示例池<span class="ref">§4.4</span></li>
+<li><b>events</b>：新闻快讯存档（§3.3 里 events 负责"新闻 → 事件卡"，collect 存新闻快讯，两者相接是本页按分工推断）<span class="ref">§3.3</span></li>
+</ul></div>
+</div>
+<p>输出侧的 validation、population、events 都经 data 读取存档，读取一律走 <code>pit.query(table, asof=clock)</code><span class="ref">§5.5</span>。PIT（point-in-time，时点一致）的意思是：模拟时钟走到某一刻，只能看到那一刻之前已经可见的记录。</p>
+</section>
+
+<section id="s2" class="reveal"><h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">真实帖子和快讯只能按日历时间一天天攒，错过的日子事后补不回来，所以采集要比模拟器本身更早开工。</p>
+<p>第一个原因是数据源本身留不住历史。免费的新闻接口大多只返回最新的一批条目，AKShare 的新闻接口一次只给最近 20–200 条，没法回填，而且经常失效，财联社接口在 2025-02 失效过，之后才修复<span class="ref">§2.5</span>。股吧帖子也一样：事后常被删除或屏蔽<span class="ref">§15.1</span>。今天不抓，几个月后去补，看到的已经是被删减过的样本。</p>
+<p>第二个原因是验证需要它。V2 把模拟出来的帖子和同期真实的股吧、雪球帖子做对照，对照样本来自授权数据加自采的前向样本<span class="ref">§12.1</span>。样本切分里的"前向持续运行"上线后逐日累积、当日落盘、只追加不重算，是最终证据<span class="ref">§11.3</span>；前视偏差一节也把前向声音列为最干净的 V2 证据，因为模型记不住还没发生的事，做法是当日生成帖对照当日真实帖<span class="ref">§13.1</span>。当日真实帖只能靠从某一天起持续采集得到。因此设计文档把每日真实帖子采集放进 Phase 0（为期 2–3 周的准备阶段），在合规结论允许后就开始<span class="ref">§15.1</span>。</p>
+<p>第三个原因是合规边界要收在一处。原始帖子带昵称、头像、地域等个人信息，设计文档按《个人信息保护法》处理：入库即去标识化，只保留研究所需字段<span class="ref">§16.1</span>。设计文档规定原始语料只有采集脚本可访问，团队只看去标识化版本<span class="ref">§16.1</span>，模块表也写明只有 collect 能访问原始语料<span class="ref">§3.3</span>。本页的理解是：这样接触原始个人信息的代码只有一处，审查和出问题时要查的范围都限定在这个模块里。</p>
+<div class="callout warn"><b class="t">反例：等模拟器做完再回头补数据</b>假设等模拟器做完才开始找真实帖子。到那时，新闻接口只剩最近一批条目，早期事件的快讯拿不到；股吧上当时热议的帖子有一部分已被删除或屏蔽，剩下的样本不完整；回填得到的数据只有来源时间，要按保守延迟处理并打上 <code>backfilled</code> 标记<span class="ref">§2.5</span>。前向连续运行这一组证据也就无从谈起。</div>
+</section>
+
+<section id="s3" class="reveal"><h2><span class="num">03</span>机制详解</h2>
+<p class="sub">先看整条流水线，再分别讲能采什么、每天怎么抓、去掉哪些字段、原始件放多久、抓哪些股票。</p>
+<p>设计文档先定原则：遵守用户协议和 robots，限速，不绕过登录、验证码或频率限制；入库即去标识化；原始语料放在仓库外、只有本模块能访问<span class="ref">§3.3</span><span class="ref">§16.1</span>。具体能采哪些页面、怎么翻页、删哪些字段，来自 2026-10-30 的实测（架构讨论 A2），已写进 §16.1 的"自采范围""采集规则""采集名单""去标识化""运行位置"各条<span class="ref">§16.1</span>。</p>
+<div class="co-svg" role="img" aria-label="collect 采集流水线示意图">
+<svg viewBox="0 0 900 330" xmlns="http://www.w3.org/2000/svg">
+<defs><marker id="coArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="rgba(148,163,184,.85)"/></marker></defs>
+<rect class="co-bound" x="212" y="12" width="446" height="222" rx="14"/>
+<text class="co-tw" x="226" y="30">常开服务器 · 采集专用账户，其他账户不可读（§16.1）</text>
+<rect class="co-nb" x="16" y="40" width="170" height="52" rx="10"/><text class="co-t1" x="30" y="62">股吧列表页</text><text class="co-t2" x="30" y="80">article_list，可翻页</text>
+<rect class="co-nb" x="16" y="108" width="170" height="52" rx="10"/><text class="co-t1" x="30" y="130">股吧正文页</text><text class="co-t2" x="30" y="148">post_content</text>
+<rect class="co-nb" x="16" y="176" width="170" height="52" rx="10"/><text class="co-t1" x="30" y="198">东财 7x24 快讯</text><text class="co-t2" x="30" y="216">游标翻页</text>
+<rect class="co-nb" x="232" y="46" width="190" height="74" rx="10"/><text class="co-t1" x="246" y="70">抓取与清洗</text><text class="co-t2" x="246" y="90">按吧过滤 · 截止停翻页</text><text class="co-t2" x="246" y="106">按帖号去重 · 清洗 HTML</text>
+<rect class="co-nb raw" x="232" y="152" width="190" height="66" rx="10"/><text class="co-t1" x="246" y="176">原始件</text><text class="co-t2" x="246" y="194">仅采集账号可读</text><text class="co-t2" x="246" y="209">90 天到期自动删除（§16.1）</text>
+<rect class="co-nb" x="452" y="46" width="190" height="74" rx="10"/><text class="co-t1" x="466" y="70">去标识化</text><text class="co-t2" x="466" y="90">哈希 user_id</text><text class="co-t2" x="466" y="106">删昵称 · 头像 · IP 属地</text>
+<rect class="co-nb ok" x="690" y="46" width="194" height="74" rx="10"/><text class="co-t1" x="704" y="70">去标识化存档</text><text class="co-t2" x="704" y="90">帖子 · 快讯（按帖号更新计数）</text><text class="co-t2" x="704" y="106">来源时间 + 入库时间</text>
+<rect class="co-nb" x="690" y="152" width="194" height="66" rx="10"/><text class="co-t1" x="704" y="176">data（只读）</text><text class="co-t2" x="704" y="194">pit.query(asof=clock)</text><text class="co-t2" x="704" y="209">同步给团队的只有这一份</text>
+<path class="co-edge flowline" d="M186 66H232" marker-end="url(#coArr)"/>
+<path class="co-edge flowline" d="M186 134C210 134 210 100 232 100" marker-end="url(#coArr)"/>
+<path class="co-edge flowline" d="M186 202C214 202 214 112 232 112" marker-end="url(#coArr)"/>
+<path class="co-edge" d="M327 120V152" marker-end="url(#coArr)"/>
+<path class="co-edge flowline" d="M422 83H452" marker-end="url(#coArr)"/>
+<path class="co-edge flowline" d="M642 83H690" marker-end="url(#coArr)"/>
+<path class="co-edge flowline" d="M787 120V152" marker-end="url(#coArr)"/>
+<text class="co-t2" x="16" y="262">不采（§16.1）：</text>
+<rect class="co-nb no" x="16" y="272" width="270" height="44" rx="10"/><text class="co-t1" x="30" y="292">雪球</text><text class="co-t2" x="30" y="308">robots 禁止 + 用户协议禁止</text>
+<rect class="co-nb no" x="306" y="272" width="270" height="44" rx="10"/><text class="co-t1" x="320" y="292">东财题材成分</text><text class="co-t2" x="320" y="308">接口 robots 禁止，改用授权来源</text>
+<rect class="co-nb no" x="596" y="272" width="288" height="44" rx="10"/><text class="co-t1" x="610" y="292">股吧回复全文</text><text class="co-t2" x="610" y="308">像需浏览器会话，暂只存回复数</text>
+</svg>
+</div>
+<p>图里红色虚线框是原始件所在的边界：抓下来的原始页面和抓取中间结果只留在这台服务器上，归采集专用账号所有。越过这条边界的只有去标识化之后的版本<span class="ref">§16.1</span>。底部三个灰色虚线框是实测后决定不自采的来源，原因见下表。</p>
+<h3 class="co-h"><span class="co-k">3.1</span>能采什么：2026-10-30 实测结论</h3>
+<p>设计文档的模块表把真实帖子、新闻快讯和拿不到历史快照的题材成分都列为 collect 的职责<span class="ref">§3.3</span><span class="ref">§5.5</span>，真实帖子的来源写的是股吧和雪球<span class="ref">§5.1</span>，collect 模块文档字符串也写"覆盖股吧、雪球的真实帖子"。2026-10-30 逐个检查了页面结构、robots 和用户协议，结论写在 §16.1，整理如下。"robots"指网站根目录下的 robots.txt 文件，网站在里面声明哪些路径不允许程序抓取。</p>
+<div class="tbl-wrap"><table class="tbl co-tbl">
+<thead><tr><th>来源</th><th>结论</th><th>实测依据</th><th>怎么处理</th></tr></thead>
+<tbody>
+<tr><td>股吧列表页（指数吧、个股吧）</td><td><span class="co-yes">可采</span></td><td>页面内嵌 <code>article_list</code>，可翻页；列表按最后回复时间排序<span class="ref">§16.1</span></td><td>每日抓取，规则见 3.2</td></tr>
+<tr><td>股吧帖子正文</td><td><span class="co-yes">可采</span></td><td>正文页的 <code>post_content</code> 是 HTML，需清洗<span class="ref">§16.1</span></td><td>抓取后清洗 HTML，只留文字</td></tr>
+<tr><td>股吧回复全文</td><td><span class="co-hold">暂不采</span></td><td>回复全文由前端接口加载，像需要浏览器会话<span class="ref">§16.1</span></td><td>暂只存回复数，等法务复核后再定是否用真实浏览器低频加载<span class="ref">§16.1</span></td></tr>
+<tr><td>雪球</td><td><span class="co-no">不能自采</span></td><td>robots 禁止相关路径；用户协议禁止用于开发 AI 系统和建存档数据集<span class="ref">§16.1</span></td><td>不自采；雪球风格仍留在 MVP，V2 对照与文风示例池靠授权数据，授权来源落实前雪球风格的 V2 结论记为"无对照"<span class="ref">§16.1</span></td></tr>
+<tr><td>东财 7x24 快讯</td><td><span class="co-yes">可采</span></td><td>无 robots 限制，游标翻页<span class="ref">§16.1</span></td><td>从 Phase 0 起每日采集<span class="ref">§5.5</span>；运行时刻与停止条件文档未定义</td></tr>
+<tr><td>东财题材成分</td><td><span class="co-no">不能采</span></td><td>东财题材成分接口 robots 禁止<span class="ref">§16.1</span></td><td>改用授权来源（如 Tushare 同花顺概念成分或数据商），随数据源一起定<span class="ref">§5.5</span></td></tr>
+</tbody></table></div>
+<p>表里有两项需要说明。题材成分：东财接口不采，改用授权来源；授权来源拿不到历史快照时，只能从某天起逐日存档，存档之前的区间不用题材维度<span class="ref">§5.5</span>。模块表仍把"拿不到历史快照的题材成分"列为 collect 的产物<span class="ref">§3.3</span>，本页理解为这时由 collect 每日存授权来源的成分快照。雪球：仍是真实帖子来源之一<span class="ref">§5.1</span>，但只靠授权数据，collect 不采<span class="ref">§16.1</span>。</p>
+
+<h3 class="co-h"><span class="co-k">3.2</span>股吧每日抓取规则</h3>
+<p>股吧列表页有三个特点，决定了抓取规则的写法<span class="ref">§16.1</span>。</p>
+<p><b>列表里混着别的吧的帖子。</b>某只股票的吧的列表页里，会夹带其他吧的推广帖。每条帖子带 <code>stockbar_code</code> 字段，标明它真正属于哪个吧。入库前先按 <code>stockbar_code</code> 过滤，和当前吧不一致的直接丢掉<span class="ref">§16.1</span>。</p>
+<p><b>列表按最后回复时间排序。</b>排在前面的是最近有人回复的帖子，不一定是最近发的帖子。所以翻页的停止条件看的是 <code>post_last_time</code>（最后回复时间）：一页一页往后翻，直到某页出现早于截止时间的帖子为止<span class="ref">§16.1</span>。截止时间的具体取值，文档未定义。</p>
+<p><b>老帖会因为新回复重新出现。</b>一条几天前的帖子今天有人回复，就会再次排到前面。为此入库时按帖号去重：帖号已存在的，不新增记录，只更新计数<span class="ref">§16.1</span>。更新哪些计数（阅读、评论、转发等），文档没有逐项列出。</p>
+<p>过滤和去重之后，取帖子详情页的 <code>post_content</code> 并清洗 HTML<span class="ref">§16.1</span>。老帖重现时是否重新请求正文（比如作者编辑过），§16.1 没有规定；本页演示只对新出现的帖号请求详情页。回复只存数量，不抓正文<span class="ref">§16.1</span>。抓取全程限速，不绕过登录、验证码或频率限制<span class="ref">§16.1</span>，《网络数据安全管理条例》第十八条也有同样要求<span class="ref">§16.1</span>。限速的具体数值和每天的运行时刻，文档未定义。</p>
+<p><b>东财 7x24 快讯的抓法不同。</b>快讯接口没有 robots 限制，翻页用游标，不用页码<span class="ref">§16.1</span>。§16.1 没有记快讯的字段名，也没有说快讯会不会像股吧老帖那样重新排到前面；重复请求之间可能有重叠，按什么键去重、翻到哪一条停止，文档未定义。这条路要轮询，是因为设计文档指出多数免费新闻接口只返回最近若干条，不能回补，只能从上线当天起自行存档并另存入库时间<span class="ref">§2.5</span><span class="ref">§5.5</span>。</p>
+<h3 class="co-h"><span class="co-k">3.3</span>两个时间戳与可见时间</h3>
+<p>每条记录同时存两个时间：来源时间戳（帖子或快讯在网站上标的发布时间）和入库时间（collect 实际把它写进存档的时刻）。可见时间取两者中较晚的那个<span class="ref">§2.5</span>。</p>
+<p>这样做是为了防止"提前看到"。假设一条快讯标着 09:30 发布，collect 10:05 才抓到。如果按 09:30 算可见，回放 09:30 的模拟时钟时，存档里就有一条当时的系统其实还没拿到的数据。取较晚的 10:05，模拟器看到它的时刻就不会早于真实世界里我们能拿到它的时刻。这个可见时间就是每条记录的 <code>available_at</code>，data 读取时强制 <code>available_at ≤ clock</code>，泄漏测试用金丝雀记录（故意埋入、本不该被读到的记录）检查<span class="ref">§5.5</span>。</p>
+<p>回填的数据没有入库时间可言，只有来源时间戳。设计文档要求对它加一个保守延迟（文档举例 15 分钟），并打上 <code>backfilled</code> 标记<span class="ref">§2.5</span>。collect 的前向存档按定义不是回填，正常情况下用不到这条。</p>
+
+<h3 class="co-h"><span class="co-k">3.4</span>去标识化：删哪些、哈希哪些</h3>
+<p>去标识化在入库那一步完成，存档里从一开始就没有可直接认出用户的字段<span class="ref">§16.1</span>。§16.1 定了各字段的处理方式：</p>
+<div class="tbl-wrap"><table class="tbl co-tbl">
+<thead><tr><th>字段</th><th>含义</th><th>处理</th><th>依据</th></tr></thead>
+<tbody>
+<tr><td><code>user_id</code></td><td>发帖用户编号</td><td><span class="co-hold">哈希</span></td><td>§16.1；条例第二十四条要求删除或匿名化自动化采集到的非必要个人信息，即入库时删除或哈希用户名<span class="ref">§16.1</span></td></tr>
+<tr><td>昵称</td><td>用户昵称（字段名文档未定义）</td><td><span class="co-no">删除</span></td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>头像</td><td>用户头像地址</td><td><span class="co-no">删除</span></td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>IP 属地</td><td>发帖地域（字段名文档未定义）</td><td><span class="co-no">删除</span></td><td><span class="ref">§16.1</span></td></tr>
+</tbody></table></div>
+<p>哈希是把原始值算成一串固定长度的乱码，同一个输入总是得到同一个结果，从结果难以直接反推原值；但用户编号的取值范围有限，不加盐时可以把候选编号逐个算一遍来比对。对 <code>user_id</code> 做哈希而不直接删除，同一个用户的多条帖子在存档里仍能归到一起。这种归并只能用于统计：设计文档按《个人信息保护法》规定不做个人画像与再识别<span class="ref">§16.1</span>；风格聚类也明确不复刻具体用户<span class="ref">§4.4</span>。哈希算法和是否加盐（在原值前混入一段保密字符串，防止上面那种逐个比对），文档未定义。</p>
+<p>另外两处会再用到去标识化的结果：真实帖子发给境外 LLM 接口前必须是去标识化版本<span class="ref">§16.4</span>；风格聚类只用匿名化后的帖子<span class="ref">§4.4</span>。</p>
+
+<h3 class="co-h"><span class="co-k">3.5</span>保存期限与访问权限</h3>
+<p>设计文档的规定是：原始语料只有采集脚本能访问，团队只看去标识化版本，原始件设保存期限，文档举例 90 天，到期删除<span class="ref">§16.1</span>。"运行位置"一条把它落到了部署上：采集跑在一台常开服务器上，原始语料只在服务器上，归采集专用账户所有，其他账户不可读；90 天到期自动删除；只把去标识化版本同步给团队。服务器还待准备<span class="ref">§16.1</span>。原始语料写在仓库外，路径由环境变量给出（collect 模块文档字符串），变量名文档未定义。</p>
+<p>拖动下面的滑块，看运行一段时间后两份数据各剩多少。每格代表 10 天，横轴长度只是演示刻度，不是设计参数。文档没有给去标识化存档设删除期限，演示里按"不删"画。</p>
+<div class="card">
+<label class="ctl" for="coRetR">已运行天数 <input type="range" id="coRetR" min="10" max="360" step="10" value="120"></label>
+<p class="co-retv" id="coRetV">载入中</p>
+<div style="font-size:12px;color:var(--mute)">原始件（服务器上）</div>
+<div class="co-ret" id="coRetRaw" aria-hidden="true"></div>
+<div style="font-size:12px;color:var(--mute)">去标识化存档（同步给团队）</div>
+<div class="co-ret" id="coRetDe" aria-hidden="true"></div>
+</div>
+<p>去标识化存档在文档里没有删除期限，所以会随运行天数一直增长。要注意它不是严格的只追加表：老帖重现时要更新计数<span class="ref">§16.1</span>，存档的写入方式（覆盖计数、还是追加一条带时间的计数快照）文档未定义。后一种做法能保留"某天某时计数是多少"，回放时不会用到之后才更新的计数，这是本页的理解。</p>
+<h3 class="co-h"><span class="co-k">3.6</span>抓哪些股票：热门股名单</h3>
+<p>采集名单是：上证指数吧、创业板吧两个指数吧，加上每天按前一交易日股吧发帖量取前 30 只个股吧，另固定跟踪 10 只个股吧（名单未定）<span class="ref">§16.1</span>。这份名单与模拟论坛的吧一致，合计约 42 个吧；其余股票的讨论在模拟论坛里并入"综合吧"<span class="ref">§7.1</span>。热门 30 只和固定 10 只可能重叠，所以每天实际抓的个股吧不超过 40 个。</p>
+<p>设计文档给出的理由是：采集名单与模拟论坛的吧一一对应，每个模拟吧都有真实帖可做 V2 对照<span class="ref">§7.1</span>。以下是本页的补充理解。全市场逐个翻页抓取和限速要求<span class="ref">§16.1</span>难以兼顾。按发帖量排名的部分跟着热度走，抓到的是当天讨论最集中的地方，V2 比较事件后发帖量曲线的形状时需要这类样本<span class="ref">§12.1</span>。固定股不随热度进出，同一批股票每天都有记录，能看到一只股票从冷到热再回落的完整过程。排名依据是"前一交易日"，因为当天的发帖量要等当天结束才知道。</p>
+<div class="callout info"><b class="t">名单和验收事件的关系</b>验收事件的真实帖子不进校准，也不进 few-shot 示例池<span class="ref">§11.3</span><span class="ref">§12.2</span>。热门股名单的规则里没有区分开发事件和验收事件，collect 只按日期和吧存帖子。验收事件的帖子由哪个模块、在哪一步排除，文档未定义。</div>
+
+</section>
+
+<section id="s4" class="reveal"><h2><span class="num">04</span>走一遍示例</h2>
+<p class="sub">下面用一个虚构的个股吧，走一遍某天的抓取：从原始列表页开始，经过过滤、停翻页、去重、取正文、去标识化，最后入库。每一步列出输入、处理、输出和对应的文档条目，底部显示这一步之后还剩哪些字段。</p>
+<p>演示里的吧名、帖号、用户、标题和时间全部是 <span class="co-ex">示例数据</span>，"示例吧"和"网友甲、乙、丙、丁"都是化名，不对应真实股票或用户。截止时间取前一天 15:00 只是为了演示，文档没有规定截止时间。字段名里，<code>article_list</code>、<code>stockbar_code</code>、<code>post_last_time</code>、<code>user_id</code>、<code>post_content</code> 是 §16.1 里出现的名字；用中文写的字段（帖号、昵称、IP 属地、发帖时间、阅读数等）是页面上有、但设计文档没有给字段名的内容，入库表的字段名文档未定义。</p>
+<div class="co-demo" id="coDemo">
+<div class="co-dots" id="coDots" role="tablist" aria-label="演示步骤"></div>
+<p class="co-st" id="coStTitle">载入中</p>
+<p id="coStDesc" style="margin:0;font-size:13.5px;color:var(--ink2)"></p>
+<div class="co-quad">
+<div><b class="co-qt">输入</b><pre id="coIn"></pre></div>
+<div><b class="co-qt">处理</b><ul id="coProc"></ul></div>
+<div><b class="co-qt">输出</b><pre id="coOut"></pre></div>
+<div><b class="co-qt">对应文档条目</b><ul id="coRef"></ul></div>
+</div>
+<div style="margin-top:10px;font-size:12px;color:var(--mute)">这一步之后每条帖子的字段（删除线 = 已删除，黄色 = 已哈希，绿色 = 新增）</div>
+<div class="co-fields" id="coFields"></div>
+<div class="co-ctl">
+<button class="btn" type="button" id="coPrev">上一步</button>
+<button class="btn pri" type="button" id="coNext">下一步</button>
+<button class="btn" type="button" id="coAuto" aria-pressed="false">自动播放</button>
+<span class="co-pos" id="coPos">0 / 0</span>
+</div>
+</div>
+<p>演示里值得留意的是第 4 步。帖号 9002 是前一天已经入库的老帖，今天因为有新回复又排到了列表前面。如果只按"这一页出现了就存一条"，存档里会有两条 9002，发帖量统计会被重复计算。按帖号去重之后，它只更新了计数<span class="ref">§16.1</span>；演示里也没有再请求它的正文，这一点 §16.1 没有规定。</p>
+<p>第 7 步的可见时间也值得看一眼。网友甲的帖子标着 09:12 发，但 collect 到 10:40 才把它入库，可见时间取较晚的 10:40<span class="ref">§2.5</span>。这一列由 collect 写入还是由 data 读取时计算，文档未定义，所以演示的字段标签里只新增了入库时间。回放这一天时，模拟时钟到 10:40 之前，这条帖子都读不到。</p>
+</section>
+
+<section id="s5" class="reveal"><h2><span class="num">05</span>接口与数据结构</h2>
+<p class="sub">collect 写出三张存档表：去标识化帖子、新闻快讯、题材成分。设计文档没有给它们起类型名，也没有定义表结构；下面只列设计文档里出现过的字段。</p>
+<p>项目整体的存储与计算选型是 Parquet + DuckDB + Polars<span class="ref">§14.4</span>，data 的产物写作 Parquet 表<span class="ref">§3.3</span>；collect 存档本身的存储格式，随数据源一起待定<span class="ref">§5.5</span>。Parquet 是一种按列存储的文件格式，适合按日期分批写入的数据。collect 只负责写入，data 只读，读取一律走 <code>pit.query(table, asof=clock)</code><span class="ref">§5.5</span>。模块表里 collect 的产物写作"去标识化帖子、新闻与题材成分存档"，没有对应的 <code>schemas</code> 类型名<span class="ref">§3.3</span>，本页不替它起名。</p>
+<h3 class="co-h"><span class="co-k">5.1</span>字段一览</h3>
+<div class="tbl-wrap"><table class="tbl co-tbl">
+<thead><tr><th>表</th><th>字段</th><th>说明</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>全部</td><td>来源时间戳</td><td>网站上标注的发布时间</td><td><span class="ref">§2.5</span></td></tr>
+<tr><td>全部</td><td>入库时间</td><td>collect 写入存档的时刻</td><td><span class="ref">§2.5</span></td></tr>
+<tr><td>全部</td><td><code>available_at</code></td><td>可见时间，取上面两者较晚者；data 要求每条记录都有，读取时强制 ≤ clock；由谁写入这一列文档未定义</td><td><span class="ref">§2.5</span><span class="ref">§5.5</span></td></tr>
+<tr><td>全部</td><td><code>backfilled</code></td><td>回填标记；前向存档正常不出现</td><td><span class="ref">§2.5</span></td></tr>
+<tr><td>帖子</td><td><code>stockbar_code</code></td><td>帖子所属的吧，用于过滤</td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>帖子</td><td><code>user_id</code></td><td>哈希后的用户编号</td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>帖子</td><td><code>post_last_time</code></td><td>最后回复时间，用于停翻页</td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>帖子</td><td>帖号、发帖时间</td><td>按帖号去重；字段名文档未定义</td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>帖子</td><td>阅读数、评论数、转发数</td><td>每次重现时更新；回复只存数量，不存全文</td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>帖子</td><td><code>post_content</code></td><td>清洗 HTML 后的正文</td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>快讯</td><td>文档未定义</td><td>东财 7x24 快讯接口返回的内容，来源时间戳取其发布时间</td><td><span class="ref">§16.1</span><span class="ref">§2.5</span></td></tr>
+<tr><td>题材成分</td><td>文档未定义</td><td>改用授权来源，字段随数据源确定</td><td><span class="ref">§5.5</span><span class="ref">§16.1</span></td></tr>
+</tbody></table></div>
+<p>入库表的正式字段名、主键、分区方式和哈希列的格式，文档都未定义。上表里中文写的字段只说明"有这项内容"，不是字段名。</p>
+<h3 class="co-h"><span class="co-k">5.2</span>一条帖子记录长什么样</h3>
+<p>下面是一条去标识化帖子记录的示意，内容是 <span class="co-ex">示例数据</span>，结构和字段名为本页拟写，<b>示意，未实现</b>。</p>
+<pre class="code" data-lang="json 示意，未实现"><span class="p">{</span>
+  <span class="k">"帖号"</span><span class="p">:</span> <span class="n">9007</span><span class="p">,</span>              <span class="c">// 字段名文档未定义</span>
+  <span class="k">"stockbar_code"</span><span class="p">:</span> <span class="s">"SL01"</span><span class="p">,</span>     <span class="c">// 示例吧，化名</span>
+  <span class="k">"user_id"</span><span class="p">:</span> <span class="s">"h:3f9c…"</span><span class="p">,</span>       <span class="c">// 哈希值；算法文档未定义</span>
+  <span class="k">"post_content"</span><span class="p">:</span> <span class="s">"今天放量了，明天看能不能站稳"</span><span class="p">,</span>
+  <span class="k">"post_last_time"</span><span class="p">:</span> <span class="s">"D 10:31"</span><span class="p">,</span>
+  <span class="k">"阅读数"</span><span class="p">:</span> <span class="n">320</span><span class="p">,</span> <span class="k">"评论数"</span><span class="p">:</span> <span class="n">6</span><span class="p">,</span> <span class="k">"转发数"</span><span class="p">:</span> <span class="n">0</span><span class="p">,</span>
+  <span class="k">"来源时间戳"</span><span class="p">:</span> <span class="s">"D 09:12"</span><span class="p">,</span>
+  <span class="k">"入库时间"</span><span class="p">:</span> <span class="s">"D 10:40"</span>
+  <span class="c">// 无昵称、头像、IP 属地：入库即删除</span>
+<span class="p">}</span></pre>
+<p>示意里没有写 <code>available_at</code>。它由两个时间戳算出，data 要求每条记录都带这一列、读取时强制 <code>available_at ≤ clock</code><span class="ref">§5.5</span>，但这一列由 collect 写入还是由 data 计算，文档未定义。无论哪边算，规则都是取两者较晚者<span class="ref">§2.5</span>。</p>
+</section>
+
+<section id="s6" class="reveal"><h2><span class="num">06</span>设计取舍与已定决定</h2>
+<p class="sub">每条取舍写三件事：选了什么、放弃了什么、为什么。各条都依据设计文档 v0.3；6.3–6.5 源自 2026-10-30 的架构讨论 A2，已写进 §16.1，最后的框列出这次讨论改变的安排。</p>
+<h3 class="co-h"><span class="co-k">6.1</span>历史靠授权数据，自采只补前向样本</h3>
+<p><b>选了：</b>历史验收事件的真实帖子用授权数据，collect 只补每天的前向样本<span class="ref">§16.1</span>。真实帖子用于 V2 对照、校准、基线 B5 与文风示例<span class="ref">§16.1</span>。<b>放弃了：</b>自己去回抓过去事件的帖子。<b>为什么：</b>回抓的历史帖子已经被删减过<span class="ref">§15.1</span>，只有来源时间、要加保守延迟并标 <code>backfilled</code><span class="ref">§2.5</span>。Wind、Choice、CSMAR、CNRDS 等付费库有股吧数据，它们的时间戳口径和再分发条款还要确认<span class="ref">§2.5</span>。</p>
+<h3 class="co-h"><span class="co-k">6.2</span>可见时间取两个时间戳中较晚的</h3>
+<p><b>选了：</b>来源时间和入库时间都存，可见时间取较晚者<span class="ref">§2.5</span>。<b>放弃了：</b>直接用网站标注的时间。<b>为什么：</b>用来源时间会让模拟器在回放时"看到"当时还没抓到的数据。代价是可见时间整体偏晚，入库越慢偏得越多，这在回放里表现为信息到达稍迟，方向是保守的。</p>
+<h3 class="co-h"><span class="co-k">6.3</span>user_id 哈希保留，其余身份字段删除</h3>
+<p><b>选了：</b>哈希 <code>user_id</code>，删昵称、头像、IP 属地<span class="ref">§16.1</span>。<b>放弃了：</b>把用户编号也一并删掉。<b>为什么：</b>设计文档没有写理由，本页的理解是：保留哈希后，同一用户的多条帖子还能归到一起，统计发帖分布时用得上；条例第二十四条允许删除或哈希两种做法<span class="ref">§16.1</span>。风险是哈希值可以把同一人的发言串起来，所以文档同时规定不做画像、不做重新识别<span class="ref">§16.1</span>。</p>
+<h3 class="co-h"><span class="co-k">6.4</span>回复只存数量</h3>
+<p><b>选了：</b>暂时只存评论数。<b>放弃了：</b>回复全文。<b>为什么：</b>回复由前端接口加载，像需要浏览器会话，§16.1 定为暂不采<span class="ref">§16.1</span>。本页的理解是：为拿回复去伪造浏览器会话，接近设计文档所说的"用技术手段绕过访问控制"，后者可能触及《刑法》第二百八十五条<span class="ref">§16.1</span>。代价是讨论串的来回争论看不到。是否改用真实浏览器低频加载，等法务复核后再定<span class="ref">§16.1</span>。</p>
+<h3 class="co-h"><span class="co-k">6.5</span>每天只抓约 42 个吧</h3>
+<p><b>选了：</b>上证指数吧、创业板吧，加前一交易日发帖量前 30 只个股吧和固定跟踪的 10 只<span class="ref">§16.1</span>。<b>放弃了：</b>全市场覆盖。<b>为什么：</b>采集名单与模拟论坛的吧一致，每个模拟吧都有真实帖可做 V2 对照<span class="ref">§7.1</span>；本页补充：限速要求<span class="ref">§16.1</span>下全抓也不现实。代价是冷门股的真实讨论基本没有样本，它们在模拟论坛里并入"综合吧"<span class="ref">§7.1</span>。</p>
+
+<div class="callout decide"><b class="t">已定（v0.3 §16.1，来自架构讨论 A2）</b>
+<p>2026-10-30 实测了各来源的页面结构、robots 和用户协议，结论写进 §16.1，即 3.1 的可采表和 3.2–3.6 的规则。其中三处改变了原先的安排。</p>
+<p><b>题材成分。</b>东财题材成分接口 robots 禁止，不采，改用授权来源（如 Tushare 同花顺概念成分或数据商）<span class="ref">§16.1</span><span class="ref">§5.5</span>。events 资产映射的题材维度要等授权题材来源<span class="ref">§5.2</span>。</p>
+<p><b>雪球。</b>不自采。雪球风格仍留在 MVP，V2 对照与文风示例池靠授权数据；授权来源落实前，雪球风格的 V2 结论记为"无对照"<span class="ref">§16.1</span>。</p>
+<p><b>保存期限与部署。</b>"访问与保留"一条仍写作"如 90 天"，"运行位置"一条定为 90 天到期自动删除，并定了部署方式：常开服务器、采集专用账户、其他账户不可读、只同步去标识化版本<span class="ref">§16.1</span>。</p>
+</div>
+</section>
+
+<section id="s7" class="reveal"><h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">collect 在整个系统里只有一个直接下游，就是 data。其他模块用到真实帖子和快讯，都是经 data 间接读取。</p>
+<p><b>直接下游。</b><a href="mod-data.html">data</a> 是 PIT 数据湖：前向存档由 collect 写入，data 只读，输出 Parquet，每条记录带 <code>available_at</code>，读取强制 <code>available_at ≤ clock</code><span class="ref">§3.3</span><span class="ref">§5.5</span>。collect 和 data 的分工是：collect 管"从网上拿下来、去掉身份、存好"，data 管"按时点读出来、不让未来数据漏进模拟"。</p>
+<p><b>经 data 使用存档的模块。</b><a href="mod-events.html">events</a> 负责把新闻、政策、公告做成事件卡<span class="ref">§3.3</span>；collect 存下的新闻快讯（东财 7x24 快讯<span class="ref">§16.1</span>）按分工应经 data 进入 events，但设计文档没有写明这条连线；历史新闻源随数据源一起定<span class="ref">§5.5</span>。<a href="mod-validation.html">validation</a> 用同期真实帖子做 V2 对照，也用真实帖子做 B5 的"真实对真实"噪声底线和帖子补全探针<span class="ref">§11.1</span><span class="ref">§12.1</span><span class="ref">§13.1</span>。<a href="mod-population.html">population</a> 从匿名化帖子里聚类说话风格，示例帖只取模拟开始之前的，排除验收事件<span class="ref">§4.4</span>。<a href="mod-social.html">social</a> 的模拟论坛与采集名单用同一组吧<span class="ref">§7.1</span>；非交易日的周末发帖系数取真实股吧非交易日与交易日发帖量之比，用 collect 的数据估计<span class="ref">§3.4</span>；social 还留有真实帖子注入接口，默认关闭，验收运行强制关闭，开关状态写进运行清单<span class="ref">§5.7</span>。</p>
+<p><b>编排与类型。</b><a href="mod-orchestrator.html">orchestrator</a> 负责把各模块串起来<span class="ref">§3.3</span>。<a href="mod-schemas.html">schemas</a> 是共享类型所在地，目前没有为 collect 的产物定义类型。<a href="mod-llm.html">llm</a> 和 collect 的交集在合规上：真实帖子发给境外 LLM 接口前必须去标识化，并确认厂商的数据条款<span class="ref">§16.4</span>。</p>
+<p>想看一条帖子从采集到被模拟器读到的完整路径，可以接着看 <a href="mod-data.html">data</a> 页的 PIT 读取部分，或 <a href="mod-validation.html">validation</a> 页的 V2 对照部分。</p>
+<div class="callout info"><b class="t">一条边界提醒</b>collect 不判断帖子说了什么，也不决定哪些帖子用于校准、哪些属于验收事件。它交出去的只有按日期和吧存好的去标识化记录，以及每条记录的两个时间戳。</div>
+</section>
+
+<section id="s8" class="reveal"><h2><span class="num">08</span>开放问题</h2>
+<p class="sub">下面这些问题，设计文档 v0.3 要么写明了"待定""需复核"，要么没有给出具体做法。动手写采集脚本之前，前四条必须先有结论。</p>
+<div class="callout todo"><b class="t">合规结论还没出</b>设计文档把每日采集放在"合规结论允许后"开始<span class="ref">§15.1</span>，待复核的有：《著作权法》第二十四条的合理使用是否覆盖团队内部研究、少样本示例、盲评与风格微调<span class="ref">§16.1</span>；东财用户协议是否允许研究用途，与著作权问题一起交法务复核<span class="ref">§16.1</span>。设计文档注明这部分不构成法律意见<span class="ref">§16.1</span>。</div>
+<div class="callout todo"><b class="t">〔需复核〕反不正当竞争法数据条款</b>《反不正当竞争法》2025 年修订、2025-10-15 起施行，新增了数据相关条款，设计文档标注"条号与原文需复核"<span class="ref">§16.1</span>。复核之前，本页不引用具体条号。</div>
+<div class="callout todo"><b class="t">服务器待准备</b>§16.1 定了常开服务器、采集专用账户、原始语料只在服务器上、90 天到期自动删除、只同步去标识化版本，但服务器还待准备<span class="ref">§16.1</span>。Phase 0 为期 2–3 周<span class="ref">§15.1</span>，采集晚一天开始，前向样本就少一天。</div>
+<div class="callout todo"><b class="t">题材成分授权来源未定</b>题材成分改用授权来源<span class="ref">§16.1</span>，与数据源一起待定<span class="ref">§5.5</span>。授权来源若拿不到历史快照，要从某天起逐日存档，存档之前不用题材维度<span class="ref">§5.5</span>；events 资产映射的题材维度也要等授权来源落实<span class="ref">§5.2</span>。</div>
+<div class="callout todo"><b class="t">雪球的对照来源</b>collect 不自采雪球<span class="ref">§16.1</span>。要让雪球风格的 V2 结论有对照，需要授权数据源；付费库的时间戳口径和再分发条款还要确认<span class="ref">§2.5</span>。授权来源落实前，雪球风格的 V2 结论记为"无对照"<span class="ref">§16.1</span>。</div>
+<div class="callout todo"><b class="t">回复全文</b>是否用真实浏览器低频加载回复，等法务复核后定<span class="ref">§16.1</span>。如果加载，还要定频率、只取哪些字段，以及回复者的身份字段是否按帖子同样处理。</div>
+<div class="callout todo"><b class="t">10 只固定股名单</b>采集名单里固定跟踪的 10 只个股吧还没选<span class="ref">§16.1</span>；它们也是模拟论坛的吧<span class="ref">§7.1</span>，两边要用同一份名单。</div>
+<div class="callout todo"><b class="t">没有给出数值或名字的参数</b>翻页截止时间、每天运行时刻、请求限速值、哈希算法与是否加盐、原始语料路径的环境变量名、存档表的字段名与主键、<code>available_at</code> 由 collect 写入还是由 data 计算。这些文档都未定义。</div>
+</section>
+
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id);};
+function clear(el){while(el&&el.firstChild){el.removeChild(el.firstChild);}}
+function li(ul,txt){if(!ul){return;}var e=document.createElement('li');e.textContent=txt;ul.appendChild(e);}
+
+/* ---- 保存期限滑块 ---- */
+(function(){
+var r=$('coRetR'),v=$('coRetV'),raw=$('coRetRaw'),de=$('coRetDe');
+if(!r||!v||!raw||!de){return;}
+var CELLS=36,PER=10,KEEP=90;
+function draw(){
+var days=parseInt(r.value,10);
+if(!isFinite(days)||days<0){days=0;}
+var filled=Math.min(CELLS,Math.ceil(days/PER));
+var keepCells=Math.ceil(KEEP/PER);
+clear(raw);clear(de);
+for(var i=0;i<CELLS;i++){
+var a=document.createElement('i'),b=document.createElement('i');
+if(i<filled){b.className='d';if(i>=filled-keepCells){a.className='r';}}
+raw.appendChild(a);de.appendChild(b);
+}
+var rawDays=Math.min(days,KEEP);
+v.textContent='已运行 '+days+' 天：服务器上的原始件只剩最近 '+rawDays+' 天，去标识化存档保留全部 '+days+' 天。';
+}
+r.addEventListener('input',draw);
+draw();
+})();
+
+/* ---- 走一遍示例（全部为示例数据） ---- */
+var F0=['帖号','stockbar_code','标题','user_id','昵称','头像','IP 属地','发帖时间','post_last_time','阅读数','评论数','转发数'];
+var STEPS=[
+{t:'第 1 步 · 抓列表页第 1 页',d:'D 日 10:40，collect 请求"示例吧"列表页第 1 页，从页面内嵌的 article_list 里取出帖子。',
+x:'GET list,示例吧.html（第 1 页）\n截止时间：D-1 日 15:00（演示取值）',
+p:['解析页面内嵌的 article_list','一页有多条帖子，这里只画 4 条'],
+out:'9007 网友甲 SL01 发 D 09:12 末回 D 10:31\n9002 网友乙 SL01 发 D-1 14:05 末回 D 10:20\n9005 网友丙 QT99 推广帖 末回 D 10:05\n9006 网友丁 SL01 发 D 08:47 末回 D 09:58',
+r:['§16.1：股吧列表页可采，内嵌 article_list，可翻页'],
+f:{}},
+{t:'第 2 步 · 按 stockbar_code 过滤',d:'9005 的 stockbar_code 是 QT99，是别的吧夹在这里的推广帖，丢弃。',
+x:'第 1 页 4 条（其中 1 条 stockbar_code = QT99）',
+p:['逐条比对 stockbar_code 与当前吧 SL01','不一致的不入库'],
+out:'保留 9007、9002、9006\n丢弃 9005（QT99）',
+r:['§16.1：列表混有其他吧的推广帖，入库前按 stockbar_code 过滤'],
+f:{}},
+{t:'第 3 步 · 翻页直到早于截止时间',d:'第 1 页最后一条末回 D 09:58，仍晚于截止时间，继续翻第 2 页。第 2 页出现了末回早于截止的 8990，翻到这页为止。',
+x:'第 2 页：9003 末回 D 09:05\n         8990 末回 D-1 14:40',
+p:['看 post_last_time，不看发帖时间','8990 早于截止 D-1 15:00：丢弃，且不再请求第 3 页','9003 晚于截止：保留'],
+out:'候选：9007、9002、9006、9003\n停止翻页',
+r:['§16.1：列表按最后回复时间排序，每日翻到 post_last_time 早于截止时间为止'],
+f:{}},
+{t:'第 4 步 · 按帖号去重，更新计数',d:'存档里已经有 9002（前一天入库），它今天有新回复所以又出现了。不新增记录，只更新计数。',
+x:'候选 4 条；存档已有 9002：阅读 900 评论 25',
+p:['帖号已存在 → 只更新阅读数、评论数、转发数','帖号不存在 → 作为新帖进入下一步'],
+out:'更新 9002：阅读 1500 评论 40\n新帖：9007、9006、9003',
+r:['§16.1：老帖有新回复会重新出现，按帖号去重并更新计数'],
+f:{}},
+{t:'第 5 步 · 取正文并清洗 HTML',d:'对 3 条新帖各请求一次详情页，取 post_content，去掉 HTML 标签只留文字。回复全文不抓，只存评论数。',
+x:'GET news,示例吧,9007.html\npost_content = "<p>今天放量了，<b>明天<\/b>看能不能站稳<\/p>"',
+p:['取 post_content','清洗 HTML 标签','回复全文像需要浏览器会话，暂不采，只存回复数'],
+out:'9007 正文：今天放量了，明天看能不能站稳',
+r:['§16.1：帖子正文页 post_content 可采，HTML 需清洗','§16.1：回复全文暂不采，只存回复数','§16.1：不绕过登录、验证码或频率限制'],
+f:{add:['post_content']}},
+{t:'第 6 步 · 去标识化',d:'在写入存档之前处理身份字段：user_id 换成哈希值，昵称、头像、IP 属地删除。',
+x:'9007 user_id = 示例编号 A\n     昵称 = 网友甲\n     IP 属地 = 示例省份',
+p:['user_id → 哈希值（算法文档未定义）','删除昵称、头像、IP 属地'],
+out:'9007 user_id = h:3f9c…（示意）\n     昵称、头像、IP 属地已删除',
+r:['§16.1：user_id 哈希；昵称、头像、IP 属地入库即删除','§16.1：《网络数据安全管理条例》第二十四条'],
+f:{add:['post_content'],hsh:['user_id'],del:['昵称','头像','IP 属地']}},
+{t:'第 7 步 · 带两个时间戳入库',d:'写入去标识化存档，同时记来源时间戳和入库时间。data 读取时用两者中较晚的作为可见时间。',
+x:'9007 发帖时间 D 09:12（来源时间戳）\n     入库时间 D 10:40',
+p:['可见时间 = max(来源时间, 入库时间)；由 collect 写入还是 data 计算，文档未定义','新帖写入、9002 更新计数；原始语料留在服务器，90 天到期自动删除'],
+out:'9007 可见时间 = D 10:40\n存档新增 3 条，更新 1 条\n同步给团队的只有这份去标识化版本',
+r:['§2.5：同时存来源时间与入库时间，取较晚者','§5.5：data 读取强制 available_at ≤ clock','§16.1：原始语料只在服务器上，90 天到期自动删除'],
+f:{add:['post_content','入库时间'],hsh:['user_id'],del:['昵称','头像','IP 属地']}}
+];
+(function(){
+var dots=$('coDots'),tt=$('coStTitle'),dd=$('coStDesc'),pin=$('coIn'),pp=$('coProc'),po=$('coOut'),pr=$('coRef'),
+pf=$('coFields'),prev=$('coPrev'),next=$('coNext'),auto=$('coAuto'),pos=$('coPos');
+if(!dots||!tt||!pin||!po||!prev||!next||!auto||!pos||!STEPS.length){return;}
+var cur=0,timer=null,N=STEPS.length;
+for(var i=0;i<N;i++){
+(function(k){
+var b=document.createElement('button');b.type='button';b.textContent=String(k+1);
+b.setAttribute('role','tab');b.setAttribute('aria-label','第 '+(k+1)+' 步');
+b.addEventListener('click',function(){stop();go(k);});
+dots.appendChild(b);
+})(i);
+}
+function has(arr,x){return !!arr&&arr.indexOf(x)>=0;}
+function fields(f){
+if(!pf){return;}
+clear(pf);
+var list=F0.slice();
+(f.add||[]).forEach(function(x){if(list.indexOf(x)<0){list.push(x);}});
+list.forEach(function(x){
+var s=document.createElement('span');s.className='co-f';
+if(has(f.del,x)){s.className+=' del';}else if(has(f.hsh,x)){s.className+=' hsh';}else if(has(f.add,x)){s.className+=' add';}
+s.textContent=x;pf.appendChild(s);
+});
+}
+function go(k){
+if(!isFinite(k)){k=0;}
+cur=Math.max(0,Math.min(N-1,k));
+var st=STEPS[cur]||{};
+tt.textContent=st.t||'';
+if(dd){dd.textContent=st.d||'';}
+pin.textContent=st.x||'';
+po.textContent=st.out||'';
+clear(pp);(st.p||[]).forEach(function(x){li(pp,x);});
+clear(pr);(st.r||[]).forEach(function(x){li(pr,x);});
+fields(st.f||{});
+var bs=dots.children;
+for(var j=0;j<bs.length;j++){
+bs[j].className=j===cur?'on':(j<cur?'done':'');
+bs[j].setAttribute('aria-selected',j===cur?'true':'false');
+}
+pos.textContent=(cur+1)+' / '+N;
+prev.disabled=cur===0;
+next.disabled=cur===N-1;
+}
+function stop(){
+if(timer){clearInterval(timer);timer=null;}
+auto.textContent='自动播放';auto.setAttribute('aria-pressed','false');
+}
+prev.addEventListener('click',function(){stop();go(cur-1);});
+next.addEventListener('click',function(){stop();go(cur+1);});
+auto.addEventListener('click',function(){
+if(timer){stop();return;}
+if(cur>=N-1){go(0);}
+auto.textContent='暂停';auto.setAttribute('aria-pressed','true');
+timer=setInterval(function(){if(cur>=N-1){stop();return;}go(cur+1);},2600);
+});
+go(0);
+})();
+})();
+</script>
+</body>
+</html>

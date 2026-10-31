@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>总览 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+.ix-mapwrap{position:relative;background:radial-gradient(ellipse at 50% 0%,rgba(96,165,250,.08),transparent 60%),var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px}
+.ix-map{width:100%;height:auto;display:block}
+@media (max-width:760px){.ix-mapwrap{overflow-x:auto}.ix-map{min-width:720px}}
+.ix-map .ix-node{cursor:pointer;outline:none}
+.ix-map .ix-node rect.ix-box{fill:rgba(12,18,38,.92);stroke-width:1.5;transition:all .2s}
+.ix-map .ix-node:focus-visible rect.ix-box{stroke-width:3}
+.ix-map .ix-node text{pointer-events:none}
+.ix-map .ix-node .ix-nm{font:700 14px var(--mono);fill:var(--ink)}
+.ix-map .ix-node .ix-ds{font:500 11px var(--sans);fill:var(--mute)}
+.ix-map .ix-edge{fill:none;stroke:var(--line2);stroke-width:1.4;opacity:.55;transition:opacity .2s,stroke .2s}
+.ix-map.ix-focus .ix-node{opacity:.25}
+.ix-map.ix-focus .ix-node.ix-on{opacity:1}
+.ix-map.ix-focus .ix-node.ix-up rect.ix-box{stroke:var(--data);stroke-width:2.4}
+.ix-map.ix-focus .ix-node.ix-dn rect.ix-box{stroke:var(--out);stroke-width:2.4}
+.ix-map.ix-focus .ix-edge{opacity:.08}
+.ix-map.ix-focus .ix-edge.ix-on{opacity:1;stroke:var(--ink)}
+.ix-map .ix-node.ix-sel rect.ix-box{fill:rgba(96,165,250,.18)}
+.ix-map .ix-layer{font:700 12px var(--mono);letter-spacing:2px}
+.ix-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin:10px 4px 0}
+.ix-legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.ix-modcard{margin-top:14px;min-height:150px}
+.ix-modcard .ix-mc-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ix-modcard .ix-mc-io{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;font-size:13px}
+@media (max-width:760px){.ix-modcard .ix-mc-io{grid-template-columns:minmax(0,1fr)}}
+.ix-mc-io b{display:block;font-size:11.5px;color:var(--mute);font-weight:600;margin-bottom:3px}
+.ix-route a.card{display:block;text-decoration:none;color:inherit}
+.ix-route a.card .ix-rf{font:600 11.5px var(--mono);color:var(--mute)}
+.ix-route a.card h4{margin:4px 0 4px}
+.ix-route a.card p{margin:0;font-size:13px;color:var(--ink2)}
+.ix-grp{font:700 12px var(--mono);letter-spacing:1.5px;color:var(--mute);margin:22px 0 8px}
+.ix-demo a.card{padding:22px 24px}
+.ix-demo a.card h3{margin:6px 0 8px;font-size:20px}
+.ix-demo a.card ul{margin:10px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink2);line-height:1.75}
+.ix-demo a.card .ix-go{display:inline-block;margin-top:12px;font-weight:700;color:var(--accent,var(--sim))}
+.ix-modlist{display:flex;flex-wrap:wrap;gap:8px}
+.ix-modlist a{display:inline-flex;flex-direction:column;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:13px;min-width:0;flex:1 1 150px}
+.ix-modlist a:hover{border-color:var(--line2);text-decoration:none;background:var(--panel2)}
+.ix-modlist a b{font-family:var(--mono)}
+.ix-modlist a small{color:var(--mute);font-size:12px}
+.ix-pr h3{font-size:16px;margin:22px 0 6px}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>设计草案 v0.3（2026-10-31）· 尚未实现</div>
+<h1>模拟 A 股散户的<span class="grad">声音、态度与决策</span></h1>
+<p class="lead">一个研究用沙盒：由 LLM 驱动的合成散户在点时的信息流里读新闻、逛论坛、聊群、下单，产出帖子、结构化态度和交易决策，导出给下游项目使用 <span class="ref">§0</span>。</p>
+<div class="meta"><span class="chip social"><i></i>声音：帖子与群聊</span><span class="chip sim"><i></i>态度：信念与情绪</span><span class="chip acct"><i></i>决策与账户</span><span class="chip warn"><i></i>不做因子</span></div>
+</header>
+<section id="s1" class="reveal">
+<h2><span class="num">01</span>这是什么、不做什么</h2>
+<p class="sub">先讲清三件事：模拟谁、产出什么、怎样判断模拟得像不像。读完这一节，后面每个模块在整体里的位置就清楚了。</p>
+<p>RetailSim（仓库名 ashare-crowdsim）是一个可复现的多智能体模拟平台 <span class="ref">§1</span>。平台里的每个"智能体"是一个合成散户，有自己的年龄、性别、学历、职业、性格、人生与入市经历，由 LLM 扮演。它们在"点时"（point-in-time，PIT）的信息流里活动：任何数据、新闻、帖子只有到了它当年实际可见的时刻才会出现在智能体眼前，仿真时钟之前的东西一律看不到 <span class="ref">§3.1</span>。智能体读新闻、逛论坛、在熟人群里聊天、在模拟账户里下单。</p>
+<p>产出分三类，各存一张主表 <span class="ref">§1</span><span class="ref">§10.3</span>。<b>声音</b>是帖子、评论、群聊的自由文本，按人设与渠道标注。<b>态度</b>是结构化的信念、情绪、理由与政策信任，可以按人群切片，也可以聚合成恐惧 / 贪婪、政策信任、杠杆意愿、入场意愿、分歧度这类描述性的群体态度指标。<b>决策</b>是买、卖、持有、观望，加上仓位和理由，并且同时记下"想做什么"（意向）、"实际成交了什么"和"为什么没做成"。此外每个智能体有一个跨日连续的模拟账户，逐日记录交易流水、出入金和投资战绩，战绩会回灌到记忆里，影响之后的发言与决策 <span class="ref">§1</span><span class="ref">§8.4</span>。几张表用 <code>persona_id</code>、<code>event_id</code>、<code>run_id</code> 关联，账户类表再加 <code>sim_date</code>。</p>
+<p>为什么模拟散户：按 Jones et al.（2025）对上交所 2016-01 至 2019-06 共 5,340 万个散户账户的研究，散户贡献约 81% 的成交额，只持有约 22% 的市值 <span class="ref">§2.1</span>。散户怎么说、怎么想、怎么做，是理解 A 股的一个重要切面。为什么不直接让一个 LLM 扮演"散户"：现有研究显示，人设标签只能解释标注差异的不到 10%，LLM 只抓住个人特异方差的 3.05%，而人类自己重测为 53.6% <span class="ref">§2.3</span>。LLM 演出来的人群偏窄、偏理性、容易刻板化。所以本项目把差异主要从 LLM 之外注入：每人看到的信息不同，社交网络、经历、内核参数各异 <span class="ref">§13.2</span>。底座模型不在单次运行内混用：同一底座内全体智能体用同一个开源权重模型，跨底座比较时全体一起换，模型差异计入 V5 <span class="ref">§6.6</span><span class="ref">§14.1</span>。</p>
+<p>使用方式分两步 <span class="ref">§1</span>。先做按需的情景推演：回放某个历史事件，或者给一个假设情景，看各类散户如何反应。再在同一套人设与内核上扩展成每日持续运行，每天生成当天的帖子、态度与决策。</p>
+<h3>怎样算"像"：V1–V5</h3>
+<p>平台内置验证框架，五项判据各自独立出结论 <span class="ref">§1</span><span class="ref">§12.3</span>。其中 V2"声音可信"是总闸门：帖子是最直接能拿真实数据对照的产出，也最容易露馅。V2 不过，帖子不对外交付，其余各项照常报告。下表的及格线是设计文档的经验设定，在 Phase 0 预注册，可依 B5（两批真实帖互相区分的噪声底线）调整一次 <span class="ref">§12.3</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>判据</th><th>问的是</th><th>及格线 <span class="ref">§12.3</span></th></tr></thead>
+<tbody>
+<tr><td>V1 人群可信</td><td>合成人口的结构像不像真实散户</td><td>主要边际 TVD ≤ 0.05</td></tr>
+<tr><td>V2 声音可信</td><td>帖子读起来像不像同期真实股吧 / 雪球帖</td><td>人工盲评识别率 ≤ 65%，且显著低于 B1（混合效应逻辑回归 <span class="ref">§12.1</span>）；冻结版判别器 AUC 只要求逐版下降</td></tr>
+<tr><td>V3 态度可信</td><td>结构化态度的分布与方向对不对得上</td><td>关键调查题 TVD ≤ 0.2，重大事件方向一致</td></tr>
+<tr><td>V4 决策可信</td><td>换手、处置效应等微观行为像不像</td><td>硬目标矩相对误差 ≤ 50%（总量比方向与变化幅度）；软目标只要求方向与排序一致；无目标矩不设线</td></tr>
+<tr><td>V5 稳定可解释</td><td>结论是否不取决于种子、模型、模板</td><td>校准前跨模型合并人群态度相关 ≥ 0.5，且可比率 ≥ 0.7、方向一致；同底座跨种子相关 &lt; 0.5 时不判</td></tr>
+</tbody></table></div>
+<p>TVD（总变差距离）衡量两个分布差多少，0 表示完全一致。B1 是"单个 LLM、不给人设"的基线，生成帖要比它更难被认出来才算数 <span class="ref">§11</span>。</p>
+<div class="callout warn"><b class="t">不做什么 <span class="ref">§1</span></b>不生成因子，不预测价格，不对下游用途的预测力负责；不做实盘交易系统；MVP 不模拟机构，也不做闭环价格形成；模拟帖子不进入对外渠道 <span class="ref">§16.2</span>。完整的非目标与风险见第 06 节。</div>
+</section>
+<section id="s2" class="reveal">
+<h2><span class="num">02</span>模块地图</h2>
+<p class="sub">整个平台拆成 14 个子包 <span class="ref">§3.3</span>。图里按数据层、模拟层、产出层和基础层四组排列，颜色与顶栏分组一致（分组是本站的归纳，§3.2 的分层视图划得更细）。悬停看上下游，点击看职责与入口。</p>
+<div class="ix-mapwrap">
+<svg class="ix-map" id="ixMap" viewBox="0 0 1120 600" role="img" aria-label="RetailSim 模块地图">
+<defs>
+<marker id="ixArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#7f8aa8"></path></marker>
+<linearGradient id="ixGData" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22d3ee" stop-opacity=".16"></stop><stop offset="1" stop-color="#22d3ee" stop-opacity=".02"></stop></linearGradient>
+<linearGradient id="ixGSim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#60a5fa" stop-opacity=".16"></stop><stop offset="1" stop-color="#60a5fa" stop-opacity=".02"></stop></linearGradient>
+<linearGradient id="ixGOut" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fb923c" stop-opacity=".16"></stop><stop offset="1" stop-color="#fb923c" stop-opacity=".02"></stop></linearGradient>
+<linearGradient id="ixGBase" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a78bfa" stop-opacity=".14"></stop><stop offset="1" stop-color="#c084fc" stop-opacity=".04"></stop></linearGradient>
+</defs>
+<rect x="20" y="30" width="230" height="400" rx="18" fill="url(#ixGData)" stroke="#22d3ee" stroke-opacity=".35"></rect>
+<rect x="285" y="30" width="540" height="400" rx="18" fill="url(#ixGSim)" stroke="#60a5fa" stroke-opacity=".35"></rect>
+<rect x="860" y="30" width="240" height="400" rx="18" fill="url(#ixGOut)" stroke="#fb923c" stroke-opacity=".35"></rect>
+<rect x="20" y="462" width="1080" height="120" rx="18" fill="url(#ixGBase)" stroke="#a78bfa" stroke-opacity=".35"></rect>
+<text class="ix-layer" x="38" y="54" fill="#22d3ee">数据层</text>
+<text class="ix-layer" x="303" y="54" fill="#60a5fa">模拟层</text>
+<text class="ix-layer" x="878" y="54" fill="#fb923c">产出层</text>
+<text class="ix-layer" x="38" y="482" fill="#a78bfa">基础层 · 被所有模块使用</text>
+<g id="ixEdges">
+<path class="ix-edge flowline" data-f="collect" data-t="data" d="M135 132 L135 186" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="data" data-t="events" d="M135 252 L135 306" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="data" data-t="agents" d="M230 216 L306 216" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="events" data-t="social" d="M230 350 L306 350" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="events" data-t="agents" d="M230 330 C268 330 268 236 306 236" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="population" data-t="agents" d="M405 132 L405 186" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="agents" data-t="social" d="M390 252 L390 306" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="social" data-t="agents" d="M420 310 L420 256" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="agents" data-t="market" d="M500 206 C550 206 550 146 596 146" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="market" data-t="accounts" d="M682 182 L682 256" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="accounts" data-t="market" d="M708 260 L708 186" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="accounts" data-t="agents" d="M600 306 C548 306 548 244 504 244" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="agents" data-t="accounts" d="M500 226 C566 226 566 284 596 284" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="agents" data-t="outputs" d="M480 190 C540 70 820 70 920 186" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="accounts" data-t="outputs" d="M790 291 C840 291 840 230 886 230" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="social" data-t="outputs" d="M500 362 C620 410 840 410 940 256" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="outputs" data-t="validation" d="M985 252 L985 326" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="prompts" data-t="llm" d="M510 528 L576 528" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="llm" data-t="agents" d="M650 496 C650 420 540 250 504 250" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="llm" data-t="social" d="M630 496 C630 440 540 366 504 366" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="llm" data-t="events" d="M610 496 C610 452 262 452 232 368" marker-end="url(#ixArr)"></path>
+</g>
+<g font-family="ui-monospace,monospace" font-size="10.5" fill="#7f8aa8">
+<text x="236" y="208">pit.query</text>
+<text x="514" y="160">OrderIntent</text>
+<text x="690" y="224">Fill</text>
+<text x="716" y="224">只读</text>
+<text x="520" y="318">只读持仓</text>
+<text x="842" y="262">账户表</text>
+<text x="640" y="88">态度 / 决策</text>
+<text x="640" y="402">帖子</text>
+<text x="518" y="520">模板</text>
+</g>
+<g id="ixNodes">
+<g class="ix-node" data-m="collect" tabindex="0" role="button"><rect class="ix-box" x="40" y="70" width="190" height="62" rx="12" style="stroke:var(--data)"></rect><text class="ix-nm" x="56" y="98">collect</text><text class="ix-ds" x="56" y="118">前向存档 · 股吧 / 快讯</text></g>
+<g class="ix-node" data-m="data" tabindex="0" role="button"><rect class="ix-box" x="40" y="190" width="190" height="62" rx="12" style="stroke:var(--data)"></rect><text class="ix-nm" x="56" y="218">data</text><text class="ix-ds" x="56" y="238">PIT 数据湖 · available_at</text></g>
+<g class="ix-node" data-m="events" tabindex="0" role="button"><rect class="ix-box" x="40" y="310" width="190" height="62" rx="12" style="stroke:var(--data)"></rect><text class="ix-nm" x="56" y="338">events</text><text class="ix-ds" x="56" y="358">EventCard · L0/L1 改写</text></g>
+<g class="ix-node" data-m="population" tabindex="0" role="button"><rect class="ix-box" x="310" y="70" width="190" height="62" rx="12" style="stroke:var(--sim)"></rect><text class="ix-nm" x="326" y="98">population</text><text class="ix-ds" x="326" y="118">人设卡 · IPF · 人生经历</text></g>
+<g class="ix-node" data-m="agents" tabindex="0" role="button"><rect class="ix-box" x="310" y="190" width="190" height="62" rx="12" style="stroke:var(--sim)"></rect><text class="ix-nm" x="326" y="218">agents</text><text class="ix-ds" x="326" y="238">认知循环 · 记忆 · 内核</text></g>
+<g class="ix-node" data-m="social" tabindex="0" role="button"><rect class="ix-box" x="310" y="310" width="190" height="62" rx="12" style="stroke:var(--social)"></rect><text class="ix-nm" x="326" y="338">social</text><text class="ix-ds" x="326" y="358">论坛 · 群聊 · 发布者 L0–L4</text></g>
+<g class="ix-node" data-m="market" tabindex="0" role="button"><rect class="ix-box" x="600" y="120" width="190" height="62" rx="12" style="stroke:var(--market)"></rect><text class="ix-nm" x="616" y="148">market</text><text class="ix-ds" x="616" y="168">A 股规则 · 成交判定</text></g>
+<g class="ix-node" data-m="accounts" tabindex="0" role="button"><rect class="ix-box" x="600" y="260" width="190" height="62" rx="12" style="stroke:var(--acct)"></rect><text class="ix-nm" x="616" y="288">accounts</text><text class="ix-ds" x="616" y="308">记账 · 快照 · 战绩</text></g>
+<g class="ix-node" data-m="outputs" tabindex="0" role="button"><rect class="ix-box" x="890" y="190" width="190" height="62" rx="12" style="stroke:var(--out)"></rect><text class="ix-nm" x="906" y="218">outputs</text><text class="ix-ds" x="906" y="238">三张主表 · 切片 · 指标</text></g>
+<g class="ix-node" data-m="validation" tabindex="0" role="button"><rect class="ix-box" x="890" y="330" width="190" height="62" rx="12" style="stroke:var(--val)"></rect><text class="ix-nm" x="906" y="358">validation</text><text class="ix-ds" x="906" y="378">V1–V5 · B1–B6 · 探针</text></g>
+<g class="ix-node" data-m="schemas" tabindex="0" role="button"><rect class="ix-box" x="60" y="496" width="190" height="62" rx="12" style="stroke:var(--orch)"></rect><text class="ix-nm" x="76" y="524">schemas</text><text class="ix-ds" x="76" y="544">Pydantic v2 共享类型</text></g>
+<g class="ix-node" data-m="prompts" tabindex="0" role="button"><rect class="ix-box" x="320" y="496" width="190" height="62" rx="12" style="stroke:var(--llm)"></rect><text class="ix-nm" x="336" y="524">prompts</text><text class="ix-ds" x="336" y="544">模板 · 内容哈希</text></g>
+<g class="ix-node" data-m="llm" tabindex="0" role="button"><rect class="ix-box" x="580" y="496" width="190" height="62" rx="12" style="stroke:var(--llm)"></rect><text class="ix-nm" x="596" y="524">llm</text><text class="ix-ds" x="596" y="544">网关 · 缓存 · 结构化输出</text></g>
+<g class="ix-node" data-m="orchestrator" tabindex="0" role="button"><rect class="ix-box" x="840" y="496" width="190" height="62" rx="12" style="stroke:var(--orch)"></rect><text class="ix-nm" x="856" y="524">orchestrator</text><text class="ix-ds" x="856" y="544">时钟 · 激活 · 快照分叉</text></g>
+</g>
+</svg>
+<div class="ix-legend"><span><i style="background:#22d3ee"></i>上游（悬停时）</span><span><i style="background:#fb923c"></i>下游（悬停时）</span><span><i style="background:#7f8aa8"></i>数据流（虚线动画）</span><span>schemas 与 orchestrator 连接所有业务模块，不逐条画线，悬停时一并高亮</span></div>
+</div>
+<div class="card ix-modcard" id="ixModCard" aria-live="polite"><p class="sub" style="margin:0">点击任一模块，这里显示它的职责、输入输出和上下游，并给出模块页链接。</p></div>
+<p style="margin-top:18px">读图的顺序可以跟着一条新闻走。<b>数据层</b>负责"世界上发生了什么"：<code>collect</code> 从今天起逐日存档只能前向积累的数据（真实帖子、快讯），<code>data</code> 把行情、复权、成分与存档帖子整理成按时点可查的数据湖，<code>events</code> 把新闻、政策、公告抽成结构化的事件卡 <code>EventCard</code> <span class="ref">§3.3</span>。</p>
+<p><b>模拟层</b>负责"散户怎么反应"。<code>population</code> 生成人设卡；<code>agents</code> 跑每个智能体的认知循环，产出信念更新、帖子和决策意向；<code>social</code> 管发布者、论坛、群聊和推荐流，决定谁看到哪条帖子；<code>market</code> 按 A 股规则判定订单能否成交并算好费用，输出 <code>Fill</code>；<code>accounts</code> 只把成交与出入金记账、结算、生成快照和战绩 <span class="ref">§3.3</span>。<b>产出层</b>的 <code>outputs</code> 把这些整理成交付表，<code>validation</code> 拿交付表去和真实数据对照，给出 V1–V5 的结论。</p>
+<p><b>基础层</b>被所有模块使用。<code>schemas</code> 定义模块之间传递的类型，<code>prompts</code> 存全部提示词模板，<code>llm</code> 是统一的调用网关，<code>orchestrator</code> 管仿真时钟、谁在何时被激活、快照与分叉。</p>
+<p>依赖方向有三条硬规定 <span class="ref">§3.3</span>。第一，业务模块只经 <code>schemas</code> 共享类型，彼此不导入对方的类型，由 <code>orchestrator</code> 串起来。智能体不直接访问数据，只通过感知步骤拿到信息；所有读取都经 <code>pit.query(table, asof=clock)</code>，由数据层强制 <code>available_at ≤ clock</code> <span class="ref">§5.5</span>。第二，<code>market</code> 读账户只读视图、判定成交、算费用，从不写账户；<code>accounts</code> 只记账，不判定成交、不算费用。这样拆是因为 market、agents（prompt 里的账户摘要）、outputs（账户类表）都要读账户，记账逻辑只能有一处。第三，LLM 响应缓存跨运行共享，放在单次运行目录之外，分叉与重放都复用它。基线 B2–B4 与消融是同一套模拟换配置运行，写在 <code>configs/</code> 里，不另写代码。</p>
+<div class="callout info"><b class="t">事实与观点分开改写</b>events 只产出 <code>EventCard</code> 与 L0（官媒转述）、L1（快讯）两类不带立场的版本，与 <code>summary</code> 做事实一致性校验，按量级每类 1–3 个版本 <span class="ref">§5.3</span>。L2–L4 都是观点，由 social 的发布者以 <code>Post</code> 产出；夸张度、确定性是发布者参数，与立场、动机、准确率并列 <span class="ref">§5.6</span>。L3 可歪曲，但必须标注所依据的 <code>event_id</code>；L4 传闻另立 <code>origin="rumor"</code> 的事件卡，带"传闻"标签，只在沙盒运行 <span class="ref">§16.2</span>。<br>注：§3.3 模块表的 events 一行仍写"按渠道改写（官媒 / 财经快讯 / 传闻）"，本站按 §5.3 画。</div>
+</section>
+<section id="s3" class="reveal ix-pr">
+<h2><span class="num">03</span>五条设计原则</h2>
+<p class="sub">设计文档 §3.1 定了五条原则，后面每个模块的取舍都能追到其中一条。每条下面写它防的是什么错、具体怎么做、由哪个模块负责。</p>
+<h3>1. LLM 给意向，内核管约束</h3>
+<p>LLM 擅长读非结构化的东西：一条新闻、几条帖子、一段异动。它不擅长守规则，也不稳定地表现出可校准的行为偏差。所以每次激活最多两次 LLM 调用，帖子在成交判定之后写 <span class="ref">§6.1</span>。先感知注意力预算内的 K 条信息；第 1 次调用做解读与意向，只出结构化字段、不带风格示例帖：盘前与盘中输出 <code>BeliefUpdate</code>、<code>DecisionIntent[]</code>（买、卖、持有、观望，加仓位档与理由）和 <code>FundingIntent</code>，收盘后与晚间只输出 <code>BeliefUpdate</code> 加"明日打算"，不出订单 <span class="ref">§3.4</span>。然后内核做约束与成交判定，改动写回记忆。第 2 次调用只在 <code>want_to_post</code> 为真时发生，输入含当日意向与实际成交（含未执行原因），风格示例帖只放这次，正文是自由文本。反思低频，每周一次或大盈亏后触发。两次调用共用静态前缀，以命中前缀缓存。内核负责硬约束（T+1、涨跌停、资金、权限）和可校准的行为偏差修正（损失厌恶、从众等）<span class="ref">§3.1</span><span class="ref">§6.3</span>。内核改动了意向，实际结果与没做成的原因写回记忆，之后的发言与之自洽；帖子里说的和实际成交之差记为"言行不一"，收盘后的明日打算与次日盘前实际意向之差记为"隔夜变卦"，都是可测量的产出 <span class="ref">§6.1</span>。LLM 也不直接给连续数字，因为数值输出校准差、易扎堆在整数；它只输出分档，分档到数值的映射由内核按人设完成，例如过度自信者映射得更极端 <span class="ref">§6.2</span>。意向来源做成可替换接口，可以是 LLM、规则先验或 Jev（一个只输出各选项概率的校准型分类模型）<span class="ref">§6.6</span>。负责模块：<code>agents</code> 跑循环和内核，<code>market</code> 判定成交。</p>
+<h3>2. 一切点时（PIT）</h3>
+<p>回放 2024 年的某一天，智能体只能看到那一天之前已经公开的东西。做法是所有数据、事件、帖子都带 <code>available_at</code> 字段，仿真时钟之前不可见 <span class="ref">§3.1</span>；事后补录的数据按保守延迟入库并打 <code>backfilled</code> 标记 <span class="ref">§2.5</span>。所有读取经 <code>pit.query(table, asof=clock)</code>，由数据层强制 <code>available_at ≤ clock</code>；泄漏测试注入未来时间戳的"金丝雀"记录并断言不可见，扫描所有 prompt 查找晚于仿真时钟的日期，并按同一运行清单重放核对结果完全一致 <span class="ref">§5.5</span>。LLM 参数里自带的"未来知识"另行处理：挑验收事件时优先用所有底座训练截止日之后的事件，并用记忆探针和帖子补全探针测出模型实际记得多少 <span class="ref">§13.1</span>。本项目不预测收益，所以这类泄漏在这里是逼真度污染：帖子带上事后视角，或者模型背过当年的帖子让 V2 虚高。负责模块：<code>data</code> 强制 <code>available_at</code>，<code>orchestrator</code> 推进仿真时钟，<code>validation</code> 跑探针。</p>
+<h3>3. 分层保真</h3>
+<p>智能体分两层 <span class="ref">§14.1</span>。Tier-A 50 人，完整记忆与反思，每个激活点都激活，用作大 V、典型人群代表、深度样本与审计。Tier-B 500 人，精简记忆、低频反思，事件触发加低频例行激活，填满 100 格 × 5 人的保底，是人群切片的主要来源。按事件触发激活，成本随信息量增长，不随人数增长 <span class="ref">§3.1</span>。第 1 次调用（全员）约 3.0k 输入、200 输出 token，第 2 次调用（仅发帖者）约 3.6k 输入、300 输出；550 人 × 2 个激活点的交易日上限约每日 7.26M 输入、0.55M 输出，全年 242 个交易日约 17.6 亿 / 1.33 亿；非交易日 20:00 激活点另计，约每日 3.63M / 0.28M <span class="ref">§14.2</span>。这是每人每个激活点都激活、都发帖的上限口径，按需激活后实际量低得多；N 个种子 × M 个底座要乘 N·M（Phase 1 为 6 倍）<span class="ref">§14.2</span>。规则或蒸馏的批量群体（Tier-C）不产出帖子，不进 MVP。负责模块：<code>population</code> 定名额，<code>orchestrator</code> 定谁何时激活。</p>
+<p>同一底座内 Tier-A 与 Tier-B 用同一模型，分层只体现在记忆深度、反思频率与激活频率，避免把人设差异和模型大小混在一起；"2 个底座"即两个模型，跨底座比较时全体一起换。小模型延到 Phase 2 扩规模时再用，切换前在开发事件上用同一批 Tier-B 人设对比大小模型，V2 文风指标与 V5 一致性不退化才切 <span class="ref">§14.1</span>。</p>
+<h3>4. 声音与态度并重</h3>
+<p>帖子是一等产出，要进入测量与评估（V2）；结构化态度字段（信念、情绪、政策信任、意向）同时保留，用来按人群切片统计 <span class="ref">§3.1</span>。两者分开存表，用 <code>persona_id</code>、<code>event_id</code>、<code>run_id</code> 关联 <span class="ref">§10</span>。这样下游既可以读文本，也可以直接拿数字，而一张表出问题（比如 V2 不过，帖子不交付）不会连带另一张。负责模块：<code>agents</code> 产出，<code>outputs</code> 落表，<code>validation</code> 分别验收。</p>
+<h3>5. 可复现、可分叉</h3>
+<p>同一配置跑两次要得到同一结果，才能谈消融和基线对比。做法是事件溯源（日志只追加）、LLM 响应缓存、固定种子、锁定模型版本：任一交易日可以重放，也可以从快照分叉做反事实情景 <span class="ref">§3.1</span>。缓存跨运行共享，放在运行目录之外 <span class="ref">§3.3</span>；缓存键是模型 ID 与带日期的版本号、推理引擎版本、结构化输出后端、schema、采样参数、种子与完整消息的哈希；重放只读缓存，未命中直接报错，不静默重新调用；解析失败的尝试也写入缓存，重放时复现同一重试序列。API 模型做不到确定性输出，只能靠缓存存档，厂商的模型别名会指向新版本，所以运行清单里写带日期的版本号 <span class="ref">§14.4</span>。负责模块：<code>orchestrator</code> 管快照、分叉与运行清单，<code>llm</code> 管缓存。</p>
+</section>
+<section id="s4" class="reveal">
+<h2><span class="num">04</span>阅读路线</h2>
+<p class="sub">站点按三种读法组织。第一次读建议先看流程篇，知道一天里发生什么；再看三个演示，直观感受发布者和散户各自怎样反应、群里每个人说了什么；最后按需查模块页，每页结构相同：职责、为什么、机制、示例、接口、取舍、关系、开放问题。</p>
+<div class="ix-grp">流程篇 · 跟着时间和数据走</div>
+<div class="grid g3 ix-route">
+<a class="card hover" href="flow-day.html"><span class="ix-rf">flow-day.html</span><h4>一个交易日</h4><p>MVP 交易日的固定激活点是盘前和收盘后：盘前是当日唯一产生例行订单的点，收盘后只出 <code>BeliefUpdate</code> 与"明日打算"；10:00 / 11:30 / 14:00 的盘中检查点只由量级 ≥ 3 的事件触发；非交易日每天一个 20:00 晚间激活点 <span class="ref">§3.4</span>。这一页按时段讲谁在做什么。</p></a>
+<a class="card hover" href="flow-journey.html"><span class="ix-rf">flow-journey.html</span><h4>一条新闻的旅程</h4><p>一条快讯怎样变成事件卡、各级发布者的帖子，再进到智能体的信息流，最后变成态度、发言和成交。</p></a>
+<a class="card hover" href="flow-run.html"><span class="ix-rf">flow-run.html</span><h4>运行生命周期</h4><p>从配置、预注册到运行、重放与分叉：一次运行留下什么记录，为什么能逐日重现。</p></a>
+</div>
+<div class="ix-grp">演示篇 · 可以动手调参数</div>
+<div class="grid g2 ix-demo">
+<a class="card hover glow" href="sim-publishers.html" style="--accent:var(--social)"><span class="chip social"><i></i>发布者演示</span><h3>同一事件，五级发布者怎样说</h3><p>一张示例事件卡（化名主体），L0 官媒、L1 快讯、L2 大 V、L3 中小博主、L4 小道消息依次出帖。</p><ul><li>每个发布者可调立场、动机、准确率，以及夸张度、确定性 <span class="ref">§5.6</span>；默认值是示例数据</li><li>按相对延迟逐条出帖：L0 即时、L1 0–10 分钟、L2 随传播、L3 数小时、L4 不定 <span class="ref">§5.3</span>；L4 帖带"传闻"标签</li><li>推荐流按级别加权 <span class="ref">§7.3</span>，显示散户实际看到的前 K 条（K 在 3–15 条范围内取示例值 <span class="ref">§5.4</span>）</li><li>在某时刻插入一条 L4 传闻，对照有、无传闻两条示例态度曲线（真实系统是两次运行对比 <span class="ref">§5.6</span>）</li></ul><span class="ix-go">打开发布者演示 →</span></a>
+<a class="card hover glow" href="sim-personas.html" style="--accent:var(--sim)"><span class="chip sim"><i></i>散户决策演示</span><h3>同一条消息，六类散户怎样决策</h3><p>打板短线新手、2015 年杠杆受过伤的老股民、退休长线、基金为主、高净值波段、Tier-A 大 V，全部是示例人设。</p><ul><li>选一个行情情景（大涨、震荡、大跌，示例价格），所有人读同一条示例新闻</li><li>逐人展开：看到的 K 条信息 → <code>BeliefUpdate</code> <span class="ref">§6.2</span>→ <code>DecisionIntent</code> <span class="ref">§6.3</span></li><li>内核七步逐步走：仓位档映射、行为偏差修正、卖出时的实现效用（损失厌恶 λ 先验中位数 2.25 <span class="ref">§6.3</span>）、看盘概率、恐慌或躺平、硬约束、写回记忆</li><li>并排对比所有人的意向、实际成交和未执行原因，也就是"言行不一"</li></ul><span class="ix-go">打开散户决策演示 →</span></a>
+<a class="card hover glow" href="sim-chat.html" style="--accent:var(--social);grid-column:1/-1"><span class="chip social"><i></i>群聊演示</span><h3>四个熟人群里，每个散户说了什么</h3><p>家庭群、同事群、老股民群、付费荐股群，按 Telegram 群聊的样子摆出两天里的全部消息（示例数据，模拟生成）。</p><ul><li>切换群、按时段回看或逐条播放；点一条气泡看它在帖子表里的一行（<code>group_id</code>、<code>turn</code> <span class="ref">§10.3</span>）</li><li>选一个人，看这个人在所有群里的发言、立场变化，和盘前实际下的单，对照"言行不一"</li><li>群聊轮次模拟器：首帖之后最多 M 轮接话，只走发言调用 <span class="ref">§7.1</span></li><li>一条付费群传闻被转进家庭群，次日官方澄清，转发人的信任被扣 <span class="ref">§7.2</span></li></ul><span class="ix-go">打开群聊演示 →</span></a>
+</div>
+<div class="ix-grp">模块篇 · 按层查阅</div>
+<p>基础层</p>
+<div class="ix-modlist"><a href="mod-schemas.html"><b>schemas</b><small>模块间传递的类型</small></a><a href="mod-prompts.html"><b>prompts</b><small>提示词模板与版本</small></a><a href="mod-llm.html"><b>llm</b><small>网关、缓存、重试与计量</small></a><a href="mod-orchestrator.html"><b>orchestrator</b><small>时钟、激活、快照与分叉</small></a></div>
+<p>数据层</p>
+<div class="ix-modlist"><a href="mod-collect.html"><b>collect</b><small>真实帖子前向存档</small></a><a href="mod-data.html"><b>data</b><small>点时行情与复权</small></a><a href="mod-events.html"><b>events</b><small>事件卡与 L0/L1 改写</small></a></div>
+<p>模拟层</p>
+<div class="ix-modlist"><a href="mod-population.html"><b>population</b><small>人设卡与合成人口</small></a><a href="mod-agents.html"><b>agents</b><small>认知循环与内核修正</small></a><a href="mod-social.html"><b>social</b><small>发布者、论坛、群聊、推荐流</small></a><a href="mod-market.html"><b>market</b><small>A 股规则与成交判定</small></a><a href="mod-accounts.html"><b>accounts</b><small>账户、出入金与战绩</small></a></div>
+<p>产出层</p>
+<div class="ix-modlist"><a href="mod-outputs.html"><b>outputs</b><small>帖子、态度、决策与账户类表</small></a><a href="mod-validation.html"><b>validation</b><small>V1–V5 验收、基线与校准</small></a></div>
+</section>
+<section id="s5" class="reveal">
+<h2><span class="num">05</span>路线图</h2>
+<p class="sub">顺序是先建探针与评估工具，再建模拟 <span class="ref">§15.1</span>。B1 与 B5 不依赖模拟，最先做好，之后 V2 的得分都相对它们看。点选项卡查看每个阶段的范围和过闸条件。</p>
+<p>真实帖子只能随日历时间积累，股吧帖子事后又常被删除或屏蔽，所以在合规结论允许之后，从 Phase 0 起就每日采集 <span class="ref">§15.1</span><span class="ref">§16.1</span>。每个阶段结束时有交付物，Phase 1 的过闸条件是 V2 达到及格线 <span class="ref">§15.1</span>；不过闸时按止损表处理，先启用风格微调 <span class="ref">§15.2</span>。</p>
+<div class="tabs">
+<div class="tab-bar"><button type="button" data-t="p0">Phase 0 数据与探针</button><button type="button" data-t="p1">Phase 1 情景推演 MVP</button><button type="button" data-t="p2">Phase 2 持续运行</button><button type="button" data-t="p3">Phase 3 扩展</button></div>
+<div class="tab-pane card" data-t="p0"><p><b>周期 2–3 周</b> <span class="ref">§15.1</span></p><p>搭 PIT 数据层、事件卡抽取和 LLM 网关；做 B1（单个 LLM、不给人设）；跑记忆探针与帖子补全探针，看底座模型记得多少历史 <span class="ref">§13.1</span>；训练冻结版判别器 v0 <span class="ref">§12.1</span>，并用它区分两批真实帖，得到 B5 噪声底线；做意向来源对比试验，在开发事件上分别用 LLM、规则先验、Jev 出意向，比较 V4 行为矩误差与同质化诊断 <span class="ref">§6.6</span>；开始每日采集真实帖子。</p><p>交付：预注册文档（主指标、验收事件清单、及格线 <span class="ref">§11.4</span><span class="ref">§12.3</span>）和底座模型的截止日表。</p></div>
+<div class="tab-pane card" data-t="p1"><p><b>周期 4–6 周</b> <span class="ref">§15.1</span></p><p>550 个智能体（Tier-A 50 + Tier-B 500）；渠道有论坛（股吧、雪球两种风格）、熟人群聊和发布者层 L0–L4；价格用模式 A，即真实行情回放；跑 2–3 个历史验收事件，加 1 个假设情景 × 3 档价格路径；每个设定 3 个种子 × 2 个底座模型。</p><p>交付：端到端可重放；三张主表、激活表与账户类表 <span class="ref">§10.3</span>；B2–B4、B6 基线。过闸条件：V2 达到及格线 <span class="ref">§12.3</span>。</p></div>
+<div class="tab-pane card" data-t="p2"><p><b>周期 6–10 周</b> <span class="ref">§15.1</span></p><p>每日持续运行，产出"前向声音"：当日生成帖对照当日真实帖，当日落盘、只追加不重算，模型记不住还没发生的事，所以这是最干净的 V2 证据 <span class="ref">§13.1</span>。持续运行按版本线管理，代码、prompt、底座版本或内核参数任一项改动即开新线 <code>line_id</code>，从最近的日终快照分叉，历史产出不改 <span class="ref">§9.3</span>；每月按中国结算的月度新增投资者数补入新开户者 <span class="ref">§4.3</span>；范围扩到个股和推荐流，启用信任重连 <span class="ref">§7.2</span>，并做 MSM 校准 <span class="ref">§12.2</span>。</p><p>交付：每日落盘的帖子、态度、决策、激活表与账户快照；每 20 个交易日的信任网络快照 <span class="ref">§10.3</span>；长期账户轨迹与战绩报告；V1–V5 报告。</p></div>
+<div class="tab-pane card" data-t="p3"><p><b>周期：持续</b> <span class="ref">§15.1</span></p><p>冲击模型（模式 C：真实价格加一个冲击模型，把模拟净流量映射到价格上，做有界的反事实 <span class="ref">§3.5</span>）；风格微调 <span class="ref">§13.3</span>；短视频评论渠道；其他国家市场 <span class="ref">§4.2</span>；Tier-C 扩规模。交付按需定。</p></div>
+</div>
+<h3>止损判据</h3>
+<p>止损判据在 Phase 0 预注册，事后不改 <span class="ref">§15.2</span>。每项判据不过时只停对应的那部分交付，其余照常报告。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>情况</th><th>处理 <span class="ref">§15.2</span></th></tr></thead>
+<tbody>
+<tr><td>V1 不过</td><td>修 IPF 的目标边际与种子样本 <span class="ref">§4.3</span>，不进入 V2 评估</td></tr>
+<tr><td>V2 不过</td><td>先启用风格微调 <span class="ref">§13.3</span>；仍不过则帖子降为内部参考，对外只交付态度与决策</td></tr>
+<tr><td>V3 不过</td><td>调内核映射（policy_trust、恐惧等结构化字段），不改文本</td></tr>
+<tr><td>V4 不过</td><td>修内核 <span class="ref">§6.3</span>，暂停交付决策表与账户类表</td></tr>
+<tr><td>V5 不过</td><td>先处理同质化 <span class="ref">§13.2</span>，不扩规模</td></tr>
+<tr><td>泄漏</td><td>探针显示底座模型"知道"某验收事件，该事件改作开发事件</td></tr>
+<tr><td>成本超预算</td><td>缓存命中率已无提升空间时，降低 Tier-A 比例 <span class="ref">§14</span></td></tr>
+</tbody></table></div>
+<h3>人员与算力</h3>
+<p>人员 <span class="ref">§15.3</span>：研究员 1 名，负责数据、预注册、校准目标与 V1–V5 评估；人工盲评由用户及其团队完成，每个验收事件约 200 对 <span class="ref">§11.4</span>；平台工程师 1–2 名，负责调度、LLM 网关与数据层；可选行为金融或调查方法顾问 1 名。</p>
+<p>算力按 token 量规划。每次激活最多两次调用：第 1 次全员，约 3.0k 输入、200 输出；第 2 次仅发帖者，约 3.6k 输入、300 输出。550 人 × 2 个激活点，交易日上限每日约 7.26M 输入、0.55M 输出，按 242 个交易日全年约 17.6 亿 / 1.33 亿；这是每人每个激活点都激活且都发帖的单次运行上限。非交易日的 20:00 激活点上限每日约 3.63M / 0.28M，全年约 4.5 亿 / 0.34 亿。N 个种子 × M 个底座再乘 N·M（Phase 1 的 3 × 2 即 6 倍），假设情景的三档价格路径再乘 3；盘中检查点、群聊接话、发布者层 L2–L4 帖子、V3 硅基调查和 Jev 单独计量，量级都小于主循环 <span class="ref">§14.2</span>。单价以各厂商定价页为准，设计文档不做费用估算 <span class="ref">§15.3</span>。</p>
+<p>MVP 全部走国内厂商 API，不自部署；两个底座都从有开源权重的模型中选（如 Qwen、DeepSeek 系列），以后转自部署时可用同一权重做确定性重放和 LoRA 风格微调，闭源模型只作对比 <span class="ref">§14.4</span>。网关自写薄层，用官方 <code>openai</code> SDK 换 <code>base_url</code>，不用 LiteLLM；嵌入模型本地运行开源中文模型（如 BGE 系列），不用厂商嵌入 API <span class="ref">§14.4</span>。Phase 2 扩规模时 Tier-B 可换小模型或自部署，换前须通过大小模型对比 <span class="ref">§15.3</span><span class="ref">§14.1</span>。</p>
+</section>
+<section id="s6" class="reveal">
+<h2><span class="num">06</span>非目标与风险</h2>
+<p class="sub">非目标划清项目边界；风险表说明这个设计最可能在哪里失败、靠什么发现、发现后怎么办。</p>
+<h3>不做什么</h3>
+<p>本项目只模拟散户的声音、态度和决策，不生成因子，不预测价格，也不对下游拿这些数据做出的预测力负责 <span class="ref">§1</span>。下游若用本项目数据做交易，合规由下游自己负责 <span class="ref">§16.3</span>。项目不接任何实盘交易系统，模拟账户只在仿真里记账。</p>
+<p>MVP 不建模机构，也不做闭环价格形成：价格来自真实行情回放（模式 A）或脚本化价格路径，散户的下单不会反过来推动价格。闭环撮合（模式 B）只作远期选项，冲击模型（模式 C）放到 Phase 3 <span class="ref">§3.5</span>。模拟生成的帖子只在团队内部和内部下游项目之间流转，不进入任何对外渠道 <span class="ref">§16.2</span>。</p>
+<h3>主要风险</h3>
+<p>下表每一行对应设计文档里的一节。"由谁发现"一列说明这个风险落到哪个指标或检查上，便于在运行清单和验收报告里追踪。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>风险</th><th>表现</th><th>对策</th><th>由谁发现</th></tr></thead>
+<tbody>
+<tr><td>同质化 <span class="ref">§13.2</span></td><td>千人一脑，观点分歧远小于真实人群，退化成单个 LLM 加噪声</td><td>异质性主要从 LLM 之外注入：信息流、内核参数、人生经历；两个开源权重底座作跨底座检验，单次运行内不混用</td><td>DR 警戒线 0.7（经验设定）、B2/B3 基线、V5</td></tr>
+<tr><td>前视偏差 <span class="ref">§13.1</span></td><td>历史推演出现事后视角；模型背过当年帖子，使 V2 虚高</td><td>截止日表筛选验收事件、记忆探针、帖子补全探针、事后视角检测</td><td>运行清单里的事后视角命中率</td></tr>
+<tr><td>对齐偏差 <span class="ref">§13.3</span></td><td>恐慌和贪婪太少，满嘴"理性投资"；政策话题有方向性偏差</td><td>选型先看中文口语能力与拒答率；内核映射修 policy_trust 与恐惧字段</td><td>说教率、免责声明率记为 V2 扣分</td></tr>
+<tr><td>模型静默更新 <span class="ref">§13.4</span></td><td>同一模型名下换了权重，结果前后不可比</td><td>锁定带日期的模型版本，响应缓存作为可重放存档</td><td>运行清单分段分析</td></tr>
+<tr><td>刻板化 <span class="ref">§16.5</span></td><td>把某类人群演成漫画，压扁群体内部差异</td><td>CoMPosT 两维诊断；对外引用注明是模型产物</td><td>§13.2 漫画化指标</td></tr>
+<tr><td>采集合规 <span class="ref">§16.1</span></td><td>自采触碰用户协议、robots 或个人信息规定</td><td>历史事件用授权数据，自采只补每日前向样本；不绕过登录与验证码；入库即去标识化</td><td>法务复核</td></tr>
+<tr><td>传闻外流 <span class="ref">§16.2</span></td><td>L4 传闻或喊单帖被当成真实信息传出</td><td>L4 只在沙盒运行；每条帖带"模拟生成"字段与传闻/喊单标签</td><td>帖子表字段检查</td></tr>
+</tbody></table></div>
+<p>DR 是离散度保留率，等于模拟人群立场的标准差除以真实人群的标准差，明显低于 1 说明观点被压扁 <span class="ref">§13.2</span>；"漫画化"沿用 CoMPosT 框架（Cheng、Piccardi 与 Yang，2023）的说法，指模拟出来的群体比真实群体更夸张、更单一 <span class="ref">§16.5</span>。</p>
+<div class="callout warn"><b class="t">合规说明 <span class="ref">§16</span></b>§16 的合规梳理不构成法律意见。著作权法第二十四条的合理使用能否覆盖团队研究、少样本示例、盲评与风格微调，仍待法务复核 <span class="ref">§16.1</span>。反不正当竞争法 2025 年修订的条号与原文〔需复核〕 <span class="ref">§16.1</span>；拟人化互动相关办法据二手报道，以网信办原文为准 <span class="ref">§16.3</span>。</div>
+</section>
+<section id="s7" class="reveal">
+<h2><span class="num">07</span>待定事项</h2>
+<p class="sub">设计文档 v0.3（2026-10-31）已并入逐模块架构讨论 A1–A12 的全部决定；讨论记录与设计文档有出入时，以设计文档为准。</p>
+<p>架构讨论从 2026-10-30 起按模块逐个进行，每谈完一个模块就把决定记进讨论记录，再统一写回设计文档。下面先列几项最常被问到的已定决定及其所在章节，再列仍待定的事项。</p>
+<div class="callout info"><b class="t">已并入的架构决定（节选）</b>数据层存不复权日线（开高低收、量、额、涨跌停价、停牌标记）和复权因子表，复权因子以除权除息日为 <code>available_at</code>；智能体看到的价格按当天现算前复权，收益与战绩统一用后复权；日线从 2005 年起 <span class="ref">§5.5</span>。采集范围是股吧列表与帖子正文、东财 7x24 快讯；股吧回复全文暂不采，只存回复数；雪球不能自采；题材成分改用授权来源；<code>user_id</code> 哈希，昵称、头像、IP 属地入库即删除；原始语料只在常开服务器上，90 天到期自动删除 <span class="ref">§16.1</span>。解析失败换种子重试最多 2 次，仍失败记"未激活"、不填默认值；拒答单独记类、不重试，作为底座选型扣分；失败的尝试也写入缓存 <span class="ref">§6.2</span><span class="ref">§14.4</span>。</div>
+<h3>仍待定的事项</h3>
+<div class="grid g2">
+<div class="callout todo"><b class="t">数据源 <span class="ref">§5.5</span></b>行情与历史新闻的数据源待定；各表 <code>available_at</code> 的取值规则和存储格式还没定。题材成分要等授权来源（如 Tushare 同花顺概念成分或数据商）。</div>
+<div class="callout todo"><b class="t">雪球没有对照 <span class="ref">§16.1</span></b>雪球风格仍留在 MVP，但雪球真实帖没有自采来源，V2 对照与文风示例池都要靠授权数据。授权来源落实前，雪球风格的 V2 结论记为无对照。</div>
+<div class="callout todo"><b class="t">法务复核</b>东财用户协议是否允许研究用途，与帖子著作权（著作权法第二十四条合理使用）一起待复核 <span class="ref">§16.1</span>。股吧回复全文是否用真实浏览器低频加载，复核后再定。</div>
+<div class="callout todo"><b class="t">采集基础设施 <span class="ref">§16.1</span></b>常开服务器待准备；固定跟踪的 10 只股票名单未定。</div>
+<div class="callout todo"><b class="t">底座型号 <span class="ref">§14.4</span></b>两个底座从有开源权重的模型中选，具体型号在 Phase 0 按选型标准与记忆探针测完再定；团队若有 GPU，可加一个自部署底座作对比。</div>
+<div class="callout todo"><b class="t">意向来源</b>决策意向由 LLM、规则先验还是 Jev 给出，要等 Phase 0 的对比试验 <span class="ref">§6.6</span>。Jev 的中文与股吧黑话能力、校准是否适用于 A 股散户，都待验证。</div>
+<div class="callout todo"><b class="t">假设参数</b>以下参数没有真实数据可校准，报告中标为假设：涨停买入的排队折扣，以及拿不到分钟线时的固定成交概率 0.1 / 0.3 / 0.5 三档 <span class="ref">§8.2</span>；信任更新步长 <span class="ref">§7.2</span>；场外配资比例 <span class="ref">§8.4</span>；大 V 的抽样条件 <span class="ref">§4.3</span>。</div>
+<div class="callout todo"><b class="t">需复核的数字与条款</b>交易费用、交易权限、卖空与程序化交易等规则参数〔需复核〕 <span class="ref">§8.1</span>；出入金群体总量的对照口径、给智能体看的券商式摊薄成本〔需复核〕 <span class="ref">§8.4</span>；反不正当竞争法 2025 年修订的条号〔需复核〕 <span class="ref">§16.1</span>。</div>
+</div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+var MODS={
+collect:{l:'数据层',c:'--data',t:'前向存档',d:'从 Phase 0 起每日采集股吧帖子与东财 7x24 快讯（范围见 §16.1：雪球不自采，题材成分改用授权来源；docstring 仍列这两项），存来源时间戳与入库时间，入库即去标识化。原始语料放在仓库外，由环境变量指定路径。',i:'股吧列表与正文、快讯接口',o:'去标识化的帖子与快讯，进入 data'},
+data:{l:'数据层',c:'--data',t:'PIT 数据湖',d:'所有读取经 pit.query(table, asof=clock)，由数据层强制 available_at ≤ clock。智能体不直接访问数据，只通过感知步骤拿到信息（§5.5）。产出 Parquet 表。',i:'行情、资金、政策、新闻、公告、存档帖子',o:'PIT 查询结果给 events 与 agents 的感知步骤'},
+events:{l:'数据层',c:'--data',t:'事件卡',d:'新闻、政策、公告抽成 EventCard，每个事件 1 次 LLM 调用，再按量级产出 1–3 个 L0/L1 转述版本，不带立场；L2–L4 文本由 social 的发布者产出（§5.3；§3.3 表仍写传闻改写）。',i:'PIT 新闻与公告',o:'EventCard、L0/L1 文本'},
+schemas:{l:'基础层',c:'--orch',t:'共享类型',d:'Pydantic v2 类型：PersonaCard、EventCard、Post、FeedItem、BeliefUpdate、DecisionIntent、FundingIntent、OrderIntent、Fill、CashFlow、RunManifest；导出 JSON Schema 供约束解码。不依赖其他子包。',i:'无',o:'类型定义，被所有模块引用'},
+prompts:{l:'基础层',c:'--llm',t:'模板',d:'所有模板作为包数据，加载器记录内容哈希进运行清单；每种用途 2–3 个等价模板，用于 V5 稳健性。',i:'模板文件',o:'渲染后的消息给 llm'},
+llm:{l:'基础层',c:'--llm',t:'网关',d:'自写薄网关，官方 openai SDK 换 base_url，不用 LiteLLM：路由、响应缓存、批处理、结构化输出、按 run_id 与 persona_id 计量，Jev 也经网关调用。重放只读缓存，未命中即报错；解析失败的尝试也入缓存，解析失败与拒答分开记（§6.2、§14.4）。',i:'消息、schema、采样参数',o:'结构化响应与调用日志'},
+orchestrator:{l:'基础层',c:'--orch',t:'调度',d:'时钟、激活、种子、快照、分叉与 RunManifest；定义 /runs/<run_id>/ 目录布局，事件日志只追加；缓存放在运行目录之外。持续运行按版本线 line_id 管理，漏跑日按 PIT 补跑并标 backfilled（§9.3）。',i:'运行配置',o:'驱动所有业务模块，写运行清单'},
+population:{l:'模拟层',c:'--sim',t:'合成人口',d:'生成人设卡：IPF 调权、MBTI 32 型抽样、大五分数、人生骨架在真实行情上预跑后改写成背景故事、说话风格与初始持仓。',i:'IPF 边际、国家类型分布、历史行情',o:'PersonaCard 与初始持仓'},
+agents:{l:'模拟层',c:'--sim',t:'智能体',d:'每次激活最多两次 LLM 调用：第 1 次出结构化的解读与意向，内核约束与成交判定之后，第 2 次只为发帖者写帖子（§6.1）。另有注意力预算、三层记忆、情绪；意向来源可替换（§6.6）。',i:'信息流、持仓只读视图、行情、人设',o:'BeliefUpdate、Post、DecisionIntent、FundingIntent、OrderIntent'},
+social:{l:'模拟层',c:'--social',t:'社交层',d:'发布者 L0–L4、论坛（股吧与雪球两种风格）、熟人群聊、推荐流与传播；真实帖子注入只留接口，默认关闭。',i:'EventCard、智能体帖子',o:'Post、FeedItem'},
+market:{l:'模拟层',c:'--market',t:'市场层',d:'A 股规则、成交判定，价格用真实行情回放或脚本化路径。只读账户视图，从不写账户。',i:'OrderIntent、账户只读视图',o:'带佣金与印花税的 Fill'},
+accounts:{l:'模拟层',c:'--acct',t:'账户层',d:'记录 Fill 与 CashFlow，日终结算、快照、战绩；账户跨日连续，一切可由事件日志重算。',i:'Fill、FundingIntent 转成的 CashFlow',o:'只读视图、四张账户表'},
+outputs:{l:'产出层',c:'--out',t:'产出与导出',d:'三张主表、激活表、调查表、信任网络快照与账户类表，按 persona_id、event_id、run_id（账户表加 sim_date）关联，行级元数据取自激活表（§10.3）；态度指标分全体持有者与发声者两种口径（§10.1）。',i:'帖子、态度、决策、激活与账户记录',o:'Parquet 表给下游与 validation'},
+validation:{l:'产出层',c:'--val',t:'验收',d:'子包 acceptance、baselines、probes、discriminator、calibration；B2–B4 由 configs/ 里的运行配置实现。',i:'产出表、真实帖对照集',o:'V1–V5 报告、探针结果'}
+};
+var BIZ=['collect','data','events','population','agents','social','market','accounts','outputs','validation'];
+var map=document.getElementById('ixMap');
+var card=document.getElementById('ixModCard');
+function edgesOf(){return map?Array.prototype.slice.call(map.querySelectorAll('.ix-edge')):[];}
+function rel(m){
+  var up={},dn={};
+  edgesOf().forEach(function(e){
+    var f=e.getAttribute('data-f'),t=e.getAttribute('data-t');
+    if(t===m)up[f]=1; if(f===m)dn[t]=1;
+  });
+  if(m==='schemas'){BIZ.concat(['prompts','llm','orchestrator']).forEach(function(x){dn[x]=1;});}
+  else if(m==='orchestrator'){BIZ.forEach(function(x){dn[x]=1;});up.schemas=1;}
+  else{up.schemas=1; if(BIZ.indexOf(m)>=0)up.orchestrator=1;}
+  delete up[m];delete dn[m];
+  return {up:up,dn:dn};
+}
+function clearFocus(){
+  if(!map)return;
+  map.classList.remove('ix-focus');
+  map.querySelectorAll('.ix-on,.ix-up,.ix-dn').forEach(function(n){n.classList.remove('ix-on','ix-up','ix-dn');});
+}
+function focus(m){
+  if(!map||!MODS[m])return;
+  clearFocus();
+  var r=rel(m);
+  map.classList.add('ix-focus');
+  map.querySelectorAll('.ix-node').forEach(function(n){
+    var k=n.getAttribute('data-m');
+    if(k===m)n.classList.add('ix-on');
+    if(r.up[k])n.classList.add('ix-on','ix-up');
+    if(r.dn[k])n.classList.add('ix-on','ix-dn');
+  });
+  edgesOf().forEach(function(e){
+    if(e.getAttribute('data-f')===m||e.getAttribute('data-t')===m)e.classList.add('ix-on');
+  });
+}
+function names(o){var a=Object.keys(o);return a.length?a.join('、'):'无';}
+function el(tag,cls,txt){var x=document.createElement(tag);if(cls)x.className=cls;if(txt!=null)x.textContent=txt;return x;}
+function showCard(m){
+  var d=MODS[m]; if(!card||!d)return;
+  var r=rel(m);
+  while(card.firstChild)card.removeChild(card.firstChild);
+  var hd=el('div','ix-mc-hd');
+  var chip=el('span','chip'); chip.style.borderColor='var('+d.c+')'; chip.style.color='var('+d.c+')';
+  chip.appendChild(el('i')); chip.appendChild(document.createTextNode(d.l));
+  hd.appendChild(chip);
+  var h=el('h4',null,m+' · '+d.t); h.style.margin='0'; hd.appendChild(h);
+  var a=el('a','btn pri','进入 mod-'+m+'.html'); a.href='mod-'+m+'.html'; a.style.marginLeft='auto';
+  hd.appendChild(a);
+  card.appendChild(hd);
+  var p=el('p',null,d.d); p.style.margin='10px 0 0'; card.appendChild(p);
+  var io=el('div','ix-mc-io');
+  [['输入',d.i],['输出',d.o],['上游模块',names(r.up)],['下游模块',names(r.dn)]].forEach(function(pair){
+    var c=el('div'); c.appendChild(el('b',null,pair[0])); c.appendChild(document.createTextNode(pair[1])); io.appendChild(c);
+  });
+  card.appendChild(io);
+  var s=el('p','sub','来源：设计文档 v0.3 §3.3 模块划分与各子包 docstring。'); s.style.margin='10px 0 0'; card.appendChild(s);
+}
+if(map){
+  map.querySelectorAll('.ix-node').forEach(function(n){
+    var m=n.getAttribute('data-m');
+    n.addEventListener('mouseenter',function(){focus(m);});
+    n.addEventListener('focus',function(){focus(m);});
+    n.addEventListener('mouseleave',function(){clearFocus();});
+    n.addEventListener('blur',function(){clearFocus();});
+    function pick(){
+      map.querySelectorAll('.ix-sel').forEach(function(x){x.classList.remove('ix-sel');});
+      n.classList.add('ix-sel'); showCard(m);
+    }
+    n.addEventListener('click',pick);
+    n.addEventListener('keydown',function(ev){if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();pick();}});
+  });
+}
+})();
+</script>
+</body>
+</html>

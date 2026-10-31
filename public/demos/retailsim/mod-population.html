@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>population · 人设卡与合成人口 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+.pp-iface{display:grid;grid-template-columns:110px 1fr;gap:6px 14px;font-size:13.5px;margin:0}
+.pp-iface dt{color:var(--mute);font:600 12px var(--mono);padding-top:2px}
+.pp-iface dd{margin:0}
+.pp-svg{width:100%;height:auto;display:block}
+.pp-svg text{font-family:var(--sans);fill:var(--ink)}
+.pp-svg .pp-m{fill:var(--mute);font-size:11px}
+.pp-svg a:hover rect{stroke-width:2.4}
+.pp-ctl{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:center;margin:0 0 14px}
+.pp-ctl label{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink2)}
+.pp-ctl output{font:700 13px var(--mono);color:var(--sim);min-width:34px}
+.pp-sum{font-size:13px;color:var(--ink2);margin:10px 0 0}
+.pp-tag{display:inline-block;font:700 11px var(--sans);padding:1px 8px;border-radius:999px;border:1px solid rgba(248,113,113,.45);color:var(--warn);background:rgba(248,113,113,.1);margin-left:6px;vertical-align:middle}
+.pp-steps{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.pp-steps li{font-size:12.5px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);opacity:.6;cursor:pointer;transition:.25s}
+.pp-steps li b{font:700 11px var(--mono);color:var(--sim);margin-right:4px}
+.pp-steps li.on{opacity:1;border-color:var(--sim);background:rgba(52,211,153,.08)}
+.pp-steps li.done{opacity:.9}
+.pp-io{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media(max-width:820px){.pp-io{grid-template-columns:1fr}}
+.pp-io .card h4{margin-top:0}
+.pp-io .card p,.pp-io .card li{font-size:13px}
+.pp-io ul{margin:0;padding-left:18px}
+.pp-btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 0}
+.pp-ref{font-size:12.5px;color:var(--mute);margin:10px 0 0}
+.pp-story{font-size:13px;line-height:1.8;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:6px 0 0}
+.pp-bar{display:flex;align-items:center;gap:8px;font:12px var(--mono);margin:3px 0}
+.pp-bar span:first-child{width:18px;color:var(--ink2)}
+.pp-bar .pp-track{flex:1;height:8px;background:var(--panel2);border-radius:6px;position:relative;overflow:hidden}
+.pp-bar .pp-track i{position:absolute;top:0;bottom:0;background:var(--sim);border-radius:6px}
+.pp-bar .pp-track:after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line2)}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>模块 · population</div>
+<h1>人设卡与<span class="grad">合成人口</span></h1>
+<p class="lead">population 模块生成全部模拟散户：先合成一个结构像真实 A 股散户的人群，再给每个人写一张人设卡（<code>PersonaCard</code>），把年龄、账户规模、性格、入市经历这些属性映射成内核可以校准的行为参数，并配上背景故事和说话风格。本页按设计文档 §4 讲清这些步骤，所有数字都标出处，示例内容会明确标注。</p>
+<div class="meta">
+<span class="chip sim"><i></i>产物：PersonaCard</span>
+<span class="chip data"><i></i>依据：§4 · §2.1 · §6.3–6.5</span>
+<span class="chip val"><i></i>验收：V1</span>
+<span class="chip warn"><i></i>只有设计，未实现</span>
+</div>
+</header>
+
+<section id="s1" class="reveal">
+<h2><span class="num">01</span>职责一览</h2>
+<p class="sub">这个模块在仿真开始之前运行一次，交出一批人设卡和每个人的初始账户。运行期间人设卡不变，后续的记忆、账户、战绩由其他模块维护。</p>
+<p>它要回答三个问题。第一，模拟哪些人：按真实散户的年龄、性别、地区、账户规模、入市年份、两融参与比例合成人口，同时保证每类人群都有足够样本可以单独看。第二，每个人是什么样的：人口属性、投资属性、性格、金融素养，以及由这些属性推出的十个内核行为参数。第三，每个人带着什么过去进入仿真：一段在真实历史行情上跑出来的炒股经历、起点时的持仓与成本、几条预置记忆、一段第一人称背景故事，以及一种说话风格和几条示例帖。MVP 的情景推演里人口固定；Phase 2 持续运行起，每月补入一批新开户者 <span class="ref">§4.3 第 5 步</span>。</p>
+<div class="card glow">
+<h4 style="margin-top:0">接口卡</h4>
+<dl class="pp-iface">
+<dt>输入</dt><dd>CHFS 持股家庭微观样本（种子）；各维度真实边际分布（§2.1 账户分档、年龄 × 性别、地区与城市级别、入市年份、16Personalities 中国大陆 32 型、按账户档的两融参与比例〔需复核〕）；2005 年起的真实日线；起点之前的去标识化股吧帖子 <span class="ref">§4.3 · §4.4 · §5.5 · §16.1</span></dd>
+<dt>输出</dt><dd><code>PersonaCard</code> 列表（Tier-B 500 + Tier-A 50，后者为大 V 20 + 深度样本 30）；每人的 <code>ExperienceVector</code>、预置记忆（标记 <code>seeded</code>）、起点持仓 / 成本 / 现金；人设表（非敏感字段 + <code>w_head</code>、<code>w_cap</code>）<span class="ref">§4.1 · §4.3 · §9.2 · §10.3</span></dd>
+<dt>下游</dt><dd>agents（内核参数、记忆、prompt 文本）、social（渠道偏好、注意力预算、轻信度）、accounts（初始账户、场外资金）、outputs（加权口径）、validation（V1 人群可信）</dd>
+<dt>运行时机</dt><dd>仿真开始前一次性生成；每个智能体在生成时绑定采样温度，运行期不变。底座模型不写在人设卡上，由运行配置统一指定，同一底座内全体智能体用同一模型 <span class="ref">§4.1 · §6.6</span>。Phase 2 持续运行起每月补入新开户者 <span class="ref">§4.3</span></dd>
+<dt>代码位置</dt><dd><code>src/ashare_crowdsim/population/</code>，目前只有模块说明，没有实现</dd>
+</dl>
+</div>
+</section>
+
+<section id="s2" class="reveal">
+<h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">LLM 多智能体模拟最常见的毛病是"一群人说同样的话"。这个模块负责从源头制造真实的差异，并让差异可以被核对。</p>
+<p>如果只给 LLM 一句"你是一名 45 岁的散户"，它写出的人物往往是刻板印象，而且彼此很像。设计文档引用的证据（Moon et al. 2024；Park et al. 2024/2026）显示，人设变量本身能解释的行为差异有限 <span class="ref">§2.3 · §4.4</span>。所以本项目把行为差异的主要来源放在两处：一是在真实行情上预跑出来的经历向量，二是挂在连续性格分数上的内核参数。背景故事有没有用，要用 B3（打乱人设）基线去检验，不预设它有用 <span class="ref">§11.1</span>。</p>
+<p>第二个原因是人群结构本身会影响结论。A 股散户里，账户资产不足 10 万的 RT1 占账户数的 58.7%，但成交额只占 5%；300 万以上的 RT4–RT5 账户合计只占 1.8%，成交额却约占 32% <span class="ref">§2.1 · §4.3</span>。如果按真实比例抽 500 人，大户只有个位数，根本无法单独分析。如果直接等额抽，全市场的统计又会被大户样本扭曲。模块用"每格保底 + 权重"同时解决这两件事。</p>
+<p>第三个原因是可验收。每个智能体的属性都来自有出处的边际分布，生成完就能和中国结算、交易所调查、CHFS、16Personalities 对照，算总变差距离（TVD，两个分布在各类别上概率差的绝对值之和的一半）。V1 的及格线是主要边际 TVD ≤ 0.05；V1 不过就修 IPF 边际和种子，不进入 V2 <span class="ref">§12.1 · §12.3 · §15.2</span>。</p>
+</section>
+
+<section id="s3" class="reveal">
+<h2><span class="num">03</span>机制详解</h2>
+<p class="sub">生成分两段。前半段（①–④）决定"有哪些人、每人有哪些属性、各占多大权重"，全部是统计抽样，不调用 LLM。后半段（⑤–⑧）给每个人补上过去：规则内核在真实行情上预跑经历，LLM 只负责把已定的事实改写成文字。</p>
+<p>下图是完整流水线。绿色框是规则或统计步骤，紫色框是调用 LLM 的步骤，虚线是 V1 检验和一致性检查的回路。点击框可以跳到对应的小节。</p>
+<div class="card">
+<svg class="pp-svg" viewBox="0 0 960 300" role="img" aria-label="人设生成流水线">
+<defs><marker id="pp-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--mute)"/></marker></defs>
+<text x="20" y="22" class="pp-m">前半段：统计抽样（不调用 LLM）</text>
+<a href="#pp-m3"><rect x="20" y="34" width="200" height="66" rx="10" style="fill:rgba(52,211,153,.07);stroke:var(--sim)"/><text x="34" y="60" font-size="14" font-weight="700">① CHFS 种子</text><text x="34" y="82" class="pp-m">持股家庭的财务决策者</text></a>
+<a href="#pp-m3"><rect x="260" y="34" width="200" height="66" rx="10" style="fill:rgba(52,211,153,.07);stroke:var(--sim)"/><text x="274" y="60" font-size="14" font-weight="700">② IPF 调权</text><text x="274" y="82" class="pp-m">账户档、年龄性别、32 型…</text></a>
+<a href="#pp-m2"><rect x="500" y="34" width="200" height="66" rx="10" style="fill:rgba(52,211,153,.07);stroke:var(--sim)"/><text x="514" y="60" font-size="14" font-weight="700">③ 条件抽样</text><text x="514" y="82" class="pp-m">入市年、风格、大五、内核</text></a>
+<a href="#pp-m4"><rect x="740" y="34" width="200" height="66" rx="10" style="fill:rgba(52,211,153,.07);stroke:var(--sim)"/><text x="754" y="60" font-size="14" font-weight="700">④ 配额与权重</text><text x="754" y="82" class="pp-m">100 格保底、Tier-A、w_head</text></a>
+<line class="flowline" x1="220" y1="67" x2="258" y2="67" style="stroke:var(--mute)" marker-end="url(#pp-arr)"/>
+<line class="flowline" x1="460" y1="67" x2="498" y2="67" style="stroke:var(--mute)" marker-end="url(#pp-arr)"/>
+<line class="flowline" x1="700" y1="67" x2="738" y2="67" style="stroke:var(--mute)" marker-end="url(#pp-arr)"/>
+<path class="flowline" d="M840,100 L840,130 L120,130 L120,158" style="fill:none;stroke:var(--mute)" marker-end="url(#pp-arr)"/>
+<text x="20" y="152" class="pp-m">后半段：补上过去（只有 ⑦ 调用 LLM）</text>
+<a href="#pp-m5"><rect x="20" y="162" width="200" height="66" rx="10" style="fill:rgba(52,211,153,.07);stroke:var(--sim)"/><text x="34" y="188" font-size="14" font-weight="700">⑤ 人生骨架</text><text x="34" y="210" class="pp-m">出生队列、学历、职业事件</text></a>
+<a href="#pp-m5"><rect x="260" y="162" width="200" height="66" rx="10" style="fill:rgba(52,211,153,.07);stroke:var(--sim)"/><text x="274" y="188" font-size="14" font-weight="700">⑥ 规则内核预跑</text><text x="274" y="210" class="pp-m">按比例预跑，期末缩放到档位</text></a>
+<a href="#pp-m5"><rect x="500" y="162" width="200" height="66" rx="10" style="fill:rgba(192,132,252,.08);stroke:var(--llm)"/><text x="514" y="188" font-size="14" font-weight="700">⑦ LLM 改写背景</text><text x="514" y="210" class="pp-m">200–300 字，不得新增事实</text></a>
+<a href="#pp-m6"><rect x="740" y="162" width="200" height="66" rx="10" style="fill:rgba(52,211,153,.07);stroke:var(--sim)"/><text x="754" y="188" font-size="14" font-weight="700">⑧ 绑定说话风格</text><text x="754" y="210" class="pp-m">风格簇 + 少量示例帖</text></a>
+<line class="flowline" x1="220" y1="195" x2="258" y2="195" style="stroke:var(--mute)" marker-end="url(#pp-arr)"/>
+<line class="flowline" x1="460" y1="195" x2="498" y2="195" style="stroke:var(--mute)" marker-end="url(#pp-arr)"/>
+<line class="flowline" x1="700" y1="195" x2="738" y2="195" style="stroke:var(--mute)" marker-end="url(#pp-arr)"/>
+<path d="M600,228 L600,262 L360,262 L360,230" style="fill:none;stroke:var(--warn);stroke-dasharray:4 4" marker-end="url(#pp-arr)"/>
+<text x="372" y="282" class="pp-m">与卡片不一致或含起点之后日期 → 重写；同质化过高 → 重抽骨架</text>
+<path d="M940,100 L952,100 L952,20 L470,20" style="fill:none;stroke:var(--val);stroke-dasharray:4 4"/>
+<text x="560" y="14" class="pp-m">V1：边际与联合 TVD 不过 → 修 IPF 边际与种子</text>
+</svg>
+</div>
+<p class="pp-ref">图中步骤编号对应 §4.3 第 1–5 步（①–④ 与 V1 检验）和 §4.4 第 1–7 步（⑤–⑧）。</p>
+<h3 id="pp-m1">3.1 人设卡里有什么</h3>
+<p>人设卡（<code>PersonaCard</code>）是一个智能体的全部静态属性，分六组 <span class="ref">§4.1</span>。设计文档的原则是"多数字段进内核、少数进 prompt"：大部分属性决定内核行为参数（§6.3）和注意力预算（§5.4），只有一部分以文字形式写进 prompt。</p>
+<div class="grid g3">
+<div class="card"><h4 style="margin-top:0">人口属性</h4><p>出生年、性别、学历（初中及以下到研究生五档）、职业、省份、城市级别（1–4 线）、家庭收入分档、场外资金分档。场外资金（<code>outside_funds</code>）是银证转账转入转出的来源和去处，由收入和人生骨架初始化 <span class="ref">§4.1 · §8.4</span>。</p></div>
+<div class="card"><h4 style="margin-top:0">投资属性</h4><p>入市年份、账户资产分档（RT1–RT5）、交易风格（短线、波段、长线、基金为主、打板五种）、交易权限（创业板、科创板、北交所、两融）、场外配资 <code>offbook_leverage</code>（配资倍数、警戒线、平仓线，没有配资则为空）、挂单等回调的幅度 <code>dip_k</code>（先验 1%–3%）、经历向量 <code>ExperienceVector</code>。权限由资产和年限按 §8.1 门槛推出，不随机抽 <span class="ref">§4.1 · §4.3 · §6.3 · §8.4</span>。</p></div>
+<div class="card"><h4 style="margin-top:0">心理</h4><p>大五人格五个维度的标准分（开放性 O、尽责性 C、外向性 E、宜人性 A、神经质 N），五字母 MBTI 类型（如 <code>ISTJ-T</code>），是否"自认 MBTI"，金融素养 0–3 <span class="ref">§4.1 · §4.2</span>。</p></div>
+<div class="card"><h4 style="margin-top:0">声音</h4><p>说话风格（一个风格簇的编号）和几条示例帖。示例帖只取仿真起点之前、去标识化的真实帖子 <span class="ref">§4.1 · §4.4</span>。</p></div>
+<div class="card"><h4 style="margin-top:0">行为</h4><p>十个内核参数 <code>KernelParams</code>；各渠道的信息偏好 <code>media_diet</code>；每次激活看到的信息条数 K_i（<code>attention_k</code>，3–15 条，对应约 1,500 token 的信息流预算）；轻信度 <code>credulity</code>，决定是否相信和转发传闻 <span class="ref">§4.1 · §5.4 · §7.4</span>。</p></div>
+<div class="card"><h4 style="margin-top:0">认知与权重</h4><p>分层 <code>tier</code>（<code>A_bigv</code> 大 V、<code>A_deep</code> 深度样本、<code>B</code>）；采样温度，生成时绑定、运行期不变，底座模型由运行配置统一指定；种子标记 <code>seed_flags</code>（<code>seed_borrowed</code>、<code>seed_sparse</code>、<code>life_asset_conflict</code>，见 3.4、3.5）；人头权重 <code>w_head</code> 与资金权重 <code>w_cap</code>，用于把样本统计换算成全市场口径 <span class="ref">§4.1 · §6.6 · §10.1</span>。</p></div>
+</div>
+<p>进入 prompt 的文字版约 500 token <span class="ref">§4.1</span>，而 §14.2 的 token 预算表里"人设与背景故事"一项记为 600 token <span class="ref">§14.2</span>。§4.1 写这个数时引了 §14.2，两处却不一致，文档没有说明口径差别，留作待解决问题。写进 prompt 时有三条规矩。大五人格用描述语给出，不给分数。MBTI 类型名不进 prompt，只有自认 MBTI 的人会在发言里自己提到。内核参数也不进 prompt，LLM 并不知道自己的损失厌恶 λ 是多少。神经质因此同时作用在两处：LLM 读到"容易紧张"的描述后报出的恐惧程度，以及内核里 η 放大恐惧对仓位的影响。这两处强度要一起校准，避免重复计入 <span class="ref">§4.1 · §12.2</span>。</p>
+<h3 id="pp-m2">3.2 MBTI 与大五人格：先抽类型，再抽连续分数</h3>
+<p>性格有两套描述。MBTI 把人分成若干类型，好懂、有现成的国家分布数据。大五人格（Big Five）给五个维度的连续分数，心理学研究里的行为关联多基于它。设计文档两者都用，分工明确：MBTI 负责"抽样时让人群的类型构成像中国大陆"，大五负责"挂行为参数" <span class="ref">§4.2</span>。</p>
+<p>行为参数为什么挂在大五上，文档给了三条理由 <span class="ref">§4.2</span>。一是二分类型会丢掉信息，重测也不稳定（Pittenger 2005）。二是四字母 MBTI 没有神经质维度，而损失厌恶 λ、情绪敏感 η、恐慌抛售概率 p_panic 都挂在神经质上；五字母类型的第五位 A/T（自信型 / 动荡型）正好补上这一维。三是这些参数的经验先验本来就来自大五研究。</p>
+<p>类型分布的数据源是 16Personalities 的中国大陆国家画像，用五字母类型，共 32 型。该页面拒绝程序抓取，具体百分比需要人工从浏览器录入，目前尚未录入 <span class="ref">§4.2 · 讨论记录第 3 项</span>。这个分布不单独硬抽，而是作为 IPF 的一个目标边际，和年龄 × 性别、账户规模一起调权（见 3.3）。拿不到按年龄、性别拆分的类型分布时，假设类型与年龄条件独立，并在报告中标注 <span class="ref">§4.2</span>。</p>
+<p>抽到类型之后，在类型对应的"半轴"里抽大五连续分数。半轴的意思是：类型字母只决定分数落在均值的哪一侧，具体位置再随机抽。对应关系依据 McCrae &amp; Costa (1989) <span class="ref">§4.2</span>：</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>类型字母</th><th>大五维度</th><th>分数落在</th><th>来源</th></tr></thead>
+<tbody>
+<tr><td>I（内向）/ E（外向）</td><td>外向性 E</td><td>I → 负半轴；E → 正半轴</td><td>I 一侧见 §4.2；E 一侧按对称推出</td></tr>
+<tr><td>N（直觉）/ S（实感）</td><td>开放性 O</td><td>N → 正半轴；S → 负半轴</td><td>N 一侧见 §4.2；S 一侧按对称推出</td></tr>
+<tr><td>F（情感）/ T（思考）</td><td>宜人性 A</td><td>F → 正半轴；T → 负半轴</td><td>F 一侧见 §4.2；T 一侧按对称推出</td></tr>
+<tr><td>J（判断）/ P（知觉）</td><td>尽责性 C</td><td>J → 正半轴；P → 负半轴</td><td>J 一侧见 §4.2；P 一侧按对称推出</td></tr>
+<tr><td>-T（动荡型）/ -A（自信型）</td><td>神经质 N</td><td>-T → 正半轴；-A → 负半轴</td><td>两侧都见 §4.2</td></tr>
+</tbody></table></div>
+<p>半轴内的具体位置还要以年龄、性别为条件。年龄趋势取 Roberts, Walton &amp; Viechtbauer (2006)：尽责性和宜人性随年龄上升，神经质随年龄下降；幅度需要用中国样本修正，数据源待定 <span class="ref">§4.2</span>。内核参数挂在连续分数上，所以两个同为 ISTJ-T 的人，神经质可以一高一低，行为也随之不同 <span class="ref">讨论记录第 3 项</span>。</p>
+<p>还有两条细则。人群切片只用四个气质组 NT、NF、SJ、SP（由类型的第二、三或第二、四个字母组成），32 型只作 IPF 边际，不作切片 <span class="ref">§4.2</span>。"自认 MBTI"（<code>self_reported_mbti</code>）为真的智能体偏年轻、多在一二线城市，只有他们会在发言里提到自己的类型 <span class="ref">§4.2 · §4.1</span>。</p>
+<h3 id="pp-m3">3.3 合成人口：种子、IPF 调权、条件抽样</h3>
+<p>目标总体是近 12 个月交易过 A 股的自然人投资者 <span class="ref">§4.3</span>。合成分三步。</p>
+<p><b>种子。</b>以 CHFS（中国家庭金融调查）里的持股家庭为种子样本，取家庭的财务决策者作为一个人 <span class="ref">§4.3 第 1 步</span>。用真实微观样本作种子的好处是，年龄、收入、学历、风险态度之间的联合关系是真的，不必凭空假设它们怎么相关。</p>
+<p><b>IPF 调权。</b>IPF（迭代比例拟合，也叫 raking）的做法是：给种子样本每人一个权重，依次让加权后的样本在每个维度上的比例对齐目标边际，对完一个维度再对下一个，反复循环直到都对齐。它只改权重，不改每个人的属性组合，所以种子里的联合关系得以保留。目标边际有六个 <span class="ref">§4.3 第 2 步</span>：账户资产分档（§2.1 的五档）、年龄 × 性别、地区与城市级别、入市年份、MBTI 32 型，以及按账户档的两融参与比例。最后一项的目标取交易所或中证金融公布的信用账户数〔需复核〕；加它是为了让杠杆户在各档的比例有出处，2015 年式的强平踩踏要靠这批人产生 <span class="ref">§4.3 · §8.4</span>。拿到官方分布之前，年龄 × 性别和地区先用 CHFS 并标注；入市年份用中国结算 / 上交所的新增投资者或新开户数估计，再按留存率折算 <span class="ref">§4.3</span>。官方的 2023–2026 年龄、性别数据还没拿到，这是最大的数据缺口 <span class="ref">§2.1</span>。</p>
+<p><b>种子不足怎么办。</b>CHFS 没有 MBTI，气质组是在种子之上事后抽的，所以种子真正要覆盖的是"年龄段 × 账户规模"的 25 格，每格需要 20 人（4 个气质组 × 5 人）<span class="ref">§4.3 第 2 步</span>。RT4–RT5 只占账户数的 1.8% <span class="ref">§4.3</span>，种子样本里这两档的家庭预计也少，再按年龄段切开，有些格的不同种子家庭可能少于 5 户。设计文档按下面的顺序处理。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §4.3 第 2 步，来自架构讨论 A5）</b>
+<ul>
+<li>借种：格内不同种子家庭不足 5 户时，从相邻年龄段、同账户档借种子，把年龄改到本格，人设卡 <code>seed_flags</code> 记 <code>seed_borrowed</code>。</li>
+<li>扰动复制：借种后仍不足，对现有种子做扰动复制，记"种子稀少"（<code>seed_sparse</code>）。</li>
+<li>留空：完全没有种子的格留空并在报告中写明，不让 LLM 编造人口属性。</li>
+<li>报告口径：人群口径的结论附"不同种子数 / 借种比例"；种子稀少格只作描述，不做显著性检验。全市场口径照常按 <code>w_head</code> 加权进 V1。</li>
+<li>阈值 5 户是初值，Phase 0 看到 CHFS 实际分布后可调。</li>
+</ul></div>
+<p><b>条件抽样。</b>种子里没有的字段，以已有属性为条件抽出 <span class="ref">§4.3 第 3 步</span>：</p>
+<ul>
+<li>入市年份与年龄、几次入市潮（2007、2015、2020–2021、2024Q4）关联 <span class="ref">§2.1 · §4.3</span>。</li>
+<li>账户资产与收入、年龄、入市年限关联。</li>
+<li>交易风格以账户规模、年龄、年限为条件，使持有期分布对齐 §2.1（如 RT1 持有期中位数 24 天）。</li>
+<li>交易权限按 §8.1 门槛推出：创业板要求前 20 日日均资产 ≥ 10 万且 24 个月经验，科创板与北交所 ≥ 50 万且 24 个月，两融 ≥ 50 万且 6 个月 〔需复核〕。达到门槛不等于开通，开通率是参数；没有权限的买单被拒并记录 <span class="ref">§8.1</span>。两融之外，场外配资 <code>offbook_leverage</code> 是单独的人设属性，平仓线按配资合同口径、紧于两融；配资覆盖率按时期给参数（2014–2015 年高、2015 年清理后低），属假设 <span class="ref">§8.4</span>。</li>
+<li>金融素养与风险态度取 CHFS 题项。</li>
+<li>内核参数从 §6.3 的群体先验抽取，以上述属性为条件，方向见下表；另有挂单等回调的幅度 <code>dip_k</code>，先验 1%–3% <span class="ref">§6.3</span>。</li>
+</ul>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>参数</th><th>含义</th><th>哪些属性让它变大</th><th>先验锚点</th></tr></thead>
+<tbody>
+<tr><td>γ 风险厌恶</td><td>均值-方差强度</td><td>年龄大、神经质高</td><td>调查自评风险偏好</td></tr>
+<tr><td>λ 损失厌恶</td><td>卖出亏损时"割肉之痛"的倍数</td><td>神经质高</td><td>中位数 2.25（Tversky &amp; Kahneman 1992）</td></tr>
+<tr><td>ρ 实现效用</td><td>处置效应强度</td><td>金融素养低</td><td>PGR/PLR（Odean 1998）</td></tr>
+<tr><td>κ 过度自信</td><td>低估不确定性</td><td>男性、牛市入市、短线风格</td><td>Barber &amp; Odean (2001)</td></tr>
+<tr><td>β^herd 从众</td><td>跟随群体买卖</td><td>宜人性高、新手</td><td>羊群效应文献</td></tr>
+<tr><td>β^ext 外推</td><td>追涨杀跌</td><td>入市年限短</td><td>调查预期文献</td></tr>
+<tr><td>β^lot 彩票偏好</td><td>偏好涨停、高 MAX 股</td><td>小资金、低收入</td><td>MAX 效应文献</td></tr>
+<tr><td>ν 活跃度</td><td>看盘与交易频率</td><td>外向性高、短线风格、退休有闲</td><td>换手与交易频率分布</td></tr>
+<tr><td>τ 惯性阈值</td><td>不调仓区间</td><td>尽责性高</td><td>换手分布</td></tr>
+<tr><td>η 情绪敏感</td><td>恐惧对 γ 的放大</td><td>神经质高</td><td>校准得到</td></tr>
+</tbody></table></div>
+<p class="pp-ref">方向是先验假设，最终以 §12 校准为准；三个 β 的先验以小值为中心，因为 LLM 的意向本身已带一部分从众与外推，内核只校准残差 <span class="ref">§6.3</span>。除 λ 外，文档没有给出各参数的具体先验数值，本页不写。</p>
+<h3 id="pp-m4">3.4 名额分配：每格保底加比例分配，再用权重还原</h3>
+<p>主切片是年龄段（5 段）× 账户规模（RT1–RT5）× 气质组（NT/NF/SJ/SP），共 5 × 5 × 4 = 100 格 <span class="ref">§4.3 第 4 步</span>。MVP 每格保底 5 人，Tier-B 正好 500 人填满保底；以后扩规模时，保底之外的名额按真实人口比例分配 <span class="ref">§4.3 · §14.1 · 讨论记录第 4、9 项</span>。</p>
+<p><b>Tier-A 50 人。</b>Tier-A 另行抽取，不占 100 格的保底名额，拆为大 V 20 人与深度样本 30 人 <span class="ref">§4.3 第 4 步 · §14.1</span>。人设卡用 <code>tier</code> 区分三类：<code>A_bigv</code>、<code>A_deep</code>、<code>B</code> <span class="ref">§4.1</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §4.3 第 4 步，来自架构讨论 A5）</b>
+<ul>
+<li>大 V 20 人：条件抽样，入市 ≥ 8 年、金融素养 ≥ 2、外向性偏高、账户偏中大档；粉丝数按幂律分配；说话风格绑定真实帖中高互动帖的风格簇。这些条件是假设，报告中标注。</li>
+<li>深度样本 30 人：按账户档每档 6 人，分散在不同年龄段，落在已有 Tier-B 的格内；每个账户档至少 1 个杠杆户（§8.4）。同格的 Tier-A 与 Tier-B 只差记忆深度与反思频率，两者的对比作为 V5 的分层效应检验。</li>
+<li>统计口径：Tier-A 与 Tier-B 一起做 IPF 得到 <code>w_head</code>，进入全市场口径；人群切片默认只用 Tier-B，Tier-A 单列；大 V 的言行不一照常测量。</li>
+<li>模型：两层用同一模型，分层只体现在记忆深度、反思频率与激活频率，避免人设差异与模型大小混在一起 <span class="ref">§6.6 · §14.1</span>。</li>
+</ul></div>
+<p><b>新开户者。</b>MVP 情景推演里人口固定。Phase 2 持续运行起每月补入新开户者，人数按中国结算最近一期可得的月度新增投资者数折算 <code>w_head</code>，遵守点时原则；用同一套 IPF 条件按新开户者口径抽取：年龄偏轻、<code>entry_year</code> 为当年、没有预跑经历，只有人生骨架与开户动机背景。已有智能体的 <code>w_head</code> 不变，全市场口径按新老合计重新归一。假设情景可以把"开户潮"作为注入变量。入市不满 1 年的新手单列为一个人群切片 <span class="ref">§4.3 第 5 步</span>。</p>
+<p>保底会让样本结构偏离真实结构：大户被多抽了，散户被少抽了。还原靠两种权重 <span class="ref">§4.3 · §10.1</span>。人头权重 <code>w_head</code> 表示"这个样本代表真实总体里多少个人"，等于该格真实人数除以该格样本数。资金权重 <code>w_cap</code> = <code>w_head</code> × 账户资产，各档 <code>w_cap</code> 合计要对齐 §2.1 的市值占比。用法上，态度类统计按人头加权，资金流向类统计按资金加权；看某个人群自己的情况时，直接用格内原始样本，不加权。一格只有约 5 人，所以格内结果只作描述，跨人群比较要合并到气质组或年龄段 <span class="ref">§10.1</span>。</p>
+<p>下面的分配器按这个规则现算。总体规模取 2 亿只是示意口径〔需复核〕，把上交所账户占比当作全市场占比是平台假设 <span class="ref">§4.3 · §2.1</span>。年龄段和气质组没有比例数据，比例分配部分在各档内部平均分到 20 格，这是示例假设。</p>
+<div class="card">
+<div class="pp-ctl">
+<label>Tier-B 总人数 <input type="range" id="pp-n" min="100" max="5000" step="50" value="500"><output id="pp-n-o">500</output></label>
+<label>每格保底 <input type="range" id="pp-f" min="0" max="20" step="1" value="5"><output id="pp-f-o">5</output></label>
+<label>比例部分依据 <select id="pp-basis">
+<option value="acct">账户数占比（§2.1）</option>
+<option value="turn">成交额占比（§2.1）</option>
+<option value="cap">市值占比（§2.1）</option>
+</select></label>
+</div>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>档</th><th>账户数占比</th><th>保底</th><th>比例分配</th><th>Tier-B 合计</th><th>若按账户占比直接抽</th><th>w_head 示意</th></tr></thead>
+<tbody id="pp-alloc"></tbody>
+</table></div>
+<p class="pp-sum" id="pp-alloc-sum"></p>
+<p class="pp-ref">数据：RT1–RT5 的账户 / 成交 / 市值占比来自 Jones et al. 2025（上交所 2016-01 至 2019-06）<span class="ref">§2.1</span>。保底 = 每档 20 格 × 每格保底；比例部分用最大余数法取整。w_head 示意 = 2 亿 × 账户数占比 ÷ 该档样本数，为示例数据。</p>
+</div>
+<p>直接按账户占比抽 500 人时，RT5 只分到 2 人，RT4 约 7 人，这两档无法单独分析；而在保底方案下每档都有 100 人，代价是 RT1 的 <code>w_head</code> 远大于 RT5，全市场统计必须加权。成交额占比（约 5/17/27/13/19）是行为校准目标，不是抽样目标 <span class="ref">§4.3 第 5 步 · §12.2</span>；分配器里提供这个选项，只为对比扩规模时用不同依据分配会差多少。</p>
+<h3 id="pp-m5">3.5 人生经历：骨架、预跑、改写</h3>
+<p>这一段的顺序是"先定事实，再写文字"：规则先把一个人从出生到仿真起点的经历定下来，LLM 最后才上场，而且只能改写，不能添加 <span class="ref">§4.4</span>。</p>
+<p><b>人生骨架。</b>按出生队列、学历、城乡与职业生成结构化的人生事件，例如 1999 年高校扩招、1990 年代末国企下岗、1998 年房改、房贷、婚育、收入冲击、退休 <span class="ref">§4.4 第 1 步</span>。骨架影响三件事：风险厌恶 γ 和现金缓冲；投资期限和计划中的卖出时点（比如孩子上学要用钱）；由职业决定的渠道偏好 <code>media_diet</code> 基线。场外资金也由收入和骨架初始化 <span class="ref">§8.4</span>。</p>
+<p><b>规则内核预跑。</b>从入市年份到仿真起点，用规则内核在真实历史行情上替这个人"炒股"，不调用 LLM，只用起点之前的数据 <span class="ref">§4.4 第 2 步</span>。产出是逐年盈亏、最大回撤、是否用过杠杆、是否被强平，以及起点时的持仓与成本。前四项写进经历向量，持仓与成本成为初始账户 <span class="ref">§4.4 · §9.2</span>。日线从 2005 年起，所以 2005 年以前入市的人，2005 年以前的经历只写进骨架作文字背景，不在行情上预跑 <span class="ref">§4.4 第 2 步 · §5.5</span>。收益与战绩统一用后复权计算；智能体在仿真里看到的价格按当天现算前复权，与当年券商软件一致 <span class="ref">§5.5</span>。预跑得到的起点持仓要对照真实持仓结构（偏小盘、主板、持股数少）检查，正式仿真前还有 20–60 个交易日的预热 <span class="ref">§9.2</span>。</p>
+<p><b>按比例预跑，期末缩放。</b>账户规模是抽样主切片，预跑盈亏会让期末资产偏离抽样时定下的档位。所以预跑只记仓位权重、收益率、出入金占资产的比例，不记绝对金额，也不受整手限制；期末整体缩放，使起点资产等于抽样档位的金额。整手与最低佣金从仿真起点才生效 <span class="ref">§4.4 第 2 步</span>。缩放之后检查倒推出来的历史入金与人生骨架里的收入是否相符：不合理就重抽经历（换预跑参数或入市年份），记录重抽次数，不改档位；多次仍不合理的，<code>seed_flags</code> 记"经历与资产冲突"（<code>life_asset_conflict</code>），并在报告中写明 <span class="ref">§4.4 第 2 步 · §4.1</span>。这样做保住了两样东西：抽样定下的账户档不被预跑改掉，经历、持仓与浮盈亏仍然自洽。</p>
+<p><b>群体对账。</b>预跑结果在群体层面要和 §2.2 的事实一致：小账户整体跑输；2015 年财富从小账户流向大账户；大多数持股家庭自报亏损（CHFS 2013 为 70.4%）。这些检验看收益率与缩放前的相对财富变化，不受缩放影响。对不上就调预跑，不调文字 <span class="ref">§4.4 第 3 步 · §2.1</span>。</p>
+<p><b>经历向量如何进入信念。</b>采用 Malmendier &amp; Nagel (2011) 的经验加权：一个人对市场回报的先验 μ^exp 是过去各年市场回报的加权和，权重 w(k) ∝ (L − k)^θ，k 是距今年数，L 是关注股市的年数，θ 约取 1.5，越近的年份权重越大 <span class="ref">§6.5</span>。原文以年龄为窗口，本平台改成入市年数是假设，两种都实现，用硅基调查比较。A 股几段关键行情被编码进经历向量，按"当时是否已入市、仓位与杠杆多大"生成：2007 年牛市与 2008 年暴跌；2015 年杠杆牛与股灾、2016 年初熔断；2018 年贸易战熊市；2019–2021 年结构性牛市与"抱团"瓦解；2021–2024 年长期下跌、2024-09-24 之后的急涨；2025 年 4 月关税冲击与汇金护盘 <span class="ref">§6.5</span>。经历向量影响先验乐观度、政策托底信任度和杠杆厌恶；例如 2015 年被强平过的人，杠杆上限低、恐慌阈值低。</p>
+<p><b>预置记忆。</b>从经历里挑 3–8 个显著片段，按模板写成情景记忆，标记 <code>seeded</code>，重要度按盈亏幅度给定 <span class="ref">§4.4 第 4 步 · §6.4</span>。这些记忆只描述起点之前的历史。</p>
+<p><b>LLM 改写背景故事。</b>LLM 把上面的事实改写成 200–300 字的第一人称叙述，不得新增事实、日期和数字 <span class="ref">§4.4 第 5 步</span>。写完要和人设卡核对年龄、职业、入市年份、盈亏方向，并扫描是否出现仿真起点之后的日期（§13.1），不一致就重写。</p>
+<p><b>多样性检查。</b>同一人群内背景故事的嵌入相似度过高，或"退休""程序员""宝妈"这类标签词出现过多时，回到第一步重抽骨架 <span class="ref">§4.4 第 6 步 · §13.2</span>。嵌入用本地运行的开源中文模型，与记忆检索、同质化诊断共用一个模型，版本号写入运行清单 <span class="ref">§6.4 · §9.4</span>。</p>
+<h3 id="pp-m6">3.6 说话风格与示例帖</h3>
+<p>同样的观点，不同的人说出来差别很大：有人一句话带三个表情，有人写长段分析，有人满嘴黑话。文风光靠描述很难让 LLM 写出来，所以每个人绑定一个说话风格，并在 prompt 里放几条同风格的真实示例帖 <span class="ref">§4.4 第 7 步</span>。</p>
+<p>风格从匿名化的公开股吧、雪球帖子聚类得到，聚类特征是句长、口语词、表情与黑话、情绪强度、话题偏好 <span class="ref">§4.4</span>。示例帖只放在发言调用（第 2 次调用）里 <span class="ref">§4.4 第 7 步 · §6.1</span>。示例帖有四条限制：只取仿真起点之前的帖子；不复刻具体用户；去除用户名与可识别信息；验收事件的真实帖不进示例池，否则 V2 对照会失效 <span class="ref">§4.4 · §12</span>。采集遵守 §16.1。发言调用的 prompt 里，示例帖约占 500 token <span class="ref">§14.2</span>。</p>
+<p><b>风格怎么绑到人身上。</b>每个智能体"按人设条件绑定"一种风格。难点在于去标识化的帖子没有人口信息，所以改为从帖内自报的信息学一个弱映射，例如"退休了""孩子上小学""30 万剩 18 万""上班偷看盘" <span class="ref">§4.4 第 7 步</span>。做法分三步：</p>
+<ul>
+<li>用 Jev 或 LLM 在去标识化文本上抽取自报的年龄段、职业大类、资金档，只作统计，不还原到用户。</li>
+<li>据此估计 p(风格簇 | 年龄段, 账户档)；样本不足时退回账户档边际，再不足退回总体比例。</li>
+<li>发帖时段与吧类型作辅助特征，对应交易风格。</li>
+</ul>
+<p>检验上，V2 对照生成帖与真实帖的风格分布，B3 检验绑定是否降低盲评识别率。会自报"30 万剩 18 万"的人偏向亏损与情绪化人群，学到的映射因此有偏，报告中要标注 <span class="ref">§4.4 第 7 步</span>。大 V 是例外：他们的风格绑定真实帖中高互动帖的风格簇 <span class="ref">§4.3 第 4 步</span>。</p>
+<p>数据来源受采集范围约束。股吧的列表和正文能采，入库即哈希 <code>user_id</code>、删除昵称、头像和 IP 属地，原始语料 90 天到期自动删除 <span class="ref">§16.1</span>。雪球的 robots 和用户协议不允许自采，雪球风格的示例池只能靠授权数据；授权来源落实之前，雪球风格的 V2 结论记为"无对照" <span class="ref">§16.1</span>。</p>
+<p>文风是否贴近真实，由 V2 的文风分布指标（句长、口语词、表情与黑话、脏话率）检验。风格微调不进 MVP，先用提示词加少样本；V2 不达标时，再用仿真起点之前的匿名帖训练 LoRA <span class="ref">§13.3 · §15.2</span>。</p>
+
+</section>
+
+<section id="s4" class="reveal">
+<h2><span class="num">04</span>逐步演示：生成一张人设卡</h2>
+<p class="sub">用一个化名"老周"的示例人物，把 3.2–3.6 的步骤从头走一遍。每一步列出输入、处理、输出和对应的文档条目。<span class="pp-tag">示例数据</span></p>
+<p>演示里的年龄、分数、盈亏、持仓、故事和帖子都是为说明流程编的示例，不是设计参数，也不对应任何真实的人。个股用"示例股"代称。真实系统里第 2 步的类型概率来自 16Personalities 录入值（尚未录入），第 7 步的示例帖来自起点之前去标识化的真实帖子，这里用编写的示意文字代替。</p>
+<div class="card glow">
+<ol class="pp-steps" id="pp-steps"></ol>
+<div class="pp-io">
+<div class="card"><h4>输入</h4><ul id="pp-in"></ul></div>
+<div class="card"><h4>处理</h4><p id="pp-do"></p></div>
+<div class="card"><h4>输出</h4><div id="pp-out"></div></div>
+</div>
+<p class="pp-ref">对应文档条目：<span id="pp-src"></span></p>
+<div class="pp-btns">
+<button class="btn" id="pp-prev" type="button">上一步</button>
+<button class="btn pri" id="pp-next" type="button">下一步</button>
+<button class="btn" id="pp-play" type="button">自动播放</button>
+<span class="ref" id="pp-pos"></span>
+</div>
+</div>
+</section>
+
+<section id="s5" class="reveal">
+<h2><span class="num">05</span>字段表与示例 JSON</h2>
+<p class="sub">下表按 §4.1 列出人设卡全部字段，并注明每个字段怎么生成、是否以文字形式进入 prompt。分档字段（收入、场外资金）的档位边界，以及 <code>ExperienceVector</code>、<code>KernelParams</code> 的内部字段，文档没有给出，表中不写。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>字段</th><th>取值</th><th>怎么生成</th><th>进 prompt</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td><code>persona_id</code></td><td>编号</td><td>生成时分配</td><td>否</td><td><span class="ref">§4.1</span></td></tr>
+<tr><td><code>birth_year</code> · <code>gender</code></td><td>年份；male / female</td><td>种子 + IPF（年龄 × 性别边际）</td><td>是</td><td><span class="ref">§4.1 · §4.3</span></td></tr>
+<tr><td><code>education</code> · <code>occupation</code></td><td>五档学历；职业类别</td><td>种子</td><td>是</td><td><span class="ref">§4.1</span></td></tr>
+<tr><td><code>province</code> · <code>city_tier</code></td><td>省份；1–4</td><td>种子 + IPF（地区边际）</td><td>是</td><td><span class="ref">§4.1 · §4.3</span></td></tr>
+<tr><td><code>household_income</code></td><td>分档</td><td>种子</td><td>是（文字）</td><td><span class="ref">§4.1</span></td></tr>
+<tr><td><code>outside_funds</code></td><td>分档</td><td>由收入与人生骨架初始化</td><td>账户摘要里</td><td><span class="ref">§4.1 · §8.4</span></td></tr>
+<tr><td><code>entry_year</code></td><td>年份</td><td>IPF 边际 + 条件抽样（年龄、入市潮）</td><td>是</td><td><span class="ref">§4.3</span></td></tr>
+<tr><td><code>account_assets</code></td><td>RT1–RT5</td><td>IPF 边际 + 条件抽样（收入、年龄、年限）</td><td>账户摘要里</td><td><span class="ref">§4.1 · §4.3</span></td></tr>
+<tr><td><code>style</code></td><td>day / swing / long / fund / limit_up</td><td>条件抽样，对齐持有期分布</td><td>是</td><td><span class="ref">§4.3</span></td></tr>
+<tr><td><code>permissions</code></td><td>chinext / star / bse / margin 的子集</td><td>按 §8.1 门槛推出，乘开通率</td><td>否（内核约束）</td><td><span class="ref">§4.3 · §8.1</span></td></tr>
+<tr><td><code>offbook_leverage</code></td><td><code>OffbookLeverage</code> 或空；含配资倍数、警戒线、平仓线</td><td>按时期给配资覆盖率（假设）；深度样本每个账户档至少 1 个杠杆户</td><td>文档未写</td><td><span class="ref">§4.1 · §4.3 · §8.4</span></td></tr>
+<tr><td><code>dip_k</code></td><td>挂单等回调的幅度 k_i，先验 1%–3%</td><td>§6.3 先验</td><td>否</td><td><span class="ref">§4.1 · §6.3</span></td></tr>
+<tr><td><code>experience</code></td><td><code>ExperienceVector</code></td><td>规则内核预跑</td><td>经背景故事间接进入</td><td><span class="ref">§4.4 · §6.5</span></td></tr>
+<tr><td><code>big5</code></td><td>O/C/E/A/N 标准分</td><td>按类型半轴抽，以年龄、性别为条件</td><td>只给描述语</td><td><span class="ref">§4.2</span></td></tr>
+<tr><td><code>mbti_type</code></td><td>五字母，如 ISTJ-T</td><td>IPF 边际</td><td>否</td><td><span class="ref">§4.2</span></td></tr>
+<tr><td><code>self_reported_mbti</code></td><td>bool</td><td>偏年轻、一二线城市</td><td>为真时可在发言中提到</td><td><span class="ref">§4.2</span></td></tr>
+<tr><td><code>fin_literacy</code></td><td>0–3</td><td>CHFS 题项</td><td>是（文字）</td><td><span class="ref">§4.1 · §4.3</span></td></tr>
+<tr><td><code>voice_style</code> · <code>voice_examples</code></td><td>风格簇编号；示例帖列表</td><td>聚类后按 p(风格簇 | 年龄段, 账户档) 绑定，样本不足逐级退回；大 V 绑定高互动帖的风格簇</td><td>示例帖只进发言调用</td><td><span class="ref">§4.3 · §4.4 · §6.1</span></td></tr>
+<tr><td><code>kernel</code></td><td><code>KernelParams</code>（10 个参数）</td><td>§6.3 先验，以属性为条件</td><td>否</td><td><span class="ref">§6.3</span></td></tr>
+<tr><td><code>media_diet</code> · <code>attention_k</code></td><td>各渠道权重；3–15</td><td>职业、年龄基线</td><td>否（决定信息流）</td><td><span class="ref">§5.4</span></td></tr>
+<tr><td><code>credulity</code></td><td>轻信度</td><td>与新手、小账户正相关</td><td>否</td><td><span class="ref">§7.4 · §2.2</span></td></tr>
+<tr><td><code>tier</code></td><td>A_bigv / A_deep / B</td><td>Tier-A 另行抽取，Tier-B 填 100 格保底</td><td>否</td><td><span class="ref">§4.1 · §4.3</span></td></tr>
+<tr><td><code>temperature</code></td><td>温度</td><td>生成时绑定，运行期不变；底座模型不在卡上，由运行配置统一指定</td><td>否</td><td><span class="ref">§4.1 · §6.6</span></td></tr>
+<tr><td><code>seed_flags</code></td><td>seed_borrowed / seed_sparse / life_asset_conflict 的子集</td><td>借种、扰动复制、经历与资产冲突时记入</td><td>否</td><td><span class="ref">§4.3 · §4.4</span></td></tr>
+<tr><td><code>w_head</code> · <code>w_cap</code></td><td>人头权重；资金权重</td><td>Tier-A 与 Tier-B 一起做 IPF 得 w_head；w_cap = w_head × 账户资产</td><td>否</td><td><span class="ref">§4.3 · §10.1</span></td></tr>
+</tbody></table></div>
+<p>下面是演示人物"老周"的人设卡 JSON。数值是示例，<code>kernel</code> 只写相对群体中位数的方向，因为文档除 λ 外没有给出先验数值。</p>
+<pre class="code" data-lang="json 示意，未实现"><span class="c">// 示意，未实现；全部取值为示例数据</span>
+{
+  <span class="k">"persona_id"</span>: <span class="s">"P-demo-0001"</span>,
+  <span class="k">"birth_year"</span>: <span class="n">1968</span>, <span class="k">"gender"</span>: <span class="s">"male"</span>,
+  <span class="k">"education"</span>: <span class="s">"high_school"</span>, <span class="k">"occupation"</span>: <span class="s">"个体经营"</span>,
+  <span class="k">"province"</span>: <span class="s">"示例省"</span>, <span class="k">"city_tier"</span>: <span class="n">3</span>,
+  <span class="k">"household_income"</span>: <span class="s">"示例档"</span>, <span class="k">"outside_funds"</span>: <span class="s">"示例档"</span>,
+  <span class="k">"entry_year"</span>: <span class="n">2007</span>, <span class="k">"account_assets"</span>: <span class="s">"RT2"</span>,
+  <span class="k">"style"</span>: <span class="s">"swing"</span>, <span class="k">"permissions"</span>: [<span class="s">"chinext"</span>],
+  <span class="k">"offbook_leverage"</span>: <span class="k">null</span>, <span class="k">"dip_k"</span>: <span class="n">0.02</span>,
+  <span class="k">"experience"</span>: { <span class="c">/* ExperienceVector，内部字段文档未定义 */</span> },
+  <span class="k">"big5"</span>: { <span class="k">"O"</span>: <span class="n">-0.5</span>, <span class="k">"C"</span>: <span class="n">0.9</span>, <span class="k">"E"</span>: <span class="n">-0.8</span>, <span class="k">"A"</span>: <span class="n">-0.3</span>, <span class="k">"N"</span>: <span class="n">0.7</span> },
+  <span class="k">"mbti_type"</span>: <span class="s">"ISTJ-T"</span>, <span class="k">"self_reported_mbti"</span>: <span class="k">false</span>,
+  <span class="k">"fin_literacy"</span>: <span class="n">1</span>,
+  <span class="k">"voice_style"</span>: <span class="s">"示例风格簇"</span>, <span class="k">"voice_examples"</span>: [<span class="s">"…"</span>],
+  <span class="k">"kernel"</span>: { <span class="k">"lambda"</span>: <span class="s">"高于中位数 2.25"</span>, <span class="k">"eta"</span>: <span class="s">"偏高"</span>, <span class="k">"tau"</span>: <span class="s">"偏高"</span>, <span class="k">"nu"</span>: <span class="s">"偏低"</span> },
+  <span class="k">"media_diet"</span>: { <span class="c">/* 各渠道权重 */</span> }, <span class="k">"attention_k"</span>: <span class="n">6</span>,
+  <span class="k">"credulity"</span>: <span class="s">"示例值"</span>,
+  <span class="k">"tier"</span>: <span class="s">"B"</span>, <span class="k">"temperature"</span>: <span class="s">"生成时绑定"</span>, <span class="k">"seed_flags"</span>: [],
+  <span class="k">"w_head"</span>: <span class="s">"IPF 后计算"</span>, <span class="k">"w_cap"</span>: <span class="s">"w_head × 账户资产"</span>
+}</pre>
+</section>
+
+<section id="s6" class="reveal">
+<h2><span class="num">06</span>设计取舍</h2>
+<p class="sub">每一项写清选了什么、放弃了什么、为什么。表中各项见设计文档 v0.3；表后四个框是 2026-10-30 起的架构讨论 A1、A2、A4、A5 定下、已并入 v0.3 的决定。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>问题</th><th>选了</th><th>放弃了</th><th>为什么</th></tr></thead>
+<tbody>
+<tr><td>行为参数挂在哪</td><td>大五连续分数</td><td>直接挂 MBTI 类型</td><td>二分类型丢信息、重测不稳；四字母类型缺神经质；经验先验来自大五研究 <span class="ref">§4.2</span></td></tr>
+<tr><td>MBTI 怎么用</td><td>32 型作 IPF 边际，与其他边际一起调权</td><td>按国家分布单独硬抽类型</td><td>放进 IPF 才能和年龄 × 性别、账户规模等边际同时对齐；单独硬抽会使其他边际偏离 <span class="ref">讨论记录第 3 项</span></td></tr>
+<tr><td>名额怎么分</td><td>100 格每格保底 + 其余按比例，配合 w_head / w_cap</td><td>纯按比例抽；全部等额抽</td><td>纯比例下大户和小众人群样本太少，无法单独分析；等额抽则全市场统计失真，权重能还原 <span class="ref">§4.3 · 讨论记录第 4 项</span></td></tr>
+<tr><td>切片粒度</td><td>4 个气质组</td><td>32 型或 16 型作切片</td><td>文档只规定 32 型不作切片。按每格保底 5 人推算，5 × 5 × 32 = 800 格需要 4000 人，而 MVP 的 Tier-B 是 500 人 <span class="ref">§4.2 · §14.1</span></td></tr>
+<tr><td>背景故事怎么来</td><td>规则定事实、预跑定经历，LLM 只改写</td><td>让 LLM 自由编背景</td><td>自由编写会出现与卡片矛盾的事实、事后才知道的信息和刻板人物；先定事实才能核对 <span class="ref">§4.4 · §13.1</span></td></tr>
+<tr><td>经验加权的窗口</td><td>入市年数与年龄两种都实现</td><td>只用原文的年龄窗口</td><td>A 股散户入市时间差异很大，入市前的行情影响应当弱得多；这是平台假设，用硅基调查比较哪种更贴近 <span class="ref">§6.5</span></td></tr>
+<tr><td>预跑怎么记金额</td><td>按比例预跑，期末缩放到抽样档位金额</td><td>按绝对金额预跑</td><td>账户规模是抽样主切片，按绝对金额预跑会让期末资产偏离档位；按比例预跑只记仓位权重、收益率和出入金比例，整手与最低佣金从仿真起点才生效，再用倒推入金核对经历是否合理 <span class="ref">§4.4 第 2 步</span></td></tr>
+<tr><td>prompt 里放什么</td><td>人口属性、描述语、背景故事、示例帖（示例帖只进发言调用，§6.1）</td><td>放大五分数、MBTI 类型名、内核参数</td><td>文档只规定不放，没有写理由。本页的理解是：参数要在内核里单独校准，若 LLM 也按参数行事，同一偏差会被计入两次；类型名则容易引出刻板角色 <span class="ref">§4.1 · 讨论记录第 3 项</span></td></tr>
+</tbody></table></div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.5 · §4.4 第 2 步，来自架构讨论 A1）</b>日线从 2005 年起，覆盖股改与 2007 年牛市。2005 年以前的经历只写进人生骨架作文字背景，不在行情上预跑。存不复权日线和复权因子表：智能体看到的价格按当天现算前复权，与当年券商软件一致；收益与战绩统一用后复权。对本模块的影响是，预跑的起点最早是 2005 年。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §16.1，来自架构讨论 A2）</b>股吧列表与正文能采，雪球不自采，只用授权数据。去标识化在入库时完成：<code>user_id</code> 哈希，昵称、头像、IP 属地删除；原始语料 90 天到期自动删除。对本模块的影响是，风格聚类和示例池目前只有股吧来源；授权来源落实之前，雪球风格的 V2 结论记为"无对照"。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §6.6 · §14.1，来自架构讨论 A4）</b>同一底座内 Tier-A 与 Tier-B 用同一个模型，分层只体现在记忆深度、反思频率与激活频率，避免人设差异与模型大小混在一起；小模型延到 Phase 2 扩规模时再用，切换前要在开发事件上做大小模型对比。跨底座比较时全体一起换模型。对本模块的影响是，人设卡上没有底座模型字段，只绑定 <code>temperature</code>，底座模型由运行配置统一指定 <span class="ref">§4.1</span>。A3（事件卡）不涉及本模块。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §4.3 第 2、4 步，来自架构讨论 A5）</b>种子不够时，按"借相邻年龄段的种子 → 扰动复制 → 留空并报告"处理，不让 LLM 编造人口属性。文档没有写理由。本页的理解是：编造的属性会让 V1 对照的不再是真实联合分布；借种和复制都记在 <code>seed_flags</code> 里，结论附"不同种子数 / 借种比例"，能看出哪些格靠得住。Tier-A 拆成大 V 20 人与深度样本 30 人；深度样本放进已有 Tier-B 格，同格的 Tier-A 与 Tier-B 只差记忆深度与反思频率，对比结果作为 V5 的分层效应检验。完整规则见 3.3、3.4 节。</div>
+</section>
+
+<section id="s7" class="reveal">
+<h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">population 只在开始前运行一次，但几乎所有模块都读它的产物。下表按"谁读什么"列出。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>模块</th><th>关系</th><th>传递的内容</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td><a href="mod-data.html">data</a></td><td>上游</td><td>2005 年起的日线与复权因子，供规则内核预跑</td><td><span class="ref">§4.4 · §5.5</span></td></tr>
+<tr><td><a href="mod-collect.html">collect</a></td><td>上游</td><td>起点之前、去标识化的股吧帖子，供风格聚类与示例池；雪球只用授权数据</td><td><span class="ref">§4.4 · §16.1</span></td></tr>
+<tr><td><a href="mod-schemas.html">schemas</a></td><td>定义</td><td><code>PersonaCard</code>、<code>ExperienceVector</code>、<code>KernelParams</code> 的结构</td><td><span class="ref">§4.1</span></td></tr>
+<tr><td><a href="mod-agents.html">agents</a></td><td>下游</td><td>内核参数、预置记忆（<code>seeded</code>）、背景故事与人设文字</td><td><span class="ref">§6.3 · §6.4</span></td></tr>
+<tr><td><a href="mod-prompts.html">prompts</a></td><td>下游</td><td>约 500 token 的人设文字版；示例帖只进发言调用</td><td><span class="ref">§4.1 · §6.1 · §14.2</span></td></tr>
+<tr><td><a href="mod-social.html">social</a></td><td>下游</td><td>渠道偏好 <code>media_diet</code>、注意力条数 K_i、轻信度</td><td><span class="ref">§5.4 · §7.4</span></td></tr>
+<tr><td><a href="mod-accounts.html">accounts</a></td><td>下游</td><td>起点持仓、成本、现金与场外资金（按比例预跑后缩放到档位）；场外配资参数 <code>offbook_leverage</code>；预跑账户历史单独存放并标记 <code>seeded</code></td><td><span class="ref">§8.4 · §9.2 · §10.3</span></td></tr>
+<tr><td><a href="mod-llm.html">llm</a></td><td>下游</td><td>每人绑定的温度；底座模型由运行配置统一指定，同一底座内全体同一模型</td><td><span class="ref">§4.1 · §6.6 · §14.1</span></td></tr>
+<tr><td><a href="mod-outputs.html">outputs</a></td><td>下游</td><td>人设表（非敏感字段 + <code>w_head</code>、<code>w_cap</code>），以 <code>persona_id</code> 关联三张表</td><td><span class="ref">§10.1 · §10.3</span></td></tr>
+<tr><td><a href="mod-validation.html">validation</a></td><td>检验</td><td>V1 人群可信（边际与联合 TVD）；B2 同质群体、B3 打乱人设基线；同质化诊断</td><td><span class="ref">§11.1 · §12.1 · §13.2</span></td></tr>
+<tr><td><a href="mod-orchestrator.html">orchestrator</a></td><td>调用方</td><td>运行开始前调用生成，之后进入 20–60 个交易日预热</td><td><span class="ref">§9.2</span></td></tr>
+</tbody></table></div>
+<p>想看不同类型的人面对同一条消息怎样决策，可以读 <a href="sim-personas.html">散户决策演示</a>；想看一条快讯如何经过这些人变成帖子、态度与成交，读 <a href="flow-journey.html">一条新闻的旅程</a>。</p>
+</section>
+
+<section id="s8" class="reveal">
+<h2><span class="num">08</span>待解决问题</h2>
+<p class="sub">下面这些在文档里明确写了"待定""需复核"，或者本页在整理时发现缺少依据。实现前需要逐项落实。</p>
+<div class="callout todo"><b class="t">数据缺口</b>
+<ul>
+<li>2023–2026 年官方的散户年龄、性别分布没有拿到，目前用 CHFS 代替并标注 <span class="ref">§2.1 · §4.3</span>。</li>
+<li>16Personalities 中国大陆 32 型的百分比需要人工录入，尚未录入 <span class="ref">§4.2</span>。</li>
+<li>大五随年龄变化的幅度需要中国样本修正，数据源待定 <span class="ref">§4.2</span>。</li>
+<li>"2 亿投资者"的总量与 §8.1 的权限门槛标为〔需复核〕 <span class="ref">§2.1 · §8.1</span>。</li>
+<li>雪球风格的示例池与 V2 对照依赖授权数据，来源未落实，此前记为"无对照" <span class="ref">§16.1</span>。</li>
+<li>IPF 新边际"按账户档的两融参与比例"的目标值取交易所或中证金融的信用账户数，标为〔需复核〕 <span class="ref">§4.3 · §8.4</span>。</li>
+</ul></div>
+<div class="callout todo"><b class="t">文档没有给出的定义</b>
+<ul>
+<li>五个年龄段的边界。</li>
+<li>家庭收入、场外资金的分档边界。</li>
+<li><code>ExperienceVector</code> 与 <code>KernelParams</code> 的内部字段；除 λ 外各内核参数的先验数值；权限开通率。</li>
+<li>说话风格簇的数量；风格绑定退回账户档边际、总体比例时"样本不足"的标准。</li>
+<li>多样性检查里"相似度过高""标签词过多"的阈值。</li>
+<li>人设文字版的 token 数：§4.1 写约 500，§14.2 预算表写 600。</li>
+</ul></div>
+<div class="callout todo"><b class="t">待决定与待检验</b>
+<ul>
+<li>经验加权用入市年数还是年龄作窗口，两种都实现，由硅基调查比较 <span class="ref">§6.5</span>。</li>
+<li>背景故事是否真的影响行为，由 B3 打乱人设基线检验 <span class="ref">§4.4 · §11.1</span>。</li>
+<li>合法取得的真实匿名访谈是最好的升级方向，目前没有来源 <span class="ref">§4.4</span>。</li>
+<li>借种阈值"不同种子家庭 5 户"是初值，要在 Phase 0 看到 CHFS 实际分布后再定；哪些格会借种、留空，现在不知道 <span class="ref">§4.3 第 2 步</span>。</li>
+<li>大 V 的抽样条件（入市 ≥ 8 年、金融素养 ≥ 2、外向性偏高、账户偏中大档）与粉丝数幂律都是假设，幂律参数文档未定义 <span class="ref">§4.3 第 4 步</span>。</li>
+<li>场外配资覆盖率按时期给参数（2014–2015 年高、2015 年清理后低），属假设，配资比例没有可靠官方数据；杠杆人群样本小，踩踏结论只作机制展示，不做显著性检验 <span class="ref">§8.4</span>。</li>
+<li>风格绑定用的自报帖偏向亏损与情绪化人群，映射有偏；绑定是否降低盲评识别率由 B3 检验 <span class="ref">§4.4 第 7 步</span>。</li>
+</ul></div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function num(v, d) { var x = Number(v); return isFinite(x) ? x : d; }
+
+  /* ---------- 分配器（§2.1 数据；w_head 为示例） ---------- */
+  var RT = [
+    { k: 'RT1 <10万', acct: 58.7, turn: 5, cap: 1 },
+    { k: 'RT2 10–50万', acct: 28.6, turn: 17, cap: 4 },
+    { k: 'RT3 50–300万', acct: 10.9, turn: 27, cap: 6 },
+    { k: 'RT4 300–1000万', acct: 1.4, turn: 13, cap: 3 },
+    { k: 'RT5 >1000万', acct: 0.4, turn: 19, cap: 7 }
+  ];
+  var CELLS_PER_RT = 20; // 5 年龄段 × 4 气质组（§4.3）
+  var POP = 2e8;         // 示意口径〔需复核〕（§2.1）
+
+  function largestRemainder(total, weights) {
+    var n = weights.length, out = [], sum = 0, i;
+    for (i = 0; i < n; i++) sum += Math.max(0, num(weights[i], 0));
+    if (!(total > 0) || !(sum > 0)) { for (i = 0; i < n; i++) out.push(0); return out; }
+    var rem = [], used = 0;
+    for (i = 0; i < n; i++) {
+      var q = total * Math.max(0, num(weights[i], 0)) / sum;
+      var f = Math.floor(q);
+      out.push(f); used += f; rem.push({ i: i, r: q - f });
+    }
+    rem.sort(function (a, b) { return b.r - a.r; });
+    for (var j = 0; j < total - used && j < rem.length; j++) out[rem[j].i] += 1;
+    return out;
+  }
+  function fmtW(n, share) {
+    if (!(n > 0)) return '—';
+    var w = POP * share / 100 / n;
+    return isFinite(w) ? (w / 1e4).toFixed(1) + ' 万' : '—';
+  }
+
+  function renderAlloc() {
+    var tb = $('pp-alloc'); if (!tb) return;
+    var N = Math.round(num($('pp-n').value, 500));
+    var F = Math.round(num($('pp-f').value, 5));
+    var basis = $('pp-basis').value || 'acct';
+    $('pp-n-o').textContent = String(N);
+    $('pp-f-o').textContent = String(F);
+    var need = F * CELLS_PER_RT * RT.length;
+    var extra = Math.max(0, N - need);
+    var prop = largestRemainder(extra, RT.map(function (r) { return r[basis]; }));
+    var direct = largestRemainder(N, RT.map(function (r) { return r.acct; }));
+    while (tb.firstChild) tb.removeChild(tb.firstChild);
+    var tot = 0, ws = [];
+    RT.forEach(function (r, i) {
+      var fl = F * CELLS_PER_RT, n = fl + prop[i];
+      tot += n;
+      if (n > 0) ws.push(POP * r.acct / 100 / n);
+      var tr = el('tr');
+      tr.appendChild(el('td', null, r.k));
+      tr.appendChild(el('td', 'n', r.acct.toFixed(1) + '%'));
+      tr.appendChild(el('td', 'n', String(fl)));
+      tr.appendChild(el('td', 'n', String(prop[i])));
+      tr.appendChild(el('td', 'n', String(n)));
+      tr.appendChild(el('td', 'n', String(direct[i])));
+      tr.appendChild(el('td', 'n', fmtW(n, r.acct)));
+      tb.appendChild(tr);
+    });
+    var s = '样本合计 ' + tot + ' 人。';
+    if (N < need) s += '设定总数 ' + N + ' 低于保底所需 ' + need + ' 人，表中按保底计。';
+    else s += '保底占 ' + need + ' 人，比例部分 ' + extra + ' 人。';
+    if (ws.length > 1) {
+      var mx = Math.max.apply(null, ws), mn = Math.min.apply(null, ws);
+      if (mn > 0 && isFinite(mx / mn)) s += '最大与最小 w_head 之比约 ' + (mx / mn).toFixed(0) + ' 倍（示例数据）。';
+    } else if (tot === 0) {
+      s += '保底为 0 且没有比例名额时，没有样本。';
+    }
+    $('pp-alloc-sum').textContent = s;
+  }
+  ['pp-n', 'pp-f', 'pp-basis'].forEach(function (id) {
+    var c = $(id);
+    if (c) { c.addEventListener('input', renderAlloc); c.addEventListener('change', renderAlloc); }
+  });
+  renderAlloc();
+
+  /* ---------- 逐步演示（全部为示例数据） ---------- */
+  var STEPS = [
+    { t: '选格子',
+      i: ['100 格名额表（3.4）与各格已填人数', 'IPF 调权后的 CHFS 种子样本'],
+      d: '示意流程（文档没有规定逐个抽人的顺序）：在"年龄段 × 账户规模"的 25 格里取一个名额未满的格，在落在这一格的种子里按 IPF 权重抽一人，种子自带的人口属性原样保留。CHFS 没有 MBTI，所以这一步还不定气质组。若本格不同种子家庭不足 5 户，从相邻年龄段、同账户档借种子，把年龄改到本格并在 seed_flags 里记 seed_borrowed；仍不足则扰动复制并记 seed_sparse；没有种子的格留空，不让 LLM 编人。',
+      o: ['年龄段：50 多岁（示例；文档未定义年龄段边界）', '账户档：RT2（10–50 万）', 'seed_flags = []（示例：假设本格种子充足，没有借种）', '种子提供：1968 年生、男、高中、个体经营、三线城市'],
+      s: '§4.3 第 1、2、4 步' },
+    { t: '定类型',
+      i: ['本格 4 个气质组的剩余名额（每组保底 5 人）', 'IPF 调权后的 32 型边际（16Personalities 百分比尚未录入）'],
+      d: 'CHFS 没有 MBTI，气质组在种子之后才抽（§4.3 第 2 步）。示意做法：先在本格名额未满的气质组里定一个，这里是 SJ；再在 SJ 组的 8 个五字母类型（ISTJ、ISFJ、ESTJ、ESFJ，各带 -A 或 -T）中按调权后的概率抽一个。',
+      o: ['气质组：SJ（示例）', 'mbti_type = ISTJ-T（示例）', 'self_reported_mbti = false：50 多岁、三线城市，不属于偏年轻、一二线的人群'],
+      s: '§4.2 · §4.3 第 2、4 步 · 讨论记录第 3 项' },
+    { t: '抽大五',
+      i: ['ISTJ-T', '年龄、性别'],
+      d: 'I → 外向性负半轴；S → 开放性负半轴、T → 宜人性负半轴（这两侧按对称推出）；J → 尽责性正半轴；-T → 神经质正半轴。半轴内的位置以年龄、性别为条件。',
+      o: ['内核方向：神经质高 → λ、η、γ 偏高；尽责性高 → τ 偏高；外向性低 → ν 偏低'],
+      bars: [['O', -0.5], ['C', 0.9], ['E', -0.8], ['A', -0.3], ['N', 0.7]],
+      s: '§4.2 · §6.3' },
+    { t: '人生骨架',
+      i: ['1968 年生、高中、城镇、个体经营'],
+      d: '按出生队列、学历、城乡与职业生成结构化的人生事件，再由骨架推出风险厌恶、现金缓冲、投资期限和渠道偏好的基线。',
+      o: ['事件（示例）：高中毕业进厂；1990 年代末国企下岗，转做个体经营；1998 年房改后买房；孩子上学', 'γ 与现金缓冲偏高；有"孩子上学用钱"的计划卖出时点', '渠道基线偏官媒与群聊；场外资金由收入与骨架初始化'],
+      s: '§4.4 第 1 步 · §5.4 · §8.4' },
+    { t: '规则内核预跑',
+      i: ['entry_year = 2007', '2005 年起的真实日线（§5.5）', '前几步得到的内核参数', '抽样档位 RT2'],
+      d: '从 2007 年到仿真起点，按真实行情逐日跑规则内核，不调用 LLM，只用起点之前的数据。预跑按比例进行：只记仓位权重、收益率、出入金占资产比例，不记绝对金额，不受整手限制。期末整体缩放，使起点资产等于 RT2 档位金额，整手与最低佣金从仿真起点才生效。缩放后核对倒推的历史入金与骨架收入；不合理就重抽经历，多次仍不合理记 life_asset_conflict。结果写入经历向量，起点持仓成为初始账户。',
+      o: ['2007 年入市，牛市里先有浮盈；2008 年暴跌，最大回撤约 −55%（示例）', '2015 年未用杠杆（账户未达两融门槛），股灾回撤约 −38%（示例）', '累计盈亏为负（示例），与"多数持股家庭自报亏损"一致', '起点持仓：示例股 A、示例股 B 两只主板股，约三成仓（示例），缩放到 RT2 档位后再取整手', '倒推入金与个体经营收入相符（示例），不记 life_asset_conflict', '预置记忆 4 条，标记 seeded，如"2008 年一股没卖，账户腰斩"'],
+      s: '§4.4 第 2–4 步 · §5.5 · §6.5 · §9.2' },
+    { t: 'LLM 改写背景',
+      i: ['人设卡事实、经历向量、预置记忆'],
+      d: 'LLM 写 200–300 字第一人称叙述，不得新增事实、日期和数字。写完核对年龄、职业、入市年份、盈亏方向，并扫描起点之后的日期；不一致就重写。',
+      story: '我是 68 年生的，高中毕业就进了厂。九十年代末厂里不景气，我下了岗，后来自己做点小生意。98 年房改那会儿买了房，孩子现在还在上学。07 年我开了户，刚进去就赚了一些，觉得炒股来钱快。结果 08 年一路往下跌，我一股没卖，账户差不多腰斩。15 年那波我没碰杠杆，跌下来还是亏了不少。这些年算总账是亏的。现在手里拿着两只主板股，打算等孩子上学要用钱的时候再看。',
+      o: ['核对：年龄、职业、入市年份、盈亏方向一致；无起点之后的日期'],
+      s: '§4.4 第 5 步 · §13.1' },
+    { t: '绑定风格',
+      i: ['年龄段与账户档（50 多岁、RT2）', '从帖内自报信息估出的 p(风格簇 | 年龄段, 账户档)', '风格簇与起点之前的去标识化示例帖池'],
+      d: '按 p(风格簇 | 年龄段, 账户档) 抽一个风格簇；这一格样本不足时退回账户档边际，再不足退回总体比例。从簇里取几条示例帖，只放进发言调用；验收事件的真实帖不进示例池。同时绑定温度，运行期不变；底座模型由运行配置统一指定，不按人绑定。',
+      o: ['voice_style：示例风格簇（短句、口语、少表情）', '示意帖（编写，非真实帖）："又是高开低走，站岗的永远是我们。""拿着不动，跌多了反正也割不下去。"', 'tier = B，temperature 已绑定（示例）', '人设卡完成，与全体一起做 IPF 得 w_head；完整 JSON 见第 05 节'],
+      s: '§4.4 第 7 步 · §4.3 · §6.1 · §6.6 · §14.2 · §16.1' }
+  ];
+
+  var cur = 0, timer = null;
+  function fillList(ul, arr) {
+    while (ul.firstChild) ul.removeChild(ul.firstChild);
+    (arr || []).forEach(function (x) { ul.appendChild(el('li', null, x)); });
+  }
+  function bar(name, v) {
+    var row = el('div', 'pp-bar');
+    row.appendChild(el('span', null, name));
+    var tr = el('span', 'pp-track'), i = el('i');
+    var x = Math.max(-1, Math.min(1, num(v, 0)));
+    i.style.left = (x < 0 ? 50 + x * 50 : 50) + '%';
+    i.style.width = Math.abs(x) * 50 + '%';
+    tr.appendChild(i); row.appendChild(tr);
+    row.appendChild(el('span', null, (x > 0 ? '+' : '') + x.toFixed(1)));
+    return row;
+  }
+  function renderStep() {
+    var list = $('pp-steps'); if (!list || !STEPS.length) return;
+    cur = Math.max(0, Math.min(STEPS.length - 1, cur));
+    var st = STEPS[cur];
+    Array.prototype.forEach.call(list.children, function (li, k) {
+      li.className = k === cur ? 'on' : (k < cur ? 'done' : '');
+    });
+    fillList($('pp-in'), st.i);
+    $('pp-do').textContent = st.d;
+    var out = $('pp-out');
+    while (out.firstChild) out.removeChild(out.firstChild);
+    if (st.bars) {
+      out.appendChild(el('p', 'pp-ref', '大五标准分（示例数据）'));
+      st.bars.forEach(function (b) { out.appendChild(bar(b[0], b[1])); });
+    }
+    if (st.story) {
+      out.appendChild(el('p', 'pp-ref', '背景故事（示例数据，化名人物）'));
+      out.appendChild(el('div', 'pp-story', st.story));
+    }
+    var ul = el('ul'); fillList(ul, st.o); out.appendChild(ul);
+    $('pp-src').textContent = st.s;
+    $('pp-pos').textContent = '第 ' + (cur + 1) + ' / ' + STEPS.length + ' 步 · 示例数据';
+    $('pp-prev').disabled = cur === 0;
+    $('pp-next').disabled = cur === STEPS.length - 1;
+  }
+  function stop() {
+    if (timer) { clearInterval(timer); timer = null; }
+    var b = $('pp-play'); if (b) b.textContent = '自动播放';
+  }
+  (function initSteps() {
+    var list = $('pp-steps'); if (!list) return;
+    STEPS.forEach(function (st, k) {
+      var li = el('li');
+      li.appendChild(el('b', null, String(k + 1)));
+      li.appendChild(document.createTextNode(st.t));
+      li.addEventListener('click', function () { stop(); cur = k; renderStep(); });
+      list.appendChild(li);
+    });
+    $('pp-prev').addEventListener('click', function () { stop(); cur -= 1; renderStep(); });
+    $('pp-next').addEventListener('click', function () { stop(); cur += 1; renderStep(); });
+    $('pp-play').addEventListener('click', function () {
+      if (timer) { stop(); return; }
+      if (cur >= STEPS.length - 1) cur = 0;
+      renderStep();
+      this.textContent = '暂停';
+      timer = setInterval(function () {
+        if (cur >= STEPS.length - 1) { stop(); return; }
+        cur += 1; renderStep();
+      }, 3500);
+    });
+    renderStep();
+  })();
+})();
+</script>
+</body>
+</html>

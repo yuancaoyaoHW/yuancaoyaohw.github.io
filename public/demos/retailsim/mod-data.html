@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>data · 点时数据层 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* mod-data 私有样式，前缀 dt- */
+.dt-io{display:grid;grid-template-columns:minmax(0,1fr) 34px minmax(0,1.1fr) 34px minmax(0,1fr);gap:8px;align-items:stretch;margin-top:14px}
+.dt-io .card{padding:14px 16px}
+.dt-io h4{margin:0 0 6px;font-size:14px}
+.dt-io ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink2)}
+.dt-io li{margin:4px 0}
+.dt-io .dt-core{border-color:rgba(34,211,238,.5);background:linear-gradient(160deg,rgba(34,211,238,.13),rgba(192,132,252,.04))}
+.dt-ar{display:flex;align-items:center;justify-content:center;color:var(--data);font-size:20px}
+@media(max-width:860px){.dt-io{grid-template-columns:minmax(0,1fr)}.dt-ar{transform:rotate(90deg);height:24px}}
+h3.dt-h{font-size:16px;margin:26px 0 8px;color:var(--ink)}
+h3.dt-h .dt-k{font:700 12px var(--mono);color:var(--data);margin-right:8px}
+.dt-svg{border:1px solid var(--line);border-radius:var(--r);background:rgba(5,8,20,.55);padding:8px;margin:14px 0 8px}
+.dt-svg svg{display:block;width:100%;height:auto}
+.dt-svg text{font-family:var(--sans)}
+.dt-n rect{fill:rgba(34,211,238,.08);stroke:rgba(34,211,238,.55);stroke-width:1.4}
+.dt-n.gate rect{fill:rgba(251,191,36,.08);stroke:rgba(251,191,36,.7)}
+.dt-n.ag rect{fill:rgba(192,132,252,.1);stroke:rgba(192,132,252,.65)}
+.dt-n.bad rect{fill:rgba(248,113,113,.06);stroke:rgba(248,113,113,.65);stroke-dasharray:5 4}
+.dt-t1{fill:var(--ink);font-size:14px;font-weight:700}
+.dt-t2{fill:var(--mute);font-size:11px}
+.dt-e{stroke:rgba(148,163,184,.75);stroke-width:1.6;fill:none}
+.dt-e.bad{stroke:rgba(248,113,113,.8);stroke-dasharray:5 4}
+.dt-el{fill:var(--mute);font-size:10.5px}
+.dt-ex{display:inline-block;font:700 11px var(--mono);color:var(--warn);border:1px dashed rgba(248,113,113,.6);border-radius:6px;padding:1px 7px}
+.dt-demo{border:1px solid rgba(34,211,238,.35);border-radius:var(--r);padding:16px;background:rgba(34,211,238,.04)}
+.dt-dots{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
+.dt-dots button{border:1px solid var(--line2);background:var(--panel);color:var(--ink2);font:600 12px var(--mono);border-radius:999px;padding:3px 10px;cursor:pointer}
+.dt-dots button.on{background:var(--data);color:#06101f;border-color:var(--data)}
+.dt-dots button.done{border-color:rgba(34,211,238,.6);color:var(--data)}
+.dt-st{font-size:15px;font-weight:700;margin:0 0 4px}
+.dt-quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+@media(max-width:700px){.dt-quad{grid-template-columns:minmax(0,1fr)}}
+.dt-quad>div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);font-size:13px;color:var(--ink2);min-width:0}
+.dt-quad b.dt-qt{display:block;font:700 11px var(--mono);color:var(--data);margin-bottom:4px;letter-spacing:.05em}
+.dt-quad pre{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 var(--mono);color:var(--ink)}
+.dt-quad ul{margin:0;padding-left:16px}
+.dt-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.dt-ctl .dt-pos{font:600 12.5px var(--mono);color:var(--ink2);margin-left:auto}
+.dt-big{font:700 22px var(--mono);color:var(--data)}
+.dt-up{color:var(--up)}.dt-down{color:var(--down)}
+.dt-lab{border:1px solid rgba(34,211,238,.35);border-radius:var(--r);padding:16px;background:rgba(34,211,238,.03)}
+.dt-lab input[type=range]{width:100%;accent-color:var(--data)}
+.dt-kpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}
+@media(max-width:600px){.dt-kpi{grid-template-columns:minmax(0,1fr)}}
+.dt-kpi>div{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--panel);min-width:0}
+.dt-kpi small{display:block;color:var(--mute);font-size:12px}
+.dt-chart line.ax{stroke:rgba(148,163,184,.35)}
+.dt-chart .raw{stroke:rgba(148,163,184,.8);stroke-dasharray:4 4;fill:none;stroke-width:1.6}
+.dt-chart .qfq{stroke:var(--data);fill:none;stroke-width:2.4}
+.dt-chart .hfq{stroke:var(--llm);fill:none;stroke-width:1.8}
+.dt-chart text{fill:var(--mute);font-size:11px;font-family:var(--mono)}
+.dt-key{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--ink2);margin-top:6px}
+.dt-key i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:6px;border-radius:2px}
+.dt-tbl td.hid{color:var(--mute);text-decoration:line-through;opacity:.6}
+.dt-tbl td.num{font-family:var(--mono);text-align:right}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>模块页 · data</div>
+<h1>点时数据层：<span class="grad">只给模拟日当天已经知道的数据</span></h1>
+<p class="lead">data 保存行情、交易日历、复权因子、成分快照和去标识化的帖子，所有读取都经过 <code>pit.query</code>，只放行 <code>available_at</code> 不晚于模拟时钟的记录。</p>
+<div class="meta">
+<span class="chip data"><i></i>产物 Parquet 表</span>
+<span class="chip warn"><i></i>强制 available_at ≤ clock</span>
+<span class="chip data"><i></i>不复权日线 + 复权因子（§5.5）</span>
+<span class="chip acct"><i></i>日线从 2005 年起，分钟线只补两类（§5.5）</span>
+</div>
+</header>
+
+<section id="s1" class="reveal"><h2><span class="num">01</span>职责一览</h2>
+<p class="sub">一句话：data 是全系统唯一的历史数据入口，按"模拟时钟当时能知道什么"把数据交给其他模块。</p>
+<p>模块说明写的是：data 是点时（PIT，point-in-time）数据层，管行情、交易日历、复权、指数 / 行业 / 题材成分的历史快照，以及去标识化后的真实帖子。点时的意思是：任何一次读取都带着一个时刻，只返回那个时刻之前已经公开的数据。每条记录带一个字段 <code>available_at</code>（这条数据最早什么时候能被看到），读取时由数据层强制 <code>available_at ≤ clock</code>，clock 是模拟时钟<span class="ref">§5.5</span>。</p>
+<p>数据分两种来路。能一次性拉全的历史数据（行情、日历、复权、指数与行业成分）由 data 自己的导入器载入；只能逐日积累的前向存档（帖子、新闻、题材成分）由 <code>collect</code> 写入，data 只读<span class="ref">§3.3</span>。产物是 Parquet 表<span class="ref">§3.3</span>。和其他业务模块一样，data 只通过 <code>schemas</code> 的共享类型与外界交换数据，由 orchestrator 把它接到上下游<span class="ref">§3.3</span>。</p>
+<div class="dt-io">
+<div class="card"><h4>输入</h4><ul>
+<li><b>历史导入器</b>：日线、交易日历、复权因子、指数与申万行业成分快照，以及按需补的分钟线<span class="ref">§5.5</span>；数据源待定<span class="ref">§5.5</span></li>
+<li><b>collect</b>：从平台上线当天起逐日存的帖子、新闻、题材成分<span class="ref">§2.5</span><span class="ref">§3.3</span></li>
+<li><b>collect 已去标识化的帖子</b>：<code>user_id</code> 哈希，昵称、头像、IP 属地入库即删除（属 collect 的采集规则<span class="ref">§16.1</span>）</li>
+</ul></div>
+<div class="dt-ar">→</div>
+<div class="card dt-core"><h4>data</h4><ul>
+<li>每条记录写 <code>available_at</code>，与报告期分开存<span class="ref">§5.5</span></li>
+<li>存不复权日线 + 复权因子表<span class="ref">§5.5</span></li>
+<li><code>pit.query(table, asof=clock)</code> 强制过滤<span class="ref">§5.5</span></li>
+<li>按 asof 现算前复权，收益与战绩用后复权<span class="ref">§5.5</span></li>
+</ul></div>
+<div class="dt-ar">→</div>
+<div class="card"><h4>输出</h4><ul>
+<li><b>agents</b>：经感知层 <code>perceive(feed, portfolio, prices)</code> 拿到价格<span class="ref">§6.1</span>，不直接读表<span class="ref">§5.5</span></li>
+<li><b>market</b>：前收、涨跌停基准、除权参考价<span class="ref">§8.4</span></li>
+<li><b>accounts / population</b>：除权时调整持仓与成本<span class="ref">§8.4</span>；投资史预跑用起点前的真实价格<span class="ref">§4.4</span></li>
+<li><b>events / outputs</b>：事件卡的 <code>assets</code> 映射到点时的指数 / 行业 / 题材 / 个股代码<span class="ref">§5.2</span>，题材维度等授权题材来源落实<span class="ref">§5.2</span><span class="ref">§5.5</span>；交付表每行标注可得时点<span class="ref">§10.3</span></li>
+</ul></div>
+</div>
+</section>
+
+<section id="s2" class="reveal"><h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">模拟回放的是过去，数据却是今天下载的。不加管控，智能体会读到它当时不可能知道的东西。</p>
+<p>RetailSim 要回答的是"某个历史时点，不同散户会说什么、怎么想、怎么做"。今天拉下来的历史数据里混着大量"未来信息"：修订后的宏观数字、后来才公布的财报、事后才划入的指数成分、按今天视角重算过的复权价格。只要有一条漏进提示词，智能体的反应就带上了后见之明，整个模拟的可信度随之失效。设计文档把"一切都是点时的"列为架构原则之一<span class="ref">§3.1</span>。</p>
+<p>所以设计文档要求每张表都有 <code>available_at</code>，并且和报告期、统计期分开存：宏观数据存首次发布值而不是修订值，财报按公告日，指数和申万行业成分用历史快照，股票池包含已退市股票以避免幸存者偏差<span class="ref">§5.5</span>。这些规则要在一个地方统一执行，否则每个模块各写一套过滤，迟早有一处漏掉。data 就是这个统一执行的地方。</p>
+<p>复权是最容易出错的一类。两个反例：</p>
+<div class="grid g2">
+<div class="card"><h4>反例一：存一份前复权序列</h4><p>前复权是以"最新一天"为基准把历史价格往下折算。如果直接存今天算好的前复权表，回放到除权之前的某一天，智能体看到的旧价格已经被后来的分红送转折算过，等于提前知道了未来会除权。设计文档因此规定存不复权日线，前复权按 <code>asof</code> 当天现算<span class="ref">§5.5</span>。</p></div>
+<div class="card"><h4>反例二：用不复权价格算收益</h4><p>除权日股价按除权参考价下调，不复权价格会出现一个跳空。用它算盈亏，一次分红送转就变成一笔大额"亏损"，智能体的战绩和情绪都会被带偏。设计文档规定收益与战绩统一用后复权计算<span class="ref">§5.5</span>。第 4 节的示例会把两种算法的差别算出来。</p></div>
+</div>
+<p>另一个原因是数据源本身不对称。有些数据可以随时回补，有些只能从某天起自己存，错过就没有了<span class="ref">§2.5</span>。data 需要把这两类记录区分开，并让结果可以分开比较。</p>
+</section>
+<section id="s3" class="reveal"><h2><span class="num">03</span>机制详解</h2>
+<p class="sub">四件事：每条记录怎样标可见时间、读取时怎样过滤、价格怎样复权、历史回溯到哪一年。最后列出还没谈定的部分。</p>
+
+<h3 class="dt-h"><span class="dt-k">3.1</span>available_at：每条记录最早何时可见</h3>
+<p><code>available_at</code> 记录的是"这条数据在现实中最早什么时候能被看到"，和它描述的时期是两回事。一份三季报描述的是 9 月 30 日之前，但要到公告日才可见；一个宏观数字后来可能被修订，模拟里只能用首次发布的那个值。设计文档对各类数据的口径如下<span class="ref">§5.5</span>：</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>数据</th><th>available_at 口径</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>财报</td><td>按公告日，不按报告期</td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>宏观数据</td><td>存首次发布值，不存修订值</td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>指数、申万行业成分</td><td>用历史快照</td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>题材成分</td><td>用授权来源（如 Tushare 同花顺概念成分或数据商）；拿不到历史快照就从某日起逐日存档，存档开始前不用题材维度</td><td><span class="ref">§5.5</span><span class="ref">§16.1</span></td></tr>
+<tr><td>新闻</td><td>平台上线当天起轮询存档，记录源时间戳与入库时间</td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>证监会、国务院、人民银行文件</td><td>用发布日，不用成文日</td><td><span class="ref">§2.5</span></td></tr>
+<tr><td>新闻联播文字稿</td><td>19:00 播出，归入下一交易日</td><td><span class="ref">§2.5</span></td></tr>
+<tr><td>复权因子</td><td>以除权除息日为 <code>available_at</code></td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>股票池</td><td>包含已退市股票，避免幸存者偏差</td><td><span class="ref">§5.5</span></td></tr>
+</tbody></table></div>
+<p>表里的规则可以归成三类。第一类是"按公开时刻记"：财报、政策文件、新闻联播都有一个描述的时期（报告期、成文日、播出当天）和一个公开时刻（公告日、发布日、下一交易日），<code>available_at</code> 取后者，描述的时期另存一列<span class="ref">§5.5</span>。第二类是"只记第一次的值"：宏观数据后来会修订，修订值在当时并不存在，所以只存首发值<span class="ref">§5.5</span>。第三类是"会随时间变化的集合"：指数成分、申万行业成分、题材成分、股票池。对这类表，问"某天的沪深 300 有哪些股票"必须查那一天的快照，用今天的成分名单回看过去，等于提前知道哪些股票后来被调入；股票池保留已退市股票也是同一个道理，只用今天还在交易的股票，回放出来的历史行情会系统性偏好"活下来的"公司，这就是幸存者偏差<span class="ref">§5.5</span>。题材成分改用授权来源；若授权来源也拿不到历史快照，就只能从开始存档那天起使用，之前的区间不用题材维度<span class="ref">§5.5</span>。</p>
+<p>自存档和回补数据要区别对待<span class="ref">§2.5</span>。自存档同时记录源时间戳和入库时间，两者取较晚的一个作为可见时间。举个例子（时刻为示例）：源上写着 9:30 发布，但系统 9:42 才抓到，那么模拟里按 9:42 算。回补的历史数据只有源时间戳，没有真实的入库时间，于是统一加一个保守延迟（文档举例"如 15 分钟"），并打上 <code>backfilled</code> 标记，方便比较两类数据上的结果有没有差别<span class="ref">§2.5</span>。</p>
+
+<h3 class="dt-h"><span class="dt-k">3.2</span>pit.query：所有读取走同一个闸门</h3>
+<p>任何模块读数据都调用 <code>pit.query(table, asof=clock)</code>，由数据层强制 <code>available_at ≤ clock</code>。智能体不直接访问数据，只通过感知层拿到经过过滤的信息<span class="ref">§5.5</span>。下图是一次读取的路径，红色虚线是被禁止的绕行。</p>
+<div class="dt-svg" role="img" aria-label="pit.query 查询示意图">
+<svg viewBox="0 0 900 300" preserveAspectRatio="xMidYMid meet">
+<defs><marker id="dt-arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="rgba(148,163,184,.85)"/></marker>
+<marker id="dt-arw-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="rgba(248,113,113,.9)"/></marker></defs>
+<path class="dt-e" d="M170 68 C200 68 200 118 228 118" marker-end="url(#dt-arw)"/>
+<path class="dt-e" d="M170 205 C200 205 200 152 228 152" marker-end="url(#dt-arw)"/>
+<path class="dt-e" d="M420 118 C450 118 450 68 478 68" marker-end="url(#dt-arw)"/>
+<path class="dt-e" d="M420 152 C450 152 450 188 478 188" marker-end="url(#dt-arw)"/>
+<path class="dt-e" d="M650 68 L718 68" marker-end="url(#dt-arw)"/>
+<path class="dt-e" d="M800 96 L800 158" marker-end="url(#dt-arw)"/>
+<path class="dt-e bad" d="M800 216 V272 H95 V244" marker-end="url(#dt-arw-bad)"/>
+<text class="dt-el" x="300" y="290" style="fill:#f87171">禁止：智能体直接读表，绕过 pit.query（§5.5）</text>
+<text class="dt-el" x="660" y="58">按 f[asof]</text>
+<text class="dt-el" x="808" y="132">感知层</text>
+<g class="dt-n"><rect x="20" y="40" width="150" height="56" rx="10"/><text class="dt-t1" x="34" y="64">模拟时钟 clock</text><text class="dt-t2" x="34" y="84">例：T25 盘前激活</text></g>
+<g class="dt-n"><rect x="20" y="172" width="150" height="70" rx="10"/><text class="dt-t1" x="34" y="196">Parquet 表</text><text class="dt-t2" x="34" y="214">日线 · 复权因子 · 成分</text><text class="dt-t2" x="34" y="230">帖子 · 新闻（collect 写）</text></g>
+<g class="dt-n gate"><rect x="230" y="92" width="190" height="86" rx="12"/><text class="dt-t1" x="244" y="120">pit.query(table, asof)</text><text class="dt-t2" x="244" y="142">只放行</text><text class="dt-t2" x="244" y="160">available_at ≤ clock</text></g>
+<g class="dt-n"><rect x="480" y="40" width="170" height="56" rx="10"/><text class="dt-t1" x="494" y="64">可见日线 + 可见因子</text><text class="dt-t2" x="494" y="84">晚于 clock 的行被丢弃</text></g>
+<g class="dt-n"><rect x="720" y="40" width="160" height="56" rx="10"/><text class="dt-t1" x="734" y="64">现算前复权</text><text class="dt-t2" x="734" y="84">与当年券商软件一致</text></g>
+<g class="dt-n"><rect x="480" y="160" width="170" height="56" rx="10"/><text class="dt-t1" x="494" y="184">后复权收益</text><text class="dt-t2" x="494" y="204">战绩 · accounts · outputs</text></g>
+<g class="dt-n ag"><rect x="720" y="160" width="160" height="56" rx="10"/><text class="dt-t1" x="734" y="184">perceive → 智能体</text><text class="dt-t2" x="734" y="204">提示词里的价格</text></g>
+</svg></div>
+<p>写成伪代码就是先扫表、再按时间过滤。真正的实现还要处理分区和缓存，文档没有规定，这里只表达规则：</p>
+<pre class="code"># 示意，未实现
+def query(table, asof, **filters):
+    df = lake.scan(table, **filters)
+    return df.filter(col("available_at") &lt;= asof)</pre>
+<p>粒度方面，行情以日线为主：盘前激活看到 T−1 收盘和隔夜信息，收盘后激活看到 T 日收盘<span class="ref">§5.5</span>，与 MVP 的固定激活点"盘前 + 收盘后"一致<span class="ref">§3.4</span>。分钟线只补两类股票日<span class="ref">§5.5</span>：</p>
+<ul>
+<li><b>盘中事件日</b>：量级 ≥ 3 且 <code>available_at</code> 落在交易时段的事件卡，会在其后最近的盘中检查点（10:00 / 11:30 / 14:00）激活接触到它的智能体。这一天只补指数与被激活者持仓的分钟线，智能体只看到检查点之前的分钟数据<span class="ref">§3.4</span>。拿不到分钟线的事件日，该次激活只出态度与帖子，交易意向转为"明日打算"，运行清单标"盘中无行情"<span class="ref">§3.4</span>。</li>
+<li><b>收盘封板但盘中开过板的股票日</b>：收盘封住涨停、但盘中最低价低于涨停价（跌停对称），每日约几十只。market 用分钟线算下单后非封板时长占比，决定排队买单的成交概率；拿不到分钟线时用固定概率跑三档敏感性分析<span class="ref">§5.5</span><span class="ref">§8.2</span>。</li>
+</ul>
+<p>分钟线同样带 <code>available_at</code>、经 <code>pit.query</code> 读取；在检查点读取时，asof 就是检查点时刻。这一句是本页按 §5.5 的通用规则推出的，分钟线表的字段和可见时刻文档没有单独写。</p>
+
+<h3 class="dt-h"><span class="dt-k">3.3</span>复权：存原始价，看前复权，算后复权</h3>
+<p>先解释三个词。上市公司分红、送股、转增股本时，股价在除权除息日按规则下调，这一天之前和之后的价格不能直接比较。"复权"就是把这种跳空修掉。前复权以最近一天为基准，把更早的价格按比例折算，最近的价格保持原样，设计文档认为按 asof 现算的前复权与当年券商软件的显示一致<span class="ref">§5.5</span>；后复权以最早一天为基准，把之后的价格往上折算，最早的价格保持原样，适合算长期收益。复权因子是每天一个累计乘数，除权日跳变一次，两种复权都由它算出。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.5，来自架构讨论 A1）</b>存不复权日线（开高低收、量、额、涨跌停价、停牌标记）和复权因子表（以除权除息日为 <code>available_at</code>）。智能体看到的价格按 <code>asof</code> 当天现算前复权，与当年券商软件显示一致；收益与战绩计算统一用后复权。</div>
+<p>这个决定的关键在"现算"。前复权的基准是"最近一天"，而模拟里的"最近一天"就是 asof。只用 <code>available_at ≤ asof</code> 的因子，以 asof 当天的因子为分母，算出来的就是那天的投资者在软件里看到的价格。除权日还没到，因子表里就没有这次除权，旧价格不会被提前折算。后复权的基准固定在序列第一天，不随 asof 变化，所以同一段收益无论哪天去算都相同，适合记战绩和事后统计。</p>
+<pre class="code"># 示意，未实现。f[t] 为累计复权因子，除权除息日跳变
+# 除权参考价与因子跳变：交易所通行算法，设计文档未写出这两条公式〔需复核〕
+ref = (pre_close - cash) / (1 + ratio)     # cash 每股派现，ratio 每股送转
+f[ex] = f[ex - 1] * pre_close / ref        # 除权日因子跳变
+
+# 前复权：只用 available_at ≤ asof 的因子，基准是 f[asof]
+qfq[t] = raw[t] * f[t] / f[asof]           # 仅对 t ≤ asof 有定义
+
+# 后复权：基准是序列第一天的因子 f[0]
+hfq[t] = raw[t] * f[t] / f[0]
+ret(t1, t2) = hfq[t2] / hfq[t1] - 1</pre>
+<p>除权还牵动其他模块。设计文档规定除权除息在权益登记日的次一交易日处理（沪 4.3.1），持仓数量与成本价同步调整，涨跌幅以除权参考价为基准；停牌期间订单无效<span class="ref">§8.4</span>。涨跌停价 = 前收 ×（1 ± 比例），主板 10%，创业板与科创板 20%，北交所 30%，最小价位 0.01 元<span class="ref">§8.1</span>。这些交易规则本身归 market 管，按"生效日 → 参数集"点时存放<span class="ref">§8.1</span>；data 提供的是不复权价格、停牌标记和复权因子。提示词里给智能体的持仓成本采用券商式摊薄成本〔需复核〕<span class="ref">§8.4</span>。</p>
+
+<h3 class="dt-h"><span class="dt-k">3.4</span>回溯：日线从 2005 年起</h3>
+<div class="callout decide"><b class="t">已定（v0.3 §5.5、§4.4，来自架构讨论 A1）</b>日线从 2005 年起，覆盖股改与 2007 年牛市。2005 年以前的经历只写进人生骨架作文字背景，不在行情上预跑。</div>
+<p>设计文档列出的关键市场时期从 2007 年牛市与 2008 年崩盘开始<span class="ref">§6.5</span>，2005 年起的日线可以覆盖它们。2005 年这个起点影响两处：一是人群生成时的投资史预跑，二是模拟起点前的热身期。预热期是正式测量前的 20–60 个交易日<span class="ref">§9.2</span>。按此推算（本页推论，文档没有写），只要正式测量起点不早于 2005 年初再加上预热长度，预热期的日线就够用。投资史预跑从每个人的 <code>entry_year</code> 跑到模拟起点，入市早于 2005 年的人只从 2005 年起在行情上预跑，之前的部分只作文字背景<span class="ref">§4.4</span>。预跑只记仓位权重、收益率和出入金占资产比例，期末再整体缩放到抽样档位<span class="ref">§4.4</span>。</p>
+
+<h3 class="dt-h"><span class="dt-k">3.5</span>泄漏测试</h3>
+<p>闸门写好了，还要能证明没有漏。设计文档规定三项测试<span class="ref">§5.5</span>；技术栈一节的"可复现的工程约定"第 6 条也把点时泄漏金丝雀测试和同一运行清单的重放一致性测试列为必做测试<span class="ref">§14.4</span>：</p>
+<ul>
+<li><b>金丝雀记录</b>：往表里插一条 <code>available_at</code> 在未来的记录，查询结果里必须看不到它。</li>
+<li><b>提示词日期扫描</b>：扫描所有提示词，不允许出现晚于模拟时钟的日期。</li>
+<li><b>回放一致性</b>：同一份运行清单（<code>RunManifest</code>，记录数据快照<span class="ref">§9.4</span>）重放，结果必须完全一致。这一条依赖 LLM 响应缓存；回放只读缓存，未命中就报错<span class="ref">§14.4</span>。</li>
+</ul>
+<p>三项测试各管一条泄漏路径。金丝雀管的是闸门本身：过滤条件写错、某张表漏了 <code>available_at</code>、某个模块绕开 <code>pit.query</code>，查询结果里都会多出那条记录。日期扫描管的是闸门之外的路径：例如背景故事、预置记忆或事件改写里写进了起点之后的日期，这些文本不一定经过数据层，只能在提示词这一端查（§4.4 第 5 条也要求扫描背景故事里起点之后的日期）<span class="ref">§4.4</span>。重放一致性管的是"同样的输入是否得到同样的结果"：如果某处读数据时用了系统当前时间而不是模拟时钟，或数据快照被悄悄更新，重放结果就会不同<span class="ref">§5.5</span><span class="ref">§9.4</span>。这一段对三项测试分工的解释是本页的归纳，文档只列出了测试本身。</p>
+<p>这些测试只管数据里的未来信息。大模型参数里本身记着的"未来知识"是另一类污染，用截止表、记忆探针等办法另行处理<span class="ref">§13.1</span>，不在 data 的职责内。</p>
+
+<h3 class="dt-h"><span class="dt-k">3.6</span>还没定的部分</h3>
+<p>设计文档写明：数据源、各表 <code>available_at</code> 的取值规则与存储格式待定，随数据源一起定；历史新闻源与授权题材来源同此<span class="ref">§5.5</span>。所以本页凡涉及表名、字段名、时刻精度（例如因子的 <code>available_at</code> 是除权日零点还是开盘前）的地方，都只是示意。技术栈写的是"Parquet + DuckDB + Polars；事件日志只追加；点时查询"<span class="ref">§14.4</span>，表怎么分、字段怎么写还没定。题材成分的方向已经定了：东财题材成分接口 robots 禁止，不采，改用授权来源<span class="ref">§16.1</span>；具体用哪家，与数据源一起定<span class="ref">§5.5</span>。</p>
+</section>
+<section id="s4" class="reveal"><h2><span class="num">04</span>走一遍示例</h2>
+<p class="sub">用一只化名股票跨过一次除权，按不同的 asof 现算前复权价，看智能体每天看到什么价格，再用后复权算一笔收益。<span class="dt-ex">示例数据</span></p>
+<p>示例股票叫"示例消费股 600xxx"，是化名，不对应任何真实公司。交易日编号 T20 到 T27，价格、分红方案、持仓都是为说明计算编的示例数据。分红方案设为"10 转 3 派 5"，即每 10 股转增 3 股并派现 5 元，折合每股送转 0.3、每股派现 0.5 元，除权除息日是 T25。示例里把复权因子的 <code>available_at</code> 记为 T25 开盘前；§5.5 只说"以除权除息日为 available_at"，具体时刻文档未定义。</p>
+<h3 class="dt-h"><span class="dt-k">4.1</span>分步演示：六个时点</h3>
+<div class="dt-demo">
+<div class="dt-dots" id="dt-dots"></div>
+<p class="dt-st" id="dt-title"></p>
+<div class="dt-quad">
+<div><b class="dt-qt">输入</b><pre id="dt-in"></pre></div>
+<div><b class="dt-qt">处理</b><pre id="dt-do"></pre></div>
+<div><b class="dt-qt">输出</b><pre id="dt-out"></pre></div>
+<div><b class="dt-qt">对应文档条目</b><pre id="dt-src"></pre></div>
+</div>
+<div class="dt-ctl">
+<button class="btn" id="dt-prev" type="button">上一步</button>
+<button class="btn pri" id="dt-next" type="button">下一步</button>
+<button class="btn" id="dt-play" type="button">自动播放</button>
+<span class="dt-pos" id="dt-pos"></span>
+</div>
+</div>
+
+<h3 class="dt-h"><span class="dt-k">4.2</span>自己拖一下 asof</h3>
+<p>下面用同一组示例数据。拖动滑块改变模拟时钟（每一格是某个交易日收盘后），图里只画 <code>available_at ≤ asof</code> 的部分。注意 asof 从 T24 拖到 T25 的那一下：青色的前复权线把 T20 到 T24 整段往下折算，而紫色的后复权线已经画出的部分一点不动。<span class="dt-ex">示例数据</span></p>
+<div class="dt-lab">
+<label class="ctl" for="dt-asof">asof（收盘后）：<b id="dt-asof-l"></b></label>
+<input type="range" id="dt-asof" min="0" max="7" step="1" value="4">
+<div class="dt-kpi">
+<div><small>智能体看到的收盘价（前复权）</small><span class="dt-big" id="dt-k1"></span></div>
+<div><small>T20 收盘起的后复权收益</small><span class="dt-big" id="dt-k2"></span></div>
+<div><small>同期用不复权价算（错误做法）</small><span class="dt-big" id="dt-k3"></span></div>
+</div>
+<div class="dt-svg dt-chart"><svg id="dt-svg" viewBox="0 0 640 230" preserveAspectRatio="xMidYMid meet" role="img" aria-label="价格序列随 asof 变化"></svg></div>
+<div class="dt-key"><span><i style="background:var(--data)"></i>前复权（以 asof 为基准）</span><span><i style="background:var(--llm)"></i>后复权（以 T20 为基准）</span><span><i style="background:rgba(148,163,184,.8)"></i>不复权原始价</span></div>
+<div class="tbl-wrap"><table class="tbl dt-tbl" id="dt-ftbl">
+<thead><tr><th>复权因子表（示例）</th><th>f</th><th>available_at</th><th>本次 asof 是否可见</th></tr></thead>
+<tbody></tbody></table></div>
+</div>
+</section>
+<section id="s5" class="reveal"><h2><span class="num">05</span>接口与数据结构</h2>
+<p class="sub">文档定下了接口的形状和少数必有字段，表名、字段名和类型都还没定。下表只列文档里出现过的内容。</p>
+<p>对外接口只有一个：<code>pit.query(table, asof=clock)</code><span class="ref">§5.5</span>。它返回的是按时间过滤后的表，调用方不能关掉过滤。存储层的技术栈写的是 Parquet + DuckDB + Polars<span class="ref">§14.4</span>，交付表也用 Parquet<span class="ref">§10.3</span>。设计文档把各表 <code>available_at</code> 的取值规则和存储格式列为待定<span class="ref">§5.5</span>，所以下表里的英文字段名一律标"文档未定义"，只有文档原文里写成代码的名字才照写。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>适用范围</th><th>文档中的内容</th><th>字段名</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>所有表</td><td>可见时间，读取时强制 ≤ clock</td><td><code>available_at</code></td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>所有表</td><td>报告期、统计期，与可见时间分开存</td><td>文档未定义</td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>不复权日线</td><td>开、高、低、收、成交量、成交额</td><td>文档未定义</td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>不复权日线</td><td>涨跌停价、停牌标记</td><td>文档未定义</td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>复权因子表</td><td>累计因子，以除权除息日为 <code>available_at</code></td><td>文档未定义</td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>分钟线</td><td>只补盘中事件日的指数与被激活者持仓，以及收盘封板且最低价低于涨停价（跌停对称）的股票日</td><td>文档未定义</td><td><span class="ref">§5.5</span><span class="ref">§3.4</span><span class="ref">§8.2</span></td></tr>
+<tr><td>自存档（新闻等）</td><td>源时间戳、入库时间，取较晚者为可见时间</td><td>文档未定义</td><td><span class="ref">§2.5</span></td></tr>
+<tr><td>回补数据</td><td>回补标记，并加保守延迟</td><td><code>backfilled</code></td><td><span class="ref">§2.5</span></td></tr>
+<tr><td>帖子</td><td>用户标识入库时哈希</td><td><code>user_id</code></td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>帖子</td><td>昵称、头像、IP 属地入库即删除</td><td>文档未定义</td><td><span class="ref">§16.1</span></td></tr>
+<tr><td>运行</td><td>记录本次运行用的数据快照</td><td><code>RunManifest</code></td><td><span class="ref">§9.4</span></td></tr>
+</tbody></table></div>
+<p>下面两段 JSON 用第 4 节的示例数据，演示一行不复权日线和一行复权因子大致长什么样。键名是为阅读起的，不是定稿。</p>
+<div class="grid g2">
+<pre class="code">// 示意，未实现；键名文档未定义；示例数据
+{
+  "symbol": "600xxx",
+  "trade_date": "T25",
+  "open": 10.05, "high": 10.35,
+  "low": 9.98,  "close": 10.20,
+  "volume": "示例", "amount": "示例",
+  "limit_up": 11.00, "limit_down": 9.00,
+  "suspended": false,
+  "available_at": "T25 收盘后"
+}</pre>
+<pre class="code">// 示意，未实现；键名文档未定义；示例数据
+{
+  "symbol": "600xxx",
+  "ex_date": "T25",
+  "factor": 1.35,
+  "plan": "10 转 3 派 5",
+  "available_at": "T25 开盘前"
+}
+// 读取（示意）：
+// pit.query("adj_factor", asof="T24 收盘后")
+//   → 不含这一行</pre>
+</div>
+<p>示例里日线的 <code>available_at</code> 写成"收盘后"，是按"收盘后激活看到 T 日收盘"<span class="ref">§5.5</span>推出的示意，日线精确到哪个时刻文档未定义。<code>backfilled</code> 标记和保守延迟在文档里是就新闻等自存档与回补数据说的<span class="ref">§2.5</span>，日线是否同样打标记没有单独说明，所以示例里没写。</p>
+</section>
+<section id="s6" class="reveal"><h2><span class="num">06</span>设计取舍与已定决定</h2>
+<p class="sub">每项写清选了什么、放弃了什么、为什么。来自架构讨论 A1–A3、已并入设计文档 v0.3 的决定单独标出。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>取舍</th><th>选择</th><th>放弃</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>过滤放在哪里</td><td>数据层统一强制 <code>available_at ≤ clock</code><span class="ref">§5.5</span></td><td>各模块自己过滤的灵活性</td><td>只有一个闸门，才能用一组金丝雀测试证明没漏<span class="ref">§14.4</span></td></tr>
+<tr><td>智能体能否直接读数据</td><td>不能，只经感知层<span class="ref">§5.5</span></td><td>让智能体按需查询的自由度</td><td>提示词里出现什么完全可控，也便于扫描日期</td></tr>
+<tr><td>价格怎么存</td><td>不复权日线 + 复权因子表<span class="ref">§5.5</span></td><td>直接读一张算好的复权表的便利，每次读取要多一步计算</td><td>算好的前复权表含有未来除权信息；原始价加因子可以算出任何 asof 下的前复权和后复权</td></tr>
+<tr><td>智能体看什么价</td><td>按 asof 现算前复权<span class="ref">§5.5</span></td><td>跨日比较价格时序列会整体变化</td><td>与当年券商软件显示一致，散户当时看到的就是这个</td></tr>
+<tr><td>收益怎么算</td><td>收益与战绩统一用后复权<span class="ref">§5.5</span></td><td>和智能体看到的价格直接对得上</td><td>后复权不随 asof 变，同一段收益任何时候算都相同，可由事件日志重算<span class="ref">§8.4</span></td></tr>
+<tr><td>新闻可见时间</td><td>源时间戳与入库时间取较晚者；回补加保守延迟并标 <code>backfilled</code><span class="ref">§2.5</span></td><td>回补数据的时效精度</td><td>宁可晚看到也不早看到，两类数据的结果可分开比较</td></tr>
+<tr><td>题材成分来源</td><td>授权来源（如 Tushare 同花顺概念成分或数据商）<span class="ref">§5.5</span></td><td>自采东财题材成分接口</td><td>该接口 robots 禁止，不采<span class="ref">§16.1</span></td></tr>
+<tr><td>题材维度</td><td>拿不到历史快照时，存档开始前不用<span class="ref">§5.5</span></td><td>早期回放里的题材分析</td><td>用今天的成分回看过去就是未来信息</td></tr>
+<tr><td>行情粒度</td><td>日线为主，分钟线只补两类股票日<span class="ref">§5.5</span></td><td>全市场分钟线</td><td>固定激活点只有盘前、收盘后，日线就够<span class="ref">§3.4</span>；分钟线只在两处必需：盘中检查点只看检查点之前的数据<span class="ref">§3.4</span>，开板回封日要按非封板时长定买单成交概率<span class="ref">§8.2</span></td></tr>
+</tbody></table></div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.5，来自架构讨论 A1）</b>复权：存不复权日线和复权因子表，前复权按 asof 现算，收益与战绩用后复权。回溯：日线从 2005 年起，2005 年以前的经历只写进人生骨架作文字背景，不在行情上预跑（§4.4 已按此改写）。粒度：日线为主，分钟线只补盘中事件日与"收盘封板但最低价低于涨停价"的股票日。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §16.1、§5.5，来自架构讨论 A2）</b>东财题材成分接口 robots 禁止，不采，题材成分改用授权来源。帖子入库即去标识化：<code>user_id</code> 哈希，昵称、头像、IP 属地入库即删除。股吧帖子与东财 7x24 快讯从 Phase 0 起每日采集，写入 data 的前向存档。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.2、§5.5，来自架构讨论 A3）</b>资产映射里的题材维度等授权题材来源落实后再用；历史新闻源与授权题材来源随数据源一起定。</div>
+</section>
+<section id="s7" class="reveal"><h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">data 处在依赖链的底部：它不调用业务模块，别的模块读它。下面按"谁写给 data""谁从 data 读"分开列。</p>
+<p>写给 data 的只有 collect 和历史导入器；读 data 的模块都经过 <code>pit.query</code>，时钟由 orchestrator 推进。共享类型放在 schemas 里<span class="ref">§3.3</span>。</p>
+<div class="grid g3">
+<div class="card"><h4><a href="mod-collect.html">collect</a></h4><p>逐日存帖子、新闻、题材成分，写入 data 的前向存档；data 只读<span class="ref">§2.5</span>。</p></div>
+<div class="card"><h4><a href="mod-orchestrator.html">orchestrator</a></h4><p>推进模拟时钟，决定每次读取的 asof；把 data 接到其他模块<span class="ref">§3.3</span>。</p></div>
+<div class="card"><h4><a href="mod-schemas.html">schemas</a></h4><p>放共享类型，data 与其他模块只通过它交换数据<span class="ref">§3.3</span>。</p></div>
+<div class="card"><h4><a href="mod-agents.html">agents</a></h4><p>经感知层 <code>perceive</code> 拿到前复权价格和可见信息，不直接读表<span class="ref">§5.5</span><span class="ref">§6.1</span>。</p></div>
+<div class="card"><h4><a href="mod-market.html">market</a></h4><p>用前收、除权参考价算涨跌停；交易规则的点时参数集归 market<span class="ref">§8.1</span><span class="ref">§8.4</span>。</p></div>
+<div class="card"><h4><a href="mod-accounts.html">accounts</a></h4><p>除权日同步调整持仓数量和成本，战绩用后复权<span class="ref">§5.5</span><span class="ref">§8.4</span>。</p></div>
+<div class="card"><h4><a href="mod-population.html">population</a></h4><p>投资史预跑读起点前的真实价格<span class="ref">§4.4</span>；行情只回溯到 2005 年，更早的经历只写进人生骨架作文字背景，预跑按比例记账、期末缩放<span class="ref">§4.4</span><span class="ref">§5.5</span>。</p></div>
+<div class="card"><h4><a href="mod-events.html">events</a></h4><p>资产映射读指数、行业成分快照；题材维度等授权题材来源落实后再用<span class="ref">§5.2</span><span class="ref">§5.5</span>。</p></div>
+<div class="card"><h4><a href="mod-outputs.html">outputs</a> · <a href="mod-validation.html">validation</a></h4><p>交付表每行标注可得时点，t 日产出只用 t 日收盘后可得的信息<span class="ref">§10.3</span>。金丝雀与重放一致性测试列在 §14.4 的工程约定里，文档没写归哪个模块。</p></div>
+</div>
+<p>想看 data 在一天里什么时候被读、读到什么，参见<a href="flow-day.html">一个交易日</a>；数据快照怎样写进运行清单，参见<a href="flow-run.html">运行生命周期</a>；智能体最终看到的价格怎样进入人设与决策，参见<a href="sim-personas.html">散户决策演示</a>。</p>
+</section>
+
+<section id="s8" class="reveal"><h2><span class="num">08</span>开放问题</h2>
+<p class="sub">以下各项在设计文档 v0.3 里仍标为待定或需复核，本页没有替它们做决定。</p>
+<div class="callout todo"><b class="t">数据源未定</b>数据源、各表 <code>available_at</code> 的取值规则与存储格式待定，随数据源一起定；历史新闻源与授权题材来源同此<span class="ref">§5.5</span>。</div>
+<div class="callout todo"><b class="t">各表 available_at 的取值规则与存储格式</b>设计文档列为待定<span class="ref">§5.5</span>。例如复权因子的 <code>available_at</code> 落在除权日的哪个时刻、日线是收盘即可见还是另有延迟，文档都没有规定。</div>
+<div class="callout todo"><b class="t">Tushare 新闻时间戳的含义</b>Tushare <code>news</code> 有 6 年以上历史、可回补、精确到秒，但需要单独的新闻权限；时间戳是发布时间还是抓取时间、修改和删除怎样处理，尚未确认<span class="ref">§2.5</span>。</div>
+<div class="callout todo"><b class="t">其他候选源的限制</b>AKShare 新闻类接口除"财经早餐"外只给最近 20–200 条、不能回补，接口也会失效<span class="ref">§2.5</span>；新闻联播文字稿的社区存档有缺天，版权未核实<span class="ref">§2.5</span>；GDELT 2.0 自 2015-02 起、15 分钟更新，对 A 股新闻覆盖偏少〔需复核〕<span class="ref">§2.5</span>；Wind、Choice、CSMAR、CNRDS 等付费库需确认时间戳口径和再分发条款<span class="ref">§2.5</span>。</div>
+<div class="callout todo"><b class="t">分钟线的来源与可见时间</b>补哪两类分钟线已经定了<span class="ref">§5.5</span>，但分钟线从哪个源取、每根 K 线的 <code>available_at</code> 怎样取值，随数据源一起待定<span class="ref">§5.5</span>。取不到分钟线时，盘中激活只出态度与发帖、意向记为明日打算并在清单标"盘中无行情"<span class="ref">§3.4</span>；开板回封日按固定档位兜底<span class="ref">§8.2</span>。</div>
+<div class="callout todo"><b class="t">需复核的规则日期与口径</b>创业板涨跌幅 2020-08-24 由 10% 改为 20%〔需复核〕、印花税 2023-08-28 由 0.1% 降至 0.05%〔需复核〕<span class="ref">§8.1</span>；提示词中的券商式摊薄成本〔需复核〕<span class="ref">§8.4</span>。这些规则与口径归 market 和 accounts，回放时要按生效日取用<span class="ref">§8.1</span>，所以和 data 的日期口径一起列在这里。</div>
+<div class="callout todo"><b class="t">金丝雀断言的位置</b>文档要求未来时间戳的金丝雀记录"必须不可见"<span class="ref">§5.5</span>，但没写断言是检查 <code>pit.query</code> 的返回结果，还是检查最终提示词，或两者都查。</div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+/* 示例数据：示例消费股 600xxx，T20..T27，T25 除权（10 转 3 派 5） */
+var D=['T20','T21','T22','T23','T24','T25','T26','T27'];
+var RAW=[13.00,13.20,13.10,13.40,13.50,10.20,10.40,10.30];
+var F=[1,1,1,1,1,1.35,1.35,1.35];
+var EX=5;
+function fx(v,n){return (typeof v==='number'&&isFinite(v))?v.toFixed(n==null?2:n):'—';}
+function pct(v){if(typeof v!=='number'||!isFinite(v))return '—';var s=(v*100).toFixed(2)+'%';return v>0?'+'+s:s;}
+function qfq(i,a){var b=F[a];if(!b||i>a)return NaN;return RAW[i]*F[i]/b;}
+function hfq(i){var b=F[0];if(!b)return NaN;return RAW[i]*F[i]/b;}
+function ratio(x,y){return (y&&isFinite(x)&&isFinite(y))?x/y-1:NaN;}
+function $(id){return document.getElementById(id);}
+
+var STEPS=[
+{t:'第 1 步 · asof = T22 收盘后：正确做法与泄漏做法',
+ i:'clock = T22 收盘后\n日线 T20–T22 不复权收盘：13.00 / 13.20 / 13.10\n复权因子表：T25 那一行 available_at = T25 开盘前',
+ d:'pit.query 过滤 available_at ≤ T22 收盘后\n→ T25 因子不可见，f[T22] = 1.00\nqfq[t] = raw[t] × f[t] / f[T22]\n\n对照错误做法：直接读一张今天（T27）算好的前复权表\nqfq_bad[T22] = 13.10 × 1.00 / 1.35',
+ o:'正确：智能体看到 T22 收盘 13.10\n错误：存好的前复权表给出 9.70\n  9.70 只有知道 T25 会除权才算得出来，属于未来信息',
+ s:'§5.5 读取强制 available_at ≤ clock\n§5.5 存不复权日线 + 复权因子表\n§5.5 前复权按 asof 现算'},
+{t:'第 2 步 · asof = T24 收盘后：除权前最后一天',
+ i:'clock = T24 收盘后\n日线 T20–T24：13.00 / 13.20 / 13.10 / 13.40 / 13.50\n可见因子：全部为 1.00',
+ d:'仍没有可见的除权因子\nqfq[t] = raw[t] × 1.00 / 1.00 = raw[t]',
+ o:'智能体看到 T24 收盘 13.50，历史价格与原始价相同\n收盘后激活看到的是 T 日收盘（§5.5）',
+ s:'§5.5 收盘后激活看到 T 收盘\n§5.5 复权因子以除权除息日为 available_at'},
+{t:'第 3 步 · asof = T25 开盘前：除权因子变为可见',
+ i:'clock = T25 开盘前（盘前激活）\n前收 pre_close = 13.50\n方案 10 转 3 派 5：cash = 0.50，ratio = 0.30',
+ d:'除权参考价 ref = (13.50 − 0.50) / (1 + 0.30) = 10.00\nf[T25] = f[T24] × 13.50 / 10.00 = 1.35\n涨跌停 = 10.00 × (1 ± 10%) = 11.00 / 9.00\n前复权前收 = 13.50 × 1.00 / 1.35 = 10.00',
+ o:'智能体盘前看到"昨收"10.00，和当年券商软件除权日的显示一致\n当日涨跌停 11.00 / 9.00\n因子 available_at 记为 T25 开盘前是示例假设，文档未定义具体时刻',
+ s:'§5.5 复权因子以除权除息日为 available_at\n§8.4 涨跌停以除权参考价为基准\n§8.1 主板 10%，最小价位 0.01 元\n§5.5 盘前激活看到 T−1 收盘 + 隔夜信息\n参考价公式为交易所通行算法〔需复核〕'},
+{t:'第 4 步 · asof = T25 收盘后：历史价格整段折算',
+ i:'clock = T25 收盘后\nT25 不复权收盘 10.20\n可见因子：T20–T24 为 1.00，T25 为 1.35',
+ d:'qfq[t] = raw[t] × f[t] / f[T25]，f[T25] = 1.35\nT20：13.00 / 1.35 = 9.63\nT24：13.50 / 1.35 = 10.00\nT25：10.20 × 1.35 / 1.35 = 10.20\n当日涨幅 = 10.20 / 10.00 − 1',
+ o:'智能体看到收盘 10.20，当日 +2.00%\n历史序列变为 9.63 / 9.78 / 9.70 / 9.93 / 10.00 / 10.20\n若用不复权价：10.20 / 13.50 − 1 = −24.44%，一次除权被当成暴跌',
+ s:'§5.5 前复权按 asof 现算，与当年券商软件一致\n§8.4 除权除息在权益登记日的次一交易日处理'},
+{t:'第 5 步 · asof = T27 收盘后：用后复权算收益',
+ i:'clock = T27 收盘后\nT27 不复权收盘 10.30\n问题：T20 收盘买入，到 T27 收盘赚了多少',
+ d:'hfq[t] = raw[t] × f[t] / f[T20]，f[T20] = 1.00\nhfq[T20] = 13.00\nhfq[T27] = 10.30 × 1.35 = 13.905\nret = 13.905 / 13.00 − 1',
+ o:'后复权收益 +6.96%\n不复权算法 10.30 / 13.00 − 1 = −20.77%，方向都错了\n智能体当天看到的前复权价是 10.30',
+ s:'§5.5 收益与战绩统一用后复权\n§8.4 战绩可由事件日志重算'},
+{t:'第 6 步 · 用持仓对一遍账',
+ i:'示例持仓：T20 收盘买入 1000 股，成本 13,000 元\nT25 除权：每 10 股转 3 股、派 5 元',
+ d:'除权日 accounts 同步调整：1000 → 1300 股，现金 +500 元（未计税，示例简化）\nT27 市值 = 1300 × 10.30 = 13,390 元\n总资产 = 13,390 + 500 = 13,890 元\n账户收益 = 13,890 / 13,000 − 1',
+ o:'账户收益 +6.85%，后复权给出 +6.96%\n差 0.11 个百分点：后复权等于假设 0.50 元现金按参考价再投入了股票，账户里它是现金\n两者都远离不复权算出的 −20.77%',
+ s:'§8.4 持仓数量与成本同步调整\n§5.5 战绩用后复权\n分红税处理：文档未定义'}
+];
+/* 组件 1：分步演示 */
+(function(){
+  var dots=$('dt-dots'),ti=$('dt-title'),pi=$('dt-in'),pd=$('dt-do'),po=$('dt-out'),ps=$('dt-src');
+  var prev=$('dt-prev'),next=$('dt-next'),play=$('dt-play'),pos=$('dt-pos');
+  if(!dots||!ti||!pi||!pd||!po||!ps||!prev||!next||!play)return;
+  var n=STEPS.length,cur=0,timer=null,btns=[];
+  STEPS.forEach(function(st,k){
+    var b=document.createElement('button');b.type='button';b.textContent=String(k+1);
+    b.setAttribute('aria-label','第 '+(k+1)+' 步');
+    b.addEventListener('click',function(){stop();go(k);});
+    dots.appendChild(b);btns.push(b);
+  });
+  function go(k){
+    if(!n)return;
+    cur=Math.max(0,Math.min(n-1,k|0));
+    var st=STEPS[cur]||{};
+    ti.textContent=st.t||'';pi.textContent=st.i||'';pd.textContent=st.d||'';
+    po.textContent=st.o||'';ps.textContent=st.s||'';
+    btns.forEach(function(b,j){b.classList.toggle('on',j===cur);b.classList.toggle('done',j<cur);});
+    prev.disabled=cur===0;next.disabled=cur===n-1;
+    if(pos)pos.textContent=(cur+1)+' / '+n+' · 示例数据';
+  }
+  function stop(){if(timer){clearInterval(timer);timer=null;}play.textContent='自动播放';}
+  prev.addEventListener('click',function(){stop();go(cur-1);});
+  next.addEventListener('click',function(){stop();go(cur+1);});
+  play.addEventListener('click',function(){
+    if(timer){stop();return;}
+    if(cur>=n-1)go(0);
+    play.textContent='暂停';
+    timer=setInterval(function(){if(cur>=n-1){stop();return;}go(cur+1);},4200);
+  });
+  go(0);
+})();
+
+/* 组件 2：asof 滑块 */
+(function(){
+  var sl=$('dt-asof'),lab=$('dt-asof-l'),k1=$('dt-k1'),k2=$('dt-k2'),k3=$('dt-k3'),svg=$('dt-svg'),tb=$('dt-ftbl');
+  if(!sl||!svg)return;
+  var NS='http://www.w3.org/2000/svg',W=640,H=230,L=46,R=16,T=16,B=34,YMIN=9,YMAX=15;
+  function X(i){var m=D.length-1;return m>0?L+(W-L-R)*i/m:L;}
+  function Y(v){var span=YMAX-YMIN;if(!span||!isFinite(v))return H-B;var c=Math.max(YMIN,Math.min(YMAX,v));return T+(H-T-B)*(1-(c-YMIN)/span);}
+  function el(tag,at,txt){var e=document.createElementNS(NS,tag);for(var k in at){if(Object.prototype.hasOwnProperty.call(at,k))e.setAttribute(k,at[k]);}if(txt!=null)e.textContent=txt;return e;}
+  function line(vals,cls){
+    var pts=[];vals.forEach(function(v,i){if(isFinite(v))pts.push(X(i).toFixed(1)+','+Y(v).toFixed(1));});
+    if(pts.length<2){return null;}
+    return el('polyline',{points:pts.join(' '),'class':cls});
+  }
+  function setNum(node,v,isPct){
+    if(!node)return;node.textContent=isPct?pct(v):fx(v);
+    node.classList.remove('dt-up','dt-down');
+    if(isPct&&isFinite(v)&&v!==0)node.classList.add(v>0?'dt-up':'dt-down');
+  }
+  function draw(a){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    for(var y=YMIN;y<=YMAX;y+=2){
+      svg.appendChild(el('line',{x1:L,x2:W-R,y1:Y(y),y2:Y(y),'class':'ax'}));
+      svg.appendChild(el('text',{x:6,y:Y(y)+4},y.toFixed(2)));
+    }
+    D.forEach(function(d,i){svg.appendChild(el('text',{x:X(i)-10,y:H-12},d));});
+    if(a>=EX){
+      svg.appendChild(el('line',{x1:X(EX),x2:X(EX),y1:T,y2:H-B,stroke:'rgba(251,191,36,.7)','stroke-dasharray':'3 4'}));
+      svg.appendChild(el('text',{x:X(EX)+4,y:T+10,style:'fill:#fbbf24'},'除权 T25'));
+    }
+    svg.appendChild(el('line',{x1:X(a),x2:X(a),y1:T,y2:H-B,stroke:'rgba(34,211,238,.35)'}));
+    var raw=[],q=[],h=[];
+    for(var i=0;i<=a;i++){raw.push(RAW[i]);q.push(qfq(i,a));h.push(hfq(i));}
+    [line(raw,'raw'),line(h,'hfq'),line(q,'qfq')].forEach(function(p){if(p)svg.appendChild(p);});
+    if(a===0){svg.appendChild(el('circle',{cx:X(0),cy:Y(RAW[0]),r:4,fill:'var(--data)'}));}
+  }
+  function table(a){
+    if(!tb||!tb.tBodies[0])return;var body=tb.tBodies[0];
+    while(body.firstChild)body.removeChild(body.firstChild);
+    var rows=[['初始（T20 及以前）',1,'T20 之前',0],['T25 除权（10 转 3 派 5）',1.35,'T25 开盘前',EX]];
+    rows.forEach(function(r){
+      var vis=a>=r[3],tr=document.createElement('tr');
+      [r[0],fx(r[1]),r[2],vis?'可见':'不可见，被 pit.query 过滤'].forEach(function(c,j){
+        var td=document.createElement('td');td.textContent=c;
+        if(j===1)td.className='num';
+        if(!vis&&j<3)td.classList.add('hid');
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+  }
+  function upd(){
+    var a=parseInt(sl.value,10);if(!isFinite(a))a=0;a=Math.max(0,Math.min(D.length-1,a));
+    if(lab)lab.textContent=D[a]+' 收盘后';
+    setNum(k1,qfq(a,a),false);
+    setNum(k2,ratio(hfq(a),hfq(0)),true);
+    setNum(k3,ratio(RAW[a],RAW[0]),true);
+    draw(a);table(a);
+  }
+  sl.addEventListener('input',upd);
+  upd();
+})();
+})();
+</script>
+</body>
+</html>

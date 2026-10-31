@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>market · 市场层：规则约束与成交判定 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+.mk-iface{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr);gap:12px;align-items:stretch}
+@media(max-width:820px){.mk-iface{grid-template-columns:minmax(0,1fr)}}
+.mk-iface .card h4{margin:0 0 6px}
+.mk-iface ul{margin:0;padding-left:18px;font-size:13.5px}
+.mk-iface li{margin:3px 0}
+.mk-core{border-color:rgba(251,191,36,.5)!important;background:rgba(251,191,36,.07)!important}
+.mk-svg{width:100%;height:auto;display:block}
+.mk-svg text{font-family:var(--sans);fill:var(--ink)}
+.mk-svg .mk-m{fill:var(--mute);font-size:11px}
+.mk-svgbox{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:10px;margin:14px 0}
+.mk-modes .card h4{margin:0 0 4px}
+.mk-modes .card p{font-size:13.5px;margin:6px 0 0}
+.mk-dim{opacity:.72}
+.mk-tagx{display:inline-block;font:700 11px var(--sans);padding:1px 8px;border-radius:999px;border:1px solid rgba(248,113,113,.45);color:var(--warn);background:rgba(248,113,113,.1);margin-left:6px;vertical-align:middle}
+.mk-ord{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.mk-ord button{font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;border:1px solid var(--line2);background:var(--panel);color:var(--ink2);cursor:pointer}
+.mk-ord button.on{background:var(--market);color:#06101f;font-weight:700;border-color:transparent}
+.mk-steps{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.mk-steps li{font-size:12px;padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel);opacity:.55;cursor:pointer}
+.mk-steps li b{font:700 11px var(--mono);margin-right:4px;color:var(--market)}
+.mk-steps li.on{opacity:1;border-color:var(--market);background:rgba(251,191,36,.1)}
+.mk-steps li.pass{opacity:.9}
+.mk-steps li.fail{opacity:1;border-color:rgba(244,63,94,.6);color:var(--up)}
+.mk-steps li.skip{opacity:.3;text-decoration:line-through}
+.mk-io{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media(max-width:820px){.mk-io{grid-template-columns:minmax(0,1fr)}}
+.mk-io .card h4{margin:0 0 6px;font-size:13px;color:var(--mute)}
+.mk-io .card p{font-size:13.5px;margin:0;white-space:pre-line}
+.mk-ban{padding:9px 13px;border-radius:10px;font-weight:700;font-size:14.5px;border:1px solid var(--line2);background:var(--panel);margin:0 0 12px}
+.mk-ban.ok{border-color:rgba(74,222,128,.5);background:rgba(74,222,128,.1);color:var(--ok)}
+.mk-ban.bad{border-color:rgba(244,63,94,.5);background:rgba(244,63,94,.1);color:var(--up)}
+.mk-ban.mid{border-color:rgba(251,191,36,.5);background:rgba(251,191,36,.1);color:var(--market)}
+.mk-btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 0}
+.mk-refl{font-size:12.5px;color:var(--mute);margin:10px 0 0}
+.mk-ctx{font-size:13px;color:var(--ink2);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:0 0 12px}
+.mk-ctl{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin:0 0 12px}
+.mk-ctl label{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink2)}
+.mk-ctl select,.mk-ctl input{max-width:100%}
+.mk-out dl{display:grid;grid-template-columns:150px minmax(0,1fr);gap:6px 12px;margin:0;font-size:13.5px}
+@media(max-width:520px){.mk-out dl{grid-template-columns:minmax(0,1fr)}}
+.mk-out dt{color:var(--mute)}
+.mk-out dd{margin:0}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>模块 · market</div>
+<h1>市场层：<span class="grad">规则约束与成交判定</span></h1>
+<p class="lead">market 模块拿到散户的订单意图，按 A 股规则逐项检查，再对照行情判定能不能成交、以什么价格成交、交多少费用，把结果交给账户模块记账；它不撮合，也不写账户 <span class="ref">§8</span> <span class="ref">§3.3</span>。</p>
+<div class="meta">
+<span class="chip market"><i></i>产物：Fill、价格序列</span>
+<span class="chip data"><i></i>依据（v0.3）：§8 · §3.4 · §3.5 · §6.3 · §10.3</span>
+<span class="chip orch"><i></i>MVP：模式 A + 脚本化价格</span>
+<span class="chip warn"><i></i>只有设计，未实现</span>
+</div>
+</header>
+
+<section id="s1" class="reveal">
+<h2><span class="num">01</span>职责一览</h2>
+<p class="sub">一句话：把"散户想怎么下单"变成"这笔单实际成交了没有、成交多少、花了多少钱"，并记下没成交的原因 <span class="ref">§8</span>。</p>
+<p>设计文档给市场层分了三件事 <span class="ref">§8</span>。第一是规则引擎，检查订单是否合规；第二是成交判定，决定能不能成交、以什么价格成交；第三是按生效日计算费用。三件事的结果交给 accounts 模块记账。这里说的"生效日"指一条规则开始施行的日期，仿真到哪一天就用那一天有效的规则 <span class="ref">§8.1</span>。</p>
+<p>它的边界也写得很清楚：市场层只读账户的"只读视图"（可卖数量、可用资金、权限），不改账户里的任何数字；记账、日终结算由 accounts 完成 <span class="ref">§3.3</span>。模块之间只通过 schemas 里定义的类型交换数据，由 orchestrator（调度器）负责把它们接起来 <span class="ref">§3.3</span>。</p>
+<div class="mk-iface">
+<div class="card">
+<h4>输入</h4>
+<ul>
+<li><code>OrderIntent</code>：agents 内核由 <code>DecisionIntent</code> 换算出的订单。LLM 只选执行方式 <code>execution</code>（open / dip / chase），不报价格；限价由内核按执行方式定，订单当日有效 <span class="ref">§6.3</span></li>
+<li>账户只读视图：可卖数量、可用资金、权限，来自 <a href="mod-accounts.html">accounts</a> <span class="ref">§3.3</span>。权限的取值是人设卡的 <code>permissions</code> 集合 <span class="ref">§4.1</span> <span class="ref">§8.1</span></li>
+<li>行情：不复权日线（开高低收、量、额、涨跌停价、停牌标记）加复权因子表，经 <a href="mod-data.html">data</a> 的点时查询读取；分钟线只补两类：盘中事件日的指数与被激活者持仓，收盘封板且最低价 &lt; 涨停价的股票日 <span class="ref">§5.5</span> <span class="ref">§8.2</span></li>
+<li>规则参数集：按"生效日 → 参数"存放，按仿真日期取用 <span class="ref">§8.1</span></li>
+</ul>
+</div>
+<div class="card mk-core">
+<h4>market 内部</h4>
+<ul>
+<li>规则引擎：按固定顺序逐项检查，不合规就拒单 <span class="ref">§8.1</span></li>
+<li>成交判定：对照真实或脚本化的 K 线，判断成交与否和成交价 <span class="ref">§8.2</span></li>
+<li>费用：按生效日费率计算佣金、印花税等 <span class="ref">§8.1</span> <span class="ref">§8.4</span></li>
+<li>价格来源：模式 A 真实回放，或三档脚本化路径 <span class="ref">§3.5</span></li>
+</ul>
+</div>
+<div class="card">
+<h4>输出</h4>
+<ul>
+<li><code>Fill</code>（含佣金与印花税）→ <a href="mod-accounts.html">accounts</a> 记账 <span class="ref">§3.3</span></li>
+<li>拒单、不成交及原因 → 事件日志 <span class="ref">§8.4</span>。事件日志只追加，所在的运行目录布局由 <a href="mod-orchestrator.html">orchestrator</a> 定义 <span class="ref">§3.3</span>；由哪个模块写入文档没有写明</li>
+<li>"想买买不进、想卖卖不出、挂单没成交" → 写回 <a href="mod-agents.html">agents</a> 的记忆 <span class="ref">§6.3</span></li>
+<li>"需求与流动性不匹配"标记 <code>liquidity_flag</code> → 决策表与运行清单，只作诊断，不改账户 <span class="ref">§8.2</span> <span class="ref">§10.3</span></li>
+<li>价格序列：文档列为本模块产物，具体由谁读取未写明 <span class="ref">§3.3</span></li>
+</ul>
+</div>
+</div>
+<p class="mk-refl">类型名 <code>OrderIntent</code>、<code>Fill</code> 定义在 <a href="mod-schemas.html">schemas</a>，本模块只使用不定义。</p>
+</section>
+
+<section id="s2" class="reveal">
+<h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">项目要模拟的是散户的声音和决策，A 股的交易规则会实实在在地改变这些决策，所以需要一个地方专门执行规则。</p>
+<p>设计原则第一条是"LLM 给意向，内核管约束" <span class="ref">§3.1</span>。大模型擅长说出"我想追这只票""我想割肉"，但它记不住、也不该负责 T+1、涨跌停、资金和权限这些硬规则。如果让模型自己判断能不能成交，同一条规则在不同的提示词、不同的模型下会给出不同结果，仿真就失去了可比性。设计文档把"LLM 直接输出 <code>OrderIntent</code>、不经内核修正"只当作消融实验来做 <span class="ref">§6.6</span> <span class="ref">§11.2</span>。</p>
+<p>第二个理由是"想做但做不了"本身就是研究对象。A 股散户常见的经历是：看好的票一字涨停买不进，当天买的票第二天才能卖，没开创业板权限只能看着。市场层把这些情况一一判出来，写进事件日志，再写回散户的记忆 <span class="ref">§8</span> <span class="ref">§6.3</span>。输出层会统计"言行不一"的原因分布，例如涨停买不进、挂单没成交、T+1、权限、舍不得割 <span class="ref">§10.2</span>。</p>
+<p>第三个理由是规则会变。2026-07-06 起沪深北交易所施行修订版交易规则，主板 ST 股涨跌幅从 5% 放宽到 10%，盘后固定价格交易扩展到全部 A 股和 ETF <span class="ref">§8.1</span>。回放 2024 年的行情就要用 2024 年的规则，这要求规则按生效日存放，并且与散户的行为参数分开管理 <span class="ref">§8.1</span>。</p>
+<div class="callout warn"><b class="t">反例：没有市场层会怎样</b>假设回放某个一字涨停日，模型说"买入 1000 股"，系统直接按收盘价记成交。结果是模拟散户人人都买到了涨停票，第二天的复盘发言全是"赚了"，而真实散户那天大多根本没买到。这样产出的情绪和发言会系统性偏乐观，与真实帖子对不上，验证环节也会失败。这个例子是示意，用来说明为什么文档规定一字板的买单不成交、收盘封板的股票日按概率判定成交 <span class="ref">§8.2</span>。</div>
+</section>
+
+<section id="s3" class="reveal">
+<h2><span class="num">03</span>机制详解</h2>
+<p class="sub">先讲价格从哪里来，再逐条讲 A 股规则，然后讲一笔订单从进来到出结果的检查顺序，再讲订单在什么时点、以哪种执行方式产生，最后讲成交价怎么定。</p>
+
+<h3>3.1 价格从哪里来：四种模式</h3>
+<p>市场层要判定成交，首先得有价格。设计文档列了四种价格来源，MVP 只用前两种 <span class="ref">§3.5</span> <span class="ref">§8.2</span>。这里的 MVP 指第一阶段要交付的最小版本。"价格接受者"指散户只能接受市场给的价格，自己的买卖不会推动价格。</p>
+<div class="grid g2 mk-modes">
+<div class="card">
+<h4>模式 A：真实行情回放 <span class="chip ok"><i></i>MVP</span></h4>
+<p>用真实历史价格，不做撮合，散户是价格接受者 <span class="ref">§8.2</span>。用于历史事件复盘（V2 主场景）和连续运行时的每日前瞻发声 <span class="ref">§3.5</span>。代价是没有反馈：模拟散户怎么买卖都不影响价格 <span class="ref">§3.5</span>。</p>
+</div>
+<div class="card">
+<h4>脚本化价格路径 <span class="chip ok"><i></i>MVP</span></h4>
+<p>用于假设情景。默认给三档路径：乐观、中性、悲观，三档下散户反应的差异本身就是产出 <span class="ref">§3.5</span>。情景只写指数路径与点名的板块、个股，其余个股由生成器产生，成交规则与模式 A 相同，把路径当作"真实行情"判定 <span class="ref">§8.2</span>。代价是路径由人设定，脚本行情不含智能体反馈，个股相关性只到因子与行业层 <span class="ref">§3.5</span>。</p>
+</div>
+<div class="card mk-dim">
+<h4>模式 C：价格冲击 <span class="chip orch"><i></i>Phase 3</span></h4>
+<p>模拟价 = 真实价 ×（1 + 冲击）。冲击由模拟净买入经 <code>w_cap</code> 放大后相对真实成交额驱动，函数形式（例如平方根律）和系数要用数据估计，结果截断在涨跌停价以内 <span class="ref">§8.2</span>。属于第三阶段的扩展 <span class="ref">§15.1</span>。</p>
+</div>
+<div class="card mk-dim">
+<h4>模式 B：闭环撮合 <span class="chip warn"><i></i>远期，不进 MVP</span></h4>
+<p>自建集合竞价加连续竞价撮合，价格优先、时间优先，执行 §8.1 全部规则，由背景代理提供流动性 <span class="ref">§8.2</span> <span class="ref">§8.3</span>。背景代理包括基本面、趋势、做市/噪声、政策资金四类，均为规则驱动 <span class="ref">§8.3</span>。</p>
+</div>
+</div>
+<p>使用顺序是先做按需情景，再做连续运行 <span class="ref">§3.5</span>。这个取舍在 2026-10-28 的讨论中定下：连续运行和历史复盘用模式 A，假设情景用脚本化三档，模式 C 以后扩展，模式 B 和背景代理移出 MVP，§8 的撮合简化为规则约束 <span class="ref">讨论记录 5</span>。</p>
+<p>模式 A 有一条要特别注意：散户不影响价格，所以模拟订单流与真实价格之间的关系不能当作冲击估计，也不能作为项目结论 <span class="ref">§8.2</span>。</p>
+<h4>脚本化路径里的个股怎么生成</h4>
+<p>情景作者只写指数和点名的板块、个股，其余个股由生成器按下面三步产生 <span class="ref">§8.2</span> <span class="ref">§3.5</span>。</p>
+<ul>
+<li>个股收益 = β_j × 指数收益 + 行业冲击 + 个股残差。β_j 与行业载荷用情景起点之前的历史数据估计；残差从该股历史残差中按块重抽，保留波动聚集，所用日期块记入运行清单 <span class="ref">§8.2</span> <span class="ref">§9.4</span>。</li>
+<li>日内开高低收按历史上同等涨跌幅日的形态抽样。收盘触及涨跌停时，按历史同类股票日（同板块、同涨停幅度）的经验频率抽"一字封板 / 开板回封 / 盘中封板"三类之一，再走 3.6 节成交判定的第 3 步。脚本化路径必须标明每日属于哪一类 <span class="ref">§8.2</span>。</li>
+<li>三档路径共用同一组残差种子，只差指数与点名部分，所以三档之间散户反应的差异来自情景，不来自个股噪声 <span class="ref">§8.2</span>。</li>
+</ul>
+
+<h3>3.2 A 股规则逐条说明</h3>
+<p>规则依据是沪深北三家交易所 2026 年修订的交易规则（上证发〔2026〕41号、深证上〔2026〕551号、北证公告〔2026〕17号），2026-04-24 发布，2026-07-06 施行 <span class="ref">§8.1</span>。下文括号里的"沪""深"后面是条款号。标〔需复核〕的条目，文档作者尚未与原文核对 <span class="ref">§8.1</span>。</p>
+<h4>MVP 能交易什么</h4>
+<p>MVP 的可交易品种是沪深主板、创业板、科创板股票，加约 10 只宽基或行业 ETF（如沪深 300、创业板、券商、半导体）。ETF 用于"国家队买 ETF"一类事件，以及中老年投资者转向 ETF 的风格。可转债、北交所、期权、港股通不进 MVP，留到 Phase 2 以后；下文与北交所、可转债有关的规则只作记录。逆回购和场外基金不建模，闲置资金按现金计、不计息，报告会注明这会略低估保守型账户的收益 <span class="ref">§8.1</span>。</p>
+
+<h4>交收与 T+1</h4>
+<p>T+1 的意思是今天买的股票要等交收完成，明天才能卖。A 股实行 T+1；债券、货币基金、黄金、商品期货基金、跨境 ETF/LOF 等实行 T+0，当天买当天可卖 <span class="ref">§8.1 沪深3.1.4–3.1.5</span>。实现上，当日买入只增加持仓总量，下一个交易日开盘前才转入可卖数量 <span class="ref">§8.4</span>。所以市场层检查卖单时看的是"可卖数量"，不是"持仓总量"。</p>
+
+<h4>涨跌幅限制</h4>
+<p>涨停价、跌停价 = 昨收 ×（1 ± 涨跌幅比例）<span class="ref">§8.1</span>。各板块比例如下表。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>板块</th><th class="n">涨跌幅</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>沪深主板（含 ST）</td><td class="n">10%</td><td>ST 股自 2026-07-06 起由 5% 放宽 <span class="ref">§8.1</span></td></tr>
+<tr><td>创业板（含 ST）</td><td class="n">20%</td><td>由 10% 调为 20% 的日期为 2020-08-24〔需复核〕 <span class="ref">§8.1</span></td></tr>
+<tr><td>科创板</td><td class="n">20%</td><td><span class="ref">§8.1</span></td></tr>
+<tr><td>北交所（含 ST）</td><td class="n">30%</td><td><span class="ref">§8.1</span></td></tr>
+<tr><td>基金</td><td class="n">10%</td><td>跟踪 20% 涨跌幅股票的基金为 20% <span class="ref">§8.1 沪3.3.13、6.6；深3.3.13–3.3.14</span></td></tr>
+</tbody></table></div>
+<p>有几类情况不设涨跌幅：沪深各板块新股上市后前 5 个交易日、重新上市首日、退市整理期首日。北交所新股首日是否设涨跌幅，文档没有写明〔需复核〕 <span class="ref">§8.1 深3.3.15；沪3.3.13</span>。主板新股前 5 日不设涨跌幅始于 2023-04-10〔需复核〕 <span class="ref">§8.1</span>。不设涨跌幅的股票另有限制：开盘集合竞价申报价不高于昨收的 900%（深），收盘集合竞价和停牌期间为最近成交价 ±10%，盘中较开盘价涨跌 30%、60% 各触发一次 10 分钟临时停牌 <span class="ref">§8.1 深3.3.17、4.3.4；沪3.3.15、4.2.4</span>。</p>
+
+<h4>价格笼子</h4>
+<p>价格笼子是连续竞价阶段对限价单价格的约束，防止报价离当前价太远。买入申报价不高于 max（基准价 × 102%，基准价 + 10 个最小价位），卖出申报价不低于 min（基准价 × 98%，基准价 − 10 个最小价位）。买单基准价是卖一价，卖单基准价是买一价；没有时依次用本方最优价、最近成交价、昨收。科创板只用 102%/98%，没有 10 个价位那一项 <span class="ref">§8.1 沪3.3.14、6.8；深3.3.16</span>。最小价位即最小变动单位，A 股 0.01 元，基金 0.001 元 <span class="ref">§8.1 沪深3.3.11</span>。</p>
+<div class="callout todo"><b class="t">日线下怎么查笼子，文档没写</b>笼子的基准价来自盘口的买一、卖一。成交判定默认用日线 <span class="ref">§8.2</span>，没有盘口数据，无法按原规则计算基准价。<code>open</code> 订单进开盘集合竞价，文档写明"集合竞价无价格笼子" <span class="ref">§6.3</span>；<code>dip</code> 是连续竞价阶段的限价单，日线下笼子检查用什么替代，文档没有说明。本页示例只检查涨跌停价，笼子一项对 dip 标为"日线下无法执行"。</div>
+
+<h4>申报数量：整手与单笔上限</h4>
+<p>"一手"是 100 股。买入申报须为 100 股的整数倍；不足 100 股的零股只能卖出，并且要一次卖完；单笔申报不超过 100 万股。创业板限价单单笔不超过 30 万股、市价单 15 万股。科创板单笔不少于 200 股，不要求 100 股整数倍，限价单不超过 10 万股、市价单 5 万股。北交所的数量规则〔需复核〕 <span class="ref">§8.1 沪3.3.8–3.3.9、6.7；深3.3.8–3.3.9</span>。</p>
+
+<h4>交易时段</h4>
+<p>开盘集合竞价 9:15–9:25，其中 9:20–9:25 不能撤单；连续竞价 9:30–11:30、13:00–14:57；收盘集合竞价 14:57–15:00，不能撤单；盘后固定价格交易 15:05–15:30，按收盘价成交、时间优先。盘后固定价格交易原先只在科创板、创业板，2026-07-06 起扩展到全部 A 股和 ETF。盘后阶段买入限价低于收盘价、卖出限价高于收盘价的申报无效（深） <span class="ref">§8.1 沪2.4.2、3.3.1、3.7；深2.3.2、3.6</span>。</p>
+<p>收盘价取收盘集合竞价的成交价；没有的话取最后一分钟成交量加权均价；当日无成交则取昨收 <span class="ref">§8.1 沪4.1.3</span>。</p>
+
+<h4>风险警示股</h4>
+<p>风险警示股就是 ST、*ST 这类被交易所特别标注风险的股票。单个投资者当日累计买入同一只风险警示股不超过 50 万股，盘后固定价格交易的买入一并计入（北交所自 2026-08-31 起为 20 万股）；普通投资者首次买入须签风险揭示书；买入退市整理股要求 2 年交易经验，且前 20 个交易日日均资产不低于 50 万元 <span class="ref">§8.1 沪4.4.10；深4.5.2–4.5.4；北证公告〔2026〕43号</span>。</p>
+
+<h4>交易权限〔需复核〕</h4>
+<p>开通创业板要求前 20 个交易日日均资产不低于 10 万元且有 24 个月交易经验；科创板、北交所为 50 万元加 24 个月；融资融券为 50 万元加 6 个月 <span class="ref">§8.1</span>。人设卡里的 <code>permissions</code> 取值为 chinext、star、bse、margin 的集合 <span class="ref">§4.1</span>，由资产和入市年限推出。达到门槛不等于已经开通，真实开通率没有数据，暂作参数 <span class="ref">§8.1</span>。没有权限的散户能看到创业板、科创板的新闻，但买单会被拒，拒单写入事件日志，可用来研究"看得见、买不了" <span class="ref">§8.1</span>。</p>
+
+<h4>费用〔需复核〕</h4>
+<p>印花税 0.05%，只向卖方收（自 2023-08-28 起，此前为 0.1%）；经手费 0.00341%、证管费 0.002%、过户费 0.001%，买卖双向收取；佣金由券商与客户协商，上限 0.3%，散户常见万一到万三（0.01%–0.03%），每笔最低 5 元 <span class="ref">§8.1</span>。每笔成交按这些费率扣费，佣金率按人设分档，例如网上低佣和传统营业部 <span class="ref">§8.4</span>。</p>
+
+<h4>其他条目</h4>
+<p>交易所每日公布收盘涨跌幅偏离 ±7%、振幅 15%、换手率 20% 的各前 5 只主板股票，这就是龙虎榜的触发条件，创业板、科创板阈值更高（文档未给数值）。主板连续 3 个交易日收盘价涨跌幅偏离值累计达 ±20% 为异常波动，创业板、科创板为 ±30% <span class="ref">§8.1 沪5.4.1–5.4.2、6.9–6.10；深5.4.1、5.4.3</span>。这两条影响信息披露，文档没有把它们列入成交前检查。模拟中散户不做空，所以融券保证金、转融券暂停等卖空规定（文档标〔需复核〕）不进检查；单账户每秒申报与撤单合计 ≥ 300 笔或单日 ≥ 2 万笔算高频程序化交易〔需复核〕，文档没有说明它在仿真中怎么用 <span class="ref">§8.1</span>。</p>
+
+<h3>3.3 规则按生效日取用</h3>
+<p>规则也遵守点时原则（PIT，point-in-time，任何时刻只能用当时已经存在的信息） <span class="ref">§3.1</span>。规则以"生效日 → 参数集"存放，按仿真日期查表 <span class="ref">§8.1</span>。文档列出的主要变更有：主板 ST 涨跌幅 5%→10% 与盘后交易扩展（2026-07-06）、创业板 10%→20%（2020-08-24）〔需复核〕、主板新股前 5 日不设涨跌幅（2023-04-10）〔需复核〕、印花税 0.1%→0.05%（2023-08-28）〔需复核〕、转融券限制（2023-10、2024-07）〔需复核〕 <span class="ref">§8.1</span>。规则来自监管文件，和行为参数分开管理：每条规则一项配置加一个单元测试，修改要经过评审 <span class="ref">§8.1</span> <span class="ref">§14.4</span>。下面可以选日期查一查。</p>
+<div class="card" id="mk-pit">
+<div class="mk-ctl">
+<label>板块 <select id="mk-pit-b"><option value="main">沪深主板（非 ST）</option><option value="mainst">沪深主板 ST</option><option value="cyb">创业板</option><option value="kcb">科创板</option><option value="bse">北交所</option></select></label>
+<label>仿真日期 <input type="date" id="mk-pit-d" value="2024-09-24" min="2005-01-04" max="2026-12-31"></label>
+</div>
+<div class="mk-out"><dl id="mk-pit-o"></dl></div>
+<p class="mk-refl">只显示 §8.1 写到的变更；文档没写的旧值显示为"文档未写"。日期下限 2005 年对应设计文档定的日线起点 <span class="ref">§5.5</span>；上限 2026-12-31 是本工具的设定，文档没有写。</p>
+</div>
+
+<h3>3.4 一笔订单的检查顺序</h3>
+<p>订单进入市场层后，先按固定顺序做七项检查：交易时段 → 权限 → T+1 可卖量 → 整手与单笔上限 → 涨跌幅与价格笼子 → 风险警示股买入上限 → 资金与两融额度 <span class="ref">§8.1</span>。任何一项不合规就拒单并计数，不做自动修正，文档给的理由是"自动修正会掩盖内核的错误" <span class="ref">§8.1</span>。七项都通过后才进入成交判定，成交后按费率扣费，生成 <code>Fill</code> 交给 accounts。合规但没成交（例如一字涨停）不算拒单，记为不成交并写明原因 <span class="ref">§8.2</span> <span class="ref">§10.3</span>。</p>
+<p>资金检查用的"可用资金"= 现金 − 当日已冻结的买单金额；卖出所得当天可以再用，但次日才能取出 <span class="ref">§8.4</span>。</p>
+<div class="mk-svgbox">
+<svg class="mk-svg" viewBox="0 0 480 570" role="img" aria-label="订单检查与成交判定流程图">
+<defs><marker id="mk-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker><marker id="mk-ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#f43f5e"/></marker></defs>
+<g stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#mk-ah)">
+<path class="flowline" d="M155 48V60"/><path class="flowline" d="M155 98V110"/><path class="flowline" d="M155 148V160"/><path class="flowline" d="M155 198V210"/><path class="flowline" d="M155 248V260"/><path class="flowline" d="M155 298V310"/><path class="flowline" d="M155 348V360"/><path class="flowline" d="M155 398V410"/><path class="flowline" d="M155 448V460"/><path class="flowline" d="M155 498V510"/>
+</g>
+<g stroke="#f43f5e" stroke-width="1.4" fill="none" marker-end="url(#mk-ahr)" stroke-dasharray="4 3">
+<path d="M290 79H338"/><path d="M290 129H338"/><path d="M290 179H338"/><path d="M290 229H338"/><path d="M290 279H338"/><path d="M290 329H338"/><path d="M290 379H338"/><path d="M290 429H338"/>
+</g>
+<rect x="20" y="10" width="270" height="38" rx="9" fill="rgba(52,211,153,.12)" stroke="#34d399"/>
+<text x="34" y="27" font-size="13" font-weight="700">OrderIntent 进入</text><text class="mk-m" x="34" y="41">来自 agents 内核 §6.3，附账户只读视图</text>
+<g fill="rgba(251,191,36,.08)" stroke="#fbbf24">
+<rect x="20" y="60" width="270" height="38" rx="9"/><rect x="20" y="110" width="270" height="38" rx="9"/><rect x="20" y="160" width="270" height="38" rx="9"/><rect x="20" y="210" width="270" height="38" rx="9"/><rect x="20" y="260" width="270" height="38" rx="9"/><rect x="20" y="310" width="270" height="38" rx="9"/><rect x="20" y="360" width="270" height="38" rx="9"/>
+</g>
+<g font-size="13" font-weight="700">
+<text x="34" y="77">① 交易时段</text><text x="34" y="127">② 交易权限</text><text x="34" y="177">③ T+1 可卖量</text><text x="34" y="227">④ 整手与单笔上限</text><text x="34" y="277">⑤ 涨跌幅与价格笼子</text><text x="34" y="327">⑥ 风险警示股买入上限</text><text x="34" y="377">⑦ 资金与两融额度</text>
+</g>
+<g class="mk-m">
+<text x="34" y="91">此刻能否申报这类订单</text><text x="34" y="141">创业板/科创板/北交所/两融</text><text x="34" y="191">卖出数量 ≤ 可卖数量</text><text x="34" y="241">买入 100 股整数倍等</text><text x="34" y="291">价格在涨跌停价之内</text><text x="34" y="341">单日同一只 ≤ 50 万股</text><text x="34" y="391">金额 ≤ 可用资金</text>
+</g>
+<rect x="20" y="410" width="270" height="38" rx="9" fill="rgba(56,189,248,.1)" stroke="#38bdf8"/>
+<text x="34" y="427" font-size="13" font-weight="700">成交判定</text><text class="mk-m" x="34" y="441">open / dip / chase · 涨跌停 §8.2</text>
+<rect x="20" y="460" width="270" height="38" rx="9" fill="rgba(251,191,36,.08)" stroke="#fbbf24"/>
+<text x="34" y="477" font-size="13" font-weight="700">费用</text><text class="mk-m" x="34" y="491">佣金、印花税、经手费等 §8.1</text>
+<rect x="20" y="510" width="270" height="44" rx="9" fill="rgba(74,222,128,.12)" stroke="#4ade80"/>
+<text x="34" y="529" font-size="13" font-weight="700">Fill → accounts 记账</text><text class="mk-m" x="34" y="545">成交价、数量、fee、stamp_tax §10.3</text>
+<rect x="340" y="60" width="130" height="338" rx="10" fill="rgba(244,63,94,.08)" stroke="#f43f5e"/>
+<g font-size="12.5"><text x="352" y="200" font-weight="700" fill="#f43f5e" style="fill:#f43f5e">拒单</text><text x="352" y="222">不自动修正</text><text x="352" y="242">计数</text><text x="352" y="262">写入事件日志</text><text x="352" y="282">写回记忆</text></g>
+<rect x="340" y="410" width="130" height="62" rx="10" fill="rgba(244,63,94,.05)" stroke="#f43f5e" stroke-dasharray="4 3"/>
+<g font-size="12.5"><text x="352" y="430" font-weight="700" style="fill:#f43f5e">合规但不成交</text><text x="352" y="448">如一字涨停</text><text x="352" y="464">记录未成交原因</text></g>
+</svg>
+</div>
+<p class="mk-refl">图中各项的说明文字是简写，完整条件见 3.2 节。⑤ 的价格笼子对 <code>open</code> 不适用（集合竞价无笼子 <span class="ref">§6.3</span>），对 <code>dip</code> 在日线下无法执行，见上文待定说明。</p>
+
+<h3>3.5 下单时点与执行方式</h3>
+<p>订单只在盘前产生。盘前激活（08:00–09:15）是当日唯一产生例行订单的激活点，被激活的有按活跃度 ν_i 抽中者、事件触发者，以及前一晚"明日打算"为买或卖的智能体（强制激活）；盘前信息只取 <code>available_at</code> ≤ 09:15 的部分，订单按 T 日行情判定成交，散户下单时并不知道当天的价格 <span class="ref">§3.4</span> <span class="ref">§3.1</span>。收盘后（15:00–18:00）和非交易日 20:00 的激活不出订单，只出 <code>BeliefUpdate</code> 和"明日打算"（买 / 卖 / 持有 / 观望 + 标的）；打算和次日实际意向之差记为"隔夜变卦"，是言行不一的一种 <span class="ref">§3.4</span>。</p>
+<p>LLM 只选执行方式，不报数字价格；限价由 agents 内核按执行方式换算，再交给本模块判定 <span class="ref">§6.3</span>。三种执行方式如下，<code>k_i</code> 是人设卡参数 <code>dip_k</code> <span class="ref">§4.1</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>execution</th><th>意思</th><th>内核定价</th><th>走 §8.2 哪一步</th></tr></thead>
+<tbody>
+<tr><td><code>open</code></td><td>开盘就买卖，进开盘集合竞价（09:15–09:25）</td><td>买入限价取涨停价，卖出取跌停价，即按开盘价成交；集合竞价无价格笼子</td><td>第 1 步 <span class="ref">§6.3</span></td></tr>
+<tr><td><code>dip</code></td><td>挂单等回调或反弹</td><td>买入限价 = 前收 ×（1 − k_i），卖出 = 前收 ×（1 + k_i），k_i 先验 1%–3%</td><td>第 2 步 <span class="ref">§6.3</span></td></tr>
+<tr><td><code>chase</code></td><td>盘中追，市价</td><td>当日均价加滑点；盘中激活取检查点至收盘的分钟均价</td><td>第 2 步，遇封板走第 3 步 <span class="ref">§6.3</span> <span class="ref">§8.2</span></td></tr>
+</tbody></table></div>
+<p>订单当日有效，收盘未成交的撤单，"挂单没成交"写回记忆；执行方式也会进入发言，例如"挂了个低价没成交" <span class="ref">§6.3</span>。</p>
+<p>盘中检查点 10:00、11:30、14:00 只由事件触发：量级 ≥ 3、<code>available_at</code> 落在交易时段的事件卡，在其后最近的检查点激活接触到该事件的智能体，执行方式限 <code>chase</code> <span class="ref">§3.4</span>。这时只为事件日的指数和被激活者持仓补分钟线，智能体只看到检查点之前的分钟数据，成交价取检查点至收盘的分钟均价加滑点，封板按分钟线走第 3 步。拿不到分钟线的事件日，这次激活只出态度与帖子，交易意向转为"明日打算"，运行清单标"盘中无行情" <span class="ref">§3.4</span>。</p>
+<p>每个激活点内部按顺序执行：第 1 次调用批量完成后，内核做约束与成交判定，再对发帖者做第 2 次调用，最后是群聊回复 <span class="ref">§14.4</span>。所以同一激活点里所有散户的订单在同一批行情上判定，第 2 次调用写帖子时输入里已含当日意向与实际成交 <span class="ref">§6.1</span>。持续运行中，盘前调用在真实时间 08:00–09:15 跑完并带时间戳落盘，成交在收盘后判定 <span class="ref">§3.4</span>。</p>
+
+<h3>3.6 成交判定：能不能成交，以什么价格成交</h3>
+<p>模式 A 和脚本化路径用同一套成交规则，默认用日线判定；只为两类股票日补分钟线：收盘封板但盘中有低于涨停价成交的股票日（第 3 步，每日约几十只），以及盘中事件日的指数与被激活者持仓 <span class="ref">§8.2</span> <span class="ref">§5.5</span>。日线有开盘价 O、最高价 H、最低价 L、收盘价 C 四个价格，下面五步主要建立在这四个数上 <span class="ref">§8.2</span>。</p>
+<div class="timeline">
+<div class="tl-item"><div class="when">第 1 步 · 集合竞价</div><div class="what">集合竞价单按真实开盘价或收盘价成交，条件是买入限价 ≥ 竞价价，或卖出限价 ≤ 竞价价。盘后固定价格交易按收盘价成交。<code>execution = open</code> 的订单走这一步 <span class="ref">§8.2</span> <span class="ref">§6.3</span>。</div></div>
+<div class="tl-item"><div class="when">第 2 步 · 盘中限价与市价</div><div class="what">盘中限价单（<code>dip</code>）的成交条件是买入限价 ≥ 当日最低价，或卖出限价 ≤ 当日最高价。成交价取保守值：买入按 min（限价，最高价），卖出按 max（限价，最低价）。市价单（<code>chase</code>）按当日成交均价加滑点，盘中激活取检查点至收盘的分钟均价；滑点取多少文档未定义 <span class="ref">§8.2</span>。</div></div>
+<div class="tl-item"><div class="when">第 3 步 · 涨跌停</div><div class="what">一字涨停（H = L = 涨停价）时买单不成交；开盘未封板的按第 2 步。收盘封住涨停、但盘中有低于涨停价的成交（L &lt; 涨停价）时，买单按概率 p 成交：有分钟线时 p = 下单后非封板时长占比 × 排队折扣，排队折扣是假设参数（散户挂单多排在后面）；拿不到分钟线时用固定 p，跑 0.1 / 0.3 / 0.5 三档做敏感性分析，档位记入运行清单。每笔订单要么全部成交、要么不成交，不做部分成交；每个智能体用记录在案的种子独立抽签，抽签之间互不影响。跌停卖出同规则。买不到、卖不掉都写回记忆 <span class="ref">§8.2</span>。</div></div>
+<div class="tl-item"><div class="when">第 4 步 · 个人成交不按放大量缩减</div><div class="what">个人成交只走第 1–3 步，不按 <code>w_cap</code>（资金权重，即一个模拟散户代表的真实资金量 <span class="ref">§4.1</span> <span class="ref">§4.3</span>）放大后的量缩减。例外：智能体自身未放大的订单超过该股当日真实成交额的设定比例（如 1%）时，超出部分不成交，原因写回记忆。放大后的群体资金流只作诊断，见下文 <span class="ref">§8.2</span>。</div></div>
+<div class="tl-item"><div class="when">第 5 步 · 不影响价格</div><div class="what">模式 A 下散户不影响价格。模拟订单流和真实价格的关系不能当成冲击估计，不作为项目结论 <span class="ref">§8.2</span>。</div></div>
+</div>
+<p>第 3 步的几个数字都是假设。"散户涨停买不进率"没有真实数据，p 与排队折扣在报告中标为假设，不进校准目标；V4 报告给出三档 p 下"涨停买不进"频率的差别 <span class="ref">§8.2</span>。</p>
+<p>第 4 步为什么不缩减：550 人下平均 <code>w_head</code> 约 36 万，放大后几乎每笔都会超过真实成交额，按比例缩减会把失真的"没买够"写进记忆 <span class="ref">§8.2</span>。改成诊断后，本模块按股票计算 <code>w_cap</code> 加权净买入额 / 真实成交额，超过阈值的股票在决策表与运行清单中标"需求与流动性不匹配"（决策表字段 <code>liquidity_flag</code>），不改账户。按股票的资金流只对当日交易智能体数 ≥ N（如 10）的股票输出，其余标"样本不足"；群体结论以全市场、行业、人群口径为主 <span class="ref">§8.2</span> <span class="ref">§10.3</span>。</p>
+<p>为什么叫保守：日线只知道当天价格到过哪里，不知道散户的单在什么时刻、对着什么盘口成交。买单按 min（限价，最高价）成交，等于假设散户付出了当天在限价以内可能付出的最高价：限价低于最高价时付满限价，限价高于最高价时按最高价，因为比最高价更高的价格当天没有出现过。卖单反过来，按 max（限价，最低价）。两种情况都对散户偏不利，不会让模拟战绩因为"捡到好价"而虚高。第 2 步的公式出自 <span class="ref">§8.2</span>，这段解释是本页的理解。</p>
+<p>成交判定什么时候发生：盘前产生的订单在 T 日的开高低收上按上面五步判定 <span class="ref">§3.4</span> <span class="ref">§8.2</span>；盘中检查点的 <code>chase</code> 订单用分钟线判定（见 3.5 节）。收盘后和非交易日不产生订单，所以没有"收盘后订单怎么成交"的问题 <span class="ref">§3.4</span>。</p>
+
+<h3>3.7 特殊情况</h3>
+<ul>
+<li>停牌股：停牌期间该股订单无效 <span class="ref">§8.4</span>。停牌标记随不复权日线一起存 <span class="ref">§5.5</span>。</li>
+<li>除权除息：在权益登记日的次一交易日处理，持仓数量和成本价同步调整，涨跌幅以除权参考价为基准 <span class="ref">§8.4 沪4.3.1</span>。</li>
+<li>退市：退市整理与摘牌按规则处理，股票池包含退市股 <span class="ref">§8.4</span> <span class="ref">§5.5</span>。股票池不剔除退市股，文档给的理由是避免幸存者偏差 <span class="ref">§5.5</span>；退市整理期和摘牌的具体处理细则文档没有展开。</li>
+<li>两融强制平仓：只有具备融资融券权限、且人设中分配了杠杆的散户能用两融。维持担保比例跌破平仓线（券商常见 130%〔需复核〕）时先追保，追保失败按规则强平；强平卖单以市价进入下一个成交判定时点，遇跌停卖不掉（§8.2 第 3 步） <span class="ref">§8.4</span>。文档把这一条称为 2015 年式踩踏的机制来源：价格下跌触发强平，强平卖单在下一个时点集中卖出。在模式 A 下这些卖单不改变真实价格（第 5 步），所以 MVP 能复现的是"谁被强平、强平后怎么说、杠杆意愿怎么变"，不是踩踏本身对价格的影响。强平写回记忆，也是经历向量里"被强平"一项的依据 <span class="ref">§8.4</span> <span class="ref">§6.5</span>。交易流水表用 <code>forced</code> 字段标记强平 <span class="ref">§10.3</span>。场外配资由人设属性 <code>offbook_leverage</code> 描述，平仓线紧于两融，强平与两融同规则；历史推演默认打开，持续运行与假设情景默认关闭，开关记入运行清单 <span class="ref">§8.4</span>。</li>
+<li>所有订单、拒单、成交、费用和公司行为都写入事件日志，账户状态可以由事件重放得到 <span class="ref">§8.4</span> <span class="ref">§3.1</span>。</li>
+</ul>
+</section>
+
+<section id="s4" class="reveal">
+<h2><span class="num">04</span>走一遍示例</h2>
+<p class="sub">六笔示例订单，各自走一遍 3.4 节的检查顺序和 3.6 节的成交判定。每一步列出输入、处理、输出和对应的文档条目，可以逐步看，也可以自动播放。</p>
+<p>六笔单覆盖三种执行方式和几类结局：① dip 挂单成交；② dip 挂单没成交；③ open 遇一字涨停买不进；④ chase 遇收盘封板，抽签没中；⑤ T+1 卖不出；⑥ 没有创业板权限。① 到 ④ 是合规订单，结局由当天行情决定；⑤ 和 ⑥ 是拒单。股票都用代号，价格、资金、持仓、dip_k 和抽签结果都是为演示编的。仓位档换算成多少股由 agents 内核决定 <span class="ref">§6.3</span>，示例直接给出股数。佣金率取万 2.5，落在文档写的"万一至万三"之间，最低 5 元 <span class="ref">§8.1</span>。</p>
+<div class="callout info"><b class="t">先说明一个前提</b>按 §6.3 第 6 步，agents 内核在产出 <code>OrderIntent</code> 之前已经按现金、T+1、整手、权限等做过一遍约束，并按执行方式定好价格；按 §8.1，市场层对每笔单还要再查一遍，不合规就拒单、不修正。示例 ⑤ 和 ⑥ 演示的是"这样的单到了市场层会怎样"。在设计上它们本不该出现，出现了就说明内核有错，拒单计数正好能把错误暴露出来 <span class="ref">§8.1</span>。两层怎么分工见第 06、08 节。</div>
+<div class="card glow" id="mk-demo">
+<span class="mk-tagx">示例数据</span>
+<div class="mk-ord" id="mk-ord" role="tablist" aria-label="选择示例订单"></div>
+<div class="mk-ctx" id="mk-ctx"></div>
+<ol class="mk-steps" id="mk-steps"></ol>
+<div class="mk-ban" id="mk-ban"></div>
+<div class="mk-io">
+<div class="card"><h4>输入</h4><p id="mk-in"></p></div>
+<div class="card"><h4>处理</h4><p id="mk-pr"></p></div>
+<div class="card"><h4>输出</h4><p id="mk-ou"></p></div>
+</div>
+<p class="mk-refl">对应文档：<span id="mk-rf"></span></p>
+<div class="mk-btns">
+<button class="btn" id="mk-prev" type="button">上一步</button>
+<button class="btn pri" id="mk-next" type="button">下一步</button>
+<button class="btn" id="mk-play" type="button">自动播放</button>
+<span class="mk-refl" id="mk-pos" style="margin:0"></span>
+</div>
+</div>
+<p class="mk-refl">示例里费用的舍入到分只为展示，文档没有规定舍入规则。拒单和不成交的原因，文档列了"缩量、取消、挂单没成交、涨停买不进、T+1 卖不出、权限不足、舍不得割"几类 <span class="ref">§6.3</span>，<code>not_executed_reason</code> 的枚举写法文档没有定义，示例直接用中文。示例 ⑤ 是盘中检查点的单：按 §3.4，盘中激活只能选 chase，且只在补到分钟线的事件日下单；拿不到分钟线时只出态度与帖子，交易意向转为"明日打算"。</p>
+</section>
+
+<section id="s5" class="reveal">
+<h2><span class="num">05</span>接口与数据结构</h2>
+<p class="sub">设计文档给了 <code>DecisionIntent</code> 的字段和几张输出表的列，没有给 <code>OrderIntent</code>、<code>Fill</code> 的完整字段定义。下表只列文档写到的内容，其余标"文档未定义"。</p>
+<p>market 收到的是 <code>OrderIntent</code>，它由 agents 内核从 <code>DecisionIntent</code> 换算而来：LLM 只选执行方式，不报数字价格，内核按执行方式定限价 <span class="ref">§6.3</span>。<code>OrderIntent</code> 和 <code>Fill</code> 都定义在 schemas 包 <span class="ref">§3.3</span>；<code>Fill</code> 文档只说"含佣金与印花税" <span class="ref">§3.3</span>。最接近 <code>Fill</code> 字段的是 §10.3 的交易流水表，下表借用它的列名。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>对象</th><th>字段</th><th>含义</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>DecisionIntent（上游）</td><td><code>asset, action, size</code></td><td>标的；buy / sell / hold / watch；仓位档 tiny / small / half / large / all_in。只在盘前与盘中激活产生</td><td><span class="ref">§6.3</span> <span class="ref">§3.4</span></td></tr>
+<tr><td>DecisionIntent（上游）</td><td><code>execution</code></td><td>open / dip / chase：开盘就买卖、挂单等回调或反弹、盘中追；盘中激活只能选 chase</td><td><span class="ref">§6.3</span></td></tr>
+<tr><td>DecisionIntent（上游）</td><td><code>reasons, source_post_ids, rationale</code></td><td>理由标签至多 3 个；影响决定的帖子至多 2 条；一句话理由至多 120 字</td><td><span class="ref">§6.3</span></td></tr>
+<tr><td>人设参数</td><td><code>dip_k</code></td><td>dip 单的限价偏离 k_i，先验 1%–3%</td><td><span class="ref">§6.3</span> <span class="ref">§4.1</span></td></tr>
+<tr><td>OrderIntent</td><td>标的、方向、数量、限价、执行方式</td><td>字段名文档未定义；检查规则用到这几项，示例按标的 / 方向 / 股数 / 限价写</td><td>文档未定义</td></tr>
+<tr><td>只读视图</td><td>可卖数量、可用资金、权限</td><td>持仓快照里对应 <code>qty</code>、<code>sellable_qty</code>；权限取值 chinext / star / bse / margin</td><td><span class="ref">§3.3</span> <span class="ref">§10.3</span> <span class="ref">§4.1</span></td></tr>
+<tr><td>Fill / 交易流水</td><td><code>trade_id, persona_id, run_id, sim_time, asset, side</code></td><td>成交编号、人设、运行、仿真时间、标的、方向</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td>Fill / 交易流水</td><td><code>qty, price, fee, stamp_tax</code></td><td>成交数量、成交价、费用、印花税；<code>fee</code> 包含哪些项文档未写</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td>Fill / 交易流水</td><td><code>order_type, decision_ref, forced</code></td><td>订单类型、对应的决策记录、是否强平</td><td><span class="ref">§10.3</span></td></tr>
+<tr><td>Fill / 交易流水</td><td><code>realized_pnl</code></td><td>已实现盈亏，按先进先出算成本；由哪个模块填写文档未写</td><td><span class="ref">§10.3</span> <span class="ref">§8.4</span></td></tr>
+<tr><td>决策表</td><td><code>intent_kind, execution, plan_ref</code></td><td><code>intent_kind</code> 区分 order（订单）与 plan（明日打算）；<code>execution</code> 记执行方式；<code>plan_ref</code> 把次日盘前的实际意向链回前晚的明日打算，隔夜变卦由此算出</td><td><span class="ref">§10.3</span> <span class="ref">§3.4</span></td></tr>
+<tr><td>决策表</td><td><code>exec_qty, exec_price, not_executed_reason</code></td><td>实际执行数量、价格、未执行原因，和意向列并排，两者之差就是"言行不一"</td><td><span class="ref">§10.3</span> <span class="ref">§6.3</span></td></tr>
+<tr><td>决策表</td><td><code>liquidity_flag</code></td><td>"需求与流动性不匹配"标记，按股票的群体资金流诊断，不改账户</td><td><span class="ref">§10.3</span> <span class="ref">§8.2</span></td></tr>
+<tr><td>行情</td><td>不复权日线</td><td>开高低收、量、额、涨跌停价、停牌标记；另存复权因子表。分钟线只补两类股票日</td><td><span class="ref">§5.5</span></td></tr>
+<tr><td>规则参数集</td><td>生效日 → 参数集</td><td>结构文档未定义</td><td><span class="ref">§8.1</span></td></tr>
+</tbody></table></div>
+<p>下面是示例 ① 那笔成交可能的样子，字段名借自交易流水表，取值来自第 04 节的示例数据。</p>
+<pre class="code" data-lang="json 示意，未实现"><span class="c">// 示意，未实现。字段名借自 §10.3 交易流水表；数值为示例数据</span>
+<span class="p">{</span>
+  <span class="k">"trade_id"</span><span class="p">:</span> <span class="s">"t-000001"</span><span class="p">,</span>
+  <span class="k">"persona_id"</span><span class="p">:</span> <span class="s">"示例-散户甲"</span><span class="p">,</span>
+  <span class="k">"run_id"</span><span class="p">:</span> <span class="s">"示例-run"</span><span class="p">,</span>
+  <span class="k">"sim_time"</span><span class="p">:</span> <span class="s">"示例日"</span><span class="p">,</span>
+  <span class="k">"asset"</span><span class="p">:</span> <span class="s">"示例股A"</span><span class="p">,</span>
+  <span class="k">"side"</span><span class="p">:</span> <span class="s">"buy"</span><span class="p">,</span>
+  <span class="k">"qty"</span><span class="p">:</span> <span class="n">1000</span><span class="p">,</span>
+  <span class="k">"price"</span><span class="p">:</span> <span class="n">9.80</span><span class="p">,</span>
+  <span class="k">"fee"</span><span class="p">:</span> <span class="n">5.63</span><span class="p">,</span>
+  <span class="k">"stamp_tax"</span><span class="p">:</span> <span class="n">0.00</span><span class="p">,</span>
+  <span class="k">"order_type"</span><span class="p">:</span> <span class="s">"dip"</span><span class="p">,</span>
+  <span class="k">"decision_ref"</span><span class="p">:</span> <span class="s">"示例-决策记录"</span><span class="p">,</span>
+  <span class="k">"forced"</span><span class="p">:</span> <span class="n">false</span><span class="p">,</span>
+  <span class="k">"realized_pnl"</span><span class="p">:</span> <span class="n">0.00</span>
+<span class="p">}</span></pre>
+<p class="mk-refl">取值的格式（例如 <code>side</code> 用 buy 还是"买入"、<code>order_type</code> 是否直接沿用 open / dip / chase）文档都没有定义，上面的写法只为示意。<code>sim_time</code> 的精度文档也没有定义，示例只写到日。</p>
+</section>
+
+<section id="s6" class="reveal">
+<h2><span class="num">06</span>设计取舍与已定决定</h2>
+<p class="sub">每条写三件事：选了什么、放弃了什么、为什么。理由只引文档原话或其直接含义。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>议题</th><th>选了</th><th>放弃了</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>价格从哪来</td><td>MVP 用模式 A 回放真实行情，加脚本化价格路径 <span class="ref">§3.5</span> <span class="ref">§8.2</span></td><td>自建撮合引擎（模式 B）、价格冲击模型（模式 C）</td><td>历史事件推演要对照当时的真实帖子，用真实行情、把智能体当价格接受者即可；代价是没有反馈环 <span class="ref">§3.5</span>。模式 C 排在 Phase 3，模式 B 只作远期选项</td></tr>
+<tr><td>不合规订单</td><td>拒绝并计数 <span class="ref">§8.1</span></td><td>自动改成合规订单（例如把 150 股改成 100 股）</td><td>"自动修正会掩盖内核的错误" <span class="ref">§8.1</span></td></tr>
+<tr><td>盘中限价单（dip）成交价</td><td>买入取 min(限价, 最高价)，卖出取 max(限价, 最低价) <span class="ref">§8.2</span></td><td>按限价或当日均价成交</td><td>日线不知道盘中成交顺序，文档称这种取法"偏保守" <span class="ref">§8.2</span></td></tr>
+<tr><td>涨跌停</td><td>一字板买单不成交；收盘封板但盘中最低价低于涨停价的，买单按概率 p 全部成交或不成交，跌停卖出同规则 <span class="ref">§8.2</span></td><td>忽略涨跌停，按收盘价全部成交；按比例部分成交</td><td>"涨停买不到、跌停卖不掉"是追涨与恐慌行为的重要约束，买不到、卖不掉都写回记忆 <span class="ref">§8.2</span>。智能体不影响价格，各自用记录的种子独立抽签即可 <span class="ref">§8.2</span></td></tr>
+<tr><td>规则怎么管</td><td>按"生效日 → 参数集"存，每条规则一个配置项加单元测试，改动走评审 <span class="ref">§8.1</span> <span class="ref">§14.4</span></td><td>规则和行为参数混在一起调</td><td>规则来自监管文件，与行为参数分开管理 <span class="ref">§8.1</span>；回放要按当年规则，所以规则按生效日存放 <span class="ref">§8.1</span>。"不能当作可校准参数"是本页的引申，文档原话只到"分开管理"</td></tr>
+<tr><td>谁执行约束</td><td>LLM 只给意向，内核执行硬约束 <span class="ref">§3.1</span> <span class="ref">§6.3</span></td><td>LLM 直接输出 <code>OrderIntent</code></td><td>后者是 TwinMarket、StockAgent 等的做法，本项目只作消融，不进主线 <span class="ref">§6.6</span></td></tr>
+<tr><td>价格由谁定</td><td>LLM 只选 open / dip / chase，内核按执行方式定价，dip 的偏离 k_i 是人设参数 <span class="ref">§6.3</span></td><td>让 LLM 报数字价格</td><td>价位由内核按规则和人设参数 <code>dip_k</code>（先验 1%–3%）算出；执行方式会进入发言，如"挂了个低价没成交" <span class="ref">§6.3</span> <span class="ref">§4.1</span>。不让 LLM 报价的理由，文档没有展开</td></tr>
+<tr><td>行情粒度</td><td>以日线为主，分钟线只补两类股票日：收盘封板但盘中开过板的，以及盘中事件日的指数与被激活者持仓 <span class="ref">§5.5</span> <span class="ref">§8.2</span></td><td>全市场分钟线</td><td>需要分钟线的只有这两类判定；前一类每日约几十只 <span class="ref">§8.2</span>。代价是 dip 单的价格笼子在日线下仍查不了</td></tr>
+<tr><td>个人成交与流动性</td><td>个人成交不按 <code>w_cap</code> 放大后的量缩减；只有未放大的订单超过该股真实成交额的设定比例（如 1%）时，超出部分不成交 <span class="ref">§8.2</span></td><td>按 <code>w_cap</code> 换算后按比例缩减</td><td>550 人下平均 <code>w_head</code> 约 36 万，放大后几乎每笔都会超过真实成交额，缩减会把失真的"没买够"写进记忆；群体资金流改作诊断（<code>liquidity_flag</code>） <span class="ref">§8.2</span></td></tr>
+<tr><td>下单时点</td><td>只在盘前产生例行订单；盘中检查点只由量级 ≥ 3 的事件触发，只能 chase <span class="ref">§3.4</span></td><td>收盘后与周末也下单</td><td>收盘后激活改出 <code>BeliefUpdate</code> 与"明日打算"，次日盘前强制激活定实际意向，前后之差记为"隔夜变卦" <span class="ref">§3.4</span></td></tr>
+</tbody></table></div>
+<div class="callout decide"><b class="t">已定（v0.3 §8.2，来自架构讨论 A7）：涨停成交与个人成交上限</b>
+<p>收盘封板、盘中有低于涨停价成交的股票日补分钟线，p = 下单后非封板时长占比 × 排队折扣；拿不到分钟线时用固定 p，跑 0.1 / 0.3 / 0.5 三档做敏感性分析，档位记入运行清单，V4 报告给出三档下"涨停买不进"频率的差别。每笔订单全部成交或不成交。排队折扣与"散户涨停买不进率"在报告中标为假设，不进校准目标 <span class="ref">§8.2</span>。</p>
+<p>个人成交不缩减，例外是自身未放大的订单超过该股真实成交额的设定比例；放大后的群体资金流只作诊断，按股票的资金流只对当日交易智能体数 ≥ N（如 10）的股票输出 <span class="ref">§8.2</span>。</p></div>
+<div class="callout decide"><b class="t">已定（v0.3 §6.3、§3.4，来自架构讨论 A7、A10）：执行方式与下单时点</b>
+<p>LLM 只选 <code>execution</code>：open 按涨停价（卖出按跌停价）进开盘集合竞价，走第 1 步；dip 限价 = 前收 × (1 ∓ k_i)，走第 2 步；chase 按均价加滑点，遇封板走第 3 步。订单当日有效，未成交的收盘撤单，"挂单没成交"写回记忆 <span class="ref">§6.3</span>。订单只在盘前产生；盘中检查点 10:00 / 11:30 / 14:00 只由事件触发，只能 chase，拿不到分钟线时交易意向转为"明日打算" <span class="ref">§3.4</span>。</p></div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.5）：行情数据怎么存</b>
+<p>存不复权日线（开高低收、量、额、涨跌停价、停牌标记）和复权因子表，复权因子以除权除息日为 <code>available_at</code>（可见时间，即这条数据从哪天起允许被智能体看到）。智能体看到的价格按 asof 当天现算前复权，与当年券商软件显示一致；收益与战绩计算统一用后复权。日线从 2005 年起，覆盖股改与 2007 年牛市；2005 年以前的经历只写进人生骨架作文字背景 <span class="ref">§5.5</span>。</p>
+<p>对本模块的含义（本页推断）：涨跌停判定和成交价用不复权价，因为涨跌停价本身就存在日线里。数据源、各表 <code>available_at</code> 的取值规则与存储格式待定 <span class="ref">§5.5</span>。</p></div>
+<h3>内核与 market 的两层检查</h3>
+<div class="grid g2">
+<div class="card"><h4>一方：内核在出单前就检查</h4><p>§6.3 第 6 步写明内核按现金、T+1、整手、涨跌停可成交性、交易权限、两融额度、费用做硬约束，之后才生成 <code>OrderIntent</code>。第 7 步还列出"缩量、取消、挂单没成交"等内核改动意向或执行未遂的情形。<span class="ref">§6.3</span></p></div>
+<div class="card"><h4>另一方：market 在成交前再查一遍</h4><p>§8.1 写明订单在成交判定前依次检查七项，不合规的拒绝并计数，不自动修正。<span class="ref">§8.1</span></p></div>
+</div>
+<p>两层都做检查，有两个问题文档没有回答。第一，内核已经查过的订单，market 再查还能拦下什么，拦下时算内核的错误还是正常拒单。第二，§6.3 允许内核"缩量"，§8.1 说不自动修正，两者的边界是：内核改的是意向，market 不改订单。这是本页的理解，文档没有明说〔需复核〕。</p>
+<h3>模式 B 的参考实现（远期）</h3>
+<p>先做日频的开盘、收盘集合竞价，研究日内踩踏或封板时再加连续竞价。Lopez-Lira (2025) 的限价单簿实现是较好的参考，但仓库未见许可，借用代码前需征得作者同意；TwinMarket 的撮合引擎为 MIT 许可，可直接参考。<span class="ref">§8.2</span></p>
+</section>
+
+<section id="s7" class="reveal">
+<h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">只写文档里明确的连接。文档没写的，标"未写"。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>模块</th><th>方向</th><th>交换什么</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td><a href="mod-agents.html">agents</a></td><td>agents → market</td><td>内核把 <code>DecisionIntent</code> 换算成 <code>OrderIntent</code>（按执行方式定价）后交给 market；实际成交与未执行原因写回记忆，并作为第 2 次调用（发帖）的输入</td><td><span class="ref">§6.3</span> <span class="ref">§6.1</span></td></tr>
+<tr><td><a href="mod-accounts.html">accounts</a></td><td>双向，market 只读</td><td>accounts 提供只读视图（可卖数量、可用资金、权限）；market 交出 <code>Fill</code>，费用已算好，由 accounts 记账和日终结算</td><td><span class="ref">§3.3</span></td></tr>
+<tr><td><a href="mod-data.html">data</a></td><td>data → market</td><td>点时行情：不复权日线与复权因子；分钟线只补两类股票日（收盘封板但盘中开过板的、盘中事件日的指数与被激活者持仓）</td><td><span class="ref">§5.5</span> <span class="ref">§8.2</span></td></tr>
+<tr><td><a href="mod-schemas.html">schemas</a></td><td>定义类型</td><td><code>OrderIntent</code>、<code>Fill</code> 的类型在这里定义，market 只使用</td><td><span class="ref">§3.3</span></td></tr>
+<tr><td><a href="mod-orchestrator.html">orchestrator</a></td><td>调度与落盘</td><td>按仿真日期推进，决定哪些智能体在盘前或盘中检查点被激活；拿不到分钟线的盘中事件日，运行清单标"盘中无行情"。订单、拒单、成交、费用和公司行为都写入只追加的事件日志</td><td><span class="ref">§3.3</span> <span class="ref">§3.4</span> <span class="ref">§9.1</span> <span class="ref">§8.4</span></td></tr>
+<tr><td><a href="mod-population.html">population</a></td><td>population → market</td><td><code>permissions</code> 由资产与入市年限推出；<code>dip_k</code> 决定 dip 单的限价；<code>w_cap</code> 只用于按股票的流动性诊断，不改个人成交</td><td><span class="ref">§4.1</span> <span class="ref">§6.3</span> <span class="ref">§8.2</span></td></tr>
+<tr><td><a href="mod-outputs.html">outputs</a></td><td>market → outputs</td><td>交易流水表；决策表中的执行列（<code>execution</code>、<code>exec_qty</code>、<code>exec_price</code>、<code>not_executed_reason</code>）与 <code>liquidity_flag</code>；三档 p 的档位与流动性标记进运行清单</td><td><span class="ref">§10.3</span> <span class="ref">§8.2</span></td></tr>
+<tr><td><a href="mod-validation.html">validation</a></td><td>读产出</td><td>言行不一率与原因分布（挂单没成交、涨停买不进、T+1、权限等）是 V4 的检验项；V4 报告给出三档 p 下"涨停买不进"频率的差别，这个比率标为假设，不进校准目标</td><td><span class="ref">§10.2</span> <span class="ref">§12.1</span> <span class="ref">§8.2</span></td></tr>
+<tr><td><a href="mod-events.html">events</a></td><td>events → market</td><td>情景里的价格路径放在 <code>configs/</code>，只写指数与点名的板块或个股，其余个股由本模块的生成器产生；量级 ≥ 3 的盘中事件卡触发盘中检查点。事件卡与价格路径怎么配套，文档未写</td><td><span class="ref">§3.3</span> <span class="ref">§8.2</span> <span class="ref">§3.4</span></td></tr>
+</tbody></table></div>
+<p>想看这些约束落在具体的人身上是什么样子，见 <a href="sim-personas.html">不同类型散户的决策模拟</a>：权限不同、持仓不同的人，下出的单在本模块会走到不同的结局。一天之内各模块的先后顺序见 <a href="flow-day.html">一个交易日</a>。</p>
+</section>
+
+<section id="s8" class="reveal">
+<h2><span class="num">08</span>开放问题</h2>
+<p class="sub">前面几节标"文档未定义""未写"的地方集中列在这里，另有一批规则条目设计文档自己标了〔需复核〕。</p>
+<h3>实现前要定下来的事</h3>
+<div class="callout todo"><b class="t">dip 单的价格笼子在日线下怎么查</b><p>规则要求申报价落在笼子范围内 <span class="ref">§8.1</span>。open 单进开盘集合竞价，不受笼子约束 <span class="ref">§6.3</span>；dip 是连续竞价的限价单，日线没有盘口基准价，文档没给替代做法：跳过、用开盘价近似，还是补分钟线。</p></div>
+<div class="callout todo"><b class="t">成交判定第 1 步与第 3 步的先后</b><p>open 买单遇一字涨停时，第 1 步的条件满足，第 3 步说不成交 <span class="ref">§8.2</span>。本页示例 ③ 按第 3 步优先处理，两步的先后文档没有明写〔需复核〕。</p></div>
+<div class="callout todo"><b class="t">滑点、排队折扣与几个"如"值</b><p>chase 单"按当日成交均价加滑点"，滑点大小未写；分钟线下的排队折扣是假设参数，取值未写 <span class="ref">§8.2</span>。个人成交上限的比例只给了"如 1%"，按股票输出资金流的人数门槛只给了"如 10"，流动性诊断的阈值没有给数 <span class="ref">§8.2</span>。</p></div>
+<div class="callout todo"><b class="t">字段与取值</b><p><code>OrderIntent</code> 的字段、<code>Fill</code> 的完整字段、<code>not_executed_reason</code> 与交易流水表 <code>order_type</code> 的取值清单都没有定义。仓位档换算成股数时怎么取整到整手文档没写。<code>fee</code> 是否包含经手费、证管费、过户费，金额的舍入规则，资金检查时冻结金额是否含费用（chase 单没有限价，冻结额按什么估），都没写。</p></div>
+<div class="callout todo"><b class="t">归属不清的计算</b><p><code>realized_pnl</code> 在交易流水表里 <span class="ref">§10.3</span>，由 market 还是 accounts 填写没说；"价格序列"作为 market 的产物 <span class="ref">§3.3</span>，谁来消费也没说。</p></div>
+<div class="callout todo"><b class="t">内核与 market 的检查边界</b><p>§6.3 第 6 步和 §8.1 都做约束检查，重复部分怎么分工、market 拦下内核已放行的订单时怎么处理，见第 06 节。</p></div>
+<div class="callout todo"><b class="t">数据与参数</b><p>数据源、各表 <code>available_at</code> 的取值规则与存储格式待定，随数据源一起定 <span class="ref">§5.5</span>。权限"达标不等于开通"，真实开通率缺数据，先设为参数 <span class="ref">§8.1</span>。模式 C 的冲击函数形式与系数待用真实数据估计 <span class="ref">§8.2</span>。规则参数集的数据结构未定义。</p></div>
+<h3>设计文档标了〔需复核〕的规则条目</h3>
+<ul>
+<li>北交所 IPO 首日涨跌幅规定〔需复核〕 <span class="ref">§8.1</span></li>
+<li>北交所申报数量〔需复核〕 <span class="ref">§8.1</span></li>
+<li>费用：印花税、经手费、证管费、过户费、佣金下限〔需复核〕 <span class="ref">§8.1</span></li>
+<li>交易权限门槛〔需复核〕 <span class="ref">§8.1</span></li>
+<li>卖空：融券保证金、转融券暂停〔需复核〕 <span class="ref">§8.1</span></li>
+<li>程序化交易〔需复核〕 <span class="ref">§8.1</span></li>
+<li>两融平仓线"券商常见 130%"〔需复核〕 <span class="ref">§8.4</span></li>
+<li>规则变更日期：创业板涨跌幅改为 20%（2020-08-24）、主板注册制新股前 5 日不设涨跌幅（2023-04-10）、印花税减半（2023-08-28）、融券与转融券限制（2023-10、2024-07），均〔需复核〕 <span class="ref">§8.1</span></li>
+<li>智能体看到的成本价按摊薄成本显示〔需复核〕 <span class="ref">§8.4</span></li>
+</ul>
+<p class="mk-refl">第 03 节的规则查询和第 04 节的示例都用这些未复核的数值，复核后需要同步改。</p>
+</section>
+
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+/* ---- 示例数据：六笔订单（示例数据，非真实行情） ---- */
+var C=[
+ ['交易时段','§8.1 交易时段（沪2.4.2、3.3.1、3.7；深2.3.2、3.6）'],
+ ['交易权限','§8.1 交易权限〔需复核〕 · §4.1 permissions'],
+ ['T+1 可卖量','§8.1 交收（沪深3.1.4–3.1.5） · §8.4 T+1 实现'],
+ ['整手与单笔上限','§8.1 申报数量（沪3.3.8–3.3.9、6.7；深3.3.8–3.3.9）'],
+ ['涨跌幅与价格笼子','§8.1 涨跌幅、价格笼子（沪3.3.13–3.3.14；深3.3.13、3.3.16）'],
+ ['风险警示股上限','§8.1 风险警示股（沪4.4.10；深4.5.2–4.5.4）'],
+ ['资金与两融额度','§8.4 可用资金']
+];
+var T_OPEN=['ok','execution = open：盘前产生，进开盘集合竞价','开盘集合竞价 9:15–9:25 接受申报，9:20–9:25 不接受撤单','通过'];
+var T_DIP=['ok','execution = dip：盘前产生的限价单，当日有效','连续竞价 9:30–11:30、13:00–14:57 接受限价申报','通过'];
+var T_CHASE=['ok','execution = chase：盘前或盘中检查点产生，按均价加滑点成交','连续竞价 9:30–11:30、13:00–14:57 内成交','通过'];
+var T_T1B=['ok','方向：买入','T+1 只约束卖出数量','不适用，通过'];
+var T_STN=['ok','该股不是风险警示股','风险警示股才有单日同一只 50 万股的买入上限','不适用，通过'];
+var O=[];
+O.push({id:'fill',name:'① dip 挂单成交',
+ ctx:'散户甲 · 盘前决定买入 示例股A（沪市主板），size = small，execution = dip；dip_k = 2%（示例，落在先验 1%–3% 内）。内核换算为 1000 股（示例）。昨收 10.00；当日开 10.20 / 高 10.68 / 低 9.75 / 收 10.40；当日真实成交额 3 亿元。可用资金 50,000 元，权限集合为空。',
+ res:['ok','成交：1000 股 @ 9.80 元，费用合计 5.63 元'],
+ intro:['DecisionIntent：买入 示例股A，size = small，execution = dip\n内核定价：限价 = 前收 × (1 − k) = 10.00 × 0.98 = 9.80\n内核出单：OrderIntent 买入 1000 股，限价 9.80\n只读视图：可用资金 50,000，permissions = {}','按仿真日期取规则参数集（主板涨跌幅 10%），读当日日线','涨停价 = 10.00 × 1.1 = 11.00\n跌停价 = 10.00 × 0.9 = 9.00'],
+ ck:[T_DIP,
+  ['ok','沪市主板；permissions = {}','主板买入不需要创业板、科创板、北交所或两融权限','通过'],
+  T_T1B,
+  ['ok','1000 股','买入须为 100 股整数倍；单笔不超过 100 万股','1000 股 = 10 手，通过'],
+  ['ok','限价 9.80；涨跌停区间 9.00–11.00','限价须在涨跌停价之内。dip 是连续竞价的限价单，价格笼子要用盘口卖一价做基准，日线下没有，无法检查','通过（笼子未检查）'],
+  T_STN,
+  ['ok','限价 × 数量 = 9,800；可用资金 50,000','可用资金 = 现金 − 当日已冻结的买单金额。冻结额是否含费用，文档未写','通过']],
+ tail:[
+  ['成交判定','ok','限价 9.80；当日高 10.68、低 9.75；不是一字涨停','第 2 步：买入限价 ≥ 当日最低价才可能成交\n成交价 = min(限价, 最高价) = min(9.80, 10.68)','成交 1000 股 @ 9.80\n成交金额 9,800.00','§6.3 第 6 步 · §8.2 第 2 步'],
+  ['个人成交上限','ok','未放大的订单金额 9,800；该股当日真实成交额 3 亿元','第 4 步：个人成交不按 w_cap 放大后的量缩减。只有未放大的订单超过真实成交额的设定比例（文档举例 1%，此处即 300 万元）时，超出部分才不成交','全额成交\n按股票的"需求与流动性不匹配"诊断另算，不改这笔成交','§8.2 第 4 步'],
+  ['计算费用','ok','成交金额 9,800.00；买方；佣金率万 2.5（示例）','佣金 9,800 × 0.025% = 2.45，不足 5 元按 5.00\n经手费 0.00341% → 0.33\n证管费 0.002% → 0.20\n过户费 0.001% → 0.10\n印花税只向卖方收，买入为 0','fee = 5.63（这里把佣金和三项规费合在一起，文档未写 fee 的口径）\nstamp_tax = 0.00','§8.1 费用〔需复核〕 · §8.4 费用'],
+  ['输出 Fill','ok','成交结果与费用','生成 Fill 交给 accounts。accounts 记账：持仓总量 +1000；可卖数量要到下一交易日开盘前才增加','事件日志记一条成交\n决策表 execution = dip，exec_qty = 1000，exec_price = 9.80','§3.3 · §8.4 · §10.3']
+ ]});
+O.push({id:'dip',name:'② dip 挂单没成交',
+ ctx:'散户乙 · 盘前决定买入 示例股B（深市主板），size = tiny，execution = dip；dip_k = 3%（示例）。内核换算为 500 股（示例）。昨收 20.00；当日开 20.40 / 高 21.10 / 低 19.60 / 收 20.90。可用资金 30,000 元。',
+ res:['mid','不成交：限价低于当日最低价，收盘撤单，记"挂单没成交"'],
+ intro:['DecisionIntent：买入 示例股B，size = tiny，execution = dip\n内核定价：限价 = 20.00 × 0.97 = 19.40\n内核出单：OrderIntent 买入 500 股，限价 19.40\n只读视图：可用资金 30,000，permissions = {}','按仿真日期取规则参数集（主板涨跌幅 10%），读当日日线','涨停价 = 20.00 × 1.1 = 22.00\n跌停价 = 20.00 × 0.9 = 18.00'],
+ ck:[T_DIP,
+  ['ok','深市主板；permissions = {}','主板买入不需要特殊权限','通过'],
+  T_T1B,
+  ['ok','500 股','买入须为 100 股整数倍','500 股 = 5 手，通过'],
+  ['ok','限价 19.40；涨跌停区间 18.00–22.00','限价在涨跌停价之内。笼子日线下无法检查','通过（笼子未检查）'],
+  T_STN,
+  ['ok','19.40 × 500 = 9,700；可用资金 30,000','金额不超过可用资金','通过']],
+ tail:[
+  ['成交判定','mid','限价 19.40；当日最低 19.60','第 2 步：买入限价须 ≥ 当日最低价才可能成交。19.40 < 19.60，当日价格没有回落到挂单价','不成交\n这笔单合规，只是没等到回调，不进拒单计数','§8.2 第 2 步'],
+  ['撤单与写回','mid','未成交的当日有效单','订单当日有效，收盘撤单，不顺延到明天。"挂单没成交"写回散户乙的情景记忆，之后的发言可以是"挂了个低价没成交"','无 Fill\n决策表 execution = dip，exec_qty = 0，not_executed_reason = 挂单没成交\n言行不一统计记一次','§6.3 第 6–7 步 · §10.3']
+ ]});
+O.push({id:'limit',name:'③ open 遇一字涨停',
+ ctx:'散户丙 · 盘前决定买入 示例股C（深市主板），size = small，execution = open。内核换算为 500 股（示例）。昨收 20.00；当日开 = 高 = 低 = 收 = 22.00，一字涨停。可用资金 30,000 元。',
+ res:['mid','不成交：一字涨停，买不进（合规，不算拒单）'],
+ intro:['DecisionIntent：买入 示例股C，size = small，execution = open\n内核定价：买入限价取涨停价 22.00\n内核出单：OrderIntent 买入 500 股，限价 22.00\n只读视图：可用资金 30,000，permissions = {}','按仿真日期取规则参数集（主板涨跌幅 10%），读当日日线','涨停价 = 20.00 × 1.1 = 22.00\n跌停价 = 20.00 × 0.9 = 18.00'],
+ ck:[T_OPEN,
+  ['ok','深市主板；permissions = {}','主板买入不需要特殊权限','通过'],
+  T_T1B,
+  ['ok','500 股','买入须为 100 股整数倍','500 股 = 5 手，通过'],
+  ['ok','限价 22.00；涨跌停区间 18.00–22.00','限价等于涨停价，仍在范围内。集合竞价无价格笼子','通过'],
+  T_STN,
+  ['ok','22.00 × 500 = 11,000；可用资金 30,000','金额不超过可用资金','通过']],
+ tail:[
+  ['成交判定','mid','开盘价 22.00；当日高 = 低 = 22.00 = 涨停价','第 1 步：限价不低于开盘价，按条件可成交\n第 3 步：一字涨停时买单不成交。本页按第 3 步优先处理，两步的先后文档没有明写','不成交\n这笔单合规，只是买不到，不进拒单计数','§8.2 第 1、3 步'],
+  ['记录与写回','mid','不成交记录','写入事件日志；写回散户丙的情景记忆，之后的发言要和"没买到"一致','无 Fill\n决策表 exec_qty = 0，not_executed_reason = 涨停买不进\n言行不一统计记一次（原因：涨停买不进）','§6.3 第 7 步 · §10.2 · §10.3']
+ ]});
+O.push({id:'seal',name:'④ chase 遇封板抽签',
+ ctx:'散户丁 · 盘前决定追买 示例股D（沪市主板），size = tiny，execution = chase，内核换算为 300 股（示例）。昨收 30.00；当日最低 29.70，收盘封涨停 33.00。这类股票日本应补分钟线，示例假设拿不到，本次运行的固定 p 取 0.3 档。',
+ res:['mid','不成交：收盘封板，抽签未中（全部成交或不成交）'],
+ intro:['DecisionIntent：买入 示例股D，size = tiny，execution = chase\n内核出单：OrderIntent 买入 300 股，按均价加滑点成交\n只读视图：可用资金 40,000，permissions = {}','按仿真日期取规则参数集（主板涨跌幅 10%），读当日日线','涨停价 = 30.00 × 1.1 = 33.00\n跌停价 = 30.00 × 0.9 = 27.00'],
+ ck:[T_CHASE,
+  ['ok','沪市主板；permissions = {}','主板买入不需要特殊权限','通过'],
+  T_T1B,
+  ['ok','300 股','买入须为 100 股整数倍','300 股 = 3 手，通过'],
+  ['ok','chase 没有内核给定的限价；涨停价 33.00','成交价不会超过涨停价。笼子日线下无法检查','通过（笼子未检查）'],
+  T_STN,
+  ['ok','按涨停价估 33.00 × 300 = 9,900；可用资金 40,000','金额不超过可用资金（按涨停价估冻结额是本页写法）','通过']],
+ tail:[
+  ['成交判定','mid','收盘价 33.00 = 涨停价；最低 29.70 < 涨停价','第 3 步：收盘封住涨停、盘中有低于涨停价的成交，买单按概率 p 成交。拿不到分钟线，用固定 p，跑 0.1 / 0.3 / 0.5 三档，本次为 0.3 档\n用记录在案的种子独立抽签：抽到 0.62（示例）> 0.3','不成交，整笔 300 股都不成交，没有部分成交\n档位记入运行清单','§8.2 第 3 步'],
+  ['记录与写回','mid','不成交记录','写入事件日志；"涨停买不进"写回散户丁的情景记忆。这个比率没有真实数据，报告中标为假设参数，不进校准目标','无 Fill\n决策表 execution = chase，exec_qty = 0，not_executed_reason = 涨停买不进','§8.2 第 3 步 · §6.3 第 7 步 · §10.3']
+ ]});
+O.push({id:'t1',name:'⑤ T+1 卖不出',
+ ctx:'散户戊 · 当天开盘用 open 买入 示例股E（沪市主板）2000 股；14:00 盘中检查点被利空事件激活，想止损，execution = chase 卖出 2000 股。只读视图：持仓总量 2000 股，可卖数量 0。',
+ res:['bad','拒单：T+1，当天买入的股票当天不能卖'],
+ intro:['DecisionIntent：卖出 示例股E，size = all_in，execution = chase\n内核出单：OrderIntent 卖出 2000 股（按 §6.3 第 6 步内核本应先拦下）\n只读视图：持仓总量 2000，可卖数量 0','按仿真日期取规则参数集，读当日日线','进入逐项检查'],
+ ck:[T_CHASE,
+  ['ok','卖出沪市主板股票','权限门槛针对创业板、科创板、北交所和两融，这笔单不涉及','通过'],
+  ['fail','卖出 2000 股；可卖数量 0','当日买入只增加持仓总量，下一交易日开盘前才转入可卖数量。卖出数量必须 ≤ 可卖数量','不合规：2000 > 0，拒单'],
+  null,null,null,null],
+ tail:[
+  ['拒单与写回','fail','拒单（第 ③ 项）','不自动修正：不会改成卖 0 股，也不会顺延到明天\n拒单计数，写入事件日志，写回散户戊的记忆','无 Fill\nnot_executed_reason = T+1 卖不出','§8.1 检查顺序 · §6.3 第 7 步 · §10.3']
+ ]});
+O.push({id:'perm',name:'⑥ 没有创业板权限',
+ ctx:'散户己 · 盘前决定买入 示例股F（创业板），execution = open，内核换算为 300 股（示例）。昨收 40.00。只读视图：permissions = {}；人设：前 20 个交易日日均资产 8 万元，入市 3 年。',
+ res:['bad','拒单：没有创业板权限'],
+ intro:['DecisionIntent：买入 示例股F，size = small，execution = open\n内核定价：买入限价取涨停价 40.00 × 1.2 = 48.00\n内核出单：OrderIntent 买入 300 股（按 §6.3 第 6 步内核本应先拦下）\n只读视图：可用资金 50,000，permissions = {}','按仿真日期取规则参数集（创业板涨跌幅 20%），读当日日线','进入逐项检查'],
+ ck:[T_OPEN,
+  ['fail','创业板；permissions = {}','创业板买入需要 chinext 权限。开通门槛：前 20 个交易日日均资产 ≥ 10 万元且 24 个月经验〔需复核〕。散户己资产不到门槛，权限集合里没有 chinext','不合规：拒单'],
+  null,null,null,null,null],
+ tail:[
+  ['拒单与写回','fail','拒单（第 ② 项）','散户己仍然能看到这只股票的新闻和讨论，只是买不了。拒单写入事件日志，可用来研究"看得见、买不了"','无 Fill\nnot_executed_reason = 权限不足','§8.1 交易权限 · §6.3 第 7 步']
+ ]});
+/* ---- 步进器 ---- */
+function $(id){return document.getElementById(id);}
+function build(o){
+ var s=[{t:'接收订单',s:'ok',i:o.intro[0],p:o.intro[1],o:o.intro[2],r:'§6.3 第 6 步 执行方式定价 · §3.3 只读视图 · §5.5 日线 · §8.1 规则按生效日'}];
+ for(var k=0;k<C.length;k++){
+  var c=o.ck[k];
+  if(!c){s.push({t:C[k][0],s:'skip',r:C[k][1]});}
+  else{s.push({t:C[k][0],s:c[0],i:c[1],p:c[2],o:c[3],r:C[k][1]});}
+ }
+ for(var j=0;j<o.tail.length;j++){var x=o.tail[j];s.push({t:x[0],s:x[1],i:x[2],p:x[3],o:x[4],r:x[5]});}
+ return s;
+}
+var demo=$('mk-demo');
+if(demo){
+ var cur=0,step=0,steps=build(O[0]),timer=null;
+ var ordBox=$('mk-ord'),stepBox=$('mk-steps'),ban=$('mk-ban'),playBtn=$('mk-play');
+ function nav(){var a=[];for(var i=0;i<steps.length;i++){if(steps[i].s!=='skip')a.push(i);}return a;}
+ function setBan(cls,t){ban.className='mk-ban'+(cls?' '+cls:'');ban.textContent=t;}
+ function render(){
+  var lis=stepBox.children,st=steps[step],n=nav(),pos=n.indexOf(step);
+  for(var i=0;i<lis.length;i++){
+   var sc=steps[i].s,cl=[];
+   if(sc==='skip')cl.push('skip');
+   else if(i<step||i===step){cl.push(sc==='fail'?'fail':'pass');}
+   if(i===step)cl.push('on');
+   lis[i].className=cl.join(' ');
+  }
+  $('mk-in').textContent=st.i||'';
+  $('mk-pr').textContent=st.p||'';
+  $('mk-ou').textContent=st.o||'';
+  $('mk-rf').textContent=st.r||'';
+  var last=(pos===n.length-1);
+  if(last){setBan(O[cur].res[0],O[cur].res[1]);}
+  else if(st.s==='fail'){setBan('bad','第 '+(pos+1)+' 步「'+st.t+'」不合规，订单将被拒');}
+  else if(st.s==='mid'){setBan('mid','第 '+(pos+1)+' 步「'+st.t+'」：合规但不成交');}
+  else{setBan('','第 '+(pos+1)+' 步「'+st.t+'」：'+(st.o?st.o.split('\n')[0]:''));}
+  $('mk-pos').textContent=(n.length?(pos+1)+' / '+n.length:'');
+  $('mk-prev').disabled=(pos<=0);
+  $('mk-next').disabled=last;
+ }
+ function go(d){var n=nav(),p=n.indexOf(step)+d;if(p<0||p>=n.length)return false;step=n[p];render();return true;}
+ function stop(){if(timer){clearInterval(timer);timer=null;}playBtn.textContent='自动播放';}
+ function pick(idx){
+  stop();cur=idx;steps=build(O[idx]);step=0;
+  var bs=ordBox.children;for(var i=0;i<bs.length;i++){bs[i].className=(i===idx?'on':'');bs[i].setAttribute('aria-selected',i===idx?'true':'false');}
+  $('mk-ctx').textContent=O[idx].ctx;
+  stepBox.textContent='';
+  steps.forEach(function(s,i){
+   var li=document.createElement('li'),b=document.createElement('b');
+   b.textContent=String(i+1);li.appendChild(b);li.appendChild(document.createTextNode(s.t));
+   if(s.s!=='skip'){li.addEventListener('click',function(){stop();step=i;render();});}
+   else{li.title='前一项已拒单，这一项不再检查';}
+   stepBox.appendChild(li);
+  });
+  render();
+ }
+ O.forEach(function(o,i){
+  var b=document.createElement('button');b.type='button';b.setAttribute('role','tab');b.textContent=o.name;
+  b.addEventListener('click',function(){pick(i);});ordBox.appendChild(b);
+ });
+ $('mk-prev').addEventListener('click',function(){stop();go(-1);});
+ $('mk-next').addEventListener('click',function(){stop();go(1);});
+ playBtn.addEventListener('click',function(){
+  if(timer){stop();return;}
+  var n=nav();if(n.indexOf(step)===n.length-1){step=n[0];render();}
+  playBtn.textContent='暂停';
+  timer=setInterval(function(){if(!go(1))stop();},2200);
+ });
+ pick(0);
+}
+/* ---- 规则按生效日查询（只含 §8.1 写到的变更） ---- */
+var pb=$('mk-pit-b'),pd=$('mk-pit-d'),po=$('mk-pit-o');
+function pit(){
+ if(!pb||!pd||!po)return;
+ var b=pb.value,d=pd.value||'',rows=[];
+ po.textContent='';
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){rows.push(['提示','请输入有效日期']);}
+ else if(d<'2005-01-04'||d>'2026-12-31'){rows.push(['提示','请选 2005-01-04 至 2026-12-31 之间的日期。下限对应 §5.5 的日线起点，上限是本工具的设定']);}
+ else{
+  var ge=function(x){return d>=x;};
+  var lim;
+  if(b==='main')lim='10%（文档未写变更）';
+  else if(b==='mainst')lim=ge('2026-07-06')?'10%（2026-07-06 起）':'5%（2026-07-06 前；更早的变化文档未写）';
+  else if(b==='cyb')lim=ge('2020-08-24')?'20%，含 ST（2020-08-24 起〔需复核〕）':'10%（2020-08-24 前〔需复核〕；当时 ST 的比例文档未写）';
+  else if(b==='kcb')lim='20%（文档未写更早的变化）';
+  else lim='30%，含 ST（文档未写更早的变化）';
+  rows.push(['涨跌幅',lim]);
+  var ipo;
+  if(b==='main'||b==='mainst')ipo=ge('2023-04-10')?'上市后前 5 个交易日不设涨跌幅（2023-04-10 起〔需复核〕）':'文档未写 2023-04-10 之前的规则';
+  else if(b==='bse')ipo='北交所 IPO 首日的规定文档未写明〔需复核〕';
+  else ipo='上市后前 5 个交易日不设涨跌幅（起始日期文档未写）';
+  rows.push(['新股上市初期',ipo]);
+  var ah;
+  if(ge('2026-07-06'))ah=(b==='bse')?'2026-07-06 起扩展到"全部 A 股和 ETF"，北交所是否包含文档未写明':'可用，15:05–15:30 按收盘价成交';
+  else ah=(b==='cyb'||b==='kcb')?'可用（科创板、创业板；起始日期文档未写）':(b==='bse'?'文档未写':'不可用（2026-07-06 才扩展到全部 A 股）');
+  rows.push(['盘后固定价格交易',ah]);
+  rows.push(['印花税',ge('2023-08-28')?'0.05%，仅卖方（2023-08-28 起〔需复核〕）':'0.1%（2023-08-28 前〔需复核〕；更早的变化文档未写）']);
+  var stc;
+  if(b==='bse')stc=ge('2026-08-31')?'单日同一只不超过 20 万股（2026-08-31 起）':'文档未写 2026-08-31 之前的数值';
+  else stc='单日同一只不超过 50 万股（生效日期文档未写）';
+  rows.push(['风险警示股买入上限',stc]);
+  if(ge('2024-07-11'))rows.push(['融券与转融券','2023-10 起提高融券保证金比例、限制战略投资者出借；2024-07-11 起暂停转融券，融券保证金比例不低于 100%（私募 120%）〔需复核〕；模拟散户不做空']);
+  else if(ge('2023-10-01'))rows.push(['融券与转融券','2023-10 起提高融券保证金比例、限制战略投资者出借〔需复核〕；具体生效日文档只写到月份；模拟散户不做空']);
+ }
+ rows.forEach(function(r){
+  var dt=document.createElement('dt'),dd=document.createElement('dd');
+  dt.textContent=r[0];dd.textContent=r[1];po.appendChild(dt);po.appendChild(dd);
+ });
+}
+if(pb&&pd){pb.addEventListener('change',pit);pd.addEventListener('input',pit);pd.addEventListener('change',pit);pit();}
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>validation · 验收、基线与校准 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* mod-validation 私有样式，前缀 va- */
+.va-io{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,1fr);gap:12px;align-items:stretch}
+@media(max-width:860px){.va-io{grid-template-columns:minmax(0,1fr)}}
+.va-io .card ul{margin:6px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink2)}
+.va-io .card li{margin:4px 0}
+.va-core{border-color:rgba(74,222,128,.5)!important;background:linear-gradient(160deg,rgba(74,222,128,.12),rgba(74,222,128,.02))!important}
+.va-lbl{font:700 11.5px var(--mono);color:var(--val);letter-spacing:1px;margin-bottom:4px}
+.va-h3{margin:28px 0 8px;font-size:17px}
+.va-h3 small{font-weight:400;color:var(--mute);font-size:12.5px;margin-left:6px}
+.va-formula{font:13px/1.75 var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;overflow-x:auto;color:var(--ink2);white-space:pre}
+/* 闸门图 */
+.va-svg{width:100%;height:auto;display:block}
+.va-svg text{fill:var(--ink);font:600 14px var(--sans)}
+.va-svg .va-t2{fill:var(--mute);font:500 11px var(--mono)}
+.va-svg .va-node{cursor:pointer}
+.va-svg .va-node rect{fill:var(--panel2);stroke:var(--line2);stroke-width:1.4;transition:stroke .15s,fill .15s}
+.va-svg .va-node.va-gate rect{fill:rgba(74,222,128,.07);stroke:rgba(74,222,128,.55)}
+.va-svg .va-node.va-main rect{fill:url(#vaGateGrad);stroke:var(--val);stroke-width:2.2}
+.va-svg .va-node.va-stopn rect{fill:rgba(248,113,113,.08);stroke:rgba(248,113,113,.6)}
+.va-svg .va-node.on rect{stroke:var(--market);stroke-width:2.6}
+.va-svg .va-node:focus{outline:none}
+.va-svg .va-node:focus rect{stroke:var(--market)}
+.va-svg .va-del rect{fill:rgba(255,255,255,.03);stroke:var(--line);stroke-dasharray:3 3}
+.va-svg .va-del text{font:500 12px var(--sans);fill:var(--ink2)}
+.va-svg .va-ln{fill:none;stroke:var(--val);stroke-width:1.6}
+.va-svg .va-fail{fill:none;stroke:var(--warn);stroke-width:1.4;stroke-dasharray:5 4}
+.va-svg .va-dash{fill:none;stroke:var(--mute);stroke-width:1.3;stroke-dasharray:4 4}
+.va-svg .va-ok{fill:var(--ok);font:600 11px var(--mono)}
+.va-svg .va-no{fill:var(--warn);font:600 11px var(--mono)}
+.va-info{min-height:84px;margin-top:10px}
+.va-info h4{margin:0 0 4px;font-size:15px}
+.va-info p{margin:4px 0;font-size:13.5px;color:var(--ink2)}
+/* 功效计算 */
+.va-pow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end}
+@media(max-width:700px){.va-pow{grid-template-columns:minmax(0,1fr)}}
+.va-powout{display:flex;gap:14px;flex-wrap:wrap;align-items:baseline;margin-top:12px}
+.va-powout b{font:800 28px var(--mono);color:var(--val)}
+/* 分步演示 */
+.va-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 12px}
+.va-bar .va-pos{margin-left:auto;font:600 12.5px var(--mono);color:var(--mute)}
+.va-dots{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.va-dots button{min-width:30px;height:24px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--mute);font:600 11px var(--mono);cursor:pointer;padding:0 6px}
+.va-dots button.on{background:var(--val);color:#06101f;border-color:var(--val)}
+.va-dots button.past{color:var(--ink2);border-color:rgba(74,222,128,.4)}
+.va-lights{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-bottom:12px}
+@media(max-width:520px){.va-lights{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.va-lights div{border:1px solid var(--line);border-radius:9px;padding:6px 4px;text-align:center;font:600 12px var(--mono);color:var(--mute);background:var(--panel)}
+.va-lights div small{display:block;font:500 10.5px var(--sans);margin-top:2px}
+.va-lights div.pass{border-color:var(--ok);color:var(--ok);background:rgba(74,222,128,.08)}
+.va-lights div.fail{border-color:var(--warn);color:var(--warn);background:rgba(248,113,113,.08)}
+.va-lights div.cur{box-shadow:0 0 0 2px var(--market) inset}
+.va-lights div.va-big{font-size:13px}
+.va-ipo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(max-width:760px){.va-ipo{grid-template-columns:minmax(0,1fr)}}
+.va-ipo .card{padding:12px 14px}
+.va-ipo ul{margin:4px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink2)}
+.va-ipo li{margin:3px 0;overflow-wrap:anywhere}
+.va-stepttl{font-size:16px;margin:0 0 8px}
+.va-stop{display:none}
+.va-stop.show{display:block}
+.va-tag{display:inline-block;font:600 10.5px var(--mono);padding:1px 7px;border-radius:6px;background:rgba(251,191,36,.14);color:var(--market);margin-left:6px;vertical-align:middle}
+.va-tbl td small{color:var(--mute)}
+.va-pass{color:var(--ok);font-weight:600}.va-failt{color:var(--warn);font-weight:600}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>模块 · validation · 验收、基线与校准</div>
+<h1>模拟出来的散户<span class="grad">像不像真的</span></h1>
+<p class="lead">validation 用公开统计、调查和同期真实帖子检查合成散户的人口结构、帖子、态度与交易，五项各自下结论，帖子这一项（V2）不过，帖子就不交付。</p>
+<div class="meta">
+<span class="chip val"><i></i>V1–V5 验收 · V2 总闸门</span>
+<span class="chip data"><i></i>基线 B1–B6</span>
+<span class="chip llm"><i></i>探针 · 判别器 · 校准</span>
+<span class="chip warn"><i></i>仅设计，未实现</span>
+</div>
+</header>
+
+<section id="s1" class="reveal">
+<h2><span class="num">01</span>职责一览</h2>
+<p class="sub">validation 拿模拟产出和真实数据逐项对照，给出 V1–V5 五个结论和一份验收报告<span class="ref">§3.3</span>，并负责把行为参数校准到真实矩上<span class="ref">§12.2</span>。</p>
+<p>它不参与模拟本身。编排器（orchestrator）跑完一次模拟，把帖子表、态度表、决策表、账户类表（含持仓快照与战绩表）和 RunManifest（运行清单，记录模型版本、种子、模板哈希等）落盘<span class="ref">§9.4 §10.3</span>；validation 读这些表，再读真实对照数据，算指标、比过线、写报告。代码里分五个子包：<code>acceptance</code>（验收指标与过线判断）、<code>baselines</code>（B1）、<code>probes</code>（探针）、<code>discriminator</code>（判别器）、<code>calibration</code>（校准）<span class="ref">§3.3</span>。判别器要深度学习框架，校准要优化库，所以各自作为可选依赖组单独安装<span class="ref">§3.3</span>。</p>
+<div class="va-io">
+<div class="card">
+<div class="va-lbl">输入</div>
+<ul>
+<li>模拟产出：帖子表、态度表、决策表、账户类表（持仓快照与战绩表里的 <code>twr</code>、<code>mwr</code> 等）<span class="ref">§10.3</span></li>
+<li>RunManifest：模型与版本、种子、模板哈希、注入开关、事后视角命中率<span class="ref">§9.4</span></li>
+<li>真实对照：中国结算统计、交易所散户调查、CHFS、同期股吧 / 雪球帖子、两融与新开户等<span class="ref">§12.1</span></li>
+<li>调查表：V3 硅基调查的旁路调用答案（<code>question_id</code>、<code>wording_version</code>、<code>option_order</code> 等）<span class="ref">§10.3 §12.1</span></li>
+<li>预注册文件：<code>docs/prereg/</code> 下的主指标与及格线、验收事件清单与基线集合、V2 盲评协议、V4 各目标矩的档位、V5 人设回归的预期符号<span class="ref">§11.4</span></li>
+</ul>
+</div>
+<div class="card va-core">
+<div class="va-lbl">validation</div>
+<ul>
+<li><b>acceptance</b>：V1–V5 指标、过线判断、同质化诊断、B6 事件错配</li>
+<li><b>probes</b>：记忆探针、帖子补全探针、事后视角检测<span class="ref">§13.1</span></li>
+<li><b>discriminator</b>：中文文本判别器，冻结版与重训版两条线，B5 真对真给误报水平<span class="ref">§12.1</span></li>
+<li><b>baselines</b>：B1 单 LLM 无人设</li>
+<li><b>calibration</b>：MSM + 代理模型贝叶斯优化，需要后验时用 ABC</li>
+</ul>
+</div>
+<div class="card">
+<div class="va-lbl">输出</div>
+<ul>
+<li>验收报告：V1–V5 各自的结论，V2 是总闸门<span class="ref">§12.3</span></li>
+<li>同质化诊断数值，每次运行写入 manifest<span class="ref">§13.2</span></li>
+<li>截止日表与探针结果：决定哪些事件能进验收<span class="ref">§15.1</span></li>
+<li>校准后的 §6.3 行为参数群体超参数<span class="ref">§12.2</span>；行为参数由 population 产出<span class="ref">§3.3</span>，校准结果怎样写回文档未定义</li>
+</ul>
+</div>
+</div>
+<p>仓库根目录还有三处配套：<code>configs/</code> 放 B2–B4 和消融的运行配置以及过线数值，由编排器换配置重跑同一套模拟；<code>apps/annotate/</code> 是团队盲评用的 Streamlit 页面，按 §12.1 的盲评协议配对、混排和记录，只听 127.0.0.1，经带认证的反向代理访问，只展示去标识后的帖子<span class="ref">§12.1 §16.4</span>；<code>docs/prereg/</code> 放预注册，以 git 提交时间为登记时间，提交后不改写<span class="ref">§11.4</span>。</p>
+</section>
+
+<section id="s2" class="reveal">
+<h2><span class="num">02</span>为什么需要它</h2>
+<p class="sub">LLM 写出的散户帖子读起来很顺，正因为顺，才需要一套事先定好的对照和过线，否则“看着像”会被当成“就是像”。</p>
+<p>RetailSim 交付的是散户的声音、态度和决策<span class="ref">§12.1</span>。这三样东西都很容易做得“似是而非”：单个帖子语气逼真，整体却千人一脑，全是同一个立场；态度方向对了，强度和分化却比真实窄很多；交易次数看着合理，盈亏结构和资金流向却对不上。只有拿真实数据逐项比，才知道哪一层出了问题，该改哪一层。</p>
+<p>第二个原因是大模型自带的污染。模型可能在训练时见过某次历史事件的真实帖子和后续行情，于是写出“后来证明”式的事后视角，或者直接复述背过的帖子，让 V2 的分数虚高<span class="ref">§13.1</span>。研究已经表明，提示“只用某日之前的信息”或者遮掉实体名都挡不住这种泄漏（Lopez-Lira、Tang &amp; Zhu 2025）<span class="ref">§13.1</span>。所以 validation 要先用探针挑出干净的验收事件，再谈打分。</p>
+<p>第三个原因是要回答“这套复杂的系统比一个 LLM 强在哪”。如果给同一个模型同样的事件卡、不给人设和社交层，它写出的帖子盲评也分不出来，那人设、内核、社交层就都白做了。基线 B1 就是这个对照，V2 要求盲评识别率显著低于 B1<span class="ref">§11.1 §12.3</span>。</p>
+<div class="callout warn"><b class="t">反例：没有验收会怎样</b>只看几条挑出来的帖子，会觉得效果很好；但如果一群智能体对同一条降准新闻给出几乎一样的看多理由，群体分歧（下文的 DR）远低于 1，这个平台其实退化成了“B1 加一点噪声”<span class="ref">§13.2</span>。没有诊断，这件事在交付前不会被发现。</div>
+</section>
+
+<section id="s3" class="reveal">
+<h2><span class="num">03</span>机制详解</h2>
+<p class="sub">先用探针挑出模型“没见过”的验收事件，再让 V1–V5 各自对照真实数据打分，基线负责回答“比一个 LLM 强在哪”，过线和止损动作都在 Phase 0 预注册，事后不改<span class="ref">§11.4 §15.2</span>。</p>
+<p>下面这张图是验收的先后关系。点击任一节点，下方显示它的检验方法、过线和不过时的止损动作。V1 不过就不进 V2 评估<span class="ref">§15.2</span>；V2 是总闸门，不过时帖子不对外交付，V3–V5 照常评估并报告<span class="ref">§12.3</span>。</p>
+<div class="card">
+<svg class="va-svg" id="vaGate" viewBox="0 0 900 380" role="group" aria-label="验收闸门图">
+<defs><linearGradient id="vaGateGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="rgba(74,222,128,.28)"/><stop offset="1" stop-color="rgba(74,222,128,.06)"/></linearGradient>
+<marker id="vaArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#4ade80"/></marker>
+<marker id="vaArrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#f87171"/></marker></defs>
+<path class="va-ln" d="M162 190H198" marker-end="url(#vaArr)"/>
+<path class="va-ln" d="M340 190H378" marker-end="url(#vaArr)"/>
+<path class="va-dash" d="M475 78V133" marker-end="url(#vaArr)"/>
+<path class="va-ln flowline" d="M570 170C605 170 605 65 638 65" marker-end="url(#vaArr)"/>
+<path class="va-ln flowline" d="M570 190H638" marker-end="url(#vaArr)"/>
+<path class="va-ln flowline" d="M570 210C605 210 605 315 638 315" marker-end="url(#vaArr)"/>
+<path class="va-fail" d="M270 230V298" marker-end="url(#vaArrR)"/>
+<path class="va-fail" d="M475 245V298" marker-end="url(#vaArrR)"/>
+<text class="va-ok" x="168" y="182">干净</text>
+<text class="va-ok" x="346" y="182">过</text>
+<text class="va-no" x="278" y="270">不过</text>
+<text class="va-no" x="483" y="275">不过</text>
+<text class="va-t2" x="584" y="248">照常评估</text>
+<g class="va-node" tabindex="0" data-k="probe"><rect x="12" y="150" width="150" height="80" rx="12"/><text x="87" y="184" text-anchor="middle">探针筛事件</text><text class="va-t2" x="87" y="206" text-anchor="middle">记忆 · 补全</text></g>
+<g class="va-node va-gate" tabindex="0" data-k="V1"><rect x="200" y="150" width="140" height="80" rx="12"/><text x="270" y="184" text-anchor="middle">V1 人群可信</text><text class="va-t2" x="270" y="206" text-anchor="middle">TVD ≤ 0.05</text></g>
+<g class="va-node va-main" tabindex="0" data-k="V2"><rect x="380" y="135" width="190" height="110" rx="14"/><text x="475" y="170" text-anchor="middle">V2 声音可信</text><text class="va-t2" x="475" y="192" text-anchor="middle">总闸门 · 盲评 ≤ 65%</text><text class="va-t2" x="475" y="212" text-anchor="middle">且显著低于 B1</text><text class="va-t2" x="475" y="232" text-anchor="middle">过 → 帖子对外交付</text></g>
+<g class="va-node va-del" tabindex="0" data-k="base"><rect x="380" y="18" width="190" height="60" rx="10"/><text x="475" y="44" text-anchor="middle">基线 B1 · B5 · B6</text><text class="va-t2" x="475" y="64" text-anchor="middle">给 V2 定对照与下限</text></g>
+<g class="va-node va-gate" tabindex="0" data-k="V3"><rect x="640" y="30" width="180" height="70" rx="12"/><text x="730" y="60" text-anchor="middle">V3 态度可信</text><text class="va-t2" x="730" y="82" text-anchor="middle">TVD ≤ 0.2 且同向</text></g>
+<g class="va-node va-gate" tabindex="0" data-k="V4"><rect x="640" y="155" width="180" height="70" rx="12"/><text x="730" y="185" text-anchor="middle">V4 决策可信</text><text class="va-t2" x="730" y="207" text-anchor="middle">硬目标相对误差 ≤ 50%</text></g>
+<g class="va-node va-gate" tabindex="0" data-k="V5"><rect x="640" y="280" width="180" height="70" rx="12"/><text x="730" y="310" text-anchor="middle">V5 稳定可解释</text><text class="va-t2" x="730" y="332" text-anchor="middle">相关 ≥ 0.5 · 可比率 ≥ 0.7</text></g>
+<g class="va-node va-stopn" tabindex="0" data-k="S1"><rect x="190" y="300" width="160" height="60" rx="10"/><text x="270" y="326" text-anchor="middle">V1 止损</text><text class="va-t2" x="270" y="346" text-anchor="middle">修 IPF，不进 V2</text></g>
+<g class="va-node va-stopn" tabindex="0" data-k="S2"><rect x="390" y="300" width="170" height="60" rx="10"/><text x="475" y="326" text-anchor="middle">V2 止损</text><text class="va-t2" x="475" y="346" text-anchor="middle">先风格微调</text></g>
+</svg>
+<div class="va-info" id="vaGateInfo" aria-live="polite"><h4>点击节点查看</h4><p>每个节点都给出检验方法、过线和止损。过线数值见 <span class="ref">§12.3</span>，止损规则见 <span class="ref">§15.2</span>。</p></div>
+</div>
+<h3 class="va-h3">V1–V5：每一项拿什么比、怎么算、过线多少<small>讨论第 9 条 · §12.1 §12.3</small></h3>
+<p>五项对应模拟产出的五个层面。每一项都先说对照数据从哪来，再说用什么指标，最后是预注册的过线。过线是经验设定，允许在 Phase 0 根据 B5 下限调整一次，之后不再改<span class="ref">§12.3</span>。</p>
+<div class="tbl-wrap"><table class="tbl va-tbl">
+<thead><tr><th>项</th><th>对照数据</th><th>指标</th><th>过线 <span class="ref">§12.3</span></th></tr></thead>
+<tbody>
+<tr><td><b>V1</b> 人群可信</td><td>中国结算统计、交易所个人投资者调查、CHFS、16Personalities 国别分布</td><td>主要边际与关键联合分布的 TVD、最大偏差</td><td>主要边际 TVD ≤ 0.05</td></tr>
+<tr><td><b>V2</b> 声音可信</td><td>同期真实股吧 / 雪球帖子（授权数据与自采前向样本）<span class="ref">§16.1</span></td><td>判别器 AUC（冻结版与重训版两条线，B5 为误报底线）；人工盲评识别率（协议见下文）；文风分布距离<span class="ref">§13.2</span>；话题与立场分布（立场用 Jev 分类，发声者口径）<span class="ref">§6.6 §10.1</span>；事件后发帖量曲线形状<span class="ref">§7.5</span>；说教率与免责声明率为扣分项</td><td>盲评识别率 ≤ 65%，且显著低于 B1（混合效应逻辑回归）；冻结版判别器 AUC 只要求逐版下降</td></tr>
+<tr><td><b>V3</b> 态度可信</td><td>交易所个人投资者年度调查、投资者信心类月度指数〔需复核：仍在发布的有哪些、口径〕、股吧情绪</td><td>硅基调查（旁路调用，见下文）的答案分布与真实问卷比较；与态度表全体持有者口径的一致性<span class="ref">§10.1</span>；关键事件前后的方向一致性与响应形状（如 2024-09-24 后参与度激增）</td><td>关键调查题 TVD ≤ 0.2，且重大事件方向一致</td></tr>
+<tr><td><b>V4</b> 决策可信</td><td>文献与调查中的散户行为、两融余额、新开户数、偏股基金净申购、证券交易结算资金与银证转账 〔需复核〕</td><td>换手与频率分布、持股数、持有期；处置效应 PGR/PLR、注意力驱动买入、彩票偏好、涨跌停与节假日附近行为；言行不一率及原因分布；亏损账户占比、大小户收益差；出入金的方向与量级（牛市净流入、熊市净流出，与结算资金变化同向）。目标矩分硬、软、无目标三档，见下文</td><td>硬目标矩相对误差 ≤ 50%（总量比方向与变化幅度）；软目标只要求方向与排序一致；无目标矩不设线</td></tr>
+<tr><td><b>V5</b> 稳定可解释</td><td>模拟自身：跨种子、跨底座模型、跨提示模板</td><td>合并人群结果一致性，以同底座跨种子相关为上限；人设一致性回归（高风险厌恶的人设确实交易更少、仓位更低）；同质化诊断<span class="ref">§13.2</span></td><td>校准前跨模型合并人群态度相关 ≥ 0.5，且可比率 ≥ 0.7、方向一致；同底座跨种子相关 &lt; 0.5 时不判</td></tr>
+</tbody></table></div>
+<p>几个术语。<b>TVD</b>（总变差距离）衡量两个分类分布差多少，取值 0 到 1，0 表示完全一样。<b>AUC</b> 是判别器把模拟帖和真实帖排开的能力，0.5 表示完全分不开。<b>PGR/PLR</b> 是处置效应的两个比率：已实现盈利占全部盈利机会的比例，与已实现亏损占全部亏损机会的比例，散户通常前者高于后者。下面的公式只是定义说明（示意，未实现）：</p>
+<pre class="code" data-lang="text"><span class="c"># 示意，未实现</span>
+TVD(p, q) = ½ · Σ_k |p_k − q_k|
+PGR = 已实现盈利数 / (已实现盈利数 + 账面盈利数)
+PLR = 已实现亏损数 / (已实现亏损数 + 账面亏损数)
+盲评识别率 = 二选一中判对“哪条是模拟”的配对数 / 总配对数
+可比率 = 跨模型相关 / 同底座跨种子相关</pre>
+<p><b>V2 人工盲评协议</b>写在 §12.1，在 <code>apps/annotate</code> 里执行<span class="ref">§12.1</span>：</p>
+<ul>
+<li>每对是一条真实帖加一条生成帖，同吧、同事件窗口内同一时段（如 2 小时块）、同长度档（按字数分 4 档）。长度差异不靠盲评，另在文风分布指标里比。</li>
+<li>真实帖从全部可见帖里随机抽，先按规则去掉广告与推广帖并记录去除比例，同一规则也作用于生成帖。生成帖在对应格内随机抽，不人工挑；抽自哪个种子、哪个底座随机决定并记录。标注员只看去标识化的真实帖。</li>
+<li>B1 帖按同样规则与真实帖配对，和主模型的配对混排、随机呈现。“显著低于 B1”在同一批标注员、同一场次内比较。</li>
+<li>标注是二选一“哪条是模拟”，加三档把握度。一个验收事件标完之前不公布对错；记录标注员 ID 与呈现顺序，约 10% 的配对重复出现，用来测前后一致性。</li>
+<li>统计用混合效应逻辑回归，标注员为随机效应，主模型 / B1 为固定效应；另报每个标注员的识别率，并检查识别率是否随呈现顺序上升。</li>
+<li>团队成员调过 prompt，熟悉生成帖的破绽，识别率会偏高。这个偏差的方向是保守的，报告里注明。</li>
+</ul>
+<p><b>判别器分两条线，AUC 不设绝对线。</b>冻结版每个 Phase 开始时训练一次，只用开发事件的真实帖和当时生成器的帖子，锁定权重与版本号；本 Phase 内各版生成器都用它在验收事件上打分，“逐版下降”按冻结版判定。调 prompt 时不得看冻结版对单条帖子的打分，只看汇总 AUC。重训版每版生成器各训一个，训练集与冻结版同口径，报告验收事件上的 AUC，衡量还剩多少破绽，只作诊断、不设及格线；它输出最能区分真假的特征（高权重词、句长等）供调 prompt 参考，冻结版不提供。两条线差值大，说明生成器在迎合冻结版，报告要标出。两条线都在同一份 B5 数据上算误报水平，即两批真实帖跨时段、跨吧被判为不同的比例，作为下限参照<span class="ref">§12.1</span>。不给 AUC 设绝对线的理由是，微调过的判别器往往能抓到人看不出的细节<span class="ref">§12.3</span>。V2 里有绝对线的只有人工盲评识别率。</p>
+<p><b>V2 证据分强弱。</b>论坛帖最强；熟人群聊只做盲评，算弱证据<span class="ref">§7.1</span>；同日写盘的前向对比最干净<span class="ref">§13.1</span>。发布者（信息流里只发帖、不交易的账户，见 <a href="sim-publishers.html">发布者演示</a>）的帖子进帖子表、不进入任何人群统计<span class="ref">§10.1</span>，也不能替代真实帖子做 V2 对照，因为它的帖子同样是模型产物（讨论第 10 条）<span class="ref">§5.6</span>。验收运行强制关闭真实帖子注入，开关写进 manifest，否则 V2 作废<span class="ref">§5.7</span>。热身期 20–60 个交易日的输出打标签，不计入 V2–V4<span class="ref">§9.2</span>。漏跑日按 PIT 补跑的产出标 <code>backfilled=true</code>，不算 V2 前向证据（补跑时当日真实帖已经存在），只作开发与校准样本，补跑日占比写进 V2 报告<span class="ref">§9.3</span>。</p>
+<p><b>V4 的战绩部分</b>对照 CHFS 2013 亏损账户占比 70.4%，并检验“小户跑输大户、主要输在选股”<span class="ref">§2.1–§2.2 §12.1</span>；2015 年复盘的大小户差距拆成择时与选股两部分，财富再分配本身只有闭环模式才能检验<span class="ref">§12.1</span>。</p>
+<p><b>V3 硅基调查走旁路调用。</b>从调查时点的日终快照出发，智能体带当时的人设与记忆答题；答案不写回记忆、不影响后续运行，单独缓存，写入调查表<span class="ref">§10.3 §12.1</span>。调用形式同第 1 次调用，不放风格示例帖，每个调查时点调一次<span class="ref">§6.1 §12.1</span>。题干、选项、量表照抄真实问卷原文，选项顺序随机；关键题备两种措辞，措辞差异计入 V5。真实调查样本有偏（如线上问卷偏年轻、偏活跃），公布了样本构成的就按它重新加权智能体，否则用 <code>w_head</code> 并注明；只问符合问卷条件的人（如“过去一年有交易”）。同一时点的调查答案还要和态度表的全体持有者口径做一致性检查，不一致比例计入 V5<span class="ref">§12.1</span>。</p>
+<p><b>V4 目标矩分三档</b>，预注册时为每个矩登记来源、时期、样本与档位<span class="ref">§11.4 §12.1</span>：</p>
+<ul>
+<li><b>硬目标</b>：同期同市场的官方统计，包括两融余额变化、新开户数、证券交易结算资金、银证转账〔需复核〕，CHFS 亏损账户占比只对应它的调查期。总量只比方向与变化幅度的相关性，不比水平。“相对误差 ≤ 50%”只适用于这一档。</li>
+<li><b>软目标</b>：其他时期或市场的文献结果，如 PGR &gt; PLR、小户跑输、注意力驱动买入、彩票偏好、涨跌停附近行为。只要求方向与排序一致，给出模拟值与文献值区间，不算相对误差。</li>
+<li><b>无目标</b>：言行不一率、涨停买不进率<span class="ref">§8.2</span>、隔夜变卦率等。只报告并做合理性检查，不设及格线，标“无对照”。</li>
+</ul>
+<p>校准用过的矩在开发事件上拟合，V4 只在验收事件上检验，同一个矩不在同一段数据上既拟合又检验。V4 结论按硬目标是否通过来下，软目标作补充证据<span class="ref">§12.1 §12.2</span>。</p>
+<p><b>V5 的计算单位与噪声上限。</b>跨模型相关在合并人群上算，单位是“气质组（4）× 年龄段（5）× 事件 × 态度字段”（恐惧、政策信任、stance 等），态度取全体持有者口径；100 格的结果只作描述，不进及格线。先算同底座跨种子相关，作为可达上限，跨模型相关除以这个上限得到可比率。同底座跨种子相关本身 &lt; 0.5 时说明噪声过大，先加种子或合并单位，不判 V5。结果分两层报告：校准前的结果作及格判定，校准后的结果只作说明。人设一致性用回归检验：换手、仓位、杠杆、发帖率等行为指标对风险厌恶、外向性、神经质等人设连续参数回归，预注册预期符号，看两个底座的符号是否都对，符号错的参数在报告里列出。跨模板（V3 的两种措辞、prompt 模板改写版）用同样的方法和可比率判定<span class="ref">§12.1</span>。</p>
+<h3 class="va-h3">基线 B1–B6：每个零件的贡献怎么证明<small>讨论第 8 条 · §11.1</small></h3>
+<p>基线是“去掉某个部分再跑一遍”的对照。如果去掉人设后 V2–V4 分数不变，说明人设没起作用。六个基线分三类：B1 是“只有一个 LLM”的最低对照；B2–B4 各拆掉一层，看这一层的贡献；B5 和 B6 检验评估方法本身靠不靠得住。原设计里的“真实舆情”基线已经改为 V2 的对照目标，旧的 B0 已删除（讨论第 8 条）<span class="ref">§11.1</span>。</p>
+<div class="tbl-wrap"><table class="tbl va-tbl">
+<thead><tr><th>基线</th><th>怎么做</th><th>检验什么</th><th>谁来跑</th></tr></thead>
+<tbody>
+<tr><td><b>B1</b> 单 LLM 无人设</td><td>同一模型、同样的事件卡，不给人设和社交层，直接写帖、答问卷、给决策</td><td>V2–V4 是否胜过“一个 LLM”；V2 盲评识别率要显著低于 B1</td><td><code>validation.baselines</code>，只经 llm、events、prompts</td></tr>
+<tr><td><b>B2</b> 同质群体</td><td>所有智能体用同一个人设</td><td>人设异质性是否让分布更真实</td><td rowspan="3"><code>configs/</code> 换配置，编排器重跑</td></tr>
+<tr><td><b>B3</b> 打乱人设</td><td>人设属性随机置换</td><td>切片差异来自人设结构，而非噪声</td></tr>
+<tr><td><b>B4</b> 无社交层</td><td>关掉发帖、群聊和信息流</td><td>社交传播的贡献</td></tr>
+<tr><td><b>B5</b> 真对真上限</td><td>判别器和盲评去区分两批同期真实帖子</td><td>噪声下限：V2 最好能做到哪</td><td><code>validation.discriminator</code></td></tr>
+<tr><td><b>B6</b> 事件错配</td><td>事件 A 的模拟帖对照事件 B 的真实帖</td><td>评估对事件敏感吗；分数应明显变差</td><td><code>validation.acceptance</code></td></tr>
+</tbody></table></div>
+<p>消融与基线同理，只是拆的是实现选择：换底座模型、换意向来源<span class="ref">§6.6</span>、把内核换成 LLM 直接出 <code>OrderIntent</code>、去掉少样本帖子、关掉发布者层。每个消融都比较 V2–V4 和同质化诊断<span class="ref">§11.2</span>。</p>
+<p><b>样本量怎么定。</b>盲评与判别器按二项检验估功效：80% 功效、双侧 α = 0.05，要检出“识别率 60% 对 50%”，每个验收事件约需 200 对，用 statsmodels 计算，盲评由用户团队完成<span class="ref">§11.4 §15.3</span>。二项检验只用于事先估样本量，正式分析用混合效应逻辑回归<span class="ref">§11.4 §12.1</span>。每个单元格约 5 人，格内几乎没有功效，所以分人群结论只在合并切片（气质组、年龄段、账户规模）上下<span class="ref">§11.4</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §4.3，来自架构讨论 A5）</b>种子稀少格（<code>seed_sparse</code>）只作描述，不做显著性检验。同一单元格里的 Tier-A 与 Tier-B 只差记忆深度与反思频率，两者的对比就是 V5 的分层效应检验。人群切片默认只用 Tier-B，Tier-A 单独报告<span class="ref">§4.3</span>。</div>
+<div class="card" id="vaPow">
+<div class="va-lbl">盲评样本量估算 · 示意计算，未实现</div>
+<p style="margin:4px 0 10px;font-size:13.5px;color:var(--ink2)">零假设是“盲评者分不出”，识别率 50%。下面用正态近似估算单样本二项检验需要多少对。文档的例子（60% 对 50%、80% 功效、双侧 α = 0.05，约 200 对）<span class="ref">§11.4</span>可以在这里复现；正式计算用 statsmodels，数值会略有出入。这个估算只用于事先定样本量，标完后的正式分析用混合效应逻辑回归<span class="ref">§11.4</span>。</p>
+<div class="va-pow">
+<label class="ctl">备择识别率 p₁<input type="range" id="vaP1" min="52" max="80" step="1" value="60"><span id="vaP1v" class="mono">60%</span></label>
+<label class="ctl">功效 1−β<select id="vaPw"><option value="0.8" selected>80%</option><option value="0.9">90%</option></select></label>
+<label class="ctl">双侧 α<select id="vaAl"><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select></label>
+</div>
+<div class="va-powout"><span>每个验收事件约需</span><b id="vaN">—</b><span>对</span><span class="mono" id="vaNx" style="color:var(--mute);font-size:12.5px"></span></div>
+<pre class="code" data-lang="text"><span class="c"># 示意，未实现：正态近似公式</span>
+n = ( z<sub>1−α/2</sub>·√(p₀q₀) + z<sub>1−β</sub>·√(p₁q₁) )² / (p₁ − p₀)²     p₀ = 0.5</pre>
+</div>
+<h3 class="va-h3">探针：先确认模型“没见过”这次事件<small>讨论第 7 条 · §13.1</small></h3>
+<p>泄漏在这里算作“真实性污染”，有两种形态：帖子里出现事后视角，以及模型背过真实帖子导致 V2 虚高<span class="ref">§13.1</span>。三种探针在不同时点起作用：前两种在模拟之前筛事件，第三种在模拟之后扫每一条帖子。</p>
+<div class="grid g3">
+<div class="card"><div class="va-lbl">记忆探针 · 模拟前</div><p style="font-size:13.5px;color:var(--ink2);margin:4px 0">问模型那段时间的指数点位、重大政策和板块走势，并让它补全当期新闻标题。结果显著好于朴素基准（如随机游走），这个事件就移出验收，改为开发事件<span class="ref">§13.1 §15.2</span>。所用模型的有效截止日也靠它测：取公开值与探测值中较晚者，再加缓冲。</p></div>
+<div class="card"><div class="va-lbl">帖子补全探针 · 模拟前</div><p style="font-size:13.5px;color:var(--ink2);margin:4px 0">给模型看一条真实帖子的前半段，让它续写。续写与原文的字符重合显著高于同期打乱对照时，该时段不用于 V2<span class="ref">§13.1</span>。它专门抓“背过帖子”这一种污染。</p></div>
+<div class="card"><div class="va-lbl">事后视角检测 · 模拟后</div><p style="font-size:13.5px;color:var(--ink2);margin:4px 0">逐条扫描模拟帖里的“后来的知识”：之后的指数点位、政策结果、“后来证明”一类措辞，用 Jev 分类加规则匹配<span class="ref">§6.6</span>。命中率按模型和事件写进 RunManifest<span class="ref">§9.4</span>，命中的帖子在 V2 扣分。</p></div>
+</div>
+<p><b>截止日表</b>是 Phase 0 的交付物之一<span class="ref">§15.1</span>，覆盖所有用到的模型：智能体底座、事件抽取、改写和向量化。验收事件最好晚于全部截止日，但截止日不是首要选择标准，模型按中文口语能力、政策话题低拒答、文风多样、成本的顺序挑<span class="ref">§13.3</span>。厂商公布的截止日未必准确，国内模型常常不公布；下表多为二手汇总（数据截至 2026-06-17），只能作参考，所以记忆探针是必做项<span class="ref">§13.1</span>：</p>
+<div class="tbl-wrap"><table class="tbl va-tbl">
+<thead><tr><th>模型</th><th>声称截止日</th><th>来源</th></tr></thead>
+<tbody>
+<tr><td>Qwen3 首批</td><td class="n">2025-03-31</td><td>OpenRouter 列表（二手汇总）</td></tr>
+<tr><td>Qwen3-2507 / Max / Coder</td><td class="n">2025-06-30</td><td>同上</td></tr>
+<tr><td>Qwen3-Next</td><td class="n">2025-09-30</td><td>同上</td></tr>
+<tr><td>DeepSeek V3.2</td><td class="n">2025-05</td><td>模型自述</td></tr>
+<tr><td>Kimi K2（0711 / 0905）</td><td class="n">2024-12-31</td><td>二手汇总</td></tr>
+<tr><td>MiniMax M3</td><td class="n">2026-01</td><td>聊天模板中的声明</td></tr>
+<tr><td>DeepSeek V4、GLM-5 系列</td><td>未找到</td><td>—</td></tr>
+</tbody></table></div>
+<p style="font-size:13px;color:var(--mute)">表格来源 <span class="ref">§13.1</span>。</p>
+<p>匿名化只做辅助检查：宏观事件本身可识别，“降准 + 互换便利”就是 2024-09-24，所以主线使用真名，ChronoGPT 一类时间截断模型不进主线<span class="ref">§13.1</span>。生成环节另有几道防线：记忆事实由经验向量模板填写，LLM 只润色语气<span class="ref">§6.5</span>；扫描起始日之后的日期和事件<span class="ref">§6.4</span>；文风少样本只取模拟起始日之前的帖子<span class="ref">§7.4</span>；事件抽取模型也算进截止日表<span class="ref">§5.2</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.2，来自架构讨论 A3）</b>为防记忆污染，V2 历史验收事件的量级（<code>magnitude</code>）由团队按 §5.2 的量级表人工标定，LLM 打分只作参考；在模型截止日之后的事件上比较 LLM 与人工打分的一致性，记入运行清单<span class="ref">§5.2 §9.4</span>。开发事件与持续运行只做遮蔽与一致性检查<span class="ref">§5.2</span>。</div>
+<div class="callout decide"><b class="t">已定（v0.3 §6.2 §13.3，来自架构讨论 A4）</b>底座模型在 Phase 0 按 §13.3 的选型标准加记忆探针选定<span class="ref">§14.4</span>。输出解析失败时换种子重试，最多 2 次；仍失败则该智能体当日记为“未激活”、原因“解析失败”，不填默认值，也不沿用上期信念。拒答单独记类、不重试，当日同样记缺席，拒答率按话题与人群切片，作为底座选型扣分。失败率与拒答率写入运行清单并告警；缺席是否集中在某些人群或行情日要检查，结果放进 V1、V3 报告<span class="ref">§6.2 §13.3</span>。Jev 等分类器经同一网关调用，按分类器类型单独计量<span class="ref">§3.3 §14.4</span>。</div>
+<h3 class="va-h3">同质化诊断：防止“千人一脑”<small>§13.2</small></h3>
+<p>同质化是指很多智能体说着几乎一样的话、站一样的立场，平台于是退化成“B1 加噪声”<span class="ref">§13.2</span>。文献里的证据包括方差被压窄（Bisbee 2024）、RLHF 降低多样性（Kirk 2024）、过度准确（Aher 2023）、漫画化（CoMPosT，Cheng、Piccardi &amp; Yang 2023；Wang、Morgenstern &amp; Dickerson 2025）等<span class="ref">§13.2</span>。对策的思路是异质性主要从 LLM 之外注入：信息不同（各人看到的帖子不同）<span class="ref">§5.4 §7</span>、参数不同（s<sub>i</sub>、γ<sub>i</sub>、λ<sub>i</sub>）<span class="ref">§6.3</span>、经历不同<span class="ref">§6.4 §6.5</span>。模型这一来源按 MVP 的做法处理：用两个开源权重底座，同一底座内全体智能体用同一模型，跨底座比较时全体一起换；模型差异体现为跨底座的结果差，计入 V5，不在单次运行内混用。温度只调到输出不重复为止，高温带来的是噪声，没有结构<span class="ref">§13.2 §6.6 §14.1</span>。仍然太窄时，才调内核映射斜率和显式噪声项，并记录调整<span class="ref">§13.2</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §6.6 §13.2，来自架构讨论 A4）</b>同一底座内 Tier-A 与 Tier-B 用同一模型，分层只体现在记忆深度、反思频率与激活频率，避免人设差异与模型大小混淆；“2 个底座”即两个模型<span class="ref">§6.6 §14.1</span>。对 validation 的影响是：单次运行内部没有模型异质，跨模型稳定性只能靠 V5 的跨底座对比来测。</div>
+<p>诊断先由 Phase 0 的探针测一次，之后每次运行写进 manifest，并计入 V5<span class="ref">§13.2</span>：</p>
+<div class="tbl-wrap"><table class="tbl va-tbl">
+<thead><tr><th>诊断</th><th>怎么算</th><th>警示信号</th></tr></thead>
+<tbody>
+<tr><td>群体分歧</td><td>立场桶的标准差 / 熵；分歧保留率 DR = 模拟标准差 / 真实标准差；Wasserstein 距离；用到的桶数；对照硅基调查<span class="ref">§12.1</span>和真实舆情</td><td>DR 明显低于 1（建议警示线 0.7，文档自定的经验值）</td></tr>
+<tr><td>人群间差异</td><td>组间方差占比</td><td>过高（漫画化）或接近 0</td></tr>
+<tr><td>有效声音数</td><td>向量聚类的 exp(熵)</td><td>远小于智能体数，且对人设不敏感</td></tr>
+<tr><td>人设敏感性</td><td>只改一个字段（年龄、入市年份、资金）</td><td>方向错，或幅度过大</td></tr>
+<tr><td>无关字段敏感性</td><td>只改名字</td><td>出现系统性差异</td></tr>
+<tr><td>漫画化</td><td>CoMPosT 的个体化与夸张度</td><td>文本差异由人设标签词驱动</td></tr>
+<tr><td>文风分布</td><td>按渠道比句长、口语词、表情 / 黑话、脏话率</td><td>比真实更窄或更书面</td></tr>
+<tr><td>立场分布</td><td>Jev 立场对真实帖，与 DR 同口径</td><td>立场 DR &lt; 0.7，或多空比反转</td></tr>
+</tbody></table></div>
+<p style="font-size:13px;color:var(--mute)">表格来源 <span class="ref">§13.2</span>。</p>
+<pre class="code" data-lang="text"><span class="c"># 示意，未实现</span>
+DR      = std(模拟立场) / std(真实立场)        <span class="c"># 警示线 0.7 §13.2</span>
+有效声音数 = exp( −Σ_c π_c · ln π_c )           <span class="c"># π_c：落在第 c 个聚类的帖子占比</span></pre>
+<p>人设和社交层到底有没有用，由 B2、B3、B4 回答；诊断告诉你“窄了”，基线告诉你“是哪一层没起作用”<span class="ref">§13.2</span>。对齐偏差另有监控：按模型、按事件类别统计拒答率、无效输出率、免责声明率、说教率；说教率与免责声明率是 V2 扣分项，拒答记为选型扣分。已有先例：用 2,000 个中国人设做民意模拟时，DeepSeek-R1 有 1,618 个无效输出（推理过长或疑似审查）<span class="ref">§2.3 §13.3</span>。内容尺度上，生成端不设类别禁止清单，各类内容的比例向真实平台可见帖子对齐，超出真实分布同样被 V2 扣分<span class="ref">§13.3</span>。2–3 套等价提示模板作为稳健性维度，模板哈希进 manifest<span class="ref">§13.4</span>。</p>
+<h3 class="va-h3">样本切分、校准与防泄漏<small>§11.3 §12.2</small></h3>
+<p>事件分三类，用途互不交叉<span class="ref">§11.3</span>。这是校准不作弊的前提：校准用的数据，验收时不能再拿来比。</p>
+<div class="grid g3">
+<div class="card"><div class="va-lbl">开发事件</div><p style="font-size:13.5px;color:var(--ink2);margin:4px 0">在某个底座模型截止日之前，或被探针判为泄漏。只用于跑通流程、调文风和校准。</p></div>
+<div class="card"><div class="va-lbl">验收事件</div><p style="font-size:13.5px;color:var(--ink2);margin:4px 0">最好在全部截止日之后，并通过记忆和补全两种探针。它们的真实帖子不进校准目标，也不进少样本池。</p></div>
+<div class="card"><div class="va-lbl">前向持续运行</div><p style="font-size:13.5px;color:var(--ink2);margin:4px 0">每天跑、当天写盘、只追加。是最终证据；之后用新模型版本重跑不算数，厂商更新记进 manifest 分段分析<span class="ref">§13.1</span>。</p></div>
+</div>
+<p><b>校准什么。</b>目标是 §6.3 行为参数的群体超参数（均值、方差、对人设属性的回归系数），以及激活和社交参数<span class="ref">§12.2</span>。校准的对象是群体层面的参数分布，也就是“这一类人的参数大致怎么分布”，单个智能体不逐个调。参数按底座分开校准：每个底座各有一套 β、ρ、η 等的群体尺度，人设间相对关系不变；各底座的校准修正量记入运行清单，作为底座自带偏差的度量与选型参考<span class="ref">§6.3 §9.4</span>。V5 的跨模型相关用校准前的结果作及格判定，校准后的结果只作说明<span class="ref">§12.1</span>。本页的理解是：校准会把两个底座往同一组真实矩上拉，校准后的一致性说明不了底座本身稳定。</p>
+<p><b>怎么算。</b>用 MSM（模拟矩方法）：选一组真实矩（如换手率、处置效应、亏损账户占比），让模拟矩与真实矩的加权距离最小。每算一次距离都要跑一遍模拟，代价高，所以用高斯过程或树模型做代理模型，再用贝叶斯优化挑下一组参数（Lamperti、Roventini &amp; Sani 2018）；需要参数后验分布时改用 ABC（近似贝叶斯计算）<span class="ref">§12.2</span>。</p>
+<pre class="code" data-lang="text"><span class="c"># 示意，未实现：MSM 目标；权重矩阵 W 的取法文档未定义</span>
+θ* = argmin_θ  ( m_sim(θ) − m_real )ᵀ · W · ( m_sim(θ) − m_real )</pre>
+<p><b>按什么顺序。</b>先用规则先验意向源<span class="ref">§6.6</span>粗搜，再在 LLM 意向源上确认<span class="ref">§12.2</span>。跑之前先做偏差测量：每个“底座模型 × 人设”组合做标准任务（损失厌恶彩票、处置情境、外推、羊群、彩票股偏好），给内核参数定起点（Yee &amp; Koh 2026）<span class="ref">§2.3 §12.2</span>。战绩与出入金矩包括亏损账户占比、分账户规模的收益分位数、择时损失（TWR − MWR）、牛熊阶段的净入金方向；§6.4 战绩回灌的两条通路（LLM 记忆和内核慢变量）的步长在这组矩上一起校准，避免重复计入<span class="ref">§12.2</span>。</p>
+<div class="callout warn"><b class="t">防泄漏的硬规则</b>校准目标只用行为矩、调查分布和开发事件的真实帖子。验收事件的真实帖子绝不进校准目标或少样本池，否则 V2 对照失效<span class="ref">§12.2</span>。在开发事件上校准，在验收事件上检验外推<span class="ref">§11.3</span>。校准用过的矩，V4 只在验收事件上检验，同一个矩不在同一段数据上既拟合又检验<span class="ref">§12.1</span>。</div>
+<h3 class="va-h3">止损规则：不过线时做什么<small>讨论第 9 条 · §15.2</small></h3>
+<p>止损规则和过线一起在 Phase 0 预注册，之后不改<span class="ref">§15.2</span>。这样“不过”就对应一个事先约定的动作，事后没有再放宽的余地。每条规则都指向该改的那一层：人群问题改抽样，声音问题改文本生成，态度和决策问题改内核。</p>
+<div class="tbl-wrap"><table class="tbl va-tbl">
+<thead><tr><th>触发</th><th>动作</th><th>对应模块（本页归纳）</th></tr></thead>
+<tbody>
+<tr><td>V1 不过</td><td>修 IPF 目标边际和种子样本；不进入 V2 评估</td><td>population <span class="ref">§4.3</span></td></tr>
+<tr><td>V2 不过</td><td>先启用风格微调（模拟起始日前的去标识帖子做 LoRA）；仍不过，帖子只作内部参考，对外只交付态度和决策</td><td>llm / prompts <span class="ref">§13.3</span></td></tr>
+<tr><td>V3 不过</td><td>调内核映射（policy_trust、恐惧等结构化字段），不改文本</td><td>agents 内核 <span class="ref">§13.3</span></td></tr>
+<tr><td>V4 不过</td><td>修内核；暂停交付决策表和账户类表</td><td>agents 内核 <span class="ref">§6.3</span></td></tr>
+<tr><td>V5 不过</td><td>先处理同质化，不扩大规模</td><td>多层 <span class="ref">§13.2</span></td></tr>
+<tr><td>泄漏</td><td>记忆探针或帖子补全探针显示底座模型“知道”某验收事件：该事件不计入验收，改作开发事件</td><td>事件清单 <span class="ref">§13.1</span></td></tr>
+<tr><td>成本</td><td>token 用量持续超预算，且缓存命中率已无提升空间：降低 Tier-A 比例</td><td>population / llm <span class="ref">§14</span></td></tr>
+</tbody></table></div>
+<p style="font-size:13px;color:var(--mute)">表格来源 <span class="ref">§15.2</span>。</p>
+<p>另有三条对应关系写在 §13.4：记忆探针失败触发泄漏条，跨模型相关低触发稳定性条，分歧过窄触发可信性条<span class="ref">§13.4</span>。</p>
+</section>
+
+<section id="s4" class="reveal">
+<h2><span class="num">04</span>走一遍示例</h2>
+<p class="sub">一次虚构的 Phase 1 验收：三个候选事件先过探针，再让一组示例分数依次过 V1–V5，不过线的那一步会弹出预注册的止损动作。</p>
+<p>先选一种情景，再用“下一步”或“自动播放”往前走。指标在浏览器里按上面的公式现算，所有数字、事件编号和分布都是<b>示例数据</b>，不代表任何真实运行结果。过线取自 <span class="ref">§12.3</span>，盲评协议、V4 三档与 V5 可比率取自 <span class="ref">§12.1</span>，止损取自 <span class="ref">§15.2</span>。演示里有两处简化：V2 用双比例 z 检验代替文档规定的混合效应逻辑回归，V4 用单个事件窗口的变化幅度代替跨时段相关；V5 的 20 个单位由固定种子的伪随机数生成。</p>
+<div class="card glow" id="vaDemo">
+<div class="va-bar" id="vaScen" role="group" aria-label="情景">
+<button class="btn pri" type="button" data-s="ok">全部通过</button>
+<button class="btn" type="button" data-s="v1">V1 不过</button>
+<button class="btn" type="button" data-s="v2">V2 不过</button>
+<button class="btn" type="button" data-s="v4">V4 不过</button>
+<button class="btn" type="button" data-s="v5n">V5 噪声过大（不判）</button>
+<span class="va-tag">示例数据</span>
+</div>
+<div class="va-bar">
+<button class="btn" type="button" id="vaPrev">上一步</button>
+<button class="btn pri" type="button" id="vaNext">下一步</button>
+<button class="btn" type="button" id="vaPlay">自动播放</button>
+<span class="va-pos" id="vaPos">1 / 7</span>
+</div>
+<div class="va-dots" id="vaDots"></div>
+<div class="va-lights" id="vaLights"></div>
+<h3 class="va-stepttl" id="vaTtl"></h3>
+<div class="va-ipo">
+<div class="card"><div class="va-lbl">输入</div><ul id="vaIn"></ul></div>
+<div class="card"><div class="va-lbl">处理</div><ul id="vaDo"></ul></div>
+<div class="card"><div class="va-lbl">输出</div><ul id="vaOut"></ul></div>
+<div class="card"><div class="va-lbl">对应文档条目</div><ul id="vaDoc"></ul></div>
+</div>
+<div class="callout warn va-stop" id="vaStop" style="margin-top:12px"><b class="t">触发止损</b><span id="vaStopT"></span></div>
+</div>
+</section>
+
+<section id="s5" class="reveal">
+<h2><span class="num">05</span>接口与数据结构</h2>
+<p class="sub">validation 读 §10.3 的交付表（含 V3 旁路调用写入的调查表）和 §9.4 的 RunManifest；验收报告本身的字段结构文档未定义。</p>
+<p>下表只列文档里出现过、且 validation 会用到的字段，右列说明它在哪一项检验里用。时点、版本线、补跑、预热等行级元数据都从激活表取，其余各表经 <code>activation_id</code> 关联<span class="ref">§10.3</span>。没有列出的字段（例如验收报告、预注册文件、截止日表的具体字段）在设计文档里都没有定义。</p>
+<div class="tbl-wrap"><table class="tbl va-tbl">
+<thead><tr><th>字段</th><th>所在表</th><th>validation 怎么用</th><th>来源</th></tr></thead>
+<tbody>
+<tr><td><code>backfilled</code>、<code>warmup</code></td><td>激活表</td><td>补跑产出不算 V2 前向证据；热身期输出不计入 V2–V4</td><td><span class="ref">§9.2 §9.3 §10.3</span></td></tr>
+<tr><td><code>status</code>、<code>absent_reason</code></td><td>激活表</td><td>缺席（解析失败 / 拒答 / 超时）是否集中在某些人群或行情日，结果进 V1、V3 报告</td><td><span class="ref">§6.2 §10.3</span></td></tr>
+<tr><td><code>text</code>、<code>channel</code>、<code>sim_time</code></td><td>帖子表</td><td>V2 文风分布、事件后发帖量曲线；按渠道分开比</td><td><span class="ref">§10.3 §12.1</span></td></tr>
+<tr><td><code>stance</code>、<code>emotion</code>、<code>post_type</code></td><td>帖子表</td><td><code>stance</code> 用于 V2 立场分布与立场 DR；V2 的话题分布用哪个字段，文档未定义</td><td><span class="ref">§10.3 §12.1 §13.2</span></td></tr>
+<tr><td><code>persona_id</code> | <code>publisher_id</code></td><td>帖子表</td><td>区分散户帖与发布者帖；发布者帖不进群体统计</td><td><span class="ref">§10.1 §10.3</span></td></tr>
+<tr><td><code>simulated</code>、<code>rumor_shill_tag</code></td><td>帖子表</td><td>盲评配对时区分来源；传闻 / 喊单标签。各类内容的比例向真实平台对齐，超出真实分布在 V2 扣分<span class="ref">§13.3</span></td><td><span class="ref">§10.3</span></td></tr>
+<tr><td><code>event_id</code>、<code>run_id</code></td><td>各表</td><td>按验收事件切分；B6 错配时换 <code>event_id</code></td><td><span class="ref">§10.3 §11.1</span></td></tr>
+<tr><td><code>stance</code>、<code>ret_bucket</code>、<code>confidence</code>、<code>policy_trust</code></td><td>态度表</td><td>V3 与调查答案做全体持有者口径一致性检查；V5 跨模型相关（全体持有者口径）</td><td><span class="ref">§10.1 §10.3 §12.1</span></td></tr>
+<tr><td><code>survey_id</code>、<code>question_id</code>、<code>wording_version</code>、<code>answer</code>、<code>option_order</code>、<code>survey_date</code></td><td>调查表</td><td>V3 答案分布对照真实问卷；两种措辞的差异计入 V5</td><td><span class="ref">§10.3 §12.1</span></td></tr>
+<tr><td><code>intent_action</code>、<code>intent_size</code>、<code>exec_qty</code>、<code>not_executed_reason</code>、<code>liquidity_flag</code></td><td>决策表</td><td>V4 换手与频率、言行不一率、涨停买不进率（后两者为无目标矩）</td><td><span class="ref">§8.2 §10.3 §12.1</span></td></tr>
+<tr><td><code>intent_kind</code>、<code>plan_ref</code></td><td>决策表</td><td><code>plan_ref</code> 把次日盘前的实际意向链回前晚的明日打算，算出隔夜变卦率（V4 无目标矩）</td><td><span class="ref">§10.3 §12.1</span></td></tr>
+<tr><td><code>twr</code>、<code>mwr</code></td><td>持仓快照与战绩表（战绩部分）</td><td>V4 战绩；择时损失 TWR − MWR 作校准矩</td><td><span class="ref">§10.3 §12.2</span></td></tr>
+<tr><td>模型与版本、种子、模板哈希、意向源</td><td>RunManifest</td><td>V5 跨种子 / 模型 / 模板一致性；分段分析</td><td><span class="ref">§9.4 §13.4</span></td></tr>
+<tr><td>真实帖子注入开关</td><td>RunManifest</td><td>验收运行必须为关，否则 V2 作废</td><td><span class="ref">§5.7 §9.4</span></td></tr>
+<tr><td>事后视角命中率</td><td>RunManifest</td><td>按模型和事件记录；命中帖在 V2 扣分</td><td><span class="ref">§9.4 §13.1</span></td></tr>
+<tr><td>各底座的内核校准修正量、补跑日占比、解析失败率 / 拒答率 / 超时率</td><td>RunManifest</td><td>底座自带偏差的度量；补跑日占比写进 V2 报告；缺席检查</td><td><span class="ref">§6.3 §9.3 §9.4</span></td></tr>
+<tr><td>LLM 与人工量级打分的一致性</td><td>RunManifest</td><td>截止日之后事件上的 <code>magnitude</code> 一致性</td><td><span class="ref">§5.2 §9.4</span></td></tr>
+<tr><td>验收报告的字段</td><td>—</td><td>文档未定义</td><td>—</td></tr>
+</tbody></table></div>
+<p>下面是一份验收报告可能的样子，用来说明“各项独立出结论、V2 决定帖子是否交付”这层意思。字段名全部是本页自拟，数值是示例数据。</p>
+<pre class="code" data-lang="json"><span class="c">// 示意，未实现：字段名为本页自拟，文档未定义报告结构；数值为示例数据</span>
+{
+  <span class="k">"run_id"</span>: <span class="s">"RUN-DEMO"</span>,
+  <span class="k">"acceptance_events"</span>: [<span class="s">"EV-DEMO-01"</span>, <span class="s">"EV-DEMO-02"</span>],
+  <span class="k">"moved_to_dev"</span>: [<span class="s">"EV-DEMO-03"</span>],
+  <span class="k">"V1"</span>: { <span class="k">"max_marginal_tvd"</span>: <span class="n">0.02</span>, <span class="k">"pass"</span>: <span class="n">true</span> },
+  <span class="k">"V2"</span>: { <span class="k">"blind_id_rate"</span>: <span class="n">0.58</span>, <span class="k">"b1_id_rate"</span>: <span class="n">0.77</span>, <span class="k">"frozen_auc"</span>: <span class="n">0.71</span>, <span class="k">"frozen_auc_prev"</span>: <span class="n">0.78</span>, <span class="k">"retrained_auc"</span>: <span class="n">0.80</span>, <span class="k">"pass"</span>: <span class="n">true</span> },
+  <span class="k">"V3"</span>: { <span class="k">"key_item_tvd"</span>: <span class="n">0.07</span>, <span class="k">"same_direction"</span>: <span class="n">true</span>, <span class="k">"pass"</span>: <span class="n">true</span> },
+  <span class="k">"V4"</span>: { <span class="k">"hard_max_rel_error"</span>: <span class="n">0.37</span>, <span class="k">"soft_direction_ok"</span>: <span class="n">true</span>, <span class="k">"no_target"</span>: <span class="s">"无对照"</span>, <span class="k">"pass"</span>: <span class="n">true</span> },
+  <span class="k">"V5"</span>: { <span class="k">"seed_corr"</span>: <span class="n">0.91</span>, <span class="k">"cross_model_corr"</span>: <span class="n">0.82</span>, <span class="k">"ratio"</span>: <span class="n">0.90</span>, <span class="k">"pre_calibration"</span>: <span class="n">true</span>, <span class="k">"pass"</span>: <span class="n">true</span> },
+  <span class="k">"deliver_posts"</span>: <span class="n">true</span>
+}</pre>
+</section>
+
+<section id="s6" class="reveal">
+<h2><span class="num">06</span>设计取舍与已定决定</h2>
+<p class="sub">每条取舍都写明选了什么、放弃了什么、为什么；来自架构讨论 A1–A12、已并入设计文档 v0.3 的决定用“已定”框标出。</p>
+<div class="tbl-wrap"><table class="tbl va-tbl">
+<thead><tr><th>议题</th><th>选择</th><th>放弃</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>结论怎么合成</td><td>V1–V5 各自出结论，V2 为总闸门<span class="ref">§12.3</span></td><td>合成单一总分（本页归纳）</td><td>V2 声音可信最关键（讨论第 1 条）；V2 不过，帖子不对外交付，其余各项照常报告<span class="ref">§12.3</span></td></tr>
+<tr><td>V2 的绝对过线</td><td>只给人工盲评设绝对线（≤ 65%），冻结版判别器 AUC 只要求逐版下降<span class="ref">§12.3</span></td><td>AUC 绝对线</td><td>微调过的判别器往往能抓到人看不出的细节；B5 给出它在两批真实帖之间的误报水平<span class="ref">§12.3</span></td></tr>
+<tr><td>判别器怎么用</td><td>冻结版判“逐版下降”，重训版只作诊断<span class="ref">§12.1</span></td><td>每版重训一个判别器并拿它判进步</td><td>冻结版锁定权重，调 prompt 时只看汇总 AUC，不看单帖打分；重训版给出高权重特征供调 prompt，两线差值大说明生成器在迎合冻结版<span class="ref">§12.1</span></td></tr>
+<tr><td>盲评的统计方法</td><td>混合效应逻辑回归，标注员为随机效应<span class="ref">§12.1</span></td><td>把所有配对合成一个比例做二项检验</td><td>二项检验只用于事先估样本量<span class="ref">§11.4</span>；同一标注员的判断彼此相关，正式分析要把标注员差异分出来（本页理解）</td></tr>
+<tr><td>V4 目标矩</td><td>分硬、软、无目标三档，只对硬目标算相对误差<span class="ref">§12.1 §12.3</span></td><td>所有矩统一按相对误差 ≤ 50% 判</td><td>其他时期或市场的文献结果只能比方向与排序；言行不一率等没有真实对照，只做合理性检查，标“无对照”<span class="ref">§12.1</span></td></tr>
+<tr><td>V5 的及格线</td><td>跨模型相关 ≥ 0.5 之外再要求可比率 ≥ 0.7，用校准前结果<span class="ref">§12.1 §12.3</span></td><td>只看跨模型相关的绝对值</td><td>同底座跨种子相关是可达上限；它本身 &lt; 0.5 时噪声过大，先加种子或合并单位，不判 V5<span class="ref">§12.1</span></td></tr>
+<tr><td>预注册范围</td><td>轻量预注册：主指标与及格线、验收事件清单、基线集合、V2 盲评协议、V4 各目标矩的来源 / 时期 / 样本 / 档位、V5 人设回归的预期符号<span class="ref">§11.4</span></td><td>完整分析计划</td><td>其余指标一律算探索性结果<span class="ref">§11.4</span>；选轻量版的理由文档未写</td></tr>
+<tr><td>是否匿名化</td><td>主线用真名，匿名化只做辅助检验<span class="ref">§13.1</span></td><td>主线匿名化、时间一致模型</td><td>匿名化能减轻但消除不了泄漏，宏观事件一看便知；真实散户本来就认识这些公司；ChronoGPT 一类都是英文小模型，写不出中文股吧语体<span class="ref">§13.1</span></td></tr>
+<tr><td>异质性从哪来</td><td>信息、参数、经历在 LLM 之外注入；模型差异只体现为跨底座的结果差<span class="ref">§13.2</span></td><td>靠调高温度；单次运行内混用多个模型</td><td>高温带来的是噪声，没有结构；温度只调到输出不重复为止。同一底座内全体用同一模型，避免人设差异与模型大小混淆<span class="ref">§13.2 §6.6</span></td></tr>
+<tr><td>选模型的首要标准</td><td>中文口语 &gt; 政策话题低拒答 &gt; 文风多样 &gt; 成本<span class="ref">§13.3</span></td><td>以截止日为首要标准</td><td>截止日早晚只影响哪些历史事件可用于验收；克制、书面、带说教的帖子一眼就能和真实股吧区分开，直接影响 V2<span class="ref">§13.3</span></td></tr>
+<tr><td>结构化字段怎么对齐</td><td>经内核映射对齐，帖子文本不改<span class="ref">§13.3</span></td><td>改写文本去迎合指标</td><td>内核只修结构化字段；文风靠少样本示例帖与模型选择拉近<span class="ref">§13.3 §7.4</span></td></tr>
+<tr><td>风格微调</td><td>不进 MVP，V2 不过时才启用<span class="ref">§13.3 §15.2</span></td><td>一开始就微调</td><td>先用提示词加少样本；V2 不达标时，用仿真起点之前的匿名帖训练 LoRA<span class="ref">§13.3</span></td></tr>
+<tr><td>增量 IC 判据</td><td>删除（讨论第 9 条）</td><td>以因子 IC 作验收</td><td>项目不做因子，验收只问像不像</td></tr>
+</tbody></table></div>
+<div class="callout decide"><b class="t">已定（v0.3 §16.1，来自架构讨论 A2）</b>历史验收事件用数据商授权或学术合作渠道的数据，自采只补每日前向样本。雪球不自采：robots 禁止相关路径，用户协议禁止用于开发 AI 系统和建存档数据集。雪球风格仍留在 MVP，它的 V2 对照与文风示例池靠授权数据；授权来源落实前，雪球风格的 V2 结论记为“无对照”。股吧回复全文暂不采，只存回复数。原始语料只在服务器上，归采集专用账户所有，其他账户不可读，90 天到期自动删除，只把去标识化版本同步给团队<span class="ref">§16.1</span>。</div>
+<div class="callout info"><b class="t">对 V2 的影响</b>授权来源落实之前，V2 的真实对照实际只有股吧的列表与主帖正文，回复只有计数<span class="ref">§16.1</span>。股吧列表混有其他吧的推广帖，入库前按 <code>stockbar_code</code> 过滤<span class="ref">§16.1</span>；盲评抽真实帖时再按规则去掉广告与推广帖并记录比例<span class="ref">§12.1</span>。</div>
+</section>
+
+<section id="s7" class="reveal">
+<h2><span class="num">07</span>与其他模块的关系</h2>
+<p class="sub">validation 站在流水线末端读所有产出，但它的结论会回流：校准得到 §6.3 行为参数的群体超参数，止损动作落到 population、prompts、agents 这些上游模块。</p>
+<div class="grid g2">
+<div class="card"><div class="va-lbl">上游：它读谁</div><ul style="margin:6px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink2)">
+<li><a href="mod-outputs.html">outputs</a>：帖子表、态度表、决策表和账户类表（含持仓快照与战绩表）<span class="ref">§10.3</span></li>
+<li><a href="mod-orchestrator.html">orchestrator</a>：RunManifest；也负责按 <code>configs/</code> 重跑 B2–B4 与消融</li>
+<li><a href="mod-collect.html">collect</a>：写前向存档（帖子、新闻、题材成分）<span class="ref">§3.3</span></li>
+<li><a href="mod-data.html">data</a>：PIT 行情与去标识后的真实帖子（data 只读 collect 写的存档）<span class="ref">§3.3 §16.1</span>；中国结算、调查等外部对照统计放在哪个模块，文档未定义</li>
+<li><a href="mod-events.html">events</a>：事件卡与 <code>event_id</code>；抽取模型计入截止日表<span class="ref">§5.2</span></li>
+<li><a href="mod-llm.html">llm</a> 与 <a href="mod-prompts.html">prompts</a>：B1 只经这两者和 events 跑；Jev 走网关</li>
+</ul></div>
+<div class="card"><div class="va-lbl">下游：结论落到谁</div><ul style="margin:6px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink2)">
+<li><a href="mod-agents.html">agents</a>：V3 / V4 不过时改内核映射或内核<span class="ref">§15.2</span>；校准结果（§6.3 参数的群体超参数）由 population 产出的行为参数承接<span class="ref">§3.3 §12.2</span>，具体写回路径文档未定义</li>
+<li><a href="mod-population.html">population</a>：V1 不过时修 IPF 目标边际和种子样本<span class="ref">§4.3</span></li>
+<li><a href="mod-social.html">social</a>：B4 关掉社交层、消融关掉发布者层，用来衡量它的贡献<span class="ref">§11.1 §11.2</span></li>
+<li>对外交付：V2 决定帖子能否交付，V4 决定决策表与账户类表能否交付<span class="ref">§15.2</span></li>
+</ul></div>
+</div>
+<p><b>边界。</b>B2–B4 和消融是换配置的模拟运行，配置在 <code>configs/</code>，不在本包实现；B5 属于 discriminator，B6 属于 acceptance。真实帖子的采集归 collect，validation 只读去标识后的数据。validation 不改任何帖子文本，对齐只经内核映射完成<span class="ref">§13.3</span>。数据结构定义见 <a href="mod-schemas.html">schemas</a>，账户与战绩的计算见 <a href="mod-accounts.html">accounts</a>。</p>
+<p><b>演示页。</b>V4 检验的是 <a href="sim-personas.html">散户决策演示</a> 里那条“读消息 → 看法 → 意向 → 内核下单”的链条在群体层面的分布；V2 要区分的散户帖与 <a href="sim-publishers.html">发布者演示</a> 里的发布者帖是两回事，后者不能充当真实对照（讨论第 10 条）。整次运行的位置见 <a href="flow-run.html">运行生命周期</a>。</p>
+</section>
+
+<section id="s8" class="reveal">
+<h2><span class="num">08</span>开放问题</h2>
+<p class="sub">下面这些点设计文档没有给出数值或做法，或者依赖外部条件，实现前需要先定。</p>
+<div class="callout todo"><b class="t">V4 的资金流对照口径 〔需复核〕</b>V4 硬目标里的“证券交易结算资金、银证转账”在设计文档中标了〔需复核〕<span class="ref">§12.1</span>：数据是否公开、按什么频率、能否拆出散户部分，都还没确认。</div>
+<div class="callout todo"><b class="t">V3 的月度对照来源 〔需复核〕</b>V3 对照里的“投资者信心类月度指数”标了〔需复核：仍在发布的有哪些、口径〕<span class="ref">§12.1</span>。来源定下来之前，V3 的月度对照只能依赖交易所年度调查和股吧情绪。</div>
+<div class="callout todo"><b class="t">探针的“显著”怎么判</b>记忆探针要“显著好于朴素基准”，补全探针要“显著高于打乱对照”<span class="ref">§13.1</span>，但检验方法、显著性水平和截止日“缓冲”的长度文档都没写。这些应该和过线一起写进 Phase 0 预注册。</div>
+<div class="callout todo"><b class="t">验收报告与预注册文件的结构</b>预注册要登记的内容 §11.4 已列全（主指标与及格线、验收事件清单与基线集合、V2 盲评协议、V4 各目标矩档位、V5 预期符号），但报告、预注册、截止日表都没有字段定义（见 05 节）。需要在 schemas 里补，否则 V1–V5 的结论没法跨版本对比。</div>
+<div class="callout todo"><b class="t">MSM 的权重与 ABC 的触发条件</b>MSM 的权重矩阵怎么取、哪些矩进目标、什么情况下“需要后验”而改用 ABC，文档都未定义<span class="ref">§12.2</span>。</div>
+<div class="callout todo"><b class="t">警示线只有 DR 一条</b>同质化诊断里只有分歧保留率给了建议警示线 0.7<span class="ref">§13.2</span>，其余诊断（组间方差占比、有效声音数等）只有方向性的警示描述，没有数值。</div>
+<div class="callout todo"><b class="t">雪球授权与版权评审</b>授权来源落实前，雪球风格的 V2 结论记为“无对照”；《著作权法》第二十四条的合理使用是否覆盖团队内部研究、少样本示例、盲评与风格微调，东财用户协议是否允许研究用途，都在等法务复核<span class="ref">§16.1</span>。这几件事决定 V2 能覆盖多少渠道。股吧固定跟踪的 10 只个股吧名单也未定<span class="ref">§16.1</span>。</div>
+<div class="callout todo"><b class="t">盲评协议里还没定的细节</b>§12.1 已定配对规则、二选一加三档把握度、混合效应逻辑回归和约 10% 的重复配对<span class="ref">§12.1</span>，但三档把握度怎样进入分析（只作描述还是作权重）、“识别率随呈现顺序上升”和前后一致性达到多少算有问题，文档都没写。04 节演示用双比例 z 检验，只是本页的简化示意。</div>
+<div class="callout todo"><b class="t">成本止损的预算数</b>成本止损条写的是“token 持续超预算”<span class="ref">§15.2</span>，本页没有找到具体预算数值，因此未写。</div>
+</section>
+
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+/* JS1：闸门图点击说明（静态作者数据，用 textContent 渲染） */
+var $ = function(id){ return document.getElementById(id); };
+function el(tag, cls, txt){ var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+var GATE = {
+  probe: ['探针筛事件', '记忆探针问指数点位、政策和板块走势并补全标题；补全探针让模型续写真实帖子前半段。', '显著好于朴素基准或打乱对照，就把事件移出验收、改为开发事件。显著性的判法文档未写。', '§13.1 §15.2'],
+  V1: ['V1 人群可信', '对照中国结算统计、交易所个人投资者调查、CHFS 和 16Personalities 国别分布，算主要边际与关键联合分布的 TVD 和最大偏差。', '过线：主要边际 TVD ≤ 0.05。不过：修 IPF 目标边际和种子样本，不进入 V2 评估。', '§12.1 §12.3 §15.2'],
+  V2: ['V2 声音可信 · 总闸门', '对照同期真实股吧 / 雪球帖子：冻结版与重训版判别器的 AUC（B5 给误报底线）、人工盲评识别率（同吧、同时段、同长度档配对，B1 混排，二选一加三档把握度）、文风分布距离、话题与立场分布、事件后发帖量曲线形状；说教率和免责声明率扣分。', '过线：盲评识别率 ≤ 65% 且显著低于 B1（混合效应逻辑回归）；冻结版判别器 AUC 只要求逐版下降。不过：帖子不对外交付，其余各项照常报告。', '§12.1 §12.3'],
+  base: ['基线 B1 · B5 · B6', 'B1 是同一模型、无人设无社交层的单 LLM，盲评时与主模型配对混排；B5 用两批同期真实帖互相判别，给出判别器与盲评的误报底线；B6 拿事件 A 的模拟帖对照事件 B 的真实帖，分数应明显变差。', 'B2–B4 也参与 V2–V4 比较，但它们是 configs/ 里换配置重跑的模拟，不在本包。', '§11.1 §12.1'],
+  V3: ['V3 态度可信', '硅基调查：从调查时点的日终快照旁路调用，智能体带当时的人设与记忆答题，答案不写回记忆、写入调查表；题干照抄真实问卷、选项顺序随机，关键题两种措辞。再看关键事件前后的方向与响应形状（如 2024-09-24 后参与度激增），并与态度表全体持有者口径做一致性检查。', '过线：关键调查题 TVD ≤ 0.2 且重大事件方向一致。不过：调内核映射（policy_trust、恐惧等结构化字段），不改文本。', '§12.1 §12.3 §15.2'],
+  V4: ['V4 决策可信', '目标矩分三档。硬目标是同期同市场官方统计（两融余额变化、新开户数、结算资金与银证转账〔需复核〕）；软目标是其他时期或市场的文献结果（PGR > PLR、小户跑输等）；言行不一率、涨停买不进率、隔夜变卦率无对照。', '过线：硬目标矩相对误差 ≤ 50%（总量比方向与变化幅度）；软目标只要求方向与排序一致；无目标矩不设线。不过：修内核，暂停交付决策表和账户类表。', '§12.1 §12.3 §15.2'],
+  V5: ['V5 稳定可解释', '单位是气质组（4）× 年龄段（5）× 事件 × 态度字段；先算同底座跨种子相关作上限，跨模型相关除以它得可比率。人设一致性用回归和预注册的预期符号检验；同质化诊断也计入这一项。', '过线：校准前跨模型合并人群态度相关 ≥ 0.5，且可比率 ≥ 0.7、方向一致；跨种子相关 < 0.5 时不判。不过：先处理同质化，不扩大规模。', '§12.1 §12.3 §15.2'],
+  S1: ['V1 止损', '人口结构没对上，后面的帖子和态度就失去了“谁在说”的基础。', '动作：修 IPF 目标边际和种子样本（§4.3），不进入 V2 评估。', '§15.2'],
+  S2: ['V2 止损', '第一步启用风格微调：用模拟起始日之前的去标识帖子做 LoRA，MVP 默认不开。', '仍不过：帖子只作内部参考，对外只交付态度和决策。', '§13.3 §15.2']
+};
+(function(){
+  var svg = $('vaGate'), box = $('vaGateInfo');
+  if (!svg || !box) return;
+  var nodes = svg.querySelectorAll('.va-node');
+  function show(k){
+    var d = GATE[k]; if (!d) return;
+    for (var i = 0; i < nodes.length; i++) nodes[i].classList.toggle('on', nodes[i].getAttribute('data-k') === k);
+    box.textContent = '';
+    box.appendChild(el('h4', null, d[0]));
+    box.appendChild(el('p', null, d[1]));
+    var p = el('p', null, d[2] + ' ');
+    p.appendChild(el('span', 'ref', d[3]));
+    box.appendChild(p);
+  }
+  for (var i = 0; i < nodes.length; i++) {
+    (function(n){
+      n.setAttribute('role', 'button');
+      n.addEventListener('click', function(){ show(n.getAttribute('data-k')); });
+      n.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(n.getAttribute('data-k')); } });
+    })(nodes[i]);
+  }
+})();
+/* JS2：盲评样本量（正态近似），防 NaN 与除零 */
+(function(){
+  var r = $('vaP1'), rv = $('vaP1v'), pw = $('vaPw'), al = $('vaAl'), out = $('vaN'), ex = $('vaNx');
+  if (!r || !out) return;
+  var ZA = { '0.05': 1.959964, '0.01': 2.575829 }, ZB = { '0.8': 0.841621, '0.9': 1.281552 };
+  function calc(){
+    var p1 = Number(r.value) / 100, p0 = 0.5;
+    var za = ZA[al ? al.value : '0.05'], zb = ZB[pw ? pw.value : '0.8'];
+    if (rv) rv.textContent = Math.round(p1 * 100) + '%';
+    var d = p1 - p0;
+    if (!isFinite(p1) || !za || !zb || Math.abs(d) < 1e-9) { out.textContent = '—'; if (ex) ex.textContent = ''; return; }
+    var a = za * Math.sqrt(p0 * (1 - p0)) + zb * Math.sqrt(p1 * (1 - p1));
+    var n = Math.ceil(a * a / (d * d));
+    out.textContent = isFinite(n) ? String(n) : '—';
+    if (ex) ex.textContent = 'z(α/2)=' + za.toFixed(2) + ' · z(β)=' + zb.toFixed(2) + ' · 效应 ' + (d * 100).toFixed(0) + ' 个百分点';
+  }
+  r.addEventListener('input', calc);
+  if (pw) pw.addEventListener('change', calc);
+  if (al) al.addEventListener('change', calc);
+  calc();
+})();
+/* JS3：分步演示的示例数据与计算（全部为示例数据） */
+function fin(x){ return typeof x === 'number' && isFinite(x); }
+function tvd(p, q){
+  if (!p || !q || p.length !== q.length || !p.length) return NaN;
+  var s = 0; for (var i = 0; i < p.length; i++) s += Math.abs(p[i] - q[i]);
+  return s / 2;
+}
+function relErr(sim, real){ return (fin(sim) && fin(real) && real !== 0) ? Math.abs(sim - real) / Math.abs(real) : NaN; }
+function mean(a){ if (!a || !a.length) return NaN; var s = 0; for (var i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
+function pearson(a, b){
+  if (!a || !b || a.length !== b.length || a.length < 2) return NaN;
+  var ma = mean(a), mb = mean(b), sab = 0, saa = 0, sbb = 0;
+  for (var i = 0; i < a.length; i++) { var x = a[i] - ma, y = b[i] - mb; sab += x * y; saa += x * x; sbb += y * y; }
+  var den = Math.sqrt(saa * sbb);
+  return den > 0 ? sab / den : NaN;
+}
+function ncdf(z){ /* Abramowitz-Stegun 近似 */
+  if (!fin(z)) return NaN;
+  var t = 1 / (1 + 0.2316419 * Math.abs(z));
+  var d = 0.3989423 * Math.exp(-z * z / 2);
+  var p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
+}
+function twoPropZ(x1, n1, x2, n2){ /* 单侧：p1 < p2 */
+  if (!(n1 > 0 && n2 > 0)) return { z: NaN, p: NaN };
+  var p1 = x1 / n1, p2 = x2 / n2, pp = (x1 + x2) / (n1 + n2);
+  var se = Math.sqrt(pp * (1 - pp) * (1 / n1 + 1 / n2));
+  if (!(se > 0)) return { z: NaN, p: NaN };
+  var z = (p1 - p2) / se;
+  return { z: z, p: ncdf(z) };
+}
+function pct(x, d){ return fin(x) ? (x * 100).toFixed(d == null ? 0 : d) + '%' : '—'; }
+function f3(x){ return fin(x) ? x.toFixed(3) : '—'; }
+var AGE_REAL = [0.12, 0.28, 0.30, 0.20, 0.10];
+/* V4 目标矩：[名称, 档位 hard/soft/none, 对照（hard 为同期变化幅度，soft 为文献方向 ±1，none 为 null）, 模拟值] */
+var BASE = {
+  age: [0.13, 0.26, 0.31, 0.20, 0.10],
+  v2: { sim: 116, b1: 154, n: 200, aucPrev: 0.78, auc: 0.71, aucRe: 0.80, b5: 0.08 },
+  att: { real: [0.45, 0.30, 0.25], sim: [0.52, 0.28, 0.20], simW2: [0.48, 0.31, 0.21], realDir: 1, simDir: 1, incons: 0.12 },
+  mom: [ ['两融余额事件窗口变化', 'hard', 0.09, 0.12], ['新开户数事件窗口变化', 'hard', 0.48, 0.35],
+         ['PGR − PLR', 'soft', 1, 0.09], ['小户相对大户收益差', 'soft', -1, -0.04],
+         ['言行不一率', 'none', null, 0.18], ['涨停买不进率', 'none', null, 0.63], ['隔夜变卦率', 'none', null, 0.11] ],
+  v5: { noise: 0.2 }, dr: 0.83
+};
+function lcg(seed){ var x = seed >>> 0; return function(){ x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296 - 0.5; }; }
+function v5Cells(noise){ /* 4 气质组 × 5 年龄段 = 20 个单位；底座 A、B 各两个种子；确定性伪随机，示例数据 */
+  var rnd = lcg(20261031), c = { A1: [], A2: [], B1: [], B2: [] };
+  for (var i = 0; i < 20; i++) {
+    var g = Math.floor(i / 5), a = i % 5, t = 0.3 - 0.15 * g + 0.05 * a, d = 0.12 * ((g + a) % 3 - 1);
+    c.A1.push(t + noise * rnd()); c.A2.push(t + noise * rnd());
+    c.B1.push(t + d + noise * rnd()); c.B2.push(t + d + noise * rnd());
+  }
+  return c;
+}
+function scen(k){
+  var s = JSON.parse(JSON.stringify(BASE));
+  if (k === 'v1') s.age = [0.06, 0.22, 0.34, 0.24, 0.14];
+  if (k === 'v2') s.v2.sim = 142;
+  if (k === 'v4') s.mom[1][3] = 1.10;
+  if (k === 'v5n') s.v5.noise = 1.0;
+  return s;
+}
+function evaluate(s){
+  var r = {};
+  r.v1 = tvd(s.age, AGE_REAL); r.p1 = fin(r.v1) && r.v1 <= 0.05;
+  r.idS = s.v2.sim / s.v2.n; r.idB = s.v2.b1 / s.v2.n;
+  r.zt = twoPropZ(s.v2.sim, s.v2.n, s.v2.b1, s.v2.n);
+  r.aucDown = fin(s.v2.auc) && fin(s.v2.aucPrev) && s.v2.auc < s.v2.aucPrev;
+  r.p2 = fin(r.idS) && r.idS <= 0.65 && fin(r.zt.p) && r.zt.p < 0.05 && r.aucDown;
+  r.v3 = tvd(s.att.sim, s.att.real); r.p3 = fin(r.v3) && r.v3 <= 0.2 && s.att.realDir === s.att.simDir;
+  r.w12 = tvd(s.att.sim, s.att.simW2);
+  r.errs = s.mom.map(function(m){ return m[1] === 'hard' ? relErr(m[3], m[2]) : NaN; });
+  r.hardOk = s.mom.map(function(m, j){ return m[1] !== 'hard' || (fin(r.errs[j]) && r.errs[j] <= 0.5 && (m[3] > 0) === (m[2] > 0)); });
+  r.softOk = s.mom.map(function(m){ return m[1] !== 'soft' || (m[3] > 0) === (m[2] > 0); });
+  r.maxErr = Math.max.apply(null, r.errs.filter(fin).concat([0]));
+  r.p4 = r.hardOk.every(Boolean);
+  r.soft4 = r.softOk.every(Boolean);
+  var c = v5Cells(s.v5.noise); r.cells = c;
+  r.seed = mean([pearson(c.A1, c.A2), pearson(c.B1, c.B2)]);
+  r.cross = mean([pearson(c.A1, c.B1), pearson(c.A1, c.B2), pearson(c.A2, c.B1), pearson(c.A2, c.B2)]);
+  r.ratio = (fin(r.seed) && r.seed > 0 && fin(r.cross)) ? r.cross / r.seed : NaN;
+  r.sameDir = (mean(c.A1.concat(c.A2)) > 0) === (mean(c.B1.concat(c.B2)) > 0);
+  r.judged5 = fin(r.seed) && r.seed >= 0.5;
+  r.p5 = r.judged5 ? (fin(r.cross) && r.cross >= 0.5 && fin(r.ratio) && r.ratio >= 0.7 && r.sameDir) : null;
+  return r;
+}
+var LIGHTS = ['探针', 'V1', 'V2', 'V3', 'V4', 'V5'];
+function buildSteps(k){
+  var s = scen(k), r = evaluate(s), st = [];
+  var v1Stop = !r.p1;
+  var skip = '未评估：V1 止损规定不进入 V2 评估（§15.2）；V3–V5 是否同时暂停文档未写，本示例一并暂停';
+  st.push({ t: '第 1 步 · 探针筛事件，检查运行清单', light: 0, ok: true,
+    i: ['候选事件 EV-DEMO-01 / 02 / 03（化名，示例数据）', '三个底座模型的截止日表'],
+    d: ['记忆探针：问三个事件期间的指数涨跌方向。EV-DEMO-03 方向命中 81%，随机游走基准 50%；另两个分别 52%、49%', '帖子补全探针：EV-DEMO-01 / 02 续写的字符重合率与打乱对照接近', '检查 manifest：真实帖子注入 = 关；预热期（示例取 40 个交易日，文档范围 20–60）已按 warmup 标记剔除；补跑日占比 0%；事后视角命中率 1.8%'],
+    o: ['验收事件：EV-DEMO-01、EV-DEMO-02', 'EV-DEMO-03 移出验收，改为开发事件'],
+    doc: [['记忆探针、补全探针', '§13.1'], ['泄漏止损', '§15.2'], ['注入开关', '§5.7'], ['预热期标记', '§9.2'], ['补跑标记', '§9.3'], ['运行清单', '§9.4']],
+    stop: '泄漏：EV-DEMO-03 移出验收，改为开发事件（§15.2）。示例里的 81% 对 50% 仅示意，“显著”的判法文档未写。' });
+  st.push({ t: '第 2 步 · V1 人群可信', light: 1, ok: r.p1,
+    i: ['模拟人群年龄段边际：' + s.age.join(' / '), '对照边际：' + AGE_REAL.join(' / ')],
+    d: ['TVD = ½ Σ|p − q| = ' + f3(r.v1), '过线：主要边际 TVD ≤ 0.05'],
+    o: [r.p1 ? 'V1 通过' : 'V1 不过（TVD ' + f3(r.v1) + ' > 0.05）'],
+    doc: [['V1 对照与指标', '§12.1'], ['过线', '§12.3']],
+    stop: v1Stop ? '修 IPF 目标边际和种子样本（§4.3），不进入 V2 评估（§15.2）。' : null });
+  if (v1Stop) {
+    ['V2', 'V3', 'V4', 'V5'].forEach(function(n, j){
+      st.push({ t: '第 ' + (j + 3) + ' 步 · ' + n, light: j + 2, ok: null, i: ['—'], d: [skip], o: ['未评估'], doc: [['V1 止损', '§15.2']], stop: null });
+    });
+  } else {
+    st.push({ t: '第 3 步 · V2 声音可信（总闸门）', light: 2, ok: r.p2,
+      i: ['盲评 ' + s.v2.n + ' 对：模拟帖对真实帖，同吧、同 2 小时块、同长度档配对', '同样 ' + s.v2.n + ' 对：B1 帖对真实帖，与主模型配对混排、随机呈现', '冻结版判别器（Phase 开始时训练、锁定权重）与本版重训版判别器'],
+      d: ['标注为二选一“哪条是模拟”加三档把握度；约 10% 配对重复出现，测前后一致性',
+        '模拟帖识别率 ' + s.v2.sim + ' / ' + s.v2.n + ' = ' + pct(r.idS) + '；B1 识别率 ' + s.v2.b1 + ' / ' + s.v2.n + ' = ' + pct(r.idB),
+        '文档规定用混合效应逻辑回归（标注员为随机效应）；本示例没有标注员数据，用双比例 z 检验（单侧）代替：z = ' + (fin(r.zt.z) ? r.zt.z.toFixed(2) : '—') + '，p ' + (fin(r.zt.p) ? (r.zt.p < 0.001 ? '< 0.001' : '= ' + r.zt.p.toFixed(3)) : '—'),
+        '冻结版 AUC：上一版 ' + f3(s.v2.aucPrev) + ' → 本版 ' + f3(s.v2.auc) + '（' + (r.aucDown ? '下降' : '未下降') + '）；重训版 AUC ' + f3(s.v2.aucRe) + '，只作诊断；B5 误报水平 ' + pct(s.v2.b5),
+        '过线：识别率 ≤ 65% 且显著低于 B1；冻结版 AUC 逐版下降'],
+      o: [r.p2 ? 'V2 通过：帖子可以对外交付' : ('V2 不过（' + (!(r.idS <= 0.65) ? '识别率 ' + pct(r.idS) + ' > 65%' : (!r.aucDown ? '冻结版 AUC 未下降' : '识别率 ' + pct(r.idS) + ' 未显著低于 B1 的 ' + pct(r.idB))) + '）：帖子暂不对外交付')],
+      doc: [['盲评协议、判别器两条线', '§12.1'], ['过线与总闸门', '§12.3'], ['约 200 对', '§11.4']],
+      stop: r.p2 ? null : '先启用风格微调（§13.3）；仍不过，帖子只作内部参考，对外只交付态度和决策（§15.2）。其余各项照常报告（§12.3）。' });
+    st.push({ t: '第 4 步 · V3 态度可信（硅基调查）', light: 3, ok: r.p3,
+      i: ['从调查时点的日终快照旁路调用，智能体带当时的人设与记忆答题，答案写入调查表、不写回记忆', '关键题“未来一个月看多 / 中性 / 看空”，题干照抄真实问卷，选项顺序随机，备两种措辞', '模拟（措辞一）：' + s.att.sim.join(' / ') + '，对照：' + s.att.real.join(' / ')],
+      d: ['TVD = ' + f3(r.v3) + '（本示例按措辞一判定，属简化）', '两种措辞的答案分布 TVD = ' + f3(r.w12) + '，计入 V5', '与态度表全体持有者口径对照，不一致比例 ' + pct(s.att.incons) + '，计入 V5', '事件前后变化方向：模拟 ' + (s.att.simDir > 0 ? '上升' : '下降') + '，对照 ' + (s.att.realDir > 0 ? '上升' : '下降'), '过线：TVD ≤ 0.2 且重大事件同向'],
+      o: [r.p3 ? 'V3 通过' : 'V3 不过'], doc: [['硅基调查', '§12.1'], ['调查表', '§10.3'], ['全体持有者口径', '§10.1'], ['过线', '§12.3']],
+      stop: r.p3 ? null : '调内核映射（policy_trust、恐惧等结构化字段），不改文本（§13.3、§15.2）。' });
+    var TIER = { hard: '硬目标', soft: '软目标', none: '无目标' };
+    function sp(x){ return fin(x) ? (x > 0 ? '+' : '') + pct(x) : '—'; }
+    st.push({ t: '第 5 步 · V4 决策可信（目标矩三档）', light: 4, ok: r.p4,
+      i: s.mom.map(function(m){
+        if (m[1] === 'hard') return '〔硬〕' + m[0] + '：模拟 ' + sp(m[3]) + '，同期官方统计 ' + sp(m[2]);
+        if (m[1] === 'soft') return '〔软〕' + m[0] + '：模拟 ' + m[3] + '，文献方向 ' + (m[2] > 0 ? '> 0' : '< 0');
+        return '〔无〕' + m[0] + '：模拟 ' + pct(m[3]);
+      }),
+      d: s.mom.map(function(m, j){
+        if (m[1] === 'hard') return TIER.hard + ' · ' + m[0] + '：变化幅度相对误差 ' + pct(r.errs[j]) + '，方向' + ((m[3] > 0) === (m[2] > 0) ? '一致' : '相反') + (r.hardOk[j] ? '' : '（不过）');
+        if (m[1] === 'soft') return TIER.soft + ' · ' + m[0] + '：方向' + (r.softOk[j] ? '一致' : '不一致') + '，不算相对误差';
+        return TIER.none + ' · ' + m[0] + '：只报告并做合理性检查，标“无对照”';
+      }).concat(['本示例只有一个事件窗口，用变化幅度的相对误差代替跨时段的相关（简化）', '过线：硬目标相对误差 ≤ 50%；软目标只看方向与排序；无目标不设线。矩在开发事件上拟合、只在验收事件上检验']),
+      o: [r.p4 ? 'V4 通过（硬目标最大相对误差 ' + pct(r.maxErr) + '）' : 'V4 不过（硬目标最大相对误差 ' + pct(r.maxErr) + '）', r.soft4 ? '软目标方向全部一致，作补充证据' : '软目标有方向不一致，作补充证据列出'],
+      doc: [['目标矩三档', '§12.1'], ['预注册档位', '§11.4'], ['拟合与检验分段', '§12.2'], ['过线', '§12.3']],
+      stop: r.p4 ? null : '修内核（§6.3），暂停交付决策表和账户类表（§15.2）。' });
+    st.push({ t: '第 6 步 · V5 稳定可解释', light: 5, ok: r.p5, lab: r.p5 === null ? '不判' : null,
+      i: ['20 个单位：4 个气质组 × 5 个年龄段，单个事件的 stance 字段，全体持有者口径（示例数据）', '底座 A、底座 B 各跑两个种子，取校准前结果', '模型 A 种子 1 前 5 格：' + r.cells.A1.slice(0, 5).map(function(x){ return x.toFixed(2); }).join(' / ')],
+      d: ['同底座跨种子相关（上限）= ' + f3(r.seed), '跨模型相关 = ' + f3(r.cross) + '；可比率 = 跨模型 / 上限 = ' + f3(r.ratio), '整体方向一致：' + (r.sameDir ? '是' : '否'), '同质化诊断：立场 DR = ' + s.dr + '（警戒线 0.7）；V3 措辞差异与口径不一致比例在此一并报告', '过线：跨模型相关 ≥ 0.5、可比率 ≥ 0.7、方向一致；跨种子相关 < 0.5 时不判'],
+      o: [r.p5 === null ? 'V5 不判：同底座跨种子相关 ' + f3(r.seed) + ' < 0.5，噪声过大，先加种子或合并单位' : (r.p5 ? 'V5 通过（校准前）；校准后结果只作说明' : 'V5 不过')],
+      doc: [['计算单位与噪声上限', '§12.1'], ['两层报告', '§6.3 §12.1'], ['过线', '§12.3'], ['DR 警戒线', '§13.2']],
+      stop: r.p5 === false ? '先处理同质化（§13.2），不扩大规模（§15.2）。' : null });
+  }
+  var dl = [];
+  if (v1Stop) dl.push('V1 未过：后续未评估，交付范围文档未写');
+  else {
+    dl.push(r.p2 ? '帖子表：交付' : '帖子表：仅内部参考');
+    dl.push(r.p3 ? '态度表：交付' : '态度表：V3 未过，先调映射（是否暂停交付文档未写）');
+    dl.push(r.p4 ? '决策表、账户类表：交付' : '决策表、账户类表：暂停交付');
+    if (r.p5 === null) dl.push('V5：本次不判，加种子或合并单位后重算');
+  }
+  st.push({ t: '第 7 步 · 写验收报告', light: -1, ok: null,
+    i: ['前 6 步的结论与中间数值'], d: ['各项独立出结论，不合成总分', 'V2 决定帖子是否交付', 'V4 结论按硬目标下，软目标作补充证据'], o: dl,
+    doc: [['各项独立、V2 总闸门', '§12.3'], ['V4 结论方式', '§12.1'], ['止损', '§15.2']], stop: null });
+  return { steps: st, r: r, v1Stop: v1Stop };
+}
+(function(){
+  var root = $('vaDemo'); if (!root) return;
+  var dots = $('vaDots'), lights = $('vaLights'), ttl = $('vaTtl'), pos = $('vaPos');
+  var uIn = $('vaIn'), uDo = $('vaDo'), uOut = $('vaOut'), uDoc = $('vaDoc'), stopBox = $('vaStop'), stopT = $('vaStopT');
+  var prev = $('vaPrev'), next = $('vaNext'), play = $('vaPlay'), scBar = $('vaScen');
+  var cur = 0, data = buildSteps('ok'), timer = null;
+  function fill(ul, arr){
+    ul.textContent = '';
+    (arr || []).forEach(function(x){
+      var li = el('li');
+      if (Array.isArray(x)) { li.appendChild(document.createTextNode(x[0] + ' ')); li.appendChild(el('span', 'ref', x[1])); }
+      else li.textContent = String(x);
+      ul.appendChild(li);
+    });
+  }
+  function render(){
+    var st = data.steps, n = st.length;
+    if (cur < 0) cur = 0; if (cur > n - 1) cur = n - 1;
+    var s = st[cur];
+    dots.textContent = '';
+    st.forEach(function(_, i){
+      var b = el('button', i === cur ? 'on' : (i < cur ? 'past' : ''), String(i + 1));
+      b.type = 'button'; b.setAttribute('aria-label', '第 ' + (i + 1) + ' 步');
+      b.addEventListener('click', function(){ stopPlay(); cur = i; render(); });
+      dots.appendChild(b);
+    });
+    lights.textContent = '';
+    LIGHTS.forEach(function(name, L){
+      var cls = '', lab = '待评';
+      for (var i = 0; i <= cur; i++) {
+        if (st[i].light === L) { cls = st[i].ok === true ? 'pass' : (st[i].ok === false ? 'fail' : ''); lab = st[i].lab || (st[i].ok === true ? '通过' : (st[i].ok === false ? '不过' : '未评估')); }
+      }
+      if (s.light === L) cls += ' cur';
+      var d = el('div', cls.trim(), name);
+      d.appendChild(el('small', null, lab));
+      lights.appendChild(d);
+    });
+    ttl.textContent = s.t;
+    fill(uIn, s.i); fill(uDo, s.d); fill(uOut, s.o); fill(uDoc, s.doc);
+    if (s.stop) { stopT.textContent = s.stop; stopBox.classList.add('show'); } else { stopT.textContent = ''; stopBox.classList.remove('show'); }
+    pos.textContent = (cur + 1) + ' / ' + n;
+    prev.disabled = cur === 0; next.disabled = cur === n - 1;
+  }
+  function stopPlay(){ if (timer) { clearInterval(timer); timer = null; } play.textContent = '自动播放'; }
+  prev.addEventListener('click', function(){ stopPlay(); cur--; render(); });
+  next.addEventListener('click', function(){ stopPlay(); cur++; render(); });
+  play.addEventListener('click', function(){
+    if (timer) { stopPlay(); return; }
+    if (cur >= data.steps.length - 1) cur = 0;
+    render(); play.textContent = '暂停';
+    timer = setInterval(function(){
+      if (cur >= data.steps.length - 1) { stopPlay(); return; }
+      cur++; render();
+    }, 2600);
+  });
+  if (scBar) {
+    var bs = scBar.querySelectorAll('button[data-s]');
+    for (var i = 0; i < bs.length; i++) {
+      bs[i].addEventListener('click', function(){
+        stopPlay();
+        for (var j = 0; j < bs.length; j++) bs[j].classList.toggle('pri', bs[j] === this);
+        data = buildSteps(this.getAttribute('data-s')); cur = 0; render();
+      });
+    }
+  }
+  render();
+})();
+})();
+</script>
+</body>
+</html>

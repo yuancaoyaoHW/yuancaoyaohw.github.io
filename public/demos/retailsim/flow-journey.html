@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一条新闻的旅程 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* fj- 本页私有样式 */
+.fj-svgwrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel);padding:10px;margin:12px 0}
+.fj-svgwrap svg{width:100%;min-width:640px;height:auto;display:block}
+.fj-hint{font-size:12.5px;color:var(--mute);margin:4px 0 0}
+.fj-node{cursor:pointer;outline:none}
+.fj-node rect.bg{fill:var(--panel2);stroke:var(--line2);stroke-width:1.5;transition:stroke .2s}
+.fj-node:hover rect.bg,.fj-node:focus rect.bg{stroke:var(--ink2)}
+.fj-node.on rect.bg{stroke:var(--accent,var(--social));stroke-width:2.5}
+.fj-node text{fill:var(--ink);font:600 15px var(--sans);text-anchor:middle;pointer-events:none}
+.fj-node text.s{fill:var(--mute);font:11.5px var(--mono)}
+.fj-node text.ix{fill:var(--mute);font:700 11px var(--mono);text-anchor:start}
+.fj-edge{stroke:var(--line2);stroke-width:2;fill:none}
+.fj-edge.lit{stroke:var(--accent,var(--social))}
+.fj-fb{stroke:var(--social);stroke-width:1.6;fill:none;stroke-dasharray:6 5}
+.fj-lbl{fill:var(--mute);font:11.5px var(--sans)}
+.fj-info{margin-top:12px;min-height:96px}
+.fj-info h4{margin:0 0 6px;color:var(--ink)}
+.fj-info p{margin:0 0 8px;color:var(--ink2)}
+.fj-ctlbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}
+.fj-dots{display:flex;gap:6px;flex-wrap:wrap}
+.fj-dots button{width:30px;height:30px;border-radius:50%;border:1px solid var(--line2);background:var(--panel2);color:var(--ink2);font:600 12px var(--mono);cursor:pointer;padding:0}
+.fj-dots button.on{background:var(--accent,var(--social));color:#06101f;border-color:transparent}
+.fj-dots button.done{color:var(--ink);border-color:var(--accent,var(--social))}
+.fj-steptitle{font-size:18px;font-weight:700;margin:0 0 4px}
+.fj-stepnote{color:var(--mute);font-size:13px;margin:0 0 12px}
+.fj-io{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media(max-width:860px){.fj-io{grid-template-columns:minmax(0,1fr)}}
+.fj-box{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:12px 14px;min-width:0}
+.fj-box h4{margin:0 0 8px;font:700 12px var(--mono);letter-spacing:1px}
+.fj-box.in h4{color:var(--data)}.fj-box.pr h4{color:var(--llm)}.fj-box.out h4{color:var(--acct)}.fj-box.doc h4{color:var(--market)}
+.fj-box ul{margin:0;padding-left:18px;color:var(--ink2);font-size:14px}
+.fj-box li{margin:0 0 4px}
+.fj-box pre.code{margin:0;max-height:340px;white-space:pre}
+.fj-box .fj-txt{margin:0 0 8px;padding:8px 10px;border-radius:8px;background:var(--panel2);border-left:3px solid var(--line2);font-size:13.5px;color:var(--ink)}
+.fj-box .fj-txt b{display:block;font:600 11.5px var(--mono);color:var(--mute);margin-bottom:2px}
+.fj-branch{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--ink2)}
+.fj-vis{list-style:none;margin:12px 0 0;padding:0}
+.fj-vis li{display:grid;grid-template-columns:72px minmax(0,1fr);gap:10px;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
+.fj-vis li .fj-tag{font:700 12px var(--mono);text-align:center;border-radius:6px;padding:2px 0;align-self:start}
+.fj-vis li.fj-y .fj-tag{color:#06101f;background:var(--acct)}
+.fj-vis li.fj-n .fj-tag{color:var(--mute);background:var(--panel2);border:1px solid var(--line2)}
+.fj-vis li .fj-why{display:block;color:var(--mute);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<span class="eyebrow"><i></i>流程 · 信息到成交</span>
+<h1>一条新闻的<span class="grad">旅程</span></h1>
+<p class="lead">跟着一条示例快讯，看它怎样变成事件卡、被发布者转述、进入某位模拟散户的信息流，最后变成一条帖子、一次下单和几行数据表记录。</p>
+<div class="meta"><span class="chip warn"><i></i>示例数据，化名</span><span class="chip data"><i></i>events</span><span class="chip social"><i></i>social</span><span class="chip sim"><i></i>agents · market · accounts</span></div>
+</header>
+<section id="s1" class="reveal"><h2><span class="num">01</span>总览：十一站</h2>
+<p class="sub">一条快讯从进入系统到落进数据表，要经过十一站，分属 collect、events、social、agents、market、accounts、outputs 七个业务模块。点击图中任一站，下方显示这一站做什么。</p>
+<p>整条路可以分成四段。第一段是<b>信息段</b>：原始快讯被聚类成事件，抽成一张结构化的事件卡（EventCard），再改写出不带立场的官媒转述（L0）和快讯（L1）版本，这一段归 events 模块 <span class="ref">§5.2 §5.3</span>。第二段是<b>传播段</b>：发布者层的大 V、博主、喊单号（L2–L4）读事件卡与 L0/L1 版本后以 Post 发帖，这些帖子、L0/L1 版本和其他模拟散户的帖子一起进入推荐流，按每个人的注意力预算挑出少数几条，这一段归 social 模块 <span class="ref">§5.3 §5.6 §7.3</span>。第三段是<b>决策段</b>：每次激活最多两次 LLM 调用。第 1 次调用读完信息流，一次给出信念更新和买卖意向；规则内核把意向换算成订单，market 判定能否成交，accounts 记账；成交判定之后，想发帖的人才走第 2 次调用写帖子 <span class="ref">§6.1 §8</span>。第四段是<b>落表</b>：帖子、态度、决策、成交分别写进不同的表，以 <code>persona_id</code>、<code>event_id</code>、<code>run_id</code> 关联 <span class="ref">§10.3</span>。</p>
+<p>贯穿全程的约束有两条。一是时点正确（PIT，point-in-time）：每条数据带"最早何时公开可得"的时间戳 <code>available_at</code>，任何读取都只能拿到 <code>available_at ≤ 当前模拟时钟</code> 的记录 <span class="ref">§3.1 §5.5</span>。二是分工固定：LLM 只给意向，硬约束和行为偏差修正由内核负责，内核改了什么都写回智能体记忆 <span class="ref">§3.1</span>。</p>
+<div class="fj-svgwrap">
+<svg viewBox="0 0 900 410" role="img" aria-label="一条新闻经过的十一站">
+<defs><marker id="fj-ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#64748b"/></marker></defs>
+<g id="fj-edges">
+<path class="fj-edge" data-e="0" d="M210 82 L248 82" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="1" d="M430 82 L468 82" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="2" d="M650 82 L688 82" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="3" d="M780 114 L780 188" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="4" d="M690 222 L652 222" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="5" d="M470 222 L432 222" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="6" d="M250 222 L212 222" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="7" d="M120 254 L120 328" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="8" d="M210 362 L248 362" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="9" d="M430 362 L468 362" marker-end="url(#fj-ar)"/>
+<path class="fj-edge" data-e="3" d="M610 114 L700 188" marker-end="url(#fj-ar)"/>
+</g>
+<path class="fj-fb flowline" d="M340 330 Q560 290 770 258" marker-end="url(#fj-ar)"/>
+<text class="fj-lbl" x="478" y="324">本人帖子：下一激活阶段才进推荐流</text>
+<g id="fj-nodes">
+<g class="fj-node" data-i="0" tabindex="0" role="button" aria-label="第1站 快讯"><rect class="bg" x="30" y="50" width="180" height="64" rx="10"/><rect x="30" y="50" width="5" height="64" rx="2" style="fill:var(--data)"/><text class="ix" x="42" y="66">01</text><text x="120" y="84">快讯</text><text class="s" x="120" y="104">collect · 原始条目</text></g>
+<g class="fj-node" data-i="1" tabindex="0" role="button" aria-label="第2站 EventCard"><rect class="bg" x="250" y="50" width="180" height="64" rx="10"/><rect x="250" y="50" width="5" height="64" rx="2" style="fill:var(--data)"/><text class="ix" x="262" y="66">02</text><text x="340" y="84">EventCard</text><text class="s" x="340" y="104">events · 事件卡</text></g>
+<g class="fj-node" data-i="2" tabindex="0" role="button" aria-label="第3站 L0 / L1 版本"><rect class="bg" x="470" y="50" width="180" height="64" rx="10"/><rect x="470" y="50" width="5" height="64" rx="2" style="fill:var(--data)"/><text class="ix" x="482" y="66">03</text><text x="560" y="84">L0 / L1 版本</text><text class="s" x="560" y="104">events · 不带立场</text></g>
+<g class="fj-node" data-i="3" tabindex="0" role="button" aria-label="第4站 发布者 L2–L4 帖"><rect class="bg" x="690" y="50" width="180" height="64" rx="10"/><rect x="690" y="50" width="5" height="64" rx="2" style="fill:var(--social)"/><text class="ix" x="702" y="66">04</text><text x="780" y="84">发布者 L2–L4 帖</text><text class="s" x="780" y="104">social · Post</text></g>
+<g class="fj-node" data-i="4" tabindex="0" role="button" aria-label="第5站 推荐流"><rect class="bg" x="690" y="190" width="180" height="64" rx="10"/><rect x="690" y="190" width="5" height="64" rx="2" style="fill:var(--social)"/><text class="ix" x="702" y="206">05</text><text x="780" y="224">推荐流</text><text class="s" x="780" y="244">social · FeedItem</text></g>
+<g class="fj-node" data-i="5" tabindex="0" role="button" aria-label="第6站 信念"><rect class="bg" x="470" y="190" width="180" height="64" rx="10"/><rect x="470" y="190" width="5" height="64" rx="2" style="fill:var(--llm)"/><text class="ix" x="482" y="206">06</text><text x="560" y="224">信念（第 1 次调用）</text><text class="s" x="560" y="244">agents · BeliefUpdate</text></g>
+<g class="fj-node" data-i="6" tabindex="0" role="button" aria-label="第7站 意向"><rect class="bg" x="250" y="190" width="180" height="64" rx="10"/><rect x="250" y="190" width="5" height="64" rx="2" style="fill:var(--llm)"/><text class="ix" x="262" y="206">07</text><text x="340" y="224">意向（第 1 次调用）</text><text class="s" x="340" y="244">agents · DecisionIntent</text></g>
+<g class="fj-node" data-i="7" tabindex="0" role="button" aria-label="第8站 内核"><rect class="bg" x="30" y="190" width="180" height="64" rx="10"/><rect x="30" y="190" width="5" height="64" rx="2" style="fill:var(--sim)"/><text class="ix" x="42" y="206">08</text><text x="120" y="224">内核</text><text class="s" x="120" y="244">agents · OrderIntent</text></g>
+<g class="fj-node" data-i="8" tabindex="0" role="button" aria-label="第9站 成交"><rect class="bg" x="30" y="330" width="180" height="64" rx="10"/><rect x="30" y="330" width="5" height="64" rx="2" style="fill:var(--market)"/><text class="ix" x="42" y="346">09</text><text x="120" y="364">成交</text><text class="s" x="120" y="384">market Fill → accounts</text></g>
+<g class="fj-node" data-i="9" tabindex="0" role="button" aria-label="第10站 帖子"><rect class="bg" x="250" y="330" width="180" height="64" rx="10"/><rect x="250" y="330" width="5" height="64" rx="2" style="fill:var(--social)"/><text class="ix" x="262" y="346">10</text><text x="340" y="364">帖子（第 2 次调用）</text><text class="s" x="340" y="384">agents → social · Post</text></g>
+<g class="fj-node" data-i="10" tabindex="0" role="button" aria-label="第11站 落表"><rect class="bg" x="470" y="330" width="180" height="64" rx="10"/><rect x="470" y="330" width="5" height="64" rx="2" style="fill:var(--out)"/><text class="ix" x="482" y="346">11</text><text x="560" y="364">落表</text><text class="s" x="560" y="384">outputs · 帖/态度/决策</text></g>
+</g>
+<text class="fj-lbl" x="690" y="345">实线：同一阶段内流转</text>
+<text class="fj-lbl" x="690" y="367">虚线：跨阶段可见（§9.1）</text>
+<text class="fj-lbl" x="690" y="389">点击站点查看说明</text>
+</svg>
+</div>
+<div class="card fj-info" id="fj-info" aria-live="polite"><h4 id="fj-info-t">点击上图任一站</h4><p id="fj-info-d">每站会显示负责的模块、产出的对象和设计文档条目。</p><p><span class="ref" id="fj-info-r"></span></p><button class="btn" id="fj-info-go" type="button" hidden>在分步演示中看这一站</button></div>
+<p class="fj-hint">手机上图表可以左右滑动。</p>
+</section>
+<section id="s2" class="reveal"><h2><span class="num">02</span>分步演示：一条示例快讯</h2>
+<p class="sub">用一条化名快讯和一位化名散户"老周"，逐站看对象怎样生成、怎样变化。每一步都列出输入、处理、输出和对应的设计文档条目。</p>
+<p>示例设定如下，全部为<b>示例数据</b>，公司、人物、价格均为虚构：T−1 日晚间，一条快讯说"某部委印发储能产业支持措施"，点名的上市公司用化名"星河储能"（主板，T−1 收盘价 20.00 元）。老周是一位 Tier-B 智能体，55 岁，关注储能板块但没有持仓。Tier-B 是 500 人的普通散户样本；Tier-A 共 50 人，拆为大 V 20 人与深度样本 30 人，两层用同一模型，只差记忆深度、反思频率与激活频率 <span class="ref">§4.3 §14.1</span>。T 日盘前他被激活，读到了这条消息。</p>
+<p>到第 9 步"成交"时，可以切换两种行情分支：A 是盘中触及涨停后回落、能成交；B 是全天一字涨停、买不到。两种分支下老周的意向相同，成交不同；帖子在成交判定之后才写，所以帖子内容和落表也跟着不同。意向与实际成交之差就是设计文档要测量的"言行不一" <span class="ref">§3.1 §6.1 §6.3</span>。</p>
+<div class="card">
+<div class="fj-ctlbar">
+<button class="btn" id="fj-prev" type="button">上一步</button>
+<button class="btn pri" id="fj-next" type="button">下一步</button>
+<button class="btn" id="fj-play" type="button" aria-pressed="false">自动播放</button>
+<span class="fj-branch" id="fj-brbar">行情分支：<button class="btn" type="button" data-br="a" aria-pressed="true">A 盘中打开</button><button class="btn" type="button" data-br="b" aria-pressed="false">B 一字涨停</button></span>
+</div>
+<div class="fj-dots" id="fj-dots" role="tablist" aria-label="步骤"></div>
+<div id="fj-steps" style="margin-top:14px">
+<div class="fj-step" data-k="0">
+<p class="fj-steptitle">01 快讯进入系统</p>
+<p class="fj-stepnote">T−1 日 20:10（示例时间），一条快讯被采集入库。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4>
+<div class="fj-txt"><b>东财 7x24 快讯条目（示例数据，化名）</b>【某部委印发储能产业支持措施】措施提出加快新型储能项目建设，完善储能参与电力市场的价格机制。相关公司：星河储能。</div>
+<ul><li>条目含发布时间、标题、正文、关联股票（示意，字段名以接口为准）。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>collect 模块按游标翻页抓取 <span class="ref">§16.1</span>；自建存档同时保存源时间戳与入库时间，以二者较晚者为可见时间 <span class="ref">§2.5 §5.5</span>。</li>
+<li>events 把同一件事的多条原始报道按嵌入相似度加时间窗聚类去重，后面只对整簇做一次抽取 <span class="ref">§5.2</span>。</li>
+<li>记下最早公开可得时间 <code>available_at</code>。夜间发布的条目进入下一个激活点（T 日盘前）的候选池 <span class="ref">§5.2 §3.4</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出</h4><ul>
+<li>一簇原始条目，<code>available_at = T−1 20:10</code>（示例）。</li>
+<li>老周这晚没被激活：晚间只激活被事件触发的时政敏感者和群聊活跃者，老周两者都不是（示例设定），所以最早在 T 日盘前看到 <span class="ref">§3.4</span>。</li></ul></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§5.1 信息来源；§5.2 聚类与去重；§5.5 时点约束</li>
+<li>§16.1 自采范围：东财 7x24 快讯接口可采（2026-10-30 实测）</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="1" hidden>
+<p class="fj-steptitle">02 抽取事件卡 EventCard</p>
+<p class="fj-stepnote">一簇条目调用一次 LLM，抽成结构化的事件卡。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>上一步的条目簇。</li>
+<li>抽取 prompt：遮去专有时间叫法（如"9·24"），只依据文本写明的政策力度、发布机构级别、是否超预期打分 <span class="ref">§5.2</span>。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>每簇 1 次 LLM 调用，成本随事件数增长，不随智能体数增长 <span class="ref">§5.2</span>。</li>
+<li>量级按 §5.2 量级表打分：部委级行业支持措施落在 3 档"板块级"（示例判断）。</li>
+<li>量级只看事前文本，不按事后涨跌回填，否则未来收益会漏进激活模式 <span class="ref">§5.2</span>。</li>
+<li>抽取模型与 prompt 版本锁定，结果缓存，人工定期抽检量级与资产映射 <span class="ref">§5.2</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出（示意，未实现；示例数据）</h4>
+<pre class="code" data-lang="json"><span class="p">{</span>
+  <span class="t">"event_id"</span>: <span class="s">"ev_demo_001"</span>,
+  <span class="t">"origin"</span>: <span class="s">"real"</span>,
+  <span class="t">"available_at"</span>: <span class="s">"T-1 20:10"</span>,
+  <span class="t">"source_tier"</span>: <span class="s">"mainstream"</span>,
+  <span class="t">"category"</span>: <span class="s">"industry_policy"</span>,
+  <span class="t">"scope"</span>: <span class="s">"sector"</span>,
+  <span class="t">"assets"</span>: [<span class="s">"储能板块"</span>, <span class="s">"星河储能"</span>],
+  <span class="t">"magnitude"</span>: <span class="n">3</span>,
+  <span class="t">"direction_hint"</span>: <span class="n">1</span>,  <span class="c">// 不给智能体看</span>
+  <span class="t">"credibility"</span>: <span class="n">1.0</span>,
+  <span class="t">"summary"</span>: <span class="s">"某部委印发储能产业支持措施，涉及项目建设与电价机制。"</span>
+<span class="p">}</span></pre></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§5.2 EventCard 字段与量级表</li>
+<li>§5.2 量级防记忆污染：V2 历史验收事件由团队人工标定，LLM 打分只作参考</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="2" hidden>
+<p class="fj-steptitle">03 改写出 L0 / L1 版本</p>
+<p class="fj-stepnote">events 把事件卡改写成"官媒转述"和"快讯"两类不带立场的文本。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>事件卡及其 <code>summary</code>（200 字以内的中性摘要，是所有改写的底稿 <span class="ref">§5.2</span>）。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>每个"事件 × 渠道"改写 1–3 个版本，量级越高版本越多 <span class="ref">§5.3</span>。</li>
+<li>可以省略细节，不得编造事实，也不带立场；与 <code>summary</code> 做事实一致性校验，不一致的丢弃重写 <span class="ref">§5.3</span>。</li>
+<li>L0 延迟 0，L1 延迟 0–10 分钟 <span class="ref">§5.3</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出（示例数据）</h4>
+<div class="fj-txt"><b>L0 官媒转述</b>某部委日前印发储能产业支持措施，提出加快新型储能项目建设、完善价格机制。</div>
+<div class="fj-txt"><b>L1 快讯</b>【部委发文支持储能】新型储能项目建设提速，储能参与电力市场价格机制将完善。</div></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§5.3 分渠道改写表（L0、L1 两行，产出方 events）</li>
+<li>§5.3 改写按事实与观点分开：events 只出 EventCard 与 L0/L1</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="3" hidden>
+<p class="fj-steptitle">04 发布者 L2–L4 发帖</p>
+<p class="fj-stepnote">发布者只发帖、不交易。各级按自己的立场、动机、夸张度出帖。详细机制见 <a href="sim-publishers.html">发布者演示页</a>。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>事件卡与 L0/L1 版本 <span class="ref">§5.6</span>。</li>
+<li>每个发布者的参数：立场、动机、准确率、夸张度、确定性。夸张度与确定性是发布者参数，不是改写参数 <span class="ref">§5.3 §5.6</span>。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>social 的发布者以 <code>Post</code> 产出 L2–L4 文本，这些都是观点 <span class="ref">§5.3</span>。</li>
+<li>L2 大 V 延迟"随传播"，标注依据的 <code>event_id</code>；L3 中小博主延迟数小时，可以歪曲、不做事实校验，但须标注 <code>event_id</code> <span class="ref">§5.3</span>。</li>
+<li>L4 喊单号延迟不定，传闻另立一张 <code>origin="rumor"</code> 的事件卡，帖子带"传闻"标签，只在沙盒运行 <span class="ref">§5.3 §16.2</span>。</li>
+<li>L2–L4 的成本归入 social 估算 <span class="ref">§5.3 §14.2</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出：3 条 Post（示例数据，化名）</h4>
+<div class="fj-txt"><b>L2 大V"老K看盘" · event_id=ev_demo_001</b>储能这份文件力度不小，但项目落地要时间，短线别追，等回踩。</div>
+<div class="fj-txt"><b>L3 博主"短线小飞侠" · event_id=ev_demo_001</b>储能要起飞了！部委亲自下场，龙头明天怕是买不到！</div>
+<div class="fj-txt"><b>L4（仅沙盒）· 传闻</b>听说星河储能还有大单没公告，懂的都懂。</div></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§5.3 分渠道改写表（L2–L4 三行，产出方 social）</li>
+<li>§5.6 发布者层：读事件卡与 L0/L1 后发帖，不交易；§7.4 帖子类型与传闻</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="4" hidden>
+<p class="fj-steptitle">05 推荐流挑出老周看到的几条</p>
+<p class="fj-stepnote">T 日盘前，老周被激活；推荐流排序，再按他的注意力预算抽出少数几条。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>候选池：L0/L1 版本、发布者帖、其他模拟散户在上一阶段发的帖、行情，只用 <code>available_at</code> ≤ 09:15 的信息 <span class="ref">§3.4 §5.4 §9.1</span>。</li>
+<li>老周的媒体习惯、关注板块、持仓 <span class="ref">§5.4</span>。</li>
+<li>真实帖子注入开关默认关闭，验收运行强制关闭 <span class="ref">§5.7</span>。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>激活：老周的媒介接触到量级 3 的事件，触发方式记为"事件" <span class="ref">§9.1</span>。盘前是当日唯一产生例行订单的激活点 <span class="ref">§3.4</span>。</li>
+<li>推荐流打分：时近性 × 热度 × 兴趣相似度 × 关注关系，热榜放大头部 <span class="ref">§7.3</span>。</li>
+<li>个人注意力打分：渠道权重 × 量级 × 资产相关度 × 时间衰减 × 显著性 <span class="ref">§5.4</span>。</li>
+<li>持仓异动必进，其余按 softmax 不放回抽取，K 在 3–15 条之间，约 1,500 token <span class="ref">§5.4</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出：老周的信息流（示例数据，K=4）</h4><ul>
+<li>L1 快讯：部委发文支持储能</li>
+<li>L3"短线小飞侠"：储能要起飞了</li>
+<li>模拟散户帖："昨天已上车储能，拿着"</li>
+<li>行情：星河储能 T−1 收 20.00 元</li></ul>
+<p class="fj-hint">没被抽中的 L2 解读，之后仍可能经群聊或转发再次进入 <span class="ref">§5.4</span>。</p></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§5.4 注意力预算；§7.3 推荐流；§5.7 注入开关</li>
+<li>§9.1 激活：媒介接触到量级 ≥ 3 的事件可触发激活；§3.4 盘前激活点</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="5" hidden>
+<p class="fj-steptitle">06 老周更新信念 BeliefUpdate（第 1 次调用）</p>
+<p class="fj-stepnote">第 1 次 LLM 调用读信息流、持仓和记忆，同时给出信念更新和决策意向。本步先看信念部分。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>prompt 按"规则 → 人设卡 → 长期信念 → 记忆 → 当日信息 → schema"从静态到动态排列，便于前缀缓存 <span class="ref">§6.1</span>。</li>
+<li>记忆约 800 token，其中账户摘要约 100 token <span class="ref">§6.4</span>。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>第 1 次调用 interpret + intend，只出结构化字段，不带风格示例帖；盘前出 BeliefUpdate + DecisionIntent[] + FundingIntent <span class="ref">§6.1</span>。</li>
+<li>LLM 只给档位，不给连续数值；档位到数值的映射由内核按人设做 <span class="ref">§6.2</span>。</li>
+<li>Pydantic 校验不过则换种子重试，最多 2 次；仍失败则记为未激活、原因"解析失败"，不填默认值，写进激活表 <span class="ref">§6.2 §9.1</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出（示意，未实现；示例数据）</h4>
+<pre class="code" data-lang="json"><span class="p">{</span>
+  <span class="t">"views"</span>: [<span class="p">{</span>
+    <span class="t">"asset"</span>: <span class="s">"星河储能"</span>, <span class="t">"horizon"</span>: <span class="s">"1w"</span>,
+    <span class="t">"stance"</span>: <span class="n">1</span>, <span class="t">"ret_bucket"</span>: <span class="s">"2~5%"</span>,
+    <span class="t">"confidence"</span>: <span class="n">3</span>,
+    <span class="t">"reasons"</span>: [<span class="s">"policy"</span>, <span class="s">"kol"</span>, <span class="s">"herd"</span>]
+  <span class="p">}</span>],
+  <span class="t">"emotion"</span>: <span class="p">{</span><span class="t">"fear"</span>: <span class="n">0</span>, <span class="t">"greed"</span>: <span class="n">2</span>, <span class="t">"regret"</span>: <span class="n">0</span>, <span class="t">"fomo"</span>: <span class="n">2</span><span class="p">}</span>,
+  <span class="t">"policy_trust"</span>: <span class="n">1</span>,
+  <span class="t">"want_to_post"</span>: <span class="k">true</span>,
+  <span class="t">"monologue"</span>: <span class="s">"部委发文，板块要动，怕又踏空。"</span>
+<span class="p">}</span></pre></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§6.1 第 1 次调用 interpret + intend</li>
+<li>§6.2 AssetView、BeliefUpdate 字段；ReasonTag 取值；解析失败与拒答</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="6" hidden>
+<p class="fj-steptitle">07 给出决策意向 DecisionIntent（同一次调用）</p>
+<p class="fj-stepnote">同一次调用里的意向部分只给"想怎么做"：动作、仓位档、执行方式、理由。不含价格和股数。不同类型散户在同一条消息下的差别见 <a href="sim-personas.html">人设决策演示页</a>。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>同一 prompt；记忆里的账户摘要（总资产、可用资金、仓位、各持仓浮盈亏） <span class="ref">§6.4</span>。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>执行方式三选一：<code>open</code> 开盘就买卖、<code>dip</code> 挂单等回调、<code>chase</code> 盘中追；盘中激活只能选 <code>chase</code> <span class="ref">§6.3</span>。</li>
+<li>意向来源是可替换接口：LLM（MVP 默认）、规则先验、Jev；换成后两者时第 1 次调用只剩解读 <span class="ref">§6.1 §6.6</span>。</li>
+<li>出入金意向 FundingIntent 在同一次调用里给出，本例为 none <span class="ref">§6.1 §6.3</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出（示意，未实现；示例数据）</h4>
+<pre class="code" data-lang="json"><span class="p">{</span>
+  <span class="t">"asset"</span>: <span class="s">"星河储能"</span>,
+  <span class="t">"action"</span>: <span class="s">"buy"</span>,
+  <span class="t">"size"</span>: <span class="s">"small"</span>,
+  <span class="t">"execution"</span>: <span class="s">"open"</span>,
+  <span class="t">"reasons"</span>: [<span class="s">"policy"</span>, <span class="s">"herd"</span>],
+  <span class="t">"source_post_ids"</span>: [<span class="s">"post_demo_l3"</span>],
+  <span class="t">"rationale"</span>: <span class="s">"部委文件力度够，开盘小仓位试试。"</span>
+<span class="p">}</span></pre></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§6.3 DecisionIntent 字段（含 execution、source_post_ids）、FundingIntent</li>
+<li>§6.6 意向来源</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="7" hidden>
+<p class="fj-steptitle">08 内核把意向换成订单 OrderIntent</p>
+<p class="fj-stepnote">规则内核做可校准的偏差修正和硬约束检查，再按执行方式定价。改动写回记忆。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>DecisionIntent、人设参数（风险厌恶、损失厌恶、从众系数等）、情绪档 <span class="ref">§6.3</span>；账户只读视图（字段文档未逐项定义） <span class="ref">§3.3</span>。</li>
+<li>老周看到的可见买卖行为：信息流里有 1 条"已上车"，所以净买入占比为正（示例） <span class="ref">§6.3 §7.5</span>。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>仓位档 small → 意向权重；加上从众、外推、彩票偏好修正，再按风险厌恶缩放、截断 <span class="ref">§6.3 第 1–2 步</span>。</li>
+<li>情绪分支：只有贪婪或 FOMO 处于最高档（3）时才临时放大从众与彩票系数；本例 greed=2、fomo=2（示例），不放大 <span class="ref">§6.2 §6.3 第 5 步</span>。</li>
+<li>硬约束：现金、T+1、整手、涨跌停可成交性、交易权限、费用 <span class="ref">§6.3 第 6 步</span>。§8.1 的权限表只对创业板、科创板、北交所与两融设门槛，本例是主板股票 <span class="ref">§8.1</span>。</li>
+<li>定价：LLM 只选执行方式，不报价格。<code>open</code> 的买入限价取涨停价，即按开盘价成交；订单当日有效，未成交的收盘撤单 <span class="ref">§6.3 第 6 步</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出（示意，未实现；示例数据；字段名为假设）</h4>
+<pre class="code" data-lang="json"><span class="p">{</span>
+  <span class="t">"asset"</span>: <span class="s">"星河储能"</span>, <span class="t">"side"</span>: <span class="s">"buy"</span>,
+  <span class="t">"qty"</span>: <span class="n">300</span>,
+  <span class="t">"execution"</span>: <span class="s">"open"</span>, <span class="t">"limit"</span>: <span class="n">22.00</span>,
+  <span class="t">"decision_ref"</span>: <span class="s">"dec_demo_001"</span>
+<span class="p">}</span></pre>
+<p class="fj-hint">v0.3 没有定义 OrderIntent 的字段 <span class="ref">§6.3 第 6 步</span>；上面的字段名借用交易流水表的 <code>side</code>、<code>qty</code>、<code>decision_ref</code> 和决策表的 <code>execution</code> <span class="ref">§10.3</span>，是示意。主板涨跌幅 10% <span class="ref">§8.1</span>，T−1 收 20.00 元，涨停价 22.00 元，所以 <code>open</code> 买单的限价是 22.00 元；集合竞价无价格笼子 <span class="ref">§6.3 第 6 步</span>。订单在 09:15–09:25 集合竞价时段提交 <span class="ref">§3.4</span>。</p></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§6.3 内核第 1–7 步与执行方式定价；§8.1 规则</li>
+<li>§3.1 原则 1：LLM 给意向、内核管约束</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="8" hidden>
+<p class="fj-steptitle">09 market 判定成交，accounts 记账</p>
+<p class="fj-stepnote">模式 A 回放真实行情，智能体是价格接受者，不影响价格。用上方按钮切换行情分支。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>OrderIntent；账户只读视图 <span class="ref">§3.3</span>。</li>
+<li data-br="a">T 日行情（分支 A，示例数据）：开 21.60、高 22.00、低 21.20、收 21.80，盘中触及涨停后回落。</li>
+<li data-br="b" hidden>T 日行情（分支 B，示例数据）：开高低收都是 22.00，一字涨停。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>检查顺序：交易时段 → 权限 → T+1 可卖数量 → 整手与单笔上限 → 涨跌幅与价格笼子 → 风险警示股买入上限 → 资金与两融额度。不合规直接拒绝并计数，不自动修正 <span class="ref">§8.1</span>。</li>
+<li>第 1 步：集合竞价单按真实开盘价成交，买入限价不低于开盘价才成交；<code>execution = open</code> 走这一步 <span class="ref">§8.2</span>。</li>
+<li>第 3 步：一字涨停（最高价 = 最低价 = 涨停价）时买单不成交 <span class="ref">§8.2</span>。</li>
+<li>第 4 步：个人成交不按 <code>w_cap</code> 放大后的量缩减；只有自身订单超过该股当日真实成交额的设定比例（如 1%）时，超出部分不成交 <span class="ref">§8.2</span>。</li>
+<li>费用逐笔扣除：佣金上限 0.3%，常见万一至万三、单笔最低 5 元；经手费 0.00341%、证管费 0.002%、过户费 0.001%，均双向；印花税 0.05% 只向卖方收 <span class="ref">§8.1〔需复核〕 §8.4</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出（示例数据）</h4>
+<div data-br="a"><div class="fj-txt"><b>Fill · 分支 A</b>限价 22.00 ≥ 开盘价 21.60，买入 300 股 @ 21.60，成交额 6,480 元。佣金 max(6,480 × 佣金率, 5)，万三以下都按最低 5.00 元；经手费、证管费、过户费合计约 0.42 元；印花税 0（买入）。费率〔需复核〕，计算为示例。</div>
+<ul><li>accounts 记账：持仓总数 +300，可卖数量当日不变，次日开盘前转为可卖 <span class="ref">§8.4</span>。</li></ul></div>
+<div data-br="b" hidden><div class="fj-txt"><b>未成交 · 分支 B</b>一字涨停，买单按第 3 步不成交，收盘撤单。</div>
+<ul><li>没有 Fill，账户不变；"涨停买不进"写回老周的记忆 <span class="ref">§6.3 第 7 步</span>。</li></ul>
+<p class="fj-hint">开盘价 22.00 等于限价，第 1 步的条件本身满足；本页按第 3 步处理一字板，v0.3 没有写明两步的先后。</p></div></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§8.1 检查顺序与费用；§8.2 模式 A 第 1–4 步；§8.4 T+1 与可用资金</li>
+<li>§3.3 market 不写账户，accounts 不判成交</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="9" hidden>
+<p class="fj-steptitle">10 老周发一条帖子（第 2 次调用）</p>
+<p class="fj-stepnote"><code>want_to_post</code> 为真，成交判定之后才发第 2 次调用，写自由文本，并附结构化元数据。用上方按钮切换行情分支。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>当日意向与实际成交（含未执行原因） <span class="ref">§6.1</span>。</li>
+<li>人设绑定的说话风格与少量风格示例帖，示例帖只放这次调用；静态前缀与第 1 次相同，可命中前缀缓存 <span class="ref">§6.1 §7.4 §14.3</span>。</li>
+<li>渠道：公开论坛（股吧风格） <span class="ref">§7.1</span>。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>第 2 次调用 post 只对 <code>want_to_post</code> = True 的智能体发送；正文为自由文本，不进 JSON <span class="ref">§6.1</span>。</li>
+<li>帖子带标的、立场、情绪、类型、传闻/喊单标签和"模拟生成"标记 <span class="ref">§7.4 §16.2</span>。</li>
+<li>本阶段发的帖，下一阶段才对别人可见；同群接话是唯一例外 <span class="ref">§9.1</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出：Post（示例数据，化名）</h4>
+<div class="fj-txt" data-br="a"><b>老周 · 股吧风格 · 观点 · 立场 +1</b>储能这回是部委发的文。开盘小仓位上了 300 股，不追高，拿着看。</div>
+<div class="fj-txt" data-br="b" hidden><b>老周 · 股吧风格 · 观点 · 立场 +1</b>储能这回是部委发的文。开盘挂了小单，一字板没买到，算了不追。</div>
+<ul><li><code>simulated = true</code>，<code>rumor_shill_tag</code> 为空</li></ul></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§6.1 第 2 次调用 post；§7.4 帖子类型与元数据</li>
+<li>§9.1 同一阶段内的帖子下一阶段可见；§16.2 标识</li></ul></div>
+</div></div>
+<div class="fj-step" data-k="10" hidden>
+<p class="fj-steptitle">11 写进数据表</p>
+<p class="fj-stepnote">同一次激活拆进不同的表，靠 <code>activation_id</code> 关联到激活表，再经激活表追溯到运行清单。</p>
+<div class="fj-io">
+<div class="fj-box in"><h4>输入</h4><ul>
+<li>激活记录、BeliefUpdate、DecisionIntent、Fill 或未执行原因、Post，全部来自只追加的事件日志 <span class="ref">§3.3 §8.4 §10.3</span>。</li></ul></div>
+<div class="fj-box pr"><h4>处理</h4><ul>
+<li>激活表每个智能体每个激活点一行，被抽中但缺席的也记；其余各表带 <code>activation_id</code>，时点、版本线、补跑、预热等字段从激活表取 <span class="ref">§10.3</span>。</li>
+<li>每行只用 <code>available_at</code> ≤ <code>info_cutoff</code> 的信息 <span class="ref">§10.3</span>。</li>
+<li>outputs 对某标的的态度只在注意到该标的的智能体上聚合，同时输出覆盖人数 <code>n_attend</code>，覆盖太少时置空；发布者帖进帖子表，但不进任何人群统计 <span class="ref">§10.1</span>。</li></ul></div>
+<div class="fj-box out"><h4>输出（示例数据）</h4>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>表</th><th>本例一行（节选字段）</th></tr></thead>
+<tbody>
+<tr><td>激活表</td><td>activation_id=act_demo_001 · persona_id=p_zhou · phase=盘前 · trigger=事件 · status=已激活（取值示意，v0.3 未列） · info_cutoff=T 09:15 · feed_len=4 · warmup=false</td></tr>
+<tr><td>态度表</td><td>activation_id=act_demo_001 · asset=星河储能 · horizon=1w · stance=+1 · ret_bucket=2~5% · confidence=3 · policy_trust=1</td></tr>
+<tr data-br="a"><td>决策表</td><td>activation_id=act_demo_001 · intent_kind=order · intent_action=buy · intent_size=small · execution=open · plan_ref=空 · exec_qty=300 · exec_price=21.60 · not_executed_reason=空</td></tr>
+<tr data-br="b" hidden><td>决策表</td><td>activation_id=act_demo_001 · intent_kind=order · intent_action=buy · intent_size=small · execution=open · plan_ref=空 · exec_qty=0 · not_executed_reason=涨停买不进</td></tr>
+<tr data-br="a"><td>交易流水表</td><td>side=buy · qty=300 · price=21.60 · stamp_tax=0 · fee≈5.42 · decision_ref=dec_demo_001 · forced=false</td></tr>
+<tr data-br="b" hidden><td>交易流水表</td><td>无记录</td></tr>
+<tr><td>帖子表</td><td>activation_id=act_demo_001 · persona_id=p_zhou · event_id=ev_demo_001 · channel=股吧 · stance=+1 · post_type=观点 · simulated=true</td></tr>
+</tbody></table></div>
+<p class="fj-hint" data-br="b" hidden>意向是买，实际成交为 0：这一差值记为一次言行不一，原因"涨停买不进" <span class="ref">§6.3 第 7 步 §10.2</span>。帖子写在成交之后，所以帖子本身如实说了没买到。</p></div>
+<div class="fj-box doc"><h4>对应文档条目</h4><ul>
+<li>§10.3 激活表、帖子表、态度表、决策表、交易流水表字段</li>
+<li>§10.1 聚合口径；§10.4 输出是模拟不是测量</li></ul></div>
+</div></div>
+</div>
+</div>
+</section>
+<section id="s3" class="reveal"><h2><span class="num">03</span>每站详细说明：信息段与传播段</h2>
+<p class="sub">前五站决定"谁在什么时候看到什么"。这里逐站讲为什么这样设计、怎样计算、由哪个模块负责。</p>
+<h3>第 1–2 站：从快讯到事件卡</h3>
+<p>原始新闻量很大，同一件事常被几十家媒体重复报道。如果让每个智能体直接读原文，成本会随智能体数增长，而且不同人读到的措辞差异会混进实验。events 模块先按嵌入相似度加时间窗把条目聚类去重，每簇只调用一次 LLM 抽成事件卡，所以成本随事件数增长 <span class="ref">§5.2</span>。新闻是自建存档：东财 7x24 快讯接口可采，按游标翻页；历史新闻源待定，随数据源一起定 <span class="ref">§5.5 §16.1</span>。</p>
+<p>事件卡里有两个字段最容易被误用。第一个是 <code>available_at</code>，它记的是最早公开可得的时间，不是事件发生时间；夜间和周末的事件放进下一个激活点的候选池 <span class="ref">§5.2</span>。第二个是 <code>direction_hint</code>（方向提示，−1/0/1），只用于路由和监控，绝不给智能体看。原因是一旦智能体看到"利好"标签，所有人都会朝同一方向反应，群体会接近基线 B1（单个 LLM、无人设）的表现 <span class="ref">§5.2 §11.1</span>。</p>
+<p>量级 <code>magnitude</code>（1–5）影响谁会被激活：媒介接触到量级 ≥ 3 的事件是激活触发条件之一 <span class="ref">§9.1</span>。量级只依据事前文本判断，不按事后涨跌回填，否则"涨得多的事件量级高、量级高的事件激活人多"会把未来收益漏进激活模式 <span class="ref">§5.2</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §5.2，来自架构讨论 A3）</b>量级防记忆污染：抽取 prompt 遮去专有时间叫法（如"9·24"），只依据文本写明的政策力度、发布机构级别、是否超预期打分。V2 历史验收事件的量级由团队按 §5.2 量级表人工标定，LLM 打分只作参考；在模型截止日之后的事件上比较 LLM 与人工打分的一致性，记入运行清单。开发事件与持续运行只做遮蔽与一致性检查。</div>
+<h3>第 3–4 站：事实版本与观点帖</h3>
+<p>同一件事在不同渠道的说法差别很大：官媒只转述，快讯简短带数字，博主会夸张，喊单号会编"内部消息"。模拟要重现这种差别，又不能让改写过程凭空造出事实。v0.3 按事实与观点分开：events 以 <code>summary</code> 为底稿生成 L0、L1 两类版本，可以省略细节，不得编造事实，也不带立场，并与 <code>summary</code> 做一致性校验；L2–L4 的文本都是观点，由 social 的发布者产出 <span class="ref">§5.3</span>。</p>
+<div class="grid g2">
+<div class="card"><h4>events：EventCard 与 L0/L1</h4><p>L0 官方媒体延迟 0，L1 财经快讯与券商观点摘要延迟 0–10 分钟。每个"事件 × 渠道"改写 1–3 个版本，量级越高版本越多，避免所有人读到同一段文字。不一致的版本丢弃重写 <span class="ref">§5.3</span>。</p></div>
+<div class="card"><h4>social：L2–L4 发布者 Post</h4><p>发布者读事件卡与 L0/L1 后以 <code>Post</code> 发帖。L2 大 V 延迟"随传播"，L3 中小博主延迟数小时、可以歪曲，两者都须标注依据的 <code>event_id</code>；L4 传闻另立 <code>origin="rumor"</code> 的事件卡，只在沙盒运行。夸张度、确定性是发布者参数，成本归入 social 估算 <span class="ref">§5.3 §5.6 §14.2</span>。</p></div>
+</div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.3，来自架构讨论 A3）</b>改写按事实与观点分开：events 只出 <code>EventCard</code> 与 L0、L1 两类不带立场的版本；观点和歪曲全部归 social 的发布者。v0.3 §3.3 的模块表仍写 events "按渠道改写（官媒 / 财经快讯 / 传闻）"，与 §5.3 不一致，见第 08 节。</div>
+<p>发布者的级别、延迟、参数和"插入一条传闻"的干预效果，在 <a href="sim-publishers.html">发布者演示页</a> 有完整演示，本页不重复。这里只记一点：发布者只发帖、不交易，帖子进帖子表但不进入任何人群统计 <span class="ref">§5.6 §10.1</span>；会交易的大 V 是 Tier-A 散户，照常进统计、照常测言行不一 <span class="ref">§5.6</span>。</p>
+<h3>第 5 站：推荐流与注意力预算</h3>
+<p>真实散户每天能读的东西有限，读到什么很大程度由平台推荐和个人习惯决定。这一站分两层计算。第一层是平台侧的推荐流（参照 OASIS 的做法）：按时近性、热度（赞、转、评）、兴趣相似度、关注关系打分，热榜放大头部内容，这些参数本身是实验变量 <span class="ref">§7.3</span>。第二层是个人侧的注意力预算，对每条候选算一个分数 <span class="ref">§5.4</span>：</p>
+<pre class="code" data-lang="公式">score = w_i(渠道) · m(量级) · rel_i(资产) · exp(−Δt / τ_d) · sal</pre>
+<p>其中 <code>w_i</code> 是此人的媒体习惯，比如中老年偏官媒与群聊、年轻人偏论坛与自媒体、专业背景偏快讯与雪球；<code>rel_i</code> 是与持仓、自选、关注板块的重合度；<code>Δt</code> 是发布后经过的时间，<code>τ_d</code> 是衰减常数；<code>sal</code> 是显著性，例如涨跌停、上热榜、大 V 转发 <span class="ref">§5.4</span>。持仓股的异动（单日涨跌超过个人阈值、涨跌停）必进；其余按 <code>softmax(score / T_i)</code> 不放回抽取，每人 K 条，K 在 3–15 之间，信息流预算约 1,500 token <span class="ref">§5.4</span>。</p>
+<p>没被抽中的消息并没有消失，之后可能经群聊或大 V 转发再次进入，这就产生了扩散延迟和反应不足或过度。设计文档引 Hirshleifer, Lim &amp; Teoh 2009 说明注意力竞争：同一时段候选越多，每条被看到的概率越低；并补充节后首个交易日积压的信息尤其如此 <span class="ref">§5.4</span>。抽取用 softmax 而不是直接取分数最高的 K 条，所以同样人设的两个人也可能读到不同的信息流。设计文档没有给出 <code>τ_d</code>、<code>T_i</code>、<code>w_i</code> 和推荐流各项权重的取值，本页不写数字。</p>
+<p>推荐流里还有两条边界。真实股吧帖子默认不进智能体的信息流，只留接口和开关，验收运行强制关闭并记入运行清单，否则 V2 对照会失效 <span class="ref">§5.7</span>。所有读取都经过 <code>pit.query(table, asof=clock)</code>，强制 <code>available_at ≤ clock</code> <span class="ref">§5.5</span>。</p>
+</section>
+<section id="s4" class="reveal"><h2><span class="num">04</span>每站详细说明：决策段</h2>
+<p class="sub">第 6–10 站把"读到了什么"变成"想做什么、实际做成了什么、说了什么"。LLM 负责想和说，内核和 market 负责做成了什么。</p>
+<h3>第 6–7 站：信念与意向（第 1 次调用）</h3>
+<p>每次激活最多两次 LLM 调用，帖子在成交判定之后写，都由 agents 模块驱动 <span class="ref">§6.1</span>：</p>
+<pre class="code" data-lang="示意，未实现">perceive(feed, portfolio, prices)        <span class="c"># K 条（§5.4）</span>
+  → 第 1 次调用：interpret + intend      <span class="c"># 只出结构化字段，不带风格示例帖</span>
+      盘前 / 盘中：BeliefUpdate + DecisionIntent[] + FundingIntent
+      收盘后 / 晚间：BeliefUpdate + 明日打算，不出订单（§3.4）
+  → constrain + fill (kernel) → 实际成交  <span class="c"># 硬约束 + 偏差修正 + 成交判定；改动写回记忆</span>
+  → 第 2 次调用：post，仅 want_to_post = True → Post
+                                         <span class="c"># 输入含当日意向与实际成交；风格示例帖只放这次</span>
+  → reflect (LLM, 低频) → Memory          <span class="c"># 每周一次（Tier-A 放在周末激活点）或大盈亏后</span></pre>
+<p>LLM 只输出档位，不输出连续数值。信念和意向都用离散档：收益预期分六档，仓位分 tiny/small/half/large/all_in 五档，情绪四项各 0–3 档 <span class="ref">§6.2 §6.3</span>。档位到具体数值（比如仓位档到意向权重）的映射由内核按人设完成 <span class="ref">§6.2 §6.3</span>。行为参数挂在大五人格的连续分数上，不进 prompt，LLM 不知道自己的损失厌恶系数是多少 <span class="ref">§4.1 §4.2</span>。意向里还有执行方式 <code>open</code> / <code>dip</code> / <code>chase</code>，LLM 只选方式，不报数字价格 <span class="ref">§6.3</span>。</p>
+<p>帖子放在成交之后写，是为了让发言与实际经历自洽：第 2 次调用的输入里有当日意向和实际成交（含未执行原因），老周没买到就不会说自己已经持有 <span class="ref">§6.1</span>。声音和决策仍是两种并列的产出，存在不同的表里 <span class="ref">§3.1</span>。帖子与实际所为之差记为"言行不一"；收盘后的明日打算与次日盘前实际意向之差记为"隔夜变卦" <span class="ref">§6.1 §3.4</span>。</p>
+<p>同一条消息在不同人设下会走出很不一样的路径：风险厌恶、损失厌恶、从众系数、神经质高低都会改变内核的修正量。这部分在 <a href="sim-personas.html">人设决策演示页</a> 用多种类型散户并排演示，本页只跟老周一个人走。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §6.2，来自架构讨论 A4）</b>解析失败与拒答分开处理。解析失败：Pydantic 校验不过则换种子重试（种子进缓存键），最多 2 次；仍失败则该智能体当日记为"未激活"、原因"解析失败"，不填默认值，也不沿用上期信念。拒答单独记类、不重试，当日同样记缺席。失败的尝试也写入缓存，重放时复现同一重试序列；失败率与拒答率写入运行清单 <span class="ref">§6.2</span>。缺席写进激活表 <span class="ref">§9.1 §10.3</span>。</div>
+<h3>第 8 站：内核</h3>
+<p>内核是一段确定性的规则代码，把意向换成可执行订单，共七步 <span class="ref">§6.3</span>。第 1–2 步做偏差修正：仓位档先换成意向权重，再加上从众、近期涨跌外推、彩票偏好三项修正，按随恐惧上升的风险厌恶缩放，最后截断到仓位上限；其中从众项用的是此人看到的可见买卖净占比 H_j。第 3 步处理卖出时的损失厌恶，损失厌恶系数 λ 先验中位数 2.25（Tversky &amp; Kahneman 1992）；改善不够时不卖，理由记"舍不得割"。第 4 步决定今天是否查看并调仓。第 5 步是情绪分支：恐惧到最高档且回撤超过阈值时，高神经质或曾在杠杆崩盘中受伤的人以一定概率恐慌卖出，其他人"躺平"；贪婪/FOMO 到最高档时从众与彩票系数临时放大。第 6 步查硬约束：资金、T+1、整手、涨跌停可成交性、权限、两融、费用，再按执行方式定价：<code>open</code> 买入限价取涨停价（卖出取跌停价），<code>dip</code> 买入限价为前收 × (1 − k_i)、卖出为前收 × (1 + k_i)，<code>chase</code> 按均价加滑点；订单当日有效，未成交的收盘撤单。第 7 步把所有改动写回记忆 <span class="ref">§6.3</span>。</p>
+<p>设计文档给出的公式如下 <span class="ref">§6.3</span>，参数的取值方向见 §6.3 参数表，数值本页不写：</p>
+<pre class="code" data-lang="公式">步骤 1  w^int_ij = 仓位档按人设映射（斜率 s_i 随过度自信 κ_i 增大）
+步骤 2  w*_ij = clip( w^int_ij + Δ_ij, 0, w_i^max )
+        Δ_ij  = (β_i^herd · H_j + β_i^ext · R_j^(5d) + β_i^lot · L_j) / (γ_i(t) · σ_j²)
+        γ_i(t) = γ_i · (1 + η_i · fear_i(t))
+步骤 3  卖出时 U_real = ρ_i · g          （g &gt; 0，落袋为安）
+                 U_real = −λ_i · ρ_i · |g|  （g &lt; 0，割肉之痛；λ 先验中位数 2.25）
+        组合改善 + U_real 超过 τ_i 才卖，否则改为持有，原因"舍不得割"
+步骤 4  当日查看组合 ~ Bernoulli(1 − exp(−ν_i · a_i(t)))；只在 |w* − w| &gt; τ_i 时调仓
+步骤 5  fear = 3 且回撤超阈值 → 以 p_panic 恐慌卖出，或"躺平"
+        greed 或 fomo = 3 → β^herd、β^lot 临时放大</pre>
+<p>式中 H_j ∈ [−1, 1] 是此人看到的"别人在买 vs 在卖"净比例，R_j^(5d) 是近 5 日收益，L_j 是彩票特征（近期涨停、高 MAX、低价），σ_j 是标的近期波动 <span class="ref">§6.3</span>。分母里的 γ_i(t) 随恐惧上升，所以同样的从众信号在恐惧高时换来的加仓更少。LLM 的意向本身已带有一部分从众与外推，修正项只校准残差，这是 β 先验以小值为中心的原因 <span class="ref">§6.3</span>。组合层另有约束：总仓位 ≤ 1 + 杠杆上限（仅两融合格者）、持股数上限、现金缓冲 <span class="ref">§6.3</span>。</p>
+<p>H_j 只统计帖子里明确的买卖行为（晒单、"已上车"、"割了"），帖子观点经 LLM 影响信念，两条路分开，避免同一条帖子被计两次 <span class="ref">§7.5</span>。各项 β 系数的先验集中在小值，由 V4 校准 <span class="ref">§6.3</span>；恐慌卖出概率、阈值的具体数值设计文档未给。</p>
+<h3>第 9 站：成交与记账</h3>
+<p>MVP 没有撮合引擎。market 模块只做三件事：检查合规、判定能否成交、计算费用，结果交给 accounts；market 不写账户，accounts 不判成交、不算费用 <span class="ref">§3.3 §8</span>。检查按固定顺序进行，不合规的订单直接拒绝并计数，不自动修正 <span class="ref">§8.1</span>。</p>
+<p>模式 A 默认用日线判定成交，按 §8.2 第 1–4 步 <span class="ref">§8.2</span>。第 1 步：集合竞价单按真实开盘或收盘价成交，<code>open</code> 走这一步。第 2 步：<code>dip</code> 限价买单在限价 ≥ 当日最低价时成交，成交价 min(限价, 最高价)，卖单对称取 max(限价, 最低价)；<code>chase</code> 按当日成交均价加滑点。第 3 步：一字涨停买单不成交；收盘封板但盘中有低于涨停价成交的，买单按概率 p 抽签，全成或不成，跌停卖出同规则。第 4 步：个人成交不按 <code>w_cap</code> 放大后的量缩减，只有自身订单超过当日真实成交额的设定比例（如 1%）时超出部分不成交；放大后的群体资金流只作诊断 <span class="ref">§8.2</span>。只为收盘封板但盘中开过板的股票日和盘中事件日补分钟线 <span class="ref">§8.2</span>。T+1 的实现是买入只增加总数量，次日开盘前才转为可卖 <span class="ref">§8.4</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>规则</th><th>取值</th><th>来源</th></tr></thead>
+<tbody>
+<tr><td>主板涨跌幅（含 ST）</td><td class="n">10%</td><td><span class="ref">§8.1</span>（2026-07-06 起 ST 由 5% 调为 10%）</td></tr>
+<tr><td>创业板 / 科创板 / 北交所</td><td class="n">20% / 20% / 30%</td><td><span class="ref">§8.1</span></td></tr>
+<tr><td>印花税</td><td class="n">0.05%，仅卖方</td><td><span class="ref">§8.1〔需复核〕</span></td></tr>
+<tr><td>佣金</td><td class="n">上限 0.3%，常见万一至万三，最低 5 元</td><td><span class="ref">§8.1〔需复核〕</span>；佣金率按人设分档 <span class="ref">§8.4</span></td></tr>
+<tr><td>经手费 / 证管费 / 过户费</td><td class="n">0.00341% / 0.002% / 0.001%，均双向</td><td><span class="ref">§8.1〔需复核〕</span></td></tr>
+<tr><td>创业板权限</td><td class="n">10 万 + 24 个月</td><td><span class="ref">§8.1〔需复核〕</span></td></tr>
+<tr><td>科创板 / 北交所权限</td><td class="n">50 万 + 24 个月</td><td><span class="ref">§8.1〔需复核〕</span></td></tr>
+</tbody></table></div>
+<h3>第 10 站：帖子（第 2 次调用）</h3>
+<p>第 2 次调用只对 <code>want_to_post</code> 为真的智能体发送。它与第 1 次共用 3.0k token 的静态前缀，可命中前缀缓存；风格示例帖只放在这次 <span class="ref">§6.1 §14.2</span>。实际调用量是上限乘以发帖率，发帖率在 Phase 0 探针中测量 <span class="ref">§14.2</span>。正文是自由文本，不进 JSON；帖子另带标的、立场、情绪、类型、传闻/喊单标签和"模拟生成"标记 <span class="ref">§6.1 §7.4 §16.2</span>。</p>
+<p>群聊接话只走这一次调用，不重做第 1 次调用，所以当阶段的交易决定不受群聊影响 <span class="ref">§7.1</span>。执行方式也会进入发言，例如"挂了个低价没成交" <span class="ref">§6.3 第 6 步</span>。</p>
+</section>
+<section id="s5" class="reveal"><h2><span class="num">05</span>时间与可见性</h2>
+<p class="sub">同一条消息在不同激活点能不能被看到，由两条规则决定：<code>available_at ≤ 当前时钟</code>，以及"本阶段发的帖子下一阶段才可见"。选一个激活点，看老周那一刻能看到什么。</p>
+<p>一个交易日分晚间/隔夜、盘前、集合竞价、盘中检查点、收盘后几个阶段 <span class="ref">§3.4</span>。MVP 的固定激活点是"盘前 + 收盘后"，非交易日改为 20:00 晚间激活点；盘中检查点只由量级 ≥ 3 的盘中事件触发，执行方式限 <code>chase</code> <span class="ref">§3.4</span>。盘前是当日唯一产生例行订单的激活点，只用 <code>available_at</code> ≤ 09:15 的信息；收盘后与晚间激活的第 1 次调用只出 BeliefUpdate 和"明日打算"，不出订单。打算为买或卖的人次一交易日盘前强制激活 <span class="ref">§3.4</span>。用日线时，盘前激活看到的是 T−1 收盘价加隔夜新闻，收盘后激活看到的是 T 日收盘价 <span class="ref">§5.5</span>。</p>
+<p>同一阶段内被激活的智能体并发调用 LLM；阶段之间严格按时钟推进，本阶段发的帖子下一阶段才可见。这样做避免了同一时刻的循环依赖，也让并发结果与执行顺序无关 <span class="ref">§9.1</span>。唯一例外是群聊：同群在阶段内顺序接话最多 M 轮，只走发言调用，不影响当阶段交易 <span class="ref">§7.1 §9.1</span>。代价是不同群、不同渠道的人在同一阶段内彼此看不到对方刚发的帖子，传播速度以"阶段"为最小单位。</p>
+<p>防泄漏有三项检查：放入金丝雀（故意设置的未来信息，看会不会被读到）、扫描 prompt 中的日期、重放一致性 <span class="ref">§5.5</span>。</p>
+<div class="card">
+<div class="fj-ctlbar" id="fj-tbar" role="group" aria-label="激活点">
+<button class="btn" type="button" data-t="0">T−1 收盘后</button>
+<button class="btn pri" type="button" data-t="1">T 盘前</button>
+<button class="btn" type="button" data-t="2">T 收盘后</button>
+<button class="btn" type="button" data-t="3">T+1 盘前</button>
+</div>
+<p class="fj-stepnote" id="fj-tnote"></p>
+<ul class="fj-vis" id="fj-vis"></ul>
+<p class="fj-hint">示例数据。各条目的时间为本例假设，规则依据见每行说明。</p>
+</div>
+</section>
+<section id="s6" class="reveal"><h2><span class="num">06</span>每站详细说明：落表与回写</h2>
+<p class="sub">第 11 站把一次激活拆进激活表和多张产出表。同时，内核做过的每一处改动都会回到智能体的记忆里，影响它下一次怎么说。</p>
+<h3>拆表与关联</h3>
+<p>声音、态度、决策是三种并列的产出，分表存放，以 <code>persona_id</code>、<code>event_id</code>、<code>run_id</code> 关联 <span class="ref">§3.1 §10.3</span>。激活表是各表的行级元数据来源：每个智能体每个激活点一行，记 <code>phase</code>（盘前 / 盘中 / 收盘后 / 晚间）、<code>trigger</code>（ν 抽中 / 事件 / 强制 / 群聊）、<code>status</code> 与 <code>absent_reason</code>（解析失败 / 拒答 / 超时），被抽中但缺席的也记；其余各表带 <code>activation_id</code>，时点、版本线、补跑、预热等字段从激活表取 <span class="ref">§10.3</span>。帖子表存正文、渠道、时间、回复关系和结构化元数据；态度表存 BeliefUpdate 里的结构化字段；决策表用 <code>intent_kind</code> 区分订单与明日打算，把意向（<code>intent_action</code>、<code>intent_size</code>、<code>execution</code>）和实际执行（<code>exec_qty</code>、<code>exec_price</code>、<code>not_executed_reason</code>）放在同一行，<code>plan_ref</code> 链回前晚打算 <span class="ref">§10.3</span>。账户类表另有交易流水、出入金、账户快照、持仓快照与战绩，全部可以由事件日志重算 <span class="ref">§10.3</span>。</p>
+<p>帖子表每行带 <code>simulated</code> 字段，正文另带隐式标识 <span class="ref">§10.3 §16.2</span>；每行只用 <code>available_at</code> ≤ <code>info_cutoff</code> 的信息，<code>info_cutoff</code> 记在激活表上 <span class="ref">§10.3</span>。帖子表只在团队内部和内部下游项目之间流转，对外展示的样例加显式"模拟生成"标识 <span class="ref">§16.2</span>。这些表是模拟产物，下游使用时要自行检验 <span class="ref">§10.4</span>。</p>
+<h3>聚合口径</h3>
+<p>态度类指标默认按人头权重 <code>w_head</code> 聚合，资金流类按资金权重 <code>w_cap</code> 聚合；对某标的的态度只在注意到该标的的智能体上聚合，同时输出覆盖人数 <code>n_attend</code>，覆盖太少时置空 <span class="ref">§10.1</span>。老周在 T 日盘前读到了星河储能的消息并给出态度，所以计入这只股票的 <code>n_attend</code>。没被激活、解析失败或拒答的人不进入当期态度均值，缺席是否集中在某些人群或行情日要单独检查，缺席记录在激活表 <span class="ref">§6.2 §10.1 §10.3</span>。</p>
+<h3>回写记忆与言行不一</h3>
+<p>内核第 7 步把改动写回记忆：缩量、取消、挂单没成交、涨停买不进、T+1 卖不出、权限不足、"舍不得割" <span class="ref">§6.3</span>。回写的目的是让后续发言与实际经历自洽。v0.3 把帖子放在成交判定之后写，所以分支 B 里老周当次发的帖就已经知道没买到；下一次被激活时，他的记忆里也有"涨停买不进"，发帖时可能抱怨踏空，而不会说自己已经持有 <span class="ref">§6.1 §6.3</span>。</p>
+<p>意向和成交分开记录，两者之差就是"言行不一"，作为一种可测量的特征 <span class="ref">§3.1 §6.3</span>。本例分支 A 意向与成交一致；分支 B 意向是买、成交为零，原因是涨停买不进。决策表里能直接数出这类行，按人群切片统计 <span class="ref">§10.2</span>。言行不一还包括"隔夜变卦"（明日打算与次日盘前实际意向之差）和口头战绩与账户战绩之差 <span class="ref">§3.4 §10.2</span>。言行不一率与隔夜变卦率没有真实对照，只报告并做合理性检查，标"无对照" <span class="ref">§12.1</span>。</p>
+</section>
+<section id="s7" class="reveal"><h2><span class="num">07</span>涉及的模块</h2>
+<p class="sub">一条新闻穿过七个业务模块，再加上负责串联的 orchestrator。业务模块之间只通过 schemas 共享类型。</p>
+<p>模块之间不直接互相调用内部实现，只交换 schemas 里定义的对象，比如 EventCard、Post、BeliefUpdate、OrderIntent、Fill <span class="ref">§3.3</span>。orchestrator 推进时钟、按阶段调度激活，并管理 <code>/runs/&lt;run_id&gt;/</code> 下只追加的事件日志 <span class="ref">§3.3</span>。重放靠事件日志、LLM 响应缓存、随机种子和锁定的模型版本 <span class="ref">§3.1</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>模块</th><th>负责的站</th><th>输入</th><th>输出</th><th>详细页</th></tr></thead>
+<tbody>
+<tr><td>collect</td><td>1</td><td>东财 7x24 快讯等公开来源</td><td>新闻快讯存档（帖子类数据入库即去标识化）</td><td><a href="mod-collect.html">mod-collect</a></td></tr>
+<tr><td>events</td><td>1–3</td><td>原始条目</td><td>EventCard；L0、L1 版本</td><td><a href="mod-events.html">mod-events</a></td></tr>
+<tr><td>social</td><td>4–5，帖子入流</td><td>EventCard、行情、模拟散户帖</td><td>发布者 Post、FeedItem</td><td><a href="mod-social.html">mod-social</a></td></tr>
+<tr><td>agents</td><td>6–8、10</td><td>FeedItem、账户只读视图、记忆、当日成交结果</td><td>BeliefUpdate、DecisionIntent、FundingIntent、OrderIntent、Post</td><td><a href="mod-agents.html">mod-agents</a></td></tr>
+<tr><td>market</td><td>9</td><td>OrderIntent、账户只读视图</td><td>Fill（含佣金、印花税）或拒绝</td><td><a href="mod-market.html">mod-market</a></td></tr>
+<tr><td>accounts</td><td>9</td><td>Fill、CashFlow</td><td>持仓、资金、快照、战绩；只读视图</td><td><a href="mod-accounts.html">mod-accounts</a></td></tr>
+<tr><td>outputs</td><td>11</td><td>事件日志</td><td>激活表、帖子表、态度表、决策表、账户类表</td><td><a href="mod-outputs.html">mod-outputs</a></td></tr>
+<tr><td>orchestrator</td><td>全程</td><td>运行配置</td><td>时钟、激活调度、事件日志、快照</td><td><a href="mod-orchestrator.html">mod-orchestrator</a></td></tr>
+</tbody></table></div>
+<p>相关的两个演示页：发布者五级怎样转述同一条消息见 <a href="sim-publishers.html">sim-publishers</a>；不同类型散户读到同一条消息后怎样决策见 <a href="sim-personas.html">sim-personas</a>。一个交易日内各阶段的完整时序见 <a href="flow-day.html">flow-day</a>。</p>
+</section>
+<section id="s8" class="reveal"><h2><span class="num">08</span>开放问题</h2>
+<p class="sub">沿着这条路走一遍后，下面这些点在设计文档 v0.3 里还没有定论，或者前后写法不一致。</p>
+<div class="callout todo"><b class="t">待定</b><ul>
+<li><b>§3.3 与 §5.3 的改写分工写法不一致。</b>§3.3 的模块表仍写 events "按渠道改写（官媒 / 财经快讯 / 传闻）"；§5.3 已改为 events 只产出 EventCard 与 L0/L1，L2–L4 由 social 发布者以 Post 产出。本页按 §5.3 画，§3.3 的措辞待统一 <span class="ref">§3.3 §5.3</span>。</li>
+<li><b>OrderIntent 字段未定义。</b>第 8 站的示例字段借用 §10.3 交易流水表与决策表的列名，属于假设；内核与 market 之间的订单结构需在 schemas 里定下来 <span class="ref">§3.3 §6.3 §10.3</span>。</li>
+<li><b>盘前帖子能写哪些成交。</b>§6.1 写第 2 次调用的输入含当日实际成交；持续运行中成交在收盘后判定 <span class="ref">§3.4</span>。本页演示按"盘前下单后即判定成交"画，持续运行时盘前帖子能写什么成交结果需要说明 <span class="ref">§3.4 §6.1</span>。</li>
+<li><b>一字涨停下 <code>open</code> 买单走哪一步。</b><code>open</code> 买单限价取涨停价，一字板时开盘价等于限价，第 1 步条件满足；第 3 步又写一字涨停买单不成交。本页按第 3 步处理，两步的先后需写明 <span class="ref">§6.3 第 6 步 §8.2</span>。</li>
+<li><b>注意力与推荐流参数。</b>衰减常数 τ_d、温度 T_i、渠道权重 w_i、推荐流各项权重没有给出取值；推荐流参数被列为实验变量 <span class="ref">§5.4 §7.3</span>。</li>
+<li><b>发布者帖子的延迟。</b>§5.3 中 L2 的延迟是"随传播"，L3 是"数小时"，L4 "不定"，具体怎样换成模拟时间戳未定 <span class="ref">§5.3</span>。</li>
+<li><b>内核参数取值。</b>β 系数先验集中在小值、由 V4 校准；<code>dip_k</code> 只给了先验 1%–3%；恐慌卖出概率 p_panic、回撤阈值、调仓阈值 τ_i 的数值未定 <span class="ref">§4.1 §6.3</span>。</li>
+<li><b>开板涨停的成交概率是假设。</b>收盘封板但盘中开过板的买单按概率 p 成交：有分钟线时 p = 非封板时长占比 × 排队折扣，排队折扣是假设参数；没有分钟线时跑 0.1 / 0.3 / 0.5 三档做敏感性分析。"涨停买不进率"没有真实数据，不进校准目标 <span class="ref">§8.2</span>。</li>
+<li><b>费用与权限数字。</b>印花税、佣金、经手费、证管费、过户费，以及创业板与科创板/北交所权限门槛都标了〔需复核〕 <span class="ref">§8.1</span>。</li>
+<li><b>历史新闻源与题材维度。</b>历史新闻源与授权题材来源待定，随数据源一起定；拿不到题材历史快照时，存档之前的区间不使用题材维度 <span class="ref">§5.5</span>。</li>
+</ul></div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+var ST=[
+['01 快讯','collect 按游标翻页抓取原始条目，自建存档同时保存源时间戳与入库时间；events 聚类去重，记下最早公开可得时间 available_at。','§2.5 §5.2 §16.1'],
+['02 EventCard','每簇调用一次 LLM 抽成事件卡：类别、范围、关联资产、量级 1–5、方向提示（不给智能体看）、可信度、中性摘要。','§5.2'],
+['03 L0 / L1 版本','events 只产出事件卡和 L0 官媒转述、L1 快讯两类不带立场的版本，做事实一致性校验。','§5.3'],
+['04 发布者 L2–L4 帖','L2–L4 由 social 的发布者以 Post 产出，按立场、动机、准确率等参数出帖；只发帖不交易，不进人群统计。L4 只在沙盒。','§5.3 §5.6'],
+['05 推荐流','推荐流按时近性、热度、兴趣、关注打分；个人按注意力预算抽出 3–15 条，持仓异动必进。','§5.4 §7.3'],
+['06 信念（第 1 次调用）','第 1 次 LLM 调用读信息流、持仓、记忆，同时输出 BeliefUpdate 与 DecisionIntent；解析失败换种子重试至多 2 次，仍失败记为未激活。','§6.1 §6.2'],
+['07 意向','同一次调用里的意向部分：动作、仓位档、执行方式 open / dip / chase、理由，不含价格和股数。来源可换成 LLM、规则先验或 Jev。','§6.3 §6.6'],
+['08 内核','七步：意向数值化、偏差修正、实现效用、活跃度与惯性、情绪分支、硬约束与执行、写回记忆，产出订单。第 6 步按执行方式定限价，订单当日有效。','§6.3'],
+['09 成交','market 按日线规则四步判定成交并算费用，accounts 记账。market 不写账户。','§8.1 §8.2 §8.4'],
+['10 帖子（第 2 次调用）','want_to_post 为真才调用，放在成交判定之后，共用静态前缀；写自由文本和结构化元数据，下一激活阶段才对别人可见。','§6.1 §7.4 §9.1 §14.2'],
+['11 落表','outputs 写激活表和帖子表、态度表、决策表、账户类表，各表带 activation_id 关联激活表。','§10.1 §10.3']
+];
+var go=null;
+function $(id){return document.getElementById(id);}
+var nodes=document.querySelectorAll('.fj-node');
+var edges=document.querySelectorAll('.fj-edge');
+var picked=0;
+function pickNode(i){
+  if(typeof i!=='number'||isNaN(i)||!ST[i])return;
+  picked=i;
+  for(var k=0;k<nodes.length;k++){nodes[k].classList.toggle('on',k===i);}
+  for(var e=0;e<edges.length;e++){
+    var ei=parseInt(edges[e].getAttribute('data-e'),10);
+    edges[e].classList.toggle('lit',!isNaN(ei)&&ei<i);
+  }
+  var t=$('fj-info-t'),d=$('fj-info-d'),r=$('fj-info-r'),b=$('fj-info-go');
+  if(t)t.textContent=ST[i][0];
+  if(d)d.textContent=ST[i][1];
+  if(r)r.textContent=ST[i][2];
+  if(b)b.hidden=false;
+}
+for(var n=0;n<nodes.length;n++){
+  (function(el){
+    var i=parseInt(el.getAttribute('data-i'),10);
+    el.addEventListener('click',function(){pickNode(i);});
+    el.addEventListener('keydown',function(ev){if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();pickNode(i);}});
+  })(nodes[n]);
+}
+var infoGo=$('fj-info-go');
+if(infoGo)infoGo.addEventListener('click',function(){
+  stopPlay();
+  if(go)go(picked);
+  var s2=$('s2');if(s2&&s2.scrollIntoView)s2.scrollIntoView({behavior:'smooth',block:'start'});
+});
+var steps=document.querySelectorAll('#fj-steps .fj-step');
+var NS=steps.length;
+var cur=0,timer=null;
+var dots=$('fj-dots');
+var dotBtns=[];
+if(dots){
+  for(var s=0;s<NS;s++){
+    (function(k){
+      var b=document.createElement('button');
+      b.type='button';
+      b.setAttribute('role','tab');
+      b.setAttribute('aria-label','第'+(k+1)+'步');
+      b.textContent=String(k+1);
+      b.addEventListener('click',function(){stopPlay();show(k);});
+      dots.appendChild(b);
+      dotBtns.push(b);
+    })(s);
+  }
+}
+function show(k){
+  if(!NS)return;
+  k=parseInt(k,10);
+  if(isNaN(k))k=0;
+  if(k<0)k=0;
+  if(k>NS-1)k=NS-1;
+  cur=k;
+  for(var i=0;i<NS;i++){steps[i].hidden=(i!==k);}
+  for(var j=0;j<dotBtns.length;j++){
+    dotBtns[j].classList.toggle('on',j===k);
+    dotBtns[j].classList.toggle('done',j<k);
+    dotBtns[j].setAttribute('aria-selected',j===k?'true':'false');
+  }
+  var p=$('fj-prev'),nx=$('fj-next');
+  if(p)p.disabled=(k===0);
+  if(nx)nx.disabled=(k===NS-1);
+  var bb=$('fj-brbar');
+  if(bb)bb.style.opacity=(k>=8)?'1':'.55';
+  if(ST[k])pickNode(k);
+}
+go=show;
+function stopPlay(){
+  if(timer){clearInterval(timer);timer=null;}
+  var pb=$('fj-play');
+  if(pb){pb.textContent='自动播放';pb.setAttribute('aria-pressed','false');}
+}
+function startPlay(){
+  stopPlay();
+  if(cur>=NS-1)show(0);
+  var pb=$('fj-play');
+  if(pb){pb.textContent='暂停';pb.setAttribute('aria-pressed','true');}
+  timer=setInterval(function(){
+    if(cur>=NS-1){stopPlay();return;}
+    show(cur+1);
+  },4500);
+}
+var prevB=$('fj-prev'),nextB=$('fj-next'),playB=$('fj-play');
+if(prevB)prevB.addEventListener('click',function(){stopPlay();show(cur-1);});
+if(nextB)nextB.addEventListener('click',function(){stopPlay();show(cur+1);});
+if(playB)playB.addEventListener('click',function(){if(timer)stopPlay();else startPlay();});
+show(0);
+var brBtns=document.querySelectorAll('#fj-brbar button[data-br]');
+function setBranch(br){
+  if(br!=='a'&&br!=='b')br='a';
+  var els=document.querySelectorAll('#fj-steps [data-br]');
+  for(var i=0;i<els.length;i++){els[i].hidden=(els[i].getAttribute('data-br')!==br);}
+  for(var j=0;j<brBtns.length;j++){
+    var on=brBtns[j].getAttribute('data-br')===br;
+    brBtns[j].classList.toggle('pri',on);
+    brBtns[j].setAttribute('aria-pressed',on?'true':'false');
+  }
+}
+for(var q=0;q<brBtns.length;q++){
+  (function(b){b.addEventListener('click',function(){setBranch(b.getAttribute('data-br'));});})(brBtns[q]);
+}
+setBranch('a');
+var TP=['T−1 收盘后','T 盘前','T 收盘后','T+1 盘前'];
+var TNOTE=['T−1 日 15:00–18:00 的收盘后激活点，第 1 次调用只出 BeliefUpdate 和"明日打算"，不出订单（§3.4）。快讯还没发布。','T 日 08:00–09:15 的盘前激活点，只用 available_at ≤ 09:15 的信息，看到 T−1 收盘价加隔夜新闻（§3.4 §5.5）。当日例行订单只在这一刻产生，演示中的老周就在这一刻被激活。','T 日 15:00–18:00 的收盘后激活点，看到 T 日收盘价（§5.5）；出 BeliefUpdate 和"明日打算"，不出订单（§3.4）。','T+1 日 08:00–09:15 的盘前激活点；前晚打算买或卖的人在这一刻强制激活（§3.4）。'];
+var VIS=[
+['星河储能 T−1 收盘价 20.00 元',0,'收盘后激活看到当日收盘价（§5.5）','—'],
+['快讯原文与事件卡 ev_demo_001',1,'available_at = T−1 20:10，夜间事件进入下一激活点候选池（§5.2）','available_at 晚于当前时钟（§5.5）'],
+['L1 快讯版本',1,'L1 延迟 0–10 分钟（§5.3）','依据的事件卡尚不可得（§5.5）'],
+['L3"短线小飞侠"帖（示例：T−1 22:00 发出）',1,'发布时间早于当前时钟（§5.5）','发布时间晚于当前时钟（§5.5）'],
+['其他散户在 T 盘前同一阶段发的帖',2,'上一阶段的帖子本阶段可见（§9.1）','同一阶段内的帖子要到下一阶段才可见（§9.1）'],
+['老周自己 T 盘前发的帖（对其他人）',2,'上一阶段的帖子本阶段可见（§9.1）','尚未发出，或同阶段不可见（§9.1）'],
+['T 日收盘价与成交结果',2,'收盘后激活看到 T 日收盘价（§5.5）','T 日尚未收盘（§5.5）'],
+['分支 A 买入的 300 股可以卖出',3,'次日开盘前转为可卖（§8.4）','T+1：买入当日只增加总数量（§8.4）'],
+['真实股吧帖子',-1,'—','注入开关默认关闭，验收运行强制关闭（§5.7）']
+];
+var tbtns=document.querySelectorAll('#fj-tbar button[data-t]');
+function showT(t){
+  t=parseInt(t,10);
+  if(isNaN(t)||t<0||t>=TP.length)t=1;
+  for(var i=0;i<tbtns.length;i++){
+    var on=parseInt(tbtns[i].getAttribute('data-t'),10)===t;
+    tbtns[i].classList.toggle('pri',on);
+    tbtns[i].setAttribute('aria-pressed',on?'true':'false');
+  }
+  var note=$('fj-tnote');
+  if(note)note.textContent='当前激活点：'+TNOTE[t];
+  var ul=$('fj-vis');
+  if(!ul)return;
+  while(ul.firstChild)ul.removeChild(ul.firstChild);
+  var cnt=0;
+  for(var k=0;k<VIS.length;k++){
+    var v=VIS[k];
+    var yes=(v[1]>=0&&t>=v[1]);
+    if(yes)cnt++;
+    var li=document.createElement('li');
+    li.className=yes?'fj-y':'fj-n';
+    var tag=document.createElement('span');
+    tag.className='fj-tag';
+    tag.textContent=yes?'可见':'不可见';
+    var body=document.createElement('span');
+    body.textContent=v[0];
+    var why=document.createElement('span');
+    why.className='fj-why';
+    why.textContent=yes?v[2]:v[3];
+    body.appendChild(why);
+    li.appendChild(tag);li.appendChild(body);
+    ul.appendChild(li);
+  }
+  if(note)note.textContent+=' 可见 '+cnt+' / '+VIS.length+' 项。';
+}
+for(var w=0;w<tbtns.length;w++){
+  (function(b){b.addEventListener('click',function(){showT(b.getAttribute('data-t'));});})(tbtns[w]);
+}
+showT(1);
+})();
+</script>
+</body>
+</html>

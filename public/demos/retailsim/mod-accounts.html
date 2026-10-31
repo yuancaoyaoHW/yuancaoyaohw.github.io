@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>accounts · 账户、出入金与战绩 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* mod-accounts 私有样式，前缀 ac- */
+.ac-io{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr);gap:12px;align-items:stretch}
+@media(max-width:860px){.ac-io{grid-template-columns:minmax(0,1fr)}}
+.ac-io .card ul{margin:6px 0 0;padding-left:18px;font-size:13.5px;color:var(--ink2)}
+.ac-io .card li{margin:4px 0}
+.ac-core{border-color:rgba(52,211,153,.5)!important;background:linear-gradient(160deg,rgba(52,211,153,.13),rgba(52,211,153,.02))!important}
+.ac-lbl{font:700 11.5px var(--mono);color:var(--acct);letter-spacing:1px;margin-bottom:4px}
+.ac-h3{margin:26px 0 8px;font-size:17px}
+.ac-h3 small{font-weight:400;color:var(--mute);font-size:12.5px;margin-left:6px}
+/* 状态图 */
+.ac-svg{width:100%;height:auto;display:block}
+.ac-node{cursor:pointer}
+.ac-node rect{transition:stroke .15s,fill .15s}
+.ac-node.on rect{stroke:var(--acct);stroke-width:2.4;fill:rgba(52,211,153,.16)}
+.ac-svg .ac-node rect{fill:var(--panel2);stroke:var(--line2);stroke-width:1.4}
+.ac-svg text{fill:var(--ink);font:600 14px var(--sans)}
+.ac-svg .ac-tx2{fill:var(--mute);font:500 11.5px var(--mono)}
+.ac-svg .ac-ln{fill:none;stroke:var(--acct);stroke-width:1.6;opacity:.85}
+.ac-svg .ac-warnln{stroke:var(--warn)}
+.ac-svg .ac-dash{stroke:var(--mute);stroke-dasharray:4 4}
+.ac-svg .ac-arrhead{fill:var(--acct)}
+.ac-node:focus{outline:none}
+.ac-node:focus rect{stroke:var(--acct);stroke-width:2.4}
+.ac-nodeinfo{min-height:64px;margin-top:10px}
+/* 步进演示 */
+.ac-stepbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 14px}
+.ac-stepbar .ac-pos{margin-left:auto;font:600 12.5px var(--mono);color:var(--mute)}
+.ac-dots{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.ac-dots button{width:30px;height:24px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--mute);font:600 11px var(--mono);cursor:pointer}
+.ac-dots button.on{background:var(--acct);color:#06101f;border-color:var(--acct)}
+.ac-dots button.past{color:var(--ink2);border-color:rgba(52,211,153,.4)}
+.ac-step{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:14px}
+@media(max-width:900px){.ac-step{grid-template-columns:minmax(0,1fr)}}
+.ac-ipo{display:grid;gap:8px}
+.ac-ipo .card{padding:12px 14px}
+.ac-ipo .ac-lbl{margin-bottom:2px}
+.ac-ipo p{margin:0;font-size:13.5px;color:var(--ink2)}
+.ac-kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.ac-kv div{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 9px;min-width:0}
+.ac-kv b{display:block;font:600 14px var(--mono);overflow-wrap:anywhere}
+.ac-kv span{font-size:11.5px;color:var(--mute)}
+.ac-kv div.chg{border-color:var(--acct);box-shadow:0 0 0 1px rgba(52,211,153,.35) inset}
+.ac-log{font:12px/1.55 var(--mono);color:var(--ink2);max-height:210px;overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-top:8px}
+.ac-log div{white-space:nowrap}
+.ac-log div.new{color:var(--acct)}
+.ac-perf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}
+.ac-perf div{border:1px solid var(--line);border-radius:9px;padding:7px 9px;text-align:center;min-width:0}
+.ac-perf b{display:block;font:700 15px var(--mono)}
+.ac-perf span{font-size:11px;color:var(--mute)}
+.ac-mini{margin-top:8px}
+.ac-tag{display:inline-block;font:600 10.5px var(--mono);padding:1px 7px;border-radius:6px;background:rgba(251,191,36,.14);color:var(--warn);margin-left:6px;vertical-align:middle}
+.ac-formula{font:13px/1.7 var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;overflow-x:auto;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+  <div class="eyebrow"><i></i>MODULE · ACCOUNTS</div>
+  <h1>accounts <span class="grad">账户、出入金与战绩</span></h1>
+  <p class="lead">把成交和银证转账记进一本只追加的账，每天收盘后结算出可卖、可用、可取，再算出每个模拟散户的投资战绩，回喂给它的记忆。</p>
+  <div class="meta">
+    <span class="chip acct"><i></i>模拟层 · 账户</span>
+    <span class="chip"><i></i>§4.4 §6.4 §8.1 §8.4 §10.3</span>
+    <span class="chip ok"><i></i>所有快照可由事件日志重算</span>
+    <span class="chip warn"><i></i>不判定成交 · 不算费用</span>
+  </div>
+</header>
+
+<section id="s1" class="reveal">
+  <h2><span class="num">01</span>职责一览</h2>
+  <p class="sub">一句话：accounts 负责“记账”，把 market 给出的成交和出入金记成事件，日终结算，产出账户快照和战绩。</p>
+  <p>设计文档的模块表把它写成：把 <code>Fill</code>（费用已算好）与出入金记入账户事件日志，日终结算可卖数量、可用与可取资金，每日生成账户与持仓快照、计算投资战绩，并向 market 和 agents 提供账户只读视图 <span class="ref">§3.3</span>。这里的“事件日志”指只追加、不改写的流水记录，账户的任何状态都由它按顺序重放得到 <span class="ref">§3.1</span>。</p>
+  <div class="ac-io">
+    <div class="card">
+      <div class="ac-lbl">输入</div>
+      <ul>
+        <li><code>Fill</code>：成交回报，费用、印花税已由 <a href="mod-market.html">market</a> 算好 <span class="ref">§8.4</span></li>
+        <li><code>FundingIntent</code>：出入金意向，来自 <a href="mod-agents.html">agents</a> 的意向来源 <span class="ref">§6.3</span></li>
+        <li>人生骨架的计划性出入金与情景注入冲击，来自 <a href="mod-population.html">population</a> 与情景配置 <span class="ref">§4.4</span></li>
+        <li>投资经历预跑产出的初始持仓、成本、现金 <span class="ref">§4.4 §9.2</span></li>
+        <li>收盘价、除权除息信息，来自 <a href="mod-data.html">data</a> <span class="ref">§8.4</span></li>
+      </ul>
+    </div>
+    <div class="card ac-core">
+      <div class="ac-lbl">本模块 accounts</div>
+      <ul>
+        <li>记账：成交与出入金写成事件</li>
+        <li>日终结算：可卖数量、可用资金、可取资金</li>
+        <li>每日账户与持仓快照（结算后生成）</li>
+        <li>战绩：TWR、MWR、超额、回撤等</li>
+        <li>出入金入账：三种来源都落成 <code>CashFlow</code></li>
+        <li>标记休眠账户，不删除</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="ac-lbl">输出</div>
+      <ul>
+        <li><code>CashFlow</code>：一笔实际发生的出入金 <span class="ref">§8.4</span></li>
+        <li>账户只读视图：给 market 做合规检查、给 agents 组装账户摘要；文档未列字段，按 §8.1 的检查项至少涉及可卖数量与可用资金 <span class="ref">§3.3</span></li>
+        <li>账户摘要：总资产、可用资金、仓位、各持仓浮盈亏，进 agents 的工作记忆 <span class="ref">§6.4</span></li>
+        <li>战绩摘要与显著事件，写成情景记忆 <span class="ref">§6.4</span></li>
+        <li>四张账户类交付表，给 <a href="mod-outputs.html">outputs</a> <span class="ref">§10.3</span></li>
+      </ul>
+    </div>
+  </div>
+  <p>类型定义都在 <a href="mod-schemas.html">schemas</a>，读写路径由 <a href="mod-orchestrator.html">orchestrator</a> 给出（<code>/runs/&lt;run_id&gt;/</code> 下的事件日志与按 <code>sim_date</code> 的快照）。本模块不判定能否成交，也不计算费用，这两件事都属于 market。</p>
+</section>
+
+<section id="s2" class="reveal">
+  <h2><span class="num">02</span>为什么需要它</h2>
+  <p class="sub">散户怎么说、怎么想、怎么做，很大程度取决于“我账上现在赚了还是亏了”。没有一本连续、可核对的账，这些反应就没有依据。</p>
+  <p>第一个原因是决策要用账户状态。智能体的规则内核要知道持仓成本 c、现价 p 和浮盈 g = p/c − 1，才能算处置效应和“等回本”倾向 <span class="ref">§6.3</span>；硬约束还要检查现金、T+1 可卖量、两融额度和维持担保比例 <span class="ref">§6.3</span>。工作记忆里约 100 个 token 留给账户摘要 <span class="ref">§6.4</span>。这些数字必须来自同一处，否则提示词里说的仓位和内核用的仓位会对不上。</p>
+  <p>第二个原因是账户要跨日连续。设计文档明确账户不封闭：如果没有出入金，几年后模拟人群的账户规模和持仓分布会偏离现实 <span class="ref">§8.4</span>。所以要有人专门处理工资结余转入、买房转出、牛市加仓资金这类现金流，并把转出的钱放回场外资金 <code>outside_funds</code>，而不是凭空消失。</p>
+  <p>第三个原因是战绩要能当证据核对。V4 验证要拿亏损账户占比、按账户规模分组的收益、择时损失和净流入方向去对照真实统计 <span class="ref">§12.1 §12.2</span>。如果账户状态散落在 market 和 agents 各自的内存里，就无法重放、无法分叉，也无法证明战绩是算对的。</p>
+  <div class="callout warn"><b class="t">反例：把账户塞进 market</b>如果由 market 一边判成交一边改余额，agents 要读账户摘要、outputs 要出账户表，都得去 market 里取，三方耦合在一起。设计文档的划分是 market 只读账户视图、只输出 <code>Fill</code>；accounts 只记 <code>Fill</code> 与 <code>CashFlow</code>、结算和快照 <span class="ref">§8 §3.3</span>。单独成模块，是因为 market、agents、outputs 三方都要用它。</div>
+</section>
+<section id="s3" class="reveal">
+  <h2><span class="num">03</span>机制详解</h2>
+  <p class="sub">按“账户里有什么 → 钱从哪来到哪去 → 战绩怎么算 → 战绩怎么影响人 → 怎么验证”的顺序讲，最后用一张状态图串起来。</p>
+
+  <h3 class="ac-h3">3.1 账户里记了什么<small>§8.4</small></h3>
+  <p>账户状态有四类：现金、持仓（总量与可卖量）、成本价、融资负债 <span class="ref">§8.4</span>。下面几个量最容易混，逐个解释。</p>
+  <p><b>总资产</b>在快照表里和 <code>cash</code>、<code>market_value</code>、<code>margin_debt</code> 并列成列 <span class="ref">§10.3</span>。没有两融时，它就是现金加持仓市值；有两融时 <code>total_assets</code> 是否已扣掉负债，文档没有写，这里不作推断。</p>
+  <p><b>可卖数量</b>体现 A 股的 T+1 规则（当天买的股票当天不能卖，沪、深交易规则 3.1.4–3.1.5 <span class="ref">§8.1</span>）。实现方式是：当日买入只增加持仓总量，在下一交易日开盘前转为可卖 <span class="ref">§8.4</span>。</p>
+  <p><b>可用资金</b>是能拿来下单的钱，等于现金减去当日已冻结的买单金额 <span class="ref">§8.4</span>。<b>可取资金</b>是能转回银行的钱。两者的差别在卖出款：当日卖出的钱当天就能再买，但要到下一交易日才能取 <span class="ref">§8.4</span>。所以一个刚卖完股票就想“割肉离场、钱转回银行”的人，当天能转出的钱比账面现金少。</p>
+  <p><b>持仓成本</b>有两套口径，3.4 节细讲。<b>两融负债</b>只有满足资格、且人设里分配了杠杆的智能体才有 <span class="ref">§8.4</span>。资格按规则判定：资产满 50 万元并持续 20 个交易日、交易满 6 个月 〔需复核〕 <span class="ref">§8.4</span>。两融参与比例按账户档作为 IPF 边际，目标取交易所或中证金融的信用账户数 〔需复核〕 <span class="ref">§8.4 §4.3</span>；深度样本每个账户档至少有 1 个杠杆户 <span class="ref">§8.4</span>。维持担保比例跌破平仓线（券商常见 130% 〔需复核〕）时先追保，追保失败就强平。强平卖单以市价进入下一个成交判定点，跌停时卖不掉（§8.2 第 3 步）<span class="ref">§8.4</span>。这是 2015 年式踩踏的机制，也是经历向量里“被强平”一项的来源 <span class="ref">§8.4 §6.5</span>。强平会写回记忆，影响之后的发言与加杠杆意愿 <span class="ref">§8.4</span>。</p>
+  <p><b>场外配资</b>记在人设卡的 <code>offbook_leverage</code> 里，含杠杆倍数、警戒线和平仓线，平仓线按配资合同设定，比两融紧 <span class="ref">§8.4 §4.1</span>。历史推演默认打开，持续运行与假设情景默认关闭，开关记入运行清单 <span class="ref">§8.4 §9.4</span>。覆盖率按时期给参数（2014–2015 年高，2015 年清理后低），属于假设 <span class="ref">§8.4</span>。配资强平与两融同规则 <span class="ref">§8.4</span>。杠杆人群样本小，踩踏结论只作机制展示，不做显著性检验；配资比例没有可靠的官方数据，报告里标为假设 <span class="ref">§8.4</span>。</p>
+  <p><b>场外资金 <code>outside_funds</code></b> 是人设卡里的一个档位，表示存款、理财等可投资的场外钱，是出入金的来源和去处 <span class="ref">§4.1</span>。它按收入与人生骨架初始化，之后按月由工资结余等累加 <span class="ref">§8.4</span>。</p>
+  <p>除权除息在权益登记日的次一交易日处理（沪 4.3.1），持仓数量和成本价同步调整；停牌股的委托无效；股票池包含已退市股票 <span class="ref">§8.4 §5.5</span>。</p>
+  <p><b>初始状态</b>来自投资经历预跑：用规则内核在真实历史上从 <code>entry_year</code> 跑到起点，不调用大模型 <span class="ref">§4.4 §9.2</span>。行情只回溯到 2005 年，2005 年以前的经历只写进人生骨架作文字背景，不在行情上预跑 <span class="ref">§4.4 §5.5</span>。预跑按比例进行：只记仓位权重、收益率、出入金占资产的比例，不记绝对金额，也不受整手限制；期末整体缩放，使起点资产等于抽样得到的账户档金额 <span class="ref">§4.4</span>。整手和最低佣金从仿真起点才生效 <span class="ref">§4.4</span>。缩放后检查倒推的历史入金与人生骨架收入是否相符，不合理就重抽经历（换预跑参数或入市年份），记录重抽次数，不改档位；多次仍不合理，标 <code>life_asset_conflict</code>（经历与资产冲突）并在报告中写明 <span class="ref">§4.4 §4.1</span>。预跑的群体检验（小户跑输、2015 年财富流向、CHFS 2013 年 70.4% 的家庭报告亏损）看收益率与缩放前的相对财富变化，不受缩放影响 <span class="ref">§4.4</span>。</p>
+  <p><b>可交易品种。</b>MVP 为沪深主板、创业板、科创板股票，加约 10 只宽基或行业 ETF（如沪深 300、创业板、券商、半导体）<span class="ref">§8.1</span>。可转债、北交所、期权、港股通不进 MVP，留到 Phase 2 以后 <span class="ref">§8.1</span>。创业板、科创板按人设的 <code>permissions</code> 判定，权限由资产与入市年限按门槛推出，达标不等于开通，开通率先设为参数 <span class="ref">§8.1 §4.1</span>。没有权限的智能体看得到这些板块的消息，买单会被拒绝；拒单写入事件日志，“权限不足”写回情景记忆 <span class="ref">§8.1 §6.3</span>。逆回购和场外基金不建模，闲置资金按现金计、不计息，报告注明这会略低估保守型账户的收益 <span class="ref">§8.1</span>。佣金率按人设分档（线上低佣与传统营业部），按 §8.1 的费率逐笔扣除 <span class="ref">§8.4</span>。</p>
+  <p><b>非交易日</b>（周末与节假日）只有 20:00 晚间激活，只有信息与社交。账户不结算、不出快照，出入金意向顺延到下一交易日（银证转账只在交易日办理 〔需复核〕）<span class="ref">§3.4</span>。</p>
+
+  <h3 class="ac-h3">3.2 跨日连续与休眠<small>§8.4</small></h3>
+  <p>持续运行时账户跨日连续，不重置 <span class="ref">§8.4</span>。做情景实验时，从某天的快照分叉，每条分叉有自己的 <code>run_id</code>，互不干扰 <span class="ref">§8.4</span>。分叉之所以便宜，是因为“事件溯源 + 缓存 + 种子 + 锁定模型版本”让系统可重放、可分叉 <span class="ref">§3.1</span>。</p>
+  <p>资产转空、又长期没有入金的账户会被标记为休眠（快照表 <code>dormant</code> 列 <span class="ref">§10.3</span>）。休眠账户留在人群里，照常接收信息，下一轮牛市可能回归；它不被删除，是为了避免幸存者偏差 <span class="ref">§8.4</span>，也就是只统计还活着的账户、把战绩高估。“长期”具体多少天，文档没有给数字。</p>
+  <h3 class="ac-h3">3.3 出入金的三种来源<small>§8.4 §6.3</small></h3>
+  <p>出入金在这里指银证转账：钱在银行账户（场外资金）和证券账户之间来回。三种来源都落成一条 <code>CashFlow</code>，出入金表的 <code>source</code> 列就记它属于哪一种 <span class="ref">§10.3</span>。</p>
+  <div class="grid g3">
+    <div class="card"><div class="ac-lbl">① 计划性</div><p style="margin:0;font-size:13.5px;color:var(--ink2)">来自人生骨架：工资结余转入、年终奖、退休金；买房首付、子女升学、医疗、失业转出 <span class="ref">§4.4</span>。按人设的频率和比例执行，<b>不调用大模型</b> <span class="ref">§8.4</span>。</p></div>
+    <div class="card"><div class="ac-lbl">② 行情驱动</div><p style="margin:0;font-size:13.5px;color:var(--ink2)">意向来源产出 <code>FundingIntent</code>，例如牛市里“再转 5 万进来”，或“割肉离场、钱转回银行” <span class="ref">§8.4</span>。每次激活至多一条 <span class="ref">§6.3</span>，只在盘前与盘中激活的第 1 次调用里产出；收盘后与晚间激活不出 <span class="ref">§6.1</span>。</p></div>
+    <div class="card"><div class="ac-lbl">③ 情景注入</div><p style="margin:0;font-size:13.5px;color:var(--ink2)">外生冲击，例如收入下降、房地产政策变化 <span class="ref">§8.4</span>。由情景配置给出，用来做“如果……会怎样”的分叉实验。</p></div>
+  </div>
+  <p>行情驱动这一路要多说几句。<code>FundingIntent</code> 只表达方向和相对大小：<code>action</code> 取 deposit / withdraw / none，<code>size</code> 取 tiny / small / half / large / all，转入时相对场外资金、转出时相对账户资产，另带一句不超过 60 字的 <code>reason</code> <span class="ref">§6.3</span>。真正的金额由规则内核决定，上限受三样东西约束：场外资金余额、现金缓冲和人设参数 <span class="ref">§8.4</span>。入场意愿随外推信念强度 β<sup>ext</sup> 和近期收益上升；离场意愿随神经质和累计亏损上升 <span class="ref">§8.4</span>。出入金的变化会写回记忆 <span class="ref">§8.4</span>。</p>
+  <p>转出还受可取资金约束（3.1 节）：当日卖出款不能当日转出。tiny、small、large 各对应多大比例，现金缓冲留多少，文档都没有给数字；出入金表里同时保留意向金额 <code>intent_amount</code> 和实际金额 <code>amount</code> <span class="ref">§10.3</span>，两者之差就是被限额砍掉的部分。</p>
+  <p>人群层面的总量要对得上真实数据：方向和量级对照投保基金的证券交易结算资金、银证转账数据 〔需复核〕 和新增开户数 <span class="ref">§8.4 §12.1</span>。所有出入金都写入事件日志和情景记忆 <span class="ref">§8.4 §6.4</span>。</p>
+
+  <h3 class="ac-h3">3.4 战绩怎么算<small>§8.4 §10.2</small></h3>
+  <p>每日收盘结算之后生成账户与持仓快照 <span class="ref">§8.4 §10.3</span>，战绩在快照基础上算。设计文档同时报告两种收益率 <span class="ref">§8.4</span>。</p>
+  <p><b>TWR（时间加权收益率）</b>把每次出入金切成小段，每段只看资产自己涨跌了多少，再把各段收益连乘。它剔除了出入金的影响，衡量的是“这套持仓本身表现如何”。<b>MWR（资金加权收益率）</b>是让所有现金流（初始本金、每笔入金、每笔出金、期末资产）净现值为零的那个收益率，即内部收益率。它把“什么时候放了多少钱进去”算进来，衡量的是“这个人实际赚到的钱对应多高的收益”。下面是两者的标准定义，文档只规定了“TWR 剔除出入金、MWR 同时报告”，没有写具体切段和计息约定。</p>
+  <div class="ac-formula">TWR = (1+r₁)(1+r₂)…(1+rₙ) − 1，  rₜ = Vₜ / (Vₜ₋₁ + Fₜ) − 1<br>MWR：解 Σ CFₖ / (1+m)^tₖ = 0 得 m<br><span style="color:var(--mute)">Vₜ 为第 t 日收盘总资产，Fₜ 为第 t 日出入金（入为正）。标准定义，示意，未实现</span></div>
+  <p>两者之差 TWR − MWR 就是<b>择时损失</b> <span class="ref">§8.4 §10.2</span>。典型散户“高位入金、低位离场”：涨了才加钱，跌了才撤钱，大钱恰好赶上下跌段，MWR 就会明显低于 TWR。4 节的逐步演示会现场算出这个差。</p>
+  <p>基准用沪深 300 和中证全指 <span class="ref">§8.4</span>。已实现盈亏按 <b>FIFO</b>（先进先出，卖出时先扣最早买入的那批）成本计算 <span class="ref">§8.4</span>。而在提示词里给智能体看的成本价，用券商 App 的<b>摊薄成本</b> 〔需复核〕 <span class="ref">§8.4</span>。券商常见算法是把已实现盈亏摊进剩余持仓，卖亏了成本就被抬高；具体公式文档未定义。用它的理由是散户的“回本”心态锚定在 App 上显示的那个数 <span class="ref">§8.4</span>。战绩可由事件日志重算，每日快照只是缓存 <span class="ref">§8.4</span>。</p>
+  <div class="callout decide"><b class="t">已定（v0.3 §5.5，来自架构讨论 A1）</b>数据层存不复权日线和复权因子表，复权因子以除权除息日为 <code>available_at</code>。智能体看到的价格按 <code>asof</code> 当天现算前复权，与当年券商软件显示一致；<b>收益与战绩计算统一用后复权</b> <span class="ref">§5.5</span>。账户这边按 §8.4 在除权除息日调整持仓数量与成本价。快照里的 <code>cost_basis</code> 用哪套口径、与后复权战绩如何对账，设计文档没有写，见 8 节。</div>
+  <h3 class="ac-h3">3.5 战绩怎么影响这个人<small>§6.4</small></h3>
+  <p>战绩不只是交付给研究者看，还要回到智能体身上，改变它之后怎么说、怎么做。设计文档写了四条通道 <span class="ref">§6.4</span>。</p>
+  <p><b>定期摘要。</b>每个月末（Tier-A 智能体每周）把战绩摘要写成一条情景记忆：本期和累计收益、相对沪深 300 的超额、最大回撤、最好和最差的一笔、出入金；重要性按盈亏大小定 <span class="ref">§6.4</span>。之后的反思会据此更新语义记忆，例如“今年跑输指数，以后少追高” <span class="ref">§6.4</span>。</p>
+  <p><b>显著事件当日写入。</b>单笔盈亏或单日账户波动超过个人阈值、被强平、清仓、回本解套，当天就写成情景记忆 <span class="ref">§6.4</span>。个人阈值怎么定，文档没有给数字。</p>
+  <p><b>参数两条路。</b>一条是大模型读到这些记忆后自己改变说法；另一条是规则内核更新慢变量。两条路一起校准，不重复计算 <span class="ref">§6.4</span>。慢变量指变化很慢的内核参数（KernelParams），这里涉及过度自信 κ 和风险厌恶 γ <span class="ref">§6.3</span>。自我归因（Gervais &amp; Odean 2001）：近期赚钱抬高 κ，亏钱降低 κ，但降的步长更小。赌场资金效应与回本效应（Thaler &amp; Johnson 1990）：赚钱后 γ 下降；深套时“等回本”倾向增强，这部分与 §6.3 的实现效用叠加，只校准残差 <span class="ref">§6.4</span>。步长都很小，由 V4 的战绩与行为矩来定 <span class="ref">§12.2</span>，文档没有给具体数值。</p>
+  <p><b>口头战绩与实际战绩。</b>发帖时可能吹嘘或隐瞒，两者的差距记为“言行不一”的一种 <span class="ref">§10.2</span>，用来检验吹嘘是否集中在合理的人群（过度自信者、大 V）<span class="ref">§6.4</span>。不同类型的人对同一份战绩反应不同，见 <a href="sim-personas.html">人设模拟</a> 页。</p>
+  <p>工作记忆里的账户摘要（总资产、可用资金、仓位、各持仓浮盈亏）每次现算，不持久化 <span class="ref">§6.4</span>。</p>
+
+  <h3 class="ac-h3">3.6 四张账户类交付表<small>§10.3</small></h3>
+  <p>账户类表用 Parquet 交付，除了与主表一样按人和运行关联，还额外按 <code>sim_date</code> 关联；持续运行时每天追加 <span class="ref">§10.3</span>。v0.3 新增激活表，作为各表的行级元数据来源：每个智能体每个激活点一行，被抽中但缺席的也记；时点、版本线、补跑、预热等字段从激活表取，不在各表重复 <span class="ref">§10.3</span>。可得时点按行取激活表的 <code>info_cutoff</code>，该行只使用 <code>available_at</code> ≤ <code>info_cutoff</code> 的信息 <span class="ref">§10.3</span>。所有账户表都由事件日志生成；起点之前投资经历预跑产生的账户历史单独存放，标记 <code>seeded</code> <span class="ref">§10.3 §4.4</span>。字段见 5 节。</p>
+  <div class="grid g4">
+    <div class="card"><div class="ac-lbl">交易流水表</div><p style="margin:0;font-size:13px;color:var(--ink2)">每笔成交一行，含费用、印花税、是否强平 <code>forced</code>、FIFO 已实现盈亏。</p></div>
+    <div class="card"><div class="ac-lbl">出入金表</div><p style="margin:0;font-size:13px;color:var(--ink2)">每笔银证转账一行，含来源、理由、意向金额与实际金额。</p></div>
+    <div class="card"><div class="ac-lbl">账户快照表</div><p style="margin:0;font-size:13px;color:var(--ink2)">每人每日一行，含可用、可取、负债、维持担保比例、休眠标记。</p></div>
+    <div class="card"><div class="ac-lbl">持仓快照与战绩表</div><p style="margin:0;font-size:13px;color:var(--ink2)">持仓每人每股每日一行；战绩每人每期一行，含 TWR、MWR、超额。</p></div>
+  </div>
+
+  <h3 class="ac-h3">3.7 V4 战绩检验<small>§12.1 §12.2 §12.3</small></h3>
+  <p>V4 是验证体系里检验决策可信度的一层，其中战绩与出入金这部分由本模块提供数据 <span class="ref">§12.1</span>。它看下面几件事：</p>
+  <p><b>战绩分布。</b>亏损账户占比对照 CHFS 2013 的 70.4%；小账户跑输大账户，且主要输在选股 <span class="ref">§12.1 §2.1–§2.2</span>。在 2015 年回放中看大小账户收益差，并拆成择时和选股两部分；财富再分配本身要在闭环模式下才能检验 <span class="ref">§12.1</span>。</p>
+  <p><b>出入金方向与量级。</b>牛市净流入、熊市净流出，与证券交易结算资金同向变化 <span class="ref">§12.1</span>；对照数据源 〔需复核〕。</p>
+  <p><b>目标矩分三档。</b>预注册时为每个矩登记来源、时期、样本与档位 <span class="ref">§12.1 §11.4</span>。</p>
+  <ul>
+    <li><b>硬目标</b>：同期同市场的官方统计，包括两融余额变化、新开户数、证券交易结算资金、银证转账 〔需复核〕；CHFS 亏损账户占比只在对应时期算硬目标。总量只比方向与变化幅度的相关性，不比水平。“相对误差 ≤ 50%”只适用于这一档 <span class="ref">§12.1 §12.3</span>。</li>
+    <li><b>软目标</b>：其他时期或市场的文献结果，例如小户跑输、PGR &gt; PLR、注意力驱动买入。只要求方向与排序一致，给出模拟值与文献值区间，不算相对误差 <span class="ref">§12.1</span>。</li>
+    <li><b>无目标</b>：言行不一率、涨停买不进率、隔夜变卦率等。只报告并做合理性检查，不设及格线，标“无对照” <span class="ref">§12.1</span>。</li>
+  </ul>
+  <p><b>校准用的矩。</b>亏损账户占比、按账户规模分档的收益分位数、择时损失（TWR − MWR）、按牛熊阶段的净流入方向 <span class="ref">§12.2</span>。上面两条反馈路的步长就在这些矩上联合校准，方法是 MSM（模拟矩估计）<span class="ref">§12.2</span>。校准用过的矩在开发事件上拟合，V4 只在验收事件上检验，同一矩不在同段数据上既拟合又检验 <span class="ref">§12.1</span>。V4 结论按硬目标是否通过来下，软目标作补充证据 <span class="ref">§12.1</span>。V4 不通过时修内核（§6.3），并暂停交付决策表和账户类表 <span class="ref">§15.2</span>。另外，模拟战绩不代表任何真实投资者或策略，不得作为投资建议展示 <span class="ref">§16.5</span>，也不能用来证明哪类散户更赚钱 <span class="ref">§10.2</span>。</p>
+  <h3 class="ac-h3">3.8 账户状态流转图<small>点击方框看说明</small></h3>
+  <p>把上面几节串起来：一天之内，成交和出入金被追加进事件日志，收盘后结算、生成快照、计算战绩，战绩写回记忆；第二天智能体读着新的账户摘要做决定。下方三条支线是强平、休眠和分叉。</p>
+  <div class="card">
+  <svg class="ac-svg" id="acStateSvg" viewBox="0 0 1000 400" role="img" aria-label="账户状态流转图">
+    <defs><marker id="acArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ac-arrhead"/></marker></defs>
+    <path class="ac-ln flowline" d="M915,50 V30 H255 V48" marker-end="url(#acArr)"/>
+    <text class="ac-tx2" x="585" y="22" text-anchor="middle">次日：agents 读账户摘要 → 新意向 → market 成交</text>
+    <path class="ac-ln" d="M160,85 H183" marker-end="url(#acArr)"/>
+    <path class="ac-ln" d="M325,85 H348" marker-end="url(#acArr)"/>
+    <path class="ac-ln" d="M490,85 H513" marker-end="url(#acArr)"/>
+    <path class="ac-ln" d="M655,85 H678" marker-end="url(#acArr)"/>
+    <path class="ac-ln" d="M820,85 H843" marker-end="url(#acArr)"/>
+    <g class="ac-node" data-k="seed"><rect x="20" y="50" width="140" height="70" rx="12"/><text x="90" y="80" text-anchor="middle">初始状态</text><text class="ac-tx2" x="90" y="100" text-anchor="middle">经历预跑 §4.4</text></g>
+    <g class="ac-node" data-k="book"><rect x="185" y="50" width="140" height="70" rx="12"/><text x="255" y="80" text-anchor="middle">记账</text><text class="ac-tx2" x="255" y="100" text-anchor="middle">Fill · CashFlow</text></g>
+    <g class="ac-node" data-k="settle"><rect x="350" y="50" width="140" height="70" rx="12"/><text x="420" y="80" text-anchor="middle">日终结算</text><text class="ac-tx2" x="420" y="100" text-anchor="middle">可卖 · 可用 · 可取</text></g>
+    <g class="ac-node" data-k="snap"><rect x="515" y="50" width="140" height="70" rx="12"/><text x="585" y="80" text-anchor="middle">每日快照</text><text class="ac-tx2" x="585" y="100" text-anchor="middle">账户 · 持仓</text></g>
+    <g class="ac-node" data-k="perf"><rect x="680" y="50" width="140" height="70" rx="12"/><text x="750" y="80" text-anchor="middle">战绩</text><text class="ac-tx2" x="750" y="100" text-anchor="middle">TWR · MWR · 超额</text></g>
+    <g class="ac-node" data-k="mem"><rect x="845" y="50" width="140" height="70" rx="12"/><text x="915" y="80" text-anchor="middle">记忆与慢变量</text><text class="ac-tx2" x="915" y="100" text-anchor="middle">κ · γ §6.4</text></g>
+    <path class="ac-ln ac-warnln" d="M420,120 V198" marker-end="url(#acArr)"/>
+    <text class="ac-tx2" x="428" y="160">担保比例跌破平仓线</text>
+    <path class="ac-ln ac-warnln" d="M330,232 H265 V122" marker-end="url(#acArr)"/>
+    <text class="ac-tx2" x="273" y="168">强平卖单</text>
+    <text class="ac-tx2" x="273" y="184">经 market 成交</text>
+    <path class="ac-ln" d="M625,120 L668,198" marker-end="url(#acArr)"/>
+    <path class="ac-ln" d="M645,120 C700,160 860,150 885,198" marker-end="url(#acArr)"/>
+    <g class="ac-node" data-k="liq"><rect x="330" y="200" width="150" height="64" rx="12"/><text x="405" y="228" text-anchor="middle">追保 / 强平</text><text class="ac-tx2" x="405" y="248" text-anchor="middle">§8.4 §6.5</text></g>
+    <g class="ac-node" data-k="dorm"><rect x="600" y="200" width="150" height="64" rx="12"/><text x="675" y="228" text-anchor="middle">休眠</text><text class="ac-tx2" x="675" y="248" text-anchor="middle">保留 · 可回归</text></g>
+    <g class="ac-node" data-k="fork"><rect x="800" y="200" width="170" height="64" rx="12"/><text x="885" y="228" text-anchor="middle">情景分叉</text><text class="ac-tx2" x="885" y="248" text-anchor="middle">新 run_id</text></g>
+    <path class="ac-ln ac-dash" d="M90,120 V328" marker-end="url(#acArr)"/>
+    <text class="ac-tx2" x="96" y="300">seeded</text>
+    <path class="ac-ln ac-dash" d="M205,120 V328" marker-end="url(#acArr)"/>
+    <text class="ac-tx2" x="211" y="300">追加写入</text>
+    <path class="ac-ln flowline" d="M560,330 V122" marker-end="url(#acArr)"/>
+    <text class="ac-tx2" x="566" y="300">按序重放</text>
+    <g class="ac-node" data-k="log"><rect x="20" y="330" width="960" height="56" rx="12"/><text x="500" y="356" text-anchor="middle">账户事件日志（只追加）</text><text class="ac-tx2" x="500" y="375" text-anchor="middle">委托 · 拒单 · 成交 · 费用 · 公司行动 · 出入金 · 强平 §8.4</text></g>
+  </svg>
+  <div class="ac-nodeinfo" id="acNodeInfo"><b>点击图中方框</b>，这里显示该环节做什么、依据哪条文档。</div>
+  </div>
+</section>
+<section id="s4" class="reveal">
+  <h2><span class="num">04</span>走一遍示例</h2>
+  <p class="sub">一个示例账户 5 个交易日的经历：买入、T+1 解锁、追涨入金、下跌割肉、出金离场。每一步的账户状态和 TWR、MWR 都由页面脚本按记账规则现场算出。</p>
+  <p>人物是虚构的“示例散户甲”，股票是虚构的“示例股A”，所有价格、金额、费用都是<b>示例数据</b>。费用本应由 market 按 §8.1 费率算好再交给 accounts，这里为了让数字可核对，按下面的示例口径在页面里算：佣金万 2.5、每笔最低 5 元，过户费 0.001%，卖出印花税 0.05% <span class="ref">§8.1</span>，示例中省略经手费与证管费；这些费率在 §8.1 都标〔需复核〕。出入金的 size 档位折算比例、现金缓冲，文档都没有给数字，示例里用的 60% 与 5 万元缓冲只是演示参数。出入金统一按“当日开盘前到账”计入收益率切段。</p>
+  <div class="card glow">
+    <div class="ac-stepbar">
+      <button class="btn" id="acPrev" type="button">上一步</button>
+      <button class="btn pri" id="acNext" type="button">下一步</button>
+      <button class="btn" id="acPlay" type="button">自动播放</button>
+      <span class="ac-pos" id="acPos">0 / 6</span>
+    </div>
+    <div class="ac-dots" id="acDots"></div>
+    <h3 style="margin:0 0 10px;font-size:16px" id="acStepTitle">—</h3>
+    <div class="ac-step">
+      <div class="ac-ipo">
+        <div class="card"><div class="ac-lbl">输入</div><p id="acIn">—</p></div>
+        <div class="card"><div class="ac-lbl">处理</div><p id="acProc">—</p></div>
+        <div class="card"><div class="ac-lbl">输出</div><p id="acOut">—</p></div>
+        <div class="card"><div class="ac-lbl">对应文档条目</div><p id="acRef">—</p></div>
+      </div>
+      <div>
+        <div class="ac-lbl">账户状态（日终）<span class="ac-tag">示例数据</span></div>
+        <div class="ac-kv" id="acKv"></div>
+        <div class="ac-perf">
+          <div><b id="acTwr">—</b><span>累计 TWR</span></div>
+          <div><b id="acMwr">—</b><span>区间 MWR</span></div>
+          <div><b id="acGap">—</b><span>择时损失 TWR−MWR</span></div>
+        </div>
+        <svg class="ac-svg ac-mini" id="acChart" viewBox="0 0 520 170" role="img" aria-label="示例账户总资产与TWR净值"></svg>
+        <div class="ac-lbl" style="margin-top:8px">事件日志（只追加）</div>
+        <div class="ac-log" id="acLog"></div>
+      </div>
+    </div>
+  </div>
+  <p>读完六步可以看到：这套持仓本身最后是赚的（TWR 为正），但示例散户甲自己算账却是亏的（MWR 为负）。原因是第 3 天在高位多投了钱，第 5 天在低位把钱撤走，错过了反弹。这个差值就是设计文档要求单独报告的择时损失 <span class="ref">§8.4 §10.2</span>，也是 V4 校准用的矩之一 <span class="ref">§12.2</span>。</p>
+</section>
+<section id="s5" class="reveal">
+  <h2><span class="num">05</span>接口与数据结构</h2>
+  <p class="sub">只列文档里写明的字段。<code>Fill</code> 和 <code>CashFlow</code> 在 schemas 里有类型名，但字段文档未定义，这里用交付表的列来对照。</p>
+  <h3 class="ac-h3">5.1 进出本模块的类型</h3>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>类型</th><th>方向</th><th>字段</th><th>来源</th></tr></thead>
+    <tbody>
+      <tr><td><code>FundingIntent</code></td><td>agents → accounts</td><td><code>action</code>: deposit / withdraw / none；<code>size</code>: tiny / small / half / large / all（转入相对场外资金，转出相对账户资产）；<code>reason</code>: 最多 60 字。每次激活至多一条</td><td><span class="ref">§6.3</span></td></tr>
+      <tr><td><code>Fill</code></td><td>market → accounts</td><td>文档未定义类型字段；已知含佣金与印花税，费用已算好。交易流水表的列可作参照</td><td><span class="ref">§8.4 §10.3</span></td></tr>
+      <tr><td><code>CashFlow</code></td><td>accounts 产出</td><td>文档未定义类型字段；出入金表的列可作参照</td><td><span class="ref">§8.4 §10.3</span></td></tr>
+      <tr><td>账户只读视图</td><td>accounts → market</td><td>文档未定义字段；按 §8.1 的检查项推断至少需要可卖数量与可用资金（交易权限在人设卡 <code>permissions</code>，§4.1）</td><td><span class="ref">§3.3</span></td></tr>
+      <tr><td>账户摘要</td><td>accounts → agents</td><td>总资产、可用资金、仓位、各持仓浮盈亏；约 100 token，不持久化</td><td><span class="ref">§6.4</span></td></tr>
+      <tr><td><code>PersonaCard</code> 相关字段</td><td>population → accounts</td><td><code>outside_funds</code>（场外资金档位）、<code>account_assets</code>、<code>permissions</code>（chinext / star / bse / margin）；<code>offbook_leverage</code>（场外配资：倍数、警戒线、平仓线，可为空）；<code>seed_flags</code> 中的 <code>life_asset_conflict</code>（经历与资产冲突，§4.4）</td><td><span class="ref">§4.1</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>激活表的 <code>activation_id, persona_id, run_id, line_id, sim_time, phase, trigger, status, absent_reason, info_cutoff, feed_len, backfilled, warmup</code> 是各表的行级元数据来源，§10.3 写“其余各表带 <code>activation_id</code>” <span class="ref">§10.3</span>。下表四张账户类表的字段清单里没有列 <code>activation_id</code>，这里照文档字段列出，不自行添加，见 8 节。</p>
+  <h3 class="ac-h3">5.2 四张账户类表的列<small>Parquet，额外按 sim_date 关联 §10.3</small></h3>
+  <div class="tabs">
+    <div class="tab-bar"><button data-t="tr" class="on">交易流水表</button><button data-t="cf">出入金表</button><button data-t="as">账户快照表</button><button data-t="pp">持仓快照与战绩表</button></div>
+    <div class="tab-pane on" data-t="tr"><div class="tbl-wrap"><table class="tbl"><tbody>
+      <tr><td><code>trade_id, persona_id, run_id, sim_time</code></td><td>主键与关联键；成交按 <code>sim_time</code> 记时间</td></tr>
+      <tr><td><code>asset, side, qty, price</code></td><td>标的、方向、数量、成交价</td></tr>
+      <tr><td><code>fee, stamp_tax</code></td><td>费用与印花税，由 market 算好</td></tr>
+      <tr><td><code>order_type, decision_ref</code></td><td>委托类型；指回产生它的决策</td></tr>
+      <tr><td><code>forced</code></td><td>强平标记</td></tr>
+      <tr><td><code>realized_pnl</code></td><td>已实现盈亏，FIFO 成本 <span class="ref">§8.4</span></td></tr>
+    </tbody></table></div></div>
+    <div class="tab-pane" data-t="cf"><div class="tbl-wrap"><table class="tbl"><tbody>
+      <tr><td><code>flow_id, persona_id, run_id, sim_date</code></td><td>主键与关联键</td></tr>
+      <tr><td><code>direction, amount</code></td><td>方向与实际金额</td></tr>
+      <tr><td><code>source</code></td><td>计划性 / 行情驱动 / 情景注入</td></tr>
+      <tr><td><code>reason, intent_amount</code></td><td>理由；意向金额（与 <code>amount</code> 之差即被内核限额砍掉的部分）</td></tr>
+    </tbody></table></div></div>
+    <div class="tab-pane" data-t="as"><div class="tbl-wrap"><table class="tbl"><tbody>
+      <tr><td><code>persona_id, run_id, sim_date</code></td><td>每人每日一行</td></tr>
+      <tr><td><code>total_assets, cash, available_cash, withdrawable_cash</code></td><td>总资产、现金、可用资金、可取资金</td></tr>
+      <tr><td><code>market_value, margin_debt, maintenance_ratio</code></td><td>持仓市值、融资负债、维持担保比例</td></tr>
+      <tr><td><code>position_ratio, n_holdings</code></td><td>仓位、持股只数</td></tr>
+      <tr><td><code>outside_funds, dormant</code></td><td>场外资金、休眠标记</td></tr>
+    </tbody></table></div></div>
+    <div class="tab-pane" data-t="pp"><div class="tbl-wrap"><table class="tbl"><tbody>
+      <tr><td colspan="2"><b>持仓快照</b></td></tr>
+      <tr><td><code>persona_id, run_id, sim_date, asset</code></td><td>每人每股每日一行</td></tr>
+      <tr><td><code>qty, sellable_qty, cost_basis</code></td><td>总量、可卖量、成本（口径见 8 节）</td></tr>
+      <tr><td><code>market_price, unrealized_pnl, holding_days</code></td><td>收盘价、浮动盈亏、持有天数</td></tr>
+      <tr><td colspan="2"><b>战绩</b></td></tr>
+      <tr><td><code>persona_id, run_id, period</code></td><td>每人每期一行；期的切法文档未定义</td></tr>
+      <tr><td><code>twr, mwr, excess_vs_csi300, max_drawdown</code></td><td>两种收益率、相对沪深 300 超额、最大回撤</td></tr>
+      <tr><td><code>win_rate, profit_loss_ratio, turnover</code></td><td>胜率、盈亏比、换手</td></tr>
+      <tr><td><code>realized_pnl, net_flow</code></td><td>已实现盈亏、净出入金</td></tr>
+    </tbody></table></div></div>
+  </div>
+  <h3 class="ac-h3">5.3 示例记录<small>示意，未实现</small></h3>
+  <p>下面是 4 节第 3 天那笔入金，从意向到入账的样子。字段名取自 §6.3 与 §10.3，数值是示例数据；<code>run_id</code> 与 <code>flow_id</code> 的格式文档未定义，这里随手写。</p>
+  <pre class="code" data-lang="json 示意，未实现"><span class="c">// FundingIntent，agents 产出（§6.3）</span>
+{ <span class="k">"action"</span>: <span class="s">"deposit"</span>, <span class="k">"size"</span>: <span class="s">"large"</span>, <span class="k">"reason"</span>: <span class="s">"行情好，再转点钱进来"</span> }
+
+<span class="c">// 出入金表一行（§10.3），由内核限额后的 CashFlow 写成</span>
+{ <span class="k">"flow_id"</span>: <span class="s">"f_demo_0003"</span>, <span class="k">"persona_id"</span>: <span class="s">"p_demo_jia"</span>, <span class="k">"run_id"</span>: <span class="s">"r_demo"</span>,
+  <span class="k">"sim_date"</span>: <span class="s">"示例日3"</span>, <span class="k">"direction"</span>: <span class="s">"deposit"</span>,
+  <span class="k">"amount"</span>: <span class="n">50000</span>, <span class="k">"intent_amount"</span>: <span class="n">60000</span>,
+  <span class="k">"source"</span>: <span class="s">"行情驱动"</span>, <span class="k">"reason"</span>: <span class="s">"行情好，再转点钱进来"</span> }</pre>
+</section>
+<section id="s6" class="reveal">
+  <h2><span class="num">06</span>设计取舍与已定决定</h2>
+  <p class="sub">每条写清选了什么、放弃了什么、为什么。v0.3 里来自架构讨论、与账户有关的已定决定单独用框标出。</p>
+  <p><b>开放账户，而非封闭账户。</b>选择让钱可以在场外资金和证券账户之间流动，放弃了“每人一笔固定本金跑到底”的简单做法。理由是封闭账户几年后规模和持仓分布会偏离现实 <span class="ref">§8.4</span>，而且“高位入金、低位离场”本身就是要模拟的散户行为。代价是多了一条需要校准的现金流，总量要对照结算资金和银证转账数据 〔需复核〕 <span class="ref">§8.4</span>。</p>
+  <p><b>大模型只给方向和档位，金额由内核定。</b><code>FundingIntent</code> 只有 action、size、reason 三个字段 <span class="ref">§6.3</span>，放弃了让大模型直接写金额。理由是金额要受场外资金余额、现金缓冲和人设参数约束 <span class="ref">§8.4</span>，交给规则内核既可校准也不会出现“转入比存款还多”的情况。计划性出入金干脆不调用大模型 <span class="ref">§8.4</span>，省调用、可复现。</p>
+  <p><b>事件日志为准，快照只是缓存。</b>选择只追加的事件日志，账户状态由重放得到，与运行清单一一对应 <span class="ref">§8.4 §9.4</span>；放弃了直接改写余额表的做法。理由是可重放、可分叉、可审计 <span class="ref">§3.1</span>，战绩算错时能从日志重算 <span class="ref">§8.4</span>。代价是存储更多、重放要时间。</p>
+  <p><b>TWR 与 MWR 并列报告。</b>只报 TWR 会看不到择时损失，只报 MWR 又分不清是持仓选得差还是时机差。两者都报，差值单列 <span class="ref">§8.4 §10.2</span>。</p>
+  <p><b>两套成本口径并存。</b>已实现盈亏按 FIFO，便于和交易流水逐笔对账；提示词里给摊薄成本 〔需复核〕，因为散户的回本心态锚定在 App 显示的数 <span class="ref">§8.4</span>。放弃了单一口径的整洁，换来行为上的真实感；代价是 <code>cost_basis</code> 用哪套要说清楚（见 8 节）。</p>
+  <p><b>休眠而不删除。</b>放弃清理“死账户”带来的省事，避免幸存者偏差 <span class="ref">§8.4</span>。</p>
+  <p><b>战绩反馈走两条路并联合校准。</b>大模型读记忆和内核更新慢变量同时存在，放弃了只走其中一条。理由是前者影响说法，后者影响可校准的决策参数；联合校准、不重复计算 <span class="ref">§6.4</span>。</p>
+  <p><b>按比例预跑，而非按金额预跑。</b>预跑只记仓位权重、收益率和出入金占资产的比例，期末缩放到抽样档位金额 <span class="ref">§4.4</span>。放弃了“按绝对金额从入市那年一路算到起点”的写法，因为账户规模是抽样主切片，预跑盈亏会让期末资产偏离抽样档位 <span class="ref">§4.4</span>。代价是整手与最低佣金在预跑期不生效，只从仿真起点开始；经历和资产对不上时要重抽，重抽仍不行就标 <code>life_asset_conflict</code> <span class="ref">§4.4</span>。</p>
+  <p><b>品种范围收窄到股票加约 10 只 ETF。</b>放弃可转债、北交所、期权、港股通，留到 Phase 2 以后；逆回购与场外基金不建模，闲置资金不计息 <span class="ref">§8.1</span>。账户结构因此只有现金、股票、ETF 和两融负债；代价是保守型账户收益略被低估，报告里注明 <span class="ref">§8.1</span>。</p>
+  <div class="callout decide"><b class="t">已定（v0.3 §8.4，来自架构讨论 A8）</b>两融资格按规则判定（资产满 50 万元并持续 20 个交易日、交易满 6 个月 〔需复核〕），参与比例按账户档作 IPF 边际；场外配资用 <code>offbook_leverage</code> 表示，平仓线紧于两融，历史推演默认开、持续运行与假设情景默认关，开关记入运行清单；强平以市价进入下一个成交判定点，跌停卖不掉，强平写回记忆。杠杆人群样本小，踩踏结论只作机制展示 <span class="ref">§8.4</span>。</div>
+  <div class="callout decide"><b class="t">已定（v0.3 §4.4、§5.5，来自架构讨论 A1、A8）</b>价格存不复权日线加复权因子表（以除权除息日为 <code>available_at</code>），智能体看前复权，<b>收益与战绩统一用后复权</b> <span class="ref">§5.5</span>。行情只回溯到 2005 年，2005 年以前的经历只写进人生骨架作文字背景，不在行情上预跑 <span class="ref">§4.4</span>。2005 年以后的投资经历按比例预跑，期末缩放到抽样档位 <span class="ref">§4.4</span>。</div>
+  <div class="callout decide"><b class="t">已定（v0.3 §6.2、§9.1，来自架构讨论 A4、A10）</b>解析失败时换种子重试，最多 2 次；仍失败则该智能体当日记为“未激活”、原因“解析失败”，不填默认值，也不沿用上期信念 <span class="ref">§6.2</span>。拒答与盘前调用超时同样记未激活，缺席者照样记入激活表 <span class="ref">§6.2 §9.1 §10.3</span>。未激活者保持持仓，不发帖 <span class="ref">§9.1</span>；对账户而言，当天不产出 <code>FundingIntent</code> 与委托。日终是否照常结算、计划性出入金是否照常执行，文档没有写，见 8 节。</div>
+  <p>A2、A3 讲数据采集与事件卡，不改账户的记账规则，本页不单列。</p>
+</section>
+<section id="s7" class="reveal">
+  <h2><span class="num">07</span>与其他模块的关系</h2>
+  <p class="sub">上游给它成交、意向和初值，下游拿它的视图、摘要和表；和 market 的边界最需要讲清。</p>
+  <div class="grid g3">
+    <div class="card"><div class="ac-lbl">上游</div>
+      <p style="margin:0;font-size:13.5px;color:var(--ink2)"><a href="mod-market.html">market</a>：<code>Fill</code>，费用已算好。<br><a href="mod-agents.html">agents</a>：<code>FundingIntent</code>。<br><a href="mod-population.html">population</a>：人设卡的 <code>outside_funds</code>、权限，人生骨架与投资经历预跑结果 <span class="ref">§4.1 §4.4</span>。<br><a href="mod-data.html">data</a>：收盘价、复权与公司行动。<br><a href="mod-orchestrator.html">orchestrator</a>：<code>run_id</code> 与读写路径。</p></div>
+    <div class="card"><div class="ac-lbl">下游</div>
+      <p style="margin:0;font-size:13.5px;color:var(--ink2)"><a href="mod-market.html">market</a>：账户只读视图，用于合规检查 <span class="ref">§8.1</span>。<br><a href="mod-agents.html">agents</a>：账户摘要进工作记忆，战绩摘要与显著事件进情景记忆，慢变量更新 <span class="ref">§6.4</span>。<br><a href="mod-outputs.html">outputs</a>：四张账户类表 <span class="ref">§10.3</span>。<br><a href="mod-validation.html">validation</a>：V4 用的战绩与出入金矩 <span class="ref">§12.1</span>。</p></div>
+    <div class="card"><div class="ac-lbl">边界</div>
+      <p style="margin:0;font-size:13.5px;color:var(--ink2)">不判定成交、不算费用、不检查合规（market 的事）。不决定要不要出入金（意向来源的事）。§8.4 写的是“内核”按场外资金余额、现金缓冲与人设参数限定实际金额，这个限额落在 accounts 还是 agents 的内核，文档未写。不写帖子、不做信念更新。类型定义在 <a href="mod-schemas.html">schemas</a>。</p></div>
+  </div>
+  <p>和 market 的分工具体到一天之内：market 先按“交易时段、权限、T+1 可卖量、整手与单笔上限、涨跌幅与价格笼子、风险警示股买入上限、资金与两融额度”的顺序检查委托 <span class="ref">§8.1</span>，其中可卖量和资金要读 accounts 的只读视图（视图字段文档未列，权限来自人设卡 <code>permissions</code> <span class="ref">§3.3 §4.1</span>）；不合规就拒单并计数，不自动修正 <span class="ref">§8.1</span>。成交后 market 输出 <code>Fill</code>，accounts 只负责记账。订单只在盘前激活产生，盘中检查点只允许 <code>chase</code>；成交在收盘后按 T 日行情判定，之后结算、出快照；收盘后与晚间激活只出 <code>BeliefUpdate</code> 和“明日打算”，不出订单，也不出 <code>FundingIntent</code> <span class="ref">§3.4 §6.1</span>。非交易日不结算 <span class="ref">§3.4</span>。一天完整的顺序见 <a href="flow-day.html">一天的流程</a>，一个人跨多日的经历见 <a href="flow-journey.html">个体旅程</a>，不同类型散户对同样涨跌的不同反应见 <a href="sim-personas.html">人设模拟</a>。</p>
+</section>
+<section id="s8" class="reveal">
+  <h2><span class="num">08</span>开放问题</h2>
+  <p class="sub">文档里还没定的数字、口径，以及标了〔需复核〕的条目。</p>
+  <div class="callout todo"><b class="t">未定</b>
+  <ul>
+    <li>TWR 的切段与计息约定（出入金算开盘前还是收盘后到账）、MWR 的求解方法与年化口径；战绩表 <code>period</code> 怎么切。</li>
+    <li><code>FundingIntent.size</code> 各档折算比例、现金缓冲多少、入场与离场意愿的函数形式与系数 <span class="ref">§8.4</span>。</li>
+    <li>休眠的判定：“资产转空”和“长期不入金”的具体阈值；休眠账户回归的触发方式 <span class="ref">§8.4</span>。</li>
+    <li>显著事件的“个人阈值”怎么定；κ、γ 慢变量的步长（只说由 V4 定）<span class="ref">§6.4 §12.2</span>。</li>
+    <li><code>Fill</code>、<code>CashFlow</code>、账户只读视图的字段；<code>total_assets</code> 是否扣除融资负债。</li>
+    <li>复权口径的衔接：§5.5 规定战绩用后复权，§8.4 在除权除息日调整数量和成本；持仓快照的 <code>cost_basis</code> 是 FIFO、摊薄成本，还是复权后的成本，文档没有写。</li>
+    <li>“未激活”的智能体（解析失败、拒答、超时，§6.2 §9.1），账户是否照常日终结算、计划性出入金是否照常执行（计划性不调用大模型，按理不受影响，但文档没写）。</li>
+    <li>§10.3 写“其余各表带 <code>activation_id</code>”，但四张账户类表的字段清单没有列它；计划性出入金、日终结算、强平这类不来自激活的行如何关联激活表，文档没有写。</li>
+    <li>场外配资各时期覆盖率、倍数与警戒线的具体取值；两融开通率参数 <span class="ref">§8.4 §8.1</span>。</li>
+    <li>重抽经历的“多次”具体几次后标 <code>life_asset_conflict</code> <span class="ref">§4.4</span>。</li>
+    <li>月末战绩摘要里“相对沪深 300 超额”之外，中证全指作为基准用在哪些指标上 <span class="ref">§8.4</span>。</li>
+  </ul>
+  <b class="t" style="margin-top:10px">〔需复核〕</b>
+  <ul>
+    <li>提示词中的成本价用券商 App 摊薄成本 <span class="ref">§8.4</span>。</li>
+    <li>两融资格“资产满 50 万元并持续 20 个交易日、交易满 6 个月” <span class="ref">§8.4</span>；§8.1 权限表写的是“50 万元 + 6 个月”，两处写法不一致。两融平仓线“券商常见 130%” <span class="ref">§8.4</span>。两融参与比例的目标取交易所或中证金融的信用账户数 <span class="ref">§8.4</span>。</li>
+    <li>银证转账只在交易日办理，非交易日的出入金意向顺延到下一交易日 <span class="ref">§3.4</span>。</li>
+    <li>费用费率：印花税 0.05%（2023-08-28 起，卖方）、经手费 0.00341%、证管费 0.002%、过户费 0.001%、佣金上限 0.3% <span class="ref">§8.1</span>。</li>
+    <li>出入金总量的对照数据源：投保基金证券交易结算资金、银证转账数据 <span class="ref">§8.4 §12.1</span>。</li>
+  </ul>
+  </div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+  'use strict';
+  /* ---------- 3.8 状态图：点击看说明 ---------- */
+  var INFO = {
+    seed:['初始状态','持仓、成本与现金来自投资经历预跑（规则内核在真实历史上跑到起点，不调用大模型；行情只回溯到 2005 年）。预跑按比例进行，期末缩放到抽样档位金额，整手与最低佣金从起点生效；经历与资产对不上时重抽，多次不行标 life_asset_conflict。场外资金按收入与人生骨架初始化。起点前的账户历史单独存放并标记 seeded。','§4.4 §9.2 §10.3'],
+    book:['记账','把 market 给出的 Fill（费用已算好，成交在收盘后按 T 日行情判定）和三种来源的出入金追加进事件日志。当日买入只增加持仓总量，不增加可卖量。','§8.4 §3.4'],
+    settle:['日终结算','下一交易日开盘前把当日买入转为可卖；可用资金 = 现金 − 当日已冻结买单；当日卖出款当日可买、次日才可取。非交易日不结算、不出快照，出入金意向顺延到下一交易日〔需复核〕。','§8.4 §3.4'],
+    snap:['每日快照','收盘结算后生成账户快照与持仓快照。可得时点按行取激活表的 info_cutoff。快照只是缓存。','§8.4 §10.3'],
+    perf:['战绩','TWR 剔除出入金影响，MWR 计入投入时机，两者之差是择时损失；基准沪深 300、中证全指；已实现盈亏按 FIFO。','§8.4 §10.2'],
+    mem:['记忆与慢变量','月末（Tier-A 每周）战绩摘要写成情景记忆，显著事件当日写入；内核按自我归因与赌场资金效应更新 κ、γ，与大模型读记忆一路联合校准。','§6.4'],
+    liq:['追保 / 强平','两融维持担保比例跌破平仓线（券商常见 130%〔需复核〕）先追保，失败则强平；场外配资按合同平仓线（紧于两融），同规则强平。强平卖单以市价进入下一个成交判定点，跌停时卖不掉；强平写回记忆，影响之后的发言与杠杆意愿；交易流水 forced 标记。','§8.4 §8.2 §6.5 §10.3'],
+    dorm:['休眠','资产转空且长期无入金的账户标为休眠：留在人群里、照常读信息、可在下一轮牛市回归，不删除，避免幸存者偏差。','§8.4'],
+    fork:['情景分叉','从某日快照分叉做情景实验，每条分叉有自己的 run_id；持续运行时账户跨日连续不重置。','§8.4 §3.1'],
+    log:['账户事件日志','所有委托、拒单、成交、费用、公司行动、出入金都写入只追加的日志；重放日志即可重建账户状态，与运行清单一一对应。','§8.4 §9.4']
+  };
+  var svg = document.getElementById('acStateSvg');
+  var box = document.getElementById('acNodeInfo');
+  if (svg && box) {
+    var nodes = svg.querySelectorAll('.ac-node');
+    var show = function(g){
+      var k = g.getAttribute('data-k'); var d = INFO[k]; if (!d) return;
+      for (var i=0;i<nodes.length;i++) nodes[i].classList.remove('on');
+      g.classList.add('on');
+      box.textContent = '';
+      var b = document.createElement('b'); b.textContent = d[0] + '：'; box.appendChild(b);
+      box.appendChild(document.createTextNode(d[1] + ' '));
+      var r = document.createElement('span'); r.className = 'ref'; r.textContent = d[2]; box.appendChild(r);
+    };
+    for (var i=0;i<nodes.length;i++) (function(g){
+      g.setAttribute('tabindex','0'); g.setAttribute('role','button');
+      g.addEventListener('click', function(){ show(g); });
+      g.addEventListener('keydown', function(e){ if (e.key==='Enter'||e.key===' '){ e.preventDefault(); show(g); } });
+    })(nodes[i]);
+  }
+  /* ---------- 4 节步进演示：示例数据，按记账规则现场计算 ---------- */
+  var R2 = function(x){ return Math.round(x*100)/100; };
+  var fin = function(x){ return typeof x==='number' && isFinite(x); };
+  var COMM = 0.00025, COMM_MIN = 5, TRANSFER = 0.00001, STAMP = 0.0005; // 示例口径，§8.1
+  var SIZE_LARGE = 0.6, BUFFER = 50000;                                 // 演示参数，文档未给
+  var DAYS = [
+    {d:0, close:10.00},
+    {d:1, close:10.50, fills:[{side:'buy', qty:2000, px:10.20}]},
+    {d:2, close:11.00},
+    {d:3, close:11.20, flows:[{dir:'deposit', reason:'行情好，再转点钱进来'}], fills:[{side:'buy', qty:4000, px:11.30}]},
+    {d:4, close:9.80, fills:[{side:'sell', qty:5000, px:9.90}]},
+    {d:5, close:10.60, flows:[{dir:'withdraw', reason:'亏怕了，钱先转回银行'}]}
+  ];
+  function feeOf(side, amt){
+    var c = Math.max(COMM_MIN, amt*COMM), t = amt*TRANSFER, s = side==='sell' ? amt*STAMP : 0;
+    return {comm:R2(c), transfer:R2(t), stamp:R2(s), total:R2(c+t+s)};
+  }
+  function mwrOf(cfs, T){
+    if (!cfs.length || !(T>0)) return null;
+    var f = function(m){ var s=0; for (var i=0;i<cfs.length;i++) s += cfs[i].cf/Math.pow(1+m, cfs[i].t); return s; };
+    var lo=-0.5, hi=0.5, flo=f(lo), fhi=f(hi);
+    if (!fin(flo) || !fin(fhi) || flo*fhi > 0) return null;
+    for (var k=0;k<200;k++){ var mid=(lo+hi)/2, fm=f(mid); if (!fin(fm)) return null; if (flo*fm<=0){ hi=mid; } else { lo=mid; flo=fm; } }
+    var m=(lo+hi)/2, out=Math.pow(1+m, T)-1;
+    return fin(out) ? out : null;
+  }
+  function simulate(){
+    var st = {cash:50000, qty:3000, sellable:3000, lots:[{qty:3000, cost:30000}], dilNet:30000,
+              outside:100000, withdrawable:50000, V:null, twr:1, peak:1, mdd:0, r:null};
+    var log = [], cfs = [], states = [];
+    for (var i=0;i<DAYS.length;i++){
+      var D = DAYS[i], info = {flows:[], fills:[]}, F = 0, Vprev = st.V;
+      if (D.d === 0) {
+        log.push('d0 INIT seeded 示例股A 3000@10.00 cash=50000');
+      } else {
+        st.sellable = st.qty; st.withdrawable = st.cash;               // T+1：开盘前解锁；昨日卖出款转为可取
+        (D.flows||[]).forEach(function(fl){
+          var x = {dir:fl.dir, reason:fl.reason};
+          if (fl.dir === 'deposit') {
+            x.intent = R2(st.outside*SIZE_LARGE); x.cap = Math.max(0, R2(st.outside-BUFFER));
+            x.amt = Math.min(x.intent, x.cap); st.cash = R2(st.cash+x.amt); st.outside = R2(st.outside-x.amt);
+            st.withdrawable = R2(st.withdrawable+x.amt); F += x.amt;
+          } else {
+            var base = fin(Vprev) ? Vprev : 0;
+            x.intent = R2(base*SIZE_LARGE); x.cap = Math.max(0, st.withdrawable);
+            x.amt = Math.min(x.intent, x.cap); st.cash = R2(st.cash-x.amt); st.outside = R2(st.outside+x.amt);
+            st.withdrawable = R2(st.withdrawable-x.amt); F -= x.amt;
+          }
+          info.flows.push(x);
+          log.push('d'+D.d+' CASHFLOW '+x.dir+' amount='+x.amt.toFixed(2)+' intent='+x.intent.toFixed(2)+' src=行情驱动');
+        });
+        (D.fills||[]).forEach(function(fi){
+          var amt = R2(fi.qty*fi.px), fee = feeOf(fi.side, amt), x = {side:fi.side, qty:fi.qty, px:fi.px, amt:amt, fee:fee, ok:true};
+          if (fi.side === 'buy') {
+            var cost = R2(amt+fee.total);
+            if (cost > st.cash) { x.ok = false; }
+            else { st.cash = R2(st.cash-cost); st.qty += fi.qty; st.lots.push({qty:fi.qty, cost:cost}); st.dilNet = R2(st.dilNet+cost);
+                   st.withdrawable = Math.min(st.withdrawable, st.cash); x.cost = cost; }
+          } else {
+            if (fi.qty > st.sellable) { x.ok = false; }
+            else {
+              var proceeds = R2(amt-fee.total), need = fi.qty, out = 0;
+              while (need > 0 && st.lots.length) {
+                var L = st.lots[0], take = Math.min(need, L.qty), part = L.qty>0 ? L.cost*take/L.qty : 0;
+                out += part; L.cost -= part; L.qty -= take; need -= take; if (L.qty === 0) st.lots.shift();
+              }
+              x.proceeds = proceeds; x.fifoCost = R2(out); x.realized = R2(proceeds-out);
+              st.cash = R2(st.cash+proceeds); st.qty -= fi.qty; st.sellable -= fi.qty;
+              st.dilNet = st.qty>0 ? R2(st.dilNet-proceeds) : 0;
+            }
+          }
+          info.fills.push(x);
+          log.push('d'+D.d+' FILL '+fi.side+' '+fi.qty+'@'+fi.px.toFixed(2)+' fee='+fee.total.toFixed(2)+(x.realized!=null?' realized='+x.realized.toFixed(2):'')+(x.ok?'':' REJECTED'));
+        });
+      }
+      st.mv = R2(st.qty*D.close); st.V = R2(st.cash+st.mv); st.available = st.cash;
+      st.withdrawable = Math.min(st.withdrawable, st.cash); st.close = D.close; st.F = F;
+      if (D.d === 0) { cfs.push({t:0, cf:-st.V}); st.r = null; }
+      else {
+        var base2 = (fin(Vprev)?Vprev:0) + F;
+        st.r = base2 > 0 ? st.V/base2 - 1 : null;
+        if (fin(st.r)) { st.twr *= (1+st.r); }
+        st.peak = Math.max(st.peak, st.twr); st.mdd = Math.min(st.mdd, st.peak>0 ? st.twr/st.peak-1 : 0);
+        if (F !== 0) cfs.push({t:D.d-1, cf:-F});
+      }
+      var lotCost = 0; st.lots.forEach(function(L){ lotCost += L.cost; });
+      st.fifoPx = st.qty>0 ? lotCost/st.qty : null; st.dilPx = st.qty>0 ? st.dilNet/st.qty : null;
+      st.twrCum = D.d>0 ? st.twr-1 : null;
+      st.mwr = D.d>0 ? mwrOf(cfs.concat([{t:D.d, cf:st.V}]), D.d) : null;
+      st.gap = (fin(st.twrCum) && fin(st.mwr)) ? st.twrCum-st.mwr : null;
+      log.push('d'+D.d+' SNAPSHOT V='+st.V.toFixed(2)+' cash='+st.cash.toFixed(2)+' qty='+st.qty+'/'+st.sellable);
+      states.push({s:JSON.parse(JSON.stringify(st)), info:info, logN:log.length});
+    }
+    return {states:states, log:log};
+  }
+  var SIM = simulate();
+  var N = SIM.states.length;                       // 0..5 为交易日，第 N 步为期末汇总
+  var LAST = N;
+  var money = function(x){ return fin(x) ? x.toLocaleString('zh-CN',{minimumFractionDigits:2, maximumFractionDigits:2}) : '—'; };
+  var px = function(x){ return fin(x) ? x.toFixed(2) : '—'; };
+  var pct = function(x){ if (!fin(x)) return '—'; if (Math.abs(x) < 5e-7) x = 0; return (x>0?'+':'') + (x*100).toFixed(2) + '%'; };
+  var pp = function(x){ if (!fin(x)) return '—'; if (Math.abs(x) < 5e-7) x = 0; return (x>0?'+':'') + (x*100).toFixed(2) + 'pp'; };
+  function S(k){ return SIM.states[Math.min(k, N-1)]; }
+  function TEXT(k){
+    var a = S(k), s = a.s, inf = a.info, f0 = inf.fills[0], fl = inf.flows[0];
+    switch (k) {
+      case 0: return ['第 0 天收盘 · 初始状态',
+        '按比例预跑的终值缩放到抽样档位（示例档位金额 80,000 元）后得到：示例股A 3000 股、成本 10.00 元，现金 50,000 元；场外资金 100,000 元按收入与人生骨架初始化。',
+        '预跑只记仓位权重与收益率，期末整体缩放，使起点资产等于档位金额；整手与每笔最低佣金从这里开始生效。按缩放后的结果建账，写一条初始化事件并标记 seeded；按收盘价 10.00 元估值。',
+        '第 0 天账户快照，总资产 V₀ = ' + money(s.V) + ' 元，等于示例档位金额，是收益率计算的起点。',
+        '§4.4 按比例预跑与缩放 · §9.2 初始持仓 · §10.3 seeded 标记'];
+      case 1: return ['第 1 天 · 买入，体验 T+1',
+        'market 的 Fill：买入示例股A 2000 股 @' + px(f0.px) + '，费用 ' + money(f0.fee.total) + ' 元（佣金 ' + money(f0.fee.comm) + '（按万 2.5 与每笔 5 元取大），过户费 ' + money(f0.fee.transfer) + '）。',
+        '持仓总量 3000→' + s.qty + '，可卖仍是 ' + s.sellable + '：当日买入只加总量。现金减去成交额和费用；FIFO 新增一批，成本含费用。收盘 ' + px(s.close) + ' 估值，r₁ = V₁/V₀ − 1 = ' + pct(s.r) + '。',
+        '交易流水一行；账户快照：现金 ' + money(s.cash) + '，总资产 ' + money(s.V) + '。',
+        '§8.4 T+1 的实现 · §8.1 沪深交易规则 3.1.4–3.1.5 · §10.3 交易流水表'];
+      case 2: return ['第 2 天 · 开盘前解锁，上涨',
+        '没有成交，没有出入金；收盘 ' + px(s.close) + '。',
+        '开盘前把第 1 天买入的 2000 股转为可卖，可卖 ' + s.sellable + ' 股。只做估值：r₂ = ' + pct(s.r) + '。此时还没有出入金，TWR 与 MWR 相同。',
+        '账户快照与持仓快照（持有天数加一）。',
+        '§8.4 可卖数量 · §10.3 持仓快照 holding_days'];
+      case 3: return ['第 3 天 · 涨了想加钱：行情驱动入金并加仓',
+        'FundingIntent{deposit, large, "' + fl.reason + '"}；随后 Fill：买入 4000 股 @' + px(f0.px) + '，费用 ' + money(f0.fee.total) + ' 元。',
+        '示例口径 large = 场外资金的 60%，意向 ' + money(fl.intent) + ' 元；内核限额（演示参数）：场外资金留 5 万元缓冲，上限 ' + money(fl.cap) + '，实际入金 ' + money(fl.amt) + '。入金按开盘前到账切段：r₃ = V₃/(V₂ + 入金) − 1 = ' + pct(s.r) + '，入金本身不算收益。',
+        'CashFlow（来源：行情驱动，intent_amount ≠ amount）、交易流水、快照；场外资金降为 ' + money(s.outside) + '；出入金写入情景记忆。',
+        '§6.3 FundingIntent · §8.4 行情驱动出入金与限额 · §10.3 出入金表'];
+      case 4: return ['第 4 天 · 下跌割肉：FIFO、摊薄成本、可用与可取',
+        'Fill：卖出 5000 股 @' + px(f0.px) + '，费用合计 ' + money(f0.fee.total) + ' 元，其中印花税 ' + money(f0.fee.stamp) + '。收盘 ' + px(s.close) + '。',
+        'FIFO：先扣投资经历预跑的 3000 股，再扣第 1 天的 2000 股，扣掉成本 ' + money(f0.fifoCost) + '，已实现盈亏 ' + money(f0.realized) + ' 元。剩余 ' + s.qty + ' 股：FIFO 成本 ' + px(s.fifoPx) + '，摊薄成本 ' + px(s.dilPx) + '（亏损摊进剩余持仓，“回本线”被抬高）。卖出款当天可再买，不可取：可用 ' + money(s.available) + '，可取只有 ' + money(s.withdrawable) + '。',
+        '交易流水（realized_pnl = ' + money(f0.realized) + '）；单日收益 ' + pct(s.r) + '，示例中超过个人阈值，当天写一条显著事件记忆。',
+        '§8.4 FIFO · 摊薄成本〔需复核〕· 可用与可取 · §6.4 显著事件'];
+      case 5: return ['第 5 天 · 低位离场，股价反弹',
+        'FundingIntent{withdraw, large, "' + fl.reason + '"}；收盘 ' + px(s.close) + '，比昨天高。',
+        '示例口径 large = 账户资产的 60%，意向 ' + money(fl.intent) + '；昨日卖出款今天已可取，上限 ' + money(fl.cap) + '，实际出金 ' + money(fl.amt) + '，转回场外资金。r₅ = V₅/(V₄ − 出金) − 1 = ' + pct(s.r) + '。',
+        'CashFlow（来源：行情驱动）与快照；场外资金回到 ' + money(s.outside) + '；离场写回记忆。',
+        '§8.4 出入金 · 可取资金 · §10.3 出入金表'];
+      default: return ['期末 · 汇总战绩，写回记忆',
+        '第 0–5 天的全部事件。战绩由回放事件日志得到，不依赖快照。',
+        'TWR 连乘 5 个日收益 = ' + pct(s.twrCum) + '；MWR 解现金流 −V₀、−入金、+出金、+V₅ 的内部收益率，换算为区间收益 = ' + pct(s.mwr) + '；择时损失 = ' + pp(s.gap) + '。按 TWR 净值的最大回撤 ' + pct(s.mdd) + '。',
+        '战绩表一行；战绩摘要写成情景记忆，例如“追涨加钱，割在低点”；内核按自我归因更新 κ（以 TWR 还是实际盈亏为准、步长多少，文档未定）。相对沪深 300 的超额需要基准行情，本示例不算。',
+        '§8.4 战绩口径 · §6.4 定期摘要与慢变量 · §10.3 战绩表 · §12.2 择时损失矩'];
+    }
+  }
+  var $ = function(id){ return document.getElementById(id); };
+  var elIn=$('acIn'), elProc=$('acProc'), elOut=$('acOut'), elRef=$('acRef'), elTitle=$('acStepTitle'),
+      elKv=$('acKv'), elLog=$('acLog'), elPos=$('acPos'), elDots=$('acDots'), elChart=$('acChart'),
+      bPrev=$('acPrev'), bNext=$('acNext'), bPlay=$('acPlay');
+  if (!elIn || !elKv || !elChart || !bNext) return;
+  var cur = 0, timer = null, dots = [];
+  for (var i=0;i<=LAST;i++) (function(k){
+    var b = document.createElement('button'); b.type='button'; b.textContent = k<LAST ? 'D'+k : '汇总';
+    if (k===LAST) b.style.width='42px';
+    b.addEventListener('click', function(){ stop(); go(k); }); elDots.appendChild(b); dots.push(b);
+  })(i);
+  function kvItems(s){
+    return [['现金', money(s.cash)], ['可用资金', money(s.available)], ['可取资金', money(s.withdrawable)],
+      ['持仓 总量 / 可卖', s.qty + ' / ' + s.sellable], ['FIFO 成本价', px(s.fifoPx)], ['摊薄成本价〔需复核〕', px(s.dilPx)],
+      ['持仓市值', money(s.mv)], ['总资产', money(s.V)], ['场外资金', money(s.outside)], ['当日收益', pct(s.r)]];
+  }
+  var NS = 'http://www.w3.org/2000/svg';
+  function mk(tag, attrs, text){ var e = document.createElementNS(NS, tag); for (var a in attrs) e.setAttribute(a, attrs[a]); if (text!=null) e.textContent = text; return e; }
+  function chart(k){
+    while (elChart.firstChild) elChart.removeChild(elChart.firstChild);
+    var W=520, H=170, L=46, Rr=12, T=14, B=26, n=N, maxV=0, V0=SIM.states[0].s.V;
+    SIM.states.forEach(function(a){ maxV = Math.max(maxV, a.s.V, fin(a.s.twr)?a.s.twr*V0:0); });
+    if (!(maxV>0)) return;
+    maxV *= 1.08;
+    var bw = (W-L-Rr)/n, y = function(v){ return T + (H-T-B)*(1 - v/maxV); };
+    [0, 0.5, 1].forEach(function(f){ var v=maxV*f;
+      elChart.appendChild(mk('line',{x1:L,x2:W-Rr,y1:y(v),y2:y(v),stroke:'var(--line)','stroke-width':1}));
+      elChart.appendChild(mk('text',{x:L-6,y:y(v)+4,'text-anchor':'end',fill:'var(--mute)','font-size':10,'font-family':'var(--mono)'}, (v/10000).toFixed(1)+'万'));
+    });
+    var pts = [];
+    SIM.states.forEach(function(a, j){
+      var x = L + bw*j + bw*0.18, h = Math.max(0, y(0)-y(a.s.V)), on = (j<=k);
+      elChart.appendChild(mk('rect',{x:x,y:y(a.s.V),width:bw*0.64,height:h,rx:3,fill: j===k||k===LAST ? 'var(--acct)' : 'rgba(52,211,153,.28)', opacity: on?1:.25}));
+      elChart.appendChild(mk('text',{x:x+bw*0.32,y:H-9,'text-anchor':'middle',fill:'var(--mute)','font-size':10,'font-family':'var(--mono)'}, 'D'+j));
+      if (on && fin(a.s.twr)) pts.push((x+bw*0.32).toFixed(1)+','+y(a.s.twr*V0).toFixed(1));
+    });
+    if (pts.length>1) elChart.appendChild(mk('polyline',{points:pts.join(' '),fill:'none',stroke:'var(--warn)','stroke-width':2}));
+    pts.forEach(function(p){ var q=p.split(','); elChart.appendChild(mk('circle',{cx:q[0],cy:q[1],r:3,fill:'var(--warn)'})); });
+    elChart.appendChild(mk('text',{x:L+4,y:T+2,fill:'var(--ink2)','font-size':10.5}, '柱：总资产（含出入金）　线：V₀ × TWR 净值（剔除出入金）'));
+  }
+  function go(k){
+    k = Math.max(0, Math.min(LAST, k)); cur = k;
+    var t = TEXT(k), a = S(k), s = a.s, prev = k>0 && k<LAST ? S(k-1).s : null;
+    elTitle.textContent = t[0]; elIn.textContent = t[1]; elProc.textContent = t[2]; elOut.textContent = t[3]; elRef.textContent = t[4];
+    elKv.textContent = '';
+    var cur_ = kvItems(s), old = prev ? kvItems(prev) : null;
+    cur_.forEach(function(it, j){
+      var d = document.createElement('div'); if (old && old[j][1] !== it[1]) d.className = 'chg';
+      var b = document.createElement('b'); b.textContent = it[1];
+      var sp = document.createElement('span'); sp.textContent = it[0];
+      d.appendChild(b); d.appendChild(sp); elKv.appendChild(d);
+    });
+    var setV = function(id, x, f){ var e=$(id); if (!e) return; e.textContent = f(x); e.className = fin(x) && Math.abs(x)>=5e-7 ? (x>0?'up':'down') : ''; };
+    setV('acTwr', s.twrCum, pct); setV('acMwr', s.mwr, pct); setV('acGap', s.gap, pp);
+    elLog.textContent = '';
+    var from = k>0 && k<LAST ? S(k-1).logN : (k===0 ? 0 : SIM.log.length);
+    SIM.log.slice(0, a.logN).forEach(function(line, j){ var d=document.createElement('div'); d.textContent=line; if (j>=from && k!==LAST) d.className='new'; elLog.appendChild(d); });
+    elLog.scrollTop = elLog.scrollHeight;
+    elPos.textContent = k + ' / ' + LAST;
+    dots.forEach(function(b, j){ b.className = j===k ? 'on' : (j<k ? 'past' : ''); });
+    bPrev.disabled = k===0; bNext.disabled = k===LAST;
+    chart(k);
+  }
+  function stop(){ if (timer) { clearInterval(timer); timer = null; } bPlay.textContent = '自动播放'; }
+  bPrev.addEventListener('click', function(){ stop(); go(cur-1); });
+  bNext.addEventListener('click', function(){ stop(); go(cur+1); });
+  bPlay.addEventListener('click', function(){
+    if (timer) { stop(); return; }
+    if (cur >= LAST) go(0);
+    bPlay.textContent = '暂停';
+    timer = setInterval(function(){ if (cur >= LAST) { stop(); return; } go(cur+1); }, 2600);
+  });
+  go(0);
+})();
+</script>
+</body>
+</html>

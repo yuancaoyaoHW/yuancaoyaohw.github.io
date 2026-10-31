@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一个交易日 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+  .fd-svg { width: 100%; height: auto; display: block; margin: 14px 0 6px; }
+  .fd-svg text { font-family: var(--sans); }
+  .fd-band { cursor: pointer; }
+  .fd-band rect { transition: fill-opacity .2s; }
+  .fd-band:hover rect, .fd-band:focus rect { fill-opacity: .42; }
+  .fd-band:focus { outline: none; }
+  .fd-note { font-size: 12.5px; color: var(--mute); margin: 4px 0 14px; }
+  .fd-demo { padding: 18px 20px; }
+  .fd-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .fd-dots { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; }
+  .fd-dots button { font: 12px var(--mono); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line2); background: var(--panel); color: var(--mute); cursor: pointer; }
+  .fd-dots button.on { color: #06101f; background: var(--orch); border-color: transparent; font-weight: 700; }
+  .fd-dots button.done { color: var(--ink2); }
+  .fd-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+  .fd-head .fd-t { font: 600 13px var(--mono); color: var(--orch); }
+  .fd-head h3 { margin: 0; }
+  .fd-who { margin: 8px 0 4px; }
+  .fd-mvp { font-size: 13px; color: var(--ink2); margin: 6px 0 10px; padding: 6px 10px; border-radius: 8px; background: rgba(167,139,250,.08); border: 1px dashed rgba(167,139,250,.4); }
+  .fd-io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 10px 0; }
+  .fd-io > div { min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+  .fd-io h4 { margin: 0 0 4px; font-size: 13px; letter-spacing: 1px; }
+  .fd-io p { margin: 0; font-size: 13.5px; color: var(--ink2); }
+  .fd-io .fd-in h4 { color: var(--data); } .fd-io .fd-pr h4 { color: var(--llm); }
+  .fd-io .fd-out h4 { color: var(--acct); } .fd-io .fd-rf h4 { color: var(--market); }
+  @media (max-width: 700px) { .fd-io { grid-template-columns: minmax(0, 1fr); } }
+  .fd-term { background: #050814; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 12px/1.75 var(--mono); color: #cdd6f4; overflow-x: auto; }
+  .fd-term div { white-space: pre-wrap; overflow-wrap: anywhere; animation: fadeUp .3s ease both; }
+  .fd-term .fd-lab { color: var(--mute); font-style: italic; }
+  .fd-term .ok { color: var(--ok); } .fd-term .bad { color: var(--warn); } .fd-term .dim { color: var(--mute); }
+  .fd-calc { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 12px 0; }
+  .fd-res { font: 13px/1.8 var(--mono); color: var(--ink2); }
+  .fd-res b { color: var(--ink); }
+  .fd-bar { height: 8px; border-radius: 4px; background: var(--panel2); overflow: hidden; margin: 6px 0 2px; }
+  .fd-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--orch), var(--sim)); transition: width .3s; }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+  <div class="eyebrow"><i></i>流程 · 一个交易日</div>
+  <h1>一个<span class="grad">交易日</span>里，谁在什么时候做什么</h1>
+  <p class="lead">仿真时钟把一天切成几个时段，按顺序推进 <span class="ref">§3.4</span>；每个时段只激活一部分智能体，同一时段内并发执行，这一时段发的帖子从下一时段起才可见，群聊是唯一例外 <span class="ref">§9.1</span>。订单只在盘前产生，按 T 日行情判定成交 <span class="ref">§3.4</span>。本页按时间顺序走一遍，说明每一段的输入、处理、输出和负责的模块。</p>
+  <div class="meta">
+    <span class="chip orch"><i></i>§3.4 一天的时段</span>
+    <span class="chip orch"><i></i>§9.1 时钟与激活</span>
+    <span class="chip market"><i></i>§8 交易规则与结算</span>
+    <span class="chip data"><i></i>演示均为示例数据</span>
+  </div>
+</header>
+
+<section id="s1" class="reveal">
+  <h2><span class="num">01</span>总览：一天被切成几个时段</h2>
+  <p class="sub">横轴是从前一晚 19:00 到当天 18:00 的仿真时间。上面一行是系统的激活时段，中间一行是交易所的交易时段，下面一行标出固定激活点和只在事件触发时才运行的检查点。点击上面一行的时段，可以跳到第 2 节对应的步骤。</p>
+  <p>仿真时钟（simulation clock）是 orchestrator 模块维护的"现在是几点"。所有模块读数据时都带着这个时间：数据层的 <code>pit.query(table, asof=clock)</code> 只返回 <code>available_at ≤ clock</code> 的记录 <span class="ref">§5.5</span>。PIT（point-in-time，点时）的意思就是"只看当时已经能看到的东西"，所以任何时段都读不到之后才发布的信息。</p>
+  <p>设计文档把一天分成晚间/隔夜、盘前、集合竞价、盘中检查点、收盘后五个时段，另有周末/节假日的每日 20:00 激活点 <span class="ref">§3.4</span>（周末不在下图里，见第 6 节）。每个时段规定了谁会被激活：盘前激活按活跃度 ν_i 抽中的、被事件触发的，以及前晚"明日打算"为买或卖的人（强制激活）；集合竞价只涉及有交易意图的；盘中检查点只激活接触到量级 ≥ 3 盘中事件的人；收盘后激活当天的交易者、按 ν_i 抽中的和被事件触发的 <span class="ref">§3.4</span>。这里的"智能体"指一个模拟散户，"激活"指这一时段让它跑一次认知循环，最多两次 LLM 调用：第 1 次出结构化的看法与意向，内核做约束与成交判定，第 2 次只给想发帖的人写帖子 <span class="ref">§6.1</span>。</p>
+  <p>MVP（最小可行版本）的固定激活点是盘前和收盘后，非交易日为 20:00；盘中检查点只由事件触发 <span class="ref">§3.4</span>。盘前是当天唯一产生例行订单的激活点；收盘后与晚间的第 1 次调用只出 <code>BeliefUpdate</code> 和"明日打算"，不出订单 <span class="ref">§3.4 §6.1</span>。成交判定默认用日线，只为事件日的指数与被激活者持仓、以及收盘封板但盘中开过板的股票日补分钟线 <span class="ref">§8.2</span>。</p>
+  <svg class="fd-svg" viewBox="0 0 960 250" role="img" aria-label="一个交易日的时段总览">
+    <g style="font-size:11px;fill:var(--mute)">
+      <text x="10" y="30">T−1 19:00</text><text x="180" y="30" text-anchor="middle">08:00</text>
+      <text x="310" y="30" text-anchor="middle">09:15</text><text x="392" y="30" text-anchor="middle">09:30</text>
+      <text x="521" y="30" text-anchor="middle">11:30</text><text x="619" y="30" text-anchor="middle">13:00</text>
+      <text x="750" y="30" text-anchor="middle">15:00</text><text x="950" y="30" text-anchor="end">18:00</text>
+    </g>
+    <g class="fd-band" data-step="0" tabindex="0" role="button" aria-label="晚间/隔夜，跳到演示第 1 步">
+      <rect x="10" y="40" width="168" height="56" rx="8" style="fill:var(--data);fill-opacity:.2;stroke:var(--data)"/>
+      <text x="94" y="64" text-anchor="middle" style="fill:var(--ink);font-size:13px">晚间/隔夜</text>
+      <text x="94" y="83" text-anchor="middle" style="fill:var(--mute);font-size:11px">事件、群聊发酵</text>
+    </g>
+    <g class="fd-band" data-step="1" tabindex="0" role="button" aria-label="盘前，跳到演示第 2 步">
+      <rect x="181" y="40" width="127" height="56" rx="8" style="fill:var(--llm);fill-opacity:.2;stroke:var(--llm)"/>
+      <text x="244" y="64" text-anchor="middle" style="fill:var(--ink);font-size:13px">盘前</text>
+      <text x="244" y="83" text-anchor="middle" style="fill:var(--mute);font-size:11px">唯一常规下单点</text>
+    </g>
+    <g class="fd-band" data-step="3" tabindex="0" role="button" aria-label="集合竞价，跳到演示第 4 步">
+      <rect x="311" y="40" width="76" height="56" rx="8" style="fill:var(--market);fill-opacity:.2;stroke:var(--market)"/>
+      <text x="349" y="64" text-anchor="middle" style="fill:var(--ink);font-size:13px">竞价</text>
+      <text x="349" y="83" text-anchor="middle" style="fill:var(--mute);font-size:11px">open 单</text>
+    </g>
+    <g class="fd-band" data-step="4" tabindex="0" role="button" aria-label="盘中检查点，跳到演示第 5 步">
+      <rect x="390" y="40" width="357" height="56" rx="8" style="fill:var(--social);fill-opacity:.14;stroke:var(--social);stroke-dasharray:5 4"/>
+      <text x="568" y="64" text-anchor="middle" style="fill:var(--ink);font-size:13px">盘中检查点</text>
+      <text x="568" y="83" text-anchor="middle" style="fill:var(--mute);font-size:11px">仅量级 ≥ 3 事件触发 · 只限 chase</text>
+    </g>
+    <g class="fd-band" data-step="5" tabindex="0" role="button" aria-label="收盘后，跳到演示第 6 步">
+      <rect x="750" y="40" width="200" height="56" rx="8" style="fill:var(--acct);fill-opacity:.2;stroke:var(--acct)"/>
+      <text x="850" y="64" text-anchor="middle" style="fill:var(--ink);font-size:13px">收盘后</text>
+      <text x="850" y="83" text-anchor="middle" style="fill:var(--mute);font-size:11px">成交结算 · 明日打算 · 发帖</text>
+    </g>
+    <text x="10" y="143" style="fill:var(--mute);font-size:11px">交易所时段 §8.1</text>
+    <g style="font-size:10.5px;fill:var(--ink2)">
+      <rect x="310" y="128" width="70" height="22" rx="4" style="fill:var(--market);fill-opacity:.35"/>
+      <text x="345" y="166" text-anchor="middle">开盘集合竞价</text>
+      <rect x="390" y="128" width="131" height="22" rx="4" style="fill:var(--sim);fill-opacity:.35"/>
+      <text x="455" y="143" text-anchor="middle">连续竞价</text>
+      <text x="570" y="143" text-anchor="middle" style="fill:var(--mute)">午间休市</text>
+      <rect x="619" y="128" width="126" height="22" rx="4" style="fill:var(--sim);fill-opacity:.35"/>
+      <text x="682" y="143" text-anchor="middle">连续竞价</text>
+      <rect x="745" y="128" width="6" height="22" style="fill:var(--market)"/>
+      <text x="740" y="166" text-anchor="end">收盘集合竞价</text>
+      <rect x="756" y="128" width="28" height="22" rx="3" style="fill:var(--mute);fill-opacity:.35"/>
+      <text x="790" y="166">盘后固定价格（无对应执行方式）</text>
+    </g>
+    <line x1="10" y1="200" x2="950" y2="200" style="stroke:var(--line2)"/>
+    <g style="font-size:10.5px;fill:var(--ink2)">
+      <circle cx="94" cy="200" r="7" style="fill:var(--bg);stroke:var(--orch);stroke-dasharray:3 2"/>
+      <circle cx="244" cy="200" r="7" style="fill:var(--orch)"/>
+      <rect x="341" y="194" width="12" height="12" style="fill:var(--market)"/>
+      <circle cx="423" cy="200" r="7" style="fill:var(--bg);stroke:var(--orch);stroke-dasharray:3 2"/>
+      <circle cx="521" cy="200" r="7" style="fill:var(--bg);stroke:var(--orch);stroke-dasharray:3 2"/>
+      <circle cx="684" cy="200" r="7" style="fill:var(--bg);stroke:var(--orch);stroke-dasharray:3 2"/>
+      <circle cx="850" cy="200" r="7" style="fill:var(--orch)"/>
+      <text x="423" y="224" text-anchor="middle">10:00</text><text x="521" y="224" text-anchor="middle">11:30</text><text x="684" y="224" text-anchor="middle">14:00</text>
+      <text x="244" y="224" text-anchor="middle">固定激活点</text><text x="850" y="224" text-anchor="middle">固定激活点</text>
+      <text x="94" y="224" text-anchor="middle">事件触发</text>
+    </g>
+    <g style="font-size:10.5px;fill:var(--mute)">
+      <circle cx="16" cy="242" r="5" style="fill:var(--orch)"/><text x="26" y="246">MVP 固定激活点</text>
+      <circle cx="136" cy="242" r="5" style="fill:var(--bg);stroke:var(--orch);stroke-dasharray:3 2"/><text x="146" y="246">仅事件触发</text>
+      <rect x="230" y="237" width="10" height="10" style="fill:var(--market)"/><text x="246" y="246">只涉及有交易意向者</text>
+    </g>
+  </svg>
+  <p class="fd-note">横轴不按比例：隔夜 13 小时被压缩，交易时段被放大。时段与激活对象依据 §3.4，交易所时段依据 §8.1。交易日的晚间时段没有固定激活点，只由事件触发；固定的 20:00 激活点只在周末与节假日 <span class="ref">§3.4</span>。</p>
+</section>
+
+<section id="s2" class="reveal">
+  <h2><span class="num">02</span>分步演示：跟着一条示例公告走完一天</h2>
+  <p class="sub">用一条示例公告和三个示例人设，从前一晚走到收盘后落盘。每一步列出被激活的模块和智能体，以及这一步的输入、处理、输出和对应的文档条目；下方的记录框是这一步产生的示例记录。</p>
+  <p>示例设定（全部为示例数据）：T−1 日 20:30，化名公司"示例股A"发布公告，拟收购同行业资产。三个示例人设与 <a href="sim-personas.html">散户决策演示</a> 一致：小林是打板短线新手，账户 6 万元现金；老周是 2015 年加杠杆受过伤的老股民，持有示例股A 2,000 股，成本 12.00 元；王阿姨是退休长线投资者，账户 40 万元。T 日示例股A 的日线是：前收 10.00、开盘 10.50、最高 11.00、最低 10.30、收盘 10.60；示例股A 按主板计，涨停价 = 前收 × (1 + 10%) = 11.00 <span class="ref">§8.1</span>，当天盘中触及涨停但收盘没封住。老周与王阿姨的挂单幅度 <code>dip_k</code> 取 2%（示例值，先验 1%–3%，<span class="ref">§6.3</span>）。这些价格、持仓和人设都不是设计参数，只用来把规则走一遍。</p>
+  <p>演示里的"处理"一栏写的是文档规定的做法，"记录"一栏是按这些做法算出的示例结果。LLM 只选执行方式（<code>open / dip / chase</code>），不报数字价格，限价由内核按执行方式算出 <span class="ref">§6.3 第 6 步</span>。成交判定一步的数字可以手算核对：规则在第 4 节逐条写出。</p>
+  <div class="card fd-demo" id="fd-demo">
+    <div class="fd-ctl">
+      <button type="button" class="btn" id="fd-prev">← 上一步</button>
+      <button type="button" class="btn pri" id="fd-next">下一步 →</button>
+      <button type="button" class="btn" id="fd-play">▶ 自动播放</button>
+      <button type="button" class="btn" id="fd-reset">重置</button>
+      <span class="chip data"><i></i>示例数据</span>
+    </div>
+    <div class="fd-dots" id="fd-dots"></div>
+    <div class="fd-head"><span class="fd-t" id="fd-time"></span><h3 id="fd-name"></h3></div>
+    <div class="fd-who" id="fd-who"></div>
+    <div class="fd-mvp" id="fd-mvp" hidden></div>
+    <div class="fd-io">
+      <div class="fd-in"><h4>输入</h4><p id="fd-inp"></p></div>
+      <div class="fd-pr"><h4>处理</h4><p id="fd-proc"></p></div>
+      <div class="fd-out"><h4>输出</h4><p id="fd-outp"></p></div>
+      <div class="fd-rf"><h4>对应文档条目</h4><p id="fd-refs"></p></div>
+    </div>
+    <div class="fd-term" id="fd-log" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="s3" class="reveal">
+  <h2><span class="num">03</span>为什么要把一天切成时段</h2>
+  <p class="sub">切成时段要解决三个问题：同一时刻谁先谁后、会不会看到未来的信息、一天要调用多少次模型。下面每个问题一段。</p>
+  <h3>同一时刻谁先谁后：阶段隔离</h3>
+  <p>假设所有智能体在同一时刻排队行动：排在前面的人发了帖，排在后面的人马上看到并受影响，结果就取决于排队顺序；换一个顺序，同一份配置会跑出不同的结果，也没法说清楚是谁影响了谁。设计文档的做法是：时钟严格按时段顺序推进；一个时段里被激活的智能体并发执行，彼此看不到对方在这一时段的输出；这一时段发的帖子从下一时段起才进入信息流 <span class="ref">§9.1</span>。这样同一时刻内没有循环依赖，执行顺序不影响结果，重放和固定随机种子才有意义。</p>
+  <p>代价是反应会慢一拍。比如小林盘前 08:03 发的"今天必板"，老周在盘前是看不到的，要到下一时段才看得到。文档用这一拍延迟换来两点：同一时刻没有循环依赖，并发结果与执行顺序无关 <span class="ref">§9.1</span>。</p>
+  <p>阶段内的并发用 asyncio 实现，规模化后换 Ray；阶段之间按时钟推进，不允许某个智能体"先跑到下一阶段" <span class="ref">§14.4</span>。盘中检查点只在量级 ≥ 3 的盘中事件出现时才插入，插入后同样遵守这条规则：被触发者的帖子到下一时段才可见 <span class="ref">§3.4 §9.1</span>。</p>
+  <p>唯一的例外是群聊。某个群在当阶段有 ≥ 2 个被激活成员且有人发言时，阶段内按种子决定的顺序进行最多 M 轮（如 4 轮）接话，只限该群 <span class="ref">§7.1</span>。接话只走第 2 次调用（发言），不重做第 1 次，所以当阶段的交易决定不受群聊影响，影响留到下一次激活，结果仍与并发顺序无关 <span class="ref">§7.1 §9.1</span>。</p>
+  <h3>不看未来：点时读取</h3>
+  <p>每个时段读数据都带着时钟：<code>pit.query(table, asof=clock)</code> 只返回 <code>available_at ≤ clock</code> 的记录 <span class="ref">§5.5</span>。夜间或周末发布的事件不会立即被所有人看到，而是进入下一个激活点的候选池 <span class="ref">§5.2</span>。产出表的每一行只用 t 日收盘后可以得到的信息 <span class="ref">§10.3</span>。</p>
+  <p>反例：如果盘前的智能体能读到 T 日的收盘价，它的"追涨"就成了事后诸葛亮。验收时要拿模拟出的态度和成交去对比真实散户 <span class="ref">§12</span>，一旦信息泄漏，对比就失去意义。时段与数据粒度也要匹配：成交判定默认用日线，盘前看到 T−1 收盘与隔夜信息（<code>available_at</code> ≤ 09:15），收盘后看到 T 日收盘 <span class="ref">§3.4 §8.2</span>。盘中检查点只为事件日的指数与被激活者持仓补分钟线，智能体只看到检查点之前的分钟数据；拿不到分钟线的事件日，这次激活只出态度与帖子，交易意向转为"明日打算"，运行清单标"盘中无行情" <span class="ref">§3.4</span>。日线只有当天的开高低收，说不出 10:00 时价格是多少，在日线上硬做盘中判断就会用到收盘后才知道的信息。</p>
+  <h3>一天调用多少次模型：成本</h3>
+  <p>每次激活最多两次调用：第 1 次全员都有，约 3.0k 输入、200 输出 token；第 2 次只给发帖者，约 3.6k 输入（含与第 1 次共用的 3.0k 前缀）、300 输出 token <span class="ref">§14.2</span>。550 个智能体每个交易日激活 2 次、每次都发帖时，第 1 次调用每日 3.3M / 0.22M，第 2 次 3.96M / 0.33M，合计 7.26M 输入、0.55M 输出 token，这是上限 <span class="ref">§14.2</span>。激活率是第一成本杠杆 <span class="ref">§14.3</span>：没被激活的人保持持仓、不发帖 <span class="ref">§9.1</span>，不花任何调用。所以文档只保留两个固定激活点，盘中只按事件触发，盘中激活的 token 单独计量 <span class="ref">§3.4</span>。第 5 节可以按不同激活率算一下调用量。</p>
+  <h3>每个激活点内部：分步执行</h3>
+  <p>一个激活点里分三步：先并发或批量发送全部第 1 次调用并校验 JSON；再由内核统一做约束与成交判定；最后对想发帖的人发送第 2 次调用。群聊接话在这之后按种子顺序进行 <span class="ref">§14.4 第 3 条</span>。帖子在成交判定之后写，第 2 次调用的输入里有当日意向和实际成交（含未执行原因），所以帖子能和实际所为对上，风格示例帖也只放在这次调用里 <span class="ref">§6.1</span>。prompt 按"静态内容在前、动态内容在后"排列，同一激活的两次调用共用静态前缀，可以命中前缀缓存 <span class="ref">§6.1 §14.3</span>。</p>
+</section>
+
+<section id="s4" class="reveal">
+  <h2><span class="num">04</span>每个时段的详细说明</h2>
+  <p class="sub">按时间顺序把每个时段讲一遍：这一时段读什么、谁被激活、做了哪些计算、产出什么、交给谁。第 2 节的演示是这一节的缩略版。</p>
+
+  <h3>晚间/隔夜（T−1 19:00 → T 08:00）</h3>
+  <p>这一时段对应现实里的新闻联播、夜间或周末出台的政策、美股和中概股收盘，以及群聊里的发酵 <span class="ref">§3.4</span>。系统要做的第一件事是把消息变成事件卡（EventCard）：原始条目先按嵌入相似度和时间窗聚类去重，每个事件簇调用 1 次 LLM 抽取，成本随事件数增长、与智能体数无关 <span class="ref">§5.2</span>。改写按事实与观点分开：events 只产出 <code>EventCard</code> 和 L0（官方媒体，延迟 0）、L1（财经快讯，0–10 分钟）两类不带立场的版本；L2–L4 的文本都是观点，由 social 模块的发布者以 <code>Post</code> 产出 <span class="ref">§5.3</span>。</p>
+  <p>事件卡的 <code>available_at</code> 是最早能公开拿到的时间，不是事件发生的时间 <span class="ref">§5.2</span>。晚上发布的事件进入下一个激活点的候选池。交易日的这一时段没有固定激活点，被激活的只有时政敏感者和群聊活跃者，而且都是事件触发 <span class="ref">§3.4</span>。他们可以在群里讨论、发帖，但不能下单，因为订单只在盘前产生 <span class="ref">§3.4</span>。</p>
+
+  <h3>盘前（08:00–09:15）：当天唯一的常规下单点</h3>
+  <p>盘前汇总隔夜信息（<code>available_at</code> ≤ 09:15），看到自己昨晚的"明日打算"，形成当日观点与订单 <span class="ref">§3.4</span>。被激活的有三类 <span class="ref">§9.1</span>：按个人活跃度 ν_i 抽中的（例行查看）；被触发的，触发条件是持仓单日波动超过个人阈值、接触到量级 ≥ 3 的事件、群内讨论到他的持仓、所持标的涨停或跌停；以及前晚（或长假中最后一次）明日打算为买或卖的人，他们在这里强制激活 <span class="ref">§3.4 §9.1</span>。</p>
+  <p>被激活后，智能体按认知循环走一遍 <span class="ref">§6.1</span>：</p>
+  <p><b>① 感知</b>：从候选信息里选出这个人能看到的 K_i 条。打分公式是 <code>score = w_i · m · rel_i · exp(−Δt/τ_d) · sal</code>，其中 w_i 是这个人对该渠道的权重，m 是事件量级，rel_i 是与他持仓或自选的相关度，exp(−Δt/τ_d) 让旧消息随时间衰减，sal 是显著度。持仓异动必然入选，其余按 softmax 无放回抽取；K_i 在 3–15 条之间，约 1,500 token <span class="ref">§5.4</span>。推荐流的打分（时近性 × 热度 × 兴趣相似度 × 关注关系）由 social 模块负责 <span class="ref">§7.3</span>。</p>
+  <p><b>② 第 1 次调用（解读 + 意向）</b>：LLM 读这 K 条信息、人设卡、记忆和昨晚的明日打算，只输出结构化字段：<code>BeliefUpdate</code>（态度、情绪、理由标签）、<code>DecisionIntent[]</code>（买、卖、持有或观望，仓位档，执行方式 <code>open / dip / chase</code>，理由）和 <code>FundingIntent</code>（出入金意向） <span class="ref">§6.1 §6.3</span>。这次调用不带风格示例帖。意向来源也可以换成规则先验或 Jev，那时这次调用只剩解读 <span class="ref">§6.6</span>。最后一次明日打算与这里的实际意向之差记为"隔夜变卦"，决策表用 <code>plan_ref</code> 把两者连起来 <span class="ref">§3.4 §10.3</span>。</p>
+  <p>JSON 校验不过时换种子重试，最多 2 次；仍失败则这次激活记为未激活，原因"解析失败"，不填默认值，也不沿用上期信念。拒答单独记类、不重试，同样记缺席 <span class="ref">§6.2</span>。持续运行中，到 09:15 仍没跑完盘前调用的智能体当日记为未激活、原因"超时"，不推迟下单 <span class="ref">§9.1</span>。三种缺席都写进激活表，比率进运行清单并告警 <span class="ref">§9.1 §10.3</span>。</p>
+  <p><b>③ 内核约束</b>：参数内核把意向改写成可执行的 OrderIntent。七步依次是：把仓位档（<code>tiny/small/half/large/all_in</code>）映射成目标权重；加上从众、外推、彩票偏好的修正项 Δ，分母里的风险厌恶 γ(t) 随恐惧上升；卖出时计入实现效用 U_real（浮亏时乘损失厌恶 λ，先验中位数 2.25），这一项是处置效应的来源；以概率 1 − exp(−ν·a) 决定当日是否查看组合，且只在 |w* − w| &gt; τ 时调仓；恐惧或贪婪到最高档时走情绪分支（恐慌割肉或躺平）；检查现金、T+1、整手、涨跌停、权限等硬约束并按执行方式定价；把改动写回记忆 <span class="ref">§6.3</span>。内核改了意向，就会留下一条"言行不一"记录，原因写明。七步的具体算法见 <a href="sim-personas.html">散户决策演示</a>。</p>
+  <p>第 6 步的定价规则 <span class="ref">§6.3 第 6 步</span>：<code>open</code> 买入限价取涨停价、卖出取跌停价，也就是按开盘价成交；<code>dip</code> 买入限价 = 前收 × (1 − k_i)，卖出 = 前收 × (1 + k_i)，k_i 是人设参数 <code>dip_k</code>，先验 1%–3%；<code>chase</code> 按当日均价加滑点成交。订单当日有效，收盘未成交的撤单，"挂单没成交"写回记忆。</p>
+  <p><b>④ 第 2 次调用（发帖）</b>：只对 <code>want_to_post</code> 为真的人发送。输入在共用前缀之后追加当日意向、内核处理结果（含未执行原因）和风格示例帖，正文是自由文本，不进 JSON <span class="ref">§6.1</span>。帖子同样从下一时段起才可见 <span class="ref">§9.1</span>。§6.1 写的是第 2 次调用的输入含"实际成交"，而持续运行中成交在收盘后判定 <span class="ref">§3.4</span>，盘前发帖时能拿到哪些成交信息，见第 8 节。</p>
+
+  <h3>集合竞价（09:15–09:25）</h3>
+  <p>盘前定下 <code>execution = open</code> 的订单在这里提交 <span class="ref">§3.4</span>。在模式 A（真实历史行情）下，集合竞价单按真实开盘价成交：买入限价不低于、卖出限价不高于竞价价格才成交 <span class="ref">§8.2 第 1 步</span>。<code>open</code> 买单的限价由内核设为涨停价，所以只要开盘没有一字封板，就按开盘价成交；集合竞价不设价格笼子 <span class="ref">§6.3 第 6 步</span>。演示里小林的 <code>open</code> 买单限价 11.00（涨停价），开盘价 10.50，按 10.50 成交（示例数据）。<code>dip</code> 单在开盘时不成交，留到收盘按日线判定 <span class="ref">§8.2 第 2 步</span>。</p>
+  <p>在 market 判定成交之前，订单要按顺序过一遍检查：交易时段 → 交易权限 → T+1 可卖数量 → 整手与单笔上限 → 涨跌停与价格笼子 → 风险警示股买入上限 → 资金与两融额度 <span class="ref">§8.1</span>。任何一项不合规就拒单并计数，不替智能体自动修正，因为自动修正会掩盖内核的错误；拒单也写入事件日志 <span class="ref">§8.1</span>。提交买单时，accounts 模块冻结相应资金：可用资金 = 现金 − 买单冻结 <span class="ref">§8.4</span>。</p>
+  <h3>盘中检查点（10:00 / 11:30 / 14:00）：只在事件触发时运行</h3>
+  <p>三个盘中检查点没有例行抽样，只由事件触发：量级 ≥ 3 且 <code>available_at</code> 落在交易时段的事件卡，在其后最近的检查点激活接触到该事件的智能体 <span class="ref">§3.4 §9.1</span>。被激活的人可以追涨、止损、补仓，但执行方式只限 <code>chase</code> <span class="ref">§3.4</span>。</p>
+  <p>价格从分钟线来。只为事件日的指数与被激活者持仓补分钟线，智能体只看到检查点之前的分钟数据；<code>chase</code> 单的成交价取检查点至收盘的分钟均价加滑点，封板情形按分钟线走 §8.2 第 3 步 <span class="ref">§3.4 §8.2 第 2 步</span>。日线说不出 10:00 的价格，如果让智能体在 10:00 看到"当天最高 11.00"，就用了未来信息。拿不到分钟线的事件日，这次激活只出态度与帖子，交易意向转为"明日打算"，运行清单标"盘中无行情"；盘中激活的 token 单独计量 <span class="ref">§3.4</span>。被触发的智能体走同一套认知循环和订单检查。演示里小林在 11:30 想卖出当天买入的股份，被 T+1 规则拒单：当天买入只增加总数量，下一交易日开盘前才转为可卖 <span class="ref">§8.4</span>。</p>
+
+  <h3>收盘：成交判定与结算（15:00 起）</h3>
+  <p>在模式 A 下，智能体是价格接受者，不影响价格 <span class="ref">§3.5</span>。market 拿当天真实日线判定挂单能否成交 <span class="ref">§8.2</span>：</p>
+  <pre class="code" data-lang="规则">第 1 步 集合竞价单（open）：按真实开盘价或收盘价成交
+        买入限价 ≥ 竞价价格、卖出限价 ≤ 竞价价格才成交
+第 2 步 盘中限价单（dip）：买入限价 ≥ 当日最低价才可能成交，成交价 = min(限价, 最高价)
+        卖出限价 ≤ 当日最高价才可能成交，成交价 = max(限价, 最低价)
+        市价单（chase）：当日成交均价 + 滑点；盘中激活取检查点至收盘的分钟均价
+第 3 步 一字涨停（最高 = 最低 = 涨停价）：买单不成交
+        收盘封涨停但最低价 &lt; 涨停价：买单按概率 p 成交
+          有分钟线：p = 下单后非封板时长占比 × 排队折扣
+          无分钟线：固定 p，跑 0.1 / 0.3 / 0.5 三档，档位记入运行清单
+        每笔全部成交或不成交；每个智能体用记录在案的种子独立抽签
+        跌停卖出同规则                                  <span class="c">§8.2 第 1–3 步</span></pre>
+  <p>这套规则偏保守：日线不知道一天里价格先到高点还是低点，只能判断"有没有可能成交"。涨停买不到、跌停卖不掉是追涨和恐慌行为的重要约束，买不到、卖不掉都写回记忆；"散户涨停买不进率"没有真实数据，参数在报告中标为假设，不进校准目标 <span class="ref">§8.2 第 3 步</span>。日线下补分钟线的只有两类股票日：收盘封板但盘中有低于涨停价成交的（每日约几十只），以及盘中事件日的指数与被激活者持仓 <span class="ref">§8.2</span>。</p>
+  <div class="callout decide"><b class="t">已定（v0.3 §8.2，来自架构讨论 A7）</b>个人成交只走第 1–3 步，不按 <code>w_cap</code> 放大后的量缩减。550 人下平均 <code>w_head</code> 约 36 万，放大后几乎每笔都会超过真实成交额，缩减会把失真的"没买够"写进记忆。例外是智能体自身未放大的订单超过该股当日真实成交额的设定比例（如 1%），超出部分不成交，原因写回记忆。放大后的群体资金流只作诊断：按股票算 <code>w_cap</code> 加权净买入额与真实成交额之比，超过阈值的股票在决策表与运行清单中标"需求与流动性不匹配"，不改账户；按股票的资金流只对当日交易智能体数 ≥ N（如 10）的股票输出，其余标"样本不足" <span class="ref">§8.2 第 4 步</span>。</div>
+  <p>模式 A 下智能体不影响价格，模拟订单流和真实价格的关系不能当成冲击估计，也不作为本项目的产出结论 <span class="ref">§8.2 第 5 步</span>。</p>
+  <p>market 输出带费用的成交（Fill），由 accounts 记账。费用按 §8.1 逐笔扣：印花税 0.05% 仅卖方收取（2023-08-28 起），经手费 0.00341%、证管费 0.002%、过户费 0.001% 双向收取，佣金协商确定、上限 0.3% <span class="ref">§8.1〔需复核〕</span>；佣金率按人设分档 <span class="ref">§8.4</span>。结算规则 <span class="ref">§8.4</span>：当天买入只加总数量，下一交易日开盘前才转为可卖；卖出所得当天可以再买，下一交易日才能转出。用了两融的账户，维持担保比例跌破平仓线（券商常见 130%〔需复核〕）时先追保，追保失败就强平；强平卖单以市价进入下一个成交判定时点 <span class="ref">§8.4</span>。</p>
+
+  <h3>收盘后（15:00–18:00）：结算、明日打算、发帖</h3>
+  <p>被激活的是当天的交易者、按 ν_i 抽中的和被事件触发的人 <span class="ref">§3.4</span>。他们结算盈亏、晒单或吐槽、写入记忆。第 1 次调用只出 <code>BeliefUpdate</code> 和"明日打算"枚举（买 / 卖 / 持有 / 观望 + 标的），写入记忆，不出订单；打算为买或卖的人次日盘前强制激活 <span class="ref">§3.4 §6.1</span>。第 2 次调用只对想发帖的人发送，输入含当日意向与实际成交（含未执行原因），"挂了个低价没成交"这类说法由此进入帖子 <span class="ref">§6.1 §6.3 第 6 步</span>。同群当阶段有 ≥ 2 个被激活成员且有人发言时，群内顺序接话最多 M 轮，只走第 2 次调用 <span class="ref">§7.1 §9.1</span>。这一时段的 PIT 读取能看到 T 日收盘；产出表每行的可得时点按激活表的 <code>info_cutoff</code> 取 <span class="ref">§3.4 §10.3</span>。</p>
+  <p>记忆有预算：每次 prompt 约 800 token，其中账户摘要约 100 token <span class="ref">§6.4</span>。工作记忆（当日信息流、账户摘要、盯盘快照）不持久化；情景记忆记带日期的经历；语义记忆是反思得出的经验 <span class="ref">§6.4</span>。反思是低频的，每周一次（Tier-A 放在周末激活点）或在大盈亏后触发 <span class="ref">§6.1</span>。战绩也会写回记忆：每月末（Tier-A 每周）写一次战绩摘要；单笔盈亏或单日账户波动超过个人阈值、被强平、清仓、回本解套时，当天就写 <span class="ref">§6.4</span>。</p>
+
+  <h3>落盘：事件日志、快照与运行清单</h3>
+  <p>所有订单、拒单、成交、费用和公司行为都写入事件日志，账户状态可以由事件重放得到 <span class="ref">§8.4</span>。每天收盘结算后生成账户快照和持仓快照 <span class="ref">§8.4 §10.3</span>。每个智能体每个激活点在激活表里记一行，被抽中但缺席的也记；其余各表带 <code>activation_id</code>，时点、版本线、补跑、预热等行级元数据从激活表取 <span class="ref">§10.3</span>。决策表用 <code>intent_kind</code> 区分订单与明日打算，用 <code>plan_ref</code> 把次日盘前的实际意向链回前晚的打算，隔夜变卦由此算出 <span class="ref">§10.3</span>。帖子、态度、决策三张主表和账户类表的每一行，都能追溯到唯一的运行清单 <code>RunManifest</code>，清单里记代码版本、数据快照、人口版本、模型、种子、prompt 模板哈希、意向来源、token 用量、解析失败率等 <span class="ref">§9.4</span>。持续运行中各激活点按真实时间运行，均带时间戳落盘，只追加不重算 <span class="ref">§3.4 §9.3</span>。运行清单的完整生命周期见 <a href="flow-run.html">运行生命周期</a>。</p>
+</section>
+
+<section id="s5" class="reveal">
+  <h2><span class="num">05</span>激活规则与调用量</h2>
+  <p class="sub">一天里每个时段由谁来跑，决定了模拟的反应速度和成本。本节先讲激活规则和两档智能体，再用一个计算器演示激活率对调用量的影响。</p>
+  <h3>谁会被激活</h3>
+  <p>"激活"指让一个智能体在某个时段走一遍认知循环，最多两次 LLM 调用 <span class="ref">§6.1</span>。规则有三类 <span class="ref">§9.1</span>：一是例行查看，按个人活跃度 ν_i 随机抽中，模拟"有空打开 App 看一眼"，非交易日按 ν_i × 周末系数；二是触发，包括持仓单日波动超过个人阈值、接触到量级 ≥ 3 的事件（交易时段内的事件在最近的盘中检查点激活）、群里讨论到自己的持仓、所持股票涨停或跌停；三是强制激活，前晚（或长假中最后一次）"明日打算"为买或卖的人，在次一交易日盘前激活。三类都不满足的人这一时段什么都不做：持仓不变，不发帖，也不花调用。被抽中但缺席的（解析失败、拒答、超时）照样记入激活表 <span class="ref">§9.1 §10.3</span>。</p>
+  <p>MVP 的智能体分两档 <span class="ref">§14.1</span>。Tier-A 50 人，拆为大 V 20 人与深度样本 30 人 <span class="ref">§4.3</span>，有完整记忆与反思，在每个激活点都被激活，用于大 V、典型人群代表、深度样本与审计。Tier-B 500 人，填满 100 格 × 5 人的保底，是人群切片的主要来源，记忆精简、反思低频，只在事件触发和低频例行查看时激活。同一底座内两档用同一个模型，分层只体现在记忆深度、反思频率和激活频率上，避免人设差异与模型大小混淆；小模型延到 Phase 2 扩规模时再用 <span class="ref">§14.1</span>。</p>
+  <p>文档没有给出 ν_i、个人阈值、周末系数和 Tier-B 例行查看频率的具体数值；周末系数要用 <code>collect</code> 采到的真实股吧发帖量估计 <span class="ref">§3.4</span>，发帖率在 Phase 0 探针中测量 <span class="ref">§14.2</span>。所以下面的计算器只用来理解"激活率和发帖率怎样影响调用量"，滑块位置都是示例。</p>
+
+  <h3>计算器：激活率与 token 调用量</h3>
+  <div class="card fd-calc-card">
+    <div class="fd-calc">
+      <label class="ctl">Tier-A 人数 <span class="ref">默认 50，§14.1</span><input type="number" id="fd-na" min="0" max="100000" step="1" value="50"></label>
+      <label class="ctl">Tier-B 人数 <span class="ref">默认 500，§14.1</span><input type="number" id="fd-nb" min="0" max="1000000" step="1" value="500"></label>
+      <label class="ctl">每日固定激活点 <span class="ref">MVP 为 2，§3.4</span><input type="number" id="fd-pts" min="1" max="6" step="1" value="2"></label>
+      <label class="ctl">第 1 次调用输入 token <span class="ref">约 3.0k，§14.2</span><input type="number" id="fd-tin" min="0" step="100" value="3000"></label>
+      <label class="ctl">第 1 次调用输出 token <span class="ref">约 200，§14.2</span><input type="number" id="fd-tout" min="0" step="50" value="200"></label>
+      <label class="ctl">第 2 次调用输入 token <span class="ref">约 3.6k，§14.2</span><input type="number" id="fd-tin2" min="0" step="100" value="3600"></label>
+      <label class="ctl">第 2 次调用输出 token <span class="ref">约 300，§14.2</span><input type="number" id="fd-tout2" min="0" step="50" value="300"></label>
+      <label class="ctl">发帖率（%） <span class="ref">100 即 §14.2 的上限；实际值待 Phase 0 测</span><input type="number" id="fd-post" min="0" max="100" step="5" value="100"></label>
+      <label class="ctl">种子数 × 模型数 <span class="ref">Phase 1 为 3 × 2，§14.2</span><input type="number" id="fd-nm" min="1" max="100" step="1" value="1"></label>
+    </div>
+    <label class="ctl" style="margin-top:12px">Tier-B 每个激活点的平均激活比例：<b id="fd-rate-v">100%</b> <span class="ref">100% 即 §14.2 的上限假设；§14.3 举例从 100% 降到 30%；其余位置为示例</span>
+      <input type="range" id="fd-rate" min="0" max="100" step="5" value="100"></label>
+    <div class="fd-res" id="fd-res" aria-live="polite"></div>
+    <div class="fd-bar" aria-hidden="true"><i id="fd-bar"></i></div>
+    <p class="fd-note" id="fd-bar-l"></p>
+  </div>
+  <p>计算方法：每日激活次数 = Tier-A 人数 × 激活点数 + Tier-B 人数 × 激活点数 × 激活比例；第 1 次调用每次激活都发，第 2 次调用再乘发帖率；全年按 242 个交易日 <span class="ref">§14.2</span>。默认值下第 1 次调用每日 330 万输入、22 万输出，第 2 次调用 396 万输入、33 万输出，合计 726 万 / 55 万 token，与 §14.2 表中"7.26M / 0.55M"一致。第 2 次调用的 3.0k 前缀与第 1 次相同，可命中前缀缓存 <span class="ref">§14.2 §14.3</span>。这张表是单次运行的上限：多个种子和模型要乘 N·M，假设情景的三档价格路径再乘 3。非交易日 20:00 激活点另算，全员激活且发帖的上限是每日 3.63M / 0.28M，全年 123 天，实际还要乘 ν_i × 周末系数 <span class="ref">§14.2</span>。盘中检查点激活、群聊接话、发布者层 L2–L4 帖子、反思、事件抽取与改写、V3 硅基调查和 Jev 评估分类器单独计量，量级都小于主循环 <span class="ref">§14.2</span>。文档不做费用估算，单价以各厂商定价页为准 <span class="ref">§14.2</span>，所以这里也只算 token。</p>
+  <p>Tier-A 在计算器里固定为每个激活点都激活，这是 §14.1 的设定。把 Tier-B 比例拉到 30%，日调用量降到上限的约 36%（示例计算：(50×2 + 500×2×0.3) ÷ 1,100），这就是"激活率是第一杠杆"的含义 <span class="ref">§14.3</span>。其他降本手段（事件级调用、前缀缓存、批处理、响应缓存）不改变激活次数，改变的是每次调用的代价，或重放时是否需要重新调用 <span class="ref">§14.3</span>。</p>
+</section>
+
+<section id="s6" class="reveal">
+  <h2><span class="num">06</span>变体与已定决定</h2>
+  <p class="sub">上面讲的是一个普通交易日在模式 A 下的样子。本节讲同一套时段在周末、不同价格来源、预热期和持续运行里有什么不同，以及设计文档 v0.3 从架构讨论并入的、与一天时序有关的决定。</p>
+
+  <h3>周末与节假日</h3>
+  <p>非交易日每天一个 20:00 晚间激活点，只有信息与社交，没有交易与结算；被激活的是按 ν_i × 周末系数抽中的和被事件触发的人 <span class="ref">§3.4</span>。周末系数取真实股吧非交易日与交易日发帖量之比，用 <code>collect</code> 数据估计 <span class="ref">§3.4</span>。调用同收盘后激活：第 1 次出 <code>BeliefUpdate</code> 和"明日打算"，节后开盘的跳空由此产生；打算为买或卖的人在节后首个交易日盘前强制激活。长假中间的打算改动只作描述，隔夜变卦按最后一次打算算 <span class="ref">§3.4</span>。</p>
+  <p>账户不结算、不出快照，出入金意向顺延到下一交易日（银证转账只在交易日办理〔需复核〕）。长假前最后一个交易日的盘前 prompt 写明"明天起休市 N 天"。群聊与发布者层照常运行，Tier-A 的每周反思放在周末激活点。历史推演的事件窗口含长假时完整跑，如 2024 年国庆 <span class="ref">§3.4</span>。夜间和周末发布的事件进入下一个激活点的候选池 <span class="ref">§5.2</span>。非交易日的 token 上限见第 5 节 <span class="ref">§14.2</span>。</p>
+
+  <h3>价格从哪里来</h3>
+  <p>收盘成交判定需要一条价格路径。§3.5 给了三种用法，时段安排相同，区别只在价格来源：</p>
+  <div class="grid g3">
+    <div class="card"><h4>历史事件推演</h4><p>模式 A：真实历史行情，智能体是价格接受者。用于 V2 主验证场景，对照当时的真实帖子。代价是智能体不影响价格，没有反馈环。<span class="ref">§3.5</span></p></div>
+    <div class="card"><h4>持续运行</h4><p>模式 A：每个交易日的真实行情。产出"前向声音"（当天生成的帖子对照当天真实帖）和长期态度序列。依赖每日数据与真实帖采集。<span class="ref">§3.5 §9.3</span></p></div>
+    <div class="card"><h4>假设情景</h4><p>脚本化价格路径，默认乐观、中性、悲观三档；把路径当作"真实行情"判定成交。情景只写指数路径与点名的板块、个股，其余个股由生成器按 β_j × 指数收益 + 行业冲击 + 个股残差产生；日内开高低收按历史同等涨跌幅日的形态抽样，收盘触及涨跌停的须标明属于一字封板、开板回封还是盘中封板。<span class="ref">§3.5 §8.2</span></p></div>
+  </div>
+  <p>模式 C（真实价格加冲击模型）列为 Phase 3 扩展；模式 B（自建撮合、价格由模拟决定）只作远期选项，不进 MVP <span class="ref">§3.5</span>。</p>
+
+  <h3>预热、持续运行与规则变更</h3>
+  <p><b>预热</b>：正式测量前先跑 20–60 个交易日，让记忆、信任网络和情绪进入稳态；预热期产出在激活表里打 <code>warmup</code> 标记，不进入 V2–V4 验收；情景从快照分叉时，预热放在分叉点之前 <span class="ref">§9.2</span>。预热期的每一天和正式期一样走这些时段。</p>
+  <p><b>持续运行</b>：各激活点按真实时间运行，盘前调用在 08:00–09:15 跑完，盘中检查点与 20:00 晚间激活按时运行，均带时间戳落盘，算前向证据；成交在收盘后判定 <span class="ref">§3.4</span>。产出只追加不重算，当天生成的帖子在生成时确实没见过之后的信息，是最干净的 V2 证据 <span class="ref">§9.3</span>。持续运行按版本线 <code>line_id</code> 管理：代码、prompt、底座版本或内核参数任一项改动就开新线，从最近的日终快照分叉，新旧线并行约 20 个交易日后停旧线。漏跑日按 PIT 补跑，当日盘前订单仍按 T 日行情判定成交；补跑产出标 <code>backfilled=true</code>，不算 V2 前向证据 <span class="ref">§9.3</span>。</p>
+  <p><b>交易规则随日期变化</b>：规则按"生效日 → 参数集"存储，回放时按仿真日期取用 <span class="ref">§8.1</span>。例如 2026-07-06 起，主板 ST 股涨跌幅由 5% 调到 10%，盘后固定价格交易扩展到全部 A 股 <span class="ref">§8.1</span>。所以同一张订单在不同日期过检查，结果可能不同。</p>
+
+  <h3>v0.3 已定的决定</h3>
+  <div class="callout decide"><b class="t">已定（v0.3 §5.5，来自架构讨论 A1）</b>复权：日线存不复权数据和复权因子表，复权因子以除权除息日为 <code>available_at</code>；智能体看到的价格按 <code>asof</code> 当天现算前复权，与当年券商软件显示一致；收益与战绩统一用后复权。这影响盘前和收盘后智能体"看到的价格"。</div>
+  <div class="callout decide"><b class="t">已定（v0.3 §16.1，来自架构讨论 A2）</b>前向存档：采集上证指数吧、创业板吧，每天按前一交易日股吧发帖量取前 30 只个股吧，另固定跟踪 10 只（名单未定），与模拟论坛的吧一致；采集运行在常开服务器上（待准备）。它决定持续运行中每天有哪些真实帖可以对照。</div>
+  <div class="callout decide"><b class="t">已定（v0.3 §5.3，来自架构讨论 A3）</b>改写分工：events 只产出 <code>EventCard</code> 与 L0、L1 两类不带立场的版本；L2–L4 文本都由 social 的发布者产出。L3 可以歪曲但须标注所依据的 <code>event_id</code>；L4 另立 <code>origin="rumor"</code> 的事件卡并带"传闻"标签 <span class="ref">§5.3 §5.6</span>。所以晚间时段的事件卡和 L0/L1 来自 events，之后各时段的转述帖来自 social。发布者怎样逐条出帖见 <a href="sim-publishers.html">发布者演示</a>。§3.3 模块表的 events 一行仍写"按渠道改写（官媒 / 财经快讯 / 传闻）"，与 §5.3 不一致，见第 8 节。</div>
+  <div class="callout decide"><b class="t">已定（v0.3 §6.2、§14.1，来自架构讨论 A4）</b>解析失败：JSON 校验不过时换种子重试（种子进缓存键），最多 2 次；仍失败则该智能体当日记为"未激活"、原因"解析失败"，不填默认值，也不沿用上期信念。失败的尝试也写入缓存，重放时复现同一重试序列。拒答单独记类、不重试，当日同样记缺席 <span class="ref">§6.2</span>。MVP 同一底座内 Tier-A 与 Tier-B 用同一个模型，分层只体现在记忆深度、反思频率与激活频率 <span class="ref">§14.1</span>。</div>
+  <div class="callout decide"><b class="t">已定（v0.3 §3.4、§6.1，来自架构讨论 A6、A7）</b>每次激活两次调用，帖子在成交判定之后写 <span class="ref">§6.1</span>。只有盘前激活产生例行订单，收盘后与非交易日只出 <code>BeliefUpdate</code> 和"明日打算"；LLM 只选执行方式 <code>open</code> / <code>dip</code> / <code>chase</code>，价格由内核定 <span class="ref">§3.4 §6.3 第 6 步</span>。</div>
+  <div class="callout decide"><b class="t">已定（v0.3 §3.4、§9.1、§9.3，来自架构讨论 A10）</b>盘中检查点保留，只由量级 ≥ 3 的盘中事件触发；非交易日每天一个 20:00 晚间激活点；持续运行中盘前调用到 09:15 未完成的记为未激活、原因"超时"，不推迟下单；持续运行按版本线管理，漏跑日补跑并标 <code>backfilled</code>。</div>
+</section>
+
+<section id="s7" class="reveal">
+  <h2><span class="num">07</span>涉及的模块</h2>
+  <p class="sub">一个交易日里出场的模块和它们的分工。表里的"不负责"一栏用来划边界：每件事只有一个模块负责，这样出错时知道去哪里查。</p>
+  <p>orchestrator 是这一天的总调度：它持有仿真时钟，决定每个时段激活谁，阶段内并发、阶段之间按时钟推进 <span class="ref">§9.1 §14.4</span>。其他模块都不自己推进时间。成交判定和账户记账分在 market 与 accounts 两个模块：market 只判断"能不能成交、按什么价、扣多少费"，accounts 负责资金、持仓和 T+1 的状态 <span class="ref">§8.2 §8.4</span>。</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>模块</th><th>出场时段</th><th>负责</th><th>不负责</th></tr></thead>
+      <tbody>
+        <tr><td><a href="mod-orchestrator.html">orchestrator</a></td><td>全天</td><td>仿真时钟、按 §9.1 规则激活（含强制激活与 09:15 超时）、阶段内并发与阶段间推进、事件日志</td><td>不生成帖子或意向，不判定成交</td></tr>
+        <tr><td><a href="mod-data.html">data</a></td><td>全天（每次读取）</td><td>点时读取 <code>available_at ≤ clock</code>（§5.5），日线与复权（§5.5）</td><td>不决定谁能看到哪条信息</td></tr>
+        <tr><td><a href="mod-events.html">events</a></td><td>晚间/隔夜为主</td><td>EventCard、量级打分、L0/L1 版本（§5.2、§5.3）</td><td>不产出 L2–L4 转述</td></tr>
+        <tr><td><a href="mod-social.html">social</a></td><td>各时段</td><td>推荐流打分（§7.3）、发布者 L2–L4 帖子（§5.6）、帖子下一时段可见、群聊最多 M 轮接话（§7.1、§9.1）</td><td>不改智能体的信念，信念由 agents 解读</td></tr>
+        <tr><td><a href="mod-agents.html">agents</a></td><td>盘前、检查点、收盘后、非交易日 20:00</td><td>认知循环与两次调用（§6.1）、内核约束与执行定价（§6.3）、记忆写入（§6.4）</td><td>不判定成交，不直接改账户</td></tr>
+        <tr><td><a href="mod-llm.html">llm</a></td><td>每次激活</td><td>调用、校验、缓存与重试，解析失败与拒答分开记（§6.2）</td><td>不决定是否激活</td></tr>
+        <tr><td><a href="mod-market.html">market</a></td><td>集合竞价、检查点、收盘</td><td>订单检查顺序（§8.1）、成交判定（§8.2 第 1–3 步）、流动性诊断标记（§8.2 第 4 步）、费用</td><td>不写账户</td></tr>
+        <tr><td><a href="mod-accounts.html">accounts</a></td><td>挂单冻结、收盘结算（非交易日不结算，§3.4）</td><td>资金冻结、T+1 可卖量、结算与快照（§8.4）</td><td>不判定能否成交</td></tr>
+        <tr><td><a href="mod-outputs.html">outputs</a></td><td>收盘后落盘</td><td>激活表、帖子、态度、决策三张主表与账户类表（§10.3）</td><td>不重算历史，持续运行只追加（§9.3）</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>想看某一环节的细节，可以接着读这些页面：<a href="sim-publishers.html">发布者演示</a> 展示 L0–L4 在同一事件上的出帖节奏；<a href="sim-personas.html">散户决策演示</a> 把盘前的认知循环和内核七步拆开给不同类型的散户各走一遍；<a href="flow-journey.html">一条新闻的旅程</a> 跟踪单条快讯跨越多个时段；<a href="flow-run.html">运行生命周期</a> 讲一天的落盘怎样组成一次完整的运行与重放。</p>
+</section>
+
+<section id="s8" class="reveal">
+  <h2><span class="num">08</span>开放问题</h2>
+  <p class="sub">设计文档里还没定下来、或标了〔需复核〕的地方。它们会影响一天的时段安排、成交结果或调用量，落地前需要逐条确定。</p>
+  <div class="callout todo"><b class="t">封板成交概率的参数</b>有分钟线时 p = 下单后非封板时长占比 × 排队折扣，排队折扣是假设参数；日线下固定 p 跑 0.1 / 0.3 / 0.5 三档做敏感性分析 <span class="ref">§8.2 第 3 步</span>。"散户涨停买不进率"没有真实数据，参数在报告中标为假设，不进校准目标；排队折扣取多少，文档没有给数值。</div>
+  <div class="callout todo"><b class="t">流动性相关的阈值</b>个人未放大订单超过当日真实成交额"如 1%"、按股票输出资金流要求当日交易智能体数 ≥ N"如 10"，两个数都只是示例；群体资金流超过多少标"需求与流动性不匹配"，文档没有给阈值 <span class="ref">§8.2 第 4 步</span>。</div>
+  <div class="callout todo"><b class="t">费率与两融参数〔需复核〕</b>§8.1 费用一行、交易权限一行和 §8.4 的平仓线 130% 都带〔需复核〕标记；文档要求规则按生效日存储，回放区间里的费率变更也要核实 <span class="ref">§8.1 §8.4</span>。</div>
+  <div class="callout todo"><b class="t">激活参数</b>个人活跃度 ν_i、持仓波动的个人阈值、Tier-B 低频例行查看的频率都没有数值；周末系数待用 <code>collect</code> 数据估计；群聊轮数 M 只给了"如 4 轮"；发帖率在 Phase 0 探针中测量 <span class="ref">§3.4 §7.1 §9.1 §14.2</span>。第 5 节计算器的滑块因此只能是示例。</div>
+  <div class="callout todo"><b class="t">非交易日的出入金〔需复核〕</b>非交易日出入金意向顺延到下一交易日，依据是"银证转账只在交易日办理"，这一条带〔需复核〕标记 <span class="ref">§3.4</span>。</div>
+  <div class="callout todo"><b class="t">盘前发帖能写到哪些成交</b>§6.1 规定第 2 次调用的输入含"当日意向与实际成交"，§3.4 又规定盘前订单按 T 日行情、成交在收盘后判定。盘前激活的第 2 次调用此时只能拿到意向和内核处理结果，<code>open</code> 单的开盘成交是否在 09:25 后补给发帖调用，文档没有写明。本页按"盘前帖只写意向，成交在收盘后激活的帖子里出现"讲解。</div>
+  <div class="callout todo"><b class="t">盘后固定价格交易</b>15:05–15:30 的盘后固定价格交易按收盘价成交，2026-07-06 起扩展到全部 A 股和 ETF <span class="ref">§8.1 §8.2 第 1 步</span>。§3.4 的时段表里没有这一段，执行方式 <code>open</code> / <code>dip</code> / <code>chase</code> 也没有对应它的一项 <span class="ref">§6.3 第 6 步</span>，本页未建模。</div>
+  <div class="callout todo"><b class="t">设计文档内部不一致：events 的改写范围</b>§3.3 模块表的 events 一行写"按渠道改写（官媒 / 财经快讯 / 传闻）"，§5.3 规定 events 只产出 <code>EventCard</code> 与 L0、L1，L2–L4 由 social 产出。本页按 §5.3 讲解，§3.3 待改。</div>
+</section>
+
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function () {
+  'use strict';
+  const STEPS = [];
+  STEPS.push({
+    t: 'T−1 19:00 → T 08:00', name: '晚间/隔夜：事件进入系统', band: 0,
+    who: [['events', 'data'], ['social', 'social'], ['agents · 事件触发者', 'sim'], ['llm', 'llm']],
+    mvp: '§3.4 规定这一时段只激活时政敏感者和群聊活跃者，而且是事件触发；没被触发的人不运行。晚间激活的第 1 次调用只出 BeliefUpdate 和"明日打算"，不出订单 §6.1。',
+    inp: '夜间发布的新闻与公告、隔夜外盘和中概股收盘、群聊里的讨论 §3.4。本例：T−1 日 20:30 示例股A 发布收购公告。',
+    proc: 'events 把公告整理成事件卡（EventCard）并打量级分，按 §5.3 的延迟发出 L0（即时）和 L1（0–10 分钟内）两类不带立场的版本；L2–L4 的观点文本由 social 的发布者以 Post 产出，L3 须标注依据的 event_id §5.3。夜间发布的事件进入下一个激活点的候选池 §5.2。媒介接触到量级 ≥ 3 的事件、或群内讨论其持仓的智能体会被触发 §9.1。被触发者第 1 次调用给出 BeliefUpdate 和明日打算（买 / 卖 / 持有 / 观望 + 标的），写入记忆；要发帖的再走第 2 次调用 §6.1；群聊同群在阶段内顺序接话最多 M 轮，只走发言调用 §7.1。帖子从下一时段起才可见 §9.1。',
+    out: 'EventCard（含量级）、L0/L1 发布；被触发者的 BeliefUpdate、NextDayPlan（明日打算）和 Post（下一时段可见）。',
+    refs: '§3.4 时段表 · §5.2 事件入池 · §5.3 分渠道改写 · §6.1 两次调用 · §7.1 群聊 · §9.1 激活与可见性',
+    log: [
+      ['dim', '[T−1 20:30] data    公告入库 available_at = T−1 20:30'],
+      ['', '[T−1 20:31] events  EventCard ev-示例01 "示例股A 拟收购同行业资产" 量级 = 4（示例）'],
+      ['', '[T−1 20:31] events  L0 原文快讯；L1 媒体速报 +6 分钟（示例延迟，§5.3 范围 0–10 分钟）'],
+      ['', '[T−1 21:10] orch    老周 被触发：群内讨论其持仓（§9.1 触发条件）'],
+      ['', '[T−1 21:11] llm     老周 第 1 次调用：BeliefUpdate 中性偏空；明日打算 = 卖 示例股A（示例）→ 写入记忆'],
+      ['', '[T−1 21:12] llm     老周 第 2 次调用：群聊帖"又是画饼，先看看"（化名，示例）→ 盘前起可见'],
+      ['dim', '[T−1 21:12] orch    老周 明日打算为卖 → 记入 T 日盘前强制激活名单（§3.4）'],
+      ['dim', '[T−1 21:12] orch    小林、王阿姨 未触发，不运行']
+    ]
+  }, {
+    t: '08:00 – 09:15', name: '盘前 ①：感知、解读与意向', band: 1,
+    who: [['orchestrator', 'orch'], ['data', 'data'], ['social · 信息流', 'social'], ['agents · 当天激活者', 'sim'], ['llm', 'llm']],
+    mvp: '盘前是当日唯一产生例行订单的激活点 §3.4。激活三类人：按活跃度 ν_i 抽中者、事件触发者、前晚打算买或卖者（强制激活）§9.1。Tier-A（50 人）每个激活点都激活，Tier-B（500 人）按事件触发加低频例行激活 §14.1。',
+    inp: '盘前汇总 available_at ≤ 09:15 的隔夜信息 §3.4，读数据时带着时钟 §5.5；每人一份按注意力预算挑出的信息流，K_i 为 3–15 条、约 1,500 token §5.4；本人的记忆与账户摘要 §6.4；强制激活者还会看到自己昨晚的明日打算 §3.4。',
+    proc: '先给候选信息打分：score = w_i(渠道)·m(量级)·rel_i·exp(−Δt/τ_d)·sal；持仓异动必入，其余按 softmax(score/T_i) 无放回抽取 §5.4。再做第 1 次调用（interpret + intend），只出结构化字段：BeliefUpdate + DecisionIntent[] + FundingIntent；DecisionIntent 含仓位档 size 和执行方式 execution（open / dip / chase）§6.1 §6.3。这一次不带风格示例帖，也不写帖子；帖子等成交判定之后由第 2 次调用写 §6.1。',
+    out: '每人一份 BeliefUpdate 与 DecisionIntent[]。强制激活者的实际意向与昨晚打算之差记为"隔夜变卦"§3.4，决策表用 plan_ref 指向那条打算 §10.3。',
+    refs: '§3.4 · §5.4 注意力预算 · §5.5 PIT · §6.1 两次调用 · §6.3 DecisionIntent · §9.1 激活 · §10.3 · §14.1',
+    log: [
+      ['', '[08:00] orch    盘前激活：老周（强制激活，前晚打算 = 卖）；小林、王阿姨（按 ν_i 抽中，示例）'],
+      ['', '[08:00] data    pit.query(bars, asof=clock) → 示例股A 最新可得收盘 10.00（T−1 日）'],
+      ['', '[08:01] social  小林 信息流 K = 8（示例值，§5.4 范围 3–15）：L1 速报、老周群聊帖、热榜 3 条……'],
+      ['', '[08:02] llm     小林 第 1 次调用：看多；DecisionIntent buy size = large execution = open（示例）'],
+      ['', '[08:02] llm     老周 第 1 次调用：中性偏空，理由"借利好出货"；DecisionIntent sell size = half execution = dip（示例）'],
+      ['', '[08:02] llm     王阿姨 第 1 次调用：中性，理由"不追高"；DecisionIntent buy size = small execution = dip（示例）'],
+      ['dim', '[08:03] orch    老周 plan_ref → 昨晚打算"卖"，今早实际意向"卖"：本例没有隔夜变卦（示例）']
+    ]
+  }, {
+    t: '08:00 – 09:15', name: '盘前 ②：内核约束与定价', band: 1,
+    who: [['agents · 内核', 'acct'], ['llm / 规则先验 / Jev', 'llm'], ['orchestrator', 'orch']],
+    mvp: '每个激活点分步执行：先并发或批量发送全部第 1 次调用并校验 JSON，再由内核统一做约束与成交判定，最后对发帖者发送第 2 次调用 §14.4 第 3 条。持续运行中盘前调用要在 09:15 前跑完 §3.4 §9.1。',
+    inp: 'DecisionIntent[]、人设卡与内核参数（含挂单幅度 dip_k）、只读账户视图（现金、持仓、可卖数量）。',
+    proc: '意向来源可以是 LLM、规则先验或 Jev §6.6。内核按七步把意向变成订单 §6.3：仓位档映射为目标权重；加行为修正 Δ = (β^herd·H + β^ext·R^(5d) + β^lot·L)/(γ(t)·σ²)，其中 γ(t) = γ(1+η·fear)；卖出时按 U_real 与 λ 计算处置效应；以 1−exp(−ν·a) 的概率看盘，|w*−w| > τ 才调仓；情绪分支（恐慌或躺平）；硬约束与执行；写回记忆。第 6 步按执行方式定价，LLM 不报数字价格：open 买入限价取涨停价、卖出取跌停价；dip 买入限价 = 前收 × (1 − k_i)、卖出 = 前收 × (1 + k_i)；chase 按当日均价加滑点。订单当日有效 §6.3 第 6 步。',
+    out: 'OrderIntent[]（订单）。意向与订单分别记录，两者之差是"言行不一"的原始数据 §6.3 第 7 步。没在时限内完成的智能体记为未激活，进激活表 §9.1 §10.3。',
+    refs: '§6.2 失败处理 · §6.3 内核七步与第 6 步定价 · §6.6 意向来源 · §9.1 超时 · §14.4 第 3 条',
+    log: [
+      ['', '[08:10] kernel  小林 open 买：限价取涨停价 11.00；现金与整手约束 → 买 5,000 股（示例）'],
+      ['', '[08:10] kernel  老周 浮亏卖出：U_real = −λ·ρ·|g|，λ 先验中位数 2.25（§6.3）→ 示例中卖单保留'],
+      ['', '[08:10] kernel  老周 dip 卖：限价 = 10.00 × (1 + 2%) = 10.20，卖 1,000 股，当日有效（示例）'],
+      ['', '[08:11] kernel  王阿姨 dip 买：限价 = 10.00 × (1 − 2%) = 9.80，买 1,000 股，当日有效（示例）'],
+      ['bad', '[08:11] llm     （假设）某 Tier-B 智能体 JSON 校验不过 → 换种子重试 2 次仍失败 → 当日记为未激活，原因 = 解析失败，不填默认值、不沿用上期信念（§6.2）'],
+      ['bad', '[09:15] orch    （假设，持续运行）某智能体盘前调用到 09:15 未完成 → 当日记为未激活，原因 = 超时，不推迟下单（§9.1）'],
+      ['dim', '[09:15] orch    解析失败、超时照样写入激活表；失败率与超时率进运行清单并告警（§6.2、§9.1）']
+    ]
+  });
+  STEPS.push({
+    t: '09:15 – 09:25', name: '集合竞价：开盘单（execution = open）', band: 3,
+    who: [['agents · 有交易意向者', 'sim'], ['market', 'market']],
+    mvp: '9:20–9:25 不能撤单 §8.1。模式 A 下智能体不影响价格，open 单按当天真实开盘价判定，集合竞价无价格笼子 §6.3 第 6 步 §8.2 第 1 步。',
+    inp: 'OrderIntent[] 与只读账户视图。',
+    proc: 'market 按 §8.1 的顺序检查每张单：交易时段 → 权限 → T+1 可卖数量 → 整手与单笔上限 → 涨跌停与价格笼子 → 风险警示股买入上限 → 资金与两融额度。不合规的单直接拒绝并计数，不自动改单，拒单写入事件日志 §8.1。execution = open 的单在这一时段提交，按 §8.2 第 1 步判定：买入限价不低于、卖出限价不高于竞价价格才成交，成交价取竞价价格。dip 单是盘中限价单，挂到收盘按第 2 步判定 §8.2。',
+    out: '通过检查的挂单与拒单记录。买单冻结相应资金：可用资金 = 现金 − 冻结买单 §8.4。',
+    refs: '§3.4 · §6.3 第 6 步 · §8.1 交易时段与检查顺序 · §8.2 第 1 步 · §8.4 资金',
+    log: [
+      ['', '[09:15] market  收到 3 张单（示例）'],
+      ['ok', '[09:15] market  小林 open 买 5,000 @11.00 通过检查；冻结 55,000，可用 5,000'],
+      ['ok', '[09:16] market  老周 dip 卖 1,000 @10.20 通过检查（可卖 2,000 ≥ 1,000）'],
+      ['ok', '[09:16] market  王阿姨 dip 买 1,000 @9.80 通过检查；冻结 9,800'],
+      ['dim', '[09:25] data    开盘价 10.50（真实数据的位置，本例为示例值）'],
+      ['', '[09:25] market  小林 open 单：限价 11.00 ≥ 开盘 10.50 → 按 10.50 成交（§8.2 第 1 步；与结算一并写入，见第 6 步）'],
+      ['dim', '[09:25] market  老周、王阿姨 的 dip 单挂到收盘，按 §8.2 第 2 步判定']
+    ]
+  }, {
+    t: '10:00 / 11:30 / 14:00', name: '盘中检查点：只由量级 ≥ 3 的事件触发', band: 4,
+    who: [['orchestrator', 'orch'], ['agents · 接触到事件者', 'sim'], ['market', 'market'], ['llm', 'llm']],
+    mvp: '检查点没有例行激活：量级 ≥ 3 且 available_at 落在交易时段的事件卡，在其后最近的检查点激活接触到该事件的智能体 §3.4 §9.1。只为事件日的指数与被激活者持仓补分钟线；拿不到分钟线时只出态度与帖子，交易意向转为明日打算，运行清单标"盘中无行情"。盘中激活 token 单独计量 §3.4。',
+    inp: '触发事件卡；检查点之前的分钟数据（智能体看不到之后的）§3.4；被触发者自己的持仓与可卖数量。',
+    proc: '被触发的智能体跑一遍同样的认知循环，常见反应是追涨、止损或补仓，执行方式限 chase；成交价取检查点至收盘的分钟均价加滑点，封板按分钟线走 §8.2 第 3 步 §3.4 §6.3。订单照样走 §8.1 的检查顺序：当天买入的股份只增加总数量，下一交易日开盘前才转为可卖 §8.4。',
+    out: '新的 OrderIntent 或拒单记录；要发帖的走第 2 次调用，Post 下一时段可见 §6.1 §9.1。',
+    refs: '§3.4 盘中事件 · §6.3 第 6 步 · §8.1 检查顺序 · §8.2 第 3 步 · §8.4 T+1 · §9.1 触发条件',
+    log: [
+      ['dim', '[10:40] events  （示例）板块快讯 ev-示例02 量级 = 4，available_at = T 10:40，落在交易时段'],
+      ['', '[10:40] data    为示例股A 与指数补 T 日分钟线（事件日、被激活者持仓）'],
+      ['', '[11:30] orch    最近的检查点 11:30：小林 接触到 ev-示例02 → 被触发；10:00 检查点无人激活'],
+      ['dim', '[11:30] data    小林 只看到 11:30 之前的分钟数据：冲到 11.00 后回落（示例路径）'],
+      ['', '[11:30] llm     小林 DecisionIntent：sell size = half execution = chase（示例）'],
+      ['bad', '[11:30] market  小林 卖 2,500 拒单：T+1，今日买入的可卖数量 = 0（§8.1、§8.4）'],
+      ['dim', '[11:30] market  拒单计数 +1，写入事件日志；不自动改单，原因写回记忆'],
+      ['', '[11:31] llm     小林 第 2 次调用：发帖"炸板了，想卖卖不了"（化名，示例）→ 下一时段可见']
+    ]
+  });
+  STEPS.push({
+    t: '15:00 起', name: '收盘：成交判定与结算', band: 5,
+    who: [['market', 'market'], ['accounts', 'acct'], ['orchestrator', 'orch']],
+    mvp: '收盘价来自收盘集合竞价 §8.1。模式 A 默认用日线判定；只为收盘封板但盘中有低于涨停价成交的股票日和盘中事件日补分钟线 §8.2。15:05–15:30 的盘后固定价格交易本页未建模（见第 8 节）。',
+    inp: 'T 日日线（开、高、低、收）、当天全部挂单、只读账户视图。',
+    proc: '§8.2 第 1–4 步：open 单按开盘价判定；dip 限价买单在限价 ≥ 当日最低价时成交，成交价 min(限价, 最高价)，限价卖单在限价 ≤ 当日最高价时成交，成交价 max(限价, 最低价)；chase 按均价加滑点；一字涨停时买单不成交，收盘封板而盘中开过板的按概率 p 抽签，全成或不成。个人成交不按 w_cap 放大后的量缩减；放大后的群体资金流只作诊断，超过阈值的股票标 liquidity_flag，不改账户 §8.2 第 4 步。未成交的单收盘撤单，"挂单没成交"写回记忆 §6.3 第 6 步。market 输出含费用的 Fill，不写账户；accounts 记账并做日终结算 §8.4。',
+    out: 'Fill、未成交与拒单记录、CashFlow（资金流水）；日终账户快照 §8.4。',
+    refs: '§6.3 第 6 步 · §8.1 收盘价与费用 · §8.2 第 1–4 步 · §8.4 结算与 T+1 · §14.4 第 3 条',
+    log: [
+      ['ok', '[15:00] market   小林 open 买 5,000 → 成交 @10.50，金额 52,500；解冻 2,500'],
+      ['ok', '[15:00] market   老周 dip 卖 1,000 @10.20：10.20 ≤ 最高 11.00 → 成交价 max(10.20, 10.30) = 10.30'],
+      ['', '[15:00] market   老周 印花税 10,300 × 0.05% = 5.15 元（仅卖方收取，费率〔需复核〕，§8.1）'],
+      ['bad', '[15:00] market   王阿姨 dip 买 1,000 @9.80：9.80 < 最低 10.30 → 未成交，收盘撤单，解冻 9,800'],
+      ['dim', '[15:00] agents   王阿姨 写记忆："挂单没成交"（§6.3 第 6 步）'],
+      ['dim', '[15:00] market   示例股A 当天未封板，不走第 3 步抽签；个人成交不做 w_cap 缩减'],
+      ['', '[15:01] accounts 小林 现金 7,500（示例未计佣金与其他规费，§8.1）；持仓 5,000，可卖 0，下一交易日开盘前转为可卖'],
+      ['', '[15:01] accounts 老周 卖出所得当日可再买入，下一交易日起才可取出'],
+      ['dim', '[15:02] accounts 生成日终快照 sim_date = T']
+    ]
+  }, {
+    t: '15:00 – 18:00', name: '收盘后：明日打算、发帖与写记忆', band: 5,
+    who: [['agents · 当日交易者 + ν_i 抽中者 + 事件触发者', 'sim'], ['llm', 'llm'], ['social', 'social']],
+    mvp: '收盘后是 MVP 的第二个固定激活点；第 1 次调用出 BeliefUpdate 和明日打算，不出订单 §3.4 §6.1。',
+    inp: 'T 日收盘行情（读数据时带着时钟，只用 available_at ≤ info_cutoff 的信息 §10.3）、自己当天的意向与实际成交（含未执行原因）、新的信息流。',
+    proc: '第 1 次调用：BeliefUpdate + 明日打算（买 / 卖 / 持有 / 观望 + 标的），写入记忆 §6.1。打算为买或卖的人下一交易日盘前强制激活 §3.4。第 2 次调用只对 want_to_post = True 的人发送，输入含当日意向与实际成交，风格示例帖只放这次 §6.1；同群在阶段内顺序接话最多 M 轮，只走发言调用 §7.1 §9.1。记忆预算约 800 token，其中账户摘要约 100 token §6.4。反思每周一次（Tier-A 放在周末激活点），或在大盈亏之后触发 §6.1。',
+    out: 'NextDayPlan（明日打算）、Post、态度记录、更新后的记忆。',
+    refs: '§3.4 · §6.1 两次调用 · §6.4 记忆 · §7.1 群聊 · §9.1 · §10.3 产出表',
+    log: [
+      ['', '[15:30] orch     收盘后激活：小林、老周（当日交易者）；王阿姨（按 ν_i 抽中，示例）'],
+      ['', '[15:31] llm      小林 第 1 次调用：明日打算 = 卖 示例股A（示例）→ 下一交易日盘前强制激活'],
+      ['', '[15:31] llm      老周 明日打算 = 持有；王阿姨 明日打算 = 观望（示例）'],
+      ['', '[15:32] llm      老周 第 2 次调用：发帖"10.3 走了一半，剩下的躺平"（化名，示例）'],
+      ['', '[15:32] llm      王阿姨 第 2 次调用：群聊帖"挂了个低价没成交"（化名，示例）'],
+      ['dim', '[15:33] social   同群接话 2 轮后无人再回（示例，上限 M 轮，§7.1）'],
+      ['dim', '[15:33] agents   本周未到反思时点，跳过 reflect']
+    ]
+  }, {
+    t: '收盘后', name: '落盘：事件日志、激活表、快照与产出表', band: 5,
+    who: [['orchestrator', 'orch'], ['outputs', 'out']],
+    mvp: '持续运行中各激活点按真实时间运行：盘前调用在 08:00–09:15 跑完，盘中检查点与 20:00 晚间激活按时运行，均带时间戳落盘，算前向证据；成交在收盘后判定 §3.4。事件日志只追加不改写 §9.3。',
+    inp: '当天所有阶段的记录：激活（含缺席）、帖子、意向与明日打算、订单、成交、拒单、资金流水。',
+    proc: 'orchestrator 把所有记录按顺序追加到 /runs/<run_id>/ 下的事件日志，并按 sim_date 存快照，用于重放和分叉；LLM 缓存跨 run 共享。outputs 生成激活表和帖子、态度、决策、成交流水、资金流水、账户快照等表。激活表每个智能体每个激活点一行，被抽中但缺席的也记；其余各表带 activation_id，时点、版本线、补跑、预热等字段从激活表取，每行只用 available_at ≤ info_cutoff 的信息。决策表用 intent_kind 区分订单与明日打算，plan_ref 链回前晚打算 §10.3。',
+    out: '事件日志、sim_date = T 的快照、§10.3 的各张产出表。时钟推进到 T 日晚间；下一天若是非交易日，激活点改为 20:00 §3.4。',
+    refs: '§3.4 持续运行 · §8.4 事件日志 · §9.3 实验类型 · §9.4 RunManifest · §10.3 激活表与产出表',
+    log: [
+      ['', '[18:00] orch     追加事件日志 /runs/<run_id>/（示例：本日 42 条）'],
+      ['', '[18:00] outputs  激活表：老周 phase = 晚间 trigger = 群聊；老周 phase = 盘前 trigger = 强制；小林、王阿姨 phase = 盘前 trigger = ν 抽中（示例）'],
+      ['', '[18:00] outputs  激活表：小林 phase = 盘中 trigger = 事件；某 Tier-B 智能体 status = 缺席 absent_reason = 解析失败（示例）'],
+      ['', '[18:00] outputs  决策表：老周 intent_kind = order，plan_ref → T−1 晚间那条明日打算；三人的收盘后打算 intent_kind = plan'],
+      ['', '[18:00] outputs  帖子表、态度表、成交流水、资金流水、账户快照 更新'],
+      ['', '[18:00] orch     写快照 sim_date = T'],
+      ['dim', '[18:00] orch     时钟 → T 日 19:00（晚间/隔夜），下一轮开始']
+    ]
+  });
+  const $ = id => document.getElementById(id);
+  const demo = $('fd-demo');
+  if (demo && STEPS.length) {
+    let cur = 0, timer = 0;
+    const dots = $('fd-dots'), prev = $('fd-prev'), next = $('fd-next'), play = $('fd-play');
+    const dotBtns = STEPS.map((s, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = (i + 1) + ' ' + String(s.name || '').split('：')[0];
+      b.addEventListener('click', () => { stop(); render(i); });
+      dots.appendChild(b);
+      return b;
+    });
+    function setText(id, v) { const el = $(id); if (el) el.textContent = v == null ? '' : String(v); }
+    function render(i) {
+      const n = STEPS.length;
+      cur = Math.min(n - 1, Math.max(0, Number.isFinite(i) ? i : 0));
+      const s = STEPS[cur];
+      setText('fd-time', '第 ' + (cur + 1) + ' / ' + n + ' 步 · ' + (s.t || ''));
+      setText('fd-name', s.name);
+      const who = $('fd-who');
+      who.textContent = '';
+      const lab = document.createElement('span');
+      lab.className = 'ref';
+      lab.textContent = '本步激活：';
+      who.appendChild(lab);
+      (s.who || []).forEach(w => {
+        const c = document.createElement('span');
+        c.className = 'chip ' + (w[1] || '');
+        c.appendChild(document.createElement('i'));
+        c.appendChild(document.createTextNode(w[0]));
+        who.appendChild(c);
+      });
+      const mvp = $('fd-mvp');
+      mvp.hidden = !s.mvp;
+      mvp.textContent = s.mvp || '';
+      setText('fd-inp', s.inp); setText('fd-proc', s.proc);
+      setText('fd-outp', s.out); setText('fd-refs', s.refs);
+      const log = $('fd-log');
+      log.textContent = '';
+      const head = document.createElement('div');
+      head.className = 'fd-lab';
+      head.textContent = '# 示例记录（示例数据，化名人设与化名个股）';
+      log.appendChild(head);
+      (s.log || []).forEach((l, k) => {
+        const d = document.createElement('div');
+        if (l[0]) d.className = l[0];
+        d.style.animationDelay = (k * 0.08) + 's';
+        d.textContent = l[1];
+        log.appendChild(d);
+      });
+      dotBtns.forEach((b, k) => { b.classList.toggle('on', k === cur); b.classList.toggle('done', k < cur); });
+      prev.disabled = cur === 0;
+      next.disabled = cur === n - 1;
+    }
+    function stop() { if (timer) { clearInterval(timer); timer = 0; } play.textContent = '▶ 自动播放'; }
+    prev.addEventListener('click', () => { stop(); render(cur - 1); });
+    next.addEventListener('click', () => { stop(); render(cur + 1); });
+    $('fd-reset').addEventListener('click', () => { stop(); render(0); });
+    play.addEventListener('click', () => {
+      if (timer) { stop(); return; }
+      if (cur >= STEPS.length - 1) render(0);
+      play.textContent = '⏸ 暂停';
+      timer = setInterval(() => {
+        if (cur >= STEPS.length - 1) { stop(); return; }
+        render(cur + 1);
+      }, 3600);
+    });
+    document.querySelectorAll('.fd-band').forEach(g => {
+      const go = () => {
+        stop();
+        render(parseInt(g.getAttribute('data-step'), 10));
+        const sec = $('s2');
+        if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+      g.addEventListener('click', go);
+      g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    });
+    render(0);
+  }
+  // 计算器：激活率与 token 调用量（示例计算）
+  const res = $('fd-res');
+  if (res) {
+    const ids = ['fd-na', 'fd-nb', 'fd-pts', 'fd-tin', 'fd-tout', 'fd-tin2', 'fd-tout2', 'fd-post', 'fd-nm', 'fd-rate'];
+    const num = (id, lo, hi) => {
+      const el = $(id);
+      const v = el ? parseFloat(el.value) : NaN;
+      if (!Number.isFinite(v)) return lo;
+      return Math.min(hi, Math.max(lo, v));
+    };
+    const fmt = v => {
+      if (!Number.isFinite(v)) return '—';
+      if (v >= 1e8) return (v / 1e8).toFixed(2) + ' 亿';
+      if (v >= 1e4) return (v / 1e4).toFixed(1) + ' 万';
+      return Math.round(v).toLocaleString('zh-CN');
+    };
+    const line = (label, val) => {
+      const d = document.createElement('div');
+      d.appendChild(document.createTextNode(label + '：'));
+      const b = document.createElement('b');
+      b.textContent = val;
+      d.appendChild(b);
+      return d;
+    };
+    const calc = () => {
+      const na = num('fd-na', 0, 1e5), nb = num('fd-nb', 0, 1e6), pts = num('fd-pts', 1, 6);
+      const tin = num('fd-tin', 0, 1e6), tout = num('fd-tout', 0, 1e6), nm = num('fd-nm', 1, 100);
+      const tin2 = num('fd-tin2', 0, 1e6), tout2 = num('fd-tout2', 0, 1e6);
+      const post = num('fd-post', 0, 100) / 100;
+      const rate = num('fd-rate', 0, 100) / 100;
+      const rv = $('fd-rate-v');
+      if (rv) rv.textContent = Math.round(rate * 100) + '%';
+      const acts = na * pts + nb * pts * rate;
+      const cap = (na + nb) * pts;
+      const ratio = cap > 0 ? acts / cap : 0;
+      const days = 242; // §14.2
+      const dIn = acts * tin + acts * post * tin2;
+      const dOut = acts * tout + acts * post * tout2;
+      res.textContent = '';
+      res.appendChild(line('每日激活次数（单次运行）', fmt(acts)));
+      res.appendChild(line('第 1 次调用每日输入 / 输出 token', fmt(acts * tin) + ' / ' + fmt(acts * tout)));
+      res.appendChild(line('第 2 次调用每日输入 / 输出 token', fmt(acts * post * tin2) + ' / ' + fmt(acts * post * tout2)));
+      res.appendChild(line('交易日合计每日输入 / 输出 token', fmt(dIn) + ' / ' + fmt(dOut)));
+      res.appendChild(line('每年（242 个交易日）输入 / 输出 token', fmt(dIn * days) + ' / ' + fmt(dOut * days)));
+      res.appendChild(line('乘以种子数 × 模型数后，每日输入 / 输出 token', fmt(dIn * nm) + ' / ' + fmt(dOut * nm)));
+      const bar = $('fd-bar');
+      if (bar) bar.style.width = (Math.max(0, Math.min(1, ratio)) * 100).toFixed(1) + '%';
+      const bl = $('fd-bar-l');
+      if (bl) bl.textContent = cap > 0
+        ? '激活次数为"全员每点都激活"上限的 ' + (ratio * 100).toFixed(1) + '%（示例计算；不含非交易日 20:00 激活点，也不含单独计量的盘中检查点、群聊接话、发布者层、反思、事件抽取与改写、V3 调查与 Jev 评估分类器，§14.2）'
+        : '人数为 0，没有可激活的智能体';
+    };
+    ids.forEach(id => { const el = $(id); if (el) el.addEventListener('input', calc); });
+    calc();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>运行生命周期 · RetailSim</title>
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="stylesheet" href="assets/components.css">
+<style>
+/* flow-run 私有样式，前缀 fr- */
+.fr-svgwrap{border:1px solid var(--line);border-radius:var(--r);background:rgba(5,8,20,.55);padding:10px}
+.fr-svgwrap svg{display:block;width:100%;height:auto}
+.fr-node{cursor:pointer;outline:none}
+.fr-node rect{transition:stroke .2s,filter .2s;stroke-width:1.5}
+.fr-node:hover rect,.fr-node:focus rect,.fr-node.on rect{stroke:#fff;filter:url(#frGlow)}
+.fr-node text{pointer-events:none}
+.fr-detail{margin-top:14px}
+.fr-detail h4{margin:0 0 8px;color:var(--accent)}
+.fr-kv{display:grid;grid-template-columns:88px minmax(0,1fr);gap:6px 12px;font-size:13.5px;margin:0}
+.fr-kv dt{color:var(--mute)}.fr-kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.fr-mini{font-size:12.5px;color:var(--mute)}
+/* 分步演示 */
+.fr-stepbar{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
+.fr-pill{border:1px solid var(--line2);background:var(--panel);color:var(--ink2);font:600 12.5px var(--mono);width:34px;height:30px;border-radius:9px;cursor:pointer}
+.fr-pill.on{background:linear-gradient(135deg,var(--accent),var(--orch));color:#06101f;border-color:transparent}
+.fr-pill.done{color:var(--ink);border-color:rgba(74,222,128,.5)}
+.fr-ctlrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.fr-stage{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:900px){.fr-stage{grid-template-columns:minmax(0,1fr)}}
+.fr-step h3{margin:0 0 4px}
+.fr-step .fr-ix{font:700 12px var(--mono);color:var(--accent)}
+.fr-io{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px 12px;margin:12px 0 0;font-size:13.5px}
+.fr-io dt{font-weight:700;color:var(--ink2)}
+.fr-io dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.fr-io dt.i{color:var(--data)}.fr-io dt.p{color:var(--orch)}.fr-io dt.o{color:var(--out)}.fr-io dt.r{color:var(--mute)}
+.fr-man{font:12.3px/1.6 var(--mono);background:#050814;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.fr-man .fr-mh{display:flex;justify-content:space-between;gap:8px;color:var(--mute);font-size:11.5px;margin-bottom:6px;flex-wrap:wrap}
+.fr-mr{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:8px;padding:3px 6px;border-radius:6px;transition:background .3s}
+.fr-mr .fk{color:#82aaff;overflow-wrap:anywhere}.fr-mr .fv{color:#c3e88d;overflow-wrap:anywhere}
+.fr-mr.pend .fk{color:#4b5675}.fr-mr.pend .fv{color:#4b5675}
+.fr-mr.new{background:rgba(74,222,128,.14);box-shadow:inset 2px 0 0 var(--ok)}
+.fr-mr.chg{background:rgba(251,191,36,.13);box-shadow:inset 2px 0 0 var(--market)}
+.fr-mr.undef .fv{color:#f78c6c}
+.fr-tree{font:12.3px/1.75 var(--mono);background:#050814;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:12px;overflow-wrap:anywhere}
+.fr-tree div{transition:opacity .3s}
+.fr-tree .off{opacity:.22}
+.fr-tree .nw{color:var(--ok)}
+.fr-tree small{font-family:var(--sans);color:var(--mute)}
+/* 缓存格 */
+.fr-ctl{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:12px 0}
+.fr-grid{display:grid;grid-template-columns:52px repeat(12,minmax(0,1fr));gap:3px}
+.fr-grid .fr-rl{font-size:11.5px;color:var(--ink2);white-space:nowrap;align-self:center}
+.fr-cell{height:22px;border-radius:4px;background:rgba(255,255,255,.06);position:relative}
+.fr-cell.hit{background:rgba(74,222,128,.55)}
+.fr-cell.miss{background:rgba(192,132,252,.78)}
+.fr-cell.err{background:#f87171}
+.fr-cell.warm{outline:1px dashed rgba(251,191,36,.75);outline-offset:-1px}
+.fr-cell.fork::after{content:"";position:absolute;left:-3px;top:-5px;bottom:-5px;width:2px;background:#fff;box-shadow:0 0 6px #fff}
+.fr-axis{font:10px var(--mono);color:var(--mute);text-align:center}
+.fr-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin:8px 0}
+.fr-legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px;background:var(--c)}
+.fr-legend span.fr-lw::before{outline:1px dashed rgba(251,191,36,.75);outline-offset:-1px}
+.fr-nums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+@media(max-width:700px){.fr-nums{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.fr-nums .stat .v{font-size:24px}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="toc"></aside>
+<main>
+<header class="hero">
+<div class="eyebrow"><i></i>流程 · 运行生命周期</div>
+<h1>一次运行，从<span class="grad">配置到重放</span></h1>
+<p class="lead">一次运行（run）先写配置和预注册，再生成人口、按仿真时钟逐日推进，把帖子、态度、决策和账户落盘，然后做 V1–V5 验收；任何一天都能凭事件日志和响应缓存重放，或者从快照分叉成新的情景<span class="ref">§3.1</span><span class="ref">§9.4</span>。</p>
+<div class="meta">
+<span class="chip orch"><i></i>orchestrator · 时钟与运行清单</span>
+<span class="chip llm"><i></i>llm · 响应缓存</span>
+<span class="chip out"><i></i>outputs · 交付表</span>
+<span class="chip val"><i></i>validation · 验收</span>
+</div>
+</header>
+<section id="s1" class="reveal">
+<h2><span class="num">01</span>总览：一次运行的七个环节</h2>
+<p class="sub">一次运行（run）是一次完整的仿真实验，由 orchestrator（编排器）统一调度，以一个 <code>run_id</code> 为身份。它分三段：运行前把配置和判定标准锁定，运行中按仿真时钟逐日推进，运行后落盘、验收，并保留随时重放或分叉的能力<span class="ref">§3.3</span><span class="ref">§9.4</span>。点击图中任一环节查看它的输入、输出和负责模块。</p>
+<div class="fr-svgwrap">
+<svg viewBox="0 0 660 330" role="img" aria-label="运行生命周期总览：配置、预注册、生成人口、运行、落盘、验收，以及重放和分叉回路">
+<defs>
+<marker id="frArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7f8aa8"/></marker>
+<filter id="frGlow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<text x="20" y="34" fill="#7f8aa8" font-size="12.5">运行前 · 看到任何结果之前锁定</text>
+<text x="20" y="160" fill="#7f8aa8" font-size="12.5">运行后 · 落盘与判定</text>
+<text x="460" y="160" fill="#7f8aa8" font-size="12.5">运行中 · 逐日推进</text>
+<g stroke="#7f8aa8" stroke-width="1.6" fill="none" marker-end="url(#frArr)">
+<path d="M200 81H236"/><path d="M420 81H456"/><path d="M550 112V166"/>
+<path d="M460 201H424"/><path d="M240 201H204"/><path d="M330 232V258"/>
+</g>
+<path class="flowline" d="M420 287H550V236" stroke="#c084fc" stroke-width="1.6" fill="none" stroke-dasharray="6 5" marker-end="url(#frArr)"/>
+<g class="fr-node" data-k="cfg" tabindex="0" role="button" aria-label="配置"><rect x="20" y="50" width="180" height="62" rx="12" fill="rgba(34,211,238,.10)" stroke="#22d3ee"/><text x="110" y="77" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">① 配置</text><text x="110" y="98" text-anchor="middle" fill="#7f8aa8" font-size="12.5">configs/ 运行配置</text></g>
+<g class="fr-node" data-k="prereg" tabindex="0" role="button" aria-label="预注册"><rect x="240" y="50" width="180" height="62" rx="12" fill="rgba(74,222,128,.10)" stroke="#4ade80"/><text x="330" y="77" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">② 预注册</text><text x="330" y="98" text-anchor="middle" fill="#7f8aa8" font-size="12.5">docs/prereg/ 提交</text></g>
+<g class="fr-node" data-k="pop" tabindex="0" role="button" aria-label="生成人口"><rect x="460" y="50" width="180" height="62" rx="12" fill="rgba(96,165,250,.10)" stroke="#60a5fa"/><text x="550" y="77" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">③ 生成人口</text><text x="550" y="98" text-anchor="middle" fill="#7f8aa8" font-size="12.5">IPF + 投资史预跑</text></g>
+<g class="fr-node" data-k="run" tabindex="0" role="button" aria-label="运行"><rect x="460" y="170" width="180" height="62" rx="12" fill="rgba(167,139,250,.12)" stroke="#a78bfa"/><text x="550" y="197" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">④ 运行</text><text x="550" y="218" text-anchor="middle" fill="#7f8aa8" font-size="12.5">时钟 · 激活点 · 两次调用</text></g>
+<g class="fr-node" data-k="persist" tabindex="0" role="button" aria-label="落盘"><rect x="240" y="170" width="180" height="62" rx="12" fill="rgba(251,146,60,.10)" stroke="#fb923c"/><text x="330" y="197" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">⑤ 落盘</text><text x="330" y="218" text-anchor="middle" fill="#7f8aa8" font-size="12.5">事件日志 · 快照 · 交付表</text></g>
+<g class="fr-node" data-k="accept" tabindex="0" role="button" aria-label="验收"><rect x="20" y="170" width="180" height="62" rx="12" fill="rgba(74,222,128,.10)" stroke="#4ade80"/><text x="110" y="197" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">⑥ 验收</text><text x="110" y="218" text-anchor="middle" fill="#7f8aa8" font-size="12.5">V1–V5 · V2 总闸</text></g>
+<g class="fr-node" data-k="replay" tabindex="0" role="button" aria-label="重放与分叉"><rect x="240" y="262" width="180" height="50" rx="12" fill="rgba(192,132,252,.12)" stroke="#c084fc"/><text x="330" y="284" text-anchor="middle" fill="#e8ecf7" font-size="16" font-weight="700">⑦ 重放 / 分叉</text><text x="330" y="302" text-anchor="middle" fill="#7f8aa8" font-size="12">读缓存 · 新 run_id</text></g>
+</svg>
+</div>
+<div class="card fr-detail" id="frDetail" aria-live="polite"><h4 id="frDetT">① 配置</h4><dl class="fr-kv" id="frDetKv"></dl></div>
+<p>这张图里有两件事要先说清。第一，"运行前"的三步全部发生在看到任何仿真结果之前：验收用哪些事件、过线标准是多少、拿哪些基线来比，都要先写进预注册并提交到 git，否则事后挑一个好看的指标就失去了检验意义<span class="ref">§11.4</span>。第二，⑦ 是一条回路：事件日志、每日快照和响应缓存三样东西齐全时，任何一天都可以原样重放，也可以从某天的快照分叉出去改一个条件再跑，分叉出的运行拿到新的 <code>run_id</code><span class="ref">§3.1</span><span class="ref">§8.4</span>。</p>
+</section>
+<section id="s2" class="reveal">
+<h2><span class="num">02</span>分步演示：一次情景推演 run 的生命周期</h2>
+<p class="sub">下面跟着一次示例情景推演走完全程：从某日快照分叉，注入一张假设事件卡"印花税再减半"（§9.3 举的例子），在中性价格路径上跑。每一步列出输入、处理、输出和对应文档条目；右侧是运行清单（RunManifest）的字段，本步新写入的标绿，本步被改写的标黄，还没写的是灰色。字段列表取自 §9.4，取值全部是示例数据。</p>
+<div class="callout info"><b class="t">示例数据 · 示意，未实现</b>run_id、日期、取值和目录名都是为了演示编的占位，只有字段名和规则来自设计文档。真实运行里，一个情景要跑 3 条价格路径 × N 个种子 × M 个底座模型<span class="ref">§9.3</span>，这里只跟其中一条分支。</div>
+<div class="fr-ctlrow">
+<button class="btn" type="button" id="frPrev">上一步</button>
+<button class="btn pri" type="button" id="frNext">下一步</button>
+<button class="btn" type="button" id="frPlay" aria-pressed="false">自动播放</button>
+<button class="btn" type="button" id="frReset">重置</button>
+<span class="fr-mini" id="frPos"></span>
+</div>
+<div class="fr-stepbar" id="frBar" role="tablist" aria-label="演示步骤"></div>
+<div class="fr-stage">
+<div class="card fr-step" aria-live="polite">
+<div class="fr-ix" id="frIx"></div>
+<h3 id="frT"></h3>
+<p id="frD"></p>
+<dl class="fr-io">
+<dt class="i">输入</dt><dd id="frI"></dd>
+<dt class="p">处理</dt><dd id="frP"></dd>
+<dt class="o">输出</dt><dd id="frO"></dd>
+<dt class="r">文档条目</dt><dd id="frR"></dd>
+</dl>
+</div>
+<div>
+<div class="fr-man">
+<div class="fr-mh"><span>RunManifest · 示意，未实现</span><span>示例数据</span></div>
+<div id="frMan"></div>
+</div>
+<div class="fr-tree" id="frTree">
+<div data-n="root">/runs/&lt;run_id&gt;/ <small>运行目录，由 orchestrator 管理（§3.3）</small></div>
+<div data-n="man">├─ 运行清单 <small>RunManifest</small></div>
+<div data-n="ev">├─ 事件日志 <small>只追加，不改写（§8.4）</small></div>
+<div data-n="snap">├─ 快照/按 sim_date <small>账户与状态的每日缓存</small></div>
+<div data-n="tbl">└─ 交付表 <small>三张主表、激活表、调查表、信任网络快照、四张账户表，Parquet（§10.3）</small></div>
+<div data-n="cache">响应缓存 <small>跨运行共享，不放在运行目录里（§3.3）</small></div>
+<div data-n="pre">docs/prereg/ <small>预注册文件，git 提交即注册（prereg/README）</small></div>
+</div>
+<p class="fr-mini">目录树里的子项名称是示意。§3.3 只规定了运行目录包含清单、追加式事件日志、按 sim_date 的快照和交付表，具体文件名未定。</p>
+</div>
+</div>
+</section>
+<section id="s3" class="reveal">
+<h2><span class="num">03</span>运行前：配置、预注册与人口</h2>
+<p class="sub">运行前的三步决定"跑什么、拿什么判、谁在跑"。它们的共同点是全部可以入库、可以复查：配置在 <code>configs/</code>，预注册在 <code>docs/prereg/</code>，人口有自己的版本号并写进运行清单<span class="ref">§3.3</span><span class="ref">§9.4</span>。</p>
+<h3>配置：一套模拟，换参数就是另一个实验</h3>
+<p><code>configs/</code> 放所有可以入库的运行参数：人口的 IPF 目标边际、情景与价格路径（乐观 / 中性 / 悲观三档）、模型路由、V1–V5 的及格线。API 密钥放 <code>.env</code>，不进仓库<span class="ref">configs/README</span>。这里有一个容易忽略的设计：基线 B2–B4 和各项消融也写成这里的运行配置。B2 同质人口、B3 打乱人设、B4 去掉社交层，本质上都是"同一套模拟换一个开关"，所以由调度器照常运行，<code>validation</code> 模块不为它们另写代码<span class="ref">§3.3</span><span class="ref">§11.1</span>。这样做的好处是基线和正式运行走完全相同的管线，比较时差异只来自那一个开关。</p>
+<p>配置里还有两个开关会直接影响结论能否成立。一是意向来源（谁给出"想买想卖"的初步意向：LLM、规则先验或 Jev 评估分类器），它是可替换接口，Phase 0 先做三者的对比试验<span class="ref">讨论 Q1</span><span class="ref">§15.1</span>。二是真实帖子注入：默认关，用于验收的运行强制关，开关状态写进运行清单，因为把真实帖喂进信息流会让 V2 的"像不像真人"失去意义<span class="ref">§5.7</span><span class="ref">讨论 Q2</span>。</p>
+<h3>预注册：在看到结果之前把尺子定死</h3>
+<p>预注册（prereg）是把"用什么指标、及格线是多少、在哪些事件上验收、跟哪些基线比"提前登记下来。项目采用轻量做法：Phase 0 结束前登记 V1–V5 的主指标与及格线、验收事件清单和基线集合，其余指标一律算探索性结果<span class="ref">§11.4</span>。操作上，每轮验收运行之前在 <code>docs/prereg/</code> 提交，git 提交时间就是登记时间；已提交的不改写，要改就另起新文件写明原因<span class="ref">docs/prereg/README</span>。</p>
+<p>为什么要这么严：仿真可调的东西太多，跑完再挑一个好看的指标或事件，几乎总能"通过"。预注册之后，已提交的内容不改写，要改只能另起新文件并写明原因<span class="ref">docs/prereg/README</span>；及格线本身允许在 Phase 0 依 B5 噪声底线调整一次<span class="ref">§12.3</span>。止损判据同样在 Phase 0 预注册、事后不改<span class="ref">§15.2</span>。</p>
+<p>样本量也在这一步定。V2 的人工盲评按二项检验估功效：要以 80% 功效、双侧 α = 0.05 检出识别率 60% 对 50%，每个验收事件约需 200 对，盲评由用户及其团队完成，功效用 statsmodels 计算<span class="ref">§11.4</span><span class="ref">讨论 9</span>。验收事件优先选在所有用到的模型（智能体底座、事件抽取、改写、嵌入）训练截止日之后发生的事件，截止日之前的事件只用于调通管线与风格；能被记忆探针或帖子补全探针"补出原文"的时段不用于 V2；验收事件的真实帖不进校准目标和少样本池<span class="ref">§11.3</span><span class="ref">§13.1</span>。</p>
+<h3>生成人口：550 个人从哪里来</h3>
+<p>人口以 CHFS（中国家庭金融调查）家庭为种子样本，用 IPF（迭代比例拟合，一种把样本权重反复调整到吻合各维度目标分布的方法）校准到 <code>configs/</code> 里的目标边际。抽样按 5 个年龄段 × 账户规模 RT1–RT5 × 4 个 MBTI 气质组（NT / NF / SJ / SP）共 100 格，每格保底 5 人，得到 500 个 Tier-B（轻量人设）；Tier-A（深度人设，兼作大 V）50 人另行抽取，合计约 550 人<span class="ref">§4.3</span><span class="ref">§14.1</span>。按格保底而不按账户数等比例抽，是因为 RT4–5 只占账户的 1.8%，却贡献约 32% 的成交额，等比例抽几乎没有大户样本<span class="ref">§4.3</span>。每个人带两种权重：<code>w_head</code> 表示他代表多少真实投资者，<code>w_cap</code> 等于 <code>w_head</code> 乘以他的账户资产；全市场口径用权重加总，人群口径看格内原始样本<span class="ref">§4.3</span><span class="ref">§10.1</span>。V1 用 TVD（总变差距离：两个分布逐项之差的绝对值求和再除以 2）检查边际，及格线是主要边际 TVD ≤ 0.05<span class="ref">§12.3</span>。</p>
+<p>人有了，还需要起始持仓。投资史预跑从每个人的入市年份跑到仿真起点，用规则内核在真实历史行情上调整仓位，得到起点时的持仓与成本价，以及逐年盈亏、最大回撤等经历。预跑只用起点之前的数据、不调 LLM，所以成本低，也不会引入泄漏<span class="ref">§4.4</span><span class="ref">§9.2</span>。预跑的群体结果要对上真实散户的事实：小户整体跑输，2015 年财富从小户流向大户，多数持股家庭报告亏损（CHFS 2013 年为 70.4%）；对不上就调预跑参数，不改写经历文本<span class="ref">§4.4</span>。从人生骨架与预跑结果中选 3–8 个最显著的片段写成带日期的预置记忆，标记 <code>seeded</code><span class="ref">§4.4</span>；预跑得到的起点之前的账户历史单独存放并标 <code>seeded</code>，不与仿真期混在一起<span class="ref">§10.3</span>。每格约 5 人意味着格内差异基本没有统计功效，分人群结论只在合并后的切片（气质组、年龄段、账户规模）上下<span class="ref">§11.4</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §4.3、§14.1，来自架构讨论 A5）</b>
+<p><b>种子不足</b>：CHFS 没有 MBTI，气质组在事后抽取，种子压力落在"年龄段 × 账户规模"25 格上（每格需 20 人）。格内不同种子家庭不足 5 户时，从相邻年龄段、同账户档借种子并把年龄改到本格，人设卡标 <code>seed_borrowed</code>；仍不足则对现有种子做扰动复制，标"种子稀少"（<code>seed_sparse</code>）；完全没有种子的格留空并在报告中写明，不让 LLM 编造人口属性。人群口径结论附"不同种子数 / 借种比例"，种子稀少格只作描述、不做显著性检验；全市场口径照常按 <code>w_head</code> 加权进 V1。阈值 5 户在 Phase 0 看到实际分布后可调<span class="ref">§4.3</span>。</p>
+<p><b>Tier-A 50 人</b>：拆为大 V 20 人与深度样本 30 人。大 V 按入市 ≥ 8 年、金融素养 ≥ 2、外向性偏高、账户偏中大档条件抽样（这些条件是假设，报告中标注）；深度样本按账户档每档 6 人，落在已有 Tier-B 的格内，同格对比作为 V5 的分层效应检验。Tier-A 与 Tier-B 一起做 IPF 得 <code>w_head</code>；人群切片默认只用 Tier-B，Tier-A 单列<span class="ref">§4.3</span><span class="ref">§14.1</span>。</p>
+</div>
+<div class="callout decide"><b class="t">已定（v0.3 §4.4、§5.5，来自架构讨论 A1、A8）</b>
+<p><b>预跑用到的行情</b>：日线从 2005 年起，覆盖股改与 2007 年牛市；2005 年以前的经历只写进人生骨架作文字背景，不在行情上预跑。存不复权日线和复权因子表（以除权除息日为 <code>available_at</code>）；智能体看到的价格按 <code>asof</code> 当天现算前复权，收益与战绩统一用后复权<span class="ref">§5.5</span><span class="ref">§4.4</span>。</p>
+<p><b>按比例预跑</b>：预跑只记仓位权重、收益率、出入金占资产比例，不记绝对金额、不受整手限制；期末整体缩放，使起点资产等于抽样档位金额，整手与最低佣金从仿真起点才生效。缩放后倒推的历史入金与人生骨架收入不相符时重抽经历、记录重抽次数，不改档位；多次仍不合理标 <code>life_asset_conflict</code>。上面"小户跑输""2015 年财富流向"等群体检验看收益率与缩放前的相对财富变化，不受缩放影响<span class="ref">§4.4</span>。</p>
+<p>数据源、各表 <code>available_at</code> 的取值规则与存储格式仍待定，随数据源一起定<span class="ref">§5.5</span>。</p>
+</div>
+</section>
+<section id="s4" class="reveal">
+<h2><span class="num">04</span>运行中：时钟、激活与每一次 LLM 调用</h2>
+<p class="sub">运行阶段由 orchestrator 推时钟、决定谁被激活，llm 模块负责把调用发出去、校验、存进缓存。这一节讲三件事：一天怎么推进，一次调用怎么做到可复现，调用失败时怎么记录<span class="ref">§3.3</span><span class="ref">§9.1</span><span class="ref">§14.4</span>。</p>
+<h3>一天的固定激活点：盘前和收盘后</h3>
+<p>MVP 的仿真时钟每个交易日有两个固定激活点：盘前（08:00–09:15）和收盘后（15:00–18:00）；非交易日只有一个 20:00 晚间激活点；盘中检查点（10:00 / 11:30 / 14:00）只由量级 ≥ 3 的盘中事件触发<span class="ref">§3.4</span>。订单只在盘前产生，按 T 日行情判定成交；盘中事件激活也能下单，但执行方式限 <code>chase</code>。收盘后与非交易日的激活不出订单，第 1 次调用改为 <code>BeliefUpdate</code> 加"明日打算"（买 / 卖 / 持有 / 观望 + 标的），主要产出帖子、结算与测量<span class="ref">§3.4</span><span class="ref">§6.1</span>。</p>
+<p>在某个激活点，一个智能体被激活有三种情况：按活跃度 ν_i 被抽中（相当于例行打开软件看一眼，非交易日按 ν_i × 周末系数）；被触发，即持仓单日波动超过个人阈值、接触到量级 ≥ 3 的事件、群里有人讨论他的持仓、所持标的涨跌停；或被强制激活，即前晚"明日打算"为买或卖的人在次一交易日盘前必须激活。没被激活的人保持持仓、不发帖；被抽中但缺席的（解析失败、拒答、超时）照样记进激活表<span class="ref">§9.1</span><span class="ref">§10.3</span>。持续运行中，盘前调用到 09:15 还没完成的智能体当日记未激活、原因"超时"，不推迟下单<span class="ref">§9.1</span>。</p>
+<p>同一阶段被激活的人并发执行，阶段之间严格按时钟推进，本阶段发的帖子要到下一阶段才可见<span class="ref">§9.1</span>。这条规则让并发结果与执行顺序无关：如果 A 和 B 同时被激活，A 先跑完发的帖子不会被 B 看到，否则结果就取决于谁先返回，重放时无法复现。唯一的例外是群聊：同一个群在阶段内顺序进行最多 M 轮接话，只走发言调用，不影响当阶段交易<span class="ref">§9.1</span><span class="ref">§7.1</span>。价格从哪里来取决于实验类型：历史事件推演和持续运行用真实行情（模式 A），假设情景用乐观 / 中性 / 悲观三档脚本价格<span class="ref">§3.5</span><span class="ref">§9.3</span>。</p>
+<p>每个激活点内部按固定顺序走四步：先并发或批量发送该激活点全部第 1 次调用（解读与意向）并校验 JSON；再由内核统一做约束与成交判定；然后只对要发帖的人发送第 2 次调用（发言，输入含当日意向与实际成交）；群聊接话放在最后，按种子决定的顺序进行<span class="ref">§14.4 第 3 点</span><span class="ref">§6.1</span>。成交判定和费用归 market 模块，记账归 accounts 模块<span class="ref">§3.3</span>。</p>
+<h3>一次调用如何做到可复现</h3>
+<p>API 模型无法保证同一输入得到同一输出，所以可复现完全靠响应缓存：每次调用的结果按缓存键存档，重放时只读缓存，未命中直接报错，不静默重新调用<span class="ref">§14.4 第 1、2 点</span>。缓存键必须包含所有会改变输出的因素，少一个，换了条件的调用就会错误地命中旧结果。</p>
+<pre class="code" data-lang="text"><span class="c"># 缓存键的组成（§14.4 第 1 点）· 示意，未实现</span>
+<span class="f">cache_key</span> = <span class="f">hash</span>(
+  <span class="s">模型 ID 与权重版本</span>,   <span class="c"># API 模型写带日期的版本号（§14.4 第 2 点）</span>
+  <span class="s">推理引擎版本</span>,
+  <span class="s">结构化输出后端</span>,
+  <span class="s">schema</span>,
+  <span class="s">采样参数</span>,
+  <span class="s">种子</span>,
+  <span class="s">完整消息</span>
+)</pre>
+<p>缓存跨运行共享，不放在运行目录里<span class="ref">§3.3</span>。这正是分叉便宜的原因：分叉运行在分叉点之前的消息与母运行完全相同，调用全部命中缓存，只有分叉之后才产生新请求<span class="ref">§14.3 第 5 点</span>。厂商的模型别名可能悄悄指向新版本，所以清单里写带日期的版本号；用更新的模型重跑不算前向证据<span class="ref">§14.4 第 2 点</span><span class="ref">§13.1</span>。</p>
+<p>调用量的上限也在这里算。第 1 次调用（全员）约 3.0k 输入 token、200 输出；第 2 次调用（仅发帖者）约 3.6k 输入（含与第 1 次共用的 3.0k 前缀）、300 输出。550 个智能体在交易日 2 个激活点全部被激活且全部发帖时，每日约 7.26M 输入 / 0.55M 输出，按每年 242 个交易日约 17.6 亿 / 1.33 亿；123 个非交易日的 20:00 激活点另计，每年约 4.5 亿 / 0.34 亿。N 个种子 × M 个底座要乘 N·M（Phase 1 的 3 × 2 即 6 倍），假设情景的三档价格路径再乘 3。这是上限：第 2 次调用的实际量等于上限乘发帖率，按需激活后的实际比例与发帖率都在 Phase 0 探针中测；盘中检查点、群聊接话、发布者帖子、反思、V3 调查与 Jev 单独计量，不在上表内；设计文档不做费用估算<span class="ref">§14.2</span>。</p>
+<h3>调用失败时怎么记</h3>
+<p>核心原则是不编数据：输出坏了就如实记"没激活"，不填默认值，也不沿用上期信念，否则缺席会被伪装成"中性态度"混进统计<span class="ref">§6.2</span>。</p>
+<div class="callout decide"><b class="t">已定（v0.3 §6.2、§14.4，来自架构讨论 A4）</b>
+<p><b>解析失败</b>：Pydantic 校验失败时换新种子重试，最多 2 次；种子是缓存键的一部分，所以每次重试是不同的缓存条目。仍失败则该智能体当天记"未激活"，原因"解析失败"，不填默认值<span class="ref">§6.2</span>。</p>
+<p><b>拒答</b>：模型拒答单独记一类，不重试，当天记缺席。拒答率按话题与人群切片，计入底座模型选型的扣分项<span class="ref">§6.2</span>。</p>
+<p><b>超时</b>：持续运行中盘前调用到 09:15 没完成的，当日记未激活、原因"超时"<span class="ref">§9.1</span>。</p>
+<p><b>重放与告警</b>：失败的尝试也写进缓存，重放时复现同一重试序列。token 用量、解析失败率、拒答率与超时率写进运行清单，超阈值告警；还要检查缺席是否集中在某些人群或某些行情日，结果写进 V1 / V3 报告<span class="ref">§14.4 第 1、6 点</span><span class="ref">§9.4</span>。</p>
+</div>
+<div class="callout decide"><b class="t">已定（v0.3 §14.1、§14.4，来自架构讨论 A4）</b>
+<p><b>底座</b>：MVP 全走国内厂商 API，不自部署；两个底座都从有开源权重的模型中选（如 Qwen、DeepSeek 系列），闭源模型只作对比，具体型号在 Phase 0 按选型标准与记忆探针测完再定，团队若有 GPU 可加一个自部署底座对比<span class="ref">§14.4</span>。同一底座下 Tier-A 与 Tier-B 用同一个模型，分层只体现在记忆深度、反思频率与激活频率；跨底座比较时全体一起换；小模型留到 Phase 2 扩规模时，V2 文风指标与 V5 一致性不退化才切换<span class="ref">§14.1</span>。</p>
+<p><b>网关</b>：自写薄网关，用官方 <code>openai</code> SDK 换 <code>base_url</code>，不用 LiteLLM，不兼容的厂商单写适配器；缓存键、重放未命中报错、失败尝试入缓存、按 <code>run_id</code> 与 <code>persona_id</code> 计量都自己实现；Jev 走同一网关，按分类器类型单独计量。嵌入模型在本地运行开源中文模型，版本号写入运行清单与缓存键<span class="ref">§14.4</span>。</p>
+</div>
+</section>
+<section id="s5" class="reveal">
+<h2><span class="num">05</span>运行后：落盘与验收</h2>
+<p class="sub">落盘的原则是先记事件、再派生表：所有变化追加进事件日志，快照和交付表都能从日志重算。验收对照预注册的及格线，V1–V5 各自出结论，V2 决定帖子能不能交付<span class="ref">§8.4</span><span class="ref">§12.3</span>。</p>
+<h3>运行目录里有什么</h3>
+<p>orchestrator 规定每个运行一个目录 <code>/runs/&lt;run_id&gt;/</code>，里面是运行清单、只追加的事件日志、按 <code>sim_date</code> 存的快照和交付表；accounts 与 outputs 的读写路径都由 orchestrator 给出<span class="ref">§3.3</span>。事件日志记下每一笔下单、拒单、成交、费用和公司行为，账户状态可以由事件回放重建，并与运行清单一一对应。每日快照只是缓存，战绩随时可以从日志重算<span class="ref">§8.4</span>。存储用 Parquet + DuckDB + Polars，事件日志只追加<span class="ref">§14.4</span>。</p>
+<p>交付物是三张主表（帖子、态度、决策）、激活表、调查表、信任网络快照和四张账户类表，全部 Parquet，以 <code>persona_id</code>、<code>event_id</code>、<code>run_id</code> 关联，账户类表另加 <code>sim_date</code>；另附人设表和运行清单<span class="ref">§10.3</span>。激活表每个智能体每个激活点一行，被抽中但缺席的也记，带 <code>line_id</code>、<code>phase</code>、<code>trigger</code>、<code>status</code>、<code>absent_reason</code>、<code>info_cutoff</code>、<code>backfilled</code>、<code>warmup</code> 等字段；其余各表只带 <code>activation_id</code>，时点、版本线、补跑、预热这类行级元数据从激活表取。可得时点按行取 <code>info_cutoff</code>：该行只使用 <code>available_at</code> ≤ <code>info_cutoff</code> 的信息<span class="ref">§10.3</span>。信任网络快照在持续运行中每 20 个交易日出一次<span class="ref">§10.3</span><span class="ref">§7.2</span>。帖子表的 <code>simulated</code> 恒为 true，预跑得到的起点之前的账户历史单独存放并标 <code>seeded</code>；发布者的帖子进帖子表，但不进人群统计<span class="ref">§10.3</span><span class="ref">§10.1</span>。帖子表只在团队内部及内部下游项目之间流转，不接入任何对外渠道；每条帖带 <code>simulated</code> 字段与正文隐式标识，对外展示样例时另加"模拟生成"显式标识<span class="ref">§16.2</span>。各交付表的每一行经激活表都能追溯到唯一的运行清单，这是"可审计"的具体含义<span class="ref">§9.4</span>。</p>
+<h3>验收：五项各自判，V2 是总闸</h3>
+<p>一个情景要跑多个种子和底座，所以态度与决策的聚合值同时记录跨种子均值和标准差，情景结果输出分布，跨种子方差大的切片在报告里标注<span class="ref">§9.4</span>。基线用来回答"得分来自哪里"：B1 单个 LLM 不带人设，B2 同质人口，B3 打乱人设，B4 去掉社交层，B5 真实帖对真实帖的上限（判别器的噪声底线），B6 事件错配<span class="ref">§11.1</span>。及格线与不过线时的处置如下，处置规则在 Phase 0 预注册、事后不改<span class="ref">§12.3</span><span class="ref">§15.2</span>。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>项</th><th>检查什么</th><th>及格线 §12.3</th><th>不过线 §15.2</th></tr></thead>
+<tbody>
+<tr><td>V1</td><td>人口可信：边际与联合分布</td><td>主要边际 TVD ≤ 0.05</td><td>修 IPF 的目标边际与种子样本，不进入 V2 评估</td></tr>
+<tr><td>V2</td><td>声音像不像真人：判别器、人工盲评、风格与话题分布</td><td>人工盲评识别率 ≤ 65%，且显著低于 B1（混合效应逻辑回归）；冻结版判别器 AUC 只要求逐版下降</td><td>先启用风格微调；仍不过则帖子降为内部参考，只交付态度与决策</td></tr>
+<tr><td>V3</td><td>态度：对照调查题</td><td>关键调查题 TVD ≤ 0.2，重大事件方向一致</td><td>调内核映射，不改文本</td></tr>
+<tr><td>V4</td><td>决策：行为矩、言行不一、战绩</td><td>硬目标矩相对误差 ≤ 50%（总量比方向与变化幅度）；软目标只要求方向与排序一致；无目标矩不设线</td><td>修内核，暂停交付决策表与账户类表</td></tr>
+<tr><td>V5</td><td>稳定性与同质化</td><td>校准前跨模型合并人群态度相关 ≥ 0.5，且可比率（跨模型相关 ÷ 同底座跨种子相关）≥ 0.7、方向一致；同底座跨种子相关 &lt; 0.5 时不判</td><td>先处理同质化，不扩规模</td></tr>
+</tbody></table></div>
+<p>表外还有两条止损：记忆探针或帖子补全探针显示底座模型"知道"某验收事件时，该事件不计入验收、改作开发事件；token 用量持续超预算且缓存命中率已无提升空间时，降低 Tier-A 比例<span class="ref">§15.2</span>。校准（MSM 加代理模型和贝叶斯优化，需要后验时用 ABC）只在开发事件上做，在验收事件上检验，两者不能混用<span class="ref">§12.2</span>。</p>
+</section>
+<section id="s6" class="reveal">
+<h2><span class="num">06</span>重放与分叉：缓存决定哪些调用要重新付费</h2>
+<p class="sub">重放是用同一份清单把运行原样再跑一遍，用来证明结果可复现；分叉是从某天的快照出发、改一个条件再跑，用来做情景推演和反事实比较。两者都依赖同一个机制：调用先查响应缓存，命中就不再请求模型<span class="ref">§3.1</span><span class="ref">§14.3 第 5 点</span><span class="ref">§14.4</span>。</p>
+<p>重放的要求最严：LLM 层只读缓存，未命中直接报错。一次重放中途报错，说明清单里某个影响输出的因素变了（例如推理引擎升级、schema 改了），或者缓存条目丢了，这时应当查原因，而不是让网关悄悄重新调用模型补上，因为补上的结果已经不是原来那次运行<span class="ref">§14.4 第 1 点</span>。"同一运行清单的重放一致性测试"列在工程约定的测试清单里<span class="ref">§14.4 第 6 点</span>。</p>
+<p>分叉的代价取决于分叉点在哪里。分叉点之前，分支的消息与母运行完全一样，全部命中缓存；分叉点之后，改动的条件进入了消息或缓存键，调用都要新发<span class="ref">§14.3 第 5 点</span>。分叉出的运行拿新的 <code>run_id</code>，账户、记忆、信任网络按 <code>run_id</code> 写时复制，所以同一个人在不同分支里的状态互不干扰<span class="ref">§8.4</span><span class="ref">§9.3</span>。预热放在分叉点之前，预热期产出在激活表里标 <code>warmup</code>，不进 V2–V4 验收<span class="ref">§9.2</span>。下面的模拟器用 12 个示例交易日演示这一点。</p>
+<p>持续运行用同一套分叉机制管理改动。一组固定的代码、prompt、底座版本与内核参数算一条版本线，记 <code>line_id</code>；任一项改动就开新线，从最近的日终快照分叉，新旧线并行约 20 个交易日，差异记入运行清单后停旧线。已经落盘的历史产出不改、不重算<span class="ref">§9.3</span>。</p>
+<p>漏跑的日子按 PIT 补跑，让账户与记忆保持连续；当日盘前订单仍按 T 日行情判定成交。补跑产出标 <code>backfilled=true</code>，只作开发与校准样本，不算 V2 前向证据，因为补跑时当天的真实帖已经存在；补跑日占比写进运行清单和 V2 报告<span class="ref">§9.3</span><span class="ref">§9.4</span>。</p>
+<div class="card">
+<div class="fr-ctl">
+<label class="ctl">模式<select id="frMode"><option value="fork">分叉</option><option value="replay">重放</option></select></label>
+<label class="ctl"><span id="frDayL">分叉日：第 6 天</span><input type="range" id="frDay" min="2" max="12" value="6"></label>
+<label class="ctl" id="frChgWrap">改动的条件<select id="frChg">
+<option value="event">注入假设事件卡</option><option value="path">换价格路径</option><option value="seed">换种子</option><option value="model">换底座模型</option><option value="tpl">改 prompt 模板</option><option value="inject">打开真实帖子注入</option>
+</select></label>
+<label class="ctl" id="frMissWrap">重放情况<select id="frMiss"><option value="ok">清单与缓存完整</option><option value="gap">所选日缓存缺条目</option></select></label>
+<label class="ctl">种子数 N<input type="number" id="frN" min="1" max="10" value="3"></label>
+<label class="ctl">底座数 M<input type="number" id="frM" min="1" max="5" value="2"></label>
+<label class="ctl">价格路径<select id="frPth"><option value="3">3 档</option><option value="1">1 条</option></select></label>
+<label class="ctl">激活比例<select id="frA"><option value="1">100%（§14.2 上限）</option><option value="0.3">30%（§14.3 举例）</option></select></label>
+</div>
+<div class="fr-legend"><span style="--c:rgba(74,222,128,.55)">命中缓存</span><span style="--c:rgba(192,132,252,.78)">新调用</span><span style="--c:#f87171">未命中即报错</span><span style="--c:rgba(255,255,255,.06)">未执行</span><span class="fr-lw" style="--c:transparent">预热（示意）</span></div>
+<div class="fr-grid" id="frGrid" aria-label="按交易日和阶段显示的缓存命中情况"></div>
+<div class="fr-nums">
+<div class="stat"><div class="v" id="frV1">0</div><div class="l">命中格数 / 总格数</div></div>
+<div class="stat"><div class="v" id="frV2">0</div><div class="l">本分支缓存命中率</div></div>
+<div class="stat"><div class="v" id="frV3">0</div><div class="l">全部分支新调用上限（次）</div></div>
+<div class="stat"><div class="v" id="frV4">0</div><div class="l">新增输入 token 上限</div></div>
+</div>
+<p class="fr-mini" id="frNote" aria-live="polite"></p>
+<p class="fr-mini">示例数据。12 天是演示长度，前 3 天的预热标记只是示意，真实预热为 20–60 个交易日<span class="ref">§9.2</span>。新调用按 550 个智能体 × 每个交易日 2 个固定激活点 × 激活比例 × 分叉后天数 × N × M × 路径数得出激活次数，每次激活计 2 次调用：第 1 次调用约 3.0k 输入 token，第 2 次调用（发言）约 3.6k，这里按全员都发帖的上限计，实际第 2 次调用量还要乘发帖率<span class="ref">§14.2</span>。演示只排交易日，非交易日 20:00 激活点和盘中、群聊调用不计入；分叉后的调用保守地全部算作未命中。</p>
+</div>
+</section>
+<section id="s7" class="reveal">
+<h2><span class="num">07</span>涉及的模块与阶段安排</h2>
+<p class="sub">一次运行几乎经过所有模块，但串起它们的只有 <code>orchestrator</code>。业务模块只经 <code>schemas</code> 共享类型，彼此不导入对方的类型<span class="ref">§3.3</span>。下表只列各模块在"运行生命周期"里管的那一段，模块内部的设计见各自页面。</p>
+<div class="tbl-wrap"><table class="tbl">
+<thead><tr><th>模块</th><th>在一次运行里负责什么</th><th>交出的东西</th><th>详见</th></tr></thead>
+<tbody>
+<tr><td><code>orchestrator</code></td><td>时钟、激活、种子、快照、分叉；定义 <code>/runs/&lt;run_id&gt;/</code> 目录布局和只追加约束</td><td><code>RunManifest</code></td><td><a href="mod-orchestrator.html">调度器</a></td></tr>
+<tr><td><code>llm</code></td><td>统一网关：路由、缓存、批处理、结构化输出、成本计量；Jev 等分类器也经此调用</td><td>调用日志</td><td><a href="mod-llm.html">LLM 网关</a></td></tr>
+<tr><td><code>prompts</code></td><td>prompt 模板与加载器，每个用途 2–3 个等价模板</td><td>模板哈希，写入清单</td><td><a href="mod-prompts.html">Prompt</a></td></tr>
+<tr><td><code>population</code></td><td>合成人口、人设卡、初始持仓</td><td><code>PersonaCard</code></td><td><a href="mod-population.html">人口</a> · <a href="sim-personas.html">人设</a></td></tr>
+<tr><td><code>events</code> · <code>social</code></td><td>事件卡与改写（只产出 L0 官媒转述、L1 快讯两类，<span class="ref">§5.3</span>）；发布者层（L2–L4 文本由发布者以 <code>Post</code> 产出）、信息流、帖子传播</td><td><code>EventCard</code>、<code>Post</code>、<code>FeedItem</code></td><td><a href="mod-events.html">事件</a> · <a href="sim-publishers.html">发布者</a></td></tr>
+<tr><td><code>agents</code> · <code>market</code> · <code>accounts</code></td><td>认知循环与意向；成交判定与费用；记账、结算与快照</td><td><code>DecisionIntent</code> 经内核约束成 <code>OrderIntent</code>、<code>Fill</code>、账户快照</td><td><a href="mod-agents.html">智能体</a> · <a href="mod-market.html">市场</a> · <a href="mod-accounts.html">账户</a></td></tr>
+<tr><td><code>outputs</code></td><td>三张主表、激活表、调查表、信任网络快照与账户类表；切片聚合</td><td>Parquet 交付表</td><td><a href="mod-outputs.html">产出</a></td></tr>
+<tr><td><code>validation</code></td><td>V1–V5 验收、基线、探针、判别器、校准</td><td>验收报告</td><td><a href="mod-validation.html">验收</a></td></tr>
+<tr><td><code>configs/</code> · <code>docs/prereg/</code></td><td>运行配置（人口边际、情景与价格路径、模型路由、及格线、基线与消融）；预注册</td><td>配置与预注册文件</td><td>本页 03 节</td></tr>
+</tbody></table></div>
+<div class="callout decide"><b class="t">已定（v0.3 §5.3、§5.2，来自架构讨论 A3）</b>
+<p>改写按事实与观点分开：events 只产出 <code>EventCard</code> 与 L0（官媒转述）、L1（快讯）两类版本，不带立场，并与 <code>summary</code> 做事实一致性校验；L2–L4 文本全部由 social 的发布者以 <code>Post</code> 产出，成本归入 social。L3 可以歪曲，但必须标注所依据的 <code>event_id</code>；L4 传闻另立 <code>origin="rumor"</code> 的事件卡并带"传闻"标签。与运行清单相关的一条：V2 历史验收事件的量级由团队人工标定，LLM 打分只作参考，两者在模型截止日之后事件上的一致性记入运行清单。</p>
+</div>
+<p>基线 B2–B4 和消融不另写代码，写成 <code>configs/</code> 里的运行配置，由调度器照常运行<span class="ref">§3.3</span>。所以对调度器而言，基线运行和正式运行走的是同一条生命周期。单个交易日内部的时序见 <a href="flow-day.html">一个交易日</a>，一条新闻从发布到进入散户信息流和决策的过程见 <a href="flow-journey.html">一条新闻的旅程</a>。</p>
+<h3>阶段安排（简版）</h3>
+<p>生命周期里的每个环节并不是同时建成的。完整路线见 <a href="index.html">首页</a>，这里只列和运行相关的交付<span class="ref">§15.1</span>。</p>
+<div class="timeline">
+<div class="tl-item"><div class="when">Phase 0 · 2–3 周</div><div class="what">PIT 数据层、事件卡抽取、LLM 网关、探针与判别器 v0。交付预注册文档（主指标、验收事件清单、及格线）和底座模型的截止日表。实际激活比例在这一阶段测<span class="ref">§14.2</span>。</div></div>
+<div class="tl-item"><div class="when">Phase 1 · 4–6 周</div><div class="what">情景推演 MVP：550 智能体，模式 A，2–3 个历史验收事件 + 1 个假设情景 × 3 档价格路径，3 种子 × 2 底座模型。交付端到端可重放与三张主表、激活表、账户类表；过闸条件是 V2 达到及格线。</div></div>
+<div class="tl-item"><div class="when">Phase 2 · 6–10 周</div><div class="what">每日持续运行与前向声音，按版本线管理改动<span class="ref">§9.3</span>；每月补入新开户者<span class="ref">§4.3</span>；个股、推荐流、信任重连、MSM 校准。每日产出含激活表，每 20 个交易日出一次信任网络快照，并出 V1–V5 报告。运行从"一次性推演"变成每日追加，账户跨日连续<span class="ref">§8.4</span>。</div></div>
+<div class="tl-item"><div class="when">Phase 3 · 持续</div><div class="what">冲击模型（模式 C）、风格微调、短视频评论渠道、其他市场、Tier-C 扩规模，按需推进。</div></div>
+</div>
+</section>
+<section id="s8" class="reveal">
+<h2><span class="num">08</span>还没定的事</h2>
+<p class="sub">下面这些问题，设计文档要么只给了原则，要么明确留给后续阶段。实现前要逐条拍板，拍板结果应当写回设计文档，而不是只留在代码里。</p>
+<h3>和运行清单直接相关</h3>
+<ul>
+<li><b>清单字段的类型和命名。</b>§9.4 只列了要记录哪些内容（代码版本、版本线 <code>line_id</code>、数据快照、人口版本、模型与版本、嵌入模型版本、采样参数、种子、模板哈希、意向来源、真实帖子注入开关、场外配资开关、涨停成交概率档位与脚本化残差日期块、各底座的内核校准修正量、缓存命中率、token 用量、解析失败率、拒答率与超时率、补跑日占比、信息流长度分布、事后视角命中率），没有字段名、类型和文件格式。本页演示里的字段名都是示意。</li>
+<li><b>几项"记入运行清单"的内容不在 §9.4 的列表里。</b>§5.2 要求 LLM 与人工量级打分的一致性记入运行清单，§3.4 要求没有分钟线的盘中检查点标"盘中无行情"，§9.3 要求新旧版本线的差异记入运行清单；§9.4 的列表没有点名这几项，字段怎么放还要定。</li>
+<li><b>新旧版本线的差异怎么量。</b>§9.3 定了并行约 20 个交易日、差异记入运行清单后停旧线，但比哪些指标、差多大算可接受，没有写。</li>
+<li><b>预注册怎样和清单挂钩。</b>预注册在每轮验收运行之前提交（<code>docs/prereg/</code> 的说明），但清单里用什么字段指向它（文件哈希、提交号还是编号），文档没有写。</li>
+<li><b>运行目录里的具体文件名。</b>§3.3 规定了目录装什么（清单、只追加的事件日志、按 <code>sim_date</code> 的快照、交付表），没有规定文件名和分片方式。</li>
+</ul>
+<h3>和调用、成本相关</h3>
+<ul>
+<li><b>具体用哪两个底座、哪个版本。</b>§14.4 只定了"国内厂商 API、有开源权重的模型、同一底座内 Tier-A 与 Tier-B 用同一个模型"，具体型号和带日期的版本要在 Phase 0 定，并写进底座模型的截止日表<span class="ref">§15.1</span>。</li>
+<li><b>真实激活比例与发帖率。</b>§14.2 的 token 估算按"每个交易日两个固定激活点、第 1 次调用全员、第 2 次调用仅发帖者"计，表中第 2 次调用按全员发帖的上限算，实际量还要乘发帖率。激活比例和发帖率在 Phase 0 测，测之前本页的成本数字都只是上限。</li>
+<li><b>告警阈值。</b>§14.4 第 6 点要求 token 用量、解析失败率、拒答率与超时率超阈值告警，阈值是多少没有写。</li>
+</ul>
+<h3>和数据、分叉相关</h3>
+<ul>
+<li><b><code>available_at</code> 的规则与存储格式。</b>设计文档只定了复权因子以除权除息日为 <code>available_at</code>（见 03 节的决定框），其余各表的取值规则与存储格式在 §5.5 仍待定，随数据源一起定。它决定预热和分叉时哪些信息能进 prompt，是泄漏测试的基础。</li>
+<li><b>分叉时种子和底座怎样分配。</b>Phase 1 要求 3 种子 × 2 底座模型 × 3 档价格路径<span class="ref">§15.1</span>，但每个组合是不是都从同一个快照分出、快照按哪个种子生成，文档没有说。</li>
+<li><b><code>configs/</code> 的文件格式。</b>§3.3 列了它装哪几类配置，没有格式和校验规则。</li>
+<li><b>费率参数待核实。</b>成交时用到的费用条目在 §8.1 标了〔需复核〕，运行前要按生效日核对后再写进配置。</li>
+</ul>
+<div class="callout todo"><b class="t">本页没有写的数字</b>设计文档没有给出的内容本页一律不写：单次运行的金额成本、告警阈值、一次运行具体从哪天预热到哪天、各步骤的实际缓存命中率。演示和模拟器里出现的天数、ID 和计数都是示例数据。</div>
+</section>
+</main>
+</div>
+<script src="assets/site.js"></script>
+<script>
+(function(){
+'use strict';
+function $(id){return document.getElementById(id);}
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
+function clear(n){while(n&&n.firstChild)n.removeChild(n.firstChild);}
+/* J1 总览图：点节点看详情 */
+(function(){
+var D={
+cfg:{t:'① 配置',who:'configs/ 存放，orchestrator 读取',what:'人口目标边际、情景与价格路径、模型路由、V1–V5 过线标准、基线与消融的运行配置；密钥放 .env',out:'run_id 与运行清单雏形',ref:'§3.3 · configs/README'},
+prereg:{t:'② 预注册',who:'docs/prereg/，由项目组在 Phase 0 结束前提交',what:'登记 V1–V5 主指标与过线、验收事件列表、基线集；git 提交时间即注册时间，提交后不改写',out:'预注册文件；未登记的分析算探索性',ref:'§11.4 · docs/prereg/README'},
+pop:{t:'③ 生成人口',who:'population 模块，合成人口、人设卡和初始持仓都归它',what:'CHFS 种子户经 IPF 校准，100 格每格保底 5 人得 500 个 Tier-B，另抽 50 个 Tier-A；在真实历史上预跑出起始持仓，不调 LLM',out:'人设表、人口版本、起始账户（起点之前的历史单独存放，标 seeded）',ref:'§4.3 · §4.4 · §14.1'},
+run:{t:'④ 运行',who:'orchestrator 管时钟与激活，llm 管调用与缓存',what:'交易日盘前 08:00–09:15 是唯一的常规下单点，收盘后 15:00–18:00 只出态度、明日打算与帖子；盘中检查点只由量级 ≥ 3 的事件触发；非交易日 20:00 一个晚间激活点。每个激活点先批量发第 1 次调用并校验，再由内核约束与判定成交，然后只给发帖者发第 2 次调用，最后按种子顺序跑群聊；盘前到 09:15 未完成的记未激活',out:'帖子、态度、DecisionIntent 或明日打算、经内核约束的 OrderIntent、成交事件、激活表行',ref:'§3.4 · §9.1 · §14.4 第 3 点'},
+persist:{t:'⑤ 落盘',who:'orchestrator 给出读写路径，outputs 写交付表，accounts 写账户事件',what:'事件日志只追加；快照按 sim_date；三张主表、激活表、调查表、信任网络快照和四张账户表用 Parquet，以 persona_id、event_id、run_id 关联，各表带 activation_id，时点、版本线、补跑、预热等行级元数据从激活表取',out:'/runs/<run_id>/ 下的清单、事件日志、快照、交付表',ref:'§3.3 · §8.4 · §10.3'},
+accept:{t:'⑥ 验收',who:'validation 模块（acceptance、baselines、probes、discriminator、calibration 子包）',what:'V1–V5 各自判定，V2 是总闸；与 B1–B6 基线比较；不过线按 §15.2 止损',out:'验收报告与是否交付的结论',ref:'§11 · §12.3 · §15.2'},
+replay:{t:'⑦ 重放 / 分叉',who:'orchestrator 管快照与分叉，llm 管只读缓存',what:'重放只读缓存，未命中报错；分叉从某日快照出发，账户、记忆、信任网络按 run_id 写时复制，改一个条件，分叉点前的调用全部命中缓存；持续运行的改动用同一机制开新版本线（line_id），新旧线并行约 20 个交易日；漏跑日按 PIT 补跑并标 backfilled',out:'重放：一致的交付表；分叉：带新 run_id 的运行；新版本线',ref:'§3.1 · §8.4 · §9.3 · §14.3 · §14.4'}
+};
+var nodes=document.querySelectorAll('.fr-node'),kv=$('frDetKv'),tt=$('frDetT');
+if(!kv||!tt||!nodes.length)return;
+function show(k){
+var d=D[k];if(!d)return;
+tt.textContent=d.t;clear(kv);
+[['负责',d.who],['做什么',d.what],['产出',d.out],['文档',d.ref]].forEach(function(r){kv.appendChild(el('dt',null,r[0]));kv.appendChild(el('dd',null,r[1]));});
+Array.prototype.forEach.call(nodes,function(n){n.classList.toggle('on',n.getAttribute('data-k')===k);});
+}
+Array.prototype.forEach.call(nodes,function(n){
+n.addEventListener('click',function(){show(n.getAttribute('data-k'));});
+n.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();show(n.getAttribute('data-k'));}});
+});
+show('cfg');
+})();
+/* J2 分步演示：数据（示例数据，字段名取自 §9.4） */
+var FR_F=[['id','run_id'],['code','代码版本'],['line','版本线 line_id'],['data','数据快照'],['pop','人口版本'],['model','模型与版本'],['emb','嵌入模型版本'],['samp','采样参数'],['seed','种子'],['tpl','prompt 模板哈希'],['intent','意向来源'],['inject','真实帖子注入'],['offbook','场外配资开关'],['ptier','涨停成交概率档位与残差日期块'],['calib','内核校准修正量'],['hit','缓存命中率'],['tok','token 用量'],['fail','解析失败率'],['refuse','拒答率'],['timeout','超时率'],['backfill','补跑日占比'],['feed','信息流长度分布'],['hind','事后视角命中率']];
+var FR_S=[
+{t:'读配置，建立运行',d:'orchestrator 读入运行配置，分配 run_id，先把复现所需的版本信息写进清单。',i:'configs/ 下的运行配置：情景与价格路径、模型路由、过线标准、基线与消融配置',p:'分配 run_id，建立 /runs/<run_id>/ 运行目录；记下代码版本、版本线 line_id、模型与带日期的版本号、嵌入模型版本、采样参数、种子、prompt 模板哈希、意向来源、各底座的内核校准修正量；真实帖子注入默认关，验收用运行强制关；场外配资开关历史推演默认开',o:'运行目录与清单雏形',r:'§3.3 · §9.4 · §5.7 · §8.4 · §6.3',set:{id:'run_示例_母',code:'<git 提交号>',line:'<line_id>',model:'底座 A · <带日期的版本号>',emb:'<嵌入模型权重版本>',samp:'<来自 configs/ 的采样参数>',seed:'1',tpl:'<模板哈希>',intent:'LLM（可替换为规则先验 / Jev）',inject:'关',offbook:'开（历史推演默认）',calib:'<底座 A 的修正量>'},tree:['root','man']},
+{t:'提交预注册',d:'判定标准必须在看到结果之前锁定。',i:'V1–V5 主指标与过线标准、验收事件列表、基线集',p:'在 Phase 0 结束前提交到 docs/prereg/，git 提交时间就是注册时间；已提交的不改写，改动另起新文件并写明理由；没有登记的分析一律算探索性',o:'预注册文件。清单本步不变：§9.4 的字段表里没有预注册条目，两者怎样关联还没设计',r:'§11.4 · docs/prereg/README · 讨论 8',set:{},tree:['pre']},
+{t:'生成合成人口',d:'按目标边际校准出 550 人的人口，并给出人口版本。',i:'CHFS 家庭样本作为种子；configs/ 里的 IPF 目标边际',p:'IPF 把样本校准到目标边际；按 5 个年龄段 × RT1–RT5 × 4 个气质组共 100 格、每格保底 5 人抽出 500 个 Tier-B；Tier-A 50 人另抽；每人带 w_head、w_cap 两种权重',o:'人设表与人口版本；V1 用 TVD 检查边际',r:'§4.3 · §14.1 · §12.1',set:{pop:'<人口版本号> · 550 人'},tree:[]},
+{t:'投资史预跑',d:'用规则内核在真实历史上跑出每个人的起始持仓。',i:'真实历史行情、规则内核',p:'不调 LLM，只用规则内核跑出起始持仓与成本；预置记忆标 seeded，起点之前的账户历史单独存放并标 seeded，不与仿真期混在一起',o:'起始账户（seeded）、首批事件与快照',r:'§4.4 · §9.2 · §10.3',set:{data:'<行情数据快照版本>'},tree:['ev','snap']},
+{t:'预热',d:'让帖子、记忆和社交关系先跑到稳定状态。',i:'起始账户、人口、预热期行情',p:'正式测量前先预热 20–60 个交易日；预热期的产出在激活表标 warmup，不进入 V2–V4 验收；每次 LLM 调用都写进响应缓存',o:'带预热标记的帖子、态度和决策；每日快照',r:'§9.2 · §14.2 · §14.4',set:{hit:'首次运行，调用全部未命中',tok:'按日累积，交易日上限约 7.26M 入 / 0.55M 出每日'},tree:['cache']},
+{t:'分叉并注入假设事件',d:'从母运行某日的快照分出一个新运行。',i:'母运行某日快照；假设事件卡"印花税再减半"（示例）；脚本价格路径乐观 / 中性 / 悲观，本例取中性',p:'从该日日终快照出发，账户、记忆、信任网络按 run_id 写时复制，注入事件卡；新运行拿新的 run_id；脚本路径的个股残差按块重抽，所用日期块记入清单；分叉点之前的调用全部命中缓存，之后才产生新请求',o:'分叉运行的目录与清单',r:'§9.3 · §3.5 · §8.2 · §8.4 · §14.3 第 5 点',set:{id:'run_示例_印花税_中性_s1_A',offbook:'关（假设情景默认）',ptier:'p = 0.3（0.1 / 0.3 / 0.5 三档之一，示例）· <残差日期块>',hit:'分叉点前全部命中'},tree:[]},
+{t:'按激活点推进',d:'交易日只有盘前一个常规下单点，收盘后只出态度、明日打算与帖子。',i:'当日脚本路径行情、上一阶段已可见的帖子、个人记忆、前晚的明日打算',p:'盘前 08:00–09:15 激活被活跃度 ν_i 抽中、被事件触发或前晚打算买卖而强制激活的人；每个激活点先批量发第 1 次调用（解读与意向）并校验，再由内核约束与判定成交，然后只给想发帖的人发第 2 次调用，最后按种子顺序跑群聊；到 09:15 未完成的记未激活、原因"超时"，不推迟下单；收盘后 15:00–18:00 不出订单；本阶段的帖子到下一阶段才可见，群聊是唯一例外；盘中检查点只由量级 ≥ 3 的事件触发，本例没有',o:'帖子、态度、DecisionIntent 或明日打算、成交与账户事件、激活表行',r:'§3.4 · §9.1 · §14.4 第 3 点',set:{hit:'分叉后的新调用未命中，命中率逐日下降',tok:'按日累积；N·M 和 ×3 路径另乘',timeout:'<比例>',feed:'<分布>'},tree:[]},
+{t:'处理解析失败、拒答与超时',d:'输出坏了不填默认值，也不沿用上期信念，缺席如实记录。',i:'未通过 Pydantic 校验的输出、模型拒答、09:15 前未完成的盘前调用',p:'校验失败换新种子重试，最多 2 次，种子在缓存键里，失败的尝试也写缓存；仍失败则当天记"未激活"，原因"解析失败"。拒答单独记一类，不重试，当天记缺席。三类缺席都写进激活表的 absent_reason',o:'失败、拒答与超时记录；清单里的解析失败率、拒答率与超时率',r:'§6.2 · §9.1 · §10.3 · §14.4 第 1、6 点',set:{fail:'<比例>，过阈值告警（阈值未定）',refuse:'<比例>，按话题与人群切片',timeout:'<比例>，过阈值告警（阈值未定）'},tree:[]},
+{t:'落盘',d:'所有变化先进事件日志，交付表从中派生。',i:'当日全部事件',p:'下单、拒单、成交、费用、公司行为全部追加到事件日志；按 sim_date 写快照；交付表以 Parquet 写出，以 persona_id、event_id、run_id 关联，账户表另加 sim_date；各表带 activation_id，可得时点按行取激活表的 info_cutoff；simulated 恒为 true；事后视角检测的命中率写进清单',o:'三张主表、激活表、四张账户类表、人设表和运行清单（调查表只在 V3 旁路调用时写，信任网络快照每 20 个交易日一次）',r:'§8.4 · §10.3 · §13.1',set:{hind:'<命中率>',backfill:'0（本例无补跑，示例数据）'},tree:['tbl']},
+{t:'验收',d:'对照预注册的过线标准逐项判定。',i:'交付表、预注册的过线标准、基线运行 B1–B6 的结果',p:'汇总量记录跨种子均值和标准差，方差高的切片打标；V1–V5 各自判定，V2 是总闸，不过线帖子不交付；B2–B4 和消融是 configs/ 里的运行配置，照常由调度器跑',o:'验收报告；不过线时按 §15.2 止损',r:'§9.4 · §11.1 · §12.3 · §15.2',set:{},tree:[]},
+{t:'重放',d:'按同一份清单重跑，结果必须一致。',i:'同一份清单、响应缓存、事件日志',p:'LLM 层只读缓存，未命中直接报错；账户状态可由事件回放重建；重放一致性测试比较两次结果',o:'与原运行一致的交付表；不一致即测试失败',r:'§14.4 第 1、6 点 · §8.4',set:{hit:'重放：必须全部命中，未命中即报错'},tree:[]}
+];
+/* J2 分步演示：逻辑 */
+(function(){
+var bar=$('frBar'),man=$('frMan'),tree=$('frTree');
+if(!bar||!man||!tree||!FR_S.length)return;
+var cur=0,timer=null,N=FR_S.length;
+var pills=[];
+FR_S.forEach(function(s,k){
+var b=el('button','fr-pill',String(k+1));
+b.type='button';b.setAttribute('role','tab');b.setAttribute('aria-label','第 '+(k+1)+' 步：'+s.t);
+b.addEventListener('click',function(){stop();go(k);});
+bar.appendChild(b);pills.push(b);
+});
+function firstSetAt(f){for(var j=0;j<N;j++){if(FR_S[j].set&&Object.prototype.hasOwnProperty.call(FR_S[j].set,f))return j;}return -1;}
+function lastSetUpTo(f,k){for(var j=k;j>=0;j--){if(FR_S[j].set&&Object.prototype.hasOwnProperty.call(FR_S[j].set,f))return j;}return -1;}
+function treeFirst(n){for(var j=0;j<N;j++){if((FR_S[j].tree||[]).indexOf(n)>=0)return j;}return -1;}
+function go(k){
+if(isNaN(k))k=0;
+cur=Math.max(0,Math.min(N-1,k));
+var s=FR_S[cur];
+$('frIx').textContent='第 '+(cur+1)+' / '+N+' 步';
+$('frT').textContent=s.t;$('frD').textContent=s.d;
+$('frI').textContent=s.i;$('frP').textContent=s.p;$('frO').textContent=s.o;$('frR').textContent=s.r;
+$('frPos').textContent='示例 run：'+(FR_S[lastSetUpTo('id',cur)]?FR_S[lastSetUpTo('id',cur)].set.id:'未分配');
+pills.forEach(function(b,j){b.className='fr-pill'+(j===cur?' on':(j<cur?' done':''));b.setAttribute('aria-selected',j===cur?'true':'false');});
+clear(man);
+FR_F.forEach(function(f){
+var j=lastSetUpTo(f[0],cur),row=el('div','fr-mr');
+var v=j>=0?FR_S[j].set[f[0]]:'未写入';
+if(j<0)row.classList.add('pend');
+else if(j===cur)row.classList.add(firstSetAt(f[0])===cur?'new':'chg');
+if(v.indexOf('未定')>=0)row.classList.add('undef');
+row.appendChild(el('span','fk',f[1]));row.appendChild(el('span','fv',v));
+man.appendChild(row);
+});
+Array.prototype.forEach.call(tree.querySelectorAll('[data-n]'),function(d){
+var t=treeFirst(d.getAttribute('data-n'));
+d.classList.toggle('off',t<0||t>cur);d.classList.toggle('nw',t===cur);
+});
+$('frPrev').disabled=cur===0;$('frNext').disabled=cur===N-1;
+}
+function stop(){if(timer){clearInterval(timer);timer=null;}var p=$('frPlay');p.textContent='自动播放';p.setAttribute('aria-pressed','false');}
+$('frPrev').addEventListener('click',function(){stop();go(cur-1);});
+$('frNext').addEventListener('click',function(){stop();go(cur+1);});
+$('frReset').addEventListener('click',function(){stop();go(0);});
+$('frPlay').addEventListener('click',function(){
+if(timer){stop();return;}
+if(cur>=N-1)go(0);
+this.textContent='暂停';this.setAttribute('aria-pressed','true');
+timer=setInterval(function(){if(cur>=N-1){stop();return;}go(cur+1);},3200);
+});
+go(0);
+})();
+/* J3 重放与分叉模拟器（示例数据） */
+(function(){
+var grid=$('frGrid');if(!grid)return;
+var DAYS=12,WARM=3,AGENTS=550,PTS=2,TIN1=3000,TIN2=3600; /* §14.2：第 1 次调用约 3.0k 输入，第 2 次约 3.6k，第 2 次按全员发帖的上限计 */
+var CHG={
+event:'假设事件卡进入信息流，分叉日之后每次调用的"完整消息"都变了，这是缓存键的一部分（§14.4 第 1 点）。',
+path:'价格路径改了，行情和 prompt 里的账户摘要随之变化，"完整消息"变，缓存键变。',
+seed:'种子本身就是缓存键的一部分（§14.4 第 1 点），换种子后分叉日之后全部重新调用。',
+model:'"模型 ID 与权重版本"是缓存键的一部分，换底座后分叉日之后全部重新调用。',
+tpl:'模板改了，消息文本变，缓存键变；新的模板哈希写入运行清单（§9.4）。',
+inject:'真实帖子注入默认关闭（§5.7）；打开后信息流里混入真实帖子，"完整消息"变，开关状态写入运行清单（§9.4）。'
+};
+function num(id,lo,hi,def){var v=parseInt($(id).value,10);if(!isFinite(v))v=def;return Math.min(hi,Math.max(lo,v));}
+function fmt(n){if(!isFinite(n)||n<0)return '0';if(n>=1e8)return (n/1e8).toFixed(2)+' 亿';if(n>=1e4)return (n/1e4).toFixed(1)+' 万';return String(Math.round(n));}
+function render(){
+var mode=$('frMode').value,d=num('frDay',2,DAYS,6);
+var n=num('frN',1,10,3),m=num('frM',1,5,2),p=num('frPth',1,3,3);
+var a=parseFloat($('frA').value);if(!isFinite(a)||a<=0||a>1)a=1;
+var gap=$('frMiss').value==='gap';
+$('frChgWrap').style.display=mode==='fork'?'':'none';
+$('frMissWrap').style.display=mode==='replay'?'':'none';
+$('frDayL').textContent=(mode==='fork'?'分叉日：第 ':'缺条目的日子：第 ')+d+' 天';
+clear(grid);
+grid.appendChild(el('div','fr-rl',''));
+for(var i=1;i<=DAYS;i++)grid.appendChild(el('div','fr-axis','D'+i));
+var hit=0,miss=0,err=0,stopped=false,rows=['盘前','收盘后'];
+var st=[];
+for(i=1;i<=DAYS;i++){for(var r=0;r<2;r++){
+var s;
+if(mode==='fork'){s=i<d?'hit':'miss';}
+else if(!gap){s='hit';}
+else if(stopped){s='';}
+else if(i<d){s='hit';}
+else{s='err';stopped=true;}
+st.push(s);if(s==='hit')hit++;else if(s==='miss')miss++;else if(s==='err')err++;
+}}
+for(r=0;r<2;r++){
+grid.appendChild(el('div','fr-rl',rows[r]));
+for(i=1;i<=DAYS;i++){
+var s2=st[(i-1)*2+r],c=el('div','fr-cell'+(s2?' '+s2:''));
+if(i<=WARM)c.classList.add('warm');
+if(i===d&&mode==='fork')c.classList.add('fork');
+var lab={hit:'命中缓存',miss:'新调用',err:'未命中即报错','':'未执行'}[s2];
+c.title='第 '+i+' 天 '+rows[r]+'：'+lab;
+grid.appendChild(c);
+}}
+var ran=hit+miss+err,total=DAYS*2;
+$('frV1').textContent=hit+' / '+total;
+$('frV2').textContent=ran>0?Math.round(hit/ran*100)+'%':'—';
+var after=mode==='fork'?DAYS-d+1:0,branches=n*m*p;
+var acts=AGENTS*PTS*a*after*branches;
+$('frV3').textContent=fmt(acts*2);
+$('frV4').textContent=fmt(acts*(TIN1+TIN2));
+var note;
+if(mode==='fork'){
+note='分叉：'+(d>2?'第 1–'+(d-1)+' 天':'第 1 天')+'沿用母运行的快照与缓存，全部命中；从第 '+d+' 天起 '+CHG[$('frChg').value]+' 分叉运行拿新的 run_id，账户、记忆、信任网络按 run_id 写时复制（§8.4、§9.3）。共 '+branches+' 个分支（'+n+' 种子 × '+m+' 底座 × '+p+' 路径），每个分支 '+after+' 天。';
+}else if(!gap){
+note='重放：用同一份运行清单，所有调用都命中缓存，不产生新调用，结果应与原运行完全一致（§14.4 第 6 点）。';
+}else{
+note='重放：第 '+d+' 天盘前的第一次调用在缓存里找不到，网关直接报错，之后的步骤不再执行（§14.4 第 1 点）。要先查清是清单里哪一项变了或缓存条目丢失，而不是让网关重新调用补上。';
+}
+$('frNote').textContent=note;
+}
+['frMode','frDay','frChg','frMiss','frN','frM','frPth','frA'].forEach(function(id){var e=$(id);if(e){e.addEventListener('input',render);e.addEventListener('change',render);}});
+render();
+})();
+})();
+</script>
+</body>
+</html>
