@@ -1,0 +1,344 @@
+{
+  "date": "2026-10-31",
+  "title": "2026-10-31 论文精选",
+  "lede": "今日主线是“把开销藏到看不见的地方”：从 FSDP 的布局税、MoE 的相位跷跷板、睡眠模型的上下文税，到投机解码被低估的专家复读——系统层的每一笔隐性成本都被逐项计账并消掉。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 769
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "The Endgame of FSDP Communication: Layout-Aware Collectives on Copy Engines, RDMA, and NVSwitch",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-28",
+          "authors": "Zejian Wang, Yifan Zhao, Kaihui Ren, Xiaoling Zhou, Yubin Wang, Chenhao Guan, Lin Zhang, Yufeng Li, Zhikang Mo, Zhuoru Ma, Yingtong Xiong, Jihu Guo, Yiqiao Liao, Chengru Song",
+          "institutions": "KlingAI Research (Kuaishou), Shanghai/Beijing",
+          "abstract": "FSDP2 以逐参数张量存储参数与梯度，但集合通信路径跑在扁平的 rank-major 缓冲区上，布局不一致带来两笔隐性开销：把 all-gather 结果拷回参数存储，仅布局转换在 Llama-3.1 70B、每卡 8K token 训练中就占 step 时间 6.4%；默认 NCCL reduce-scatter 还会让本可单波完成的并发 GEMM 慢 69%。作者提出 TIDE，基于公开 NCCL 2.31+ 接口实现零拷贝集合通信：TIDE-AG 用 NVSwitch 组播加分级递归倍增 RDMA 把分片直接送达参数存储，TIDE-RS 直接消费逐参数 bf16 梯度并归约为 fp32 分片，传输与放置完全不用 SM，靠拷贝引擎与短生命周期 CTA 做节点内累加。两阶段流水线把梯度读取与网络推进解耦，Slot-Reuse 复用已腾空的 all-gather 槽位。",
+          "contributions": [
+            "量化了 FSDP2 的两笔隐形开销：布局转换占 step 时间 6.4%，reduce-scatter 使单波 GEMM 慢 69%。",
+            "提出 TIDE-AG/TIDE-RS 零拷贝集合通信，把布局放置折进通信寻址，全程不占用 SM。",
+            "给出 NCCL 缺失的 bf16 梯度到 fp32 分片混合精度归约路径，并以 Slot-Reuse 复用显存槽位。"
+          ],
+          "conclusions": [
+            "通信与布局开销可以靠“让集合通信直接说参数存储的语言”消掉，而不必放弃 FSDP2 的逐参数存储与计算 kernel。",
+            "把归约从 SM 迁到拷贝引擎后，通信与算力互不挤占，缓冲大小也随规模稳定。"
+          ],
+          "experiments": [
+            "64 卡上相对原生 FSDP2 最多降低 step 时间 27.1%，相对 FSDP2+SymmMem 降低 6.0%（Llama-3.1 70B、Wan2.2、Qwen3-30B-A3B）。",
+            "reduce-scatter 的 SM 时间降低 12.5–14.5 倍，对并发计算的干扰最多降一个数量级。",
+            "固定每卡输出尺寸时，reduce-scatter 缓冲从 16 卡到 64 卡几乎不变；峰值显存比 FSDP2+SymmMem 低至多 4.7 GiB。"
+          ],
+          "significance": "把大模型训练的通信优化从“换算法”推进到“消除布局税”，是 FSDP 通信接近理论上限的一次工程收口。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38228",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38228.pdf",
+          "index": 1,
+          "takeaway": "FSDP 通信的真正余量不在带宽，而在没人计账的布局转换与 SM 抢占。",
+          "keyExperiment": "64 卡相对原生 FSDP2 step 时间最多降 27.1%，reduce-scatter 占用 SM 时间降 12.5–14.5 倍。"
+        },
+        {
+          "title": "PDScope: Breaking the Prefill-Decode Seesaw for Memory-Bound MoE Inference",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-29",
+          "authors": "Enda Yu, Dezun Dong, Zhaoning Zhang, Xiaojian Yang, Weiling Yang, Shaonan Ma, Dongsheng Li, Yongwei Wu, Xiangke Liao",
+          "institutions": "National University of Defense Technology, Tsinghua University, Qiyuan Lab",
+          "abstract": "在 CPU-GPU 节点上本地部署 MoE 大模型受显存限制，多数专家被迫留在 CPU 内存：prefill 算力受限、希望激进加载到 GPU，decode 受 I/O 限制、需要保守的 PCIe 传输，低批量下两者无法摊薄，相位无关的调度器只能陷入跷跷板——偏向 prefill 会注入无法掩盖的 I/O 拖住 decode，偏向 decode 又让 prefill 的 GPU 空转。作者观察到专家路由在两类相位下各自可预测，于是把两相位解耦，分别优化预测、调度与执行：用专家激活预测指导放置与预取，经跨层代价建模为每个相位选贴合其瓶颈的策略，再用静态计算图、缓存预取与零拷贝异步 I/O 把决策编译成无额外开销的流水线。在主流 MoE 模型上，prefill 吞吐提升 2.5–10.3 倍，decode 吞吐提升 2.1–6.1 倍，并能自然扩展到多批量。",
+          "contributions": [
+            "指出本地 MoE 推理的核心矛盾是 prefill 要激进换入、decode 要保守传输，低批量下无法调和。",
+            "利用“专家路由分相位可预测”把 prefill 与 decode 解耦，对预测、调度、执行分别做相位特化。",
+            "用静态计算图、缓存预取与零拷贝异步 I/O 把调度决策落成零运行时开销的流水线。"
+          ],
+          "conclusions": [
+            "相位感知的协同设计能在有限显存下同时抬高 prefill 与 decode 吞吐，跷跷板并非必然而是一种设计缺陷。",
+            "该相位分离框架可扩展到多批量场景，不依赖高批量摊薄。"
+          ],
+          "experiments": [
+            "主流 MoE 模型上 prefill 吞吐相对现有系统提升 2.5–10.3 倍。",
+            "同设置下 decode 吞吐提升 2.1–6.1 倍。",
+            "附录在 V100 上验证吞吐增益，并对预测误差与批量规模做鲁棒性与多批量评测。"
+          ],
+          "significance": "把“显存不够就得在预填充与解码之间二选一”的直觉拆掉，为端侧与私有化 MoE 服务提供了可复用的相位特化范式。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39216",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39216.pdf",
+          "index": 2,
+          "takeaway": "专家路由可预测这件事，一旦按相位分开利用，就同时解开了 prefill 与 decode 的枷锁。",
+          "keyExperiment": "prefill 吞吐 2.5–10.3 倍、decode 吞吐 2.1–6.1 倍提升。"
+        },
+        {
+          "title": "Rimuru: Unified Memory Management for Modern LLM Serving via Elastic Expert Offloading",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.OS",
+          "date": "2026-10-29",
+          "authors": "Zhiyuan Fang, Dingyang Li, Jianfeng Zhong, Bin Wang, Weixi Zhu, Cunshu Ni, Zicong Hong, Wuhui Chen, Zibin Zheng",
+          "institutions": "Sun Yat-sen University, EPFL, Independent Researchers",
+          "abstract": "现代 LLM 服务同时被模型权重与注意力状态挤压显存，现有系统为两类张量各自划固定边界，无法跟随负载变化：重负载下状态容量不足，限制并发、压低吞吐；轻负载下某一区域空闲内存又无法挪给另一区域，白白浪费。同时新架构引入布局与生命周期各异的异构张量，进一步放大管理难度。Rimuru 在 vLLM 之上做统一内存管理：建立共享页池让异构张量弹性共享内存，用内存视图让每类张量按自己的页大小与页表解释同一片空间，再以巨页对齐加多级页分配器的拆分合并实现跨类型容量复用；页表感知的融合 MoE kernel 直接读取非连续专家权重，省掉拷贝开销。其上挂一个负载感知调节器，按运行时需求在张量类型间动态重分配页。",
+          "contributions": [
+            "把“共享池”推进到可用：内存视图让不同粒度、不同布局的张量在同一片内存上各自寻址。",
+            "巨页对齐 + 多级页分配器支持跨类型页的拆分与合并，使权重与注意力状态真正可互相借内存。",
+            "页表感知融合 MoE kernel 直接读非连续专家权重，避免为统一管理付出拷贝代价。"
+          ],
+          "conclusions": [
+            "统一内存管理比分别调参更能应对负载波动，且不必改动模型或牺牲 kernel 效率。",
+            "在 vLLM 上即可落地，对现代 MoE/混合架构保持兼容。"
+          ],
+          "experiments": [
+            "相对基线吞吐最高提升 19.03 倍。",
+            "TTFT 平均降低 98.1%。",
+            "消融覆盖端到端性能、FusedMoE kernel 效率与敏感度分析。"
+          ],
+          "significance": "把服务系统的显存从“分区制”改成“共享页 + 视图”，为异构张量时代的显存管理提供了可实现的抽象。",
+          "arxivUrl": "https://arxiv.org/abs/2610.40305",
+          "pdfUrl": "https://arxiv.org/pdf/2610.40305.pdf",
+          "index": 3,
+          "takeaway": "权重与 KV 不该抢显存，该共用一套页表和账本。",
+          "keyExperiment": "吞吐最高 19.03 倍、TTFT 平均降 98.1%，构建于 vLLM。"
+        },
+        {
+          "title": "DolphinRouting: Cluster-Level Binary Routing for Disaggregated LLM Inference Serving",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-29",
+          "authors": "Yishuo Yuan, Shaoyu Yang, Chunrong Fang",
+          "institutions": "Nanjing University",
+          "abstract": "PD 分离把 prefill 与 decode 拆到不同资源池，但请求级路径选择要同时权衡 prefill 工作量、缓存复用与 decode 压力，靠人工规则很难调准。DolphinRouting 把这一选择当作可从端到端 SLO 反馈中学习的问题：在给定 P/D 资源配比下，按原始 prompt 长度、两个 worker 池上经缓存修正的输入长度以及输出长度信息对请求聚类，离线策略搜索为每个簇学一个二值动作，在线只做特征抽取、簇分配与查表，决定走本地还是远程 prefill。作者在真实 PD 分离集群上，用三个公开基准、混合负载与真实数据评测，相比 Dynamo，混合负载与真实数据下 P90 TTFT 降低 5.7–7.9%，P90 TPOT 降低 2.6–10.1%。",
+          "contributions": [
+            "把 PD 分离中的本地/远程 prefill 选择建模为按簇学习的二值策略，离线搜索、在线查表。",
+            "聚类特征同时编码原始长度、双池缓存修正长度与输出长度，显式照顾缓存复用与 decode 压力。",
+            "在真实 PD 分离集群上以 P90 尾延迟为优化目标验证策略，而非只看吞吐均值。"
+          ],
+          "conclusions": [
+            "请求级路径选择更适合学出来而不是手写规则，且线性查表开销可忽略。",
+            "同样的资源配比下，路由策略本身就能带来可观的尾延迟收益。"
+          ],
+          "experiments": [
+            "混合负载与真实数据下 P90 TTFT 相比 Dynamo 降低 5.7–7.9%。",
+            "P90 TPOT 相比 Dynamo 降低 2.6–10.1%。",
+            "在三个公开基准、混合负载与真实数据上评测，k-means 聚类版本的收益最稳。"
+          ],
+          "significance": "把 PD 分离的调度粒度从“部署拓扑”下沉到“请求路由”，提示尾延迟还有一层便宜的收益可挖。",
+          "arxivUrl": "https://arxiv.org/abs/2610.40292",
+          "pdfUrl": "https://arxiv.org/pdf/2610.40292.pdf",
+          "index": 4,
+          "takeaway": "PD 分离的下一波收益不在加卡，而在每条请求该往哪走。",
+          "keyExperiment": "真实集群上 P90 TTFT 降 5.7–7.9%、P90 TPOT 降 2.6–10.1%（对比 Dynamo）。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Why Speculative Decoding Works Better Than Predicted on Sparse MoE Models",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-28",
+          "authors": "Ekagra Ranjan, Komal K. Teru, Bharat Venkitesh, Acyr Locatelli",
+          "institutions": "Cohere",
+          "abstract": "投机解码利用 decode 阶段访存受限的特点，用一次前向验证多个草稿 token 来加速自回归推理。此前工作认为 MoE 的加速比与批量成凹形关系，专家饱和使收益在中等批量见顶。作者在 10 个稀疏 MoE 模型（30B 至 1T 参数、8 至 512 个专家）上重测，发现近期细粒度模型打破这一趋势，低批量下加速反而更高。原因在于验证代价不只由被激活专家的字节数决定，还受草稿 token 之间的时间重叠与 GPU 执行特性影响：低批量下细粒度模型的 MoE 层占运行时比例远小于其权重占比，H100 上的 kernel profiling 显示这主要来自 MoE kernel 相对注意力更高的带宽利用率，以及 L2 吸收了共路由专家的重复读取；跨草稿 token 的路由重叠又进一步减少了验证期唯一激活的专家数。作者用最大熵迭代比例拟合框架从路由重叠统计预测唯一专家数，误差低于 4%。",
+          "contributions": [
+            "在 10 个 30B–1T、8–512 专家的稀疏 MoE 上重测投机解码，证伪“加速比随批量凹形下降”的既有结论。",
+            "把验证代价归因拆成激活专家字节数、草稿间时间重叠与 GPU 执行动态三层，并用 H100 上 kernel profiling 支撑。",
+            "提出最大熵 IPF 框架，用路由重叠统计预测验证期唯一专家数。"
+          ],
+          "conclusions": [
+            "细粒度 MoE 在低批量下更受益于投机解码，部署时应按专家粒度而非参数量预估收益。",
+            "路由重叠是决定验证真实成本的一阶因素，独立同分布假设会系统性低估收益。"
+          ],
+          "experiments": [
+            "IPF 模型预测唯一专家数误差低于 4%。",
+            "在 10 个 30B–1T 参数、8–512 专家的稀疏 MoE 上完成评测，覆盖细粒度与粗粒度两类模型。",
+            "合成路由实验复现了真实模型在低批量下加速升高的定性趋势。"
+          ],
+          "significance": "纠正了业界用“专家饱和”估算投机解码收益的经验法则，为细粒度 MoE 的部署决策提供可计算模型。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38981",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38981.pdf",
+          "index": 5,
+          "takeaway": "投机解码在 MoE 上的收益被低估了，因为大家都忘了草稿 token 之间会复读同一批专家。",
+          "keyExperiment": "10 个 MoE 实测 + IPF 预测唯一专家数误差 <4%，细粒度模型低批量加速更高。"
+        },
+        {
+          "title": "KV Cache Quantization for Diffusion Language Models",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-29",
+          "authors": "Yan Tai, Yunan Ding, Guangzhao Li, Siqi Luo, Chaoyang Zhang, Guangtao Zhai, Guodong Guo, Xiaohong Liu",
+          "institutions": "Shanghai Jiao Tong University, The Hong Kong Polytechnic University, Eastern Institute of Technology Ningbo",
+          "abstract": "KV cache 量化在自回归语言模型中研究充分：因果注意力下缓存的前缀状态是精确的，量化只是缓存重建问题。扩散语言模型打破这一前提：快速 dLLM 推理会在多个去噪步之间复用 KV 状态，而被掩码 token 逐步揭示时双向表示会变化，复用的缓存可能在量化之前就已偏离完整重算结果。作者研究这种复用误差下的 KV 量化，把 KIVI 与 KVQuant 适配到 Fast-dLLM 式前缀缓存与双缓存复用，并提出 TRACE 与 dLLM-KVQ：TRACE 从 prompt-答案对重建可行的揭示轨迹，给出与迭代掩码解码匹配的校准状态；dLLM-KVQ 据此按输出级与注意力级行为指标挑选需要保持高精度的逐层 K 缓存条目，V 仍走标准低比特量化。在 LLaDA 与 Dream 上评测 GSM8K、HumanEval、MATH、MBPP，4-bit 与 2-bit 下平均分均居量化方法之首。",
+          "contributions": [
+            "指出 dLLM 的 KV 复用误差先于量化存在，自回归“缓存精确、只需重建”的假设不成立。",
+            "提出 TRACE，从 prompt-答案对重建可行揭示轨迹，产出与迭代掩码解码一致的校准状态。",
+            "dLLM-KVQ 只对行为敏感的 K 条目保高精度、V 全低比特，在 2-bit 下仍站得住。"
+          ],
+          "conclusions": [
+            "dLLM 的 KV 量化必须把揭示轨迹纳入校准，否则误差会与量化误差叠加放大。",
+            "非对称处理（K 精选、V 全压）比统一比特宽度更契合扩散解码的敏感性分布。"
+          ],
+          "experiments": [
+            "LLaDA 与 Dream 上覆盖 GSM8K、HumanEval、MATH、MBPP 四个基准。",
+            "4-bit 与 2-bit 的前缀/双缓存设置下平均分均为量化方法中最高。",
+            "附录给出 KIVI/KVQuant 的适配细节与量化粒度消融。"
+          ],
+          "significance": "为扩散语言模型的缓存压缩补上缺失的一环：先修轨迹偏差，再谈比特宽度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39853",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39853.pdf",
+          "index": 6,
+          "takeaway": "扩散模型复用 KV 时，缓存在量化之前就已经偏了——校准必须按揭示轨迹来。",
+          "keyExperiment": "LLaDA/Dream 四基准上 2-bit 与 4-bit 平均分均居量化方法首位。"
+        },
+        {
+          "title": "Multi-View MoE: Letting Every Router Shape Expert Computation",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-29",
+          "authors": "Zelin Zhao, Tianchi Ma, Junyuan Shang, Shuohuan Wang, Dianhai Yu",
+          "institutions": "ERNIE Team, Baidu",
+          "abstract": "稀疏 MoE 用少量激活专家扩大参数容量，固定激活预算下专家选择直接决定模型能力。作者对全部专家做稠密评估后发现，单路由器排序与按专家效用评估的排序在中层与深层尤其不一致；而用更丰富信号做选择与计算都要付代价：基于专家内部激活的选择需要先算一遍，把多个完整表示分别送进同一专家又会重复计算。Multi-View MoE 用多个路由器改进选择，并复用它们的分歧调制专家计算：多路由子模块聚合多个独立初始化路由器的 sigmoid 分数，这些路由器在训练中形成高度差异化的专家偏好，使被单一路由器强偏好或被多个路由器共同支持的专家都能入选；每个被选专家还按其跨路由相对分数把学到的潜视图混入输入。每个被选专家仍只做一次前向，激活专家数、专家 FLOPs 与 all-to-all 通信量都不变。",
+          "contributions": [
+            "用稠密评估揭示单路由器排序与专家真实效用在中深层严重失配。",
+            "多路由器聚合选择，并额外把跨路由相对分数用于调制专家输入，一份信号两用。",
+            "在激活专家数、专家 FLOPs 与 all-to-all 流量全部不变的前提下取得增益。"
+          ],
+          "conclusions": [
+            "路由器之间的分歧不是噪声而是可利用的结构信号，关键在于怎么零成本地用掉它。",
+            "扩充路由视角比扩充专家计算更划算，因为前者不增加通信与算力。"
+          ],
+          "experiments": [
+            "24 层 10B-A1B 模型、708B token 训练，九任务下游均值提升 1.18 个百分点。",
+            "仅多路子模块即带来 0.6 个百分点提升。",
+            "路由分数与专家效用的秩相关全局相对提升 8.1%，单路由对齐最差的那一层提升约 58%。"
+          ],
+          "significance": "给出了一条“不增加任何推理开销就提升 MoE 质量”的路线，对现有 MoE 训练配方是低风险替换。",
+          "arxivUrl": "https://arxiv.org/abs/2610.40577",
+          "pdfUrl": "https://arxiv.org/pdf/2610.40577.pdf",
+          "index": 7,
+          "takeaway": "多个路由器吵起来的分歧，正好可以免费当成专家计算的调制信号。",
+          "keyExperiment": "10B-A1B/708B token 上九任务均值 +1.18pp，激活专家数与通信量不变。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "GAAC: Lossless KV Compression for Bandwidth-Efficient LLM Inference on Personal Devices",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-10-28",
+          "authors": "Yipin Guo, Arun M George, Siddharth Joshi",
+          "institutions": "University of Notre Dame",
+          "abstract": "权重量化能大幅压缩 LLM 的存储与显存，但长上下文推理中不断增长的 KV cache 仍是个人设备上的瓶颈。GAAC 是一个无损 KV 压缩与服务体系，利用指数位冗余在不引入 KV 近似的前提下降低存储并加速注意力：它用按通道校准的 base-plus-offset 码对连续区间内的 BF16 指数位编码，在小分组内自适应码宽，同时保证 KV 数值逐比特不变；融合注意力 kernel 在片上即时重建 KV 瓦片，避免整缓存解压，块状压缩与固定容量槽位又支持增量更新与分页服务。在五个模型上实现 1.405–1.407 倍无损压缩，FP8 E4M3 缓存 1.09–1.14 倍、E5M2 缓存 1.25–1.30 倍。DGX Spark 上 64K 上下文解码注意力加速 1.19–1.27 倍，常驻 KV 显存降约 26%，吞吐提升 13–29%。",
+          "contributions": [
+            "把 KV 压缩从“有损近似”改成“指数位无损编码”，压缩与精度不再需要权衡。",
+            "设计融合注意力 kernel 在片上即时重建瓦片，让压缩不阻碍增量更新与分页服务。",
+            "在 NVIDIA 与 Apple 两类设备上验证可移植性，覆盖 BF16 与 FP8 缓存。"
+          ],
+          "conclusions": [
+            "靠数据格式本身的冗余（指数位）就能拿到约 1.4 倍免费压缩，代价远低于有损量化。",
+            "无损压缩的收益主要体现在显存驻留与带宽，端到端加速幅度小于注意力层加速。"
+          ],
+          "experiments": [
+            "五个模型上 BF16 KV 实现 1.405–1.407 倍无损压缩。",
+            "DGX Spark 上 64K 上下文解码注意力加速 1.19–1.27 倍。",
+            "常驻 KV 显存降约 26%，同 KV 显存预算下聚合吞吐提升 13–29%。"
+          ],
+          "significance": "为端侧长上下文推理提供了一条不牺牲数值精度的显存/带宽优化路径。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38210",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38210.pdf",
+          "index": 8,
+          "takeaway": "指数位是 KV cache 里最没信息量的一段，压缩它既无损又直接省带宽。",
+          "keyExperiment": "1.405–1.407 倍无损压缩、KV 显存降 26%、吞吐 +13–29%。"
+        },
+        {
+          "title": "Nemotron 3.5 Super and Lightning: Open, Efficient Mixture-of-Experts Hybrid Mamba-Transformer Models for Agentic AI",
+          "score": 4.8,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-10-28",
+          "authors": "NVIDIA (Nemotron Team)",
+          "institutions": "NVIDIA",
+          "abstract": "NVIDIA 发布 Nemotron 3.5 Super 与 Lightning 两个 MoE 混合 Mamba-Transformer 模型，面向推理、长上下文与 agent 负载：Super 为 120B 参数、12B 激活的多模态模型，Lightning 为 30B 参数、3B 激活的文本模型。均结合大规模蒸馏、长上下文训练与原生投机解码，Super 另加 Indic 预训练与 agentic 软件工程中期训练；后训练覆盖 SFT、RLVR 与 RLHF，并以多教师 on-policy 蒸馏把文本基座变成可推理图像、视频与工具环境的多模态 agent。Super 在 SWE-bench Pro 上达 51.78%，激活参数少约 4.6 倍仍超过 Nemotron 3 Ultra；MTP 增强让投机解码接受长度最高提升 21.8%，NVFP4 相对 BF16 恢复 99.62% 精度。",
+          "contributions": [
+            "开源 120B-A12B 多模态与 30B-A3B 文本两个 MoE 混合 Mamba-Transformer 模型，均原生带投机解码。",
+            "构建含 MOPD 多教师 on-policy 蒸馏的后训练流水线，把文本基座转成多模态 agent。",
+            "把训练效率与部署效率一起做量化交付：NVFP4 恢复率、单卡吞吐与每用户速率同报。"
+          ],
+          "conclusions": [
+            "小激活参数 + 高质量蒸馏可以在 agentic 编码任务上超过更大激活的上一代模型。",
+            "混合 Mamba-Transformer 与原生投机解码结合，是长上下文 agent 负载下兼顾吞吐与体验的实用组合。"
+          ],
+          "experiments": [
+            "SWE-bench Pro 51.78%，激活参数约为 Nemotron 3 Ultra 的 1/4.6 仍超越。",
+            "后训练 MTP 增强使概率式草稿采样下投机解码接受长度最高提升 21.8%。",
+            "NVFP4 量化恢复 99.62% 中位精度；GB200 上单卡最高 4,856 输出 token/s，且每用户 ≥50 token/s。"
+          ],
+          "significance": "开放权重阵营又添一个“小激活、高 agent 能力”的旗舰，训练与部署效率指标同框发布的方式值得对标。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38095",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38095.pdf",
+          "index": 9,
+          "takeaway": "12B 激活打赢上一代 Ultra，靠的是蒸馏配方而非堆参数。",
+          "keyExperiment": "SWE-bench Pro 51.78%，激活参数少 4.6 倍仍超越 Nemotron 3 Ultra。"
+        },
+        {
+          "title": "PhOSv1: Efficient Scaling of Model Sleeping on a Single Server for Autoscaling with GPU-Context Deduplication",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-29",
+          "authors": "Tianle Sun, Xingda Wei, Rong Chen",
+          "institutions": "Shanghai Jiao Tong University",
+          "abstract": "模型即服务系统中自动扩缩的关键是快，扩容时间直接决定服务过载时长与服务质量。vLLM、SGLang 等主流引擎采用的 model sleeping 通过暂停预启动引擎实现近零成本扩容，但并非免费午餐：每个睡眠模型必须常驻 GPU 上下文，这一开销随模型数量线性增长，拖累服务性能，而提供商必须支持大量模型，于是陷入“全部模型都能快扩容”与“高性能服务”的两难。作者发现睡眠模型的上下文大量重复：CUDA 驱动上下文可跨模型共享，GPU kernel 二进制也因共用算子与库高度重叠。PhOSv1 通过 API remoting 把每个引擎的 GPU 上下文分配透明委托给中心守护进程，从而去重；单机可睡眠的模型数远超现有引擎。评测显示其扩容时间与原生 vLLM sleep 模式持平，同时显著降低显存占用并提升多模型端到端服务性能。",
+          "contributions": [
+            "把 model sleeping 的隐性成本显式化为“每模型一份 GPU 上下文”的线性税。",
+            "观测到睡眠模型的 CUDA 驱动上下文与 kernel 二进制高度重复，具备去重空间。",
+            "用 API remoting 把上下文分配委托给中心守护进程，对引擎透明、无需改上层代码。"
+          ],
+          "conclusions": [
+            "快扩容与高性能并非零和，前提是把休眠态的上下文从“每模型独占”改为“共享去重”。",
+            "单机可保持的睡眠模型数可从数十量级推到远超现有引擎的上限。"
+          ],
+          "experiments": [
+            "扩容时间与原生 vLLM sleep 模式持平。",
+            "显存占用显著降低，使单机可睡眠模型数大幅增加。",
+            "多模型端到端服务性能优于现有 sleep 方案。"
+          ],
+          "significance": "为多模型 MaaS 的冷启动问题给出系统级解法：扩容快慢的瓶颈原来在上下文重复而不是调度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39999",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39999.pdf",
+          "index": 10,
+          "takeaway": "睡眠模型的显存税，大半是同一份 CUDA 上下文被抄了很多遍。",
+          "keyExperiment": "扩容时间与 vLLM sleep 持平，显存占用大幅下降、单机可睡眠模型数远超现有引擎。"
+        }
+      ]
+    }
+  ]
+}
