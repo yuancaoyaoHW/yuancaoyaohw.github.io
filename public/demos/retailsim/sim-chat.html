@@ -4,68 +4,95 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>群聊演示 · RetailSim</title>
+<script src="assets/theme-init.js"></script>
 <link rel="stylesheet" href="assets/theme.css">
 <link rel="stylesheet" href="assets/components.css">
 <style>
-.ch-app{display:grid;grid-template-columns:250px minmax(0,1fr) 230px;height:680px;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;background:#0e1621;box-shadow:var(--shadow);margin:14px 0}
-.ch-side{background:#17212b;border-right:1px solid #0b1118;display:flex;flex-direction:column;min-width:0}
-.ch-search{margin:10px;padding:7px 12px;border-radius:999px;background:#242f3d;color:var(--mute);font-size:13px}
+/* 群聊室配色：深色仿 Telegram 夜间，浅色仿日间 */
+:root{
+  --ch-bg:#0e1621;--ch-side:#17212b;--ch-sep:#0b1118;--ch-search:#242f3d;--ch-hover:#202b36;--ch-sel:#2b5278;
+  --ch-sub:#8a9aa9;--ch-blue:#3e9ae0;--ch-dots:rgba(255,255,255,.035);
+  --ch-pill:rgba(0,0,0,.45);--ch-pill-ink:#d5dde6;--ch-turn:#6f8396;
+  --ch-bub:#182533;--ch-bub-ink:#e9eef3;--ch-me:#2b5278;--ch-bub-hover:rgba(255,255,255,.12);
+  --ch-meta:#7d8e9e;--ch-pt:rgba(255,255,255,.07);--ch-pt-ink:#aeb9c6;--ch-rm-ink:#fca5a5;--ch-sh-ink:#fdba74;
+  --ch-qc:#65aadd;--ch-quote:rgba(255,255,255,.05);--ch-quote-ink:#b8c4cf;--ch-fwd:#6ab3f3;
+  --ch-btn-line:#2f3e4e;--ch-btn-ink:#c9d4de;--ch-label:#9fb0bf;--ch-dot-off:#4b5966;
+  --ch-track:rgba(255,255,255,.07);--ch-flow:#94a3b8;--ch-act:#38bdf8;
+  --ch-grid:rgba(255,255,255,.06);--ch-grid0:rgba(255,255,255,.18);--ch-ring:#0b1020;
+}
+:root[data-theme="light"]{
+  --ch-bg:#e8edf2;--ch-side:#fff;--ch-sep:#dbe2e9;--ch-search:#eff2f5;--ch-hover:#f1f4f7;--ch-sel:#dbeafe;
+  --ch-sub:#64748b;--ch-blue:#2481cc;--ch-dots:rgba(15,23,42,.05);
+  --ch-pill:rgba(15,23,42,.08);--ch-pill-ink:#3d4863;--ch-turn:#5b6b7b;
+  --ch-bub:#fff;--ch-bub-ink:#0f1720;--ch-me:#dcecff;--ch-bub-hover:rgba(15,23,42,.16);
+  --ch-meta:#64748b;--ch-pt:rgba(15,23,42,.06);--ch-pt-ink:#475569;--ch-rm-ink:#b91c1c;--ch-sh-ink:#c2410c;
+  --ch-qc:#2b7fc4;--ch-quote:rgba(15,23,42,.04);--ch-quote-ink:#475569;--ch-fwd:#2481cc;
+  --ch-btn-line:#cfd8e1;--ch-btn-ink:#334155;--ch-label:#475569;--ch-dot-off:#c3ccd5;
+  --ch-track:rgba(15,23,42,.08);--ch-flow:#64748b;--ch-act:#0284c7;
+  --ch-grid:rgba(15,23,42,.07);--ch-grid0:rgba(15,23,42,.22);--ch-ring:#fff;
+}
+/* 浅色下把人物识别色压暗一些再当文字用 */
+:root[data-theme="light"] .ch-bub .nm{color:color-mix(in srgb,var(--nmc) 68%,#000)}
+:root[data-theme="light"] .ch-quote b{color:color-mix(in srgb,var(--qc,var(--ch-qc)) 68%,#000)}
+.ch-app{display:grid;grid-template-columns:250px minmax(0,1fr) 230px;height:680px;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;background:var(--ch-bg);box-shadow:var(--shadow);margin:14px 0}
+.ch-side{background:var(--ch-side);border-right:1px solid var(--ch-sep);display:flex;flex-direction:column;min-width:0}
+.ch-search{margin:10px;padding:7px 12px;border-radius:999px;background:var(--ch-search);color:var(--mute);font-size:13px}
 .ch-glist{overflow:auto;flex:1}
 .ch-gi{display:flex;gap:10px;align-items:center;padding:8px 10px;cursor:pointer;border:0;background:none;width:100%;text-align:left;color:var(--ink);font:inherit}
-.ch-gi:hover{background:#202b36}.ch-gi.on{background:#2b5278}
+.ch-gi:hover{background:var(--ch-hover)}.ch-gi.on{background:var(--ch-sel)}
 .ch-av{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;font-size:15px}
 .ch-av.sm{width:30px;height:30px;font-size:12px}
 .ch-gi .t{flex:1;min-width:0}.ch-gi b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ch-gi small{display:block;color:#8a9aa9;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ch-gi .r{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:11px;color:#8a9aa9}
-.ch-badge{min-width:20px;padding:0 6px;border-radius:999px;background:#3e9ae0;color:#fff;font-size:11.5px;font-weight:700;line-height:20px;text-align:center}
+.ch-gi small{display:block;color:var(--ch-sub);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-gi .r{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font-size:11px;color:var(--ch-sub)}
+.ch-badge{min-width:20px;padding:0 6px;border-radius:999px;background:var(--ch-blue);color:#fff;font-size:11.5px;font-weight:700;line-height:20px;text-align:center}
 .ch-gi.on .ch-badge{display:none}
-.ch-main{display:flex;flex-direction:column;min-width:0;background-color:#0e1621;background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:18px 18px}
-.ch-head{display:flex;gap:10px;align-items:center;padding:8px 14px;background:#17212b;border-bottom:1px solid #0b1118}
-.ch-head b{font-size:15px}.ch-head small{display:block;color:#8a9aa9;font-size:12.5px}
+.ch-main{display:flex;flex-direction:column;min-width:0;background-color:var(--ch-bg);background-image:radial-gradient(var(--ch-dots) 1px,transparent 1px);background-size:18px 18px}
+.ch-head{display:flex;gap:10px;align-items:center;padding:8px 14px;background:var(--ch-side);border-bottom:1px solid var(--ch-sep)}
+.ch-head b{font-size:15px}.ch-head small{display:block;color:var(--ch-sub);font-size:12.5px}
 .ch-head .sp{flex:1}
 .ch-msgs{flex:1;overflow:auto;padding:10px 14px 16px;scroll-behavior:smooth}
 .ch-day{text-align:center;margin:12px 0 6px}
-.ch-day span{display:inline-block;padding:2px 12px;border-radius:999px;background:rgba(0,0,0,.45);color:#d5dde6;font-size:12px}
-.ch-turnsep{text-align:center;color:#6f8396;font-size:11.5px;margin:4px 0}
+.ch-day span{display:inline-block;padding:2px 12px;border-radius:999px;background:var(--ch-pill);color:var(--ch-pill-ink);font-size:12px}
+.ch-turnsep{text-align:center;color:var(--ch-turn);font-size:11.5px;margin:4px 0}
 .ch-row{display:flex;gap:8px;align-items:flex-end;margin:5px 0;transition:opacity .2s}
 .ch-row.me{flex-direction:row-reverse}
 .ch-row.dim{opacity:.22}
 .ch-row.new .ch-bub{animation:chPop .35s ease}
 @keyframes chPop{from{transform:translateY(8px) scale(.97);opacity:0}to{transform:none;opacity:1}}
-.ch-bub{position:relative;max-width:min(520px,80%);padding:6px 10px 5px;border-radius:12px 12px 12px 4px;background:#182533;color:#e9eef3;cursor:pointer;border:1px solid transparent;min-width:0}
-.ch-row.me .ch-bub{background:#2b5278;border-radius:12px 12px 4px 12px}
-.ch-bub:hover{border-color:rgba(255,255,255,.12)}.ch-bub.sel{border-color:var(--social);box-shadow:0 0 0 2px rgba(244,114,182,.25)}
-.ch-bub .nm{font-size:13px;font-weight:700;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.ch-bub .nm em{font-style:normal;font-weight:400;font-size:11px;color:#8a9aa9}
+.ch-bub{position:relative;max-width:min(520px,80%);padding:6px 10px 5px;border-radius:12px 12px 12px 4px;background:var(--ch-bub);color:var(--ch-bub-ink);cursor:pointer;border:1px solid transparent;min-width:0}
+.ch-row.me .ch-bub{background:var(--ch-me);border-radius:12px 12px 4px 12px}
+.ch-bub:hover{border-color:var(--ch-bub-hover)}.ch-bub.sel{border-color:var(--social);box-shadow:0 0 0 2px rgba(244,114,182,.25)}
+.ch-bub .nm{color:var(--nmc);font-size:13px;font-weight:700;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ch-bub .nm em{font-style:normal;font-weight:400;font-size:11px;color:var(--ch-sub)}
 .ch-role{font-size:10.5px;font-weight:600;padding:0 6px;border-radius:6px;background:rgba(251,191,36,.16);color:var(--market)}
 .ch-txt{font-size:14.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
-.ch-meta{display:flex;flex-wrap:wrap;gap:4px 6px;justify-content:flex-end;align-items:center;margin-top:3px;font-size:11px;color:#7d8e9e}
-.ch-pt{padding:0 6px;border-radius:5px;background:rgba(255,255,255,.07);color:#aeb9c6}
+.ch-meta{display:flex;flex-wrap:wrap;gap:4px 6px;justify-content:flex-end;align-items:center;margin-top:3px;font-size:11px;color:var(--ch-meta)}
+.ch-pt{padding:0 6px;border-radius:5px;background:var(--ch-pt);color:var(--ch-pt-ink)}
 .ch-tag{padding:0 6px;border-radius:5px;font-weight:700}
-.ch-tag.rm{background:rgba(248,113,113,.18);color:#fca5a5}.ch-tag.sh{background:rgba(251,146,60,.18);color:#fdba74}
+.ch-tag.rm{background:rgba(248,113,113,.18);color:var(--ch-rm-ink)}.ch-tag.sh{background:rgba(251,146,60,.18);color:var(--ch-sh-ink)}
 .ch-st{font-family:var(--mono)}.ch-st.p{color:var(--up)}.ch-st.m{color:var(--down)}
 .ch-hidemeta .ch-pt,.ch-hidemeta .ch-st,.ch-hidemeta .ch-tn{display:none}
-.ch-quote{border-left:3px solid var(--qc,#65aadd);padding:1px 8px;margin:3px 0 4px;background:rgba(255,255,255,.05);border-radius:4px;font-size:12.5px;color:#b8c4cf}
-.ch-quote b{display:block;color:var(--qc,#65aadd);font-size:12px}
-.ch-fwd{font-size:12px;color:#6ab3f3;margin-bottom:2px}
+.ch-quote{border-left:3px solid var(--qc,var(--ch-qc));padding:1px 8px;margin:3px 0 4px;background:var(--ch-quote);border-radius:4px;font-size:12.5px;color:var(--ch-quote-ink)}
+.ch-quote b{display:block;color:var(--qc,var(--ch-qc));font-size:12px}
+.ch-fwd{font-size:12px;color:var(--ch-fwd);margin-bottom:2px}
 .ch-news{border-left:3px solid var(--data);background:rgba(34,211,238,.07);padding:4px 8px;border-radius:4px;margin:3px 0;font-size:13px}
 .ch-news b{color:var(--data);font-size:12px;display:block}
-.ch-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 10px;background:#17212b;border-top:1px solid #0b1118}
-.ch-bar button{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid #2f3e4e;background:#202b36;color:#c9d4de;cursor:pointer}
-.ch-bar button.on{background:#3e9ae0;border-color:#3e9ae0;color:#fff}
-.ch-bar button.done{border-color:#3e9ae0}
+.ch-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 10px;background:var(--ch-side);border-top:1px solid var(--ch-sep)}
+.ch-bar button{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--ch-btn-line);background:var(--ch-hover);color:var(--ch-btn-ink);cursor:pointer}
+.ch-bar button.on{background:var(--ch-blue);border-color:var(--ch-blue);color:#fff}
+.ch-bar button.done{border-color:var(--ch-blue)}
 .ch-bar .sp{flex:1}
-.ch-bar label{font-size:12.5px;color:#9fb0bf;display:flex;gap:4px;align-items:center}
-.ch-mem{background:#17212b;border-left:1px solid #0b1118;overflow:auto;padding:10px 0;min-width:0}
-.ch-mem h5{margin:4px 14px 8px;font-size:12px;color:#8a9aa9;letter-spacing:.06em}
+.ch-bar label{font-size:12.5px;color:var(--ch-label);display:flex;gap:4px;align-items:center}
+.ch-mem{background:var(--ch-side);border-left:1px solid var(--ch-sep);overflow:auto;padding:10px 0;min-width:0}
+.ch-mem h5{margin:4px 14px 8px;font-size:12px;color:var(--ch-sub);letter-spacing:.06em}
 .ch-mi{display:flex;gap:8px;align-items:center;padding:6px 12px;width:100%;border:0;background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
-.ch-mi:hover{background:#202b36}.ch-mi.on{background:#2b5278}
+.ch-mi:hover{background:var(--ch-hover)}.ch-mi.on{background:var(--ch-sel)}
 .ch-mi .t{flex:1;min-width:0}.ch-mi b{font-size:13px;display:block}
-.ch-mi small{display:block;font-size:11.5px;color:#8a9aa9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-mi small{display:block;font-size:11.5px;color:var(--ch-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ch-svg .fst{cursor:pointer}.ch-svg .fst rect{transition:stroke-width .2s}.ch-svg .fst.on rect{stroke-width:3}
-.ch-dot{width:8px;height:8px;border-radius:50%;background:#4b5966;flex:none}.ch-dot.on{background:#4ade80;box-shadow:0 0 6px #4ade80}
-.ch-note{margin:10px 14px;font-size:11.5px;color:#7d8e9e;line-height:1.55}
+.ch-dot{width:8px;height:8px;border-radius:50%;background:var(--ch-dot-off);flex:none}.ch-dot.on{background:var(--val);box-shadow:0 0 6px var(--val)}
+.ch-note{margin:10px 14px;font-size:11.5px;color:var(--ch-meta);line-height:1.55}
 @media(max-width:1100px){.ch-app{grid-template-columns:200px minmax(0,1fr)}.ch-mem{display:none}}
 @media(max-width:700px){.ch-app{grid-template-columns:minmax(0,1fr);height:auto}.ch-side{max-height:180px}.ch-msgs{height:460px;flex:none}}
 .ch-svg{width:100%;height:auto;display:block}
@@ -98,7 +125,7 @@
 .ch-seq span{padding:2px 8px;border-radius:999px;border:1px solid var(--line2);font-size:12px}
 .ch-seq span.act{border-color:var(--social);color:var(--social)}
 .ch-trust{display:grid;grid-template-columns:110px minmax(0,1fr) 54px;gap:8px;align-items:center;font-size:13px;margin:5px 0}
-.ch-trust .bar{height:10px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}
+.ch-trust .bar{height:10px;border-radius:999px;background:var(--ch-track);overflow:hidden}
 .ch-trust .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--social),var(--orch));transition:width .5s}
 .ch-trust .d{font-family:var(--mono);font-size:12px;text-align:right}
 .ch-json{max-height:340px;overflow:auto}
@@ -128,15 +155,15 @@
 <div class="card" style="padding:12px 14px">
 <svg class="ch-svg" id="chNet" viewBox="0 0 900 330" role="img" aria-label="四个示例群与成员关系图">
 <defs>
-<linearGradient id="chG1" x1="0" x2="1"><stop offset="0" stop-color="#f472b6"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
-<linearGradient id="chG2" x1="0" x2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#f87171"/></linearGradient>
-<marker id="chArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#f87171"/></marker>
+<linearGradient id="chG1" x1="0" x2="1"><stop offset="0" stop-color="var(--social)"/><stop offset="1" stop-color="var(--orch)"/></linearGradient>
+<linearGradient id="chG2" x1="0" x2="1"><stop offset="0" stop-color="var(--market)"/><stop offset="1" stop-color="var(--warn)"/></linearGradient>
+<marker id="chArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--warn)"/></marker>
 </defs>
 <g id="chNetEdges"></g>
 <g id="chNetGroups"></g>
 <g id="chNetPeople"></g>
-<path class="flowline" d="M580 250 C 540 285, 520 285, 502 252" fill="none" stroke="#f87171" stroke-width="2" marker-end="url(#chArr)"/>
-<path class="flowline" d="M580 250 C 480 312, 290 312, 207 252" fill="none" stroke="#f87171" stroke-width="2" marker-end="url(#chArr)"/>
+<path class="flowline" d="M580 250 C 540 285, 520 285, 502 252" fill="none" stroke="var(--warn)" stroke-width="2" marker-end="url(#chArr)"/>
+<path class="flowline" d="M580 250 C 480 312, 290 312, 207 252" fill="none" stroke="var(--warn)" stroke-width="2" marker-end="url(#chArr)"/>
 <text x="400" y="322" text-anchor="middle" class="m">传闻转发：付费群 → 老股民群（老马转）/ 家庭群（阿强转）</text>
 </svg>
 </div>
@@ -195,21 +222,21 @@
 <div class="card" style="padding:12px 14px">
 <svg class="ch-svg" id="chFlow" viewBox="0 0 900 250" role="img" aria-label="群聊生成流程">
 <defs>
-<linearGradient id="chG3" x1="0" x2="1"><stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#f472b6"/></linearGradient>
-<marker id="chArr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker>
+<linearGradient id="chG3" x1="0" x2="1"><stop offset="0" stop-color="var(--llm)"/><stop offset="1" stop-color="var(--social)"/></linearGradient>
+<marker id="chArr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ch-flow)"/></marker>
 </defs>
-<g class="fst" data-k="act"><rect x="10" y="30" width="150" height="66" rx="12" fill="rgba(56,189,248,.1)" stroke="#38bdf8"/><text x="85" y="58" text-anchor="middle">阶段开始</text><text x="85" y="78" text-anchor="middle" class="m">按 ν 抽中 / 事件 / 强制</text></g>
-<g class="fst" data-k="c1"><rect x="200" y="30" width="160" height="66" rx="12" fill="rgba(192,132,252,.1)" stroke="#c084fc"/><text x="280" y="58" text-anchor="middle">第 1 次调用（并发）</text><text x="280" y="78" text-anchor="middle" class="m">信念 / 意向 / 明日打算</text></g>
-<g class="fst" data-k="exec"><rect x="400" y="30" width="150" height="66" rx="12" fill="rgba(52,211,153,.1)" stroke="#34d399"/><text x="475" y="58" text-anchor="middle">内核与成交</text><text x="475" y="78" text-anchor="middle" class="m">群聊不改这一步</text></g>
-<g class="fst" data-k="c2"><rect x="590" y="30" width="150" height="66" rx="12" fill="rgba(192,132,252,.1)" stroke="#c084fc"/><text x="665" y="58" text-anchor="middle">第 2 次调用</text><text x="665" y="78" text-anchor="middle" class="m">首帖 turn=0</text></g>
-<g class="fst" data-k="gate"><rect x="590" y="150" width="150" height="66" rx="12" fill="rgba(251,191,36,.1)" stroke="#fbbf24"/><text x="665" y="178" text-anchor="middle">群内 ≥2 人激活?</text><text x="665" y="198" text-anchor="middle" class="m">且有人发言</text></g>
-<g class="fst" data-k="loop"><rect x="350" y="150" width="190" height="66" rx="12" fill="url(#chG3)" fill-opacity=".18" stroke="#f472b6"/><text x="445" y="178" text-anchor="middle">接话 turn=1…M</text><text x="445" y="198" text-anchor="middle" class="m">按种子轮流，只走发言调用</text></g>
-<g class="fst" data-k="next"><rect x="120" y="150" width="180" height="66" rx="12" fill="rgba(148,163,184,.08)" stroke="#94a3b8"/><text x="210" y="178" text-anchor="middle">下一次激活</text><text x="210" y="198" text-anchor="middle" class="m">群聊内容才进入决策</text></g>
-<path d="M160 63H198M360 63H398M550 63H588" stroke="#94a3b8" stroke-width="2" marker-end="url(#chArr2)"/>
-<path d="M665 96V148" stroke="#94a3b8" stroke-width="2" marker-end="url(#chArr2)"/>
-<path class="flowline" d="M590 183H542" stroke="#f472b6" stroke-width="2" marker-end="url(#chArr2)"/>
-<path class="flowline" d="M350 183H302" stroke="#f472b6" stroke-width="2" marker-end="url(#chArr2)"/>
-<path d="M445 216 C 445 245, 520 245, 520 218" fill="none" stroke="#f472b6" stroke-width="1.5" stroke-dasharray="3 3"/>
+<g class="fst" data-k="act"><rect x="10" y="30" width="150" height="66" rx="12" fill="rgba(56,189,248,.1)" stroke="var(--ch-act)"/><text x="85" y="58" text-anchor="middle">阶段开始</text><text x="85" y="78" text-anchor="middle" class="m">按 ν 抽中 / 事件 / 强制</text></g>
+<g class="fst" data-k="c1"><rect x="200" y="30" width="160" height="66" rx="12" fill="rgba(192,132,252,.1)" stroke="var(--llm)"/><text x="280" y="58" text-anchor="middle">第 1 次调用（并发）</text><text x="280" y="78" text-anchor="middle" class="m">信念 / 意向 / 明日打算</text></g>
+<g class="fst" data-k="exec"><rect x="400" y="30" width="150" height="66" rx="12" fill="rgba(52,211,153,.1)" stroke="var(--acct)"/><text x="475" y="58" text-anchor="middle">内核与成交</text><text x="475" y="78" text-anchor="middle" class="m">群聊不改这一步</text></g>
+<g class="fst" data-k="c2"><rect x="590" y="30" width="150" height="66" rx="12" fill="rgba(192,132,252,.1)" stroke="var(--llm)"/><text x="665" y="58" text-anchor="middle">第 2 次调用</text><text x="665" y="78" text-anchor="middle" class="m">首帖 turn=0</text></g>
+<g class="fst" data-k="gate"><rect x="590" y="150" width="150" height="66" rx="12" fill="rgba(251,191,36,.1)" stroke="var(--market)"/><text x="665" y="178" text-anchor="middle">群内 ≥2 人激活?</text><text x="665" y="198" text-anchor="middle" class="m">且有人发言</text></g>
+<g class="fst" data-k="loop"><rect x="350" y="150" width="190" height="66" rx="12" fill="url(#chG3)" fill-opacity=".18" stroke="var(--social)"/><text x="445" y="178" text-anchor="middle">接话 turn=1…M</text><text x="445" y="198" text-anchor="middle" class="m">按种子轮流，只走发言调用</text></g>
+<g class="fst" data-k="next"><rect x="120" y="150" width="180" height="66" rx="12" fill="rgba(148,163,184,.08)" stroke="var(--ch-flow)"/><text x="210" y="178" text-anchor="middle">下一次激活</text><text x="210" y="198" text-anchor="middle" class="m">群聊内容才进入决策</text></g>
+<path d="M160 63H198M360 63H398M550 63H588" stroke="var(--ch-flow)" stroke-width="2" marker-end="url(#chArr2)"/>
+<path d="M665 96V148" stroke="var(--ch-flow)" stroke-width="2" marker-end="url(#chArr2)"/>
+<path class="flowline" d="M590 183H542" stroke="var(--social)" stroke-width="2" marker-end="url(#chArr2)"/>
+<path class="flowline" d="M350 183H302" stroke="var(--social)" stroke-width="2" marker-end="url(#chArr2)"/>
+<path d="M445 216 C 445 245, 520 245, 520 218" fill="none" stroke="var(--social)" stroke-width="1.5" stroke-dasharray="3 3"/>
 <text x="560" y="243" class="m">最多 M 轮</text>
 </svg>
 <p class="ch-note" id="chFlowNote" style="margin:4px 0 0">悬停或点击一个方框，查看这一步的说明。</p>
@@ -558,7 +585,7 @@ function bubble(m, isNew) {
   const p = P[m.who], f = S.focus;
   const row = el('div', 'ch-row' + (f === m.who ? ' me' : '') + (f && f !== m.who ? ' dim' : '') + (isNew ? ' new' : ''));
   const b = el('div', 'ch-bub' + (S.sel === m.id ? ' sel' : ''));
-  const nm = el('div', 'nm'); nm.style.color = p[2]; nm.append(document.createTextNode(p[0]));
+  const nm = el('div', 'nm'); nm.style.setProperty('--nmc', p[2]); nm.append(document.createTextNode(p[0]));
   if (GI[m.g][4] === m.who) nm.append(el('span', 'ch-role', '群主 · ' + p[4]));
   b.append(nm);
   if (m.f) b.append(el('div', 'ch-fwd', '转发自 ' + FWD[m.f]));
@@ -734,7 +761,7 @@ function pickPerson(id) {
   const svg = $('#chPSvg'); svg.textContent = '';
   const X = k => 70 + k * 130, Y = s => 80 - s * 28;
   [-2, -1, 0, 1, 2].forEach(s => {
-    svg.append(sv('line', { x1: 40, x2: 620, y1: Y(s), y2: Y(s), stroke: s ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.18)' }));
+    svg.append(sv('line', { x1: 40, x2: 620, y1: Y(s), y2: Y(s), stroke: s ? 'var(--ch-grid)' : 'var(--ch-grid0)' }));
     const tx = sv('text', { x: 30, y: Y(s) + 4, 'text-anchor': 'end', class: 'm' }); tx.textContent = (s > 0 ? '+' : '') + s; svg.append(tx);
   });
   let seg = [];
@@ -751,7 +778,7 @@ function pickPerson(id) {
   PH.forEach(ph => {
     const xs = ms.filter(m => m.ph === ph.k); if (!xs.length) return;
     const mean = xs.reduce((a, m) => a + m.stance, 0) / xs.length;
-    svg.append(sv('circle', { cx: X(ph.k), cy: Y(mean), r: 5.5, fill: p[2], stroke: '#0b1020', 'stroke-width': 2 }));
+    svg.append(sv('circle', { cx: X(ph.k), cy: Y(mean), r: 5.5, fill: p[2], stroke: 'var(--ch-ring)', 'stroke-width': 2 }));
     const d = ds.find(x => x[0] === ph.k);
     if (d) { const a = sv('text', { x: X(ph.k), y: 154, 'text-anchor': 'middle', class: 'm' }); a.textContent = (d[1] === 'order' ? '下单' : '打算') + ACTCN[d[2]]; a.style.fill = 'var(--ink2)'; svg.append(a); }
   });

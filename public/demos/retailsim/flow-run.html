@@ -3,15 +3,18 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>运行生命周期 · RetailSim</title>
+<script src="assets/theme-init.js"></script>
 <link rel="stylesheet" href="assets/theme.css">
 <link rel="stylesheet" href="assets/components.css">
 <style>
 /* flow-run 私有样式，前缀 fr- */
-.fr-svgwrap{border:1px solid var(--line);border-radius:var(--r);background:rgba(5,8,20,.55);padding:10px}
+:root{--fr-well:#050814;--fr-key:#82aaff;--fr-val:#c3e88d;--fr-pend:#4b5675;--fr-undef:#f78c6c;--fr-empty:rgba(255,255,255,.06);--fr-warm:rgba(251,191,36,.75)}
+:root[data-theme="light"]{--fr-well:#f8fafd;--fr-key:#1d4ed8;--fr-val:#3f6212;--fr-pend:#a3acc0;--fr-undef:#c2410c;--fr-empty:rgba(15,23,42,.08);--fr-warm:rgba(180,83,9,.8)}
+.fr-svgwrap{border:1px solid var(--line);border-radius:var(--r);background:var(--well);padding:10px}
 .fr-svgwrap svg{display:block;width:100%;height:auto}
 .fr-node{cursor:pointer;outline:none}
 .fr-node rect{transition:stroke .2s,filter .2s;stroke-width:1.5}
-.fr-node:hover rect,.fr-node:focus rect,.fr-node.on rect{stroke:#fff;filter:url(#frGlow)}
+.fr-node:hover rect,.fr-node:focus rect,.fr-node.on rect{stroke:var(--strong);filter:url(#frGlow)}
 .fr-node text{pointer-events:none}
 .fr-detail{margin-top:14px}
 .fr-detail h4{margin:0 0 8px;color:var(--accent)}
@@ -21,7 +24,7 @@
 /* 分步演示 */
 .fr-stepbar{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
 .fr-pill{border:1px solid var(--line2);background:var(--panel);color:var(--ink2);font:600 12.5px var(--mono);width:34px;height:30px;border-radius:9px;cursor:pointer}
-.fr-pill.on{background:linear-gradient(135deg,var(--accent),var(--orch));color:#06101f;border-color:transparent}
+.fr-pill.on{background:linear-gradient(135deg,var(--accent),var(--orch));color:var(--on-accent);border-color:transparent}
 .fr-pill.done{color:var(--ink);border-color:rgba(74,222,128,.5)}
 .fr-ctlrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .fr-stage{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
@@ -32,15 +35,15 @@
 .fr-io dt{font-weight:700;color:var(--ink2)}
 .fr-io dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .fr-io dt.i{color:var(--data)}.fr-io dt.p{color:var(--orch)}.fr-io dt.o{color:var(--out)}.fr-io dt.r{color:var(--mute)}
-.fr-man{font:12.3px/1.6 var(--mono);background:#050814;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.fr-man{font:12.3px/1.6 var(--mono);background:var(--fr-well);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .fr-man .fr-mh{display:flex;justify-content:space-between;gap:8px;color:var(--mute);font-size:11.5px;margin-bottom:6px;flex-wrap:wrap}
 .fr-mr{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:8px;padding:3px 6px;border-radius:6px;transition:background .3s}
-.fr-mr .fk{color:#82aaff;overflow-wrap:anywhere}.fr-mr .fv{color:#c3e88d;overflow-wrap:anywhere}
-.fr-mr.pend .fk{color:#4b5675}.fr-mr.pend .fv{color:#4b5675}
+.fr-mr .fk{color:var(--fr-key);overflow-wrap:anywhere}.fr-mr .fv{color:var(--fr-val);overflow-wrap:anywhere}
+.fr-mr.pend .fk{color:var(--fr-pend)}.fr-mr.pend .fv{color:var(--fr-pend)}
 .fr-mr.new{background:rgba(74,222,128,.14);box-shadow:inset 2px 0 0 var(--ok)}
 .fr-mr.chg{background:rgba(251,191,36,.13);box-shadow:inset 2px 0 0 var(--market)}
-.fr-mr.undef .fv{color:#f78c6c}
-.fr-tree{font:12.3px/1.75 var(--mono);background:#050814;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:12px;overflow-wrap:anywhere}
+.fr-mr.undef .fv{color:var(--fr-undef)}
+.fr-tree{font:12.3px/1.75 var(--mono);background:var(--fr-well);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:12px;overflow-wrap:anywhere}
 .fr-tree div{transition:opacity .3s}
 .fr-tree .off{opacity:.22}
 .fr-tree .nw{color:var(--ok)}
@@ -49,16 +52,16 @@
 .fr-ctl{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:12px 0}
 .fr-grid{display:grid;grid-template-columns:52px repeat(12,minmax(0,1fr));gap:3px}
 .fr-grid .fr-rl{font-size:11.5px;color:var(--ink2);white-space:nowrap;align-self:center}
-.fr-cell{height:22px;border-radius:4px;background:rgba(255,255,255,.06);position:relative}
+.fr-cell{height:22px;border-radius:4px;background:var(--fr-empty);position:relative}
 .fr-cell.hit{background:rgba(74,222,128,.55)}
 .fr-cell.miss{background:rgba(192,132,252,.78)}
-.fr-cell.err{background:#f87171}
-.fr-cell.warm{outline:1px dashed rgba(251,191,36,.75);outline-offset:-1px}
-.fr-cell.fork::after{content:"";position:absolute;left:-3px;top:-5px;bottom:-5px;width:2px;background:#fff;box-shadow:0 0 6px #fff}
+.fr-cell.err{background:var(--warn)}
+.fr-cell.warm{outline:1px dashed var(--fr-warm);outline-offset:-1px}
+.fr-cell.fork::after{content:"";position:absolute;left:-3px;top:-5px;bottom:-5px;width:2px;background:var(--strong);box-shadow:0 0 6px var(--strong)}
 .fr-axis{font:10px var(--mono);color:var(--mute);text-align:center}
 .fr-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin:8px 0}
 .fr-legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px;background:var(--c)}
-.fr-legend span.fr-lw::before{outline:1px dashed rgba(251,191,36,.75);outline-offset:-1px}
+.fr-legend span.fr-lw::before{outline:1px dashed var(--fr-warm);outline-offset:-1px}
 .fr-nums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
 @media(max-width:700px){.fr-nums{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .fr-nums .stat .v{font-size:24px}
@@ -85,24 +88,24 @@
 <div class="fr-svgwrap">
 <svg viewBox="0 0 660 330" role="img" aria-label="运行生命周期总览：配置、预注册、生成人口、运行、落盘、验收，以及重放和分叉回路">
 <defs>
-<marker id="frArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7f8aa8"/></marker>
+<marker id="frArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--mute)"/></marker>
 <filter id="frGlow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 </defs>
-<text x="20" y="34" fill="#7f8aa8" font-size="12.5">运行前 · 看到任何结果之前锁定</text>
-<text x="20" y="160" fill="#7f8aa8" font-size="12.5">运行后 · 落盘与判定</text>
-<text x="460" y="160" fill="#7f8aa8" font-size="12.5">运行中 · 逐日推进</text>
-<g stroke="#7f8aa8" stroke-width="1.6" fill="none" marker-end="url(#frArr)">
+<text x="20" y="34" fill="var(--mute)" font-size="12.5">运行前 · 看到任何结果之前锁定</text>
+<text x="20" y="160" fill="var(--mute)" font-size="12.5">运行后 · 落盘与判定</text>
+<text x="460" y="160" fill="var(--mute)" font-size="12.5">运行中 · 逐日推进</text>
+<g stroke="var(--mute)" stroke-width="1.6" fill="none" marker-end="url(#frArr)">
 <path d="M200 81H236"/><path d="M420 81H456"/><path d="M550 112V166"/>
 <path d="M460 201H424"/><path d="M240 201H204"/><path d="M330 232V258"/>
 </g>
-<path class="flowline" d="M420 287H550V236" stroke="#c084fc" stroke-width="1.6" fill="none" stroke-dasharray="6 5" marker-end="url(#frArr)"/>
-<g class="fr-node" data-k="cfg" tabindex="0" role="button" aria-label="配置"><rect x="20" y="50" width="180" height="62" rx="12" fill="rgba(34,211,238,.10)" stroke="#22d3ee"/><text x="110" y="77" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">① 配置</text><text x="110" y="98" text-anchor="middle" fill="#7f8aa8" font-size="12.5">configs/ 运行配置</text></g>
-<g class="fr-node" data-k="prereg" tabindex="0" role="button" aria-label="预注册"><rect x="240" y="50" width="180" height="62" rx="12" fill="rgba(74,222,128,.10)" stroke="#4ade80"/><text x="330" y="77" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">② 预注册</text><text x="330" y="98" text-anchor="middle" fill="#7f8aa8" font-size="12.5">docs/prereg/ 提交</text></g>
-<g class="fr-node" data-k="pop" tabindex="0" role="button" aria-label="生成人口"><rect x="460" y="50" width="180" height="62" rx="12" fill="rgba(96,165,250,.10)" stroke="#60a5fa"/><text x="550" y="77" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">③ 生成人口</text><text x="550" y="98" text-anchor="middle" fill="#7f8aa8" font-size="12.5">IPF + 投资史预跑</text></g>
-<g class="fr-node" data-k="run" tabindex="0" role="button" aria-label="运行"><rect x="460" y="170" width="180" height="62" rx="12" fill="rgba(167,139,250,.12)" stroke="#a78bfa"/><text x="550" y="197" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">④ 运行</text><text x="550" y="218" text-anchor="middle" fill="#7f8aa8" font-size="12.5">时钟 · 激活点 · 两次调用</text></g>
-<g class="fr-node" data-k="persist" tabindex="0" role="button" aria-label="落盘"><rect x="240" y="170" width="180" height="62" rx="12" fill="rgba(251,146,60,.10)" stroke="#fb923c"/><text x="330" y="197" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">⑤ 落盘</text><text x="330" y="218" text-anchor="middle" fill="#7f8aa8" font-size="12.5">事件日志 · 快照 · 交付表</text></g>
-<g class="fr-node" data-k="accept" tabindex="0" role="button" aria-label="验收"><rect x="20" y="170" width="180" height="62" rx="12" fill="rgba(74,222,128,.10)" stroke="#4ade80"/><text x="110" y="197" text-anchor="middle" fill="#e8ecf7" font-size="17" font-weight="700">⑥ 验收</text><text x="110" y="218" text-anchor="middle" fill="#7f8aa8" font-size="12.5">V1–V5 · V2 总闸</text></g>
-<g class="fr-node" data-k="replay" tabindex="0" role="button" aria-label="重放与分叉"><rect x="240" y="262" width="180" height="50" rx="12" fill="rgba(192,132,252,.12)" stroke="#c084fc"/><text x="330" y="284" text-anchor="middle" fill="#e8ecf7" font-size="16" font-weight="700">⑦ 重放 / 分叉</text><text x="330" y="302" text-anchor="middle" fill="#7f8aa8" font-size="12">读缓存 · 新 run_id</text></g>
+<path class="flowline" d="M420 287H550V236" stroke="var(--llm)" stroke-width="1.6" fill="none" stroke-dasharray="6 5" marker-end="url(#frArr)"/>
+<g class="fr-node" data-k="cfg" tabindex="0" role="button" aria-label="配置"><rect x="20" y="50" width="180" height="62" rx="12" fill="rgba(34,211,238,.10)" stroke="var(--data)"/><text x="110" y="77" text-anchor="middle" fill="var(--ink)" font-size="17" font-weight="700">① 配置</text><text x="110" y="98" text-anchor="middle" fill="var(--mute)" font-size="12.5">configs/ 运行配置</text></g>
+<g class="fr-node" data-k="prereg" tabindex="0" role="button" aria-label="预注册"><rect x="240" y="50" width="180" height="62" rx="12" fill="rgba(74,222,128,.10)" stroke="var(--val)"/><text x="330" y="77" text-anchor="middle" fill="var(--ink)" font-size="17" font-weight="700">② 预注册</text><text x="330" y="98" text-anchor="middle" fill="var(--mute)" font-size="12.5">docs/prereg/ 提交</text></g>
+<g class="fr-node" data-k="pop" tabindex="0" role="button" aria-label="生成人口"><rect x="460" y="50" width="180" height="62" rx="12" fill="rgba(96,165,250,.10)" stroke="var(--sim)"/><text x="550" y="77" text-anchor="middle" fill="var(--ink)" font-size="17" font-weight="700">③ 生成人口</text><text x="550" y="98" text-anchor="middle" fill="var(--mute)" font-size="12.5">IPF + 投资史预跑</text></g>
+<g class="fr-node" data-k="run" tabindex="0" role="button" aria-label="运行"><rect x="460" y="170" width="180" height="62" rx="12" fill="rgba(167,139,250,.12)" stroke="var(--orch)"/><text x="550" y="197" text-anchor="middle" fill="var(--ink)" font-size="17" font-weight="700">④ 运行</text><text x="550" y="218" text-anchor="middle" fill="var(--mute)" font-size="12.5">时钟 · 激活点 · 两次调用</text></g>
+<g class="fr-node" data-k="persist" tabindex="0" role="button" aria-label="落盘"><rect x="240" y="170" width="180" height="62" rx="12" fill="rgba(251,146,60,.10)" stroke="var(--out)"/><text x="330" y="197" text-anchor="middle" fill="var(--ink)" font-size="17" font-weight="700">⑤ 落盘</text><text x="330" y="218" text-anchor="middle" fill="var(--mute)" font-size="12.5">事件日志 · 快照 · 交付表</text></g>
+<g class="fr-node" data-k="accept" tabindex="0" role="button" aria-label="验收"><rect x="20" y="170" width="180" height="62" rx="12" fill="rgba(74,222,128,.10)" stroke="var(--val)"/><text x="110" y="197" text-anchor="middle" fill="var(--ink)" font-size="17" font-weight="700">⑥ 验收</text><text x="110" y="218" text-anchor="middle" fill="var(--mute)" font-size="12.5">V1–V5 · V2 总闸</text></g>
+<g class="fr-node" data-k="replay" tabindex="0" role="button" aria-label="重放与分叉"><rect x="240" y="262" width="180" height="50" rx="12" fill="rgba(192,132,252,.12)" stroke="var(--llm)"/><text x="330" y="284" text-anchor="middle" fill="var(--ink)" font-size="16" font-weight="700">⑦ 重放 / 分叉</text><text x="330" y="302" text-anchor="middle" fill="var(--mute)" font-size="12">读缓存 · 新 run_id</text></g>
 </svg>
 </div>
 <div class="card fr-detail" id="frDetail" aria-live="polite"><h4 id="frDetT">① 配置</h4><dl class="fr-kv" id="frDetKv"></dl></div>
@@ -247,7 +250,7 @@
 <label class="ctl">价格路径<select id="frPth"><option value="3">3 档</option><option value="1">1 条</option></select></label>
 <label class="ctl">激活比例<select id="frA"><option value="1">100%（§14.2 上限）</option><option value="0.3">30%（§14.3 举例）</option></select></label>
 </div>
-<div class="fr-legend"><span style="--c:rgba(74,222,128,.55)">命中缓存</span><span style="--c:rgba(192,132,252,.78)">新调用</span><span style="--c:#f87171">未命中即报错</span><span style="--c:rgba(255,255,255,.06)">未执行</span><span class="fr-lw" style="--c:transparent">预热（示意）</span></div>
+<div class="fr-legend"><span style="--c:rgba(74,222,128,.55)">命中缓存</span><span style="--c:rgba(192,132,252,.78)">新调用</span><span style="--c:var(--warn)">未命中即报错</span><span style="--c:var(--fr-empty)">未执行</span><span class="fr-lw" style="--c:transparent">预热（示意）</span></div>
 <div class="fr-grid" id="frGrid" aria-label="按交易日和阶段显示的缓存命中情况"></div>
 <div class="fr-nums">
 <div class="stat"><div class="v" id="frV1">0</div><div class="l">命中格数 / 总格数</div></div>

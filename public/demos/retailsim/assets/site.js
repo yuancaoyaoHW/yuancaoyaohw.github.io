@@ -38,6 +38,7 @@
       ? `<a href="index.html" class="${here === 'index.html' ? 'on' : ''}">${n}</a>`
       : `<button type="button" class="grp${cur.g === g ? ' on' : ''}" data-g="${g}">${n}<span class="car">▾</span></button>`).join('')}</nav>
     <span class="here">${cur.g === 'home' ? '' : cur.cn}</span>
+    <button type="button" class="theme-btn" aria-label="切换浅色/深色主题"></button>
     <div class="navpanel" hidden></div>`;
   document.body.prepend(bar);
   const panel = bar.querySelector('.navpanel');
@@ -60,6 +61,20 @@
   panel.addEventListener('mouseenter', () => clearTimeout(hideT));
   document.addEventListener('click', e => { if (!bar.contains(e.target)) closeGroup(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGroup(); });
+  // 浅色/深色切换：写入 localStorage "theme"，与博客共用；其他同源窗口（如嵌入的父页面）改主题时同步
+  const root = document.documentElement, tbtn = bar.querySelector('.theme-btn');
+  function applyTheme(t) {
+    root.setAttribute('data-theme', t);
+    tbtn.textContent = t === 'light' ? '☾' : '☀';
+    tbtn.title = t === 'light' ? '切换到深色' : '切换到浅色';
+  }
+  applyTheme(root.getAttribute('data-theme') === 'light' ? 'light' : 'dark');
+  tbtn.addEventListener('click', () => {
+    const t = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    applyTheme(t);
+    try { localStorage.setItem('theme', t); } catch (e) {}
+  });
+  addEventListener('storage', e => { if (e.key === 'theme' && (e.newValue === 'light' || e.newValue === 'dark')) applyTheme(e.newValue); });
   const prog = document.createElement('div');
   prog.className = 'progress';
   document.body.prepend(prog);

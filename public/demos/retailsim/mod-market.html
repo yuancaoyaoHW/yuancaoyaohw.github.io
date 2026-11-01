@@ -4,9 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>market · 市场层：规则约束与成交判定 · RetailSim</title>
+<script src="assets/theme-init.js"></script>
 <link rel="stylesheet" href="assets/theme.css">
 <link rel="stylesheet" href="assets/components.css">
 <style>
+:root{--mk-arrow:#94a3b8;--mk-sky:#38bdf8}
+:root[data-theme="light"]{--mk-arrow:#64748b;--mk-sky:#0284c7}
 .mk-iface{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr);gap:12px;align-items:stretch}
 @media(max-width:820px){.mk-iface{grid-template-columns:minmax(0,1fr)}}
 .mk-iface .card h4{margin:0 0 6px}
@@ -23,7 +26,7 @@
 .mk-tagx{display:inline-block;font:700 11px var(--sans);padding:1px 8px;border-radius:999px;border:1px solid rgba(248,113,113,.45);color:var(--warn);background:rgba(248,113,113,.1);margin-left:6px;vertical-align:middle}
 .mk-ord{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
 .mk-ord button{font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;border:1px solid var(--line2);background:var(--panel);color:var(--ink2);cursor:pointer}
-.mk-ord button.on{background:var(--market);color:#06101f;font-weight:700;border-color:transparent}
+.mk-ord button.on{background:var(--market);color:var(--on-accent);font-weight:700;border-color:transparent}
 .mk-steps{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-wrap:wrap;gap:6px}
 .mk-steps li{font-size:12px;padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel);opacity:.55;cursor:pointer}
 .mk-steps li b{font:700 11px var(--mono);margin-right:4px;color:var(--market)}
@@ -208,16 +211,16 @@
 <p>资金检查用的"可用资金"= 现金 − 当日已冻结的买单金额；卖出所得当天可以再用，但次日才能取出 <span class="ref">§8.4</span>。</p>
 <div class="mk-svgbox">
 <svg class="mk-svg" viewBox="0 0 480 570" role="img" aria-label="订单检查与成交判定流程图">
-<defs><marker id="mk-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker><marker id="mk-ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#f43f5e"/></marker></defs>
-<g stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#mk-ah)">
+<defs><marker id="mk-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--mk-arrow)"/></marker><marker id="mk-ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--up)"/></marker></defs>
+<g stroke="var(--mk-arrow)" stroke-width="1.6" fill="none" marker-end="url(#mk-ah)">
 <path class="flowline" d="M155 48V60"/><path class="flowline" d="M155 98V110"/><path class="flowline" d="M155 148V160"/><path class="flowline" d="M155 198V210"/><path class="flowline" d="M155 248V260"/><path class="flowline" d="M155 298V310"/><path class="flowline" d="M155 348V360"/><path class="flowline" d="M155 398V410"/><path class="flowline" d="M155 448V460"/><path class="flowline" d="M155 498V510"/>
 </g>
-<g stroke="#f43f5e" stroke-width="1.4" fill="none" marker-end="url(#mk-ahr)" stroke-dasharray="4 3">
+<g stroke="var(--up)" stroke-width="1.4" fill="none" marker-end="url(#mk-ahr)" stroke-dasharray="4 3">
 <path d="M290 79H338"/><path d="M290 129H338"/><path d="M290 179H338"/><path d="M290 229H338"/><path d="M290 279H338"/><path d="M290 329H338"/><path d="M290 379H338"/><path d="M290 429H338"/>
 </g>
-<rect x="20" y="10" width="270" height="38" rx="9" fill="rgba(52,211,153,.12)" stroke="#34d399"/>
+<rect x="20" y="10" width="270" height="38" rx="9" fill="rgba(52,211,153,.12)" stroke="var(--acct)"/>
 <text x="34" y="27" font-size="13" font-weight="700">OrderIntent 进入</text><text class="mk-m" x="34" y="41">来自 agents 内核 §6.3，附账户只读视图</text>
-<g fill="rgba(251,191,36,.08)" stroke="#fbbf24">
+<g fill="rgba(251,191,36,.08)" stroke="var(--market)">
 <rect x="20" y="60" width="270" height="38" rx="9"/><rect x="20" y="110" width="270" height="38" rx="9"/><rect x="20" y="160" width="270" height="38" rx="9"/><rect x="20" y="210" width="270" height="38" rx="9"/><rect x="20" y="260" width="270" height="38" rx="9"/><rect x="20" y="310" width="270" height="38" rx="9"/><rect x="20" y="360" width="270" height="38" rx="9"/>
 </g>
 <g font-size="13" font-weight="700">
@@ -226,16 +229,16 @@
 <g class="mk-m">
 <text x="34" y="91">此刻能否申报这类订单</text><text x="34" y="141">创业板/科创板/北交所/两融</text><text x="34" y="191">卖出数量 ≤ 可卖数量</text><text x="34" y="241">买入 100 股整数倍等</text><text x="34" y="291">价格在涨跌停价之内</text><text x="34" y="341">单日同一只 ≤ 50 万股</text><text x="34" y="391">金额 ≤ 可用资金</text>
 </g>
-<rect x="20" y="410" width="270" height="38" rx="9" fill="rgba(56,189,248,.1)" stroke="#38bdf8"/>
+<rect x="20" y="410" width="270" height="38" rx="9" fill="rgba(56,189,248,.1)" stroke="var(--mk-sky)"/>
 <text x="34" y="427" font-size="13" font-weight="700">成交判定</text><text class="mk-m" x="34" y="441">open / dip / chase · 涨跌停 §8.2</text>
-<rect x="20" y="460" width="270" height="38" rx="9" fill="rgba(251,191,36,.08)" stroke="#fbbf24"/>
+<rect x="20" y="460" width="270" height="38" rx="9" fill="rgba(251,191,36,.08)" stroke="var(--market)"/>
 <text x="34" y="477" font-size="13" font-weight="700">费用</text><text class="mk-m" x="34" y="491">佣金、印花税、经手费等 §8.1</text>
-<rect x="20" y="510" width="270" height="44" rx="9" fill="rgba(74,222,128,.12)" stroke="#4ade80"/>
+<rect x="20" y="510" width="270" height="44" rx="9" fill="rgba(74,222,128,.12)" stroke="var(--val)"/>
 <text x="34" y="529" font-size="13" font-weight="700">Fill → accounts 记账</text><text class="mk-m" x="34" y="545">成交价、数量、fee、stamp_tax §10.3</text>
-<rect x="340" y="60" width="130" height="338" rx="10" fill="rgba(244,63,94,.08)" stroke="#f43f5e"/>
-<g font-size="12.5"><text x="352" y="200" font-weight="700" fill="#f43f5e" style="fill:#f43f5e">拒单</text><text x="352" y="222">不自动修正</text><text x="352" y="242">计数</text><text x="352" y="262">写入事件日志</text><text x="352" y="282">写回记忆</text></g>
-<rect x="340" y="410" width="130" height="62" rx="10" fill="rgba(244,63,94,.05)" stroke="#f43f5e" stroke-dasharray="4 3"/>
-<g font-size="12.5"><text x="352" y="430" font-weight="700" style="fill:#f43f5e">合规但不成交</text><text x="352" y="448">如一字涨停</text><text x="352" y="464">记录未成交原因</text></g>
+<rect x="340" y="60" width="130" height="338" rx="10" fill="rgba(244,63,94,.08)" stroke="var(--up)"/>
+<g font-size="12.5"><text x="352" y="200" font-weight="700" fill="var(--up)" style="fill:var(--up)">拒单</text><text x="352" y="222">不自动修正</text><text x="352" y="242">计数</text><text x="352" y="262">写入事件日志</text><text x="352" y="282">写回记忆</text></g>
+<rect x="340" y="410" width="130" height="62" rx="10" fill="rgba(244,63,94,.05)" stroke="var(--up)" stroke-dasharray="4 3"/>
+<g font-size="12.5"><text x="352" y="430" font-weight="700" style="fill:var(--up)">合规但不成交</text><text x="352" y="448">如一字涨停</text><text x="352" y="464">记录未成交原因</text></g>
 </svg>
 </div>
 <p class="mk-refl">图中各项的说明文字是简写，完整条件见 3.2 节。⑤ 的价格笼子对 <code>open</code> 不适用（集合竞价无笼子 <span class="ref">§6.3</span>），对 <code>dip</code> 在日线下无法执行，见上文待定说明。</p>

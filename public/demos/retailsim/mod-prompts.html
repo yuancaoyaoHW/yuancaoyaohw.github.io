@@ -3,10 +3,13 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>prompts · 提示词分层、版本与缓存 · RetailSim</title>
+<script src="assets/theme-init.js"></script>
 <link rel="stylesheet" href="assets/theme.css">
 <link rel="stylesheet" href="assets/components.css">
 <style>
 /* mod-prompts 私有样式，前缀 pp- */
+:root{--pp-on-llm:#120a1f;--pp-prev-bg:#03060f;--pp-prev-ink:#b7c1dc;--pp-ex:#7dd3fc}
+:root[data-theme="light"]{--pp-on-llm:#fff;--pp-prev-bg:#eef2f8;--pp-prev-ink:#2d3852;--pp-ex:#0284c7}
 .pp-io{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:14px;align-items:stretch}
 @media(max-width:860px){.pp-io{grid-template-columns:minmax(0,1fr)}}
 .pp-io ul{margin:6px 0 0;padding-left:18px;font-size:13.5px;line-height:1.7;color:var(--ink2)}
@@ -19,9 +22,9 @@
 .pp-svg .tk{font-size:12px;font-family:var(--mono);fill:var(--ink2)}
 .pp-lay{cursor:pointer}
 .pp-lay rect.box{transition:stroke .2s,stroke-width .2s}
-.pp-lay:hover rect.box,.pp-lay.on rect.box{stroke:#fff;stroke-width:2.2}
+.pp-lay:hover rect.box,.pp-lay.on rect.box{stroke:var(--strong);stroke-width:2.2}
 .pp-lay:focus{outline:none}
-.pp-lay:focus rect.box{stroke:#fff;stroke-width:2.2}
+.pp-lay:focus rect.box{stroke:var(--strong);stroke-width:2.2}
 .pp-lay text{pointer-events:none}
 .pp-det{margin-top:12px;min-height:120px}
 .pp-det h4{margin:0 0 6px;color:var(--llm)}
@@ -31,7 +34,7 @@
 .pp-stp-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
 .pp-dots{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .pp-dots button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line2);background:var(--panel2);color:var(--ink2);font-size:12px;cursor:pointer;padding:0}
-.pp-dots button.on{background:var(--llm);color:#120a1f;border-color:var(--llm);font-weight:700}
+.pp-dots button.on{background:var(--llm);color:var(--pp-on-llm);border-color:var(--llm);font-weight:700}
 .pp-stp-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin:4px 0 10px}
 .pp-stp-h b{font-size:17px}
 .pp-blk{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
@@ -43,7 +46,7 @@
 .pp-ref{margin-top:10px;font-size:13px;color:var(--mute)}
 .pp-asm{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px;margin-top:14px}
 @media(max-width:860px){.pp-asm{grid-template-columns:minmax(0,1fr)}}
-.pp-prev{background:#03060f;border:1px solid var(--line);border-radius:12px;font:12px/1.65 var(--mono);color:#b7c1dc;max-height:380px;overflow:auto;padding:10px 12px;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.pp-prev{background:var(--pp-prev-bg);border:1px solid var(--line);border-radius:12px;font:12px/1.65 var(--mono);color:var(--pp-prev-ink);max-height:380px;overflow:auto;padding:10px 12px;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .pp-seg{display:block;border-left:3px solid var(--line2);padding:2px 0 6px 10px;margin:0 0 8px}
 .pp-seg.new{background:rgba(192,132,252,.08)}
 .pp-seg b{display:block;font:700 11px var(--mono);letter-spacing:.5px;margin-bottom:2px}
@@ -158,7 +161,7 @@
 <text class="tk" x="468" y="371" text-anchor="end">未单列</text></g>
 <g class="pp-lay" data-k="post" tabindex="0" role="button" aria-label="第 2 次调用追加部分">
 <text class="sm" x="140" y="440" text-anchor="end">第 2 次调用</text>
-<rect class="box" x="150" y="418" width="330" height="54" rx="10" style="fill:rgba(125,211,252,.08);stroke:#7dd3fc;stroke-dasharray:5 4"/>
+<rect class="box" x="150" y="418" width="330" height="54" rx="10" style="fill:rgba(125,211,252,.08);stroke:var(--pp-ex);stroke-dasharray:5 4"/>
 <text class="lb" x="164" y="441">⑦ 追加：意向与成交 + 风格示例帖</text><text class="sm" x="164" y="460">仅发帖者；接在 ①–⑤ 共用前缀之后</text>
 <text class="tk" x="468" y="441" text-anchor="end">≈100+500</text></g>
 <path d="M496 30 h8 v306 h-8" fill="none" style="stroke:var(--ok)" stroke-width="2"/>
@@ -402,7 +405,7 @@ g.addEventListener('click',function(){showLay(k);});
 g.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();showLay(k);}});
 });
 /* 交互二：逐步拼装示例（全部为示例数据） */
-var C={rules:'var(--llm)',persona:'var(--sim)',ex:'#7dd3fc',belief:'var(--acct)',feed:'var(--social)',schema:'var(--orch)',post:'var(--warn)'};
+var C={rules:'var(--llm)',persona:'var(--sim)',ex:'var(--pp-ex)',belief:'var(--acct)',feed:'var(--social)',schema:'var(--orch)',post:'var(--warn)'};
 var S=[
 {t:'读入模板并记下哈希',k:'加载器',in:['用途：盘前激活的第 1 次调用（解读 + 意向）与第 2 次调用（发帖）','本次实验选用的等价模板：第 1 份（共 2–3 份）'],pr:['加载器从包数据里读出两份模板文件','按模板内容分别计算哈希'],out:['模板文本（各层的标题与固定说明）','模板哈希，写入运行清单（示例值 3f9c…、a07e…）'],r:['§3.3','§6.1','§9.4','§13.4'],seg:null},
 {t:'第 ① 层：规则说明',k:'静态 · 全体共用',in:['模板里的固定说明文字'],pr:['原样放在最前面，不插任何日期或个人信息'],out:['约 200 token，所有散户都相同'],r:['§6.1','§13.3','§14.2'],
