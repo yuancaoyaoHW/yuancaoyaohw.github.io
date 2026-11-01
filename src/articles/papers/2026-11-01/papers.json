@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-01",
+  "title": "2026-11-01 论文精选",
+  "lede": "今日主线是把“等待”藏起来：KV 块直接落到最终介质、prefill 与 decode 在算子级各走各的并行、dLLM 按剩余工作量而非到达顺序排队、serverless 的加载阶段塞进 DAG 的 slack。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 759
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "FlatCake: A Flat KVCache Storage Architecture for LLM Serving",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-30",
+          "authors": "Xin Huang, Teng Ma, Zhuoran Li, Yibo Zhao, Zhaoshi Li, Qianchao Zhu, Wei Yang, Chenxi Wang, Tao Xie, Youwei Zhuo",
+          "institutions": "Fudan University, Peking University, MetaX, ICT CAS",
+          "abstract": "KV cache 复用能加速大模型服务，但现有系统把主机 DRAM 与 NVMe SSD 组织成层级结构，DRAM 充当中间缓存。生产负载打破了这个前提：复用呈双峰分布，要么是一次性、复用距离极远的块，要么是超过 DRAM 容量的多 GB agent 会话，使 SSD 被推到关键读取路径上；同时 DRAM 暂存加按驱逐顺序布局让 SSD 恢复成为瓶颈，暂存缓冲在高负载下争抢导致预取被放弃，增量驱逐又把同一会话的块打散，无法做大块顺序读。本文提出 FlatCake，把主机 DRAM 与 NVMe SSD 作为对等介质暴露在统一 64 位地址空间：利用 KV 块写一次、不可变、按会话复用的性质，在创建时就按会话连续、层主序把块直接放到目标介质且永不迁移；再用 GPUDirect Storage 把合并后的 SSD 读直接流进 GPU 有界窗口，并解耦两种介质的请求队列以避免队头阻塞。",
+          "contributions": [
+            "把 KV 存储从分级缓存改成扁平对等介质：DRAM 与 SSD 统一编址，取消 DRAM 暂存层，消除暂存争抢与块迁移。",
+            "利用 KV 块写一次且不可变的性质，在生成时就按会话连续、层主序落到最终介质，使后续 SSD 读天然具备大块顺序性。",
+            "用 GPUDirect Storage 把 SSD 数据直接流入 GPU 窗口，并分离 DRAM/SSD 请求队列，防止预取被前台请求饿死。"
+          ],
+          "conclusions": [
+            "层级式 KV 存储的两个前提在生产负载下都不成立，双峰复用需要按介质对等布局而不是按缓存局部性布局。",
+            "当会话级复用成为主导时，会话连续布局比 DRAM 时间过滤更重要。"
+          ],
+          "experiments": [
+            "生产 Claude Code 轨迹配 DeepSeek-V4-Flash：负载上升时缓存命中率保持 94%，Mooncake 跌到 64%。",
+            "同一场景消除 Mooncake 的 6.5–6.7 倍 SSD 读放大，峰值负载平均 TTFT 降低 1.6 倍、总 token 吞吐提升 1.6 倍。",
+            "Llama-3.1-70B 在 8K–128K 上下文上，平均 TTFT 相比 Mooncake 最多降低 2.4 倍，相比 Mooncake-GDS 降低 1.8 倍。"
+          ],
+          "significance": "把 KV 缓存从「分级缓存」重构为「对等存储」，给长会话 agent 负载一条新的存储布局原则。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38355",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38355.pdf",
+          "index": 1,
+          "takeaway": "KV 块写一次且不可变，所以生成时直接落到最终介质、永不迁移，比事后搬移更划算。",
+          "keyExperiment": "生产 Claude Code 轨迹上缓存命中率 94%（Mooncake 64%），SSD 读放大被彻底消除。"
+        },
+        {
+          "title": "ConfluxServe: Reconciling Resource Utilization and Parallelism Efficiency across Prefill and Decode in LLM Serving",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-30",
+          "authors": "Wenhao Chen, Hong Zhang",
+          "institutions": "University of Waterloo",
+          "abstract": "Prefill 与 decode 在资源使用上互补，但偏好的并行方式往往相反。把两个阶段分开执行能各自保留最优并行，却让互补资源闲置；co-batching 提升利用率，但要求批内统一并行配置，反而拖累执行效率。本文提出 Conflux Parallelism（XP），一个允许同一批内 prefill 与 decode 采用不同并行度共同执行的并行抽象：它利用 Transformer 的算子级结构，在算子之间构造异构执行路径，不同算子采用不同 batching 与并行策略，从而兼得 co-batching 与分阶段执行的好处。在此之上设计 ConfluxServe，一个 SLO 感知的服务系统，在 TTFT 与 TBT 双约束下最大化集群 goodput。生产负载评测中，ConfluxServe 相比最强基线把 goodput 提升 1.26–1.62 倍。",
+          "contributions": [
+            "提出 Conflux Parallelism：批内 prefill/decode 可用不同并行度，并按算子拼出异构执行路径。",
+            "指出「利用率 vs 并行效率」两难的根源是批级统一并行配置，算子级解耦可以同时满足两端。",
+            "实现 SLO 感知的集群调度器，在 TTFT 与 TBT 双约束下最大化 goodput。"
+          ],
+          "conclusions": [
+            "prefill 与 decode 的资源互补性应该在算子粒度而非批粒度上兑现。",
+            "异构执行路径让 co-batching 不再以并行效率为代价。"
+          ],
+          "experiments": [
+            "生产负载上集群 goodput 相比最强基线提升 1.26–1.62 倍。",
+            "在 TTFT 与 TBT 双 SLO 约束下取得上述收益，说明利用率与延迟目标不必二选一。",
+            "对比分阶段执行与 co-batching 两类基线，均取得更优的利用率—效率折中。"
+          ],
+          "significance": "给 prefill/decode 混跑一个算子级的并行解耦方案，直接改服务层而不动模型。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37810",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37810.pdf",
+          "index": 2,
+          "takeaway": "批内不必统一并行度：按算子拼异构执行路径，同时拿到利用率和效率。",
+          "keyExperiment": "生产负载 goodput 相比最强基线提升 1.26–1.62 倍。"
+        },
+        {
+          "title": "DWISE: Denoising Workload-Informed Scheduling Engine",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-10-30",
+          "authors": "Lie Li, Wen Li, Junxiao Shen, Jindong Gu, Guosheng Hu",
+          "institutions": "University of Bristol, University of Oxford",
+          "abstract": "扩散语言模型（dLLM）通过并行迭代去噪生成文本，是高效推理的一条路径。但现有服务框架仍按自回归模型的策略调度 dLLM 请求：FCFS 准入加 prefill 优先。作者发现两者都不适合 dLLM：FCFS 忽略了 dLLM 请求的解码开销高度异质且到达时未知，会造成严重队头阻塞；prefill 优先在 dLLM 上让只跑 prompt 的轮次浪费大部分 batch 算力。本文提出 DWISE，按剩余工作量调度请求，工作量用 prefill 与去噪共享的块级单位度量，使两个阶段共处同一轮。为预测未知的去噪工作量，DWISE 在准入时用轻量 prompt 预测器，再用首轮去噪的隐藏状态做一次精修，不需要额外模型执行。在 SGLang 中实现，覆盖三个 dLLM 家族的五个模型，平均端到端延迟相比 SGLang 降低 5.4 倍，最高 14.9 倍。",
+          "contributions": [
+            "指出 AR 时代的 FCFS 与 prefill 优先在 dLLM 上失效：解码成本异质且未知导致队头阻塞，prompt-only 轮次让 batch 空转。",
+            "用块级「剩余工作量」统一度量 prefill 与去噪，使两阶段共享同一调度轮次而不是互相打断。",
+            "两段式工作量预测：准入时 prompt 预测 + 首轮去噪隐藏状态精修，不需要额外前向。"
+          ],
+          "conclusions": [
+            "并行去噪改变了成本结构，调度应基于剩余工作量而不是到达顺序。",
+            "首轮去噪的隐藏状态就已包含足够信息，可以把工作量预测误差压到可用水平。"
+          ],
+          "experiments": [
+            "SGLang 实现、三个 dLLM 家族五个模型、突发负载：平均端到端延迟降低 5.4 倍，最高 14.9 倍。",
+            "上述延迟收益在保持任务准确率的前提下取得。",
+            "与 SGLang 原生的 FCFS + prefill 优先策略直接对照评测。"
+          ],
+          "significance": "把 dLLM 服务调度从「照搬 AR 策略」改成按块级剩余工作量统一排队，是扩散模型落地的必要一步。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39852",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39852.pdf",
+          "index": 3,
+          "takeaway": "dLLM 里 prefill 优先是负优化：只跑 prompt 的轮次让 batch 大部分空闲。",
+          "keyExperiment": "SGLang 上平均端到端延迟降低 5.4 倍、最高 14.9 倍，准确率不变。"
+        },
+        {
+          "title": "LRMoE: Demand-Side Load Re-Calibration for Efficient MoE Training on Memory-Constrained Nodes",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-10-30",
+          "authors": "Jiaming Hu, Zhida Jiang, Zhaolong Xing, Yu Li, Zhen Chen, Ke Zhang",
+          "institutions": "JD.com",
+          "abstract": "稀疏 MoE 用可扩展容量支撑 Web 应用，但不均衡路由带来计算与通信瓶颈。现有放置与复制方法靠重分配负载缓解，可额外的专家副本会和 token 相关缓冲争抢有限的 GPU 显存。本文提出 LRMoE，一个显存感知的 MoE 训练系统，同时重校准反向需求和平衡保留下来的工作量。前向执行时，它在资源约束下规划保留配额与专家放置，同时保持全部路由计算；反向传播时，用一个负载重校准度量估计每个 token-expert 对专家更新的贡献，并在配额内挑选 pair；容量感知路由把保留的 pair 分配到原专家的可用实例上；最后物理压缩形成更小的通信负载与可变大小的 grouped GEMM，同时降低反向流量、计算量和执行缓冲需求。",
+          "contributions": [
+            "把 MoE 负载均衡从「复制专家」转向「重校准反向需求」，避免副本挤占 token 缓冲这块更稀缺的显存。",
+            "提出 token-expert 贡献度量，在配额内保留对专家更新真正重要的 pair，而不是均匀裁剪。",
+            "物理压缩把保留 pair 组织成更小的通信负载与可变尺寸 grouped GEMM，一并压掉反向流量、计算与缓冲。"
+          ],
+          "conclusions": [
+            "反向传播中大量 token-expert 对贡献极小，选择性保留即可保住收敛，同时腾出显存。",
+            "通信量下降是负载重校准的副产品，不必再单独设计通信压缩。"
+          ],
+          "experiments": [
+            "Qwen3-30B-A3B 与 GLM4.5-106B-A12B 上，达到固定 loss 目标的 MoE 层累计训练时间相比 SYMI 降低 21.2%–44.8%。",
+            "在显存受限节点上完成上述规模的 MoE 训练，原方法因副本与缓冲争抢无法扩展。",
+            "收益覆盖 30B 与 106B 两个量级，说明方法不依赖特定专家规模。"
+          ],
+          "significance": "给显存受限的 MoE 训练一条不靠加副本的负载均衡路径。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37720",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37720.pdf",
+          "index": 4,
+          "takeaway": "MoE 训练瓶颈常是反向的 token-expert 冗余，而不是专家负载本身。",
+          "keyExperiment": "固定 loss 目标下 MoE 层训练时间降低 21.2%–44.8%（对比 SYMI）。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Turing LLM Post-Training: Calibrated Distillation and Efficient Dynamic-MoE Execution",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-30",
+          "authors": "Yue He, Jiahui Hu, Shaman Tang, Hua Zhou, Qiman Wu, Menglin Li, Yizhao Wang, Yuheng Zhang, Da Zhu, Zhou Wang, et al.",
+          "institutions": "XPeng Inc. Foundation Model Team",
+          "abstract": "本文研究动态路由 MoE 模型的后训练，重点是如何把独立优化出来的领域专家整合进一个模型，同时让整合过程保持高效。方法一侧是校准多教师 on-policy 蒸馏（C-MOPD）：在局部 Top-K 支撑上匹配每个被选教师，并做教师级 loss 归一化与裁剪，避免强弱教师互相拉扯；另一侧是执行路径：容量后限界宽度 dispatch、最终路由重放，以及异步 rollout 与训练重叠。在 Turing-20B-A2B 上，整合模型四域归一化得分为 0.9988，每个领域至少保留 90.16% 的专家增益。相同 K=32 下，完整校准目标得 0.9962，去掉校准为 0.9724，去掉裁剪为 0.9834。在 8K 回复上限下，该模型在四个数学与代码推理基准上全部超过共享 SFT 与 Qwen3-8B。",
+          "contributions": [
+            "C-MOPD：在局部 Top-K 支撑上匹配教师并做教师级 loss 归一化与裁剪，解决多教师蒸馏的尺度失衡。",
+            "动态 MoE 执行路径：容量后限界宽度 dispatch 加最终路由重放，保证整合后训练与推理路由一致。",
+            "异步 rollout 与训练重叠，把专家整合阶段的串行等待藏到训练后面。"
+          ],
+          "conclusions": [
+            "多教师蒸馏的关键不在教师数量，而在各教师 loss 的尺度校准与裁剪。",
+            "整合效率的提升来自执行路径与训练流程的重叠，而非降低模型容量。"
+          ],
+          "experiments": [
+            "Turing-20B-A2B 四域归一化整合得分 0.9988，每域至少保留 90.16% 的专家增益。",
+            "K=32 时完整校准目标 0.9962，无校准 0.9724，无裁剪 0.9834。",
+            "四个推理基准去权均值 85.92，高于 Qwen3-8B 的 80.33 与共享 SFT 的 74.21；12 项更广指标中 10 项优于 SFT。"
+          ],
+          "significance": "给小鹏自研 MoE 模型一套可复用的「专家合并 + 高效整合」后训练配方。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39876",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39876.pdf",
+          "index": 5,
+          "takeaway": "把多个领域专家合成一个 MoE 时，教师 loss 校准比教师数量更决定上限。",
+          "keyExperiment": "四域整合 0.9988 且每域保住 90%+ 专家增益；PPU 上整合步从 398.7s 降到 139.3s。"
+        },
+        {
+          "title": "TableTune: Measured, Self-Correcting Draft-Length Tables for Dynamic Speculative Decoding",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.ET",
+          "date": "2026-10-30",
+          "authors": "Abhishek Malvankar, Paul Castro, Nick Mitchell, Lionel Villard",
+          "institutions": "IBM Research",
+          "abstract": "投机解码只有在 GPU 还有空闲算力时才能加速服务，所以最优草稿长度（草稿模型每步猜多少 token）会随 batch 增大而缩小。vLLM 允许运维为每个 batch size 手写草稿长度表，但没有任何机制去测量或校正这张表。本文提出 TableTune：调优器在 vLLM 自己的服务路径上为每个 batch size 与草稿长度的组合计时，几分钟内算出吞吐最优的表；控制器作为 vLLM 插件，跟踪线上流量里被接受的猜测数，在服务过程中重建表。作者只把 TableTune 与其他投机方式对比：H100 上，调优表在五种 drafter 设置中的四种至少达到最佳固定草稿长度吞吐的 94%（第五种 88%），而且运维不需要知道那个长度是多少。",
+          "contributions": [
+            "把草稿长度表从手写超参变成可测量、可自校正的配置：直接在真实服务路径上穷举计时。",
+            "vLLM 插件式在线控制器，用实时接受率重建表，不需要停机或离线重跑。",
+            "与其他投机控制策略统一对照，最坏情况损失不劣于 TurboSpec/Nightjar 式控制。"
+          ],
+          "conclusions": [
+            "草稿长度的最优点是随负载移动的，静态配置表必然在某些区间失效。",
+            "在线接受率足以驱动重调，无需额外的离线剖析流水线。"
+          ],
+          "experiments": [
+            "H100 上，调优表在 4/5 种 drafter 设置下达到最佳固定长度吞吐的 ≥94%，第五种为 88%。",
+            "对已经跑偏的表，控制器最多提升吞吐 58%（vLLM 默认 runner 上 45%）。",
+            "MoE 模型上 vLLM 文档表最多损失 18%，调优表最多 3%；负载切换后可恢复陈旧表 96% 的损失。"
+          ],
+          "significance": "把投机解码的调参从经验手艺变成运行时自校正，运维不再需要猜草稿长度。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38968",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38968.pdf",
+          "index": 6,
+          "takeaway": "草稿长度是负载的函数，应该测量并持续自校正，而不是手写一张表。",
+          "keyExperiment": "调优表达到最佳固定长度 94%+ 的吞吐，切换负载后恢复 96% 损失。"
+        },
+        {
+          "title": "FAD-KV: Adaptive Dictionary KV Caching for Efficient Reasoning Decoding",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-30",
+          "authors": "Yuxuan Zhu, David H. Yang, Parisa Shiravani, Mohammad Mohammadi Amiri, Tejaswini Pedapati, Subhajit Chaudhury, Keerthiram Murugesan, Pin-Yu Chen",
+          "institutions": "Rensselaer Polytechnic Institute, IBM Research",
+          "abstract": "KV 缓存是长输出推理的显存与计算瓶颈。字典式稀疏压缩把每个 token 的 KV 状态表示成一组学习到的基元素（原子）的稀疏组合，既保留 token 级结构，又不强加全局低秩约束，因此比低秩分解更贴合实际分布。但现有字典方法在解码时有两个现实问题：用正交匹配追踪（OMP）之类的迭代稀疏编码会引入解码开销；静态字典又和测试时不断演化的 KV 分布失配，而朴素的 append-only 自适应会让字典在生成过程中持续膨胀。本文提出 FAD-KV：一是筛选式稀疏编码，用一次 Top-n 选择圈出小候选池，再做轻量系数精修；二是固定大小的字典自适应，复用不活跃原子而不扩张字典。两处共同约束了稀疏编码开销与字典增长，使长推理负载下的压缩既有质量又显存有界。",
+          "contributions": [
+            "用一次 Top-n 筛选加轻量精修替代 OMP 迭代稀疏编码，把解码期的稀疏编码开销压下来。",
+            "固定容量字典自适应：复用不活跃原子来跟踪分布漂移，而不是让字典随生成膨胀。",
+            "同时约束编码成本与字典规模，使长推理负载下的显存占用可预期。"
+          ],
+          "conclusions": [
+            "字典式 KV 压缩的实用障碍是解码开销与字典膨胀，而不是表达能力。",
+            "分布跟踪可以用复用原子实现，无需扩大字典。"
+          ],
+          "experiments": [
+            "在推理与长上下文基准上取得优于既有字典 KV 方法的质量—效率折中。",
+            "解码全过程字典规模保持固定，不随生成长度增长。",
+            "稀疏编码从迭代求解改为一次性筛选加精修，解码额外开销显著低于 OMP 路线。"
+          ],
+          "significance": "把字典 KV 压缩从「思路可行」推到「解码可部署」，补齐了长推理的显存缺口。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37921",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37921.pdf",
+          "index": 7,
+          "takeaway": "字典压缩要能上线，关键是把稀疏编码从迭代变成一次筛选，并锁死字典大小。",
+          "keyExperiment": "固定容量字典 + 一次 Top-n 筛选，避免 OMP 开销与字典无界增长。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "MCCL: Training Pytorch models across a fleet of Macs at Skywalker Sound",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-30",
+          "authors": "Kevin Sasso, Chris Fiegel, Francis Aitken, Nicolas Tsingos, Nicholas Tong",
+          "institutions": "Skywalker Sound (Lucasfilm)",
+          "abstract": "Skywalker Sound 是一家顶级音频后期制作机构，运行着 200 多台 M4 Max Mac Studio，通过 10Gb 以太网互联。这些机器在艺术家不使用时完全空闲，意味着大量未被利用的统一内存与算力。它们本可作为现有 NVIDIA GPU 集群之外的分布式训练资源，但 PyTorch 缺少面向 Apple Metal 的加速分布式后端。本文提出 MCCL（Metal Communication Collective Library），首个开源、面向 MPS、跑在交换式以太网上的多机 PyTorch 训练后端。作者在 24 个节点上评测：大规模 all-reduce 达到 TCP goodput 的 98%–99.7%；训练 113.5M 参数的 ViT 从 198 扩展到 4568 samples/s，并行效率 95.9%。",
+          "contributions": [
+            "首个开源的 MPS 多机 collective 后端，补上 PyTorch 在 Apple Silicon 集群上的空白。",
+            "面向 10Gb 以太网设计 all-reduce 实现，把通信效率推到 TCP goodput 的 98%–99.7%。",
+            "给出 Mac 集群与 A100 的等价比价，并给出利用夜间闲置时段的真实生产方案。"
+          ],
+          "conclusions": [
+            "CPU/统一内存集群的最大障碍是缺通信后端，而不是算力本身。",
+            "在 10Gb 以太网这种弱互联上，通信实现效率直接决定并行效率。"
+          ],
+          "experiments": [
+            "24 节点上大 all-reduce 达到 TCP goodput 的 98%–99.7%。",
+            "113.5M 参数 ViT 从 198 扩到 4568 samples/s，95.9% 并行效率。",
+            "对比 A100：单台 M4 Max 的 FP32 矩阵乘吞吐约为其 1.7 倍，5.5 台 Mac 匹配 A100 的 TF32；100 台 Mac 每晚 12 小时每年约省 20 万美元云算力。"
+          ],
+          "significance": "证明闲置的统一内存工作站集群可以作为 GPU 集群之外的现实训练资源，且不脱离标准 PyTorch 代码。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39029",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39029.pdf",
+          "index": 8,
+          "takeaway": "集合通信后端是新型加速器集群能否进入 PyTorch 生态的那道门槛。",
+          "keyExperiment": "24 节点 all-reduce 达 TCP goodput 98%–99.7%，ViT 训练 95.9% 并行效率。"
+        },
+        {
+          "title": "Causal Attention on CPU: A Cache-Aware and Load-Balanced Scheduling Kernel for Prefill",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-30",
+          "authors": "Kwun Fung Lau, Frost Mitchell, Kanya Mo, Emani Ashok",
+          "institutions": "Intel Corp.",
+          "abstract": "Agentic AI 带来显著的效率提升，但多个 agent 并发进行长上下文 prefill 会把 GPU 算力打满。CPU 是一条可行替代路径，然而现有 CPU attention kernel 既无法适配多级缓存层级，也缺少有效的线程调度。本文提出 CACPU，一个面向因果全序列 prefill 的高性能 attention kernel，核心是两个机制：分层缓存分块，按 L1/L2/L3 的容量与带宽把注意力工作组切到合适的缓存层；以及 kernel 内任务派发，按不规则因果工作量把子任务动态分给线程。相比 PyTorch SDPA、FlexAttention 与 SGLang 的 attention kernel，CACPU 最高取得 2.01 倍加速；集成进 SGLang 后，Llama-3.1-8B 的 TTFT 最多降低 1.74 倍，同时保持精度。",
+          "contributions": [
+            "针对多级缓存层级做分层分块，让注意力中间结果尽量留在片上而不是反复走内存。",
+            "用 kernel 内任务派发替代外部队列，按因果 mask 造成的不规则工作量做线程级负载均衡。",
+            "落地为 SGLang 后端，把长上下文 prefill 溢出到 CPU 而不损精度。"
+          ],
+          "conclusions": [
+            "CPU attention 的瓶颈是缓存适配与线程调度，而不是浮点吞吐。",
+            "因果 mask 让线程工作量高度不均衡，必须在 kernel 内部动态派发。"
+          ],
+          "experiments": [
+            "相比 PyTorch SDPA、FlexAttention 与 SGLang attention kernel，最高 2.01 倍加速。",
+            "集成进 SGLang 后 Llama-3.1-8B 的 TTFT 最多降低 1.74 倍。",
+            "上述加速在保持模型精度的前提下取得。"
+          ],
+          "significance": "给「GPU 被 agent 长 prefill 打满」提供了 CPU 侧的可用退路，且直接进 SGLang。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38809",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38809.pdf",
+          "index": 9,
+          "takeaway": "CPU 跑 attention 要赢，关键是缓存分层 + kernel 内动态派发，而非更快的算子。",
+          "keyExperiment": "相比 SDPA/FlexAttention/SGLang kernel 最高 2.01 倍，SGLang 中 TTFT 最多降低 1.74 倍。"
+        },
+        {
+          "title": "GearUp: DAG-aware Acceleration for Serverless Inference Serving via Slack-guided Pre-loading",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-30",
+          "authors": "Qi Qi, Yifan Sui, Hanfei Yu, Hong Zhang, Hao Wang",
+          "institutions": "University of Waterloo, George Mason University",
+          "abstract": "Serverless 平台越来越多地承载 ML 推理工作流，而这类工作流常被建模为相互依赖函数组成的 DAG。除了容器启动，每个 ML 节点还必须加载库、模型权重与 CUDA kernel 才能运行，这些成本沿依赖路径累积，直接落在端到端关键路径上。现有系统只优化其中一半：与 DAG 无关的预加载会准备请求可能根本到不了的节点，浪费主机与 GPU 内存；DAG 感知的服务只路由与扩缩整个函数，不管节点内部的加载阶段。本文提出 GearUp：剖析每个节点的加载阶段，把它们排进 DAG 暴露的 slack 时间里，让初始化藏在上游执行后面；同时跨请求复用已初始化实例，并用概率化、流量自适应的 keep-alive 策略平衡内存成本与冷启动风险。",
+          "contributions": [
+            "把 ML 节点的加载阶段当作可独立调度的工作，塞进 DAG 依赖关系暴露出的 slack。",
+            "跨请求复用已初始化实例，并用流量自适应的 keep-alive 决定保留时长。",
+            "纯服务层实现，不改模型、不改 DAG 定义，可直接套在现有 serverless 平台。"
+          ],
+          "conclusions": [
+            "DAG 的依赖结构本身就暴露了可用来隐藏初始化的时间窗，问题是没人去填。",
+            "预加载要 DAG 感知，否则会用宝贵的内存准备永不执行的节点。"
+          ],
+          "experiments": [
+            "AMBER Alert 工作流：中位端到端延迟相比 SMIless 降低 64.5%，相当于冷执行的 3.1 倍加速。",
+            "FINRA-ML 工作流：中位延迟降低 75.9%，相当于 10.0 倍加速。",
+            "相比 InstaInfer 的 eager pre-loading，GPU 与主机内存分配最多分别下降 83.9% 与 94.6%；四 worker 下取得 4.2 倍强扩展。"
+          ],
+          "significance": "把 serverless ML 推理的冷启动开销从关键路径上挪走，且几乎不额外占内存。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38196",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38196.pdf",
+          "index": 10,
+          "takeaway": "DAG 的 slack 就是免费的预加载预算，关键是按依赖关系挑选加载时机。",
+          "keyExperiment": "两条生产工作流中位延迟分别降低 64.5% 与 75.9%，内存占用最多降 94.6%。"
+        }
+      ]
+    }
+  ]
+}
