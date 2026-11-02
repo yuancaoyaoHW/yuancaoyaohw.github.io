@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-02",
+  "title": "2026-11-02 论文精选",
+  "lede": "今日取自 10-30 批次的剩余池，主线是「先算对账，再省时间」：投机解码的能耗要按接受 token 结算、剪掉的视觉 token 分期补算、多智能体的瓶颈藏在协作结构里、连量化都要先换一组等价的计算基。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 749
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Only Accepted Tokens Count: An Energy Accounting of Speculative Decoding Under Latency Targets",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-30",
+          "authors": "Bole Ma, Ayesha Afzal, Jan Eitzinger, Harald Köstler, Gerhard Wellein",
+          "institutions": "Erlangen National High Performance Computing Center (NHR@FAU)",
+          "abstract": "大模型推理的上限正从算力转向机房供电：每 token 能耗决定一个数据中心能服务多少请求，延迟目标决定用户多快拿到答案。解码阶段每生成一个 token 都要重新读全部权重，批处理把这次读取摊到多个用户上，投机解码则让草稿模型先提出若干未来 token、由目标模型一次前向验证，从而复用同一次权重读取。但被起草的 token 无论是否被接受都要付验证成本，节能与否完全取决于接受量。作者在生产条件（SGLang + CUDA Graph、H100/H200、batch 最大 64、5 个语料）下实测，发现稠密模型上验证而非起草主导能耗；batch 增大时批处理已摊薄权重读取，投机收益递减；大 batch 下块状草稿把验证推入计算受限区，收益转为亏损，低接受率草稿反而抬高每 token 能耗。",
+          "contributions": [
+            "把投机解码的能耗拆成「验证成本」与「被接受 token 摊薄收益」两笔账，给出延迟约束下净收益成立的判据。",
+            "在 SGLang + CUDA Graph 的生产配置下跨 5 个语料、batch 至 64、H100/H200 双平台实测每 token 能耗，而非用 FLOPs 估算。",
+            "指出接受率随文本域漂移：所有被测草稿在对话上都低于代码，低资源语言罗曼什语上低于英语。"
+          ],
+          "conclusions": [
+            "稠密模型的投机解码能耗由验证主导；batch 越大，投机相对批处理的节能优势越小，极端情况下变成额外开销。",
+            "在更紧的延迟目标下用投机换时延要付出额外能耗，且被测模型上留给 DVFS 的节能空间已经很小。"
+          ],
+          "experiments": [
+            "H100/H200、batch 上限 64、5 个语料、SGLang + CUDA Graph 的生产级配置下统一测量每 token 能耗。",
+            "所有被测草稿在对话语料上的接受 token 数都低于代码语料，罗曼什语低于英语。",
+            "大 batch + 块状草稿使验证跨过算术/访存平衡点进入计算受限区，节能转为亏损。"
+          ],
+          "significance": "把「投机解码省不省电」从口号变成可按语料域与 batch 核算的能耗账本。",
+          "arxivUrl": "https://arxiv.org/abs/2610.40287",
+          "pdfUrl": "https://arxiv.org/pdf/2610.40287.pdf",
+          "index": 1,
+          "takeaway": "投机节能的前提是高接受率与小 batch；batch 一大，验证成本就吃掉收益。",
+          "keyExperiment": "batch 增至 64 时权重读取已被批处理摊薄，块状草稿的验证把系统推入计算受限区，节能变亏损。"
+        },
+        {
+          "title": "Raincheck: Deferred Multimodal Prefill for Efficient Multi-Turn MLLM Inference",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-10-30",
+          "authors": "Wenjie Huang, Jun Zhang, Hongyaoxing Gu, Haoyang Huang, Tianqi Xu, Xinyue Hao, Xinyi Hu, Xinle Du, Jun Dai, Shuang Ge, Chen Lei, Yue Li, Mingcheng Wan",
+          "institutions": "Zhejiang University, Alibaba Group, University of Chinese Academy of Sciences, Carnegie Mellon University",
+          "abstract": "多轮多模态对话会复用输入上下文，但长的图像或视频输入把首 token 延迟（TTFT）推得很高。查询感知的硬剪枝能减少 prefill token，却永久丢弃了后续问题可能需要的信息。Raincheck 把「初始 token 选择」与「后续信息可用性」解耦：仍由现有剪枝方法选出首轮 prefill token，但把未选中的 token 按源顺序保留，在解码阶段的空闲算力和调度空隙里渐进补做 prefill，答案返回后仍可继续。作者用注意力可见性与仿射状态映射，使生成开始之后的上下文更新在纯注意力与混合递归模型上都成立，并用 prefill-decode 融合减少重复权重读取。在 Qwen3-VL-8B 与 Qwen3.5-9B 上只保留 30% 多模态 token 时，Raincheck 分别挽回硬剪枝损失质量的 77.7%（MultiVerse）与 60.4%（ConvBench）。",
+          "contributions": [
+            "提出「延后 prefill」：首轮只算被剪枝选中的 token，其余 token 在 decode 空闲算力与调度空隙中按源顺序补齐。",
+            "用注意力可见性控制加仿射状态映射，使生成开始后仍能安全把新 token 并入上下文，兼容纯注意力与混合递归两类模型。",
+            "prefill-decode 融合减少重复权重读取，把补做 prefill 的边际成本压到可接受范围。"
+          ],
+          "conclusions": [
+            "硬剪枝丢掉的质量可以用「晚点再算」而非「彻底不算」挽回，代价是极小的解码延迟增长。",
+            "30% 保留率下首轮 TTFT 相对全量 prefill 最多降 24.1%，而平均 TPOT 增幅不到 0.5%。"
+          ],
+          "experiments": [
+            "Qwen3-VL-8B 与 Qwen3.5-9B、30% 多模态 token 保留率、4 种剪枝方法、MultiVerse 与 ConvBench 两个多轮基准。",
+            "相对匹配的硬剪枝，平均挽回 77.7%（MultiVerse）和 60.4%（ConvBench）的质量损失。",
+            "SGLang 实现下 MultiVerse 首轮 TTFT 最多降低 24.1%，平均 TPOT 增幅小于 0.5%。"
+          ],
+          "significance": "把多模态长上下文的 prefill 从「一次性预算」变成「可分期偿还的账」。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39562",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39562.pdf",
+          "index": 2,
+          "takeaway": "剪掉的视觉 token 不必真丢，放到解码空闲时再算回来。",
+          "keyExperiment": "30% 保留率下挽回 77.7% 与 60.4% 的剪枝质量损失，首轮 TTFT 降 24.1% 而 TPOT 只涨 0.5%。"
+        },
+        {
+          "title": "MAServeBench: Benchmarking Multi-Agent LLM Serving Systems with Hierarchical Collaboration Workloads",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.MA",
+          "date": "2026-10-30",
+          "authors": "Shengxuan Qiu, Haochen Huang, Shuzhang Zhong, Zizhuo Fu, Zebin Yang, Jianming Tong, Meng Li",
+          "institutions": "Peking University",
+          "abstract": "大模型多智能体系统把一个用户请求拆成相互依赖的模型调用与工具调用；与独立请求不同，这些操作在不同时刻才就绪，并随智能体交换结果不断改写上下文，形成持续变化的并发、计算与显存需求，暴露出单请求压测看不到的硬件瓶颈。要复现这些效应，仅记录执行期观察到的请求不够，还必须把协作规则本身参数化。MAServeBench 把多智能体协作当成服务工作负载的可配置维度：可组合阶段刻画智能体如何协调与交换上下文，使任务输入与工具不变时也能生成不同负载；分层语义 trace 保留实际发生的操作与依赖，支持在固定工作量下比较合法的释放约束；任务关联测量把负载接到服务执行与 GPU/NPU 行为上，解释服务效率提升为何不总等于任务按时完成。",
+          "contributions": [
+            "把多智能体协作协议做成负载的可配置维度，使同一任务在同一工具集下也能产出不同的并发与显存画像。",
+            "提出分层语义 trace：保留真实操作与依赖，支持在固定总工作量下公平比较不同释放与排序约束。",
+            "建立从负载到服务执行再到 GPU/NPU 行为的任务关联测量，解释「服务效率上升但任务完成变慢」的脱节。"
+          ],
+          "conclusions": [
+            "请求级 benchmark 覆盖不到多智能体负载的关键瓶颈，协作结构本身必须作为评测变量。",
+            "在固定工作量下改变智能体排序就会显著拉长根任务延迟，说明调度与释放策略是多智能体服务的一等公民。"
+          ],
+          "experiments": [
+            "三次成对原生评测中请求输入中位数差异不超过 2.3%，最大输入 P90 变化为 Magentic-One/WebArena 的 -7.1%。",
+            "加入分析师排序后调度宽度从 24 降到 12，但平均根延迟上升 26%；GPT Researcher 全量 trace 下排序使宽度 9→3、根延迟上升 40–54%。",
+            "KV 从 16 GiB 扩到 40 GiB 使可处理 prefill 因子降 52%、根 P95 降 17.5%。"
+          ],
+          "significance": "给多智能体服务与硬件评测提供第一套可复现的「协作感知」负载生成方法。",
+          "arxivUrl": "https://arxiv.org/abs/2610.40293",
+          "pdfUrl": "https://arxiv.org/pdf/2610.40293.pdf",
+          "index": 3,
+          "takeaway": "多智能体的服务瓶颈不在单请求，而在协作结构决定的就绪时序。",
+          "keyExperiment": "固定工作量下只改智能体排序就把根延迟拉高 26–54%，证明协作结构本身就是性能变量。"
+        },
+        {
+          "title": "Sandman: Building and Operating Sandboxes for Agentic Reinforcement Learning on Shared Kubernetes",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-10-30",
+          "authors": "Yiming Yan, Hongyang Wang, Wenbo Chen, Xuan Wang, Jingguo Liu, Xian Li, Chen Qi, Leo Fan, Siwei Li, Qianli Wu, Yichuan Li, Ruochen Wen, Qian Qu, Zheshen Wang, Benoit Dumoulin",
+          "institutions": "Amazon",
+          "abstract": "智能体强化学习要在任务专属环境里反复调用工具，一个训练作业可能在短时间内突发创建上千个环境，同时还要与其他作业共享集群。Sandman 是 Amazon 在生产中构建并运营的沙箱服务，在共享 Kubernetes 上承载多个生产级 agentic RL 负载：训练框架提交任务镜像，然后通过命令与文件操作使用返回的沙箱；文件与进程在多次调用间保持存活，直到框架显式释放。每个沙箱是一个 Kubernetes pod，镜像不做任何修改，只把一个小型守护进程挂载进去，由 Sandman 统一管理创建、就绪与回收。规模测试中同时持有 11,858 个微型沙箱；2026 年 10 月四个生产级 SWE-bench Verified 训练活动共创建了 310 万个沙箱。作者还总结了应对创建突发、准备任务环境、回收被遗弃沙箱与受控评测的运营经验。",
+          "contributions": [
+            "以不改镜像、注入 sidecar 守护进程的方式把任意任务镜像变成可复用沙箱，避免为 RL 定制镜像。",
+            "把沙箱生命周期的创建、就绪探测与回收集中到服务层，专门应对训练框架的突发式批量创建。",
+            "给出共享 K8s 上多租户 agentic RL 的运营经验：突发削峰、环境预热、弃用沙箱回收与可控评测。"
+          ],
+          "conclusions": [
+            "沙箱的瓶颈往往不在容器启动本身，而在就绪判定与回收是否及时。",
+            "共享集群上多作业并行时，沙箱服务必须把创建速率与配额当作一等资源来管理。"
+          ],
+          "experiments": [
+            "规模测试中单次持有 11,858 个并发微型沙箱。",
+            "2026 年 10 月四个生产 SWE-bench Verified 训练活动共创建 310 万个沙箱。",
+            "每个沙箱等于一个 Kubernetes pod 加挂载进未修改镜像的小型守护进程，文件与进程跨调用持久。"
+          ],
+          "significance": "把 agentic RL 的环境供给从「每作业自建」变成集群级共享基础设施。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39711",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39711.pdf",
+          "index": 4,
+          "takeaway": "百万级沙箱的关键不是启动快，而是就绪与回收可管。",
+          "keyExperiment": "11,858 并发沙箱、单月 310 万次创建，全部跑在共享 Kubernetes 上。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Multi-Token Prediction Done Right",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-10-30",
+          "authors": "Jayden Teoh",
+          "institutions": "MIT",
+          "abstract": "多 token 预测（MTP）已是预训练标配：既提升下游效果，又通过投机解码加快推理。作者指出标准 MTP 训练存在一个缺陷——MTP 交叉熵梯度里有一项残差会同时干扰下一 token 学习与多 token 学习，且随规模放大。他们把这个梯度精确分解为两部分：一项 KL 自蒸馏项，把每个 MTP 头拉向模型自己的下一 token 分布并改善投机解码；其余是信噪比很低的残差，会把有用的 KL 信号埋掉。作者提出 KL 梯度回收技巧：当两个分布共享同一个线性输出头时，二者 KL 的梯度可以用各自的交叉熵梯度经 straight-through 梯度路由精确还原，既不需要构造词表大小的 logit 矩阵，也与标准融合交叉熵 kernel 兼容。",
+          "contributions": [
+            "把 MTP 交叉熵梯度精确分解为 KL 自蒸馏项与低信噪比残差项，解释 MTP 在规模变大时为何反而变差。",
+            "提出 KL 梯度回收技巧：共享线性输出头时用两项交叉熵梯度精确还原 KL 梯度，无需词表级 logit 矩阵。",
+            "Soft-MTP 只需一行改动、不加参数、无可测开销，同时兼容 DeepSeek 式与 Meta 式 MTP。"
+          ],
+          "conclusions": [
+            "只回传 KL 自蒸馏信号比原始 MTP 梯度干净，在 167M 到 1.2B 各规模都更好。",
+            "Soft-MTP 在多数指标上追平甚至超过直接最小化 KL，且不需要额外的词表级计算。"
+          ],
+          "experiments": [
+            "WikiText 困惑度：NTP 17.50、MTP 18.16、Soft-MTP 17.49；LAMBADA 分别为 14.16、15.00、14.07。",
+            "零样本平均准确率：NTP 56.75、MTP 56.80、Soft-MTP 57.31。",
+            "167M 到 1.2B 全规模上 NTP 困惑度更低、投机解码更快、零样本更准；689M 起 MTP 困惑度也更低。"
+          ],
+          "significance": "把 MTP 从需要小心调的配件变成一行代码就免费变好的默认项。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38331",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38331.pdf",
+          "index": 5,
+          "takeaway": "MTP 的梯度可以精确拆开，只回传 KL 自蒸馏项就够。",
+          "keyExperiment": "WikiText 困惑度 18.16→17.49、零样本准确率 56.80→57.31，不改结构不加参数。"
+        },
+        {
+          "title": "Multi-Draft On-Policy Distillation for Diffusion Drafters",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-30",
+          "authors": "Petr Molodyk, Yuchen Zhu, Jaemoo Choi, Molei Tao, Yongxin Chen",
+          "institutions": "Georgia Institute of Technology",
+          "abstract": "投机解码用一步扩散草稿器并行提出一整块 token，把顺序开销换成并行开销。on-policy 蒸馏本可用验证器反馈训练草稿器，但并行起草让反馈难以对齐：草稿器预测某个位置时看不到同一块里排在它前面的已采样 token，而验证器的预测条件于这些 token，于是同一处草稿预测在不同采样前缀下对应不同的验证器目标。作者表明，分别针对这些目标做蒸馏会压制「在某些前缀下合理、在另一些前缀下不合理」的 token，损害接受率。为此提出 MDraft：从同一上下文采样多个草稿块，把各自前缀下验证器的全词表条件分布聚合起来作为训练目标，让来自其他前缀的支持也能影响监督信号，从而缓解分布错配。",
+          "contributions": [
+            "指出并行草稿的 on-policy 蒸馏存在前缀错配：同一草稿预测在不同采样前缀下对应不同验证器目标。",
+            "提出 MDraft：同上下文采样多份草稿块，聚合各前缀下验证器的全词表条件分布，避免压制多峰 token。",
+            "只改训练、不动草稿器结构与推理流程，训练出的 checkpoint 可直接替换原模型。"
+          ],
+          "conclusions": [
+            "聚合多前缀的验证器条件分布能缓解分布错配，使接受长度超过预训练水平。",
+            "方法不改推理路径，落地成本低。"
+          ],
+          "experiments": [
+            "数学、代码、对话共 6 个任务、温度 T=0 时平均接受长度：DFlash 6.432、AdaFlash 6.671（+3.7%）、MDraft 6.685（+3.9%）。",
+            "单项上 GSM8K 6.469→6.907，HumanEval 6.581→6.740。",
+            "保持草稿器架构与推理流程不变，仅替换训练目标即可直接顶替预训练 checkpoint。"
+          ],
+          "significance": "把并行草稿器的训练目标从「对单一前缀负责」改成「对前缀分布负责」。",
+          "arxivUrl": "https://arxiv.org/abs/2610.37778",
+          "pdfUrl": "https://arxiv.org/pdf/2610.37778.pdf",
+          "index": 6,
+          "takeaway": "并行起草的蒸馏目标要按前缀分布聚合，否则会压掉多峰 token。",
+          "keyExperiment": "平均接受长度 6.432→6.685（+3.9%），超过 AdaFlash 的 +3.7%。"
+        },
+        {
+          "title": "Cord: Confidence-Anchored Order Residual Decoding for Masked Diffusion Language Models",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-10-30",
+          "authors": "Chengwei Zhou, Zhaoyan Jia, Massoud Pedram, Gourav Datta",
+          "institutions": "Case Western Reserve University, University of Southern California",
+          "abstract": "掩码扩散语言模型（dLLM）的解码顺序会显著影响生成质量，但常见解码器在整个生成过程中沿用同一条揭示规则。置信度是强默认：它衡量某位置「现在」是否可被果断预测，却不衡量揭示该位置对后续解码有多大帮助。Cord 是一个轻量、以 prompt 为条件的策略：保留置信度解码作为稳定参考，通过学习几何残差决定何时、如何偏离——残差作用在生成方向、与已揭示上下文的邻近度以及双向 infilling 三个维度上，并随 prompt 与演化中的部分回答自适应。Cord 不在每个解码步采样新动作，而是每次 rollout 采样一个低维系数矩阵，由它诱导出整条状态相关的揭示轨迹，形成可用序列级奖励直接训练的 contextual bandit，无需步级信用分配，也不更新骨干。",
+          "contributions": [
+            "把 dLLM 解码顺序问题重述为「以置信度为锚加一个低维全局残差」的 contextual bandit，绕开步级信用分配。",
+            "残差在生成方向、上下文邻近度与双向 infilling 三个几何维度上建模，兼顾 prompt 与演化中的部分回答。",
+            "只加 0.53M 可训练参数、不增加骨干前向，推理开销 5.39%。"
+          ],
+          "conclusions": [
+            "自适应揭示顺序相对固定置信度规则带来显著质量提升，且不同任务学到的残差结构不同。",
+            "用一个 rollout 级低维系数矩阵代替逐步策略采样，可同时降低训练与推理成本。"
+          ],
+          "experiments": [
+            "3 个 dLLM 与 5 个推理/代码/约束满足基准上，平均任务成功率从置信度解码的 32.0% 提升到 48.2%。",
+            "优于按领域逐一调优的最优固定残差。",
+            "仅 0.53M 可训练参数，推理延迟开销 5.39%。"
+          ],
+          "significance": "给 dLLM 的解码顺序学习提供了一个便宜、可迁移的轻量策略层。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39372",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39372.pdf",
+          "index": 7,
+          "takeaway": "解码顺序不必每步重学，一个 rollout 级系数矩阵就够。",
+          "keyExperiment": "平均任务成功率 32.0%→48.2%，只加 0.53M 参数、5.39% 延迟。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "A Case Study of a Multi-Agent Kernel-Optimization Loop That Learns a New AI Accelerator",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-30",
+          "authors": "Byonggon Chun",
+          "institutions": "Fluidstack",
+          "abstract": "前沿大模型能为大多数单算子基准写出正确的 CUDA kernel，但换到它们很少见过架构与编程语言的加速器上，正确率就崩塌。本文给出一个面向此类加速器的 agent 循环案例：目标是被近期、文档稀疏的 Rust DSL 编程的 FuriosaAI RNGD NPU，循环在 12 天里、在共享且稀缺的设备上优化三个 Gemma-4-12B 解码 kernel。循环自行积累目标知识——写并校验 DSL 文档摘要、用微基准测量芯片、记录编译器给出的合法性规则，并在工具链变化时回头重测；再用按角色划分的 Design Tree 搜索整 kernel 设计，并把小的被接受的改动累积到每个 kernel 的最佳版本上。因为设备时间稀缺、读数有噪声，新设计在真正上机前先被廉价检查筛掉，运行后期只有与最佳 kernel 反复对比后才接受改动。",
+          "contributions": [
+            "给出面向罕见加速器（FuriosaAI RNGD NPU 与其 Rust DSL）的 agent 循环：自建文档摘要、微基准与编译器合法性规则的知识库。",
+            "用按角色划分的 Design Tree 搜索代替扁平试错：既探索整 kernel 设计，又累积被接受的小改动。",
+            "在稀缺且带噪的设备条件下，用廉价预筛加后期重复对比来控制上机预算。"
+          ],
+          "conclusions": [
+            "在文档稀疏、模型不熟悉的新加速器上，知识自建加结构化搜索能把正确率重新拉起来。",
+            "最终 kernel 已接近访存下界，剩余空间主要在权重搬运本身。"
+          ],
+          "experiments": [
+            "三个 Gemma-4-12B 解码 kernel，在被共享的 RNGD NPU 上迭代 12 天。",
+            "相对官方基线取得 9.293 倍几何平均加速。",
+            "每个 kernel 的周期数都在「仅搬运其权重所需周期」的 1.25 倍以内。"
+          ],
+          "significance": "示范了 agent 循环如何为新硬件补上「还没人写过的 kernel」这一层。",
+          "arxivUrl": "https://arxiv.org/abs/2610.38329",
+          "pdfUrl": "https://arxiv.org/pdf/2610.38329.pdf",
+          "index": 8,
+          "takeaway": "不熟悉的加速器上，agent 得先自己造知识，再谈优化。",
+          "keyExperiment": "12 天、三个解码 kernel 取得 9.293 倍几何平均加速，且已逼近权重搬运下界（1.25 倍以内）。"
+        },
+        {
+          "title": "When Does Heterogeneity Pay Off? Understanding GPU-WSE System Complementarity",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-10-30",
+          "authors": "Ziyu Hu, Zhijing Ye, Jiamin Wang, Zhiqing Zhong, Zhendong Mi, Shaoyi Huang, Weijian Zheng, Rajkumar Kettimuthu, Xiaodong Yu",
+          "institutions": "Stevens Institute of Technology",
+          "abstract": "AI 加速器架构日益多样，把不同架构放进同一系统正在成为新的异构计算范式。GPU 与晶圆级引擎（WSE）在计算、存储与通信组织上差异明显，既带来架构互补，也带来额外开销，但如何把这种异构性转化为实际收益仍不清楚。本文提出分层基准方法刻画 GPU 与 WSE 的异构执行，并给出解析性能模型，用来判定异构何时成为瓶颈、何时带来系统级增益。分析显示：在数据并行与流水并行下，两者差异更多表现为障碍；而在 prefill/decode 分离（P/D disaggregation）下，架构差异反而成为可利用的互补性，因为 prefill 吃算力、decode 吃带宽，WSE 的大容量片上 SRAM 恰好把 KV 工作集留在片内。",
+          "contributions": [
+            "提出分层基准方法，分别在算子、模型与系统层刻画 GPU 与 WSE 的异构执行。",
+            "给出解析性能模型，判定异构何时成为瓶颈、何时带来增益，并指出 P/D 分离是最佳落点。",
+            "量化跨域 KV cache 传输的带宽下界，为 GPU–WSE 互联设计给出参考区间。"
+          ],
+          "conclusions": [
+            "在 DP 与 PP 下，GPU 与 WSE 的架构差异主要转化为同步与重分布开销；只有 P/D 分离能让差异变成互补。",
+            "最优 GPU 与 WSE 配比随请求形状（上下文长度、batch）变化，硬件配置需覆盖目标负载区间。"
+          ],
+          "experiments": [
+            "WSE 单芯片集成约 85 万计算核与 44 GB 片上 SRAM，每个 PE 最多 48KB 本地 SRAM。",
+            "稳态 prefill 吞吐下 KV cache 平均带宽下界：7B 模型 device/node/cluster 分别需 6.55、26.2、209.6 GB/s；70B 为 4.6、18.8、150.4 GB/s。",
+            "PP 下细粒度协调与多重执行约束放大了架构不对称的负面影响；WSE 每步 decode 稳定在数十微秒，而 GPU 随上下文增长更快触到 HBM 带宽上限。"
+          ],
+          "significance": "给「GPU 加晶圆级引擎」这类异构系统划出了能用与不能用的边界。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39222",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39222.pdf",
+          "index": 9,
+          "takeaway": "异构加速器不是堆上就好，P/D 分离才是 GPU 加 WSE 的甜区。",
+          "keyExperiment": "P/D 分离下跨域 KV 带宽下界从 6.55 GB/s（7B device 级）到 209.6 GB/s（cluster 级）。"
+        },
+        {
+          "title": "LinQuant: Functional Invariances for Low-Precision Linear Recurrences",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-10-30",
+          "authors": "Neehal Tumma, Philipp Nazari, Rohan Cherukuri, Daniela Rus, T. Konstantin Rusch",
+          "institutions": "MIT CSAIL, Max Planck Institute for Intelligent Systems, ETH Zürich",
+          "abstract": "线性递归正在成为 softmax 注意力的实用替代，既有独立架构也有混合架构；但与 softmax 注意力相比，它们的低精度推理远不成熟。prefill 阶段的分块并行算法把大部分递归改写为稠密矩阵乘，本应是走向低精度的自然路径，然而直接对原生形式量化很脆弱。作者找出一组函数不变性：这些变换保持全精度计算结果不变，却让操作数更利于量化，包括旋转、对角缩放，以及把递归衰减与写因子换到另一个操作数上。他们推导了这些变换在常见递归族（线性、门控、delta-rule 更新）上成立的条件，并说明它们提供互补的自由度。最后把框架落到生产：在已有的 Mamba-2 低精度 prefill 流水线 SSDi8 上加入适用的不变性。",
+          "contributions": [
+            "提出 7 种保持全精度结果的函数不变性（旋转、对角缩放、衰减与写因子换边），让递归 prefill 的操作数更利于量化。",
+            "推导这些变换在线性、门控与 delta-rule 三类递归族上的成立条件，并指出它们提供互补自由度。",
+            "把变换融进生产流水线 SSDi8（W4A8 投影加 INT8 递归），query-key 旋转不引入可测的端到端 prefill 延迟。"
+          ],
+          "conclusions": [
+            "低精度递归的关键不在更细的量化粒度，而在换一组等价的计算基。",
+            "key 侧变换可迁移到生产配置；value 侧变换因 SSDi8 已有 per-channel 尺度而收益有限。"
+          ],
+          "experiments": [
+            "WikiText-2（长度 2048）生产困惑度，Mamba-2 1.3B：FP16 10.420、SSDi8 10.928、加变换 10.830。",
+            "Mamba-2 8B：FP16 7.250、SSDi8 7.620、加变换 7.435；Nemotron-H Base 为 6.030、6.338、6.175。",
+            "融合进 SSDi8 后 query-key 旋转在 Mamba-2 上不增加可测的端到端 prefill 延迟，1.3B 单层延迟不变。"
+          ],
+          "significance": "给线性递归类模型补上了缺失的低精度 prefill 方法学。",
+          "arxivUrl": "https://arxiv.org/abs/2610.39418",
+          "pdfUrl": "https://arxiv.org/pdf/2610.39418.pdf",
+          "index": 10,
+          "takeaway": "量化前先换个等价的计算基，比调量化粒度更有效。",
+          "keyExperiment": "Mamba-2 8B 的 WikiText-2 困惑度从 SSDi8 的 7.620 降到 7.435，延迟不变。"
+        }
+      ]
+    }
+  ]
+}
