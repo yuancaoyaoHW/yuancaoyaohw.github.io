@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-03",
+  "title": "2026-11-03 论文精选",
+  "lede": "今日主线是推理服务里的数据搬运成本：KV cache 如何在解耦架构与跨模型之间流动、混合模型的循环状态该放在哪一层存储，以及超长上下文与异构集群在架构层面如何摊薄搬运与调度开销。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 395
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "ARK: Avoiding Routing Collisions for KV Cache Transfer in Disaggregated LLM Inference",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.NI",
+          "date": "2026-11-02",
+          "authors": "Hung-Chun Lin, Ting-Wei Hsu, Chung-En Ho, Ahmed Saeed",
+          "institutions": "Georgia Institute of Technology",
+          "abstract": "解耦式大模型推理把 prefill 与 decode 拆到不同 GPU 池，随之产生海量 KV cache 传输。这些传输每次持续数百毫秒到数秒，表现为吃掉链路带宽的超级大象流；此时无状态 ECMP 容易哈希碰撞，把并发流挤到同一条 spine 上而其它链路空闲，传输时间被拉长数秒。作者提出 ARK——分布式象流路径预留机制：利用这些流寿命长的特点，用轻量一对多协调让发送端挑选源端口，使并发流的哈希落在不同 spine，既不改交换机也不要求接收端重排包。包级 RDMA 仿真显示，中等负载下平均与 P95 FCT 分别降低最多 27.3% 与 34.0%，平均 TTFT 降低 12.9%。",
+          "contributions": [
+            "指出解耦推理的 KV cache 传输是持续毫秒到秒级的大象流，此时 ECMP 哈希碰撞会显著拉长流完成时间。",
+            "提出 ARK：通过发送端源端口选择的分布式路径预留，把并发大象流映射到不同 spine，无需改交换机或接收端重排。",
+            "用包级 RDMA 仿真在中等负载下量化收益，FCT 与 TTFT 同时改善，证明协调开销可被长寿命流摊薄。"
+          ],
+          "conclusions": [
+            "KV cache 传输的持久性既是拥塞根源，也让轻量协调变得可行，是解耦推理网络优化的有效切入点。",
+            "只改发送端端口选择即可接近显式路由的效果，对现有数据中心网络是低侵入方案。"
+          ],
+          "experiments": [
+            "中等负载下平均 FCT 降低最多 27.3%。",
+            "P95 FCT 降低最多 34.0%，尾延迟改善更明显。",
+            "平均 TTFT 降低最多 12.9%，直接反映到端到端推理体验。"
+          ],
+          "significance": "把解耦推理的 KV cache 传输当作数据中心象流问题来处理，为 GPU 间通信路径优化提供了新视角。",
+          "takeaway": "改发送端端口选择就能躲开 ECMP 碰撞，P95 FCT 降 34%。",
+          "keyExperiment": "中等负载下平均 FCT -27.3%、P95 FCT -34.0%，平均 TTFT -12.9%。",
+          "arxivUrl": "https://arxiv.org/abs/2610.41160",
+          "pdfUrl": "https://arxiv.org/pdf/2610.41160.pdf",
+          "index": 1
+        },
+        {
+          "title": "LEAP: Efficient LLM Inference Scheduling with Generalizable Length Prediction",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-02",
+          "authors": "Kwan Yan, Jialun Zhong, Yanzeng Li",
+          "institutions": "Beijing Normal University, Peking University",
+          "abstract": "长度感知调度靠优先处理短请求来压低时延，但长度预测器虽参数量大，遇到领域与任务偏移时排序能力仍会退化，重新适配代价高，预测本身的开销又会抵消调度收益。作者提出 LEAP：复用服务模型 prefill 阶段的隐状态（其中已隐含输出长度信息），用线性读出提取长度信号；面对显著领域漂移，用递归最小二乘在测试时更新该读出，只以已完成请求作监督，无梯度计算、无历史数据回放。预测与更新在 CPU 上异步执行，与剩余 GPU prefill 重叠。跨域迁移下排序能力保持良好，较大域偏移时在线适配把 Spearman 相关提升 64.7%；每 token 平均时延比对比预测器低 15.9–40.8%，吞吐还高 1.9%，预测器参数量少 30569 倍。",
+          "contributions": [
+            "提出复用 prefill 隐状态加线性读出的长度预测方式，预测开销可与 GPU prefill 完全重叠。",
+            "用递归最小二乘做无梯度的测试时自适应，仅依赖已完成请求，跨领域显著偏移时仍保持排序质量。",
+            "把预测与批次初始排序放到 CPU 异步执行，使预测开销不再侵蚀调度收益。"
+          ],
+          "conclusions": [
+            "长度预测不必依赖独立大模型，服务模型自身的 prefill 隐状态已含足够信号。",
+            "轻量在线自适应足以应对域偏移，代价远低于重新训练，适合生产环境持续漂移的负载。"
+          ],
+          "experiments": [
+            "较大域偏移下在线适配把 Spearman 相关提升 64.7%。",
+            "每 token 平均时延较对比长度预测器降低 15.9–40.8%。",
+            "吞吐提升 1.9%，同时预测器参数量比最强基线少 30569 倍。"
+          ],
+          "significance": "把长度预测从独立模型降级为几十个参数的读出层，让长度感知调度在真实漂移负载下变得可用。",
+          "takeaway": "预填隐状态 + 线性读出 + 在线递归最小二乘，延迟降 40% 吞吐还升。",
+          "keyExperiment": "每 token 时延 -15.9~40.8%，吞吐 +1.9%，参数量少 30569 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2610.41359",
+          "pdfUrl": "https://arxiv.org/pdf/2610.41359.pdf",
+          "index": 2
+        },
+        {
+          "title": "HiState: Hierarchical Prefix Cache Management for Hybrid LLM Serving in Agentic Workloads",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-02",
+          "authors": "Zaifeng Pan, Lucas Wang, Xinwei Qiang, Yanbo Zhou, Chang Chen, Zhengding Hu, Yue Guan, Yufei Ding",
+          "institutions": "University of California, San Diego",
+          "abstract": "混合模型（全注意力层加循环线性层）能降低推理成本，前缀缓存可进一步消除重复计算，但循环状态是 checkpoint，无法回到更短前缀对应的历史状态。现有混合前缀缓存只在少数边界留 checkpoint，而 agent 负载会改写、压缩、回退早期上下文，需要的可复用前缀往往没存 checkpoint 或已被驱逐；单纯多留 checkpoint 又会挤占其它会话的可复用前缀。HiState 观察到前缀复用时读取全部匹配 KV、却只取一个循环 checkpoint，于是把历史 checkpoint 沉到 SSD，快速内存留给 KV，并自适应控制间隔以平衡存储与重算、统一驱逐协调稀疏化与陈旧轨迹回收。在 vLLM 上实现，编程 agent trace 上 p99 TTFT 相比 vLLM-Marconi 与 SGLang-HiCache 分别快 5.73 倍与 5.44 倍。",
+          "contributions": [
+            "指出混合模型的前缀缓存瓶颈在于循环 checkpoint 无法回退到更短前缀，而 agent 负载的上下文改写使这一问题被放大。",
+            "发现复用的不对称性：命中需要全部匹配 KV，却只需一个循环 checkpoint，据此设计 SSD 与显存的分层放置。",
+            "提出自适应间隔控制与统一驱逐，在 checkpoint 稀疏化与 KV 回收之间做协同，避免不同会话互相挤占。"
+          ],
+          "conclusions": [
+            "混合模型前缀缓存应按 KV 与循环状态的不同稀缺度分层存储，而不是统一按前缀长度留 checkpoint。",
+            "面向 agent 负载的缓存策略必须考虑上下文改写与分支回退，常规对话的复用模式假设不再成立。"
+          ],
+          "experiments": [
+            "真实编程 agent trace 上 p99 TTFT 相比 vLLM-Marconi 快最多 5.73 倍。",
+            "相比 SGLang-HiCache 快最多 5.44 倍。",
+            "在两个公开 coding-agent trace 数据集与受控微基准上均取得一致收益。"
+          ],
+          "significance": "为混合注意力模型在 agent 场景下的前缀缓存给出了第一套分层管理方案，直接把尾延迟压到原来的五分之一。",
+          "takeaway": "checkpoint 沉 SSD、KV 留显存，p99 TTFT 快 5.7 倍。",
+          "keyExperiment": "vLLM 上实现，p99 TTFT 相比 vLLM-Marconi / SGLang-HiCache 快 5.73× / 5.44×。",
+          "arxivUrl": "https://arxiv.org/abs/2610.41508",
+          "pdfUrl": "https://arxiv.org/pdf/2610.41508.pdf",
+          "index": 3
+        },
+        {
+          "title": "TraceSpec: Understanding and Improving Speculative Decoding for LLM Agents",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-11-02",
+          "authors": "Jihao Zhao, Shuaishuai Zu, Pengfei Li, Biao Qin, Guanghuan Fang, Ben Feng, Baochuan Yang",
+          "institutions": "Renmin University of China, Huawei Technologies",
+          "abstract": "LLM agent 靠反复调用模型、在不断增长的推理—动作—工具反馈历史上完成任务，聚合粒度的投机解码指标掩盖了不同决策的差异，难以指导草稿监督该投在哪里。作者提出 TraceSpec，把轨迹评测与自适应草稿训练打通，结合动态执行与固定前缀重放，构建 TraceSpec-Traj 语料（1 万个训练状态、2500 个测试状态，覆盖网页浏览与软件工程）。对五个投机基线的分析显示，总体接受长度可随上下文变长而上升，但在匹配的后期浏览动作内部反而下降，且受负载与阶段影响，因此监督需按轨迹条件分配。TraceSpec 在中间 assistant 轮次上训练，用状态条件下的前缀感知接受差估计分配固定预测预算。三种目标尺寸、两种温度下回放吞吐较 DSpark 基座提升 12.5%–22.6%；Qwen3-4B 消融中接受长度较固定整轮监督提升 3.3%–10.0%。",
+          "contributions": [
+            "构建 TraceSpec-Traj 轨迹语料，把 agent 执行拆成可重放的状态，使投机解码评测可按决策粒度进行。",
+            "揭示聚合接受率与局部接受率的背离：上下文变长时总体上升，但后期浏览动作内部下降。",
+            "提出按轨迹条件分配预测预算的草稿训练策略，在中间轮次监督下取得更好的接受长度。"
+          ],
+          "conclusions": [
+            "agent 场景的投机解码必须按状态而非按整体平均来评测和训练，否则监督信号会被平均掉。",
+            "固定预算下的自适应分配优于对整轮统一监督，说明监督位置比监督总量更关键。"
+          ],
+          "experiments": [
+            "回放吞吐较 DSpark 基座提升 12.5%–22.6%，覆盖三种目标模型尺寸与两种温度。",
+            "Qwen3-4B 消融中接受长度较固定整轮监督提升 3.3%–10.0%。",
+            "分析覆盖五个投机基线与浏览、软件工程两类 agent 负载。"
+          ],
+          "significance": "把 agent 轨迹分析与草稿模型训练连成闭环，指出投机解码在 agent 负载上的真实失效位置。",
+          "takeaway": "agent 的接受率要按状态看，自适应预算让回放吞吐涨 12.5–22.6%。",
+          "keyExperiment": "三种目标尺寸两种温度下回放吞吐 +12.5%~22.6%，Qwen3-4B 接受长度 +3.3%~10.0%。",
+          "arxivUrl": "https://arxiv.org/abs/2610.41177",
+          "pdfUrl": "https://arxiv.org/pdf/2610.41177.pdf",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "ACCT: Asymmetric Cross-LLM Context Transfer",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-02",
+          "authors": "Yuzhe Liu, Haolin Tian, Tonghan Wang",
+          "institutions": "Tsinghua University",
+          "abstract": "实际部署中 LLM 系统正从单模型调用转向异构多模型调用，同一上下文被不同模型复用时，新选中的目标模型往往要重新处理整段上下文，重复付出高额计算。作者提出 ACCT，针对同一模型族内不同规模模型之间的 KV cache 迁移：把源模型产生的 KV 转成目标模型可直接消费的稀疏 KV 状态，从而把上下文计算与下游推理解耦。ACCT 由三个轻量组件构成——Cartographer 为每个目标层与 KV 头识别与查询相关的上下文 token；Allocator 在共享 KV 预算下决定各层各头保留多少 token；Compiler 把选中的源 KV 转换为目标侧稀疏 KV。在五个通用基准与六个强上下文任务上，即使把 KV cache 压缩 75%，ACCT 仍能持平或超过目标模型原生推理效果；上下文约 19K token 时，KV 转换比目标模型重新 prefill 快 6.5–21.2 倍。",
+          "contributions": [
+            "提出跨规模同族模型的 KV cache 稀疏转换，使上下文计算一次、在多个模型间复用。",
+            "设计 Cartographer、Allocator、Compiler 三个轻量组件，分别解决相关性识别、预算分配与稀疏 KV 构造。",
+            "在通用能力与强上下文依赖任务上验证：KV 压到四分之一仍不掉点，转换开销远低于重新 prefill。"
+          ],
+          "conclusions": [
+            "跨模型上下文复用在 KV 预算受限时是可行的，精度损失可通过查询相关性选择来规避。",
+            "把上下文计算与推理解耦后，模型路由的成本结构会显著改变，异构多模型系统更易落地。"
+          ],
+          "experiments": [
+            "KV cache 缩小 75% 的情况下仍持平或超过目标模型原生推理性能。",
+            "约 19K token 上下文时，KV 转换比目标模型重新 prefill 快 6.5–21.2 倍。",
+            "评测覆盖五个通用基准与六个强上下文依赖任务。"
+          ],
+          "significance": "为异构多模型部署提供了上下文级复用机制，把重复 prefill 变成一次性的稀疏 KV 转换。",
+          "takeaway": "同族跨模型搬上下文，KV 砍 75% 不掉点，转换快 6.5–21 倍。",
+          "keyExperiment": "KV 缩减 75% 精度持平；19K 上下文下转换比 prefill 快 6.5–21.2×。",
+          "arxivUrl": "https://arxiv.org/abs/2610.42116",
+          "pdfUrl": "https://arxiv.org/pdf/2610.42116.pdf",
+          "index": 5
+        },
+        {
+          "title": "Experts Exhibit Structured Redundancy: Structure-Preserving Expert Pruning for Mixture-of-Experts Large Language Models",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-02",
+          "authors": "Tian Wang, Yongding Tao, Yihong Dong, Xiaoming Wu, Ying Guo, Ge Li",
+          "institutions": "Peking University, Shanghai Jiao Tong University, Qilu University of Technology, Shandong Computer Science Center",
+          "abstract": "稀疏 MoE 改善容量与推理效率的折中，但部署仍需存储全部专家，显存开销大。作者指出 MoE 层的专家输出存在结构化冗余：跨模型与任务类别，专家输出的稳定秩与熵有效秩都远低于名义专家数，输出分布的有效模态也更少。据此把专家剪枝重构为保结构的专家子集选择问题，用贪心策略高效求解，而不是独立打分排序或穷举组合；提出两种方法——PEEP 最大化加权投影能量以保留函数子空间，DCEP 最小化加权覆盖误差以保留分布几何，两者都以 router 权重作先验，兼顾专家间全局结构关系与单专家局部重要性。在 DeepSeek-V2-Lite 与 Qwen3-30B-A3B 上，保留 75% 与 50% 专家的设置下多数基准优于 SOTA，通用与数学推理任务上平均表现最好。",
+          "contributions": [
+            "实证专家输出存在结构化冗余：稳定秩与熵有效秩远低于名义专家数，有效模态数也更少。",
+            "把专家剪枝表述为保结构的子集选择并用贪心求解，兼得全局结构与局部重要性。",
+            "提出 PEEP（保函数子空间）与 DCEP（保分布几何）两种准则，并以 router 权重作先验。"
+          ],
+          "conclusions": [
+            "MoE 剪枝的关键不是单个专家的重要性，而是被保留子集能否维持专家输出的结构。",
+            "结构化冗余普遍存在于不同模型与任务类别，为更激进的压缩提供了依据。"
+          ],
+          "experiments": [
+            "DeepSeek-V2-Lite 与 Qwen3-30B-A3B 在保留 75% 与 50% 专家时多数基准优于 SOTA。",
+            "通用任务与数学推理任务上的平均表现均为最佳。",
+            "两种剪枝准则在同一框架下均有效，说明结构保持比打分函数更关键。"
+          ],
+          "significance": "把 MoE 剪枝从打分排序推进到结构保持，指出冗余是有结构的、可以按子空间与分布来压缩。",
+          "takeaway": "专家输出秩远低于专家数，按结构剪枝 50% 仍不掉点。",
+          "keyExperiment": "两个 MoE 模型保留 50%/75% 专家时多数基准领先，通用与数学推理平均最佳。",
+          "arxivUrl": "https://arxiv.org/abs/2610.41236",
+          "pdfUrl": "https://arxiv.org/pdf/2610.41236.pdf",
+          "index": 6
+        },
+        {
+          "title": "RecIS: Unifying Sparse and Dense Computation for Efficient Recommendation Training",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.DC",
+          "date": "2026-11-02",
+          "authors": "Hua Zong, Shuai Yang, Zhengxiong Zhou, Qingtao Zeng, Jiawei Liu, Hao Wan, Hongbin Zhou, Jiahao Wang, Hao Zhang, Bencheng Yan, Yuheng Huang, Huimin Yi, Jiamang Wang, Han Zhu, Jian Xu, Bo Zheng, Lin Qu",
+          "institutions": "Alibaba Group, University of Chinese Academy of Sciences",
+          "abstract": "现代推荐模型同时扩展稀疏表示与稠密计算：数千异构特征域、长用户行为序列、万亿级 Embedding 参数，稠密网络又越来越多采用大 Transformer 架构。这种执行错配造成阶段内细粒度算子、跨设备负载不均与同步等待、以及阶段间的 GPU 气泡，成为可扩展推荐训练的主要瓶颈。已有系统分别改进 Embedding 缓存与数据预取，但这些低效并存并共同限制端到端吞吐。RecIS 把从输入特征到稠密计算的整条路径当作一个优化目标：自适应融合把碎片化特征变换与向量化访存合并；GPU Embedding 引擎用哈希分片与分层通信均衡请求放置、消除冗余传输，并针对前向/反向索引结构特化聚合；多级流水重叠下一轮输入准备与当前轮稠密计算。工业模型上吞吐达 PICASSO 的 2.62 倍、TorchRec 的 1.15 倍，步时延降低最多 61.5% 与 12.9%。",
+          "contributions": [
+            "把稀疏前端与稠密计算视为单一数据流优化目标，而非分别优化 Embedding 缓存与预取。",
+            "提出自适应融合、GPU Embedding 引擎（哈希分片加分分层通信）与多级流水三项协同机制。",
+            "针对前向与反向索引结构特化聚合，消除冗余传输并消除阶段间 GPU 气泡。"
+          ],
+          "conclusions": [
+            "推荐训练的效率瓶颈在稀疏与稠密之间的衔接，端到端数据流视角比单点优化更有效。",
+            "GPU 中心化设计配合分层通信，可在万亿级 Embedding 规模下保持负载均衡。"
+          ],
+          "experiments": [
+            "吞吐达 PICASSO 的 2.62 倍、TorchRec 的 1.15 倍。",
+            "步时延相比 PICASSO 降低最多 61.5%，相比 TorchRec 降低 12.9%。",
+            "在代表性工业推荐模型与分布式训练平台上验证，收益随模型规模放大而稳定。"
+          ],
+          "significance": "把推荐训练从稀疏/稠密分别优化推进到统一数据流，补齐了大模型时代推荐系统的训练系统短板。",
+          "takeaway": "稀疏前端喂不饱稠密网络是主因，统一数据流后吞吐 2.62×。",
+          "keyExperiment": "对 PICASSO 吞吐 2.62×、步时延 -61.5%；对 TorchRec 吞吐 1.15×、步时延 -12.9%。",
+          "arxivUrl": "https://arxiv.org/abs/2610.41457",
+          "pdfUrl": "https://arxiv.org/pdf/2610.41457.pdf",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "MemX: Memory-Aware Automatic Parallelism for Cross-Vendor Heterogeneous GPU Training",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-02",
+          "authors": "Lin Meng, Yuzhong Sun, Jie Zhu",
+          "institutions": "Institute of Computing Technology, Chinese Academy of Sciences",
+          "abstract": "跨厂商异构 GPU 集群越来越多用于大模型训练，但各家 GPU 在算力、显存容量与互联特性上差异显著；现有自动并行系统通常在把显存当硬约束的前提下最小化迭代时间，难以处理跨厂商集群的算力—显存不对称。作者提出 MemX，联合优化迭代时间、峰值显存与跨 GPU 显存均衡：用加权乘积目标函数表达三者折中，引入异构重计算策略、最小集剖析器、基于插值的数据增广、双输出 XGBoost 预测器与哈希签名预测缓存，以更低代价搜索大规模自动并行的最优配置。在 Megatron-LM 上实现，与四个自动并行基线在两个异构集群上比较：预测 MAPE 最低为 12.17%，是唯一在时间与显存均衡两种排序下都找到真实 Top-1 配置的方法；26.5 秒搜索 31240 个配置，而端到端剖析基线同规模推算需约 17 天。",
+          "contributions": [
+            "指出跨厂商异构集群的核心矛盾是算力与显存的非对称，把显存当硬约束的既有范式会错失更优配置。",
+            "提出加权乘积目标函数，同时优化迭代时间、峰值显存与跨卡显存均衡。",
+            "用最小集剖析、插值增广、双输出 XGBoost 与预测缓存把配置搜索成本压低数个数量级。"
+          ],
+          "conclusions": [
+            "异构集群的并行策略搜索应以多目标折中为出发点，而非单目标加约束。",
+            "低成本代理预测足以在巨大搜索空间中定位 Top-1 配置，端到端剖析不再是必需。"
+          ],
+          "experiments": [
+            "预测 MAPE 最低为 12.17%。",
+            "26.5 秒完成 31240 个配置搜索，端到端剖析基线同规模推算约需 17 天。",
+            "在时间与显存均衡两种排序下均唯一找到真实 Top-1 配置，并外推到 40/60 卡仿真验证。"
+          ],
+          "significance": "为混合国产与商用 GPU 的异构训练集群提供了可落地的自动并行方案。",
+          "takeaway": "异构集群要按算力—显存均衡一起搜，26 秒扫 3 万配置。",
+          "keyExperiment": "MAPE 12.17%，26.5s 搜 31240 个配置（剖析基线需约 17 天），两种排序均命中 Top-1。",
+          "arxivUrl": "https://arxiv.org/abs/2610.41525",
+          "pdfUrl": "https://arxiv.org/pdf/2610.41525.pdf",
+          "index": 8
+        },
+        {
+          "title": "Matching Workloads to Blackwell: Power-Resolved Benchmarking of NVIDIA B200 and B300 across HPC and AI Workloads",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-02",
+          "authors": "Mohsen Zand, Trung Dac Nguyen, H. Birali Runesha",
+          "institutions": "University of Chicago",
+          "abstract": "作者在两个独立八卡集群上评测 NVIDIA B200 与 B300（Blackwell Ultra），覆盖视觉推理与训练、Llama-3-8B/70B 的 LLM 推理以及六个生产 HPC 代码。结论是 B300 并非 B200 的均匀后继：卷积推理落后最多 5.6 倍、3D 视觉 Transformer 训练落后 8 倍、70B LLM 吞吐落后 24–27%、双精度 Quantum ESPRESSO 落后 16 倍。用每卡板级功耗而非单纯吞吐定位，受影响负载上 B300 只跑到 1100W 上限的 36–53%，而在它胜出的 ViT-Large 上两块卡都达到 TDP 的 95–97%；由于框架把输入常驻显存，主机侧数据流水线被排除，问题定位到单核成本。两块同型号 B300 节点仅因 vLLM 开发版构建不同，TTFT 就差 2.1 倍。",
+          "contributions": [
+            "在同一代 Blackwell 的两款芯片上给出跨 HPC 与 AI 负载的功率分辨评测，而非只报吞吐。",
+            "用板级功耗解释性能差异：受影响负载未跑满功耗上限，说明瓶颈在单核效率而非带宽或 TDP。",
+            "揭示软件栈对结果的影响同样巨大，同型号节点因 vLLM 构建不同 TTFT 可差 2.1 倍。"
+          ],
+          "conclusions": [
+            "新一代 GPU 不是均匀替代品，采购必须按负载类型与功耗行为分别评估。",
+            "性能归因必须同时看功耗与软件栈，单看吞吐会得出错误结论。"
+          ],
+          "experiments": [
+            "B300 在卷积推理上落后最多 5.6 倍，3D 视觉 Transformer 训练落后 8 倍。",
+            "70B LLM 吞吐落后 24–27%，双精度 Quantum ESPRESSO 落后 16 倍。",
+            "受影响负载上 B300 仅用 36–53% 的 1100W 功耗上限；ViT-Large 上两卡均达 95–97% TDP。"
+          ],
+          "significance": "给出了 Blackwell 两代芯片的功率分辨画像，直接可用于 GPU 采购与负载匹配决策。",
+          "takeaway": "B300 不是 B200 的全面升级，卷积/HPC 落后数倍，功耗揭示单核瓶颈。",
+          "keyExperiment": "B300 卷积推理落后 5.6×、3D ViT 训练落后 8×、70B 吞吐落后 24–27%，功耗仅 36–53% 上限。",
+          "arxivUrl": "https://arxiv.org/abs/2610.41919",
+          "pdfUrl": "https://arxiv.org/pdf/2610.41919.pdf",
+          "index": 9
+        },
+        {
+          "title": "Latent Sparse Attention: Towards Subquadratic Ultra-Long Context Attention",
+          "score": 4.7,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-11-02",
+          "authors": "Ales Kubicek, Andrea Caciolai, Liangzu Peng, Sukrit Sumant, Benjamin Hoover, Fraser Greenlee, Ruairidh M. Battleday, Radim Urban, Torsten Hoefler, James C.R. Whittington",
+          "institutions": "Prefrontal AI, ETH Zurich",
+          "abstract": "agent 工作流正转向长程任务，模型受益于长上下文窗口，但超过 100 万 token 后全注意力代价高。稀疏注意力用索引器挑部分 key，但现有索引方法要么本身随上下文二次增长，要么在超长上下文下精度下降。作者提出 Latent Sparse Attention（LSA）：在学到的隐空间中对 key 做层次聚类，查询只对该聚类层次打分，使长上下文下的 prefill、decode 与训练都更快。两变体：D-LSA 用蒸馏适配预训练模型，N-LSA 仅用下一 token 损失原生训练。在 GLM-5.3-FLASH（QWEN-3.8-27B）的 1000 万 token 上，D-LSA 单层 prefill 快 22.7 倍（全注意力 72.4 倍）、decode 快 4.6 倍（42.5 倍），多任务精度基本持平；N-LSA 在 128k 上达到全注意力精度，单层训练加速 1.6 倍。",
+          "contributions": [
+            "把稀疏注意力的索引成本降到次二次：在隐空间对 key 层次聚类，查询只对簇层次打分。",
+            "给出可蒸馏的 D-LSA 与可原生训练的 N-LSA 两条落地路径，兼容已有预训练模型。",
+            "在千万级 token 上下文上同时取得 prefill、decode 与训练的加速，且精度基本不降。"
+          ],
+          "conclusions": [
+            "超长上下文的瓶颈在索引器本身，层次化隐空间索引能把索引与注意力的成本都压到次二次。",
+            "稀疏注意力可以既提速度又不牺牲精度，蒸馏路径使其能直接套用到现有模型。"
+          ],
+          "experiments": [
+            "1000 万 token 上下文下，D-LSA 单层 prefill 加速 22.7 倍（相对全注意力 72.4 倍）。",
+            "同设置下 decode 加速 4.6 倍（相对全注意力 42.5 倍），多任务精度基本持平。",
+            "N-LSA 在 128k 上达到全注意力精度，单层训练加速 1.6 倍。"
+          ],
+          "significance": "为百万级甚至千万级 token 上下文提供了可训练、可蒸馏的次二次注意力方案。",
+          "takeaway": "隐空间层次聚类做索引，10M token 上 prefill 快 22.7×。",
+          "keyExperiment": "10M token：单层 prefill 22.7×（全注意力 72.4×）、decode 4.6×（42.5×），精度持平。",
+          "arxivUrl": "https://arxiv.org/abs/2610.42147",
+          "pdfUrl": "https://arxiv.org/pdf/2610.42147.pdf",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
