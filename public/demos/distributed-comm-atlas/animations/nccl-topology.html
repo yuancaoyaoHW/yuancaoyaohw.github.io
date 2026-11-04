@@ -1,0 +1,1279 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4.5.1 NCCL 中的拓扑感知：让流量走 NVLink</title>
+<style>
+:root{
+  color-scheme:light;
+  --page:#eef1f6; --surface:#fcfcfb; --surface2:#f2f3f7; --ink:#0b0b0b; --ink2:#52514e; --muted:#6b6a66;
+  --grid:#e1e0d9; --axis:#c3c2b7; --line:rgba(11,11,11,.10); --line2:rgba(11,11,11,.17);
+  --accent:#6250d6; --accent-soft:rgba(98,80,214,.13);
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --api:var(--c4); --idle:var(--muted); --good:#0ca30c;
+  --tint:24%; --glass:rgba(252,252,251,.82);
+  --shadow:0 1px 0 rgba(255,255,255,.8) inset,0 22px 48px -30px rgba(30,40,90,.35);
+  --aur1:rgba(98,80,214,.20); --aur2:rgba(42,120,214,.17); --aur3:rgba(235,104,52,.11);
+  --circuit:rgba(30,40,80,.05);
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --page:#080b12; --surface:#121621; --surface2:#171c2a; --ink:#eef1f8; --ink2:#b9c0cf; --muted:#8a90a0;
+    --grid:#232838; --axis:#3a4052; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.15);
+    --accent:#9085e9; --accent-soft:rgba(144,133,233,.17);
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --good:#0ca30c;
+    --tint:34%; --glass:rgba(18,22,33,.74);
+    --shadow:0 1px 0 rgba(255,255,255,.05) inset,0 30px 70px -36px rgba(0,0,0,.9);
+    --aur1:rgba(144,133,233,.24); --aur2:rgba(57,135,229,.20); --aur3:rgba(217,89,38,.13);
+    --circuit:rgba(150,170,255,.055);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --page:#080b12; --surface:#121621; --surface2:#171c2a; --ink:#eef1f8; --ink2:#b9c0cf; --muted:#8a90a0;
+  --grid:#232838; --axis:#3a4052; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.15);
+  --accent:#9085e9; --accent-soft:rgba(144,133,233,.17);
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --good:#0ca30c;
+  --tint:34%; --glass:rgba(18,22,33,.74);
+  --shadow:0 1px 0 rgba(255,255,255,.05) inset,0 30px 70px -36px rgba(0,0,0,.9);
+  --aur1:rgba(144,133,233,.24); --aur2:rgba(57,135,229,.20); --aur3:rgba(217,89,38,.13);
+  --circuit:rgba(150,170,255,.055);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:var(--ink);font:14px/1.65 var(--sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.viz-root{position:relative;max-width:1180px;margin:0 auto;padding:30px 24px 44px;overflow:hidden;isolation:isolate}
+.viz-root::before{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
+  background-image:linear-gradient(var(--circuit) 1px,transparent 1px),linear-gradient(90deg,var(--circuit) 1px,transparent 1px);
+  background-size:28px 28px;-webkit-mask-image:linear-gradient(to bottom,#000 0,rgba(0,0,0,.6) 30%,transparent 75%);mask-image:linear-gradient(to bottom,#000 0,rgba(0,0,0,.6) 30%,transparent 75%)}
+.aurora{position:absolute;left:-10%;right:-10%;top:-140px;height:640px;z-index:-1;pointer-events:none;filter:blur(36px)}
+.aurora i{position:absolute;border-radius:50%;animation:drift 28s ease-in-out infinite alternate}
+.aurora i:nth-child(1){width:46%;height:72%;left:2%;top:10%;background:radial-gradient(closest-side,var(--aur1),transparent)}
+.aurora i:nth-child(2){width:42%;height:62%;left:40%;top:0;background:radial-gradient(closest-side,var(--aur2),transparent);animation-duration:36s;animation-delay:-9s}
+.aurora i:nth-child(3){width:34%;height:54%;left:64%;top:24%;background:radial-gradient(closest-side,var(--aur3),transparent);animation-duration:44s;animation-delay:-17s}
+@keyframes drift{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(6%,5%,0) scale(1.14)}100%{transform:translate3d(-6%,-3%,0) scale(.92)}}
+.defs{position:absolute;width:0;height:0;overflow:hidden}
+code{font-family:var(--mono);font-size:.88em;color:var(--ink);background:color-mix(in srgb,var(--ink) 7%,transparent);padding:.08em .36em;border-radius:4px;overflow-wrap:anywhere}
+/* ---------- 头图 ---------- */
+.hero{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.15fr);gap:30px;align-items:center;margin:4px 0 30px}
+.hero h1{font-size:36px;line-height:1.2;letter-spacing:-.012em;margin:0 0 16px;font-weight:700;text-wrap:balance}
+.hero .lead{color:var(--ink2);font-size:15px;line-height:1.85;margin:0 0 10px;max-width:33em}
+.hero .lead b{color:var(--ink);font-weight:600}
+.hero-viz{position:relative;margin:0;border-radius:20px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);
+  background:radial-gradient(110% 85% at 50% 42%,color-mix(in srgb,var(--accent) 12%,var(--surface)) 0%,var(--surface) 62%)}
+#hero{display:block;width:100%;height:310px}
+.hero-cap{padding:0 18px 14px;margin-top:-4px;font-size:12.5px;color:var(--ink2)}
+.hc-row{display:flex;justify-content:space-between;gap:2px 14px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.hc-row #hero-phase{color:var(--ink);font-weight:600}
+.hc-key{display:flex;flex-wrap:wrap;gap:2px 16px;margin-top:4px;font-size:12px;color:var(--muted)}
+.hc-key span{display:inline-flex;align-items:center;gap:6px}
+.theme-btn{margin-top:6px}
+
+/* ---------- 路线式页签：六步是一个顺序 ---------- */
+.route{position:relative;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));margin:0 0 26px;padding-top:4px}
+.route-track,.route-lit{position:absolute;top:17px;left:calc(100% / 12);height:2px;border-radius:2px}
+.route-track{right:calc(100% / 12);background:var(--grid)}
+.route-lit{width:0;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 25%,transparent),var(--accent));
+  transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.route-spark{position:absolute;top:-3px;left:0;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 10px 3px var(--accent);opacity:0;animation:spark 2.6s cubic-bezier(.5,0,.3,1) infinite}
+@keyframes spark{0%{left:0;opacity:0}12%{opacity:1}82%{opacity:1}100%{left:100%;opacity:0}}
+.tab{position:relative;appearance:none;border:0;background:none;color:inherit;font:inherit;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:7px;padding:0 4px 6px;border-radius:12px}
+.tab .stn{position:relative;z-index:1;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+  font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;background:var(--surface);border:2px solid var(--axis);color:var(--muted);
+  transition:background .35s,border-color .35s,color .35s,box-shadow .35s}
+.tab .verb{font-size:31px;line-height:1.05;font-weight:600;color:var(--muted);transition:color .3s,transform .3s cubic-bezier(.2,.8,.2,1)}
+.tab .cap{font-size:12px;line-height:1.4;color:var(--muted);text-align:center;transition:color .3s}
+.tab:hover .verb{color:var(--ink2);transform:translateY(-2px)}
+.tab.past .stn{border-color:var(--accent);color:var(--accent)}
+.tab[aria-selected="true"] .stn{background:var(--accent);border-color:var(--accent);color:#fff;
+  box-shadow:0 0 0 5px var(--accent-soft),0 0 22px -2px var(--accent)}
+.tab[aria-selected="true"] .verb{color:var(--ink);transform:none}
+.tab[aria-selected="true"] .cap{color:var(--ink2)}
+.tab[aria-selected="true"]::after{content:"";position:absolute;left:50%;bottom:0;width:26px;height:3px;margin-left:-13px;border-radius:3px;
+  background:var(--accent);box-shadow:0 0 12px var(--accent);animation:grow .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes grow{from{transform:scaleX(0)}to{transform:none}}
+
+/* ---------- 按钮与控件 ---------- */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{appearance:none;font:inherit;font-size:13px;color:var(--ink);background:var(--surface2);border:1px solid var(--line2);border-radius:10px;
+  height:34px;min-width:34px;padding:0 11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;
+  transition:background .2s,border-color .2s,transform .12s}
+.btn:hover{border-color:var(--accent)}
+.btn:active{transform:translateY(1px)}
+.btn svg{width:15px;height:15px;fill:currentColor;flex:none}
+.btn.play{width:46px;height:46px;min-width:46px;padding:0;border-radius:50%;border:0;color:#fff;
+  background:radial-gradient(circle at 35% 30%,color-mix(in srgb,#fff 22%,var(--accent)),var(--accent));box-shadow:0 8px 22px -8px var(--accent)}
+.btn.play svg{width:18px;height:18px}
+.btn.play.on{animation:halo 1.9s ease-out infinite}
+@keyframes halo{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent),0 8px 22px -8px var(--accent)}
+  100%{box-shadow:0 0 0 14px transparent,0 8px 22px -8px var(--accent)}}
+.seg{display:inline-flex;background:var(--surface2);border:1px solid var(--line2);border-radius:10px;padding:2px;gap:2px}
+.seg button{appearance:none;border:0;background:none;font:inherit;font-size:12.5px;color:var(--ink2);padding:0 9px;height:28px;border-radius:8px;
+  cursor:pointer;font-variant-numeric:tabular-nums;transition:background .2s,color .2s}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);font-weight:600}
+input[type=range]{-webkit-appearance:none;appearance:none;height:24px;margin:0;background:none;cursor:pointer;min-width:90px}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:linear-gradient(90deg,var(--accent) var(--p,0%),var(--grid) var(--p,0%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;margin-top:-5.5px;border-radius:50%;background:var(--surface);
+  border:3px solid var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:var(--grid)}
+input[type=range]::-moz-range-progress{height:4px;border-radius:4px;background:var(--accent)}
+input[type=range]::-moz-range-thumb{width:9px;height:9px;border-radius:50%;background:var(--surface);border:3px solid var(--accent)}
+/* ---------- 每一页 ---------- */
+.stage{transition:opacity .16s ease}
+.stage.out{opacity:0}
+.stage.swap .tl-panel{animation:fadeup .55s cubic-bezier(.2,.8,.2,1) both}
+.stage.swap .row{animation:fadeup .55s .08s cubic-bezier(.2,.8,.2,1) both}
+.stage.swap .row + .row{animation-delay:.14s}
+@keyframes fadeup{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.stage-head{margin:0 0 12px}
+.stage-head h2{font-size:22px;line-height:1.4;margin:0;font-weight:650;letter-spacing:-.005em;text-wrap:balance}
+.panel{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:16px 18px}
+.panel h3{margin:0 0 4px;font-size:14px;line-height:1.5;font-weight:600;color:var(--ink)}
+.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.controls .scrub{flex:1 1 240px;display:flex;align-items:center;gap:12px;margin:0 6px}
+.controls .scrub input{flex:1}
+.tlabel{font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tlabel b{color:var(--ink);font-weight:600}
+.params{display:flex;flex-wrap:wrap;gap:8px 22px;margin:12px 0 2px;padding-top:12px;border-top:1px solid var(--line)}
+.param{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink2)}
+.param input{width:132px}
+.param output{min-width:30px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;line-height:1.5;color:var(--ink2);margin:10px 0 4px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend svg{flex:none;overflow:visible}
+.sw{display:inline-block;width:14px;height:10px;border-radius:3px;flex:none}
+.sw.k-compute{background:var(--c1)}
+.sw.k-comm{background:var(--c2)}
+.sw.k-offload{background:var(--c3)}
+.sw.k-host{background:repeating-linear-gradient(45deg,rgba(0,0,0,.3) 0 1.5px,transparent 1.5px 4.5px),var(--c4)}
+.sw.k-sync{border:1.5px dashed var(--muted)}
+.note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.65}
+svg text{font-family:var(--sans)}
+
+/* ---------- 时间线（类似 Nsight Systems 的泳道） ---------- */
+#tl{display:block;width:100%;height:auto;overflow:visible;margin-top:2px}
+.gridline{stroke:var(--grid);stroke-width:1}
+.axis-text{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.groupline{stroke:var(--line2);stroke-width:1}
+.group-label,.end-label,.mark-label,.lane-label{paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
+.group-label{fill:var(--ink);font-size:12.5px;font-weight:600}
+.badge{stroke-width:1}
+.badge.pre{fill:var(--surface);stroke:var(--axis)}
+.badge.post{fill:var(--accent-soft);stroke:var(--accent)}
+.badge-text{font-size:10.5px;font-weight:600;fill:var(--ink2)}
+.badge-text.post{fill:var(--ink)}
+.lane-bg{fill:color-mix(in srgb,var(--ink) 3.5%,transparent)}
+.lane-label{fill:var(--ink2);font-size:11.5px}
+.blk.k-compute{fill:var(--c1)}
+.blk.k-comm{fill:var(--c2)}
+.blk.k-offload{fill:var(--c3)}
+.blk.k-host{fill:url(#hatch)}
+.blk.k-sync{fill:color-mix(in srgb,var(--muted) 12%,transparent);stroke:var(--muted);stroke-width:1.2;stroke-dasharray:4 3}
+.blk.ghost{opacity:1}
+.blk.ghost.k-compute{fill:color-mix(in srgb,var(--c1) 20%,var(--surface))}
+.blk.ghost.k-comm{fill:color-mix(in srgb,var(--c2) 20%,var(--surface))}
+.blk.ghost.k-offload{fill:color-mix(in srgb,var(--c3) 20%,var(--surface))}
+.blk.ghost.k-host{opacity:.3}
+.blk.ghost.k-sync{opacity:.55;fill:none}
+.tl-in .blk.ghost{transform-box:fill-box;transform-origin:left center;animation:blkin .6s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0s)}
+@keyframes blkin{from{transform:scaleX(0);opacity:0}}
+.blk.live{filter:url(#glow)}
+.stripes{fill:url(#stripes);pointer-events:none;display:none}
+.stripes.on{display:inline}
+.blk-label{font-size:11px;font-weight:500;fill:var(--ink);pointer-events:none}
+.blk-label.on{fill:#fff}
+.blk-label.on.k-host{fill:#0b0b0b}
+.blk-label.k-sync,.blk-label.on.k-sync{fill:var(--ink2)}
+.hit{fill:transparent;cursor:pointer}
+.endmark{stroke:var(--ink);stroke-width:2}
+.end-label{fill:var(--ink);font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.endg{transform-box:fill-box;transform-origin:center}
+.endg .tick{fill:none;stroke:var(--good);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:16;stroke-dashoffset:16}
+.endg.hit-on .tick{stroke-dashoffset:0;transition:stroke-dashoffset .4s ease .05s}
+.endg.hit-on{animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.endg.quiet{animation:none}
+.endg.quiet .tick{transition:none}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.22)}100%{transform:scale(1)}}
+.idealmark{stroke:var(--ink2);stroke-width:1.4;stroke-dasharray:5 4}
+.idealmark.alt{stroke-dasharray:1.5 3.5;stroke-width:2;stroke-linecap:round}
+.mark-label{fill:var(--ink2);font-size:11px;font-variant-numeric:tabular-nums}
+.playhead{stroke:var(--accent);stroke-width:2}
+.ph-beam{fill:url(#beam);pointer-events:none}
+.ph-knob{fill:var(--accent);filter:url(#glow)}
+
+/* ---------- 文字说明与“此刻” ---------- */
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;margin-top:24px;align-items:start}
+.desc{font-size:14px;color:var(--ink2);line-height:1.85}
+.desc p{margin:0 0 10px}
+.desc ul{margin:0;padding:0;list-style:none}
+.desc li{position:relative;padding-left:16px;margin:0 0 8px}
+.desc li::before{content:"";position:absolute;left:2px;top:.75em;width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.75}
+.desc b{color:var(--ink);font-weight:600}
+.now{margin-top:16px;padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+.now h3{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.now ul li{padding:0;margin:0 0 4px;display:grid;grid-template-columns:14px 9em minmax(0,1fr);gap:8px;align-items:baseline;font-size:12.5px;line-height:1.6}
+.now ul li::before{display:none}
+.now li.gh{display:block;margin:8px 0 2px;color:var(--ink);font-weight:600}
+.now li .sw{align-self:start;margin-top:.5em}
+.now .ln-name{color:var(--ink2)}
+.now .op{color:var(--ink)}
+.now .info{display:block;color:var(--muted)}
+.tip{position:fixed;z-index:30;display:none;max-width:330px;padding:10px 12px;border-radius:12px;background:var(--glass);
+  -webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);border:1px solid var(--line2);
+  box-shadow:0 18px 44px -18px rgba(0,0,0,.55);font-size:12.5px;line-height:1.55;pointer-events:none}
+.tip .t1{display:flex;align-items:center;gap:7px;color:var(--ink);font-weight:600}
+.tip .t2{color:var(--muted);font-variant-numeric:tabular-nums}
+.tip .t3{color:var(--ink2);margin-top:3px}
+/* ---------- 右侧：梯度桶 / 拓扑 ---------- */
+.side{display:grid;gap:22px}
+#diag,#bars{display:block;width:100%;height:auto;overflow:visible;margin:4px auto 0}
+#diag{margin-top:14px}
+.sub-title{fill:var(--ink);font-size:12px;font-weight:600}
+.nd-sub{fill:var(--muted);font-size:10.5px}
+.st-text{fill:var(--ink2);font-size:11px;font-variant-numeric:tabular-nums}
+.uplink{stroke:var(--line2);stroke-width:1;stroke-dasharray:3 3}
+.up-text{fill:var(--muted);font-size:10px}
+.vial{fill:color-mix(in srgb,var(--ink) 4%,transparent);stroke:var(--axis);stroke-width:1.2}
+.vial.wait{stroke:var(--ink2);stroke-dasharray:3 2;animation:waitp 1.2s ease-in-out infinite}
+@keyframes waitp{50%{stroke-opacity:.35}}
+.liq{fill:var(--c1)}
+.liq.acc{fill:var(--c1);opacity:.6}
+.liq.comm{fill:var(--c2)}
+.liq.done{fill:var(--c1)}
+.ptl{fill:var(--c2);stroke:var(--surface);stroke-width:1}
+.bk-tick{fill:none;stroke:var(--good);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:0;transform-box:fill-box;transform-origin:center}
+.bk-tick.on{opacity:1;animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.ln{stroke:var(--axis);stroke-width:2.2;stroke-linecap:round;transition:stroke .25s}
+.ln.nvlink{stroke-width:5.5}
+.ln.pcie{stroke-width:1.8}
+.ln.on{stroke:var(--c2)}
+.ln.on.cpu{stroke:var(--c4)}
+.ln.on.red{stroke:var(--c3)}
+.halo{stroke:transparent;stroke-width:11;stroke-linecap:round;opacity:.3;transition:stroke .25s}
+.halo.nvlink{stroke-width:16}
+.halo.on{stroke:var(--c2)}
+.halo.on.cpu{stroke:var(--c4)}
+.halo.on.red{stroke:var(--c3)}
+.ln-label{fill:var(--muted);font-size:10.5px}
+.nd{fill:var(--surface2);stroke:var(--line2);stroke-width:1.2;transition:fill .25s,stroke .25s}
+.nd.gpu{stroke:color-mix(in srgb,var(--ink) 38%,transparent)}
+.nd.xsw{stroke:var(--ink2)}
+.nd.host{stroke:var(--c4)}
+.nd.busy{fill:color-mix(in srgb,var(--c1) 34%,var(--surface));stroke:var(--c1);animation:gpulse 1.1s ease-in-out infinite}
+.nd.agg{fill:color-mix(in srgb,var(--c3) 34%,var(--surface));stroke:var(--c3)}
+.nd.cpu{fill:url(#hatch);stroke:var(--c4)}
+@keyframes gpulse{50%{stroke-width:2.6}}
+.nd-label{fill:var(--ink);font-size:11px;font-weight:600;pointer-events:none}
+.dot{fill:var(--c2);stroke:var(--surface);stroke-width:1.5}
+.dot.red{fill:var(--c3)}
+.dot.cpu{fill:var(--c4)}
+.trail{stroke:none}
+.ripple{fill:none;stroke:var(--c3);stroke-width:2;opacity:0;transform-box:fill-box;transform-origin:center}
+.ripple.on{animation:ripple 1.1s ease-out infinite}
+@keyframes ripple{0%{opacity:.85;transform:scale(.85)}100%{opacity:0;transform:scale(1.9)}}
+
+/* ---------- 对照条形图与表格 ---------- */
+.bar{fill:url(#barg)}
+.bar.ideal{fill:none;stroke:var(--ink2);stroke-width:1.3;stroke-dasharray:4 3}
+.bar-label{fill:var(--ink2);font-size:12px}
+.bar-val{fill:var(--ink);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+details{margin-top:10px}
+summary{cursor:pointer;font-size:12.5px;color:var(--ink2);padding:4px 0;width:max-content}
+summary:hover{color:var(--ink)}
+.tbl-wrap{max-height:300px;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{padding:5px 9px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;background:var(--surface2);color:var(--ink2);font-weight:600}
+td{color:var(--ink2)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- 排查台：从症状往回查 ---------- */
+.trouble{margin-top:34px;padding:22px 24px}
+.trouble h2{font-size:19px;margin:0;font-weight:650;color:var(--ink)}
+.ts-intro{font-size:13px;color:var(--muted);margin:6px 0 14px;max-width:72ch}
+.ts-sym{display:flex;flex-wrap:wrap;gap:8px}
+.ts-sym button,.ts-causes button{appearance:none;font:inherit;cursor:pointer;color:var(--ink2);background:var(--surface2);border:1px solid var(--line2);transition:background .2s,border-color .2s,color .2s}
+.ts-sym button{font-size:13px;padding:7px 13px;border-radius:999px}
+.ts-sym button:hover,.ts-causes button:hover{border-color:var(--axis);color:var(--ink)}
+.ts-sym button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);font-weight:600}
+.ts-body{display:grid;grid-template-columns:240px minmax(0,1fr);gap:20px;margin-top:18px;align-items:start}
+.ts-causes{display:flex;flex-direction:column;gap:8px}
+.ts-causes .lab{font-size:12px;color:var(--muted);margin:0 0 2px}
+.ts-causes button{text-align:left;padding:10px 12px 10px 14px;border-radius:12px;position:relative;line-height:1.5}
+.ts-causes button b{display:block;font-size:13.5px;font-weight:600;color:var(--ink)}
+.ts-causes button span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.ts-causes button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.ts-causes button[aria-pressed="true"]::before{content:"";position:absolute;left:-1px;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--accent)}
+.ts-detail h3{margin:0 0 8px;font-size:15px;font-weight:650;color:var(--ink)}
+.ts-svg{display:block;width:100%;height:auto;background:color-mix(in srgb,var(--ink) 3%,transparent);border:1px solid var(--line);border-radius:14px}
+.ts-svg .row-cap{fill:var(--ink2);font-size:11.5px;font-weight:600}
+.ts-svg .hop{fill:var(--surface2);stroke:var(--line2);stroke-width:1.2;transition:stroke .2s}
+.ts-svg .hop.mem{fill:color-mix(in srgb,var(--c4) 20%,var(--surface));stroke:var(--c4);stroke-dasharray:5 3}
+.ts-svg .hop.lit{stroke:var(--c2);stroke-width:2;stroke-dasharray:none;filter:url(#glow)}
+.ts-svg .hop-t{fill:var(--ink);font-size:11px;font-weight:600;pointer-events:none}
+.ts-svg .hop-s{fill:var(--muted);font-size:10px;pointer-events:none}
+.ts-svg .wire{stroke:var(--axis);stroke-width:2;stroke-linecap:round}
+.ts-svg .big{fill:var(--ink);font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
+.ts-svg .big-s{fill:var(--muted);font-size:10.5px}
+.ts-svg .lane-t{fill:var(--ink2);font-size:11px;font-weight:600}
+.ts-svg .seg-bg{fill:color-mix(in srgb,var(--ink) 4%,transparent)}
+.ts-svg .ts-ph{stroke:var(--accent);stroke-width:2;filter:url(#glow)}
+.ts-svg .blk.k-err{fill:color-mix(in srgb,var(--c2) 22%,var(--surface));stroke:var(--c2);stroke-width:1.2}
+.ts-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px 22px;margin-top:14px}
+.ts-cols h4{margin:0 0 6px;font-size:13px;font-weight:650;color:var(--ink)}
+.ts-cols p{font-size:13px;line-height:1.75;color:var(--ink2);margin:0 0 8px}
+.ts-log{margin:0 0 8px;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--ink) 5%,transparent);font:12px/1.7 var(--mono);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.ts-log .tag{font-family:var(--sans);font-size:11px;font-weight:600;padding:0 6px;margin-right:8px;border-radius:6px;border:1px solid var(--axis);color:var(--ink2)}
+.ts-log .tag.post{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+
+/* ---------- 嵌入博客（iframe）时 ---------- */
+html.embed body{background:transparent}
+html.embed .viz-root{padding:4px 0 8px}
+html.embed .viz-root::before{display:none}
+html.embed .aurora{opacity:.6}
+html.embed .hero{grid-template-columns:1fr;margin-bottom:22px}
+html.embed .hero > div:first-child{display:none}
+.tl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#tl{min-width:880px}   /* 再窄字就小到看不清了：平板和手机上宁可横向滚动 */
+
+@media (max-width:920px){
+  .hero{grid-template-columns:1fr;gap:18px}
+  .row{grid-template-columns:1fr}
+  .ts-body,.ts-cols{grid-template-columns:minmax(0,1fr)}
+  .ts-causes{flex-direction:row;flex-wrap:wrap}
+  .ts-causes .lab{flex-basis:100%}
+  .ts-causes button{flex:1 1 200px}
+}
+@media (max-width:600px){
+  .viz-root{padding:18px 14px 30px}
+  .hero h1{font-size:28px}
+  #hero{height:250px}
+  .tab .verb{font-size:24px}
+  .tab .cap{display:none}
+  .stage-head h2{font-size:18px}
+  .panel{padding:12px;border-radius:14px}
+  .trouble{padding:16px 14px}
+  .ts-svg{min-width:600px}
+  .param input{width:104px}
+  .controls .scrub{flex-basis:100%;margin:4px 0 0;order:9}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  .aurora i{animation:none}
+  .route-spark{display:none}
+}
+/* ---- 5-tab route override ---- */
+.route{grid-template-columns:repeat(5,minmax(0,1fr))}
+.route-track,.route-lit{left:10%}
+.route-track{right:10%}
+.page[hidden]{display:none}
+.page{animation:pgin .45s ease both}
+@keyframes pgin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* ---- block / swatch kinds ---- */
+.blk.k-nv,.sw.k-nv{fill:var(--c1);background:var(--c1)}
+.blk.k-pcie,.sw.k-pcie{fill:var(--c2);background:var(--c2)}
+/* ---- topology links ---- */
+.ln{fill:none;stroke-linecap:round}
+.ln.fast{stroke:var(--axis);stroke-width:3;opacity:.9}
+.ln.slow{stroke:var(--axis);stroke-width:2;stroke-dasharray:5 4;opacity:.9}
+.ln.feed,.ln.host{stroke:var(--axis);stroke-width:1.5;opacity:.6}
+.ln.fast.on{stroke:var(--c1);opacity:1;filter:url(#glowU)}
+.ln.slow.on{stroke:var(--c2);opacity:1;filter:url(#glowU)}
+.gpu rect{fill:var(--surface);stroke:var(--c1);stroke-width:1.5;rx:8}
+.gpu text{fill:currentColor;font-size:12px;text-anchor:middle;font-weight:600}
+.gpu.sel rect{stroke:var(--accent);stroke-width:2.5;filter:url(#glow)}
+.gpu.pick rect{fill:var(--c1);fill-opacity:.25}
+.gpu{cursor:pointer}
+/* ---- cards / terminal / gauge ---- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:10px 0}
+.card{border:1px solid var(--line,#2b3045);border-radius:12px;padding:10px 12px;background:var(--surface)}
+.card b{display:block;margin-bottom:4px}
+.card .big{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.term{font:12px/1.55 ui-monospace,Menlo,monospace;background:#0b0d14;color:#cfd6ee;border-radius:10px;padding:10px 12px;overflow:auto;white-space:pre}
+.term .hl{color:#7ee0a8}.term .wr{color:#ffb86b}.term .dm{color:#7a839f}
+.gauge{height:10px;border-radius:6px;background:rgba(127,127,160,.2);overflow:hidden}
+.gauge i{display:block;height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,var(--c1),var(--accent));transition:width .9s cubic-bezier(.2,.8,.2,1)}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line,#2b3045);opacity:.85}
+.tag.sup{border-color:var(--c4);color:var(--c4)}
+.warn{border-left:3px solid var(--c4);padding:8px 12px;border-radius:6px;background:rgba(255,190,80,.08);margin:10px 0}
+.split{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px}
+@media(max-width:860px){.split{grid-template-columns:1fr}}
+.gpu.hot rect{fill:color-mix(in srgb,var(--c1) 30%,var(--surface));stroke:var(--accent)}
+.gpu:focus-visible rect{stroke:var(--accent);stroke-width:3}
+.gpu rect,.gpu{transition:opacity .25s}
+.load{fill:var(--c2);font-size:11px;font-weight:700;text-anchor:middle}
+#pk-bars{display:block;width:100%;max-width:640px;margin-top:12px}
+.blk.ghost.k-nv{fill:color-mix(in srgb,var(--c1) 20%,var(--surface))}
+.blk.ghost.k-pcie{fill:color-mix(in srgb,var(--c2) 20%,var(--surface))}
+.blk-label.on.k-nv,.blk-label.on.k-pcie{fill:#fff}
+.sw.k-nv,.sw.k-pcie{display:inline-block;width:11px;height:11px;border-radius:3px;flex:none}
+.row-cap{fill:var(--ink2);font-size:11.5px;font-weight:600}
+</style>
+</head>
+<body>
+<script>if (window.self !== window.top) document.documentElement.classList.add('embed');</script>
+<svg class="defs" aria-hidden="true" focusable="false" width="0" height="0" style="position:absolute"><defs>
+  <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <rect width="6" height="6" fill="var(--c4)"/><rect width="2.4" height="6" fill="#000" opacity=".28"/>
+  </pattern>
+  <pattern id="stripes" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+    <rect width="4" height="10" fill="#fff" opacity=".34"/>
+    <animateTransform attributeName="patternTransform" type="translate" additive="sum" from="0 0" to="10 0" dur="0.7s" repeatCount="indefinite"/>
+  </pattern>
+  <filter id="glow" x="-30%" y="-70%" width="160%" height="240%">
+    <feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="glowU" filterUnits="userSpaceOnUse" x="-100" y="-100" width="900" height="600">
+    <feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <linearGradient id="beam" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="var(--accent)" stop-opacity="0"/><stop offset="1" stop-color="var(--accent)" stop-opacity=".24"/></linearGradient>
+  <linearGradient id="barg" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="var(--accent)" stop-opacity=".5"/><stop offset="1" stop-color="var(--accent)" stop-opacity="1"/></linearGradient>
+</defs></svg>
+<div class="viz-root">
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+<header class="hero">
+  <div>
+    <h1>4.5.1 NCCL 中的拓扑感知</h1>
+    <p class="lead"><b>让流量走 NVLink，别让 PCIe 与跨 NUMA 链路成为暗礁。</b>NCCL 启动时先探测 GPU 之间的物理连接（NVLink、NVSwitch、PCIe、NUMA、InfiniBand、TCP），再据此选择通信模式。</p>
+    <p class="lead">分层 all-reduce 先在快域内归约，只在域间交换少量结果，再在域内广播。慢链路承担的字节数因此从全量降到与域数成正比。</p>
+    <button class="btn theme-btn" id="theme" type="button">配色：自动</button>
+  </div>
+  <figure class="hero-viz">
+    <canvas id="hero" role="img" aria-label="四张 GPU 分成两个 NVLink 小组，小组之间是较慢的 PCIe 链路；动画依次演示拓扑盲环、按拓扑排序的环和分层 all-reduce 的数据流"></canvas>
+    <figcaption class="hero-cap">
+      <div class="hc-row"><span id="hero-phase">拓扑盲环</span><span id="hero-bytes">慢链路 0.0 N / 方向</span></div>
+      <div class="hc-key"><span><i class="sw k-nv"></i>NVLink（快）</span><span><i class="sw k-pcie"></i>PCIe / 跨 NUMA（慢）</span></div>
+    </figcaption>
+  </figure>
+</header>
+<nav class="route" role="tablist" id="tabs" aria-label="本节五个页面">
+  <div class="route-track" aria-hidden="true"></div>
+  <div class="route-lit" id="route-lit" aria-hidden="true"><i class="route-spark"></i></div>
+</nav>
+<main class="stage" id="stage">
+  <div class="stage-head"><h2 id="stitle"></h2></div>
+<section class="page" id="pg-probe" hidden>
+  <div class="split">
+    <section class="panel">
+      <h3>NCCL 看到的机器</h3>
+      <div class="controls">
+        <div class="seg" id="pb-kind" role="group" aria-label="拓扑类型">
+          <button type="button" data-v="pairs" aria-pressed="true">书中的 4 卡例子：两对 NVLink</button>
+          <button type="button" data-v="nvs" aria-pressed="false">NVSwitch 全互联（NVL72 一类）</button>
+        </div>
+        <button type="button" class="btn" id="pb-scan">重新探测</button>
+      </div>
+      <div class="legend"><span><i class="sw k-nv"></i>NVLink / NVSwitch（快）</span><span><i class="sw k-pcie"></i>PCIe 或跨 NUMA（慢）</span><span>点击任意两张 GPU 查看路径</span></div>
+      <div class="tl-scroll"><svg id="pb-svg" viewBox="0 0 360 260" role="img" aria-label="GPU 拓扑图，可点击选择两张 GPU 查看它们之间的路径"></svg></div>
+      <p class="note" id="pb-note"></p>
+    </section>
+    <section class="panel">
+      <h3>探测过程（示意输出，不是真实 NCCL 日志）</h3>
+      <div class="term" id="pb-log" aria-live="polite"></div>
+      <h3>两点之间走什么</h3>
+      <div class="cards" id="pb-paths"></div>
+    </section>
+  </div>
+  <section class="panel">
+    <h3>链路分类</h3>
+    <details open><summary>表格视图</summary><div class="tbl-wrap"><table id="pb-tbl"></table></div></details>
+  </section>
+</section>
+<section class="page" id="pg-cmp" hidden>
+  <section class="panel tl-panel">
+    <h3>同一次 all-reduce，三种走法（时间轴为示意单位，不是实测）</h3>
+    <div class="controls">
+      <button type="button" class="btn play" id="play" aria-label="播放 / 暂停"><svg viewBox="0 0 16 16" width="16" height="16"><path id="play-ic" d="M4.5 2.5v11l9-5.5z" fill="currentColor"/></svg></button>
+      <button type="button" class="btn" id="prev" aria-label="上一个事件"><svg viewBox="0 0 16 16" width="16" height="16"><path d="M3 3h2v10H3zM13 3v10L6 8z" fill="currentColor"/></svg></button>
+      <button type="button" class="btn" id="next" aria-label="下一个事件"><svg viewBox="0 0 16 16" width="16" height="16"><path d="M11 3h2v10h-2zM3 3v10l7-5z" fill="currentColor"/></svg></button>
+      <button type="button" class="btn" id="reset" aria-label="回到开头"><svg viewBox="0 0 16 16" width="16" height="16"><path d="M8 2.5V.5L4.5 3.5 8 6.5V4a4 4 0 1 1-4 4H2.5A5.5 5.5 0 1 0 8 2.5z" fill="currentColor"/></svg></button>
+      <div class="scrub"><input type="range" id="scrub" min="0" max="1000" value="0" aria-label="时间轴位置"><span class="tlabel" id="tlabel">t = 0.00</span></div>
+      <div class="seg" id="speed" role="group" aria-label="播放速度">
+        <button type="button" data-v="0.5" aria-pressed="false">0.5×</button><button type="button" data-v="1" aria-pressed="true">1×</button><button type="button" data-v="2" aria-pressed="false">2×</button><button type="button" data-v="4" aria-pressed="false">4×</button>
+      </div>
+    </div>
+    <div class="params" id="cm-params"></div>
+    <div class="legend" id="cm-legend"></div>
+    <div class="tl-scroll"><svg id="tl" role="img" aria-label="三种 all-reduce 方式的链路占用时间轴"></svg></div>
+    <p class="note" id="tlnote"></p>
+  </section>
+  <div class="row">
+    <div class="desc" id="now"></div>
+    <div class="side">
+      <section class="panel">
+        <h3>跟随播放头看数据怎么走</h3>
+        <div class="seg" id="follow" role="group" aria-label="选择要跟随的方式">
+          <button type="button" data-v="0" aria-pressed="true">拓扑盲环</button><button type="button" data-v="1" aria-pressed="false">按拓扑排序的环</button><button type="button" data-v="2" aria-pressed="false">分层</button>
+        </div>
+        <div class="legend"><span><i class="sw k-nv"></i>快链路</span><span><i class="sw k-pcie"></i>慢链路</span></div>
+        <svg id="diag" viewBox="0 0 360 260" role="img" aria-label="随播放头变化的数据流示意图"></svg>
+      </section>
+      <section class="panel">
+        <h3>总时间与慢链路字节数</h3>
+        <svg id="bars" role="img" aria-label="三种方式的总时间和慢链路字节数对照条形图"></svg>
+        <p class="note" id="bnote"></p>
+        <details><summary>表格视图</summary><div class="tbl-wrap"><table id="tbl"></table></div></details>
+      </section>
+    </div>
+  </div>
+</section>
+<section class="page" id="pg-meas" hidden>
+  <section class="panel">
+    <h3>在 Nsight Systems 里怎么看出来（内核拆分为示意画法）</h3>
+    <p class="note">下图的内核长度是示意，不是实测。</p>
+    <div class="tl-scroll"><svg id="ms-tl" role="img" aria-label="两种方式在 Nsight Systems 中的 NCCL 内核时间线对比"></svg></div>
+    <p class="note" id="ms-note"></p>
+  </section>
+  <div class="split">
+    <section class="panel">
+      <h3>书中表 4-2（书中示意数字，不是实测）</h3>
+      <div id="ms-gauge"></div>
+      <p class="warn">书中正文把这些改善归因于把流量从 PCIe 挪到 NVLink，但表的标题同时提到了计算与通信重叠。读这组数字时不要把全部收益都算在拓扑感知上。</p>
+    </section>
+    <section class="panel">
+      <h3>开启日志与抓取拓扑</h3>
+      <div class="term" id="ms-cmds"></div>
+      <p class="note">NCCL_DEBUG=INFO 打印探测结果和所选通道；NCCL_TOPO_DUMP_FILE 把探测到的拓扑写成文件。日志格式随 NCCL 版本变化。</p>
+    </section>
+  </div>
+</section>
+<section class="page" id="pg-pick" hidden>
+  <section class="panel">
+    <h3>选卡：同一个 NUMA 节点 / NVSwitch 岛内的 4 张，胜过散在慢链路上的 8 张（示意单位）</h3>
+    <div class="controls"><div class="seg" id="pk-presets" role="group" aria-label="选卡预设"></div></div>
+    <div class="split">
+      <div><div class="legend"><span><i class="sw k-nv"></i>域内快链路</span><span><i class="sw k-pcie"></i>跨域慢链路</span><span>点击 GPU 加入或移出</span></div>
+        <svg id="pk-svg" viewBox="0 0 360 260" role="img" aria-label="八张 GPU 分成两个域，可点击选择参与训练的 GPU"></svg></div>
+      <div><div class="cards" id="pk-cards"></div></div>
+    </div>
+    <svg id="pk-bars" role="img" aria-label="不同选卡方式的 all-reduce 示意时间"></svg>
+    <p class="note" id="pk-note"></p>
+  </section>
+  <div class="split">
+    <p class="warn"><b>NCCL_ALGO 只在剖析确认自动选择有问题之后再用。</b>例如 <code>NCCL_ALGO=NVLS,NVLSTree,Tree,Ring,PAT</code>，并且要在目标负载上验证。</p>
+    <p class="note">Ring、Tree、CollTree、CollNet、PAT 等通信算法在 4.6 节「NCCL 通信算法」展开。</p>
+  </div>
+</section>
+<section class="page" id="pg-desk" hidden>
+  <section class="trouble panel">
+    <h2>排查台</h2>
+    <p class="ts-intro">先选看到的症状，再选可疑原因。右侧会演示改前和改后的数据路径，并给出确认命令和修法。带「补充」标记的内容不在 4.5.1 正文里。</p>
+    <div class="ts-sym" id="ts-sym"></div>
+    <div class="ts-body">
+      <div class="ts-causes" id="ts-causes"></div>
+      <div class="ts-detail">
+        <h3 id="ts-title"></h3>
+        <div class="tl-scroll"><svg id="ts-svg" class="ts-svg" viewBox="0 0 360 260" role="img" aria-label="改前和改后的数据路径对照"></svg></div>
+        <div class="ts-cols"><div><h4>怎么确认</h4><div id="ts-check"></div></div><div><h4>怎么改</h4><div id="ts-fix"></div></div></div>
+      </div>
+    </div>
+  </section>
+</section>
+</main>
+<div class="tip" id="tip" role="tooltip"></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs = {}, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+const fmt = v => v.toFixed(2);
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const ease = x => 1 - (1 - x) ** 3;
+const textW = (s, px = 11.5) => [...s].reduce((a, ch) => a + (ch.charCodeAt(0) > 255 ? px : px * 0.56), 0);
+const niceStep = x => { const p = 10 ** Math.floor(Math.log10(x)); return [1, 2, 5, 10].map(k => k * p).find(v => v >= x - 1e-9); };
+const sw = kind => `<span class="sw k-${kind}"></span>`;
+const RM = matchMedia('(prefers-reduced-motion: reduce)');
+const S = { page: 0, t: 0, end: 1, playing: false, speed: 1, last: 0, anim: !RM.matches, n: 4, r: 6, N: 1, follow: 0, M: null };
+const ALPHA = 0.05;
+const MODES = [{ name: '拓扑盲环' }, { name: '按拓扑排序的环' }, { name: '分层 all-reduce' }];
+const LANES = [['a', '域 A 内（NVLink）'], ['b', '域 B 内（NVLink）'], ['x', '跨域（PCIe）']];
+const live = {};
+const ANIMS = new Set();
+function run(dur, fn) { const a = { t0: performance.now(), dur, fn }; if (!S.anim) { fn(1); return a; } ANIMS.add(a); fn(0); return a; }
+const tickAnims = now => ANIMS.forEach(a => { const k = clamp01((now - a.t0) / a.dur); a.fn(k); if (k >= 1) ANIMS.delete(a); });
+
+// ---------- 示意模型：时间单位不是实测 ----------
+// 一步的耗时：域内每张 GPU 各有独立端口（并行），跨域慢链路按方向把字节累加（带宽取 1）
+function stepOf(flows, g, r) {
+  const busy = { a: 0, b: 0, x: 0 }, dir = [0, 0], cnt = [0, 0];
+  flows.forEach(f => {
+    const da = f.from < g ? 0 : 1, db = f.to < g ? 0 : 1;
+    if (da === db) { const k = da ? 'b' : 'a'; busy[k] = Math.max(busy[k], f.bytes / r); }
+    else { dir[da] += f.bytes; cnt[da]++; }
+  });
+  busy.x = Math.max(dir[0], dir[1]);
+  return { flows, busy, xn: Math.max(cnt[0], cnt[1]), dur: ALPHA + Math.max(busy.a, busy.b, busy.x), slow: busy.x };
+}
+function ringSteps(order, g, r, N) {
+  const n = order.length, flows = order.map((u, i) => ({ from: u, to: order[(i + 1) % n], bytes: N / n }));
+  return Array.from({ length: 2 * (n - 1) }, (_, k) => {
+    const rs = k < n - 1, j = rs ? k + 1 : k - n + 2;
+    return { ...stepOf(flows, g, r), phase: `${rs ? 'reduce-scatter' : 'all-gather'} 第 ${j}/${n - 1} 步`, short: `${rs ? 'RS' : 'AG'} ${j}`, grp: rs ? 'rs' : 'ag' };
+  });
+}
+function hierSteps(g, r, N) {
+  const out = [], R = Math.log2(g);
+  const tree = down => {
+    for (let q = 0; q < R; q++) {
+      const st = 2 ** (down ? R - 1 - q : q), flows = [];
+      for (const base of [0, g]) for (let l = 0; l < g; l++) if (l % (2 * st) === st) flows.push(down ? { from: base + l - st, to: base + l, bytes: N } : { from: base + l, to: base + l - st, bytes: N });
+      out.push({ ...stepOf(flows, g, r), phase: `${down ? '域内广播' : '域内归约'} 第 ${q + 1}/${R} 轮`, short: down ? `广播 ${q + 1}` : `归约 ${q + 1}`, grp: down ? 'bc' : 'rd' });
+    }
+  };
+  tree(false);
+  out.push({ ...stepOf([{ from: 0, to: g, bytes: N }, { from: g, to: 0, bytes: N }], g, r), phase: '域间交换：两个组长互发域内结果', short: '域间交换', grp: 'xc' });
+  tree(true);
+  return out;
+}
+function build(n, r, N) {
+  const g = n / 2, order = Array.from({ length: n }, (_, i) => (i % 2 ? g + (i - 1) / 2 : i / 2));
+  const lists = [ringSteps(order, g, r, N), ringSteps([...Array(n).keys()], g, r, N), hierSteps(g, r, N)], segs = [];
+  const modes = lists.map((steps, m) => {
+    let t = 0, sl = 0;
+    steps.forEach(st => {
+      st.s = t; st.e = t + st.dur; st.sl0 = sl; sl += st.slow;
+      for (const l of ['a', 'b', 'x']) if (st.busy[l] > 1e-9) segs.push({ v: m, lane: m + '.' + l, s: t, e: t + ALPHA + st.busy[l], kind: l === 'x' ? 'pcie' : 'nv', label: st.short, st, l });
+      t = st.e;
+    });
+    return { steps, end: t, slow: sl };
+  });
+  return { n, g, r, N, modes, segs, T: Math.max(...modes.map(m => m.end)) };
+}
+const stepIdx = (m, t) => { const i = m.steps.findIndex(s => t < s.e - 1e-9); return i < 0 ? m.steps.length : i; };
+const slowAt = (m, t) => m.steps.reduce((a, s) => a + s.slow * clamp01((t - s.s - ALPHA) / Math.max(s.busy.x, 1e-9)), 0);
+const tip = $('tip');
+function showRawTip(ev, t1, t2, t3) {
+  tip.innerHTML = `<div class="t1">${t1}</div><div class="t2">${t2}</div>${t3 ? `<div class="t3">${t3}</div>` : ''}`;
+  tip.style.display = 'block';
+  const r = tip.getBoundingClientRect();
+  let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14;
+  tip.style.left = Math.max(8, x) + 'px'; tip.style.top = Math.max(8, y) + 'px';
+}
+const hideTip = () => { tip.style.display = 'none'; };
+function segTip(g) {
+  const st = g.st, M = S.M, nm = MODES[g.v].name;
+  const info = g.l === 'x'
+    ? `跨域慢链路，同一方向有 ${st.xn} 条流共用，带宽 1，忙 ${fmt(st.busy.x)}（另含固定开销 ${ALPHA}）`
+    : `域内快链路，每张 GPU 用自己的端口并行传输，带宽 ${M.r}，忙 ${fmt(g.e - g.s - ALPHA)}（另含固定开销 ${ALPHA}）`;
+  const wait = st.e - g.e > 1e-6 ? `；这条泳道在 ${fmt(st.e)} 前就空闲了，要等本步最慢的链路` : '';
+  return [`${sw(g.kind)}${g.label}`, `${nm}，${LANES.find(q => q[0] === g.l)[1]}：${fmt(g.s)} → ${fmt(g.e)}`, `${st.phase}。${info}${wait}`];
+}
+// ---------- 时间线：每组一个方式，共用一根时间轴 ----------
+function drawTL(svg, groups, segs, T, o = {}) {
+  const W = 1100, LW = o.LW || 150, R = 18, GH = 24, LH = o.LH || 30, BH = 20, TOP = 34, laneY = {};
+  const tx = t => LW + t / T * (W - LW - R);
+  svg.innerHTML = '';
+  svg.classList.toggle('tl-in', !!o.fresh && S.anim);
+  let y = TOP;
+  const gy = groups.map(g => { const y0 = y; y += GH; g.lanes.forEach(([id]) => { laneY[g.id + '.' + id] = y; y += LH; }); y += 10; return y0; });
+  const H = y, stp = niceStep(T / 12);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  for (let v = 0; v <= T + 1e-6; v += stp) {
+    el('line', { x1: tx(v), x2: tx(v), y1: TOP - 6, y2: H - 8, class: 'gridline' }, svg);
+    el('text', { x: tx(v), y: TOP - 10, 'text-anchor': 'middle', class: 'axis-text' }, svg).textContent = +v.toFixed(2);
+  }
+  const top = el('g', { class: 'tl-top' }, svg), ends = [];
+  groups.forEach((g, i) => {
+    const y0 = gy[i];
+    if (i) el('line', { x1: 8, x2: W - R, y1: y0 - 5, y2: y0 - 5, class: 'groupline' }, svg);
+    el('text', { x: 8, y: y0 + 16, class: 'group-label' }, top).textContent = g.name;
+    g.lanes.forEach(([id, nm]) => {
+      const ly = laneY[g.id + '.' + id];
+      el('rect', { x: LW, y: ly + 3, width: W - LW - R, height: LH - 6, rx: 5, class: 'lane-bg' }, svg);
+      el('text', { x: LW - 10, y: ly + LH / 2 + 4, 'text-anchor': 'end', class: 'lane-label' }, svg).textContent = nm;
+    });
+    const e = g.end, lab = `完成 ${fmt(e)}`, lw = textW(lab, 11.5), left = tx(e) + lw + 40 > W;
+    const gg = el('g', { class: 'endg' }, top), lx = left ? tx(e) - 8 : tx(e) + 8, kx = left ? lx - lw - 15 : lx + lw + 5;
+    el('line', { x1: tx(e), x2: tx(e), y1: y0 + GH - 4, y2: y0 + GH + g.lanes.length * LH, class: 'endmark' }, gg);
+    el('text', { x: lx, y: y0 + 16, 'text-anchor': left ? 'end' : 'start', class: 'end-label' }, gg).textContent = lab;
+    el('path', { d: `M${kx} ${y0 + 11} l3.5 3.5 l6.5 -7`, class: 'tick' }, gg);
+    ends.push({ g: gg, e, on: false });
+  });
+  const blocks = segs.map((g, i) => {
+    const x0 = tx(g.s) + 1, w = Math.max(2, tx(g.e) - tx(g.s) - 2), by = laneY[g.lane] + (LH - BH) / 2;
+    const ghost = el('rect', { x: x0, y: by, width: w, height: BH, rx: 4, class: `blk ghost k-${g.kind}`, style: `--d:${Math.min(i * 0.012, 0.7).toFixed(3)}s` }, svg);
+    const fill = el('rect', { x: x0, y: by, width: 0, height: BH, rx: 4, class: `blk k-${g.kind}` }, svg);
+    const str = g.kind === 'pcie' ? el('rect', { x: x0, y: by, width: 0, height: BH, rx: 4, class: 'stripes' }, svg) : null;
+    let clip = null;
+    if (textW(g.label, 11) + 8 < w) {
+      const cx = x0 + w / 2, cy = by + BH / 2 + 4, id = `cp${o.id || 't'}${i}`;
+      el('text', { x: cx, y: cy, 'text-anchor': 'middle', class: `blk-label k-${g.kind}` }, svg).textContent = g.label;
+      clip = el('rect', { x: x0, y: by, width: 0, height: BH }, el('clipPath', { id }, svg));
+      el('text', { x: cx, y: cy, 'text-anchor': 'middle', class: `blk-label on k-${g.kind}`, 'clip-path': `url(#${id})` }, svg).textContent = g.label;
+    }
+    const hit = el('rect', { x: x0 - 2, y: by - 4, width: Math.max(w + 4, 10), height: BH + 8, class: 'hit' }, svg);
+    hit.addEventListener('mousemove', ev => o.tip && showRawTip(ev, ...o.tip(g)));
+    hit.addEventListener('mouseleave', hideTip);
+    if (o.click) hit.addEventListener('click', () => o.click(g));
+    return { g, w, ghost, fill, str, clip, live: false };
+  });
+  const beam = el('rect', { x: LW, y: TOP - 6, width: 0, height: H - TOP - 2, class: 'ph-beam' }, svg);
+  const ph = el('line', { x1: tx(0), x2: tx(0), y1: TOP - 6, y2: H - 8, class: 'playhead' }, svg);
+  const knob = el('circle', { cx: tx(0), cy: TOP - 6, r: 4.5, class: 'ph-knob' }, svg);
+  svg.append(top);
+  return { update(t) {
+    blocks.forEach(b => {
+      const f = clamp01((t - b.g.s) / (b.g.e - b.g.s)), fw = f * b.w, lv = f > 0 && f < 1;
+      b.fill.setAttribute('width', fw);
+      if (b.clip) b.clip.setAttribute('width', fw);
+      if (b.str) b.str.setAttribute('width', fw);
+      b.ghost.style.visibility = f >= 1 ? 'hidden' : '';
+      if (lv !== b.live) { b.live = lv; b.fill.classList.toggle('live', lv); if (b.str) b.str.classList.toggle('on', lv); }
+    });
+    const x = tx(t), bx = Math.max(LW, x - 72);
+    ph.setAttribute('x1', x); ph.setAttribute('x2', x); knob.setAttribute('cx', x);
+    beam.setAttribute('x', bx); beam.setAttribute('width', Math.max(0, x - bx));
+    ends.forEach(q => { const on = t >= q.e - 1e-9; if (on !== q.on) { q.on = on; q.g.classList.toggle('hit-on', on); } });
+  } };
+}
+// ---------- 条形图：条从 0 长出来，数字跟着往上数 ----------
+const barPath = (x0, y, w, h) => `M${x0},${y} h${w - 4} a4,4 0 0 1 4,4 v${h - 8} a4,4 0 0 1 -4,4 h${-(w - 4)} z`;
+function drawBars(svg, items, { LW = 118 } = {}) {
+  const W = 560, R = 130, BH = 20, GAP = 12, HD = 28;
+  let y = 6, cur = [];
+  const rows = items.map(it => { if (it.head) cur = []; else cur.push(it); it.grp = cur; const r = { it, y }; y += it.head ? HD : BH + GAP; return r; });
+  const H = y + 10, parts = [];
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  rows.forEach(({ it, y }) => {
+    if (it.head) { el('text', { x: 4, y: y + 16, class: 'bar-head', style: 'fill:var(--ink2);font-size:12px;font-weight:600' }, svg).textContent = it.head; return; }
+    const w0 = Math.max(5, it.value / Math.max(...it.grp.map(q => q.value), 1e-9) * (W - LW - R));
+    el('text', { x: LW - 10, y: y + BH / 2 + 4, 'text-anchor': 'end', class: 'bar-label' }, svg).textContent = it.name;
+    const bar = el('path', { d: barPath(LW, y, w0, BH), class: it.cls || 'bar' }, svg);
+    parts.push({ bar, t: el('text', { x: LW + w0 + 7, y: y + BH / 2 + 4, class: 'bar-val' }, svg), it, w0, y });
+  });
+  const set = k => parts.forEach((b, i) => {
+    const f = ease(clamp01(k * 1.3 - i * 0.1)), w = Math.max(5, b.w0 * f);
+    b.bar.setAttribute('d', barPath(LW, b.y, w, BH));
+    b.t.setAttribute('x', LW + w + 7);
+    b.t.textContent = (b.it.f || fmt)(b.it.value * f) + (b.it.suffix || '');
+  });
+  set(1);
+  return { set, play: () => run(1100, set) };
+}
+// ---------- 拓扑：四张 / 八张 GPU 与它们之间的链路 ----------
+function layout(kind) {
+  const nodes = {}, links = [], gpus = [];
+  const gpu = (i, x, y) => { nodes['g' + i] = { x, y, t: 'gpu' }; gpus.push('g' + i); };
+  const node = (id, x, y, t, label) => { nodes[id] = { x, y, t, label }; };
+  if (kind === 'pairs') {
+    [[0, 85, 62], [1, 85, 198], [2, 275, 62], [3, 275, 198]].forEach(a => gpu(...a));
+    node('p0', 150, 130, 'port', 'PCIe 桥'); node('p1', 210, 130, 'port', 'PCIe 桥');
+    links.push(['g0', 'g1', 'fast'], ['g2', 'g3', 'fast'], ['g0', 'p0', 'feed'], ['g1', 'p0', 'feed'], ['g2', 'p1', 'feed'], ['g3', 'p1', 'feed'], ['p0', 'p1', 'slow']);
+  } else if (kind === 'islands') {
+    [[0, 40, 48], [1, 130, 48], [2, 40, 212], [3, 130, 212], [4, 230, 48], [5, 320, 48], [6, 230, 212], [7, 320, 212]].forEach(a => gpu(...a));
+    node('h0', 85, 130, 'hub', 'NVSwitch'); node('h1', 275, 130, 'hub', 'NVSwitch');
+    node('p0', 150, 130, 'port', 'PCIe 桥'); node('p1', 210, 130, 'port', 'PCIe 桥');
+    for (let i = 0; i < 8; i++) links.push(['g' + i, i < 4 ? 'h0' : 'h1', 'fast']);
+    links.push(['h0', 'p0', 'feed'], ['h1', 'p1', 'feed'], ['p0', 'p1', 'slow']);
+  } else {
+    node('sw', 180, 130, 'hub', 'NVSwitch');
+    for (let i = 0; i < 8; i++) { const a = -Math.PI / 2 + i * Math.PI / 4; gpu(i, 180 + 130 * Math.cos(a), 130 + 96 * Math.sin(a)); links.push(['g' + i, 'sw', 'fast']); }
+  }
+  return { nodes, links, gpus };
+}
+function buildTopo(svg, kind, o = {}) {
+  const L = layout(kind), adj = {}, lnEl = {}, gpuEl = [], key = (a, b) => [a, b].sort().join('|'), dg = kind === 'pairs' ? 2 : 4;
+  svg.innerHTML = '';
+  L.links.forEach(([a, b]) => { (adj[a] ||= []).push(b); (adj[b] ||= []).push(a); });
+  L.links.forEach(([a, b, c]) => { const A = L.nodes[a], B = L.nodes[b]; lnEl[key(a, b)] = el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, class: 'ln ' + c }, svg); });
+  const loadT = el('text', { x: 180, y: 112, class: 'load' }, svg);
+  if (lnEl['p0|p1']) el('text', { x: 180, y: 150, 'text-anchor': 'middle', class: 'nd-sub' }, svg).textContent = '慢链路';
+  Object.entries(L.nodes).forEach(([id, nd]) => {
+    if (nd.t === 'gpu') {
+      const i = +id.slice(1), g = el('g', { class: 'gpu', transform: `translate(${nd.x} ${nd.y})`, tabindex: 0, role: 'button', 'aria-label': 'GPU ' + i }, svg);
+      el('rect', { x: -25, y: -14, width: 50, height: 28, rx: 8 }, g);
+      el('text', { y: 4 }, g).textContent = 'GPU ' + i;
+      g.addEventListener('click', () => o.onpick && o.onpick(i));
+      g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); o.onpick && o.onpick(i); } });
+      gpuEl[i] = g;
+    } else if (nd.t === 'hub') {
+      el('rect', { x: nd.x - 32, y: nd.y - 12, width: 64, height: 24, rx: 7, class: 'nd xsw' }, svg);
+      el('text', { x: nd.x, y: nd.y + 4, 'text-anchor': 'middle', class: 'nd-label' }, svg).textContent = nd.label;
+    } else el('circle', { cx: nd.x, cy: nd.y, r: 6, class: 'nd' }, svg);
+  });
+  const route = (a, b) => {
+    const prev = { ['g' + a]: null }, q = ['g' + a];
+    while (q.length) { const u = q.shift(); (adj[u] || []).forEach(v => { if (!(v in prev)) { prev[v] = u; q.push(v); } }); }
+    const p = [];
+    for (let u = 'g' + b; u != null; u = prev[u]) p.unshift(u);
+    return p;
+  };
+  const pool = Array.from({ length: 10 }, () => el('circle', { r: 5, class: 'dot', visibility: 'hidden', filter: 'url(#glow)' }, svg));
+  const capT = el('text', { x: 180, y: 252, 'text-anchor': 'middle', class: 'nd-sub' }, svg);
+  let act = [];
+  function show(flows, cap) {
+    Object.values(lnEl).forEach(l => l.classList.remove('on'));
+    gpuEl.forEach(g => g && g.classList.remove('hot'));
+    const cnt = [0, 0];
+    act = flows.slice(0, pool.length).map((f, k) => {
+      const ids = route(f.from, f.to), pts = ids.map(id => [L.nodes[id].x, L.nodes[id].y]), cross = ids.some(id => id[0] === 'p');
+      ids.slice(1).forEach((id, m) => lnEl[key(ids[m], id)].classList.add('on'));
+      gpuEl[f.from].classList.add('hot');
+      if (cross) cnt[f.from < dg ? 0 : 1]++;
+      return { pts, cross, off: (k * 0.37) % 1 };
+    });
+    pool.forEach((d, k) => d.setAttribute('visibility', k < act.length ? 'visible' : 'hidden'));
+    const m = Math.max(...cnt), sl = lnEl['p0|p1'];
+    if (sl) sl.style.strokeWidth = m ? Math.min(14, 2 + 1.7 * m) : '';
+    loadT.textContent = m > 1 ? `×${m} 条流共用` : '';
+    capT.textContent = cap || '';
+  }
+  function frame(now) {
+    act.forEach((a, k) => {
+      const [x, y] = along(a.pts, S.anim ? ((now / 1000) * 0.55 + a.off) % 1 : 0.5), d = pool[k];
+      d.setAttribute('cx', x); d.setAttribute('cy', y); d.style.fill = a.cross ? 'var(--c2)' : 'var(--c1)';
+    });
+  }
+  return { L, show, frame, route, gpuEl };
+}
+const along = (pts, p) => {
+  const ls = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1])), tot = ls.reduce((a, b) => a + b, 0) || 1;
+  let d = p * tot;
+  for (let i = 0; i < ls.length; i++) {
+    if (d <= ls[i] || i === ls.length - 1) { const f = ls[i] ? Math.min(1, d / ls[i]) : 0; return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f]; }
+    d -= ls[i];
+  }
+  return pts[0];
+};
+// ---------- 头图：四张 GPU 两个快域，依次演示三种走法 ----------
+const hero = (() => {
+  const cv = $('hero'), ctx = cv.getContext('2d'), M = build(4, 6, 1), STEPT = [0.78, 0.78, 1.3], HOLD = 1.0, FONT = getComputedStyle(document.body).fontFamily;
+  const dur = M.modes.map((m, i) => m.steps.length * STEPT[i] + HOLD), CYCLE = dur.reduce((a, b) => a + b, 0);
+  let W = 0, H = 0, dpr = 1, C = {}, vis = true, dirty = true, ph = '', by = '';
+  const t0 = performance.now();
+  function colors() {
+    const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
+    C = { ink: g('--ink'), muted: g('--muted'), axis: g('--axis'), grid: g('--grid'), surf: g('--surface2'), c1: g('--c1'), c2: g('--c2'), acc: g('--accent') };
+    dirty = true;
+  }
+  function size() {
+    const r = cv.getBoundingClientRect();
+    dpr = Math.min(2, devicePixelRatio || 1); W = r.width; H = r.height;
+    cv.width = Math.max(1, Math.round(W * dpr)); cv.height = Math.max(1, Math.round(H * dpr)); dirty = true;
+  }
+  const rr = (x, y, w, h, r) => { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); };
+  function draw(tau) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    let mi = 0, tt = tau;
+    while (mi < 2 && tt >= dur[mi]) { tt -= dur[mi]; mi++; }
+    const m = M.modes[mi], T = STEPT[mi], run = tt < m.steps.length * T, si = run ? Math.floor(tt / T) : m.steps.length - 1, st = m.steps[si], p = run ? tt / T - si : 1;
+    const cw = Math.max(46, Math.min(70, W * 0.15)), ch = cw * 0.52;
+    const gp = [[W * .2, H * .27], [W * .2, H * .73], [W * .8, H * .27], [W * .8, H * .73]], pp = [[W * .42, H * .5], [W * .58, H * .5]];
+    const route = (a, b) => (a < 2) === (b < 2) ? [gp[a], gp[b]] : [gp[a], pp[a < 2 ? 0 : 1], pp[b < 2 ? 0 : 1], gp[b]];
+    const line = (a, b, w, col, al, dash) => { ctx.globalAlpha = al; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke(); ctx.setLineDash([]); };
+    ctx.lineCap = 'round';
+    const used = run ? st.flows : [], inA = used.some(f => f.from < 2 && f.to < 2), inB = used.some(f => f.from >= 2 && f.to >= 2);
+    [0, 1].forEach(d => { ctx.globalAlpha = 1; ctx.strokeStyle = C.grid; ctx.lineWidth = 1.5; rr(gp[d * 2][0] - cw * 0.9, gp[d * 2][1] - ch * 1.3, cw * 1.8, gp[d * 2 + 1][1] - gp[d * 2][1] + ch * 2.6, 16); ctx.stroke(); });
+    [[0, 1, inA], [2, 3, inB]].forEach(([a, b, on]) => { if (on) { ctx.shadowColor = C.c1; ctx.shadowBlur = 12; } line(gp[a], gp[b], 4, C.c1, on ? 1 : 0.5); ctx.shadowBlur = 0; });
+    gp.forEach((q, i) => line(q, pp[i < 2 ? 0 : 1], 2, C.axis, 0.7));
+    ctx.lineDashOffset = -tau * 22;
+    const lit = run && st.xn > 0;
+    if (lit) { ctx.shadowColor = C.c2; ctx.shadowBlur = 14; }
+    line(pp[0], pp[1], run ? 3 + 2.6 * st.xn : 3, C.c2, lit ? 1 : 0.55, [7, 5]);
+    ctx.shadowBlur = 0; ctx.lineDashOffset = 0;
+    pp.forEach(q => { ctx.globalAlpha = 1; ctx.fillStyle = C.surf; ctx.strokeStyle = C.axis; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(q[0], q[1], 6, 0, 7); ctx.fill(); ctx.stroke(); });
+    ctx.font = `600 ${Math.max(11, cw * 0.19)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    gp.forEach((q, i) => {
+      const src = used.some(f => f.from === i);
+      ctx.globalAlpha = 1; ctx.fillStyle = C.surf; ctx.strokeStyle = src ? C.acc : C.c1; ctx.lineWidth = src ? 2.5 : 1.5;
+      if (src) { ctx.shadowColor = C.acc; ctx.shadowBlur = 12; }
+      rr(q[0] - cw / 2, q[1] - ch / 2, cw, ch, 9); ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
+      ctx.fillStyle = C.ink; ctx.fillText('GPU ' + i, q[0], q[1] + 1);
+    });
+    ctx.fillStyle = C.muted; ctx.font = `500 ${Math.max(10, cw * 0.16)}px ${FONT}`;
+    ctx.fillText('域 A · NVLink', gp[0][0], gp[0][1] - ch * 1.75); ctx.fillText('域 B · NVLink', gp[2][0], gp[2][1] - ch * 1.75);
+    used.forEach(f => {
+      const pts = route(f.from, f.to), col = (f.from < 2) !== (f.to < 2) ? C.c2 : C.c1;
+      for (let q = 0; q < 4; q++) {
+        const [x, y] = along(pts, ease(clamp01(p - q * 0.045)));
+        ctx.globalAlpha = 1 - q * 0.24; ctx.shadowColor = col; ctx.shadowBlur = q ? 0 : 16; ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(x, y, 5.2 - q * 0.9, 0, 7); ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+    });
+    ctx.globalAlpha = 1;
+    const a = `${MODES[mi].name} · ${run ? st.phase : '完成'}`, b = `慢链路已传 ${fmt(run ? st.sl0 + st.slow * ease(p) : m.slow)} N / 方向`;
+    if (a !== ph) { ph = a; $('hero-phase').textContent = a; }
+    if (b !== by) { by = b; $('hero-bytes').textContent = b; }
+  }
+  function frame(now) {
+    if (!vis || document.hidden || !W) return;
+    if (!S.anim) { if (dirty) { draw(dur[0] + dur[1] + 1.4); dirty = false; } return; }
+    draw((Math.max(0, now - t0) / 1000) % CYCLE);
+  }
+  colors(); size();
+  new ResizeObserver(size).observe(cv);
+  new IntersectionObserver(es => { vis = es[0].isIntersecting; dirty = true; }).observe(cv);
+  new MutationObserver(colors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', colors);
+  return { frame, redraw: () => { dirty = true; } };
+})();
+const fillRange = inp => inp.style.setProperty('--p', (inp.value - inp.min) / (inp.max - inp.min) * 100 + '%');
+const seg = (box, cb) => box.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  box.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  cb(b.dataset.v);
+});
+function syncPlay() {
+  $('play').classList.toggle('on', S.playing);
+  $('play').setAttribute('aria-label', S.playing ? '暂停' : '播放');
+  $('play-ic').setAttribute('d', S.playing ? 'M3.5 2.5h3.2v11H3.5zM9.3 2.5h3.2v11H9.3z' : 'M4.5 2.5v11l9-5.5z');
+}
+// ---------- 探：NCCL 先探测，再选路 ----------
+const PB = { kind: 'pairs', a: 0, b: 3, pending: false, log: null };
+const PB_N = { pairs: 4, nvs: 8 };
+const hopName = id => id[0] === 'g' ? 'GPU ' + id.slice(1) : id[0] === 'p' ? 'PCIe 桥' : 'NVSwitch';
+function probeLines() {
+  const dm = ['dm', '# 示意输出，不是真实 NCCL 日志'];
+  if (PB.kind === 'pairs') return [dm, ['', '探测：枚举 GPU … 找到 4 张'], ['', '探测：读取 GPU 之间的互联、PCIe 与 NUMA 层级'],
+    ['hl', 'GPU0 ↔ GPU1        NVLink            快'], ['hl', 'GPU2 ↔ GPU3        NVLink            快'], ['wr', 'GPU{0,1} ↔ GPU{2,3}  PCIe 桥（组间）   慢'],
+    ['', '建图：2 个快域 {0,1} {2,3}，域间 1 条慢链路'], ['hl', '选路：域内走 NVLink，域间只交换少量结果']];
+  return [dm, ['', '探测：枚举 GPU … 找到 8 张'], ['hl', '任意两张 GPU ↔ GPU  经 NVSwitch 一跳   快'], ['', '建图：1 个快域 {0…7}，没有慢链路'], ['hl', '选路：整个域是均匀的 all-to-all，不需要分层']];
+}
+function probeScan() {
+  const L = probeLines(), box = $('pb-log');
+  if (PB.log) ANIMS.delete(PB.log);
+  PB.log = run(300 * L.length, k => { box.innerHTML = L.slice(0, Math.max(1, Math.ceil(k * L.length - 1e-9))).map(([c, s]) => `<span class="${c}">${s}</span>`).join('\n'); });
+}
+function probePath() {
+  const topo = live.pb, { a, b } = PB, cards = $('pb-paths');
+  [...Array(PB_N[PB.kind]).keys()].forEach(i => topo.gpuEl[i].classList.toggle('sel', i === a || i === b));
+  if (b === null) { topo.show([], ''); cards.innerHTML = `<div class="card"><b>路径</b><span class="note">已选 GPU ${a}，再点一张 GPU 看它们之间走什么。</span></div>`; return; }
+  const ids = topo.route(a, b), cross = ids.some(id => id[0] === 'p'), fast = PB.kind === 'nvs' ? 'NVSwitch 一跳' : 'NVLink 直连';
+  topo.show([{ from: a, to: b }, { from: b, to: a }], `GPU ${a} ↔ GPU ${b}`);
+  cards.innerHTML = `<div class="card"><b>路径</b><div style="font-size:15px;font-weight:650;line-height:1.5">${ids.map(hopName).join(' → ')}</div></div>
+    <div class="card"><b>链路类别</b><span class="tag${cross ? ' sup' : ''}">${cross ? '含慢链路：PCIe 桥 / 跨 NUMA' : fast}</span></div>
+    <div class="card"><b>路径上最慢一段</b><div class="big">${cross ? 1 : S.r}</div><span class="note">示意相对带宽：慢链路 = 1，快链路 = r（比 页可调）</span></div>`;
+}
+const LINK_ROWS = [
+  ['NVLink', 'GPU 与 GPU 之间直连', '快。NVLink 5 每条链路 100 GB/s（单向）；每 GPU 18 条，单向约 900 GB/s，双向合计 1.8 TB/s（GB200 / GB300 NVL72）', '书 4.5.1，译注 38'],
+  ['NVSwitch 域', 'NVL72：72 张 GPU 在同一个 NVLink Switch 域内', '任意两张之间均匀的 all-to-all', '书 4.5.1'],
+  ['PCIe', '两对 NVLink 之间的组间链路', '比 NVLink 慢', '书 4.5.1 的 4 卡例子'],
+  ['跨 NUMA', 'GPU 与另一个 NUMA 节点之间', '跨过 NUMA 域会降低吞吐', '书 4.5.1'],
+  ['NVLink-C2C', 'Grace Blackwell 的 CPU 与 GPU 之间', '约 900 GB/s', '书 4.5.1'],
+  ['InfiniBand / TCP', '节点之间', '探测时同样会被分类；速度取决于网卡与网络', '探测对象见书；速度为补充'],
+];
+function initProbe() {
+  PB.a = 0; PB.b = PB.kind === 'pairs' ? 3 : 5; PB.pending = false;
+  live.pb = buildTopo($('pb-svg'), PB.kind === 'pairs' ? 'pairs' : 'uniform', { onpick: i => {
+    if (!PB.pending) { PB.a = i; PB.b = null; PB.pending = true; } else { PB.pending = false; if (i !== PB.a) PB.b = i; else PB.b = null; }
+    probePath();
+  } });
+  $('pb-note').innerHTML = (PB.kind === 'pairs'
+    ? '书中的 4 卡例子：GPU 0–1 共用一条 NVLink，GPU 2–3 共用另一条，两对之间是较慢的 PCIe。书里另一处把同样的结构说成两块 PCIe 交换芯片，这里按“两对 NVLink + 较慢的组间链路”来画。'
+    : 'NVL72 一类的系统里，所有 GPU 在同一个 NVLink Switch 域内，任意两张之间的路径一样快，没有“慢组间”。图中画 8 张只是为了够清楚。')
+    + ' 一张 GPU 的直连 NVLink 通道数是固定的：没有直连的两张卡之间通道数会减少，或者退回 PCIe。';
+  $('pb-tbl').innerHTML = `<thead><tr><th>链路</th><th>在哪里</th><th>速度</th><th>出处</th></tr></thead><tbody>${LINK_ROWS.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  probePath(); probeScan();
+}
+// ---------- 比：三种走法 ----------
+const CM = { tl: null, now: [], fkey: '', auto: 0 };
+const pctOf = (v, b, i) => i ? `（${v < b ? '−' : '+'}${Math.abs(Math.round((1 - v / b) * 100))}%）` : '（基线）';
+function cmParams() {
+  $('cm-params').innerHTML = `<div class="param">GPU 数<div class="seg" id="cm-n" role="group" aria-label="GPU 数">${[4, 8].map(v => `<button type="button" data-v="${v}" aria-pressed="${S.n === v}">${v} 张（2 × ${v / 2}）</button>`).join('')}</div></div>
+    <label class="param" for="cm-r">域内带宽 r<input type="range" id="cm-r" min="1.5" max="12" step="0.5" value="${S.r}"><output id="cm-rv">${S.r}</output></label>
+    <label class="param" for="cm-N">梯度大小 N<input type="range" id="cm-N" min="0.5" max="4" step="0.5" value="${S.N}"><output id="cm-Nv">${S.N}</output></label>`;
+  seg($('cm-n'), v => { S.n = +v; cmRecompute(); });
+  [['r', 'cm-r', 'cm-rv'], ['N', 'cm-N', 'cm-Nv']].forEach(([k, i, o]) => {
+    const inp = $(i); fillRange(inp);
+    inp.oninput = () => { S[k] = +inp.value; $(o).textContent = S[k]; fillRange(inp); cmRecompute(); };
+  });
+}
+function cmRecompute(fresh) {
+  const M = S.M = build(S.n, S.r, S.N), base = M.modes[0];
+  S.end = M.T; S.t = Math.min(S.t, S.end); CM.fkey = '';
+  const names = MODES.map((m, i) => m.name + (i === 1 ? '（补充对照）' : ''));
+  CM.tl = drawTL($('tl'), MODES.map((m, i) => ({ id: i, name: names[i], end: M.modes[i].end, lanes: LANES })), M.segs, S.end * 1.02,
+    { fresh, id: 'cm', tip: segTip, click: g => { S.t = g.s + 1e-4; S.playing = false; syncPlay(); updateCmp(); } });
+  live.diag = buildTopo($('diag'), S.n === 4 ? 'pairs' : 'islands');
+  $('tlnote').textContent = `时间是示意单位，不是实测：慢链路带宽 = 1，域内带宽 = r = ${S.r}，每步另加固定开销 ${ALPHA}。每步用时 = 固定开销 + 本步最忙那条链路的忙碌时间，所以快链路泳道上比步长短的部分，就是在等慢链路。`;
+  const bars = drawBars($('bars'), [{ head: '总时间（示意单位，越短越好）' },
+    ...M.modes.map((m, i) => ({ name: MODES[i].short || MODES[i].name, value: m.end, suffix: ' ' + pctOf(m.end, base.end, i) })),
+    { head: '慢链路上的字节数（每方向，单位 N）' },
+    ...M.modes.map((m, i) => ({ name: MODES[i].short || MODES[i].name, value: m.slow / S.N, suffix: ' N ' + pctOf(m.slow, base.slow, i) }))], { LW: 128 });
+  if (fresh) bars.play();
+  $('bnote').textContent = `分层把每方向的慢链路字节数降到 ${fmt(M.modes[2].slow / S.N)} N（盲环 ${fmt(base.slow / S.N)} N）。按拓扑排序的环已经很接近分层，书中“只交换一小部分”的说法对拓扑盲的环最明显。`;
+  $('tbl').innerHTML = `<thead><tr><th>方式</th><th>泳道</th><th>操作</th><th class="num">开始</th><th class="num">结束</th><th class="num">时长</th></tr></thead><tbody>${[...M.segs].sort((a, b) => a.s - b.s || a.v - b.v).map(g =>
+    `<tr><td>${MODES[g.v].name}</td><td>${LANES.find(q => q[0] === g.l)[1]}</td><td>${g.label}</td><td class="num">${fmt(g.s)}</td><td class="num">${fmt(g.e)}</td><td class="num">${fmt(g.e - g.s)}</td></tr>`).join('')}</tbody>`;
+  updateCmp();
+}
+function updateCmp() {
+  const t = S.t, M = S.M;
+  $('scrub').value = Math.round(t / S.end * 1000); $('tlabel').textContent = `t = ${fmt(t)}`;
+  CM.tl.update(t); $('now-t').textContent = fmt(t);
+  CM.now.forEach((r, i) => {
+    const m = M.modes[i], k = stepIdx(m, t), done = k >= m.steps.length, st = m.steps[Math.min(k, m.steps.length - 1)];
+    r.s.className = 'sw ' + (done ? '' : st.busy.x >= Math.max(st.busy.a, st.busy.b) ? 'k-pcie' : 'k-nv');
+    r.o.textContent = done ? '已完成' : st.phase;
+    r.i.textContent = `慢链路累计 ${fmt(slowAt(m, t) / S.N)} N / 方向` + (done ? '' : `；本步最忙的是${st.busy.x >= Math.max(st.busy.a, st.busy.b) ? '慢链路' : '快链路'}`);
+  });
+  const fm = M.modes[S.follow], fk = stepIdx(fm, t), key = `${S.follow}:${fk}:${S.n}`;
+  if (key !== CM.fkey) {
+    CM.fkey = key;
+    const st = fm.steps[fk];
+    live.diag.show(st ? st.flows : [], st ? `${MODES[S.follow].name} · ${st.phase}` : `${MODES[S.follow].name} · 已完成`);
+  }
+}
+function initCmp() {
+  S.t = 0; S.playing = false; syncPlay(); cmParams();
+  $('now').innerHTML = `<p><b>拓扑盲环</b>：环上相邻的两张 GPU 恰好总在不同的域里，每一步所有数据都挤过同一条慢链路。慢链路成了瓶颈，域内的快链路几乎闲着。</p>
+    <p><b>按拓扑排序的环</b>（补充对照，书中没有）：把同域的 GPU 排在环上相邻的位置，每步只有一条流过慢链路。NCCL 的环搜索本来就会参考拓扑，所以实际中更接近这一条，而不是盲环。</p>
+    <p><b>分层 all-reduce</b>：先在域内归约到组长，只在两个组长之间交换一份结果，再在域内广播。书中的说法：慢链路承担的字节数因此从全量降到与域数成正比。</p>
+    <div class="now"><h3>此刻 t = <span id="now-t">0.00</span></h3><ul id="now-ul">${MODES.map((m, i) =>
+      `<li><span class="sw" id="nw-s${i}"></span><span class="ln-name">${m.name}</span><span class="op"><span id="nw-o${i}"></span><span class="info" id="nw-i${i}"></span></span></li>`).join('')}</ul></div>`;
+  CM.now = MODES.map((_, i) => ({ s: $('nw-s' + i), o: $('nw-o' + i), i: $('nw-i' + i) }));
+  $('cm-legend').innerHTML = `<span>${sw('nv')}域内 NVLink（快，带宽 r）</span><span>${sw('pcie')}跨域慢链路（带宽 1，条纹表示正在传）</span><span>点击色块跳到那一步，悬停看细节</span>`;
+  cmRecompute(true);
+  clearTimeout(CM.auto);
+  CM.auto = setTimeout(() => { if (S.page === 1 && S.t === 0 && !S.playing && S.anim) cmToggle(); }, 700);
+}
+function cmEvents() {
+  const s = new Set([0, S.end]);
+  S.M.segs.forEach(g => { s.add(+g.s.toFixed(4)); s.add(+g.e.toFixed(4)); });
+  return [...s].filter(v => v <= S.end + 1e-9).sort((a, b) => a - b);
+}
+function cmStep(dir) {
+  S.playing = false;
+  const ev = cmEvents();
+  S.t = dir > 0 ? (ev.find(v => v > S.t + 1e-3) ?? S.t) : ([...ev].reverse().find(v => v < S.t - 1e-3) ?? 0);
+  syncPlay(); updateCmp();
+}
+function cmToggle() {
+  if (!S.playing && S.t >= S.end - 1e-6) S.t = 0;
+  S.playing = !S.playing; S.last = performance.now(); syncPlay(); updateCmp();
+}
+$('play').onclick = cmToggle;
+$('prev').onclick = () => cmStep(-1);
+$('next').onclick = () => cmStep(1);
+$('reset').onclick = () => { S.playing = false; S.t = 0; syncPlay(); updateCmp(); };
+$('scrub').oninput = e => { S.playing = false; syncPlay(); S.t = e.target.value / 1000 * S.end; updateCmp(); };
+seg($('speed'), v => { S.speed = +v; });
+seg($('follow'), v => { S.follow = +v; CM.fkey = ''; updateCmp(); });
+seg($('pb-kind'), v => { PB.kind = v; initProbe(); });
+$('pb-scan').onclick = probeScan;
+// ---------- 测：在 Nsight Systems 里看出分层 ----------
+const MS = { tl: null, anim: null };
+function measReplay() {
+  const M = build(S.n, S.r, S.N), bl = M.modes[0], hi = M.modes[2], T = Math.max(bl.end, hi.end) * 1.02;
+  const merged = [{ v: 0, lane: '0.k', s: 0, e: bl.end, kind: 'pcie', label: 'ncclAllReduce（一个长内核）', info: `所有 ${bl.steps.length} 步都在同一个内核里，环上每一跳都要过慢链路` }];
+  const nm = { rd: ['nv', '组内归约', '域内先归约到组长'], xc: ['pcie', '组间交换', '两个组长之间只交换一次'], bc: ['nv', '组内广播', '组长把结果广播回域内'] };
+  hi.steps.forEach(st => {
+    const last = merged[merged.length - 1];
+    if (last.grp === st.grp) { last.e = st.e; return; }
+    merged.push({ v: 2, lane: '2.k', s: st.s, e: st.e, grp: st.grp, kind: nm[st.grp][0], label: nm[st.grp][1], info: nm[st.grp][2] });
+  });
+  if (MS.anim) ANIMS.delete(MS.anim);
+  MS.tl = drawTL($('ms-tl'), [{ id: 0, name: '拓扑盲环：一个长的 NCCL 内核', end: bl.end, lanes: [['k', 'NCCL CUDA 内核']] },
+    { id: 2, name: '分层：拆成组内、组间、组内多个内核', end: hi.end, lanes: [['k', 'NCCL CUDA 内核']] }], merged, T,
+    { id: 'ms', fresh: true, tip: g => [`${sw(g.kind)}${g.label}`, `${fmt(g.s)} → ${fmt(g.e)}，用时 ${fmt(g.e - g.s)}`, g.info] });
+  MS.anim = run(2600, k => MS.tl.update(k * T));
+}
+function initMeas() {
+  measReplay();
+  $('ms-note').innerHTML = '书中的判据：分层运算在时间线上会出现多个 NCCL CUDA 内核，分别对应组内步骤和组间步骤。内核的拆分、命名和数量随 NCCL 版本与算法选择变化，上图只是示意。 <button type="button" class="btn" id="ms-replay">重播</button>';
+  $('ms-replay').onclick = measReplay;
+  const rows = [['SM 忙碌率', ['60%', 60], ['90%', 90]], ['因等待内存而停顿的 warp', ['很多'], ['明显减少']], ['迭代时间', ['100 ms', 100], ['70 ms', 70]]];
+  const line = (lab, c) => `<div style="display:grid;grid-template-columns:4.2em minmax(0,1fr) 4.6em;gap:8px;align-items:center;margin-top:6px"><span class="note" style="margin:0">${lab}</span>${c[1] ? `<div class="gauge"><i data-w="${c[1]}"></i></div>` : '<span></span>'}<span style="font-variant-numeric:tabular-nums;font-weight:600">${c[0]}</span></div>`;
+  $('ms-gauge').innerHTML = rows.map(r => `<div style="margin:0 0 14px"><b>${r[0]}</b>${line('优化前', r[1])}${line('优化后', r[2])}</div>`).join('') + '<p class="note">迭代时间从 100 ms 降到 70 ms，即减少 30%。表中数字是书里的示意数字，不是实测。</p>';
+  const gs = [...$('ms-gauge').querySelectorAll('.gauge i')];
+  gs.forEach(g => { g.style.width = '0'; });
+  requestAnimationFrame(() => requestAnimationFrame(() => gs.forEach(g => { g.style.width = g.dataset.w + '%'; })));
+  $('ms-cmds').innerHTML = [['dm', '# 1) 打开 NCCL 日志：看探测到的拓扑和选出的通道（书中提到）'], ['', 'NCCL_DEBUG=INFO python train.py'], ['', ''],
+    ['dm', '# 2) 把探测到的拓扑写成文件（书中提到）'], ['', 'NCCL_TOPO_DUMP_FILE=/tmp/nccl_topo.xml python train.py'], ['', ''],
+    ['dm', '# 3) 抓一段时间线，数 NCCL 内核（书中只说用 Nsight Systems，这条命令形式为补充）'], ['', 'nsys profile --trace=cuda,nvtx -o nccl_topo python train.py']]
+    .map(([c, s]) => `<span class="${c || 'hl'}">${s}</span>`).join('\n');
+}
+// ---------- 选：选哪几张卡 ----------
+const PK = { sel: new Set([0, 1, 2, 3]), bars: null };
+const PRESETS = [['4 张 · 同一个域', [0, 1, 2, 3]], ['4 张 · 2 + 2 跨域', [0, 1, 4, 5]], ['8 张 · 全部', [0, 1, 2, 3, 4, 5, 6, 7]]];
+function pkTime(sel) {
+  const a = [...sel].filter(i => i < 4).length, b = sel.size - a, { r, N } = S, lg = m => (m > 1 ? Math.ceil(Math.log2(m)) : 0);
+  if (!a || !b) { const m = a + b; return { a, b, slow: 0, time: m < 2 ? 0 : 2 * (m - 1) * (ALPHA + N / (m * r)) }; }
+  return { a, b, slow: N, time: 2 * Math.max(lg(a), lg(b)) * (ALPHA + N / r) + ALPHA + N };
+}
+function pkRender(fresh) {
+  const sel = PK.sel, T = pkTime(sel), topo = live.pk, ids = [...sel].sort((x, y) => x - y);
+  topo.gpuEl.forEach((g, i) => { g.classList.toggle('pick', sel.has(i)); g.style.opacity = sel.has(i) ? 1 : 0.5; });
+  const A = ids.filter(i => i < 4), B = ids.filter(i => i >= 4);
+  const flows = A.length && B.length ? [{ from: A[0], to: B[0] }, { from: B[0], to: A[0] }]
+    : ids.length > 1 ? ids.map((u, i) => ({ from: u, to: ids[(i + 1) % ids.length] })) : [];
+  topo.show(flows, ids.length < 2 ? '至少选 2 张' : A.length && B.length ? '跨两个域：组长之间要过慢链路' : '全部在一个域内：只走快链路');
+  $('pk-presets').querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', PRESETS[i][1].length === sel.size && PRESETS[i][1].every(x => sel.has(x))));
+  $('pk-cards').innerHTML = `<div class="card"><b>参与的 GPU</b><div class="big">${sel.size} 张</div><span class="note">域 A ${T.a} 张，域 B ${T.b} 张</span></div>
+    <div class="card"><b>一次 all-reduce（示意）</b><div class="big">${sel.size < 2 ? '—' : fmt(T.time)}</div><span class="note">示意单位，只算通信</span></div>
+    <div class="card"><b>慢链路</b><div class="big">${T.slow ? fmt(T.slow / S.N) + ' N' : '没用到'}</div><span class="note">${T.slow ? '每方向的字节数' : '数据始终留在快域里'}</span></div>`;
+  const items = [...PRESETS.map(([nm, s]) => ({ name: nm, value: pkTime(new Set(s)).time })), { name: '你的选择', value: T.time, cls: 'bar' }];
+  PK.bars = drawBars($('pk-bars'), [{ head: '一次 all-reduce 的示意时间（越短越好）' }, ...items.map(q => ({ ...q, suffix: ' ' + (q.value ? '' : '（需要 ≥ 2 张）') }))], { LW: 128 });
+  if (fresh) PK.bars.play();
+  $('pk-note').textContent = `沿用 比 页的参数：域内带宽 r = ${S.r}，N = ${S.N}。这里只比较通信：8 张的算力更多，是否划算取决于计算量，这个模型不判断。选卡建议来自书中：把任务放在同一个 NUMA 节点或 NVSwitch 岛内的 4 张卡上，而不是铺到 8 张慢链路上。`;
+}
+function initPick() {
+  $('pk-presets').innerHTML = PRESETS.map(([nm], i) => `<button type="button" data-v="${i}" aria-pressed="false">${nm}</button>`).join('');
+  live.pk = buildTopo($('pk-svg'), 'islands', { onpick: i => { PK.sel.has(i) ? PK.sel.delete(i) : PK.sel.add(i); pkRender(); } });
+  pkRender(true);
+}
+seg($('pk-presets'), v => { PK.sel = new Set(PRESETS[+v][1]); pkRender(); });
+// ---------- 排：从症状往回查 ----------
+const SUP = ' <span class="tag sup">补充</span>';
+const lg = (s, sup) => `<div class="ts-log">${s}${sup ? SUP : ''}</div>`;
+const ps = (s, sup) => `<p>${s}${sup ? SUP : ''}</p>`;
+const FORM = '形如这样，具体格式随 NCCL 版本变化。';
+const CAUSES = {
+  numa: { name: '选卡跨了 NUMA / 慢链路', sub: '8 张卡里有一部分在另一个 NUMA 节点',
+    before: { cap: '跨 NUMA 的两张卡：数据要绕主机侧互连', hops: [['GPU 0'], ['PCIe', '慢'], ['NUMA 0', '主机侧', 1], ['NUMA 互连', '慢'], ['NUMA 1', '主机侧', 1], ['PCIe', '慢'], ['GPU 4']], big: '1', bigs: '示意相对带宽' },
+    after: { cap: '同一个 NVLink 域内的两张卡', hops: [['GPU 0'], ['NVLink / NVSwitch', '快'], ['GPU 1']], big: '6', bigs: '示意带宽 r = 6' },
+    check: [lg('nvidia-smi topo -m', 1), ps('两张卡之间是 NV# 表示走 NVLink；PIX / PXB / PHB / NODE / SYS 表示要经过 PCIe 交换芯片、主机桥，或跨 NUMA 的系统互连。', 1),
+      lg('NCCL_DEBUG=INFO python train.py'), ps(`看每条通道的传输方式，形如 <code>Channel 00 : 0[0] -&gt; 1[1] via P2P/…</code>。${FORM}`)],
+    fix: [ps('把任务放在同一个 NUMA 节点或 NVSwitch 岛内的 4 张卡上，而不是铺到 8 张慢链路上（书中的建议）。'), ps('用 <code>CUDA_VISIBLE_DEVICES</code> 指定同一个域内的卡。', 1)] },
+  p2p: { name: 'P2P 被禁用，退回主机内存', sub: 'NVLink 明明在，数据却绕了一圈主机',
+    before: { cap: 'P2P 被禁用：同一 NVLink 域内的两张卡也要经主机内存中转', hops: [['GPU 0'], ['PCIe', '慢'], ['主机内存', '', 1], ['PCIe', '慢'], ['GPU 1']], big: '1', bigs: '示意相对带宽' },
+    after: { cap: 'P2P 可用：NVLink 直达', hops: [['GPU 0'], ['NVLink', '快'], ['GPU 1']], big: '6', bigs: '示意带宽 r = 6' },
+    check: [lg('NCCL_DEBUG=INFO python train.py'), ps(`同一 NVLink 域内的通道应该是 <code>via P2P</code>；出现 <code>via SHM</code> 说明退回了主机内存。${FORM}`),
+      lg('env | grep NCCL_P2P', 1), ps('看有没有遗留的 <code>NCCL_P2P_DISABLE=1</code>（调试时常有人设过）。', 1)],
+    fix: [ps('去掉 <code>NCCL_P2P_DISABLE</code>，只在确实需要排查时临时设置。', 1), ps('容器 / 虚拟机里确认 GPU 之间允许 P2P。', 1)] },
+  blind: { name: '拓扑信息缺失，环顺序“盲”了', sub: '虚拟机 / 容器里看不到真实的 NVLink 层级',
+    before: { cap: '环上相邻的 GPU 总在不同的域里', ring: [0, 4, 1, 5, 2, 6, 3, 7], big: '跨域 8 次', bigs: '每圈经过慢链路' },
+    after: { cap: '按拓扑排序：同域的 GPU 相邻', ring: [0, 1, 2, 3, 4, 5, 6, 7], big: '跨域 2 次', bigs: '每圈经过慢链路' },
+    check: [lg('NCCL_DEBUG=INFO python train.py'), ps(`看打印出的环顺序，形如 <code>Channel 00/02 : 0 4 1 5 2 6 3 7</code>，数一数相邻两项分属不同域的次数。${FORM}`),
+      lg('NCCL_TOPO_DUMP_FILE=/tmp/nccl_topo.xml python train.py'), ps('打开写出的拓扑文件：如果里面看不到 NVLink、只有一个 CPU，多半是 NCCL 没探测到真实拓扑。这一判读为补充。', 0)],
+    fix: [ps('让 NCCL 能看到真实的 PCIe / NVLink 层级：虚拟机和容器里透传 GPU 与 <code>/sys</code>，或用 <code>NCCL_TOPO_FILE</code> 提供拓扑文件。', 1)] },
+  algo: { name: '硬编码了 NCCL_ALGO', sub: '改完以后反而更慢',
+    before: { cap: '强制指定算法', bar: 1, text: '更慢（示意）', big: '', bigs: '' },
+    after: { cap: '让 NCCL 自己选，或在目标负载上验证过的指定', bar: 0.7, text: '更快（示意）', big: '', bigs: '' },
+    check: [lg('env | grep NCCL_ALGO', 1), ps('同时在启动脚本和训练代码里搜 <code>NCCL_ALGO</code>。', 1), lg('./build/all_reduce_perf -b 8M -e 1G -f 2 -g 8', 1), ps('用 nccl-tests 在目标消息大小上，分别带 / 不带 <code>NCCL_ALGO</code> 扫一遍，对比带宽。', 1)],
+    fix: [ps('书中的建议：只有剖析表明自动选择有问题时才覆盖，例如 <code>NCCL_ALGO=NVLS,NVLSTree,Tree,Ring,PAT</code>，并且要在目标负载上验证。')] },
+  unit: { name: '把单向带宽和双向带宽比混了', sub: '规格表上的数字和实测对不上',
+    before: { cap: '拿双向合计当单向去比', bar: 1, text: '1.8 TB/s', big: '', bigs: '' },
+    after: { cap: '单向和单向比', bar: 0.5, text: '约 900 GB/s', big: '', bigs: '' },
+    check: [ps('NVLink 5 单条链路 100 GB/s 是单向（译注 38）。每 GPU 18 条链路：单向约 900 GB/s，双向合计 1.8 TB/s（GB200 / GB300 NVL72）。'), ps('先确认实测值和规格值用的是同一口径：单向还是双向。', 1)],
+    fix: [ps('把 1.8 TB/s 当作双向合计，和单向实测对比时先除以 2。')] },
+};
+const SYMS = [['单机 8 卡不比 4 卡快', ['numa', 'p2p']], ['带宽只有预期的几分之一', ['blind', 'p2p', 'unit']], ['Nsight 里只有一个长 NCCL 内核', ['blind', 'algo']], ['改了 NCCL_ALGO 反而更慢', ['algo', 'blind']]];
+const DK = { sym: 0, cause: null, rows: [] };
+function deskRow(svg, y, tag, d) {
+  const post = tag === '改后', by = y + 28, row = { hops: [], last: -1 };
+  el('rect', { x: 8, y, width: 32, height: 16, rx: 8, class: 'badge ' + (post ? 'post' : 'pre') }, svg);
+  el('text', { x: 24, y: y + 12, 'text-anchor': 'middle', class: 'badge-text' + (post ? ' post' : '') }, svg).textContent = tag;
+  el('text', { x: 50, y: y + 12, class: 'row-cap' }, svg).textContent = d.cap;
+  if (d.hops) {
+    const n = d.hops.length, gap = 14, w = (522 - (n - 1) * gap) / n;
+    d.hops.forEach(([t, s, mem], i) => {
+      const x = 8 + i * (w + gap);
+      if (i) el('line', { x1: x - gap, y1: by + 24, x2: x, y2: by + 24, class: 'wire' }, svg);
+      row.hops.push(el('rect', { x, y: by, width: w, height: 48, rx: 10, class: 'hop' + (mem ? ' mem' : '') }, svg));
+      el('text', { x: x + w / 2, y: by + (s ? 22 : 29), 'text-anchor': 'middle', class: 'hop-t' }, svg).textContent = t;
+      if (s) el('text', { x: x + w / 2, y: by + 38, 'text-anchor': 'middle', class: 'hop-s' }, svg).textContent = s;
+    });
+  } else if (d.ring) {
+    const dom = i => (i < 4 ? 'c1' : 'c3'), step = (522 - 40) / 7;
+    d.ring.forEach((g, i) => {
+      const x = 8 + i * step, nx = d.ring[(i + 1) % 8], cross = dom(g) !== dom(nx);
+      el('rect', { x, y: by + 2, width: 40, height: 34, rx: 8, class: 'hop', style: `fill:color-mix(in srgb,var(--${dom(g)}) 30%,var(--surface));stroke:var(--${dom(g)})` }, svg);
+      el('text', { x: x + 20, y: by + 24, 'text-anchor': 'middle', class: 'hop-t' }, svg).textContent = g;
+      if (i < 7) el('line', { x1: x + 42, y1: by + 19, x2: x + step - 2, y2: by + 19, class: 'wire', style: cross ? 'stroke:var(--c2);stroke-width:4' : '' }, svg);
+      else el('path', { d: `M${x + 20} ${by + 38} v8 H28 v-8`, class: 'wire', style: `fill:none;${cross ? 'stroke:var(--c2);stroke-width:3;stroke-dasharray:5 4' : ''}` }, svg);
+    });
+  } else {
+    el('rect', { x: 8, y: by + 8, width: d.bar * 480, height: 30, rx: 6, class: 'bar' }, svg);
+    el('text', { x: 8 + d.bar * 480 + 10, y: by + 28, class: 'bar-val' }, svg).textContent = d.text;
+  }
+  if (d.big) {
+    el('text', { x: 548, y: by + 22, class: 'big' }, svg).textContent = d.big;
+    el('text', { x: 548, y: by + 40, class: 'big-s' }, svg).textContent = d.bigs;
+  }
+  DK.rows.push(row);
+}
+function deskShow() {
+  const c = CAUSES[DK.cause], svg = $('ts-svg');
+  svg.innerHTML = ''; DK.rows = [];
+  svg.setAttribute('viewBox', '0 0 640 236');
+  deskRow(svg, 10, '改前', c.before); deskRow(svg, 126, '改后', c.after);
+  $('ts-title').textContent = c.name;
+  $('ts-check').innerHTML = c.check.join(''); $('ts-fix').innerHTML = c.fix.join('');
+  document.querySelectorAll('#ts-causes button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === DK.cause));
+  run(500, k => { svg.style.opacity = 0.25 + 0.75 * k; });
+}
+function deskSym() {
+  const ids = SYMS[DK.sym][1];
+  if (!ids.includes(DK.cause)) DK.cause = ids[0];
+  document.querySelectorAll('#ts-sym button').forEach((b, i) => b.setAttribute('aria-pressed', i === DK.sym));
+  $('ts-causes').innerHTML = `<div class="lab">可能的原因，逐个看：</div>` + ids.map(id => `<button type="button" data-id="${id}" aria-pressed="false"><b>${CAUSES[id].name}</b><span>${CAUSES[id].sub}</span></button>`).join('');
+  deskShow();
+}
+function deskFrame(now) {
+  if (S.page !== 4 || !S.anim) return;
+  DK.rows.forEach(r => {
+    const i = Math.floor(now / 520) % (r.hops.length + 2);
+    if (i !== r.last) { r.last = i; r.hops.forEach((h, j) => h.classList.toggle('lit', j === i)); }
+  });
+}
+function initDesk() {
+  $('ts-sym').innerHTML = SYMS.map(([t], i) => `<button type="button" data-i="${i}" aria-pressed="false">${t}</button>`).join('');
+  deskSym();
+}
+$('ts-sym').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { DK.sym = +b.dataset.i; deskSym(); } });
+$('ts-causes').addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (b) { DK.cause = b.dataset.id; deskShow(); } });
+// ---------- 页面、主题与主循环 ----------
+const PAGES = [
+  { id: 'probe', verb: '探', cap: '探测拓扑', title: '探：NCCL 启动时先摸清机器里每条链路有多快', init: initProbe },
+  { id: 'cmp', verb: '比', cap: '三种走法', title: '比：同一次 all-reduce，慢链路上要传多少字节', init: initCmp },
+  { id: 'meas', verb: '测', cap: '怎么验证', title: '测：在 Nsight Systems 里看出分层', init: initMeas },
+  { id: 'pick', verb: '选', cap: '怎么选卡', title: '选：同一个域内的 4 张卡，胜过散在慢链路上的 8 张', init: initPick },
+  { id: 'desk', verb: '排', cap: '排查台', title: '排：症状 → 原因 → 怎么确认 → 怎么改', init: initDesk },
+];
+$('tabs').insertAdjacentHTML('beforeend', PAGES.map((p, i) => `<button class="tab" role="tab" data-i="${i}" aria-selected="false"><span class="stn">${i + 1}</span><span class="verb">${p.verb}</span><span class="cap">${p.cap}</span></button>`).join(''));
+$('tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) setPage(+b.dataset.i); });
+function setPage(i) {
+  S.page = i; S.playing = false; syncPlay(); hideTip(); clearTimeout(CM.auto);
+  document.querySelectorAll('.tab').forEach((b, j) => { b.setAttribute('aria-selected', j === i); b.classList.toggle('past', j < i); });
+  $('route-lit').style.width = `calc(${i} * 20%)`;
+  PAGES.forEach((p, j) => { $('pg-' + p.id).hidden = j !== i; });
+  $('stitle').textContent = PAGES[i].title;
+  history.replaceState(null, '', '#' + (i + 1));
+  PAGES[i].init();
+}
+const THEMES = [['', '自动'], ['light', '浅色'], ['dark', '深色']];
+let ti = 0;
+$('theme').onclick = () => {
+  ti = (ti + 1) % 3;
+  if (THEMES[ti][0]) document.documentElement.dataset.theme = THEMES[ti][0]; else delete document.documentElement.dataset.theme;
+  $('theme').textContent = '配色：' + THEMES[ti][1];
+};
+addEventListener('keydown', e => {
+  const tg = e.target instanceof Element ? e.target : document.body;
+  if (e.altKey || e.ctrlKey || e.metaKey || tg.matches('input, select, textarea')) return;
+  if (/^[1-5]$/.test(e.key)) { setPage(+e.key - 1); return; }
+  if (S.page !== 1) return;
+  if (e.code === 'Space') { if (tg.closest('button, summary, a, label')) return; e.preventDefault(); cmToggle(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); cmStep(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); cmStep(-1); }
+});
+function loop(now) {
+  requestAnimationFrame(loop);
+  if (S.playing) {
+    const dt = Math.min(0.1, Math.max(0, (now - S.last) / 1000));
+    S.t = Math.min(S.end, S.t + dt * S.end / 10 * S.speed);
+    if (S.t >= S.end) { S.playing = false; syncPlay(); }
+    updateCmp();
+  }
+  S.last = now;
+  tickAnims(now); Object.values(live).forEach(t => t.frame(now)); hero.frame(now); deskFrame(now);
+}
+const defs = document.querySelector('svg.defs');
+const syncMotion = () => { S.anim = !RM.matches; if (S.anim) defs.unpauseAnimations(); else defs.pauseAnimations(); hero.redraw(); };
+RM.addEventListener('change', syncMotion);
+syncMotion();
+const h0 = parseInt(location.hash.slice(1), 10);
+setPage(h0 >= 1 && h0 <= PAGES.length ? h0 - 1 : 0);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

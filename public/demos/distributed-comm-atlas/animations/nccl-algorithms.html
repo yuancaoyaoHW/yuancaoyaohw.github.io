@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4.6 NCCL 通信算法：同一次 all-reduce 的五种走法</title>
+<style>
+:root{
+  color-scheme:light;
+  --page:#eef1f6; --surface:#fcfcfb; --surface2:#f2f3f7; --ink:#0b0b0b; --ink2:#52514e; --muted:#6b6a66;
+  --grid:#e1e0d9; --axis:#c3c2b7; --line:rgba(11,11,11,.10); --line2:rgba(11,11,11,.17);
+  --accent:#6250d6; --accent-soft:rgba(98,80,214,.13);
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --good:#0ca30c;
+  --glass:rgba(252,252,251,.82);
+  --shadow:0 1px 0 rgba(255,255,255,.8) inset,0 22px 48px -30px rgba(30,40,90,.35);
+  --aur1:rgba(98,80,214,.20); --aur2:rgba(42,120,214,.17); --aur3:rgba(235,104,52,.11);
+  --circuit:rgba(30,40,80,.05);
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --page:#080b12; --surface:#121621; --surface2:#171c2a; --ink:#eef1f8; --ink2:#b9c0cf; --muted:#8a90a0;
+  --grid:#232838; --axis:#3a4052; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.15);
+  --accent:#9085e9; --accent-soft:rgba(144,133,233,.17);
+  --c1:#3987e5; --c2:#e0642c; --c3:#1fb37f; --c4:#d99500; --good:#2fd06b;
+  --glass:rgba(18,22,33,.74);
+  --shadow:0 1px 0 rgba(255,255,255,.05) inset,0 30px 70px -36px rgba(0,0,0,.9);
+  --aur1:rgba(144,133,233,.24); --aur2:rgba(57,135,229,.20); --aur3:rgba(217,89,38,.13);
+  --circuit:rgba(150,170,255,.055);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:var(--ink);font:14px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+.viz-root{position:relative;max-width:1180px;margin:0 auto;padding:30px 24px 44px;overflow:hidden;isolation:isolate}
+.viz-root::before{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;
+  background-image:linear-gradient(var(--circuit) 1px,transparent 1px),linear-gradient(90deg,var(--circuit) 1px,transparent 1px);
+  background-size:28px 28px;-webkit-mask-image:linear-gradient(to bottom,#000 0,rgba(0,0,0,.6) 30%,transparent 75%);mask-image:linear-gradient(to bottom,#000 0,rgba(0,0,0,.6) 30%,transparent 75%)}
+.aurora{position:absolute;left:-10%;right:-10%;top:-140px;height:640px;z-index:-1;pointer-events:none;filter:blur(36px)}
+.aurora i{position:absolute;border-radius:50%;animation:drift 28s ease-in-out infinite alternate}
+.aurora i:nth-child(1){width:46%;height:72%;left:2%;top:10%;background:radial-gradient(closest-side,var(--aur1),transparent)}
+.aurora i:nth-child(2){width:42%;height:62%;left:40%;top:0;background:radial-gradient(closest-side,var(--aur2),transparent);animation-duration:36s;animation-delay:-9s}
+.aurora i:nth-child(3){width:34%;height:54%;left:64%;top:24%;background:radial-gradient(closest-side,var(--aur3),transparent);animation-duration:44s;animation-delay:-17s}
+@keyframes drift{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(6%,5%,0) scale(1.14)}100%{transform:translate3d(-6%,-3%,0) scale(.92)}}
+code{font-family:var(--mono);font-size:.88em;background:color-mix(in srgb,var(--ink) 8%,transparent);padding:.08em .36em;border-radius:4px;overflow-wrap:anywhere}
+b{font-weight:600}
+.hero{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.15fr);gap:30px;align-items:center;margin:4px 0 30px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;color:var(--accent);font-weight:600;margin-bottom:8px}
+.hero h1{font-size:34px;line-height:1.25;letter-spacing:-.012em;margin:0 0 16px;font-weight:700;text-wrap:balance}
+.hero .lead{color:var(--ink2);font-size:15px;line-height:1.85;margin:0 0 10px;max-width:33em}
+.hero .lead b{color:var(--ink)}
+.hero-viz{position:relative;margin:0;border-radius:20px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);
+  background:radial-gradient(110% 85% at 50% 42%,color-mix(in srgb,var(--accent) 12%,var(--surface)) 0%,var(--surface) 62%)}
+#hero{display:block;width:100%;height:300px}
+.hero-cap{padding:0 18px 14px;font-size:12.5px;color:var(--ink2);display:flex;justify-content:space-between;gap:6px 14px;flex-wrap:wrap}
+.hero-cap b{color:var(--ink)}
+.note-unit{display:inline-block;margin-top:6px;font-size:12px;color:var(--muted);border:1px dashed var(--line2);border-radius:8px;padding:2px 9px}
+.route{position:relative;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));margin:0 0 26px;padding-top:4px}
+.route-track,.route-lit{position:absolute;top:17px;left:calc(100% / 12);height:2px;border-radius:2px}
+.route-track{right:calc(100% / 12);background:var(--grid)}
+.route-lit{width:0;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 25%,transparent),var(--accent));transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.tab{position:relative;appearance:none;border:0;background:none;color:inherit;font:inherit;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:7px;padding:0 4px 6px;border-radius:12px}
+.tab .stn{position:relative;z-index:1;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;
+  background:var(--surface);border:2px solid var(--axis);color:var(--muted);transition:all .35s}
+.tab .verb{font-size:31px;line-height:1.05;font-weight:600;color:var(--muted);transition:color .3s,transform .3s cubic-bezier(.2,.8,.2,1)}
+.tab .cap{font-size:12px;line-height:1.4;color:var(--muted);text-align:center}
+.tab:hover .verb{color:var(--ink2);transform:translateY(-2px)}
+.tab.past .stn{border-color:var(--accent);color:var(--accent)}
+.tab[aria-selected="true"] .stn{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 0 5px var(--accent-soft),0 0 22px -2px var(--accent)}
+.tab[aria-selected="true"] .verb{color:var(--ink);transform:none}
+.tab[aria-selected="true"] .cap{color:var(--ink2)}
+.tab[aria-selected="true"]::after{content:"";position:absolute;left:50%;bottom:0;width:26px;height:3px;margin-left:-13px;border-radius:3px;
+  background:var(--accent);box-shadow:0 0 12px var(--accent);animation:grow .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes grow{from{transform:scaleX(0)}to{transform:none}}
+.btn{appearance:none;border:1px solid var(--line2);background:var(--surface2);color:var(--ink);font:inherit;font-size:13px;
+  padding:6px 13px;border-radius:999px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:focus-visible,.tab:focus-visible,.seg button:focus-visible,.cell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.play{background:var(--accent);border-color:var(--accent);color:#fff;min-width:78px;font-weight:600;position:relative}
+.btn.play:hover{color:#fff;filter:brightness(1.1)}
+.btn.play.on::after{content:"";position:absolute;inset:-4px;border-radius:999px;border:2px solid var(--accent);opacity:0;animation:halo 1.6s ease-out infinite}
+@keyframes halo{0%{opacity:.7;transform:scale(.92)}100%{opacity:0;transform:scale(1.2)}}
+.theme-btn{margin-top:10px}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:999px;overflow:hidden;background:var(--surface2)}
+.seg button{appearance:none;border:0;background:none;color:var(--ink2);font:inherit;font-size:12.5px;padding:5px 12px;cursor:pointer;transition:all .2s}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.seg button:not([aria-pressed="true"]):hover{color:var(--accent)}
+input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;cursor:pointer;
+  background:linear-gradient(90deg,var(--accent) var(--p,0%),var(--grid) var(--p,0%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 0 12px var(--accent)}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--accent)}
+.stage{min-height:300px}
+.stage.out{opacity:0;transform:translateY(8px);transition:all .18s}
+.stage.swap{animation:fadeup .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes fadeup{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.stage-head h2{font-size:24px;margin:0 0 4px;line-height:1.3}
+.stage-head p{margin:0 0 16px;color:var(--ink2);max-width:60em}
+.panel{background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--line);
+  border-radius:18px;padding:16px 18px;box-shadow:var(--shadow);margin-bottom:16px}
+.panel h3{font-size:14.5px;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.panel h3 small{font-weight:400;color:var(--muted);font-size:12px}
+.two{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:start}
+.two .panel{margin-bottom:0}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.controls .scrub{flex:1 1 220px;min-width:160px}
+.controls .tnow{font-family:var(--mono);font-size:12.5px;color:var(--ink2);min-width:84px;text-align:right}
+.tlabel{font-size:11.5px;color:var(--muted);margin:0 0 8px}
+.tl{display:grid;gap:5px;align-items:center}
+.tl .lane{font-size:11.5px;color:var(--ink2);white-space:nowrap;padding-right:8px}
+.cell{appearance:none;border:0;height:22px;border-radius:5px;background:var(--grid);opacity:.5;cursor:pointer;
+  transition:background .3s,opacity .3s,box-shadow .3s;padding:0}
+.cell.empty{background:transparent;opacity:.18;border:1px dashed var(--axis);cursor:default}
+.cell.lit{opacity:1;background:var(--lc);box-shadow:0 0 12px -2px var(--lc)}
+.cell.cur{outline:2px solid var(--ink);outline-offset:1px;animation:blink 1s ease-in-out infinite alternate}
+@keyframes blink{to{outline-color:var(--accent)}}
+svg.topo{display:block;width:100%;height:auto;border-radius:12px;background:radial-gradient(90% 80% at 50% 40%,color-mix(in srgb,var(--accent) 7%,var(--surface)),var(--surface2))}
+.topo text{font-family:var(--sans);fill:var(--ink)}
+.gbox{fill:color-mix(in srgb,var(--c3) 5%,transparent);stroke:var(--axis);stroke-dasharray:5 5}
+.gname{font-size:12px;fill:var(--muted)!important}
+.edge{stroke:var(--axis);stroke-width:2;fill:none;transition:stroke .3s,stroke-width .3s}
+.edge.net{stroke-dasharray:7 5}
+.edge.act{stroke:var(--accent);stroke-width:3.5;filter:drop-shadow(0 0 5px var(--accent))}
+.node circle{fill:var(--surface);stroke:var(--axis);stroke-width:2.5;transition:stroke .3s,filter .3s}
+.node.lead circle{stroke:var(--c4)}
+.node.done circle{stroke:var(--good);filter:drop-shadow(0 0 8px var(--good))}
+.node text{font-size:12.5px;font-weight:600;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.pk{pointer-events:none}
+.pk circle{stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 6px currentColor)}
+.pk text{font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:central;fill:#fff!important}
+.sw rect{fill:var(--surface);stroke:var(--c4);stroke-width:2}
+.sw text{font-size:10.5px;text-anchor:middle;fill:var(--c4)!important}
+.legend{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.facts{display:grid;gap:9px;margin:0 0 12px}
+.fact{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center;font-size:13px}
+.fact .k{color:var(--muted);font-size:12px}
+.fact .v{color:var(--ink)}
+.bar{height:9px;border-radius:9px;background:var(--grid);overflow:hidden;position:relative}
+.bar i{display:block;height:100%;width:0;border-radius:9px;background:linear-gradient(90deg,var(--c1),var(--accent));transition:width 1s cubic-bezier(.2,.8,.2,1)}
+.stepbox{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:9px 12px;background:var(--surface2);margin-bottom:10px;min-height:92px}
+.stepbox b{display:block;margin-bottom:2px}
+.stepbox span{color:var(--ink2);font-size:13px}
+.xlist{font-family:var(--mono);font-size:11.5px;color:var(--ink2);margin-top:6px;max-height:64px;overflow:auto}
+.evs{margin:0;padding:0;list-style:none;max-height:178px;overflow:auto;font-size:12.5px}
+.evs li{padding:3px 8px;border-radius:7px;cursor:pointer;color:var(--ink2);display:flex;gap:8px}
+.evs li em{font-style:normal;font-family:var(--mono);color:var(--muted);min-width:22px}
+.evs li:hover{background:var(--accent-soft)}
+.evs li.on{background:var(--accent-soft);color:var(--ink)}
+.quote{margin:12px 0 0;padding:8px 12px;border-left:3px solid var(--c4);background:color-mix(in srgb,var(--c4) 8%,transparent);border-radius:0 10px 10px 0;font-size:12.5px;color:var(--ink2)}
+.quote cite{display:block;font-style:normal;color:var(--muted);font-size:11.5px;margin-top:2px}
+.warn{margin:10px 0 0;padding:8px 12px;border-radius:10px;border:1px dashed var(--c2);font-size:12.5px;color:var(--ink2)}
+#tip{position:fixed;z-index:50;pointer-events:none;max-width:280px;background:var(--ink);color:var(--page);font-size:12px;line-height:1.5;
+  padding:6px 10px;border-radius:8px;opacity:0;transition:opacity .12s;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#tip.on{opacity:.96}
+@media (max-width:860px){.hero,.two{grid-template-columns:1fr}.tab .verb{font-size:24px}.tab .cap{display:none}.hero h1{font-size:27px}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+label{font-size:12.5px;color:var(--ink2);display:flex;align-items:center;gap:8px}
+label input[type=range]{width:150px}
+label b{min-width:64px;font-family:var(--mono);font-size:12px}
+.tb{width:100%;border-collapse:collapse;font-size:12.5px}
+.tb th,.tb td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.tb th{color:var(--muted);font-weight:500}
+.pickout{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--surface2);display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:center;margin-top:12px}
+.pickout .big{font-size:44px;font-weight:700;line-height:1;color:var(--accent);text-align:center;text-shadow:0 0 22px var(--accent)}
+.pickout p{margin:0 0 4px;color:var(--ink2);font-size:13px}
+.row{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;align-items:center;margin:6px 0}
+.row .k{font-size:12px;color:var(--muted)}
+.brow{display:grid;grid-template-columns:150px 1fr 40px;gap:8px;align-items:center;margin:7px 0;font-size:12.5px}
+.brow .bar{height:12px}
+.brow .n{font-family:var(--mono);text-align:right}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.tlr{height:30px;border-radius:8px;background:var(--grid);overflow:hidden;margin-top:4px}
+.tlr-in{display:flex;height:100%;clip-path:inset(0 100% 0 0);transition:clip-path 1.1s cubic-bezier(.2,.8,.2,1)}
+.tlr-in.go{clip-path:inset(0 0 0 0)}
+.tlr-in span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#fff;font-size:11.5px;line-height:30px;padding:0 8px;border-right:2px solid var(--surface)}
+pre.cmd{margin:0;padding:10px 12px;border-radius:10px;background:var(--surface2);border:1px solid var(--line);font:12px/1.6 var(--mono);overflow:auto;white-space:pre-wrap;word-break:break-all}
+.trouble h3 small{font-weight:400}
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="aurora"><i></i><i></i><i></i></div>
+<header class="hero">
+  <div>
+    <div class="eyebrow">第 4 章 · 4.6 节</div>
+    <h1>NCCL 通信算法：<br>同一次 all-reduce 的五种走法</h1>
+    <p class="lead">同样是把 N 块 GPU 上的梯度加起来再发回去，<b>Ring</b>、<b>Tree</b>、<b>CollTree</b>、<b>CollNet</b>、<b>PAT</b> 的走法不同。小消息怕<b>步数多</b>（延迟），大消息怕<b>链路闲着</b>（带宽）。每一页都是一次真实的逐步模拟，不是装饰动画。</p>
+    <span class="note-unit">时间轴是示意单位，不是实测；书中的数字会标出处</span><br>
+    <button class="btn theme-btn" id="themeBtn" type="button">切换浅色 / 深色</button>
+  </div>
+  <figure class="hero-viz">
+    <canvas id="hero" aria-label="8 个 GPU 组成的环，数据包沿环流动"></canvas>
+    <figcaption class="hero-cap"><span><b>Ring</b>：8 个 GPU 首尾相接，数据块沿环接力</span><span>后面几页逐一拆开</span></figcaption>
+  </figure>
+</header>
+<nav class="route" id="tabs" role="tablist" aria-label="NCCL 算法">
+  <div class="route-track"></div><div class="route-lit" id="lit"></div>
+</nav>
+<main id="stage" class="stage">
+  <section id="pAlg">
+    <div class="stage-head"><h2 id="aTitle"></h2><p id="aLead"></p></div>
+    <div class="panel">
+      <div class="controls">
+        <button class="btn play" id="play" type="button">播放</button>
+        <button class="btn" id="prev" type="button" aria-label="上一步">&#9664; 上一步</button>
+        <button class="btn" id="next" type="button" aria-label="下一步">下一步 &#9654;</button>
+        <button class="btn" id="reset" type="button">回到开头</button>
+        <span class="seg" id="speed" role="group" aria-label="速度"><button type="button" data-v="0.5">0.5×</button><button type="button" data-v="1" aria-pressed="true">1×</button><button type="button" data-v="2">2×</button></span>
+        <input class="scrub" id="scrub" type="range" min="0" max="1" step="0.01" value="0" aria-label="拖动查看进度">
+        <span class="tnow" id="tnow"></span>
+      </div>
+      <div class="controls" id="aOpts"></div>
+      <div class="tlabel">时间线：每格是一步，颜色是所属阶段，点击跳转。（示意单位，不是实测）</div>
+      <div class="tl" id="tl"></div>
+    </div>
+    <div class="two">
+      <div class="panel">
+        <h3>数据怎么流动 <small>圆点是正在传的数据块；节点下方的小方格是每个块已累加了几个 GPU 的贡献，满格变绿</small></h3>
+        <svg class="topo" id="topo" viewBox="0 0 1000 520" role="img" aria-label="通信拓扑动画"></svg>
+        <div class="legend" id="aLegend"></div>
+        <div id="aPipe"></div>
+      </div>
+      <div class="panel">
+        <h3>这一步在做什么</h3>
+        <div class="stepbox"><b id="sbT"></b><span id="sbD"></span><div class="xlist" id="sbX"></div></div>
+        <div class="facts" id="facts"></div>
+        <ul class="evs" id="evs"></ul>
+        <div class="quote" id="quote"></div>
+        <div class="warn" id="warn" hidden></div>
+      </div>
+    </div>
+  </section>
+  <section id="pPick" hidden></section>
+</main>
+<section class="panel trouble" id="trouble"></section>
+</div>
+<div id="tip" role="tooltip"></div>
+<script>
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const NS='http://www.w3.org/2000/svg';
+const el=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const k in (a||{}))e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const pop=m=>{let c=0;while(m){m&=m-1;c++}return c};
+const ease=u=>u*u*(3-2*u);
+const themeHooks=[];
+$('#themeBtn').onclick=()=>{const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';themeHooks.forEach(f=>f())};
+const tip=$('#tip');
+document.addEventListener('mouseover',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(t){tip.textContent=t.dataset.tip;tip.classList.add('on')}});
+document.addEventListener('mousemove',e=>{if(tip.classList.contains('on')){tip.style.left=Math.max(8,Math.min(e.clientX+14,innerWidth-300))+'px';tip.style.top=(e.clientY+16)+'px'}});
+document.addEventListener('mouseout',e=>{if(e.target.closest&&e.target.closest('[data-tip]'))tip.classList.remove('on')});
+function countTo(node,v,fmt,ms){
+  fmt=fmt||(x=>Math.round(x));
+  if(RM){node.textContent=fmt(v);return}
+  const t0=performance.now(),d=ms||800;
+  (function f(t){const k=Math.min(1,(t-t0)/d);node.textContent=fmt(v*ease(k));if(k<1)requestAnimationFrame(f)})(t0);
+}
+function simulate(M){
+  const n=M.nodes.length,S=[M.nodes.map((_,i)=>Array(M.nc).fill(1<<i))];
+  M.full=(1<<n)-1;M.dup=false;
+  M.steps.forEach(st=>{
+    const p=S[S.length-1],c=p.map(r=>r.slice());
+    st.xf.forEach(x=>x.ch.forEach(k=>{
+      if(x.op==='add'){if(c[x.b][k]&p[x.a][k])M.dup=true;c[x.b][k]|=p[x.a][k]}else c[x.b][k]=p[x.a][k];
+    }));
+    S.push(c);
+  });
+  M.S=S;M.T=M.steps.length;
+  const pairs=new Set();let tot=0;
+  M.steps.forEach(st=>st.xf.forEach(x=>{pairs.add(x.a+'>'+x.b);tot++}));
+  M.util=tot/(pairs.size*M.T);
+  M.ok=!M.dup&&S[M.T].every(r=>r.every(m=>m===M.full));
+  return M;
+}
+const posOf=(M,id)=>typeof id==='string'?M.sws[+id.slice(1)]:M.nodes[id];
+const ekey=(a,b)=>[String(a),String(b)].sort().join('|');
+function buildSVG(M){
+  const svg=$('#topo');svg.innerHTML='';
+  const V={M,edges:{},ctl:{},nodes:[],pk:[]};
+  (M.groups||[]).forEach(g=>{
+    el('rect',{class:'gbox',x:g.x,y:g.y,width:g.w,height:g.h,rx:16},svg);
+    el('text',{class:'gname',x:g.x+14,y:g.y+22,'font-size':12},svg).textContent=g.name;
+  });
+  M.edges.forEach(e=>{
+    const A=posOf(M,e.a),B=posOf(M,e.b);
+    if(e.ctl){V.ctl[ekey(e.a,e.b)]=e.ctl;V.edges[ekey(e.a,e.b)]=el('path',{class:'edge '+(e.kind||''),d:'M'+A.x+' '+A.y+'Q'+e.ctl[0]+' '+e.ctl[1]+' '+B.x+' '+B.y},svg)}
+    else V.edges[ekey(e.a,e.b)]=el('line',{class:'edge '+(e.kind||''),x1:A.x,y1:A.y,x2:B.x,y2:B.y},svg);
+  });
+  (M.sws||[]).forEach(s=>{
+    const g=el('g',{class:'sw'},svg);
+    el('rect',{x:s.x-34,y:s.y-12,width:68,height:24,rx:7},g);
+    el('text',{x:s.x,y:s.y+4},g).textContent='NVSwitch';
+  });
+  const R=M.R||20,sw=Math.min(56,M.nc*13),cw=sw/M.nc;
+  M.nodes.forEach((p,i)=>{
+    const g=el('g',{class:'node'+(p.lead?' lead':''),'data-tip':''},svg);
+    el('circle',{cx:p.x,cy:p.y,r:R},g);
+    el('text',{x:p.x,y:p.y},g).textContent=p.label;
+    const cells=[];
+    for(let c=0;c<M.nc;c++)cells.push(el('rect',{x:p.x-sw/2+c*cw+.5,y:p.y+R+6,width:Math.max(2,cw-1.5),height:8,rx:2,stroke:'var(--axis)','stroke-width':1},g));
+    V.nodes.push({g,cells});
+  });
+  for(let i=0;i<30;i++){
+    const g=el('g',{class:'pk',style:'display:none','data-tip':''},svg);
+    el('circle',{r:10,cx:0,cy:0},g);el('text',{x:0,y:0},g);
+    V.pk.push(g);
+  }
+  return V;
+}
+const P={M:null,V:null,tau:0,playing:false,speed:1,last:0,idx:-9};
+function setPlay(on){P.playing=on;const b=$('#play');b.textContent=on?'暂停':'播放';b.classList.toggle('on',on);P.last=performance.now()}
+function setTau(x){P.tau=Math.max(0,Math.min(P.M.T,x));draw()}
+function draw(){
+  const {M,V}=P,T=M.T,tau=P.tau,N=M.nodes.length;
+  const t=Math.min(Math.floor(tau+1e-9),T),fr=tau-t;
+  let u=t>=T?0:fr;if(RM&&t<T)u=.5;
+  const S=M.S[t],Sp=M.S[Math.max(0,t-1)],flash=t>0&&fr<.4;
+  V.nodes.forEach((nd,i)=>{
+    let all=true;
+    nd.cells.forEach((c,k)=>{
+      const n=pop(S[i][k]),full=n===N;if(!full)all=false;
+      c.setAttribute('fill',full?'var(--good)':'var(--accent)');
+      c.setAttribute('fill-opacity',full?1:(.08+.72*n/N).toFixed(2));
+      c.setAttribute('stroke',flash&&S[i][k]!==Sp[i][k]?'var(--ink)':'var(--axis)');
+    });
+    nd.g.classList.toggle('done',all);
+    nd.g.dataset.tip='GPU '+M.nodes[i].label+'：'+(M.nc===1?'已累加 '+pop(S[i][0])+'/'+N+' 个 GPU 的数据':S[i].map((m,k)=>'块'+k+' '+pop(m)+'/'+N).join('，'));
+  });
+  Object.values(V.edges).forEach(e=>e.classList.remove('act'));
+  const xf=t<T?M.steps[t].xf:[];
+  V.pk.forEach((g,i)=>{
+    const x=xf[i];
+    if(!x){g.style.display='none';return}
+    const pts=[x.a].concat(x.via!=null?[x.via]:[],[x.b]).map(id=>posOf(M,id));
+    const ids=[x.a].concat(x.via!=null?[x.via]:[],[x.b]);
+    for(let s=0;s<ids.length-1;s++){const e=V.edges[ekey(ids[s],ids[s+1])];if(e)e.classList.add('act')}
+    const q=ease(Math.min(1,u))*(pts.length-1),s=Math.min(pts.length-2,Math.floor(q)),w=q-s;
+    const c=V.ctl[ekey(ids[s],ids[s+1])],A=pts[s],B=pts[s+1];
+    const px=c?(1-w)*(1-w)*A.x+2*(1-w)*w*c[0]+w*w*B.x:A.x+(B.x-A.x)*w,py=c?(1-w)*(1-w)*A.y+2*(1-w)*w*c[1]+w*w*B.y:A.y+(B.y-A.y)*w;
+    const col=x.op==='add'?'var(--c2)':'var(--c1)';
+    g.style.display='';g.style.color=col;g.setAttribute('transform','translate('+px+' '+py+')');
+    g.firstChild.setAttribute('fill',col);
+    g.lastChild.textContent=x.ch.length===1&&M.nc>1?x.ch[0]:'';
+    g.dataset.tip=M.nodes[x.a].label+' → '+M.nodes[x.b].label+'：'+(x.op==='add'?'边收边加（归约）':'直接复制（广播/收集）')+'，块 '+x.ch.join('、');
+  });
+  const idx=tau<=0?-1:(t>=T?T:t);
+  if(idx!==P.idx){
+    P.idx=idx;
+    const st=idx>=0&&idx<T?M.steps[idx]:null;
+    $('#sbT').textContent=idx<0?'起点':idx>=T?'完成':'第 '+(idx+1)+' 步 · '+st.title;
+    $('#sbD').textContent=idx<0?M.intro:idx>=T?M.outro:st.desc;
+    $$('#evs li').forEach((li,i)=>li.classList.toggle('on',i===idx));
+    const on=$('#evs li.on');if(on)$('#evs').scrollTop=on.offsetTop-60;
+  }
+  const cur=t<T?M.steps[t]:null;
+  $('#sbX').innerHTML=cur&&tau>0||(cur&&tau===0)?cur.xf.slice(0,12).map(x=>M.nodes[x.a].label+' → '+M.nodes[x.b].label+(x.ch.length===1&&M.nc>1?' 块'+x.ch[0]:'')+(x.op==='add'?' +':' =')).join('<br>')+(cur.xf.length>12?'<br>…共 '+cur.xf.length+' 条':''):'';
+  V.cells.forEach((c,i)=>{c.classList.toggle('lit',tau>i);c.classList.toggle('cur',t===i&&tau>0)});
+  const sc=$('#scrub');sc.value=tau;sc.style.setProperty('--p',(tau/T*100)+'%');
+  $('#tnow').textContent=tau<=0?'未开始':t>=T?'完成 '+T+'/'+T:'第 '+(t+1)+' / '+T+' 步';
+}
+function loop(now){
+  if(P.playing){
+    const dt=Math.min(100,now-P.last);P.last=now;
+    P.tau=Math.min(P.M.T,P.tau+dt/1200*P.speed);
+    if(P.tau>=P.M.T)setPlay(false);
+    draw();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+$('#play').onclick=()=>{if(!P.playing&&P.tau>=P.M.T)P.tau=0;setPlay(!P.playing)};
+$('#prev').onclick=()=>{setPlay(false);setTau(Math.ceil(P.tau-1e-9)-1)};
+$('#next').onclick=()=>{setPlay(false);setTau(Math.floor(P.tau+1e-9)+1)};
+$('#reset').onclick=()=>{setPlay(false);setTau(0)};
+$('#scrub').oninput=e=>{setPlay(false);setTau(+e.target.value)};
+$$('#speed button').forEach(b=>b.onclick=()=>{P.speed=+b.dataset.v;$$('#speed button').forEach(x=>x.setAttribute('aria-pressed',x===b))});
+function load(M){
+  setPlay(false);P.M=M;P.V=buildSVG(M);P.idx=-9;
+  $('#aTitle').textContent=M.title;$('#aLead').innerHTML=M.lead;
+  $('#aLegend').innerHTML='<span><i style="background:var(--c2)"></i>归约：边收边加</span><span><i style="background:var(--c1)"></i>复制：广播 / 收集</span><span><i style="background:var(--good)"></i>该块已累加全部 GPU</span><span><i style="background:var(--axis)"></i>实线 = 节点内高速互联，虚线 = 跨节点网络</span>';
+  const T=M.T,tl=$('#tl');tl.innerHTML='';
+  tl.style.gridTemplateColumns='auto repeat('+T+',minmax(12px,1fr))';
+  P.V.cells=[];
+  M.phases.forEach((ph,pi)=>{
+    const l=document.createElement('div');l.className='lane';l.textContent=ph.name;tl.appendChild(l);
+    for(let i=0;i<T;i++){
+      const cc=M.cc?M.cc(pi,i):(M.steps[i].ph===pi?ph.c:0);
+      if(cc){
+        const b=document.createElement('button');b.className='cell';b.type='button';
+        b.style.setProperty('--lc','var(--c'+cc+')');b.dataset.tip='第 '+(i+1)+' 步：'+M.steps[i].title;
+        b.setAttribute('aria-label','跳到第 '+(i+1)+' 步');
+        b.onclick=()=>{setPlay(false);setTau(i+.5)};
+        tl.appendChild(b);P.V.cells[i]=b;
+      }else{const d=document.createElement('div');d.className='cell empty';tl.appendChild(d)}
+    }
+  });
+  $('#evs').innerHTML=M.steps.map((s,i)=>'<li><em>'+(i+1)+'</em><span>'+s.title+'</span></li>').join('');
+  $$('#evs li').forEach((li,i)=>li.onclick=()=>{setPlay(false);setTau(i+.5)});
+  const pct=M.util*100;
+  $('#facts').innerHTML='<div class="fact"><span class="k">总步数</span><span class="v"><b id="fT">0</b> 步</span></div>'
+   +'<div class="fact"><span class="k" data-tip="实际传输次数 ÷（用到的单向链路数 × 总步数），按本页示意的调度算出，不是实测">链路占用率</span><span class="v"><div class="bar"><i id="fU"></i></div><small id="fUt">0%</small></span></div>'
+   +M.facts.map(f=>'<div class="fact"><span class="k">'+f[0]+'</span><span class="v">'+f[1]+'</span></div>').join('')
+   +'<div class="fact"><span class="k">模拟自检</span><span class="v" style="color:var(--'+(M.ok?'good':'c2')+')">'+(M.ok?'通过：结束时每个 GPU 的每个块都累加了全部 '+M.nodes.length+' 个 GPU，且没有重复累加':'未通过')+'</span></div>';
+  countTo($('#fT'),T);countTo($('#fUt'),pct,x=>x.toFixed(0)+'%');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{$('#fU').style.width=pct+'%'}));
+  $('#quote').innerHTML=M.quote;
+  const w=$('#warn');w.hidden=!M.warn;w.innerHTML=M.warn||'';
+  $('#aOpts').innerHTML='';$('#aOpts').hidden=!M.opts;if(M.opts)M.opts($('#aOpts'));
+  $('#aPipe').innerHTML=M.pipe?M.pipe():'';
+  $('#scrub').max=T;
+  setTau(0);
+}
+const OPT={ringN:8,patK:4,sw:false};
+function seg(host,label,vals,cur,cb){
+  const s=document.createElement('span');s.textContent=label;s.style.cssText='font-size:12.5px;color:var(--ink2)';
+  const g=document.createElement('span');g.className='seg';
+  vals.forEach(v=>{const b=document.createElement('button');b.type='button';b.textContent=v[1];b.setAttribute('aria-pressed',v[0]===cur);b.onclick=()=>cb(v[0]);g.appendChild(b)});
+  host.append(s,g);
+}
+const BOOK='《AI Systems Performance Engineering》第 4 章 4.6 节（转述，非原文）';
+function ringModel(N){
+  const nodes=[],edges=[],steps=[];
+  for(let i=0;i<N;i++){const a=-Math.PI/2+2*Math.PI*i/N;nodes.push({x:500+330*Math.cos(a),y:240+150*Math.sin(a),label:String(i)});edges.push({a:i,b:(i+1)%N,kind:'nv'})}
+  for(let s=0;s<N-1;s++)steps.push({ph:0,title:'归约-散布 '+(s+1)+'/'+(N-1),
+    desc:'每个 GPU 把一个块发给右邻，右邻把它加到自己的同号块上。每一步每个 GPU 都在发、都在收，所有链路同时忙。',
+    xf:nodes.map((_,g)=>({a:g,b:(g+1)%N,ch:[((g-s)%N+N)%N],op:'add'}))});
+  for(let s=0;s<N-1;s++)steps.push({ph:1,title:'全收集 '+(s+1)+'/'+(N-1),
+    desc:'此时每个 GPU 手里有一个已加完的块。继续沿环转发，只复制不再相加，直到每个 GPU 拿到全部 '+N+' 个结果块。',
+    xf:nodes.map((_,g)=>({a:g,b:(g+1)%N,ch:[((g+1-s)%N+N)%N],op:'set'}))});
+  const per=2*(N-1)/N;
+  return simulate({title:'Ring：沿环接力，每条链路都满载',
+    lead:'把数据切成 N 块，N 个 GPU 首尾相接。前 N−1 步边传边加（reduce-scatter），后 N−1 步只转发结果（all-gather）。每个 GPU 每一步都在收发，链路没有空闲，所以<b>大消息带宽最优</b>；代价是步数随 N 线性增长，<b>小消息被延迟拖累</b>。',
+    nodes,edges,steps,nc:N,R:21,phases:[{name:'reduce-scatter',c:2},{name:'all-gather',c:1}],
+    intro:'每个 GPU 把自己的数据切成 '+N+' 块，此刻每个块只含自己一个 GPU 的贡献（小方格最淡）。',
+    outro:'共 '+2*(N-1)+' 步。每个 GPU 的每个块都累加了全部 '+N+' 个 GPU，小方格全绿。',
+    facts:[['每链路数据量','2×(N−1)/N × D = <b>'+per.toFixed(2)+' D</b>。N 越大越趋近 2D，几乎与 N 无关'],
+      ['延迟','O(N)：2×(N−1) = '+2*(N-1)+' 步，每步都有固定开销'],
+      ['适合','大消息。带宽最优，负载完全均衡'],['代价','GPU 越多步数越长，小消息跑不快']],
+    quote:'书中“环的 2× 从哪来”：一遍 reduce-scatter 加一遍 all-gather，所以每条链路传的总量约为数据量的 2 倍，且不随 GPU 数增加。<cite>'+BOOK+'</cite>',
+    opts:h=>seg(h,'GPU 数 N ',[[4,'4'],[6,'6'],[8,'8']],OPT.ringN,v=>{OPT.ringN=v;load(ringModel(v))})});
+}
+const DEP=[0,1,1,2,2,2,2,3],PAR=i=>(i-1)>>1;
+function treeModel(K,pat){
+  const P8=[[500,60],[290,175],[710,175],[190,300],[390,300],[610,300],[810,300],[190,430]];
+  const nodes=P8.map((p,i)=>({x:p[0],y:p[1],label:String(i)})),edges=[];
+  for(let i=1;i<8;i++)edges.push({a:i,b:PAR(i),kind:'nv'});
+  const steps=[];
+  for(let s=1;s<=5+K;s++){
+    const xf=[],tags=[];
+    for(let k=0;k<K;k++){
+      const l=s-k;if(l<1||l>6)continue;
+      tags.push('块'+k+(l<=3?'↑':'↓')+(l<=3?l:l-3));
+      for(let i=1;i<8;i++){
+        if(l<=3&&DEP[i]===4-l)xf.push({a:i,b:PAR(i),ch:[k],op:'add'});
+        if(l>3&&DEP[i]===l-3)xf.push({a:PAR(i),b:i,ch:[k],op:'set'});
+      }
+    }
+    steps.push(K===1?{ph:s<=3?0:1,title:(s<=3?'向上归约 第 ':'向下广播 第 ')+(s<=3?s:s-3)+'/3 层',
+      desc:s<=3?'这一层的子节点把整份数据发给父节点，父节点加到自己的数据上。其余链路空着。':'父节点把已加完的整份结果发给子节点，直到叶子。其余链路空着。',xf}
+      :{ph:0,title:tags.join(' '),desc:'同一拍里不同的块走在树的不同层，所以向上和向下的链路可以同时有活。↑ 表示向上归约，↓ 表示向下广播，数字是第几层。',xf});
+  }
+  const M={nodes,edges,steps,nc:K,R:19,
+    cc:K===1?null:(pi,i)=>{const l=i+1-pi;return l>=1&&l<=3?2:l>=4&&l<=6?1:0},
+    phases:K===1?[{name:'向上归约',c:2},{name:'向下广播',c:1}]:Array.from({length:K},(_,k)=>({name:'块 '+k,c:1})),
+    intro:K===1?'8 个 GPU 排成二叉树，根是 GPU 0。每个 GPU 只有自己的数据（小方格最淡）。':'8 个 GPU 同一棵树，整份数据被切成 '+K+' 块（每个节点下 '+K+' 个小方格）。',
+    outro:'树的 6 步走完'+(K>1?'，加上错开的 '+(K-1)+' 拍，共 '+(5+K)+' 步':'')+'。每个 GPU 都拿到了完整结果。'};
+  return simulate(M);
+}
+function treePage(){
+  const M=treeModel(1);
+  return Object.assign(M,{title:'Tree：逐层汇到根，再逐层广播回来',
+    lead:'8 个 GPU 排成二叉树，只和父子节点通信，一共 2×3 = 6 步（O(log N)），比 Ring 的 14 步少得多，所以<b>小消息更快</b>。但叶子 GPU 只发一次、收一次，消息很大时大多数链路在空等。',
+    facts:[['延迟','O(log N)：2×树深 = 6 步（Ring 同样 8 个 GPU 要 14 步）'],
+      ['叶子 GPU','整个过程只发 1 次、收 1 次，大消息时链路利用率低'],
+      ['NVLSTree','在 NVLink 域内借 NVSwitch 做聚合（NVLink SHARP 卸载），域间仍走树。需要硬件、固件和插件支持'],
+      ['适合','小到中等消息，延迟占主导的场景']],
+    quote:'书中：Tree 先沿树向上做归约，再向下广播，步数 O(log N)；叶子 GPU 只发送一次，大消息时链路没有用满。NVLSTree 用于启用 NVLink SHARP 卸载。<cite>'+BOOK+'</cite>',
+    warn:'<b>译文勘误：</b>中文版把 Tree 写成“先 reduce-scatter 再 broadcast”。树上的机制是“先 reduce（逐层汇到根）再 broadcast”，reduce-scatter 是 Ring 里的阶段。本页按后者画。'});
+}
+function patPage(K){
+  const M=treeModel(K,true);
+  return Object.assign(M,{title:'PAT：把消息切块，让树的每一层都不闲着',
+    lead:'大消息被切成 K 块，第 k 块比第 k−1 块晚一拍进树。上一块在向下广播时，下一块已经在向上归约，各层链路同时有活干，<b>占用率随 K 逼近 100%</b>，起步延迟仍是树的 O(log N)。点选下方的 K 看步数和占用率怎么变。',
+    facts:[['步数','2×树深 + (K−1) = '+(5+K)+' 步'],['占用率','K / (K+5) = '+(100*K/(K+5)).toFixed(0)+'%（K=1 就是上一页的 Tree，约 17%）'],
+      ['代价','额外的内存和调度开销；收益取决于块大小、内存和拓扑（书脚注 40）'],
+      ['两条 stream','书中提到 reduce-scatter 与 all-gather 交错放在不同 CUDA stream 上，本页没有画']],
+    quote:'书中：PAT 是流水线化的 ring / tree 混合：大消息切块，下一块错开一拍开始树归约，链路利用率接近 Ring，每块的起步延迟约 O(log N)。<cite>'+BOOK+'</cite>',
+    warn:'<b>需要核对：</b>NCCL 官方发布说明里的 PAT（Parallel Aggregated Trees，2.23 起）我记得是用于 all-gather / reduce-scatter，且目前面向每节点一个 GPU 的场景，与书中的描述不完全一致。这条不是书里的内容，请以你所用 NCCL 版本的文档为准。',
+    opts:h=>seg(h,'分块数 K ',[1,2,3,4,6,8].map(v=>[v,String(v)]),OPT.patK,v=>{OPT.patK=v;load(patPage(v))})});
+}
+function collTreePage(sw){
+  const nodes=[],edges=[],groups=[],sws=[],steps=[],X=(g,l)=>g*4+l;
+  const OFF=[[0,-68],[-110,0],[110,0],[-110,65]];
+  for(let g=0;g<4;g++){
+    const x=30+(g%2)*490,y=15+(g>>1)*255,cx=x+225;
+    groups.push({x,y,w:450,h:235,name:'组 '+g+(sw?'（一个 NVLink 域，带 NVSwitch）':'（一个节点）')});
+    for(let l=0;l<4;l++)nodes.push({x:cx+OFF[l][0],y:y+130+OFF[l][1],label:g+'.'+l,lead:l===0});
+    if(sw){sws.push({x:cx,y:y+130});for(let l=0;l<4;l++)edges.push({a:X(g,l),b:'s'+g,kind:'nv'})}
+    else[[1,0],[2,0],[3,1]].forEach(p=>edges.push({a:X(g,p[0]),b:X(g,p[1]),kind:'nv'}));
+  }
+  const PG=[-1,0,0,1];
+  [1,2,3].forEach(g=>edges.push({a:X(g,0),b:X(PG[g],0),kind:'net'}));
+  const loc=(pairs,op,ph,title,desc)=>steps.push({ph,title,desc,xf:[0,1,2,3].flatMap(g=>pairs.map(p=>({a:X(g,p[0]),b:X(g,p[1]),ch:[0],op})))});
+  const crs=(pairs,op,ph,title,desc)=>steps.push({ph,title,desc,xf:pairs.map(p=>({a:X(p[0],0),b:X(p[1],0),ch:[0],op}))});
+  if(sw)steps.push({ph:0,title:'交换机在网内聚合',desc:'组内 GPU 把数据发进 NVSwitch，交换机在网络内直接做加法，只用 1 步就把组内结果交给 leader（NVLink SHARP 卸载）。',
+    xf:[0,1,2,3].flatMap(g=>[1,2,3].map(l=>({a:X(g,l),b:X(g,0),via:'s'+g,ch:[0],op:'add'})))});
+  else{
+    loc([[3,1]],'add',0,'组内汇聚 1/2','每个组里最深的 GPU 先把数据发给父节点。四个组同时进行。');
+    loc([[1,0],[2,0]],'add',0,'组内汇聚 2/2','组内汇到本组的 leader（第 0 号）。');
+  }
+  crs([[3,1]],'add',1,'组间向上 1/2','第二层：只有 4 个 leader 走 RDMA 组成一棵树。先由最深的组 3 发给组 1。');
+  crs([[1,0],[2,0]],'add',1,'组间向上 2/2','组 1、组 2 的结果汇到根 leader。此时根 leader 拿到全部 16 个 GPU 的和。');
+  crs([[0,1],[0,2]],'set',2,'组间向下 1/2','根 leader 把全局结果发回组 1、组 2。');
+  crs([[1,3]],'set',2,'组间向下 2/2','组 1 再发给组 3。四个 leader 都有了全局结果。');
+  if(sw)steps.push({ph:3,title:'交换机多播',desc:'leader 把结果发进 NVSwitch，交换机的硬件多播一步送达组内所有 GPU。',
+    xf:[0,1,2,3].flatMap(g=>[1,2,3].map(l=>({a:X(g,0),b:X(g,l),via:'s'+g,ch:[0],op:'set'})))});
+  else{
+    loc([[0,1],[0,2]],'set',3,'组内广播 1/2','leader 把结果发给组内两个子节点。');
+    loc([[1,3]],'set',3,'组内广播 2/2','最后一个 GPU 拿到结果。');
+  }
+  return simulate({title:'CollTree：先在组内聚合，再让各组的 leader 组一棵树',
+    lead:'16 个 GPU 分成 4 组，每组是一个节点或一个 NVLink 域。<b>第一层</b>在组内聚合；<b>第二层</b>每组出一个 leader，通过 RDMA 在组间组一棵树。两层可以流水，跨节点只有 O(log 组数) 步。用下方开关对比组内“GPU 自己做加法”和“交换机做加法”。',
+    nodes,edges,groups,sws,steps,nc:1,R:18,
+    phases:[{name:'组内汇聚',c:3},{name:'组间 · 上',c:2},{name:'组间 · 下',c:1},{name:'组内广播',c:4}],
+    intro:'4 个组 × 4 个 GPU。黄边的是每组的 leader（第 0 号）。每个 GPU 只有自己的数据。',
+    outro:'全部 16 个 GPU 都拿到了完整结果。',
+    facts:[['跨节点步数','O(log 组数)：本例 4 个组，向上 2 + 向下 2 = 4 步'],
+      ['组内',sw?'交换机在网内聚合 + 硬件多播，各只要 <b>1 步</b>（NVLink SHARP，需要硬件、固件和插件支持）':'本地树，由 GPU 自己做加法：汇聚 2 步 + 广播 2 步'],
+      ['组间','每组一个 leader，经 RDMA 组成第二层树；InfiniBand 上跨组这棵树可由 NCCL SHARP 插件卸载'],
+      ['取舍','消息特别大时 Ring 或 PAT 可能更优；跨节点延迟占主导时 CollTree 更占优']],
+    quote:'书中：CollTree 是两层树。每个节点（或 NVSwitch 岛）内有一棵本地树，每组的 leader 再通过 RDMA 加入第二层树；两层流水，跨节点步数 O(log N)。<cite>'+BOOK+'</cite>',
+    warn:'<b>简化说明：</b>书中把组内树写成“reduce-scatter 再 broadcast”。为了让每个 GPU 的贡献看得清，这里画成“汇到 leader 再广播”；组内具体怎么切块以 NCCL 实现为准。',
+    opts:h=>seg(h,'组内聚合方式 ',[[false,'GPU 本地树'],[true,'交换机卸载（NVLink SHARP）']],OPT.sw,v=>{OPT.sw=v;load(collTreePage(v))}),
+    pipe:()=>{
+      const L=['组内汇聚','组间树','组内广播'];let h='<div class="tlabel" style="margin-top:14px">两层流水（示意：每块每层占 1 格，不是实测）。把消息切成 4 块：不流水要 12 格，流水只要 6 格</div><div class="tl" style="grid-template-columns:auto repeat(6,1fr)">';
+      L.forEach((n,r)=>{h+='<div class="lane">'+n+'</div>';for(let s=0;s<6;s++){const k=s-r;h+=k>=0&&k<4?'<div class="cell lit" style="--lc:var(--c'+[3,2,4][r]+');cursor:default;animation:fadeup .5s both;animation-delay:'+(s*.15)+'s" data-tip="块 '+k+' 在“'+n+'”层">'+'<span style="font-size:11px;color:#fff;display:block;text-align:center;line-height:22px">'+k+'</span></div>':'<div class="cell empty"></div>'}});
+      return h+'</div>';
+    }});
+}
+function collNetPage(){
+  const nodes=[],edges=[],groups=[],steps=[],G=6,X=(g,l)=>g*4+l;
+  const LP=[[85,80],[225,80],[225,170],[85,170]];
+  for(let g=0;g<G;g++){
+    const x=15+(g%3)*330,y=10+(g>=3?262:0);
+    groups.push({x,y,w:310,h:240,name:'组 '+g+'（高速互联域）'});
+    for(let l=0;l<4;l++)nodes.push({x:x+LP[l][0],y:y+LP[l][1],label:g+'.'+l,lead:l===0});
+    for(let l=0;l<4;l++)edges.push({a:X(g,l),b:X(g,(l+1)%4),kind:'nv'});
+    edges.push({a:X(g,0),b:X(g,2),kind:'nv'});
+  }
+  const PG=[-1,0,1,0,1,4],DG=[0,1,2,1,2,3],ALL=[0,1,2,3],GR=[0,1,2,3,4,5];
+  const bow=(a,b,dx,dy)=>{const A=nodes[X(a,0)],B=nodes[X(b,0)];return [(A.x+B.x)/2+dx,(A.y+B.y)/2+dy]};
+  [[1,0,0,-80],[2,1,0,-80],[3,0,-130,0],[4,1,-130,0],[5,4,0,-80]].forEach(e=>edges.push({a:X(e[0],0),b:X(e[1],0),kind:'net',ctl:bow(e[0],e[1],e[2],e[3])}));
+  for(let s=0;s<3;s++)steps.push({ph:0,title:'组内 reduce-scatter '+(s+1)+'/3',desc:'每个组内部用 Ring 先做 reduce-scatter：6 个组同时、各自在高速互联上进行，网络上没有任何流量。',
+    xf:GR.flatMap(g=>ALL.map(l=>({a:X(g,l),b:X(g,(l+1)%4),ch:[((l-s)%4+4)%4],op:'add'})))});
+  steps.push({ph:0,title:'组内汇到 leader',desc:'组内每个 GPU 手里有一块已加完的组内结果，一起交给 leader（第 0 号）。leader 现在持有整个组的和。',
+    xf:GR.flatMap(g=>[1,2,3].map(l=>({a:X(g,l),b:X(g,0),ch:[(l+1)%4],op:'set'})))});
+  const up=(l,ph,t,d)=>steps.push({ph,title:t,desc:d,xf:ALL.concat(4,5).filter(g=>DG[g]===4-l).map(g=>({a:X(g,0),b:X(PG[g],0),ch:ALL,op:'add'}))});
+  const dn=(l,t,d)=>steps.push({ph:2,title:t,desc:d,xf:[1,2,3,4,5].filter(g=>DG[g]===l).map(g=>({a:X(PG[g],0),b:X(g,0),ch:ALL,op:'set'}))});
+  [1,2,3].forEach(l=>up(l,1,'组间向上 '+l+'/3','只有 6 个 leader 在跨组网络上通信（虚线），其余 18 个 GPU 不碰网络。'));
+  [1,2,3].forEach(l=>dn(l,'组间向下 '+l+'/3','全局结果沿第二层树向下送回各组的 leader。'));
+  steps.push({ph:3,title:'组内分发',desc:'每个 leader 在组内高速互联上把全局结果发给其余 3 个 GPU。',
+    xf:GR.flatMap(g=>[1,2,3].map(l=>({a:X(g,0),b:X(g,l),ch:ALL,op:'set'})))});
+  return simulate({title:'CollNet：按高速互联分组，每组只派一个 leader 上网',
+    lead:'24 个 GPU 分成 6 组。组内走高速互联，用 Ring 聚合；每组一个 leader 加入跨组的第二层树，把<b>跨组网络上的轮数压到最少</b>。在超大多节点集群里，这样能降低网络负载。',
+    nodes,edges,groups,steps,nc:4,R:17,
+    phases:[{name:'组内聚合',c:3},{name:'组间 · 上',c:2},{name:'组间 · 下',c:1},{name:'组内分发',c:4}],
+    intro:'6 个组 × 4 个 GPU，每个 GPU 把数据切成 4 块。黄边的是各组 leader，虚线是跨组网络。',
+    outro:'全部 24 个 GPU 的每个块都累加了全部 24 个 GPU。',
+    facts:[['跨组轮数','树深 3：向上 3 + 向下 3 = <b>6 步</b>。同样 24 个 GPU 的全局 Ring 要 2×(24−1) = 46 步，每一步都含跨组链路'],
+      ['上网的 GPU','只有 6 个 leader，其余 18 个只用组内互联'],
+      ['组内','先 Ring reduce-scatter，再汇到 leader；书中写作“组内用 Ring 或本地树聚合”'],
+      ['适合','非常大的多节点集群，网络是瓶颈的时候']],
+    quote:'书中：CollNet（“树并行”）先按快速互联分组，组内用 Ring 或本地树聚合，每组一个 leader 加入跨组的第二层树，使跨组轮数最少，降低超大多节点集群的网络负载。<cite>'+BOOK+'</cite>',
+    warn:'<b>说明：</b>书中对 CollTree 与 CollNet 的描述很接近（都是组内聚合加 leader 跨组树）。本页用不同的组内做法来区分：CollTree 画本地树，CollNet 画 Ring。NCCL 内部的实际实现以源码和版本为准。'});
+}
+const TABS=[['绕','Ring','沿环接力'],['汇','Tree','逐层汇总'],['分','CollTree','两层树'],['跨','CollNet','只派 leader'],['流','PAT','切块流水'],['选','怎么选','按场景挑']];
+const PAGES=[()=>ringModel(OPT.ringN),treePage,()=>collTreePage(OPT.sw),collNetPage,()=>patPage(OPT.patK)];
+let cur=-1;
+const tabsEl=$('#tabs');
+TABS.forEach((t,i)=>{
+  const b=document.createElement('button');b.className='tab';b.type='button';b.setAttribute('role','tab');b.dataset.i=i;
+  b.innerHTML='<span class="stn">'+(i+1)+'</span><span class="verb">'+t[0]+'</span><span class="cap"><b>'+t[1]+'</b><br>'+t[2]+'</span>';
+  b.onclick=()=>show(i);tabsEl.appendChild(b);
+});
+tabsEl.addEventListener('keydown',e=>{
+  if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;
+  const n=(cur+(e.key==='ArrowRight'?1:5))%6;show(n);$$('.tab')[n].focus();
+});
+function show(i,instant){
+  if(i===cur)return;
+  const st=$('#stage'),go=()=>{
+    cur=i;
+    $$('.tab').forEach((b,k)=>{b.setAttribute('aria-selected',k===i);b.classList.toggle('past',k<i);b.tabIndex=k===i?0:-1});
+    $('#lit').style.width='calc(100% * '+i+' / 6)';
+    $('#pAlg').hidden=i>4;$('#pPick').hidden=i<5;
+    setPlay(false);
+    if(i<5)load(PAGES[i]());else pickInit();
+    st.classList.remove('out');st.classList.remove('swap');void st.offsetWidth;if(!RM)st.classList.add('swap');
+    history.replaceState(null,'','#'+(i+1));
+  };
+  if(RM||instant||cur<0)go();else{st.classList.add('out');setTimeout(go,170)}
+}
+const hc=$('#hero'),hx=hc.getContext('2d');let HC={};
+function hcol(){HC={ink:css('--ink'),axis:css('--axis'),acc:css('--accent'),c1:css('--c1'),c2:css('--c2'),good:css('--good'),sur:css('--surface'),mut:css('--muted')}}
+function hsize(){const r=hc.getBoundingClientRect(),d=devicePixelRatio||1;hc.width=Math.round(r.width*d);hc.height=Math.round(r.height*d);hx.setTransform(d,0,0,d,0,0);hc.w=r.width;hc.h=r.height}
+function hdraw(t){
+  const w=hc.w,h=hc.h,cx=w/2,cy=h/2-4,rx=Math.min(w*.34,190),ry=Math.min(h*.33,98),n=8;
+  hx.clearRect(0,0,w,h);
+  const P=i=>{const a=-Math.PI/2+2*Math.PI*i/n;return [cx+rx*Math.cos(a),cy+ry*Math.sin(a)]};
+  const f=RM?.5:(t/1500)%1,cyc=Math.floor(t/1500)%14,col=cyc<7?HC.c2:HC.c1;
+  hx.lineWidth=2;
+  for(let i=0;i<n;i++){const a=P(i),b=P((i+1)%n);hx.strokeStyle=HC.axis;hx.beginPath();hx.moveTo(a[0],a[1]);hx.lineTo(b[0],b[1]);hx.stroke()}
+  for(let i=0;i<n;i++){
+    const a=P(i),b=P((i+1)%n),q=ease(f),x=a[0]+(b[0]-a[0])*q,y=a[1]+(b[1]-a[1])*q;
+    hx.save();hx.shadowColor=col;hx.shadowBlur=14;hx.fillStyle=col;hx.beginPath();hx.arc(x,y,5.5,0,7);hx.fill();hx.restore();
+  }
+  for(let i=0;i<n;i++){
+    const p=P(i);hx.save();hx.shadowColor=HC.acc;hx.shadowBlur=12;hx.fillStyle=HC.sur;hx.strokeStyle=HC.acc;hx.lineWidth=2;
+    hx.beginPath();hx.arc(p[0],p[1],15,0,7);hx.fill();hx.stroke();hx.restore();
+    hx.fillStyle=HC.ink;hx.font='600 12px system-ui,sans-serif';hx.textAlign='center';hx.textBaseline='middle';hx.fillText(i,p[0],p[1]);
+  }
+  hx.fillStyle=HC.mut;hx.font='12px system-ui,sans-serif';hx.fillText(cyc<7?'reduce-scatter（边收边加）':'all-gather（只复制）',cx,cy);
+}
+function hloop(t){hdraw(t);requestAnimationFrame(hloop)}
+hcol();hsize();themeHooks.push(hcol);addEventListener('resize',hsize);
+if(RM)hdraw(0);else requestAnimationFrame(hloop);
+const CH={N:64,K:8,a:5,b:400,view:'chart',mx:null,drawn:false};
+const fmtS=s=>s>=2**30?+(s/2**30).toFixed(1)+' GB':s>=2**20?+(s/2**20).toFixed(1)+' MB':s>=1024?+(s/1024).toFixed(1)+' KB':s+' B';
+const fmtT=t=>t>=1e6?+(t/1e6).toFixed(2)+' s':t>=1e3?+(t/1e3).toFixed(2)+' ms':+t.toFixed(0)+' µs';
+function tcost(S){
+  const d=Math.ceil(Math.log2(CH.N)),Bp=CH.b*1000,K=CH.K;
+  return [2*(CH.N-1)*(CH.a+S/(CH.N*Bp)),2*d*(CH.a+2*S/Bp),(2*d+K-1)*(CH.a+2*S/(K*Bp))];
+}
+const CNAME=['Ring','Tree','PAT（K='+'）'],CCOL=['--c1','--c2','--c3'];
+function cross(){
+  for(let e=3;e<9.6;e+=.02){const S=10**e,c=tcost(S);if(c[0]<c[1])return S}
+  return null;
+}
+function chartDraw(prog){
+  const cv=$('#chart');if(!cv||$('#cWrap').hidden)return;
+  const r=cv.getBoundingClientRect(),d=devicePixelRatio||1,W=r.width,H=320;
+  cv.width=Math.round(W*d);cv.height=H*d;const g=cv.getContext('2d');g.setTransform(d,0,0,d,0,0);g.clearRect(0,0,W,H);
+  const L=62,R=14,T=30,B=34,x0=3,x1=9.6;
+  let lo=1e9,hi=0;const pts=[];
+  for(let e=x0;e<=x1+1e-9;e+=.05){const c=tcost(10**e);pts.push([e,c]);c.forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v)})}
+  const y0=Math.floor(Math.log10(lo)),y1=Math.ceil(Math.log10(hi));
+  const X=e=>L+(e-x0)/(x1-x0)*(W-L-R),Y=v=>T+(1-(Math.log10(v)-y0)/(y1-y0))*(H-T-B);
+  g.font='11px system-ui,sans-serif';g.lineWidth=1;g.textBaseline='middle';
+  for(let y=y0;y<=y1;y++){g.strokeStyle=css('--grid');g.beginPath();g.moveTo(L,Y(10**y));g.lineTo(W-R,Y(10**y));g.stroke();g.fillStyle=css('--muted');g.textAlign='right';g.fillText(fmtT(10**y),L-6,Y(10**y))}
+  g.textAlign='center';
+  [1024,2**14,2**18,2**22,2**26,2**30].forEach(S=>{const xe=Math.log10(S);g.strokeStyle=css('--grid');g.beginPath();g.moveTo(X(xe),T);g.lineTo(X(xe),H-B);g.stroke();g.fillStyle=css('--muted');g.fillText(fmtS(S),X(xe),H-B+14)});
+  g.fillStyle=css('--muted');g.textAlign='right';g.fillText('消息大小 →（对数坐标）',W-R,H-6);
+  const n=Math.max(2,Math.round(pts.length*prog));
+  for(let k=0;k<3;k++){
+    g.strokeStyle=css(CCOL[k]);g.lineWidth=2.6;g.shadowColor=css(CCOL[k]);g.shadowBlur=8;g.beginPath();
+    pts.slice(0,n).forEach((p,i)=>{i?g.lineTo(X(p[0]),Y(p[1][k])):g.moveTo(X(p[0]),Y(p[1][k]))});g.stroke();g.shadowBlur=0;
+    g.fillStyle=css(CCOL[k]);g.textAlign='left';g.fillText((k<2?CNAME[k]:'PAT（K='+CH.K+'）'),L+10+k*92,T-14);
+  }
+  const cs=cross();
+  if(cs&&prog>=1){g.setLineDash([5,4]);g.strokeStyle=css('--ink2');g.beginPath();g.moveTo(X(Math.log10(cs)),T);g.lineTo(X(Math.log10(cs)),H-B);g.stroke();g.setLineDash([]);g.fillStyle=css('--ink2');g.textAlign='left';g.fillText('Ring 反超 Tree ≈ '+fmtS(cs),X(Math.log10(cs))+6,T+10)}
+  if(CH.mx!==null&&prog>=1){
+    const e=Math.max(x0,Math.min(x1,x0+(CH.mx-L)/(W-L-R)*(x1-x0))),c=tcost(10**e);
+    g.strokeStyle=css('--accent');g.beginPath();g.moveTo(X(e),T);g.lineTo(X(e),H-B);g.stroke();
+    tip.textContent=fmtS(Math.round(10**e))+'：Ring '+fmtT(c[0])+'，Tree '+fmtT(c[1])+'，PAT '+fmtT(c[2]);tip.classList.add('on');
+  }
+  const info=cs?'Tree 在约 <b>'+fmtS(cs)+'</b> 以下更快（步数少），超过后 Ring 反超（带宽项小）。':'在这组参数下，整个范围内 Tree 都不输 Ring。';
+  $('#cInfo').innerHTML=info+' PAT 把带宽项压到接近 Ring，同时保持树的步数。<cite>书中：切换点通常在几百 KB 到几 MB（脚注 39），经验规则里“小”消息可到几十 MB 量级。两处量级不同，说明都要实测。这条曲线只是示意。</cite>';
+}
+function chartTable(){
+  const rows=[1024,16384,2**18,2**22,2**26,2**30].map(S=>{const c=tcost(S),m=Math.min(...c);return '<tr><td>'+fmtS(S)+'</td>'+c.map(v=>'<td'+(v===m?' style="color:var(--good);font-weight:700"':'')+'>'+fmtT(v)+'</td>').join('')+'</tr>'});
+  $('#cTable').innerHTML='<table class="tb"><thead><tr><th>消息大小</th><th>Ring</th><th>Tree</th><th>PAT（K='+CH.K+'）</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>';
+}
+function chartAll(prog){chartDraw(prog==null?1:prog);chartTable();$('#vA').textContent=CH.a+' µs';$('#vB').textContent=CH.b+' GB/s'}
+function animChart(){const t0=performance.now();(function f(t){const p=RM?1:Math.min(1,(t-t0)/1100);chartDraw(ease(p));if(p<1)requestAnimationFrame(f)})(t0);chartTable()}
+const PICK_HTML=`<div class="stage-head"><h2>怎么选：消息大小、GPU 数量、硬件，三件事</h2><p>默认让 NCCL 自动选算法和协议。想强制某个算法，用 <code>NCCL_ALGO</code>，并且要在 <code>ncclCommInitRank()</code> 之前设置。先看耗时曲线，再用选型器按场景挑，最后对照各算法。</p></div>
+<div class="panel"><h3>示意耗时曲线 <small>每步耗时 = α + 每个 GPU 要收的字节 ÷ B。参数是示意，不是实测</small></h3>
+<div class="controls" id="cOpts"></div>
+<div class="controls"><label>每步固定开销 α <input type="range" id="rA" min="1" max="20" step="1" value="5"><b id="vA"></b></label><label>每 GPU 带宽 B <input type="range" id="rB" min="100" max="900" step="50" value="400"><b id="vB"></b></label><span class="seg" id="cView"><button type="button" data-v="chart" aria-pressed="true">曲线</button><button type="button" data-v="table" aria-pressed="false">表格</button></span></div>
+<div id="cWrap"><canvas id="chart" style="width:100%;height:320px;display:block"></canvas></div>
+<div id="cTable" hidden></div>
+<div class="quote" id="cInfo"></div>
+<div class="tlabel" style="margin-top:8px">Ring = 2(N−1)×(α + S/(N·B))　Tree = 2⌈log₂N⌉×(α + 2S/B)　PAT = (2⌈log₂N⌉+K−1)×(α + 2S/(K·B))。树的内部节点每步要收两个孩子的数据，所以带宽项里是 2S。这是和前几页动画一致的简化模型，忽略协议和拥塞。</div></div>
+<div class="two"><div class="panel" id="selP"></div><div class="panel" id="cmpP"></div></div>`;
+function cOptsRender(){
+  const h=$('#cOpts');h.innerHTML='';
+  seg(h,'GPU 数 N ',[[8,'8'],[64,'64'],[512,'512']],CH.N,v=>{CH.N=v;cOptsRender();chartAll()});
+  seg(h,'PAT 分块数 K ',[[1,'1'],[4,'4'],[8,'8'],[16,'16'],[64,'64']],CH.K,v=>{CH.K=v;cOptsRender();chartAll()});
+}
+function rangeP(i){i.style.setProperty('--p',((i.value-i.min)/(i.max-i.min)*100)+'%')}
+let pickBuilt=false;
+function pickInit(){
+  const h=$('#pPick');
+  if(!pickBuilt){
+    pickBuilt=true;h.innerHTML=PICK_HTML;cOptsRender();
+    [['#rA','a'],['#rB','b']].forEach(p=>{const i=$(p[0]);rangeP(i);i.oninput=()=>{CH[p[1]]=+i.value;rangeP(i);chartAll()}});
+    $$('#cView button').forEach(b=>b.onclick=()=>{
+      CH.view=b.dataset.v;$$('#cView button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+      $('#cWrap').hidden=CH.view!=='chart';$('#cTable').hidden=CH.view!=='table';chartAll();
+    });
+    const cv=$('#chart');
+    cv.onmousemove=e=>{CH.mx=e.clientX-cv.getBoundingClientRect().left;chartDraw(1)};
+    cv.onmouseleave=()=>{CH.mx=null;tip.classList.remove('on');chartDraw(1)};
+    themeHooks.push(()=>{if(cur===5)chartAll()});
+    addEventListener('resize',()=>{if(cur===5)chartDraw(1)});
+    selInit();cmpInit();
+  }
+  $('#vA').textContent=CH.a+' µs';$('#vB').textContent=CH.b+' GB/s';
+  requestAnimationFrame(animChart);
+  cmpAnimate();
+}
+const SEL={scale:'multi',msg:'small',hw:'none'};
+const SELOPT={scale:['规模',[['one','单节点 ≤8 GPU'],['multi','多节点'],['huge','超大多节点集群']]],msg:['消息',[['small','小消息'],['large','大消息']]],hw:['硬件',[['none','没有卸载硬件'],['nvls','NVSwitch（NVLS）'],['sharp','InfiniBand SHARP']]]};
+function decide(){
+  const {scale,msg,hw}=SEL,col='CollTree 在环境变量里对应 CollnetChain / CollnetDirect（名字以你所用版本的文档为准），还需要 SHARP 插件，通常要设 NCCL_COLLNET_ENABLE=1';
+  if(msg==='small'){
+    if(hw==='sharp'&&scale!=='one')return ['分','CollTree','小消息怕步数多。跨节点那棵树可以交给 InfiniBand SHARP 卸载，跨节点只剩 O(log 组数) 步。',col];
+    if(hw==='nvls')return ['汇','NVLSTree','小消息怕延迟。NVSwitch 的 NVLS 把域内聚合卸载（NVLink SHARP），域间仍走树。','NCCL_ALGO=NVLSTree'];
+    if(scale==='huge')return ['分','CollTree','GPU 很多时 Ring 的 2(N−1) 步太长。两层树把跨节点步数降到 O(log 组数)。',col];
+    return ['汇','Tree','小消息是延迟问题：Tree 只要 2×log₂N 步，Ring 要 2(N−1) 步。','NCCL_ALGO=Tree'];
+  }
+  if(scale==='huge')return ['跨','CollNet','大消息加上很多节点，网络负载是瓶颈。按高速互联分组，只让 leader 上网，跨组轮数最少。','CollNet 在环境变量里对应 CollnetDirect / CollnetChain（以文档为准）'];
+  return ['绕','Ring（或 PAT）','大消息是带宽问题：Ring 每条链路都满载，负载完全均衡。PAT 靠切块让树接近 Ring 的利用率，值得在实测里对比。','NCCL_ALGO=Ring　或　NCCL_ALGO=PAT'];
+}
+function selRender(){
+  const d=decide();
+  $('#pickOut').innerHTML='<div class="pickout" style="animation:fadeup .4s both"><div class="big">'+d[0]+'</div><div><p><b style="color:var(--ink);font-size:15px">'+d[1]+'</b></p><p>'+d[2]+'</p><code>'+d[3]+'</code></div></div>';
+  Object.keys(SELOPT).forEach(k=>$$('#sel-'+k+' button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===SEL[k])));
+}
+function selInit(){
+  const P=$('#selP');
+  P.innerHTML='<h3>选型器 <small>按书中的经验规则，不是 NCCL 内部的决策表</small></h3>'
+   +Object.keys(SELOPT).map(k=>'<div class="row"><span class="k">'+SELOPT[k][0]+'</span><span class="seg" id="sel-'+k+'">'+SELOPT[k][1].map(o=>'<button type="button" data-v="'+o[0]+'" aria-pressed="false">'+o[1]+'</button>').join('')+'</span></div>').join('')
+   +'<div id="pickOut"></div>'
+   +'<div class="tlabel" style="margin-top:10px">最终以实测为准：用 <code>all_reduce_perf -b 8 -e 1G -f 2 -g 8</code>（nccl-tests）扫一遍消息大小，并把硬件支持的卸载算法也放进对比。</div>'
+   +'<div class="warn">书中：对称内存加低延迟内核，在部分测试里小、中消息约 7.6×。这是书里的数字，本页没有测过，请在自己的环境里复现。</div>';
+  Object.keys(SELOPT).forEach(k=>$$('#sel-'+k+' button').forEach(b=>b.onclick=()=>{SEL[k]=b.dataset.v;selRender()}));
+  selRender();
+}
+const CMP=[['Ring',30,'--c1','沿环接力：reduce-scatter 加 all-gather','2(N−1) = 30','大消息，带宽最优','步数随 N 线性增长'],
+  ['Tree',8,'--c2','逐层汇到根，再广播','2·log₂N = 8','小消息，步数少','叶子链路闲置，大消息带宽低'],
+  ['PAT（K=4）',11,'--c3','切块，错拍进树','2·log₂N + K−1 = 11','大消息，利用率接近 Ring','额外内存与调度开销'],
+  ['CollTree · GPU 树',8,'--c4','组内树 + leader 跨组树（4 组 × 4）','4 + 4 = 8','跨节点延迟占主导','超大消息时 Ring / PAT 可能更好'],
+  ['CollTree · 交换机',6,'--c4','组内由 NVSwitch 聚合 / 多播','1 + 4 + 1 = 6','同上，组内更省步数','需要硬件、固件、插件支持'],
+  ['CollNet',9,'--accent','组内 Ring + leader 跨组树（4 组 × 4）','3 + 1 + 4 + 1 = 9','超大多节点集群，降低网络负载','组内多一次汇集和分发']];
+let cmpView='bars';
+function cmpInit(){
+  $('#cmpP').innerHTML='<h3>对照：同样 16 个 GPU 要几步 <small>示意步数，与前几页动画的调度一致</small></h3>'
+   +'<div class="controls"><span class="seg" id="cmpSeg"><button type="button" data-v="bars" aria-pressed="true">条形图</button><button type="button" data-v="table" aria-pressed="false">表格</button></span></div>'
+   +'<div id="cmpBars"></div><div id="cmpTbl" hidden></div>';
+  $('#cmpBars').innerHTML=CMP.map((r,i)=>'<div class="brow" data-tip="'+r[3]+'；'+r[4]+'"><span>'+r[0]+'</span><span class="bar"><i style="background:var('+r[2]+')"></i></span><span class="n" id="cn'+i+'">0</span></div>').join('');
+  $('#cmpTbl').innerHTML='<table class="tb"><thead><tr><th>算法</th><th>怎么走</th><th>步数</th><th>擅长</th><th>代价</th></tr></thead><tbody>'+CMP.map(r=>'<tr><td><b>'+r[0]+'</b></td><td>'+r[3]+'</td><td>'+r[4]+'</td><td>'+r[5]+'</td><td>'+r[6]+'</td></tr>').join('')+'</tbody></table>';
+  $$('#cmpSeg button').forEach(b=>b.onclick=()=>{
+    $$('#cmpSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+    $('#cmpBars').hidden=b.dataset.v!=='bars';$('#cmpTbl').hidden=b.dataset.v!=='table';
+    if(b.dataset.v==='bars')cmpAnimate();
+  });
+}
+function cmpAnimate(){
+  $$('#cmpBars .bar i').forEach(i=>{i.style.width='0'});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    $$('#cmpBars .bar i').forEach((i,k)=>{i.style.width=(CMP[k][1]/30*100)+'%';countTo($('#cn'+k),CMP[k][1],null,900)});
+  }));
+}
+const TR=[
+ {s:'小消息的 all-reduce 特别慢',c:[
+  {t:'GPU 很多，却在用 Ring',why:'Ring 的步数是 2(N−1)，64 个 GPU 就是 126 步，每步都有固定开销。小消息的传输时间很短，全被步数淹没。',
+   u:'步（示意：每步开销相同）',b:[['Ring：126 步',126,1]],a:[['Tree：12 步',12,2]],
+   cmd:'nsys profile -o prof python train.py\n# 在 Nsight Systems 里看 NCCL kernel 的名字，名字里带算法和协议（如 RING_LL）\nNCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=TUNING python train.py',
+   fix:'先让 NCCL 自动选；确认它选了 Ring 且实测偏慢，再在 <code>ncclCommInitRank()</code> 之前设 <code>NCCL_ALGO=Tree</code>（有 NVSwitch 时试 <code>NVLSTree</code>），用 nccl-tests 对比。'},
+  {t:'消息太碎，每次只传几 KB',why:'每次集合通信都要付启动开销。一百次小 all-reduce 就付一百次，合并成几次大的就只付几次。',
+   u:'次（示意：每次启动开销相同）',b:[['100 次 all-reduce',100,1]],a:[['合并成 4 次',4,3]],
+   cmd:'# 看一个迭代里有多少次 ncclAllReduce、各自多大\nnsys profile --trace=cuda,nvtx -o prof python train.py',
+   fix:'DDP 里调大 <code>bucket_cap_mb</code>，或在框架里把小梯度合并成大桶再通信。这样也让消息落在 Ring 更占优的区间。'}]},
+ {s:'大消息的带宽上不去',c:[
+  {t:'大消息被分给了 Tree',why:'Tree 的叶子 GPU 只发一次，大部分链路闲着。按本页的简化模型，N=64 时未流水的树带宽项约是 Ring 的 12 倍。',
+   u:'带宽项（示意单位，未流水的树，N=64）',b:[['Tree：24',24,2]],a:[['Ring：约 2',2,1]],
+   cmd:'all_reduce_perf -b 8M -e 1G -f 2 -g 8   # nccl-tests，看 busbw 随消息大小的变化\nNCCL_ALGO=Ring all_reduce_perf -b 8M -e 1G -f 2 -g 8',
+   fix:'大消息用 <code>NCCL_ALGO=Ring</code>，或试 <code>PAT</code>（切块后利用率接近 Ring）。注意真实的树是流水的，差距比这个简化模型小，以实测为准。'},
+  {t:'拓扑被降级，走了更慢的路径',why:'NVLink 链路异常或 GPU 间通信被迫经过 PCIe / CPU，所有算法的带宽上限都被拉低，换算法救不了。',
+   u:'相对带宽（比例仅作示意，取决于机型）',b:[['绕路的链路',4,2]],a:[['链路正常',2,1]],
+   cmd:'nvidia-smi topo -m\nnvidia-smi nvlink -s\nNCCL_DEBUG=INFO NCCL_TOPO_DUMP_FILE=topo.xml python train.py',
+   fix:'先修硬件 / 驱动 / 调度（让同一任务的 GPU 落在同一个 NVLink 域），再谈选算法。'}]},
+ {s:'设了 NCCL_ALGO 没有效果',c:[
+  {t:'环境变量设得太晚',why:'NCCL 在建通信器时读取环境变量。已经调用过 <code>ncclCommInitRank()</code>（PyTorch 里是 <code>init_process_group</code>）再设就晚了。',
+   u:'事件顺序（示意）',b:[['初始化已读环境',2,3],['这时才设 NCCL_ALGO',2,2],['仍走原算法',6,1]],a:[['先设变量',1,4],['初始化读到 Tree',2,3],['走 Tree',3,2]],
+   cmd:'NCCL_DEBUG=INFO python train.py 2>&1 | grep -i "NCCL_ALGO"   # INFO 日志里应出现 set by environment 之类的字样（版本不同略有差异）',
+   fix:'在启动脚本里 <code>export NCCL_ALGO=...</code>，或在 Python 里 <code>import</code> 之后、<code>init_process_group</code> 之前写 <code>os.environ</code>。'},
+  {t:'各个 rank 的设置不一致',why:'只在部分节点或进程里设了变量，同一次集合通信里各 rank 的行为对不上，容易出现卡住或异常。',
+   u:'事件顺序（示意）',b:[['部分 rank 设了',4,1],['集合通信对不上，卡住或异常',8,2]],a:[['启动器统一导出',1,4],['所有 rank 同一算法',4,3]],
+   cmd:'torchrun ... env | grep NCCL   # 在每个节点上核对环境变量\nNCCL_DEBUG=INFO python train.py 2>&1 | grep -i "set by environment"',
+   fix:'在作业启动器（torchrun / Slurm / K8s）里统一注入，不要手工在个别节点上设置。'}]},
+ {s:'NVLS / SHARP 卸载没有生效',c:[
+  {t:'硬件、固件、插件缺一不可',why:'书中强调：SHARP（InfiniBand）和 NVLS（NVSwitch）卸载需要支持的硬件、固件和插件。缺任何一项，NCCL 都会退回软件算法。',
+   u:'事件顺序（示意）',b:[['缺固件或插件',3,2],['退回软件算法',6,1]],a:[['硬件 + 固件 + 插件齐全',3,4],['卸载生效',3,3]],
+   cmd:'NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=INIT,ENV python train.py 2>&1 | grep -iE "nvls|collnet|sharp"',
+   fix:'升级固件和驱动，安装 SHARP 插件；确认机型支持后再设 <code>NCCL_ALGO=NVLSTree</code> 等。'},
+  {t:'容器里没带插件或库',why:'宿主机支持，但容器镜像里没有 SHARP 插件或库路径不对，NCCL 找不到插件。',
+   u:'事件顺序（示意）',b:[['容器缺插件',3,2],['找不到，退回软件算法',6,1]],a:[['挂载插件、设好库路径',3,4],['卸载生效',3,3]],
+   cmd:'ldconfig -p | grep -i sharp\necho $LD_LIBRARY_PATH',
+   fix:'在镜像里装好插件，或把宿主机的库目录挂进容器并加入 <code>LD_LIBRARY_PATH</code>。'}]}
+];
+const TS={s:0,c:-1};
+function troubleInit(){
+  $('#trouble').innerHTML='<h3>排查台 <small>选症状 → 选可能的原因 → 看改前 / 改后 → 怎么确认 → 怎么改</small></h3><div class="chips" id="trS"></div><div class="chips" id="trC"></div><div id="trBody"></div>';
+  trRender();
+}
+function trRender(){
+  const S=$('#trS');S.innerHTML='';
+  TR.forEach((x,i)=>{const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=x.s;b.setAttribute('aria-pressed',i===TS.s);b.onclick=()=>{TS.s=i;TS.c=-1;trRender()};S.appendChild(b)});
+  const C=$('#trC');C.innerHTML='<span class="tlabel" style="align-self:center;margin:0">可能的原因：</span>';
+  TR[TS.s].c.forEach((x,j)=>{const b=document.createElement('button');b.type='button';b.className='btn';b.textContent=x.t;b.setAttribute('aria-pressed',j===TS.c);b.onclick=()=>{TS.c=j;trRender()};C.appendChild(b)});
+  const B=$('#trBody');
+  if(TS.c<0){B.innerHTML='<p class="tlabel" style="margin:6px 0 0">选一个原因，看改前和改后的时间线、确认命令和改法。</p>';return}
+  const x=TR[TS.s].c[TS.c],sum=a=>a.reduce((s,r)=>s+r[1],0),sc=Math.max(sum(x.b),sum(x.a));
+  const row=(arr,delay)=>'<div class="tlr"><div class="tlr-in" style="transition-delay:'+delay+'s">'+arr.map(r=>'<span style="flex:0 0 '+(r[1]/sc*100)+'%;background:var(--c'+r[2]+')" data-tip="'+r[0]+'">'+r[0]+'</span>').join('')+'</div></div>';
+  B.innerHTML='<p style="margin:10px 0">'+x.why+'</p><div class="tlabel">改前　<small>（'+x.u+'）</small></div>'+row(x.b,0)+'<div class="tlabel" style="margin-top:8px">改后</div>'+row(x.a,.7)
+   +'<div class="two" style="margin-top:14px"><div><div class="tlabel">怎么确认</div><pre class="cmd" id="trCmd"></pre></div><div><div class="tlabel">怎么改</div><p style="margin:0;font-size:13px">'+x.fix+'</p></div></div>';
+  $('#trCmd').textContent=x.cmd;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>$$('#trBody .tlr-in').forEach(e=>e.classList.add('go'))));
+}
+themeHooks.push(()=>{if(RM)hdraw(0)});
+troubleInit();
+show(Math.min(6,Math.max(1,parseInt(location.hash.slice(1))||1))-1,true);
+</script>
+</body>
+</html>

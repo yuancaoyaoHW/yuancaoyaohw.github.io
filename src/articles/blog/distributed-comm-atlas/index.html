@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分布式通信知识地图：NCCL 算法、SHARP 与 NIXL</title>
+<style>
+:where(.article-body, .interactive-body) .comm-atlas {
+  max-width: 1280px; margin: 0 auto; padding: 12px 24px 64px;
+  color: var(--a-fg); font-size: 16px; line-height: 1.85;
+}
+.comm-atlas h1 { color: var(--a-fg-strong); font-size: clamp(27px, 3vw, 38px); line-height: 1.4; margin: 8px 0 16px; }
+.comm-atlas h2 { color: var(--a-fg-strong); font-size: 23px; margin: 0 0 14px; }
+.comm-atlas p { margin: 0 0 16px; }
+.comm-atlas .lead, .comm-atlas .hint, .comm-atlas figcaption { color: var(--a-fg-muted); }
+.comm-atlas .lead { max-width: 960px; font-size: 17px; }
+.comm-atlas .actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 22px 0; }
+.comm-atlas .actions a { display: inline-flex; padding: 9px 16px; border: 1px solid var(--a-line); border-radius: 8px; color: var(--a-fg-strong); text-decoration: none; font-size: 14px; }
+.comm-atlas .actions .primary { background: var(--a-accent); border-color: var(--a-accent); color: var(--a-on-solid); font-weight: 600; }
+.comm-atlas .actions a:hover { border-color: var(--a-accent); }
+.comm-atlas .viewer { border: 1px solid var(--a-line); border-radius: 12px; overflow: hidden; margin: 0 0 32px; background: var(--a-surface); }
+.comm-atlas .viewer iframe { display: block; width: 100%; height: min(900px, 88dvh); min-height: 640px; border: 0; }
+.comm-atlas .viewer .hint { font-size: 13px; padding: 12px 18px; margin: 0; }
+.comm-atlas .route-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0 0 32px; }
+.comm-atlas .route { padding: 20px; background: var(--a-surface); border: 1px solid var(--a-line); border-radius: 10px; }
+.comm-atlas .route strong { display: block; color: var(--a-fg-strong); margin-bottom: 8px; }
+.comm-atlas .route p { font-size: 14px; color: var(--a-fg-muted); margin-bottom: 12px; }
+.comm-atlas .route a { color: var(--a-accent); font-size: 14px; }
+.comm-atlas .scope { border-left: 3px solid var(--a-blue); background: var(--a-blue-bg); padding: 18px 22px; margin-bottom: 30px; border-radius: 0 8px 8px 0; }
+.comm-atlas .scope p:last-child { margin-bottom: 0; }
+.comm-atlas .overview { margin: 0; }
+.comm-atlas .overview img { display: block; width: 100%; height: auto; border: 1px solid var(--a-line); border-radius: 10px; }
+.comm-atlas figcaption { font-size: 13px; margin-top: 10px; }
+@media (max-width: 860px) { .comm-atlas .route-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .comm-atlas { padding: 8px 16px 40px; }
+  .comm-atlas .route-grid { grid-template-columns: 1fr; }
+  .comm-atlas .viewer iframe { min-height: 600px; }
+}
+</style>
+</head>
+<body>
+<div class="comm-atlas">
+  <h1>分布式通信知识地图：NCCL 算法、SHARP 与 NIXL</h1>
+  <p class="lead">这张图把《AI系统工程》第四章整理成一条阅读路线：先理解每种通信原语的结果，再看训练怎样产生与隐藏通信，沿拓扑找到实际数据路径，最后比较 NCCL 算法、硬件卸载与解耦推理的代价。整图按六个主题排列，阅读版提供 30 个入口，可以直接进入某一节。</p>
+  <div class="actions">
+    <a class="primary" href="/demos/distributed-comm-atlas/" target="_blank" rel="noopener">打开完整知识地图 ↗</a>
+    <a href="/demos/distributed-comm-atlas/#46-ring" target="_blank" rel="noopener">从 4.6 Ring 逐轮详解开始</a>
+    <a href="/demos/distributed-comm-atlas/assets/atlas.svg" download>下载完整 SVG</a>
+  </div>
+
+  <section class="viewer" aria-label="第四章分布式通信知识地图阅读器">
+    <iframe src="/demos/distributed-comm-atlas/" title="第四章分布式通信知识地图：六组章节导航与分区阅读" loading="lazy"></iframe>
+    <p class="hint">选择章节后可上下滚动，＋ / − 调整大小；“整图”查看各区位置。内容较多，建议在新标签页中打开完整阅读器。</p>
+  </section>
+
+  <h2>按问题进入六个阅读区</h2>
+  <div class="route-grid">
+    <article class="route"><strong>01 / 通信基础</strong><p>AllReduce、ReduceScatter、AllGather 各让 rank 得到什么；异步重叠、软件栈与物理互联如何区分。</p><a href="/demos/distributed-comm-atlas/#primitives" target="_blank" rel="noopener">阅读通信原语 →</a></article>
+    <article class="route"><strong>02 / 训练优化</strong><p>4.1–4.3 与 4.7：隐藏等待、减少同步和传输、检查真实重叠，理解 DP / DDP 的职责。</p><a href="/demos/distributed-comm-atlas/#41" target="_blank" rel="noopener">阅读计算与通信重叠 →</a></article>
+    <article class="route"><strong>03 / 路径与运行时</strong><p>4.4、4.5、4.8：Magnum IO、多节点连通性、NVLink / RDMA、拓扑放置与通信器生命周期。</p><a href="/demos/distributed-comm-atlas/#connectivity" target="_blank" rel="noopener">阅读多节点通路检查 →</a></article>
+    <article class="route"><strong>04 / 算法与硬件卸载</strong><p>4.6A–F 逐轮展开 Ring、Tree、分层、卸载、PAT 与成本模型，旁边衔接 SHARP 和持久缓冲区。</p><a href="/demos/distributed-comm-atlas/#46" target="_blank" rel="noopener">阅读 NCCL 算法概览 →</a></article>
+    <article class="route"><strong>05 / 推理与端到端验收</strong><p>Dynamo 架构、NIXL 请求生命周期与 KV 成本并排对照，再用吞吐、尾延迟和收敛验收收益。</p><a href="/demos/distributed-comm-atlas/#dynamo" target="_blank" rel="noopener">阅读 Dynamo / NIXL 全景 →</a></article>
+    <article class="route"><strong>06 / 工程速查与复习</strong><p>从现象回到控制项、支持条件和证据；校准原文示例与实际实现，并接上已有章节动画。</p><a href="/demos/distributed-comm-atlas/#environment" target="_blank" rel="noopener">阅读工程速查 →</a></article>
+  </div>
+
+  <section class="scope">
+    <h2>4.6 的展开方式</h2>
+    <p>Ring 用 4 rank × 4 块的具体数值展示 3 轮 ReduceScatter 和 3 轮 AllGather；Tree 展示 8 rank 的归约、广播及互补双树；分层图分别记录每卡和整个节点的流量。后续三张卡区分 CollTree、CollNet、NVLS 的含义，说明 PAT 的算子与版本边界，并用 α–B 成本模型理解小消息和大消息的差别。</p>
+    <p>图中推导、原文报告与工程补充已注明口径。数值示例用于解释机制，未在本机运行 GPU 通信性能测试。出处与校准见 <a href="/demos/distributed-comm-atlas/sources.html" target="_blank" rel="noopener">阅读说明</a>；要动态观察时间线，可继续看 <a href="/blog/distributed-comm-tuning/">分布式通信调优动画</a>。</p>
+  </section>
+
+  <figure class="overview">
+    <a href="/demos/distributed-comm-atlas/assets/atlas.svg" target="_blank" rel="noopener"><img src="/demos/distributed-comm-atlas/assets/overview.webp" width="1200" height="1760" loading="lazy" decoding="async" alt="第四章分布式通信知识地图总览，按通信基础、训练优化、路径、算法、推理和工程速查六区排列"></a>
+    <figcaption>完整画布总览。点击打开矢量图；逐节阅读请使用上方阅读器。</figcaption>
+  </figure>
+</div>
+</body>
+</html>
