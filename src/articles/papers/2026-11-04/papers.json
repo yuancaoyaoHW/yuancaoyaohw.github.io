@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-04",
+  "title": "2026-11-04 论文精选",
+  "lede": "今日主题是服务的成本与稳定性：从 RL 权重同步的流式转换、KV 驱逐方向与 prefill 公平调度，到坏状态自锁的缓存相变，全在拆解同一笔账——长上下文推理的时间到底花在哪。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 1112
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "5 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "5 篇推荐",
+      "papers": [
+        {
+          "title": "When Shards Fly: Cross-Tensor In-Flight Conversion for Low-Latency, Low-Memory Weight Updates in Disaggregated RL",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-03",
+          "authors": "Jiayu Xiao, Ye Wang, Zhi Zhang, Jiarui Guo, Kan Liu, Tao Lan, Minchen Yu",
+          "institutions": "香港中文大学（深圳）, 阿里巴巴集团",
+          "abstract": "分离式 LLM 强化学习把训练池与 rollout 池拆开，但每一轮策略更新都要在两者之间反复同步权重。现有系统靠分片投递与副本转发降低通信量，却仍保留独立的格式转换 pass 和暂存缓冲，在同步更新时额外付出延迟与显存。ShardFly 把可复用的传输规划与流式 GPU 执行结合，做原地权重更新：Planner 将原生分片映射、量化依赖与副本路由编译成跨张量调度，只为已调度的传输预留 payload 缓冲；Executor 用单个常驻传输 kernel 执行每个 rank 的调度，把内存布局转换、量化、GPU 主动通信与目的端写入融合在一起，并在副本之间转发已转换的字节。配置稳定时规划与通信状态被复用，更新切换时整体替换以配合 rollout 扩缩。",
+          "contributions": [
+            "把权重同步中的内存布局转换、量化、GPU 主动通信融合进单个常驻传输 kernel，消除独立的转换 pass 与中间暂存缓冲。",
+            "提出跨张量调度：将分片映射、量化依赖与副本路由统一编译，只为已调度的传输预留 payload 缓冲。",
+            "支持规划与通信状态跨更新复用，并能在 rollout 扩缩时整体替换调度。"
+          ],
+          "conclusions": [
+            "在最多 32 张 H20、五个模型上，BF16 全量权重更新相对 veRL NCCL、Awex、veRL NIXL、WeightBridge 四个基线取得 1.26–27.92 倍加速。",
+            "端到端 Qwen3-30B-A3B GRPO 在四种 rollout 配置下，response-token 吞吐比 veRL NCCL 提升 5.49–6.71%。"
+          ],
+          "experiments": [
+            "32 卡 H20，五个模型，四种基线，全量 BF16 权重更新加速 1.26–27.92 倍。",
+            "Qwen3-30B-A3B GRPO 端到端吞吐 +5.49–6.71%（对比 veRL NCCL）。",
+            "只为已调度传输预留 payload 缓冲，避免为全部权重常驻暂存区，压低同步更新的显存峰值。"
+          ],
+          "significance": "把 RL 权重同步从单纯的搬运问题重构为编译调度加流式转换的问题，直接压缩分离式 RL 的同步关键路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.00646",
+          "pdfUrl": "https://arxiv.org/pdf/2611.00646.pdf",
+          "index": 1,
+          "takeaway": "权重同步的瓶颈不是带宽而是转换 pass 与暂存缓冲，融进一个常驻传输 kernel 就能拿到一个数量级的加速。",
+          "keyExperiment": "32 张 H20 上 BF16 全量更新相对四个基线 1.26–27.92 倍加速，Qwen3-30B-A3B GRPO 端到端吞吐提升 5.49–6.71%。"
+        },
+        {
+          "title": "When Cache Pressure Becomes a Trap: Metastability in Agent Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-03",
+          "authors": "Chengzhi Lu, Boxi Zhou, Yanying Lin, Dmitrii Ustiugov",
+          "institutions": "南洋理工大学, 哈佛大学",
+          "abstract": "Agent 会反复把不断增长的会话发给模型，前缀复用因此成为服务效率的核心。本文指出一次短暂的流量尖峰就能破坏这种复用，并在 prefill-decode（PD）分离引擎中触发亚稳态故障：到达率回落到引擎此前本可承受的水平后，服务依旧劣化。在 SGLang 上，一次十分钟的尖峰使随后一小时的 goodput 下降约 88%，移除残留的突发会话后服务在数分钟内恢复。维持机制是种群与缓存之间的正反馈：变慢的调用延长会话、放大其聚合上下文即工作集，由此产生的缓存未命中增加重算、进一步推迟请求离开。作者用流体模型给出该反馈发生的资源条件，并据此构建 Basin：为每个会话分配固定优先级、按预测峰值上下文预留自适应准入预算、用空闲 decode 显存扩展缓存并丢弃超量需求。",
+          "contributions": [
+            "首次识别并刻画 PD 分离引擎中 agent 服务的亚稳态故障——负载恢复后服务不自愈。",
+            "用流体模型解释种群—缓存正反馈，说明缓存容量、工具耗时与基础负载如何影响脆弱性，并在 36 个模拟部署中标记出全部 17 个 cache-first 案例。",
+            "提出 Basin：会话优先级、按预测峰值上下文的准入预算、空闲 decode 显存扩缓存与超量需求丢弃协同设计。"
+          ],
+          "conclusions": [
+            "真实 H200 1P3D 部署（含长上下文 SWE-bench Pro）突发下，原型达到 Continuum 的 1.20–1.70 倍、单独 HiCache 的 2.35–3.59 倍 goodput。",
+            "模拟环境中预测驱动策略在六种突发场景下达到最强基线的 1.20–2.05 倍 goodput。"
+          ],
+          "experiments": [
+            "SGLang 上十分钟尖峰导致其后一小时 goodput 下降约 88%。",
+            "H200 1P3D 实测 goodput 为 Continuum 的 1.20–1.70 倍、HiCache 的 2.35–3.59 倍。",
+            "36 个模拟部署中模型标记出全部 17 个 cache-first 案例，模拟六场景 goodput 1.20–2.05 倍。"
+          ],
+          "significance": "把 serving 的可靠性问题从过载保护重新定义为缓存相变，并给出可操作的准入控制手段。",
+          "arxivUrl": "https://arxiv.org/abs/2611.02543",
+          "pdfUrl": "https://arxiv.org/pdf/2611.02543.pdf",
+          "index": 2,
+          "takeaway": "agent serving 的故障常不是扛不住峰值，而是峰值过后缓存塌陷让系统卡在坏状态里。",
+          "keyExperiment": "SGLang 十分钟尖峰使随后一小时 goodput 掉约 88%；Basin 在 H200 上恢复到 1.20–1.70 倍 Continuum 的 goodput。"
+        },
+        {
+          "title": "BasisKV: Value Latents for Communication and Key Routing",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-03",
+          "authors": "Lixun Zhang, Zishan Shao, Kangning Cui, Yu Liang, Fan Yang, Yiran Chen",
+          "institutions": "杜克大学, 维克森林大学",
+          "abstract": "长上下文推理的瓶颈正从算力转向不断增长的 KV cache。低秩 K/V 投影能以很小质量损失压缩 cache，但既有工作几乎都在单卡视角下优化压缩率，忽略了分布式推理——尤其是注意力按头切分的张量并行——带来的通信代价。作者给出两点观察：部署低秩 KV 压缩后，张量并行的通信成为显著成本；Value 压缩可以与输出投影结合，使同一低秩 Value 表示同时收窄 Value cache 宽度和张量并行通信量。BasisKV 据此跨各 GPU 注意力分片联合优化低秩因子以拟合完整注意力输出，而非逐分片独立拟合；压缩后的 Value cache 还被用来预测 Key 页面路由所需的部分 Key 信息，无法还原的部分由 Key 专属残差承载，只对选中页面取回原始 Key 做精确 QK 计算。",
+          "contributions": [
+            "指出张量并行下低秩 KV 压缩的真实瓶颈是 TP 通信而非显存，并让 Value 压缩与输出投影绑定以同时削减两者。",
+            "跨分片联合优化低秩因子以对齐完整注意力输出，避免逐分片拟合的偏差累积。",
+            "用压缩后的 Value 潜变量预测 Key 页面路由，只对选中页面取回原始 Key 做精确打分。"
+          ],
+          "conclusions": [
+            "在多个 LLM 家族与系统设置下取得优于现有低秩基线的质量与效率折中，8 卡张量并行推理端到端最高 1.42 倍加速。",
+            "代码已开源。"
+          ],
+          "experiments": [
+            "8 卡张量并行端到端最高 1.42 倍加速。",
+            "多个 LLM 家族上质量—效率折中优于既有低秩 KV 压缩基线。",
+            "仅对路由选中的 Key 页面取原始 Key 精确计算，降低取回与算力开销。"
+          ],
+          "significance": "把 KV 压缩从省显存重新定位为省通信，为张量并行下的长上下文推理提供了一个被忽视的角度。",
+          "arxivUrl": "https://arxiv.org/abs/2611.02583",
+          "pdfUrl": "https://arxiv.org/pdf/2611.02583.pdf",
+          "index": 3,
+          "takeaway": "在张量并行里压缩 Value 等于同时压缩 all-reduce 的字节数，这是低秩 KV 压缩被忽略的那部分收益。",
+          "keyExperiment": "8 卡张量并行端到端最高 1.42 倍加速，同时质量优于既有低秩压缩基线。"
+        },
+        {
+          "title": "Fairway: Load-Aware KV Cache Reuse for LLM Prefill Scheduling",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-03",
+          "authors": "Hamidreza Alikhani, Nazmul Takbir, Matin Khajavi, Rajat Bhattacharjya, Sangeetha Abdu Jyothi, Nikil Dutt",
+          "institutions": "加州大学欧文分校",
+          "abstract": "Agentic 工作流与 RAG 用共享上下文拼长 prompt，前缀共享让服务引擎可以复用 KV cache 跳过部分 prefill 计算。但这种复用是分级的：队列内各请求的未缓存工作量最多相差 100 倍，调度顺序因此直接决定它们的 TTFT。以 KV 复用优先的调度能给出最低的中位 TTFT，却在负载尖峰时饿死昂贵请求；先来先服务（FCFS）能压住尾延迟，却抬高整体中位 TTFT。Fairway 提出自适应复用优先的 prefill 调度器：队列短时偏向复用，随请求等待时间相对其自身 prefill 时长的比例上升而转向公平分配。它用虚拟双通道模型——在引擎等待队列之上叠加 KV 复用优先的 Fast 通道与 Fair 通道——既加速廉价复用请求又不饿死昂贵请求，且无需按工作负载调参。",
+          "contributions": [
+            "揭示 KV 复用分级造成复用优先与 FCFS 二选一的结构性矛盾，并用等待时间比自身 prefill 时长作为归一化判据。",
+            "提出虚拟双通道（Fast/Fair lane）模型，自动适配工作负载而无需逐负载调参。",
+            "实现于服务引擎等待队列之上，改动局部、易于移植。"
+          ],
+          "conclusions": [
+            "在瞬时过载下降低尾 TTFT 而不牺牲中位数，p99 TTFT 比既有 prefix 感知调度器低最多 8.6 倍。",
+            "负载尖峰期间以低 6 倍的中位 TTFT 保持 FCFS 的尾部表现；跨工作负载与负载水平持平或优于最强基线。"
+          ],
+          "experiments": [
+            "p99 TTFT 比既有 prefix 感知调度器低最多 8.6 倍。",
+            "尖峰期在保持 FCFS 尾部延迟的同时，中位 TTFT 低 6 倍。",
+            "多种工作负载、多负载水平下持平或优于最优基线，无需按负载调参。"
+          ],
+          "significance": "把 prefix cache 调度的公平性问题量化成一个可归一化的比值判据，是 agentic serving 调度的干净解法。",
+          "arxivUrl": "https://arxiv.org/abs/2611.02082",
+          "pdfUrl": "https://arxiv.org/pdf/2611.02082.pdf",
+          "index": 4,
+          "takeaway": "KV 复用让请求的便宜程度相差百倍，调度不能只看等待时间，要看等待时间相对它自己还要算多久。",
+          "keyExperiment": "p99 TTFT 比既有 prefix 感知调度器低最多 8.6 倍，尖峰期中位 TTFT 比 FCFS 低 6 倍。"
+        },
+        {
+          "title": "Rethinking KV Cache Eviction for Agentic LLM Serving",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-03",
+          "authors": "Jiakun Fan, Han Meng, Yuxuan Xia, Hao Mark Chen, Dong Li, Dimitrios S. Nikolopoulos",
+          "institutions": "弗吉尼亚理工大学",
+          "abstract": "KV cache 给 LLM 服务系统带来巨大显存压力，容量不足时必须驱逐。既有机制通常在缓存序列的两端驱逐，以保住跨请求的前缀共享。但 agent 负载会在连续多轮中反复复用长历史，而序列末尾 token 的 KV 重算明显更贵——它们的注意力涉及更长历史。本文提出保留共享前缀、从剩余历史的开头开始驱逐并保留缓存后缀：返回的请求可直接复用留在 GPU 或 CPU 中的 KV，只重算缺失片段。作者把驱逐策略、KV 重算路径与 GPU-CPU 统一缓存管理协同设计，构建 Penelope 并实现在 SGLang 中。",
+          "contributions": [
+            "指出末尾驱逐对 agent 多轮复用是反向选择：末尾 token 的重算成本最高而非最低。",
+            "提出保留后缀、从头驱逐的策略，把重算代价压到最低的那一段历史。",
+            "驱逐策略、重算路径与两级 GPU-CPU cache 管理协同设计，并落地到 SGLang。"
+          ],
+          "conclusions": [
+            "三个 Qwen3 规模、真实 agent trace：仅 GPU cache 时平均首 token 延迟最多降 60%、作业完成时间最多降 37%。",
+            "两级 GPU-CPU cache 下两项分别最多降 76% 与 60%。"
+          ],
+          "experiments": [
+            "GPU-only 缓存：平均 TTFT 最多降 60%，job completion time 最多降 37%。",
+            "两级 GPU-CPU 缓存：TTFT 最多降 76%，JCT 最多降 60%。",
+            "基于 SGLang 实现，三个 Qwen3 模型尺寸上以真实 agent trace 验证。"
+          ],
+          "significance": "用一个反直觉但便宜的改动——换个驱逐方向——就把 agentic serving 的首 token 延迟砍掉六成。",
+          "arxivUrl": "https://arxiv.org/abs/2611.00391",
+          "pdfUrl": "https://arxiv.org/pdf/2611.00391.pdf",
+          "index": 5,
+          "takeaway": "驱逐该从长历史的头部下手，因为越靠后的 token 重算越贵。",
+          "keyExperiment": "仅 GPU cache 下平均 TTFT 降 60%、JCT 降 37%；两级缓存下 TTFT 降 76%、JCT 降 60%。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Introducing Cluster Efficiency to LLM Serving: Pooling Economical Accelerators over Fast Interconnects",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-03",
+          "authors": "Youhe Jiang, Pavle Glusac, Binhang Yuan, Eiko Yoneki",
+          "institutions": "剑桥大学, Tenstorrent, 香港科技大学",
+          "abstract": "长上下文 LLM 服务对算力、显存容量与带宽的需求极高。便宜加速器能以更低成本提供这些资源，但单卡容量有限必须跨设备池化，通信开销随之成为主导。作者提出以集群效率（每美元、每焦耳的 token 数）衡量，说明低延迟高带宽互联如何让便宜加速器保住成本优势。他们以编码 agent 负载特征与加速器扩展性刻画为指导，在 Tenstorrent Galaxy——一组 Blackhole 芯片集群——上落地服务栈：集成通信引擎、流水化 ring 传输、通信与计算重叠、设备端 decode 重放，用于压低集合通信开销。",
+          "contributions": [
+            "提出以 tokens/dollar 与 tokens/joule 为核心的集群效率指标，把互联质量纳入成本模型。",
+            "在 Blackhole 集群上实现通信—计算重叠的完整服务栈（集成通信引擎、流水化 ring 传输、设备端 decode 重放）。",
+            "用把互联换成 TCP 级的反事实实验，隔离出互联本身对成本优势的贡献。"
+          ],
+          "conclusions": [
+            "三个 dense 模型、BF16 与 8-bit、8K–256K 上下文下，Galaxy 达到 8 卡 RTX PRO 6000 Blackwell 服务器 1.07–2.24 倍的 tokens/dollar（三年购置加电费模型）。",
+            "在同款芯片上模拟 TCP 级通信，吞吐下降 23.5–67.4%，所有受测配置的成本优势消失。"
+          ],
+          "experiments": [
+            "8K–256K 上下文、三个模型、两种精度下 tokens/dollar 为对照 GPU 服务器的 1.07–2.24 倍。",
+            "模拟 TCP 级互联：吞吐降低 23.5–67.4%，成本优势在全部配置中消失。",
+            "成本模型覆盖三年购置与电费，而非单卡峰值算力对比。"
+          ],
+          "significance": "给出互联是便宜算力能否兑现成本优势的唯一开关这一量化证据，把硬件采购讨论拉回到带宽与延迟上。",
+          "arxivUrl": "https://arxiv.org/abs/2611.02975",
+          "pdfUrl": "https://arxiv.org/pdf/2611.02975.pdf",
+          "index": 6,
+          "takeaway": "便宜加速器要赢在 tokens/dollar，前提是互联够快；把互联降级成 TCP 级别，成本优势直接归零。",
+          "keyExperiment": "同一批芯片上，快互联下 tokens/dollar 为对照 GPU 服务器的 1.07–2.24 倍，换成 TCP 级通信则吞吐掉 23.5–67.4%。"
+        },
+        {
+          "title": "Understanding GPU Megakernels: Why Residency Can Mislead",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-03",
+          "authors": "Xinwei Qiang, Ziyi Xu, Chang Chen, Zaifeng Pan, Zhongkai Yu, Yue Guan, Yufei Ding",
+          "institutions": "加州大学圣地亚哥分校, RadixArk",
+          "abstract": "Megakernel 让一个常驻 GPU 程序提前准备依赖算子、把就绪任务合并执行。作者在 H100 上用两个 LLM megakernel——ThunderKittens 与 VDCores——的原始算子代码把它们重构为分离 kernel，以隔离执行组织方式本身的收益与代价。结果显示 CTA 驻留会双向误导对有效重叠机会的判断：用 programmatic dependent launch（PDL）把启动与操作数加载重叠后，重构版在 TK 上把 decode 步延迟降低 5.7%，VDCores 在同样强制内存序下性能持平。在整算子依赖下 TK 的常驻执行仍从预取获益更多，但运行时与完成信号排序的开销抵消了这一优势。启动重叠与预取都受资源可用性约束：常驻 CTA 可在退役前复用存储，而分离的后继 kernel 必须先拿到完整 CTA 占用才能初始化或加载操作数。",
+          "contributions": [
+            "用原算子代码重构的对照方法，把 megakernel 的收益从算法差异中剥离出来，做成归因研究。",
+            "指出 CTA 驻留作为重叠机会的代理指标会在两个方向上误判。",
+            "揭示准入约束（必须先取得 CTA footprint）与瓶颈资源余量才是重叠能否兑现的前提。"
+          ],
+          "conclusions": [
+            "PDL 启动重叠使重构版 TK 的 decode 步延迟降低 5.7%，VDCores 在同等内存序要求下性能持平。",
+            "为通信预留 SM 可能增加 GEMM 波次从而抹掉重叠收益；内存带宽饱和后填满空闲 SM 收效甚微。"
+          ],
+          "experiments": [
+            "TK 重构版 decode 步延迟降低 5.7%，VDCores 持平。",
+            "对两套 megakernel 在整算子依赖场景下对比常驻执行与分离执行，预取收益被完成信号排序成本部分抵消。",
+            "资源敏感性实验：为通信预留 SM 会抵消重叠收益，带宽饱和后填满空闲 SM 无明显收益。"
+          ],
+          "significance": "为要不要写 megakernel 提供了可操作判据：看的不是驻留率，而是瓶颈资源余量与准入时机。",
+          "arxivUrl": "https://arxiv.org/abs/2611.00495",
+          "pdfUrl": "https://arxiv.org/pdf/2611.00495.pdf",
+          "index": 7,
+          "takeaway": "驻留率高不等于重叠有效，分离 kernel 加上 PDL 就能拿回大部分启动重叠的收益。",
+          "keyExperiment": "PDL 让重构版 ThunderKittens 的 decode 步延迟降低 5.7%，VDCores 持平——说明驻留并非必要条件。"
+        },
+        {
+          "title": "FLAMIA: FLAsh MIcroscaling Attention for Fast and Causally Safe Training on Blackwell",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-03",
+          "authors": "Fedor Velikonivtsev, Mikhail Koltakov, Denis Kuznedelev",
+          "institutions": "Yandex Research",
+          "abstract": "注意力是 Transformer 训练的主要开销之一，长上下文下更甚。Blackwell 提供高吞吐低精度矩阵乘，但要在注意力里兑现需解决三件事：量化本身的开销、共享 scale 引起的因果信息泄漏、以及前向与反向之间的数值不一致。FLAMIA 提出面向 Blackwell 的注意力 kernel 族，含 MXFP8 与混合 NVFP4/FP8 两条训练路径：token-block scaling 在矩阵的各方向上复用已量化操作数，针对 scale 引发的泄漏加入定向保护，并保持前向与反向计算一致。融合量化与架构特化优化降低开销，document-local scaling 与负载感知调度让变长文档可直接在 packed 布局上运行而无需重打包。",
+          "contributions": [
+            "指出共享 scale 造成的因果泄漏是低精度注意力训练的核心正确性问题，并给出定向保护。",
+            "token-block scaling 加前后向一致的数值设计，把量化开销融进 kernel 内部。",
+            "支持 packed 文档原地调度，变长文档无需重打包。"
+          ],
+          "conclusions": [
+            "MXFP8 路径相对各负载下最快的基线：B200 上 1.10–1.40 倍、B300 上 1.06–1.42 倍（含量化在内的前后向注意力总调用）。",
+            "在 Llama 类模型预训练上验证了训练稳定性与质量保持。"
+          ],
+          "experiments": [
+            "含量化的前后向注意力调用：B200 加速 1.10–1.40 倍，B300 加速 1.06–1.42 倍。",
+            "Llama 类预训练上训练稳定、质量保持。",
+            "另提供混合 NVFP4/FP8 训练路径，覆盖更激进的低精度配置。"
+          ],
+          "significance": "把低精度能不能用于注意力训练从能跑推进到既正确又更快，重点是因果泄漏这一正确性死角。",
+          "arxivUrl": "https://arxiv.org/abs/2611.03344",
+          "pdfUrl": "https://arxiv.org/pdf/2611.03344.pdf",
+          "index": 8,
+          "takeaway": "FP8/FP4 上做注意力训练，先解决共享 scale 的因果泄漏，再谈速度。",
+          "keyExperiment": "MXFP8 路径在 B200 上快 1.10–1.40 倍、B300 上快 1.06–1.42 倍（含量化），且 Llama 类预训练质量保持。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "Jet-QSparse: Accelerating Agentic LLM Inference with 4-Bit Sparse Attention",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-03",
+          "authors": "Haozhan Tang, Hao Kang, Meng Lu, Yecheng Wu, Zerui Wang, Seokho Han, Haocheng Xi, Shuo Yang, Song Han, Han Cai",
+          "institutions": "卡内基梅隆大学, 弗吉尼亚理工大学, 麻省理工学院, NVIDIA, 成均馆大学, 加州大学伯克利分校",
+          "abstract": "长程推理与 agent 负载同时压 KV cache 容量与 decode 注意力吞吐。Jet-QSparse 是一个免训练方法：用紧凑的 NVFP4 存储 cache，并在 Blackwell 张量核上做原生 FP4 的 query-key 计算；对完整 key 历史做稠密扫描后选出 128-token 块，再用 FP16 做稀疏 value 聚合、FP32 累加，把高精度留在形成输出的那一步，同时保证连续的 tile 加载。校准式 key 居中和每序列每层最多两个 BF16 页用于吸收量化误差；FP8 prefill 使用临时 arena，持久 cache 则直接从 BF16 激活打包。",
+          "contributions": [
+            "免训练地把 NVFP4 cache 与原生 FP4 的 QK 计算组合，同时把高精度保留在输出形成步骤。",
+            "以 128-token 块为单位做稀疏选择，稠密扫描避免 token 级索引开销并获得连续加载。",
+            "两个廉价的量化误差补丁：校准式 key 居中，以及每序列每层最多两页 BF16 残留。"
+          ],
+          "conclusions": [
+            "四个混合 LLM 上，每 KV head 128 块预算在被测数学推理、代码与 agent 基准上没有可检出的精度损失（更小预算有损失）。",
+            "64 块预算下 Qwen3.8-27B 在单张 GB300、128K 上下文、batch 16 时相对稠密 BF16 端到端 decode 加速 1.94 倍，KV 池容量为 BF16 的 2.58–2.76 倍。"
+          ],
+          "experiments": [
+            "GB300 单卡、128K 上下文、batch 16：Qwen3.8-27B decode 端到端 1.94 倍加速（对照稠密 BF16）。",
+            "KV 池 token 容量为 BF16 的 2.58–2.76 倍。",
+            "128 块预算在四个混合模型上无可见精度损失，SWE-bench Verified 精度与 BF16 持平。"
+          ],
+          "significance": "说明 Blackwell 的原生 FP4 不只用于权重，KV cache 存储与注意力打分本身也能进 4 bit。",
+          "arxivUrl": "https://arxiv.org/abs/2611.01022",
+          "pdfUrl": "https://arxiv.org/pdf/2611.01022.pdf",
+          "index": 9,
+          "takeaway": "cache 存 4 bit、QK 算 4 bit、输出聚合留在 FP16/FP32，是低比特注意力不掉点的分工方式。",
+          "keyExperiment": "64 块预算下 Qwen3.8-27B 在 GB300 上 decode 加速 1.94 倍，KV 池容量为 BF16 的 2.58–2.76 倍，128 块预算无精度损失。"
+        },
+        {
+          "title": "Inference First, Training Underneath: Layer-Granular LoRA Co-Serving with LayerLoom",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-03",
+          "authors": "Zongpu Zhang, Yishu Yin, Xuehai Qian",
+          "institutions": "清华大学, 独立研究者",
+          "abstract": "在同一批 GPU 上同时服务与微调，可以把推理突发之间的空闲算力转成训练进展；LoRA 让这种共置很便宜，因为两侧共享同一份冻结的基座权重。难点在反向：现有共服务系统按服务迭代粒度调度反向工作，每次迭代带固定反向预算，期间到达的请求只能等，负载尖峰时微调直接决定推理延迟。作者观察到 LoRA microbatch 的反向可分解为逐层任务，而推理前向恰好访问同一批权重，于是调度粒度可以从迭代降到层。LayerLoom 把同层反向往推理前向上挂，每层只跑在飞请求延迟余量允许的任务数；用跨层错开的 microbatch 波前保证每层都有就绪任务，并把 microbatch 状态卸到主机内存、按调度点预取以限制激活显存；融合 kernel 用一次基座权重读取同时服务配对的前向与反向 GEMM。",
+          "contributions": [
+            "把共服务的反向调度粒度从迭代降到层，使微调不再为推理延迟设上限。",
+            "跨层错开的 microbatch 波前加激活卸载与预取，约束波前的显存占用。",
+            "融合 kernel 以单次基座权重读取同时服务成对的前向与反向 GEMM。"
+          ],
+          "conclusions": [
+            "RTX 4090 跑 Llama-3.1-8B、突发生产 trace：联合 SLO 达成率比既有工作高 13.5–21.8 个百分点，微调吞吐相当或最高高 12%。",
+            "达到与独立训练相同的训练 loss。"
+          ],
+          "experiments": [
+            "联合 SLO 达成率提升 13.5–21.8 个百分点。",
+            "微调吞吐相当或最高高 12%。",
+            "训练 loss 与独立训练一致，未因共置牺牲收敛。"
+          ],
+          "significance": "证明推理优先、训练填空可以在层粒度做到不伤 SLO，为大模型平台复用闲置算力提供了低风险路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.00652",
+          "pdfUrl": "https://arxiv.org/pdf/2611.00652.pdf",
+          "index": 10,
+          "takeaway": "把反向拆到层粒度挂到前向上，训练就只在推理的延迟余量里生长。",
+          "keyExperiment": "RTX 4090 上 Llama-3.1-8B 突发 trace 中联合 SLO 提升 13.5–21.8 个百分点，微调吞吐不降。"
+        }
+      ]
+    }
+  ]
+}
