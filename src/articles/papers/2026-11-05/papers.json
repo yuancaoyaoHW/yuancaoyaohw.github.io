@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-05",
+  "title": "2026-11-05 论文精选",
+  "lede": "今日十篇几乎都在回答同一个问题：当算力不再是唯一稀缺资源，通信、调度与显存该怎么联合设计——从专家并行的 SM 分区、上下文并行的任务图，到 KV 容量约束下的 cμ 调度规则与按部署定制的光互连。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 501
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "GC-MoE: Overlapping Expert-Parallel Token Dispatch with FP8/FP4 Grouped GEMM via CUDA Green Contexts",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-04",
+          "authors": "Yong Li, Kan Liu, Tao Lan",
+          "institutions": "Alibaba",
+          "abstract": "MoE 专家并行下每层都要付 all-to-all 令牌分发、分组 GEMM 与合并三步开销。解码时每个 rank 只持 1 到 256 个 token，分发延迟与权重搬运占主导。已有融合算子把分发与计算叠在同一批 SM 上，分发 warp 与 MMA、epilogue 抢寄存器与共享内存，同步跨越整个 SM 阵列。GC-MoE 改用 CUDA Green Contexts 把 GPU 切成小通信分区与大计算分区，两个角色各有独立 kernel、资源预算和同步域；再用三节点 CUDA Graph 把分发与分组 GEMM 作为并发根一起发射，令牌环握手让计算在首个填满的 ring block 上就开始，双缓冲接收计数去掉尾部屏障。计算分区在 Blackwell 用 tcgen05 块缩放 MMA，Hopper 用寄存器 A 的 WGMMA 加寄存器内 FP4 解码。",
+          "contributions": [
+            "用 CUDA Green Contexts 做物理级 SM 分区，把通信与计算拆成各自的 kernel、资源预算与同步域，取代 Mega MoE 共用 SM 的做法",
+            "三节点（Hopper 四节点）CUDA Graph 并发根 + 令牌环握手 + 双缓冲接收计数，消除每次 replay 的 workspace 清理与跨 rank 屏障",
+            "计算分区按代际切换：Blackwell 用 tcgen05 块缩放 MMA，Hopper 用寄存器 A 的 WGMMA 与寄存器内 FP4 解码，并融合 SwiGLU 与重量化"
+          ],
+          "conclusions": [
+            "在 H20 这类 Hopper 机器上分区仍拿到 1.188 倍平均加速，说明收益主要来自调度与同步域解耦，而非换更快的算子",
+            "到 B300 只留 20 个 SM 做分发就有 1.106 倍，剩余 128 个 SM 全部用于计算，验证了小分区够用的假设"
+          ],
+          "experiments": [
+            "8 卡 H20 + DeepSeek-V4.1-Flash：解码平均 1.188 倍，峰值 1.296 倍（路由专家套件）、1.353 倍（共享专家套件）",
+            "8 卡 B300 + GLM-5.2 与 DeepSeek-V4.1-Flash：平均 1.106 倍，融合共享专家后 1.123 倍，峰值 1.209 倍",
+            "54 个测量点在同等精度下全部优于 DeepGEMM 的 Mega MoE；B300 上分发只占 148 个 SM 中的 20 个"
+          ],
+          "significance": "给 MoE 解码的通信与计算划出硬件级边界，是继算子融合之后的下一条优化路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.04222",
+          "pdfUrl": "https://arxiv.org/pdf/2611.04222.pdf",
+          "takeaway": "通信和 GEMM 不该抢同一批 SM——用 Green Contexts 连资源预算和同步域一起拆开，比只融合算子更彻底。",
+          "keyExperiment": "8 卡 B300 上 GLM-5.2/DeepSeek-V4.1-Flash 解码平均 1.106 倍，54 个测点全胜 Mega MoE，分发仅占 20/148 SM",
+          "index": 1
+        },
+        {
+          "title": "LiquidCP: Decoupling Attention Tasks from Communication and Kernel Boundaries in Context Parallelism",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-04",
+          "authors": "Hongyu Chen, Yikang Ruan, Yuhai Long, Ziyu Huang, Yiyu Luo, Liukun Yu, Yangjie Zhou, Zihan Liu, Weihao Cui, Zijun Li, Anbang Wu, Yu Feng, Jing Yang, Jingwen Leng, Bingsheng He, Minyi Guo, Shixuan Sun",
+          "institutions": "Shanghai Jiao Tong University, Sun Yat-sen University, National University of Singapore",
+          "abstract": "上下文并行把长序列切到多卡，训练与推理都要在卡间搬 KV。变长训练和整段 prefill 时，按注意力均衡放置仍可能让令牌负载不均，ring 执行又在每一步计算与通信上重复开销；decode 的分段串行执行让长任务阻塞后继工作，留下大量空闲硬件。LiquidCP 把训练和推理统一成 Transfer、Compute、Reduction 三类任务加 tile 级依赖的模型，让注意力任务脱离通信与 kernel 边界。训练与 full prefill 走 MegaRing：BuddyRing 放置同时平衡注意力与令牌负载，并在前向注意力中合并已就绪的 KV 区段以摊薄开销。解码与混合批次走 MegaDCP：联合建模注意力完成时间与其依赖 reduction 来选历史 KV 切分。两者共用一个常驻 GPU 的持久化执行引擎，同一套抽象覆盖训练与推理。",
+          "contributions": [
+            "把 CP 的训练、prefill、decode 统一成 Transfer/Compute/Reduction 任务图加 tile 级依赖，解开注意力与通信、kernel 边界的耦合",
+            "MegaRing：BuddyRing 放置同时平衡注意力与令牌负载，前向注意力中合并已就绪 KV 区段以摊薄 ring 每步开销",
+            "MegaDCP：按注意力与依赖 reduction 的联合完成时间选择历史 KV 切分，并共用常驻 GPU 的持久化引擎"
+          ],
+          "conclusions": [
+            "一套任务抽象同时覆盖训练与推理的 CP 场景，说明 CP 的主要损失来自任务切分粒度而非链路带宽",
+            "收益最终落在 vLLM 带 KV 前缀缓存的服务上（TTFT 1.22 倍），不是只在大 kernel 微基准里生效"
+          ],
+          "experiments": [
+            "8 卡 H100：MegaRing 核心注意力前向几何平均 1.23 倍、反向 1.18 倍，整层 1.08-1.16 倍",
+            "MegaDCP 核心注意力：纯解码 1.20 倍，混合批次 1.35 倍",
+            "vLLM + KV 前缀缓存服务：平均 TTFT 加速 1.22 倍"
+          ],
+          "significance": "把上下文并行从固定 ring 流水改成可调度的任务图，是长上下文训练与推理共用的一条优化路线。",
+          "arxivUrl": "https://arxiv.org/abs/2611.04401",
+          "pdfUrl": "https://arxiv.org/pdf/2611.04401.pdf",
+          "takeaway": "CP 的瓶颈是任务切分粒度：把注意力拆成可独立调度的 tile，通信和 kernel 边界就不再是硬约束。",
+          "keyExperiment": "8 卡 H100 上整层 1.08-1.16 倍，vLLM 服务 TTFT 平均 1.22 倍",
+          "index": 2
+        },
+        {
+          "title": "FP4Quant: Efficient 4-Bit Communication Compression for Model-Parallel LLM Training",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-04",
+          "authors": "Man Liu, Xingchen Liu, Hairui Zhao, Guangming Tan, Dingwen Tao",
+          "institutions": "University of Chinese Academy of Sciences, Institute of Computing Technology (CAS)",
+          "abstract": "模型并行训练的通信开销已成为瓶颈。已有低精度压缩能降通信量，但要压到 FP4 这种超低位宽会带来三个新问题：数值范围有限、亚字节存储有额外开销、细粒度量化的计算代价上升。FP4Quant 是面向模型并行 LLM 训练的微分组 FP4 压缩框架：微分组双尺度量化保留局部张量分布特征，warp 协作的 FP4 打包实现高效的亚字节表示，混合两级 FWHT 流水线配合 GPU 感知的执行优化来抑制量化误差。作者在 H100 上用 Qwen-7B 做端到端验证，并明确指出吞吐提升与模型质量之间存在权衡。",
+          "contributions": [
+            "微分组双尺度 FP4 量化：用小分组两级 scale 保住局部张量分布，缓解 FP4 动态范围窄带来的精度塌陷",
+            "warp 协作的 FP4 打包方案，把亚字节表示的存储与搬运开销压到可接受",
+            "混合两级 FWHT 流水线 + GPU 感知执行优化，在压缩路径上就地抑制量化误差"
+          ],
+          "conclusions": [
+            "FP4 通信压缩能把端到端吞吐推到 BF16 的 1.56 倍，但作者坦承这是拿模型质量换来的，不是免费加速",
+            "细粒度量化的计算开销是 FP4 落地的真正障碍，必须与打包、变换流水线协同设计才划算"
+          ],
+          "experiments": [
+            "8 卡 H100 + Qwen-7B：端到端吞吐相对 BF16 最高 1.56 倍",
+            "压缩路径由微分组量化、warp 打包、两级 FWHT 三段构成，任一段不做 GPU 感知优化都会吃掉带宽收益",
+            "作者给出吞吐与模型质量的权衡曲线，指出 FP4 并非在所有并行配置下都值得开"
+          ],
+          "significance": "把模型并行训练的通信压到 4 bit，代价是必须同时重做量化、打包与误差补偿三段。",
+          "arxivUrl": "https://arxiv.org/abs/2611.04323",
+          "pdfUrl": "https://arxiv.org/pdf/2611.04323.pdf",
+          "takeaway": "FP4 通信压缩能到 1.56 倍，但精度是明码标价的——先看质量曲线再决定开不开。",
+          "keyExperiment": "8 卡 H100 + Qwen-7B 端到端吞吐最高 1.56 倍（对 BF16），以模型质量为代价",
+          "index": 3
+        },
+        {
+          "title": "Beyond Compression Ratio: High-Throughput KV Compression for Disaggregated LLM Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-04",
+          "authors": "Junhong Wu, Zedong Liu, Xinyang Ma, Yuhan Chen, Guangming Tan, Dingwen Tao",
+          "institutions": "Institute of Computing Technology (CAS), University of Chinese Academy of Sciences",
+          "abstract": "KV cache 压缩能降低分离式服务的通信量，但实际收益不只取决于压缩比和模型质量，还取决于压缩流水线本身跑得多快。在高带宽互连上这点更关键：压缩不够快，省下的通信时间会被压缩开销吃掉一大半。该文在 KVserve 之上搭了一条高吞吐 KV 压缩数据通路，做两处改动：一是把分布变换与低位量化融合进 KV 感知的 tilelang kernel，消除中间张量落地与冗余访存；二是把原来的无损压缩后端换成基于 LC 的开放、可扩展、可搜索后端，让压缩算子流水线能组合与调优。作者据此论证：在现在的网络带宽下，只有把压缩通路做快，KV 压缩才留得住通信收益。",
+          "contributions": [
+            "把分布变换与低位量化融合进 KV 感知的 tilelang kernel，去掉中间张量物化与重复访存",
+            "用基于 LC 的开放可搜索后端替换原有无损压缩后端，使压缩算子流水线可组合、可自动调优",
+            "重新定义评价口径：不看压缩比，而看压缩通路的吞吐能否在高带宽网络下保住通信收益"
+          ],
+          "conclusions": [
+            "高带宽互连时代，压缩比不再是主要指标，压缩吞吐不足会让 KV 压缩的通信收益基本归零",
+            "把量化与无损压缩两段都做成高吞吐算子后，KV 压缩在快网络下依然能显著缩短作业完成时间"
+          ],
+          "experiments": [
+            "融合 kernel 相对原实现最高 5.9 倍加速",
+            "无损压缩后端吞吐从不足 90 GB/s 提到 500 GB/s 以上",
+            "端到端作业完成时间最多缩短 2.04 倍"
+          ],
+          "significance": "给 KV 压缩研究换了一把尺子：先证明压缩本身够快，再谈省了多少通信。",
+          "arxivUrl": "https://arxiv.org/abs/2611.04382",
+          "pdfUrl": "https://arxiv.org/pdf/2611.04382.pdf",
+          "takeaway": "压缩比是纸面指标，压缩吞吐才是分离式服务里真正决定收益的那一项。",
+          "keyExperiment": "无损后端吞吐从 <90 GB/s 提到 >500 GB/s，端到端作业完成时间最多省 2.04 倍",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Asymptotic Optimality of $c\\mu$-Rule for LLM Inference Scheduling under Memory Constraint",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "math.OC",
+          "date": "2026-11-04",
+          "authors": "Zhenghao Li, Shengbo Wang, Nian Si",
+          "institutions": "HKUST, University of Southern California",
+          "abstract": "LLM 推理的排队问题与经典模型不同：请求的 prompt 与输出长度各异，要依次经过 prefill 与自回归 decode，并争抢有限的 KV cache 容量；而一步服务时长同时取决于 prefill 计算与 KV cache 读写，服务能力由算力、访存与内存占用三者共同决定。该文建立流体模型，把系统化约为多类单服务台队列，用有效服务率刻画这三重约束，从而导出 cμ 优先规则：μ 由算力、内存带宽与内存容量共同决定。作者证明该规则在流体模型下最小化累积持有成本，对有限负载还最小化完成时间、最大化全程输出令牌吞吐；随后构造原有限系统的可行策略，证明其缩放动态收敛到最优流体策略。最后在 H800 上用真实服务引擎验证。",
+          "contributions": [
+            "把 prefill 计算、KV 读写、KV 容量三重约束合进一个有效服务率 μ，得到适用于 LLM 推理的 cμ 规则",
+            "证明该规则在流体模型下最优（累积持有成本、有限负载完成时间、全程输出吞吐三项）",
+            "构造有限系统的可行优先级策略并证明收敛性，再在真实引擎上落地验证"
+          ],
+          "conclusions": [
+            "KV 容量约束下最优调度的判据是 μ 最大者优先，而 μ 必须把访存带宽算进去——只看算力会挑错请求",
+            "理论最优与工程实现之间的落差可以在真实引擎里补上，平均延迟下降的同时吞吐不掉"
+          ],
+          "experiments": [
+            "NVIDIA H800 上的真实 LLM 服务引擎：相对现有调度策略显著降低平均延迟，同时保持高吞吐",
+            "有限负载场景下该策略同时最小化完成时间并最大化全程输出令牌吞吐，与理论预测一致",
+            "cμ 规则的有效服务率同时含计算速度、内存带宽与内存容量三项，任缺一项都会偏离最优"
+          ],
+          "significance": "给 KV 容量受限下的推理调度提供了可证明最优的判据，把排队论结论接到了真实引擎上。",
+          "arxivUrl": "https://arxiv.org/abs/2611.04807",
+          "pdfUrl": "https://arxiv.org/pdf/2611.04807.pdf",
+          "takeaway": "调度优先级该按有效服务率排，而有效服务率必须把访存带宽和 KV 容量算进去。",
+          "keyExperiment": "H800 真实引擎上相对现有策略显著降延迟且保持吞吐，理论上证明了对累积持有成本与完成时间的最优性",
+          "index": 5
+        },
+        {
+          "title": "HybridSpec: Throughput-Aware Speculative Decoding for Hybrid GDN-MoE Models",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-04",
+          "authors": "Haiyu Wang, Sai Qian Zhang, Zechun Liu, Steven Li",
+          "institutions": "Meta AI, New York University",
+          "abstract": "投机解码里并行 drafter（如 DFlash）让起草变便宜后，每轮瓶颈转到目标模型验证。关键选择是验证长度：一次让目标模型处理多少 token。验得多能接受更多，但首次拒绝之后的工作全是浪费。对 GDN 与 MoE 混合的目标模型，验证时间随长度增长远快于稠密模型：Qwen3.6-35B-A3B 单请求 profile 中，长度从 4 增到 16 时验证耗时涨 71%，几乎全落在 GDN 与 MoE 层，稠密 Qwen3-4B 只涨 4-6%。原因是每层 GDN 要对每个 token 更新循环状态并在接受前缀末尾恢复，MoE 成本又取决于验证跑起来才知道的专家激活。HybridSpec 在 GPU 上按 draft 侧接受率估计与实测目标延迟选长度，只多验一个 token 到首个 MoE router，用观测到的专家分配做轻量路由修正决定是否保留，其余验证只跑被选中的 token。",
+          "contributions": [
+            "按 draft 侧接受率与实测目标延迟在 GPU 上动态选验证长度，替掉固定长度的做法",
+            "只多验一个 token 到首个 MoE router，用观测到的专家分配做路由修正，避免为被拒 token 跑完整专家计算",
+            "块并行 GDN kernel 不为每个 token 存状态，一次发射重建各层被接受前缀的循环状态"
+          ],
+          "conclusions": [
+            "混合 GDN-MoE 目标的验证成本随长度超线性增长，固定验证长度在这类模型上必然次优",
+            "把 MoE 的路由决策提前到专家执行之前，是这类模型上最划算的一刀"
+          ],
+          "experiments": [
+            "验证长度 4-16、所有 draft 都被接受时，块并行 GDN kernel（含接受状态重建）比默认 kernel 快 1.54-4.04 倍",
+            "三个 GDN-MoE 目标模型单请求贪心解码：比自回归快 1.75-1.88 倍，比 DFlash 快 1.30-1.33 倍",
+            "Qwen3.6-35B-A3B 上长度 4 到 16 的验证耗时涨幅 71%，稠密 Qwen3-4B 仅 4-6%，定位到 GDN 与 MoE 层"
+          ],
+          "significance": "把投机解码的调参对象从固定长度改成随模型结构与负载变化的在线决策。",
+          "arxivUrl": "https://arxiv.org/abs/2611.04055",
+          "pdfUrl": "https://arxiv.org/pdf/2611.04055.pdf",
+          "takeaway": "混合 GDN-MoE 目标验证变贵得离谱，验证长度必须在线算，还要在 MoE router 处提前止损。",
+          "keyExperiment": "单请求贪心解码比自回归快 1.75-1.88 倍、比 DFlash 快 1.30-1.33 倍，GDN kernel 快 1.54-4.04 倍",
+          "index": 6
+        },
+        {
+          "title": "LoopKV: Loop-Aware KV Cache Compression for Serving Looped Transformers",
+          "score": 3.8,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-04",
+          "authors": "Tianle Zhou, Yang Zhang, Tianyu Wu, Zhuohan Wang, William Nixon, Juncheng Yang",
+          "institutions": "Harvard University, University of California San Diego, University of Chicago",
+          "abstract": "循环 Transformer 每 token 重复执行同一组 block 来提升精度而不加参数，Ouro 这类模型每轮循环各自保留一份 KV cache，缓存显存直接限制批大小，而批大小又决定权重读取能否被摊薄。统一位宽量化与按循环固定规则都不考虑每层在每轮里的敏感度差异。作者在 Ouro 上测到量化敏感度在（循环，层）格点上差异明显，各格点损伤之和可近似整体输出损伤；共享损伤也逐格点不同，越靠后的循环越能容忍共享；按注意力分数跳过低权重值则会跨循环累积误差。LoopKV 用一次性离线 profile 为每个格点选 4 bit 存储、2 bit 存储或复用最后一轮的 KV，规划器在预测损伤与存储预算下最小化读取；解码时每轮先读高 2 bit，只有本轮注意力确实需要 4 bit 精度时才取低位。整套计划由 vLLM 里一个融合 kernel 执行。",
+          "contributions": [
+            "把 KV 精度分配细化到（循环，层）格点，按各自 KL 损伤选 4 bit、2 bit 或复用最后一轮 KV",
+            "格点级 KV 共享：共享损伤低的格点直接指针复用最后一轮，几乎不付精度代价",
+            "两平面存储（高 2 bit 常读、低 2 bit 按注意力需要取）加单个融合 kernel，把每步 host 发射从 504 次降到 17 次"
+          ],
+          "conclusions": [
+            "循环模型的 KV 压缩不能按均匀位宽做，敏感度是二维格点结构，逐格点分配才拿得到收益",
+            "越靠后的循环越能容忍 KV 共享，这个规律可直接写成规划器的先验"
+          ],
+          "experiments": [
+            "单张 RTX PRO 6000 服务 Ouro-1.4B：LoopKV-M 比均匀 4 bit 的 KIVI-4 少存 35% KV，且用同一融合 kernel 与 CUDA 图",
+            "16K 最大长度、带延迟 SLO 时，goodput 是 KIVI-4 的 1.7-2.2 倍",
+            "六个公开基准上平均值不显著低于 BF16；每解码步 host 发射从 504 次降到 17 次"
+          ],
+          "significance": "给循环 Transformer 这类新结构补上了配套的 KV 压缩方案，而不是照搬稠密模型的量化规则。",
+          "arxivUrl": "https://arxiv.org/abs/2611.04137",
+          "pdfUrl": "https://arxiv.org/pdf/2611.04137.pdf",
+          "takeaway": "循环模型的 KV 敏感度是（循环，层）格点，逐格点分配精度比统一位宽多省 35% 显存还能提速。",
+          "keyExperiment": "16K 长度带 SLO 下 goodput 是 KIVI-4 的 1.7-2.2 倍，KV 少存 35%",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Multi-layer Indexer: Overlapping Selection and Attention in DeepSeek Sparse Attention",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-04",
+          "authors": "Serdarcan Dilbaz, Arjun Krishna, Kiran Kamble, Daniel M. Bikel",
+          "institutions": "Writer AI Research (Writer, Inc.)",
+          "abstract": "稀疏注意力削减长上下文推理成本：每个 query 只看部分序列，所选子集由固定模式或近期生产模型里学到的逐 query 打分决定。DeepSeek 稀疏注意力在每层前放一个闪电 indexer，对整段 cache 打分并保留 k=2048 个最高分 token。长上下文下真正吃时间的不是它喂给的那次稀疏注意力，而是这次 indexer 扫描。作者观察到相邻层选出的 token 高度相似，于是让某层直接沿用上一层 indexer 的选择，从而去掉依赖：每个 indexer 可与所在层的注意力并发执行。由此得到的 Multi-layer Indexer 不需重训、不加权重，默认实现不改 kernel，直接跑在 SGLang 生产 decode 图里；可选融合 decode kernel 在 DeepSeek-V3.2 上进一步加速，并与 GLM-5.2 发布的跨层复用机制叠加。",
+          "contributions": [
+            "观察到相邻层的 indexer 选择高度重合，用上一层选择替代本层选择，从而解除 indexer 与注意力的串行依赖",
+            "Multi-layer Indexer 无需重训、不新增权重，默认实现不改 kernel 即可跑在 SGLang 生产 decode 图内",
+            "与 IndexCache 正交组合：IndexCache 减层、MLI 把剩余层的扫描藏到注意力后面，另有可选融合 decode kernel"
+          ],
+          "conclusions": [
+            "长上下文 decode 的时间花在 indexer 扫描而不是稀疏注意力本身，优化要打在这个被忽视的环节",
+            "不重训、不改 kernel 就能拿到的加速，意味着这条路径可以直接进生产，而不是论文里的上界"
+          ],
+          "experiments": [
+            "同等保留率下比 IndexCache 快：DeepSeek-V3.2 在 1/2 保留率最高快 14.5%，GLM-5 快 9.8%；1/4 时分别 7.9% 与 5.1%",
+            "128K 上下文、1/4 保留率下达到未改模型 decode 吞吐的 1.32 倍，高于 IndexCache 在 1/8 保留率的 1.28 倍",
+            "LongBench、RULER、LongBench v2 精度与 IndexCache 相差几个百分点以内"
+          ],
+          "significance": "在 DSA 这类生产稀疏注意力架构上，用层间冗余换并行度，属于零成本提速。",
+          "arxivUrl": "https://arxiv.org/abs/2611.03768",
+          "pdfUrl": "https://arxiv.org/pdf/2611.03768.pdf",
+          "takeaway": "稀疏注意力的瓶颈是 indexer 扫描而非注意力本身，借上一层的选择就能把扫描藏进并发里。",
+          "keyExperiment": "128K 上下文 1/4 保留率下 decode 吞吐达未改模型 1.32 倍，且精度与 IndexCache 相差几个点内",
+          "index": 8
+        },
+        {
+          "title": "Workload-Static Optical Circuit Switching For Scalable LLM Inference Decode",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-04",
+          "authors": "Maximilian Thürmer, Nicolas Scotto di Perto, Eloise Stein, Natanijel Vasic, Mikaeil Bagherli, Zhenguo Wu, Benjamin Klenk, Holger Fröning, Johannes Feldmann",
+          "institutions": "Salience Labs, NVIDIA, Heidelberg University",
+          "abstract": "LLM 推理的 decode 阶段跑的是细粒度集合通信，其延迟直接决定单用户交互速度，但今天的 scale-up 互连仍沿用为训练设计的电子分组交换机。作者观察到：给定模型部署与并行策略，decode 的通信结构是固定的，于是提出工作负载静态的光电路交换（OCS）：电路按部署一次性配置好，并与模型并行、拓扑感知的集合通信调度协同设计，把闲置的加速器端口换成更少的通信阶段或更高的带宽。评估依赖 GXNET——一个图化工作负载模拟器，配解析模型与基于硬件实测校准的 flit 级网络模型。",
+          "contributions": [
+            "把 decode 通信结构固定这一观察当成设计前提，提出按部署一次性配置的静态光电路交换，而非动态重配",
+            "OCS 与模型并行策略、拓扑感知的集合调度协同设计，用闲置加速器端口减少通信阶段或提高带宽",
+            "GXNET 图化工作负载模拟器 + 解析模型 + flit 级实测校准网络模型，形成可复用的评估方法"
+          ],
+          "conclusions": [
+            "decode 的通信模式是静态的，为训练设计的动态分组交换在这里是过度通用、代价过高的选择",
+            "光互连的收益不仅来自带宽，也来自把多余端口折成更少的通信阶段，这两条要一起设计"
+          ],
+          "experiments": [
+            "576 加速器 scale-up 域、5T 参数 MoE、最长 5M token 上下文：全 OCS 结构相对 4:1 超订分组交换，交互性最高提升 65%",
+            "同场景能效最高提升 119%",
+            "结论基于硬件实测校准的 flit 级模型，覆盖解析与模拟两级验证"
+          ],
+          "significance": "把互连从训练导向的分组交换改成按部署定制的光电路，为 decode 的延迟敏感型通信另开一条路。",
+          "arxivUrl": "https://arxiv.org/abs/2611.05104",
+          "pdfUrl": "https://arxiv.org/pdf/2611.05104.pdf",
+          "takeaway": "decode 的通信结构是固定的，就该用一次性配好的光电路，而不是通用分组交换。",
+          "keyExperiment": "576 加速器域上 5T MoE 解码：交互性最高 +65%，能效最高 +119%（对比 4:1 超订分组交换）",
+          "index": 9
+        },
+        {
+          "title": "EpiLoRA: Fusing Many LoRA Adapters into Low-Precision GEMMs for Serving and RL",
+          "score": 3.8,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-04",
+          "authors": "Hieu Tran, Hong Yu",
+          "institutions": "University of Massachusetts Amherst, University of Massachusetts Lowell",
+          "abstract": "LoRA 让一份基座服务许多微调变体：多租户引擎保留一份基座，把各租户请求批在一起，各自带适配器。基座走向 FP8/FP4 后 GEMM 变便宜了，适配器却没变便宜——引擎把它们当作 GEMM 旁的小 kernel 单独跑，延迟在每步解码中的占比越来越大。作者的关键观察是：适配器先把输入降到低秩再升回去，而 GEMM 只在 epilogue（写输出的最后阶段）才需要这个降维结果。EpiLoRA 作为 vLLM 插件，先发射降维，再发射以它为依赖的低精度 GEMM，GEMM 在流式加载权重的同时在每个租户的 epilogue 里加上升维。同一份低精度基座也能训练：用引擎的 FP8 权重做 LoRA 强化学习训练不需要 16 bit 副本。",
+          "contributions": [
+            "识别出适配器的降维结果只在 GEMM 的 epilogue 才需要，据此把降维前置、GEMM 作为依赖 kernel 发射",
+            "在 GEMM epilogue 里流式累加各租户的升维，把多租户适配器从旁路小 kernel 变成零额外启动的融合路径",
+            "同一低精度基座兼顾训练：LoRA RL 训练器直接用引擎的 FP8 权重，不需要 16 bit 副本"
+          ],
+          "conclusions": [
+            "基座量化越激进，适配器旁路 kernel 的相对开销越大，多租户服务会先撞上这个天花板",
+            "按 epilogue 需求重排 kernel 依赖，可以在不牺牲多租户的前提下把适配器开销摊进 GEMM"
+          ],
+          "experiments": [
+            "Hopper GPU 上单适配器解码：每 token 时间比 vLLM 最快配置低最多 24%，并快于 SGLang 与 TensorRT-LLM",
+            "多租户场景下适配器 kernel 吞吐在多数 GPU-模型组合上高于 vLLM",
+            "27B 模型可在单张 48GB GPU 上做 FP8 LoRA RL 训练，无需 16 bit 权重副本"
+          ],
+          "significance": "把多租户 LoRA 服务里最碎的一段 kernel 链消掉，同时让低精度基座能直接用于 RL 训练。",
+          "arxivUrl": "https://arxiv.org/abs/2611.03899",
+          "pdfUrl": "https://arxiv.org/pdf/2611.03899.pdf",
+          "takeaway": "适配器的降维只在 GEMM 的 epilogue 才用到——把它前置成依赖 kernel 就能把多租户开销摊平。",
+          "keyExperiment": "Hopper 上单适配器每 token 时间比 vLLM 最优配置低最多 24%，多租户吞吐多数组合胜出",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
