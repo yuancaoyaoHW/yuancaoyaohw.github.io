@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-06",
+  "title": "2026-11-06 论文精选",
+  "lede": "今日主题是「把开销从关键路径上搬走」：从屏障开销、全 cache 重复读、专家放置不均，到查询-上下文不对称，几篇系统工作都在重新分配而非硬算。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 281
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "flash-comm: Self-Synchronizing Collective Communication for LLM Decoding",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-05",
+          "authors": "Carrie Wang, Jack Li, Jason Zhao",
+          "institutions": "ScitiX.AI",
+          "abstract": "分布式大模型解码把集合通信放在关键路径上。作者实测发现，用于协调数据就绪的 GPU 间屏障开销常常超过数据传输本身，而现有通信库优化普遍忽略这部分。flash-comm 提出自同步传输：每个数据块自带就绪证据，接收方直接校验所需数据块，不再需要单独的跨 GPU 屏障。在此基础上，成本引导的协议选择器按消息大小与参与卡数自适应选择就绪编码方式，在同步开销与额外传输成本之间取平衡；进一步把传输顺序与归约顺序解耦，使数据异步到达时各卡结果仍保持一致。运行时集成到现有推理栈，支持 all-reduce 与独立 all-gather。",
+          "contributions": [
+            "指出屏障同步（而非带宽）是解码阶段集合通信的主要被忽视开销，并给出实测证据。",
+            "提出自同步传输：把就绪信息编码进数据块本身，接收端按需校验，彻底去掉独立屏障。",
+            "成本引导的协议选择器 + 传输顺序与归约顺序解耦，兼顾小消息/大消息与异步到达下的一致性。"
+          ],
+          "conclusions": [
+            "在 8 卡 B300 上，all-reduce 中位延迟较 SOTA 的 custom AR v2 降低 28.8%，最高 43.7%。",
+            "all-reduce 仅占基线解码时间 11.4%，因此端到端收益天然有上限，实测 TPOT 降低 1.7 至 6.8%。"
+          ],
+          "experiments": [
+            "8 卡 NVIDIA B300：all-reduce 中位延迟 -28.8%、最高 -43.7%。",
+            "独立 all-gather：中位延迟 -23.8%，最高 -58.9%。",
+            "端到端解码 TPOT 降低 1.7% 至 6.8%（受 all-reduce 占比 11.4% 限制）。"
+          ],
+          "significance": "把同步开销本身当作可消除的目标，而非接受为通信常数的必然代价。",
+          "arxivUrl": "https://arxiv.org/abs/2611.06634",
+          "pdfUrl": "https://arxiv.org/pdf/2611.06634.pdf",
+          "takeaway": "屏障比传输更贵：让数据块自带就绪证据，8 卡 B300 上 all-reduce 延迟降 28.8%。",
+          "keyExperiment": "all-reduce 中位延迟 -28.8%（最高 -43.7%），端到端 TPOT -1.7~6.8%。",
+          "index": 1
+        },
+        {
+          "title": "Runway Characters: Serving a 57B Video Diffusion Transformer for Real-Time Conversation",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-05",
+          "authors": "Rohan Agarwal, Robin Andeer, Alex Armbruster, Bennett Arthur, Michail Christos Doukas, Piero Esposito, Qiming Fang, Aron Filkey, Bryan Fox, Anastasis Germanidis, Jonathan Granskog, Corina Gurau, et al.",
+          "institutions": "Runway",
+          "abstract": "对话式视频角色要求视频生成速度高于播放速度，且是单用户单批次实时交互。Runway 描述了支撑该产品的服务系统：在 4 张 H100 上以 704x1088、24fps 服务约 570 亿参数的自回归视频扩散 Transformer，每 4 帧块做 4 次去噪、须在 166.7 毫秒内完成。作者发现每块 240 次注意力调用都在读 5788 槽位的 KV cache，而其中仅 757 个 token 是新的，29% 的原始步耗时属于每次调用都重复的全 cache 计算。于是把工作从读时搬到写时：环形 cache、RoPE 与 FP8 量化每次写入只做一次、位置重置时做增量旋转；并把张量并行 all-reduce 融合进 FP8 GEMM 做交换机内归约，同时给 latent 解码器单独一张 GPU。",
+          "contributions": [
+            "定位出重复的全 cache 计算占扩散步 29%，并以写时计算（环形 cache + 一次量化 + 增量旋转）消除。",
+            "把张量并行的 all-reduce 融合进 FP8 GEMM，在交换机内完成归约，降低通信暴露。",
+            "解码器独占 GPU，解除帧解码与去噪链路的争用；系统级给出实时预算下的完整工程取舍。"
+          ],
+          "conclusions": [
+            "实时不是靠更大集群，而是靠把重复的读时工作一次搬到写时，并用 fused kernel 吃掉通信。",
+            "七周生产运行中 99.5% 的会话维持 23.5fps 以上，且唇形同步评分无可检测退化。"
+          ],
+          "experiments": [
+            "无 fused kernel：扩散步 240.9ms 降至 159.3ms（1.51 倍，24.5fps 持续）。",
+            "启用 fused kernel：147.4ms（1.63 倍，达 FP8 峰值 43%），中途曾回滚一次后重新上线。",
+            "生产七周：99.5% 的会话平均帧率高于 23.5fps；生成链路仅占 2.1s 中位对话轮的 0.49s。"
+          ],
+          "significance": "单用户实时视频生成的瓶颈在 KV cache 重复读与通信暴露，而非算力总量。",
+          "arxivUrl": "https://arxiv.org/abs/2611.05642",
+          "pdfUrl": "https://arxiv.org/pdf/2611.05642.pdf",
+          "takeaway": "57B 视频 DiT 单用户 24fps：把全 cache 读时工作搬到写时 + all-reduce 融进 FP8 GEMM。",
+          "keyExperiment": "扩散步 240.9→147.4ms（1.63 倍），4 卡 H100 上 704x1088 稳定 23.5fps 以上。",
+          "index": 2
+        },
+        {
+          "title": "vExpert: Virtualizing Expert Storage for Adaptive Load Balancing in Distributed MoE Inference",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-05",
+          "authors": "Wenxun Wang, Xiuhong Li, Yida Wang, Chen Tang, Zongle Huang, Ke Hong, Yu Wang, Yongpan Liu",
+          "institutions": "Tsinghua University, BNRist, Infinigence-AI",
+          "abstract": "MoE 模型的分布式部署受静态专家放置与路由动态性冲突之苦，负载严重不均。主机 DRAM 本可提供容量来避免静态设备存储，但作者指出既有 offloading 方案在分布式推理中根本失效，原因是两个被忽视的挑战：运行时 H2D 传输的性能影响与负载动态及共享 PCIe 拓扑耦合；以及大规模下 DRAM 使用带来的系统级内存开销。vExpert 把 DRAM offloading 从部分驻留改为全冗余加虚拟化：首个同时刻画 H2D 延迟、PCIe 争用与负载不均的系统级性能模型，配套轻量分配器在运行时把物理专家映射到虚拟槽位，并用解耦管理器降低多进程环境的内存开销。",
+          "contributions": [
+            "揭示分布式 MoE 推理下 offloading 失效的两个系统级根因：PCIe 争用耦合与多进程 DRAM 开销。",
+            "提出联合刻画 H2D 延迟、PCIe 争用与负载不均的性能模型，指导运行时专家→虚拟槽位映射。",
+            "全冗余虚拟化存储 + 解耦管理器，把负载均衡从静态放置问题变成运行时调度问题。"
+          ],
+          "conclusions": [
+            "把专家放置从静态决策转为运行时虚拟映射，是分布式 MoE 负载均衡更可扩展的方向。",
+            "在 DeepSeek-V3.1 的 8 节点 H100 集群上同时改善均衡性与端到端吞吐。"
+          ],
+          "experiments": [
+            "8 节点 H100 集群 + DeepSeek-V3.1：负载均衡比最高提升 55%。",
+            "端到端取得 1.2 倍加速。",
+            "解耦管理器显著降低多进程环境下的 DRAM 系统开销（避免全冗余的容量惩罚）。"
+          ],
+          "significance": "为分布式 MoE 推理给出可建模、可运行的专家存储虚拟化方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.06057",
+          "pdfUrl": "https://arxiv.org/pdf/2611.06057.pdf",
+          "takeaway": "全冗余虚拟化专家存储 + H2D/PCIe 争用建模，DeepSeek-V3.1 八节点 H100 上 1.2 倍加速。",
+          "keyExperiment": "负载均衡比最高 +55%，端到端 1.2 倍（8 节点 H100，DeepSeek-V3.1）。",
+          "index": 3
+        },
+        {
+          "title": "SafeStart: Mitigating the Overlooked Safety Cost of Active Expert Reduction in MoE LLM Serving",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-05",
+          "authors": "Erfan Baghaei Potraghloo, Saeid Shokoufa, Seyedarmin Azizi, Arya Fayyazi, Souvik Kundu, Mehdi Kamal, Massoud Pedram",
+          "institutions": "University of Southern California, Intel Labs",
+          "abstract": "MoE 服务加速的常用手段是每 token 只跑更少的专家，但这些方法只在准确率基准上被验证。作者证明这类主动专家削减会削弱模型的拒答能力，并提出 SafeStart 在保留大部分加速的同时基本恢复拒答。在单张 RTX A6000 的 vLLM 上，保留约三分之二的选中专家可在 batch size 8 时把离线解码加速 15% 至 28%。作者发现拒答的下降主要发生在处理 prompt 与生成最初几个 token 的阶段，因此 SafeStart 在 prompt 与前 8 个生成 token 上跑全部专家，之后切到削减后的专家集，通过 vLLM 中的融合 kernel 实现，且不改变模型权重。",
+          "contributions": [
+            "首次系统揭示 MoE 专家削减在安全维度的隐性代价：准确率几乎不掉，拒答却显著劣化。",
+            "定位退化发生的位置——prompt 处理与最初 8 个生成 token，据此设计前后段不同专家预算的调度。",
+            "在 vLLM 中用融合 kernel 落地，几乎无损地保住加速，并给出服务系统应测拒答而非只测准确率的结论。"
+          ],
+          "conclusions": [
+            "服务侧优化必须把拒答纳入回归测试，否则加速会静默换来对齐退化。",
+            "按阶段分配专家预算（起步全专家、后续削减）能以极小吞吐代价消除大部分安全损失。"
+          ],
+          "experiments": [
+            "保留约 2/3 专家：batch 8 离线解码加速 15% 至 28%（单卡 RTX A6000，vLLM）。",
+            "越狱设定下有害回答率上升 18.4pp（Qwen1.5-MoE）、9.5pp（OLMoE）、6.6pp（DeepSeek-V2-Lite），MMLU 掉点不到 2。",
+            "SafeStart 保住至少 85% 的离线加速（batch 8 与 32），安全变化收敛到 -2.1 至 +1.3pp；889 条留出请求上截断带来 +5.8~21.4pp，SafeStart 仅 0.6~2.6pp。"
+          ],
+          "significance": "为 MoE 服务优化补上被忽略的安全维度，且给出几乎免费的工程修法。",
+          "arxivUrl": "https://arxiv.org/abs/2611.06147",
+          "pdfUrl": "https://arxiv.org/pdf/2611.06147.pdf",
+          "takeaway": "专家削减换来的加速会削弱拒答；前 8 个 token 跑全专家即可保住 85% 加速并复原安全。",
+          "keyExperiment": "越狱下有害回答率 +18.4pp，SafeStart 把它拉回 -2.1~+1.3pp 且保住 ≥85% 加速。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Hybrid Spark: Adaptive Speculative Decoding That Lets the Content Choose the Drafter",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-05",
+          "authors": "Ekagra Ranjan, Bharat Venkitesh",
+          "institutions": "Cohere",
+          "abstract": "投机解码的收益既取决于工作负载形状（batch size、上下文长度），也取决于内容。基于模型的 drafter 对任何内容都能提出短块，而 n-gram 之类的免模型 drafter 在输出重复输入时（如代码编辑）能以近零成本给出长拷贝。自适应验证把批次级验证预算分配给最可能被接受的草稿 token，但只支持一个模型 drafter；免模型 drafter 没有 per-token 置信度，无法参与预算分配，部署方只能固定一种 drafter 或把 GPU 分割给两种。Hybrid Spark 每步同时运行两种 drafter，并为每个请求取二者中更优的链，全部在 GPU 上完成以保持异步调度。核心是每个被验证草稿 token 的价格——该槽位在批次别处本可换取的 goodput。",
+          "contributions": [
+            "提出以「每个验证槽位的机会成本」统一度量模型 drafter 与免模型 drafter 的草稿价值。",
+            "为 n-gram 草稿 token 拟合一次性的校准接受率估计，使无置信度的免模型 drafter 能进入自适应验证预算分配。",
+            "在不破坏异步调度的前提下，单部署同时对代码编辑与对话两类内容各取所需。"
+          ],
+          "conclusions": [
+            "drafter 选择应由请求内容在线决定，而不是部署时静态二选一。",
+            "统一价格化后，混合草稿在重复性强的编辑类负载上收益最大，在高温对话上基本无损。"
+          ],
+          "experiments": [
+            "代码编辑 batch 4：输出吞吐为 DSPARK 的 1.10 至 1.62 倍（vLLM 实现）。",
+            "代码编辑 batch 128：仍为 1.04 至 1.27 倍。",
+            "对话（temperature 0）：维持在 0.97 至 1.01 倍，即几乎不付代价。"
+          ],
+          "significance": "让内容而非部署决策来选择 drafter，是投机解码走向通用化的关键一步。",
+          "arxivUrl": "https://arxiv.org/abs/2611.05611",
+          "pdfUrl": "https://arxiv.org/pdf/2611.05611.pdf",
+          "takeaway": "两种 drafter 同跑并对验证槽位定价：代码编辑吞吐 +10~62%，对话几乎零损失。",
+          "keyExperiment": "代码编辑 bs4 达 1.62 倍、bs128 达 1.27 倍，对话 0.97~1.01 倍。",
+          "index": 5
+        },
+        {
+          "title": "EchoKV: Self-Corrective KV Cache Eviction via Iterative Query Feedback",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-05",
+          "authors": "JianKun Zou, Tongtong Yuan",
+          "institutions": "Beijing University of Technology",
+          "abstract": "KV cache 驱逐不只是 token 排序问题：用于生成驱逐查询的工作区本身也决定了查询的质量。于是一个早期的工作区误差会扭曲后续查询观测，强化错误的最终驱逐决策，当证据分散在长上下文中时尤为严重。EchoKV 用迭代纠正来发现并处理该失效模式：先用未来解码位置上的提案初始化一个反馈兼容的引导工作区，再用早期解码产生的查询在剩余前瞻步之前修复工作区。它与 LAQ 使用相同数量的工作区前向次数，只增加一次张量重打分操作来完成工作区修复，因此在几乎不增加开销的前提下改善分散证据类任务。",
+          "contributions": [
+            "把 KV 驱逐中「查询—工作区耦合」识别为一种实际失效模式，而非单纯的排序误差。",
+            "提出两阶段自纠正：未来位置提案初始化 + 早期解码查询反馈修复工作区。",
+            "在等价前向开销下（与 LAQ 同为 K 次工作区前向）增加一次张量重打分，实现可插拔的精度提升。"
+          ],
+          "conclusions": [
+            "查询驱动的驱逐方法应把工作区质量当作一阶变量来优化，而非固定超参。",
+            "收益集中在需要跨段聚合证据的任务上，其余子集性能基本持平，说明修正是选择性的而非普适涨点。"
+          ],
+          "experiments": [
+            "LongBench 16 项任务、Mistral-7B-Instruct-v0.2 与 Qwen2.5-7B-Instruct 两套骨干：多跳跨文档 QA 与长单文档理解明显优于 LAQ。",
+            "各预算档与各骨干下，证据密集型任务稳定提升，其余 LongBench 子集保持可比。",
+            "工作区前向次数与 LAQ 相同，仅增加一次张量重打分，开销增量可忽略。"
+          ],
+          "significance": "给出长上下文 KV 驱逐中被忽视的误差放大路径及其低成本纠正方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.05903",
+          "pdfUrl": "https://arxiv.org/pdf/2611.05903.pdf",
+          "takeaway": "驱逐查询的好坏取决于工作区：用早期解码查询迭代修复工作区，长上下文多跳任务显著改善。",
+          "keyExperiment": "LongBench 多跳跨文档 QA 稳定优于 LAQ，工作区前向次数相同、仅多一次张量重打分。",
+          "index": 6
+        },
+        {
+          "title": "Tools Need Not Speak in Text: Latent Context Compression for Agents",
+          "score": 3.5,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-05",
+          "authors": "Yuetong Liu, Zhehao Zhou, Yitong Zhang, Haorui Chen, Jia Li",
+          "institutions": "Tsinghua University",
+          "abstract": "LLM agent 通常把工具返回的原始输出直接追加到上下文。多步交互后，冗长且有噪声的观测带来大量上下文开销，并稀释 agent 对任务相关信息的注意力。现有的 token 剪枝与摘要方法受限于离散文本表示，压缩比难以提升。作者挑战「agent 必须以显式文本 token 消费工具观测」这一默认假设，提出 Coca-Cola：把工具观测压缩为 latent token 并直接嵌入 agent 的输入嵌入空间。为让压缩后的 latent 保留决策关键信息，作者引入动作保持训练，对齐全观测与压缩观测下 agent 的下一动作分布。",
+          "contributions": [
+            "提出用连续 latent token 取代文本 token 承载工具观测，突破离散表示对压缩比的天花板。",
+            "提出动作保持训练：以全观测与压缩观测下下一动作分布的一致性为监督信号，直接优化决策充分性。",
+            "在多个 QA 基准与两族模型上同时降低 token 消耗与端到端时延，且任务表现不降反升。"
+          ],
+          "conclusions": [
+            "agent 的上下文压缩应优化「决策充分性」而非「文本可还原性」，这改变了压缩目标的定义。",
+            "latent 压缩在 web-search agent 上取得 70% 以上的 token 削减，说明工具输出中大部分文本对决策是冗余的。"
+          ],
+          "experiments": [
+            "web-search agent、4 个 QA 基准、2 个模型族：token 消耗降低 70.01% 至 89.24%。",
+            "端到端运行时降低 24.45% 至 55.97%。",
+            "在上述压缩率下任务表现持续优于未压缩基线。"
+          ],
+          "significance": "为 agent 上下文管理给出以动作分布为约束的压缩范式。",
+          "arxivUrl": "https://arxiv.org/abs/2611.06500",
+          "pdfUrl": "https://arxiv.org/pdf/2611.06500.pdf",
+          "takeaway": "工具观测不必是文本：压缩成 latent token，token 省 70~89%、时延降 24~56% 且效果更好。",
+          "keyExperiment": "token 消耗 -70.01%~89.24%，端到端时延 -24.45%~55.97%，任务表现提升。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Systolic Linear Attention: Co-Designing Tile-Grouped Gated Delta Attention for TPUs",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-05",
+          "authors": "Gagik Amirkhanyan, Nuojin Cheng",
+          "institutions": "Google",
+          "abstract": "Gated DeltaNet、Kimi Delta Attention、GDN-2 等门控 delta 线性注意力层是为 GPU 调优的：小尺寸张量核 tile 与快速向量寄存器让逐通道衰减重缩放与块内顺序求解都很便宜。而在把算力集中在 256x256 脉动矩阵单元、向量单元相对较慢的 Google TPU 上，直接移植会让每个矩阵 tile 有一半空置并在向量操作上阻塞。作者提出 Systolic Linear Attention，围绕矩阵单元重塑门控 delta 注意力：用分组 value head 把 key 拓宽到 256、把衰减门分成四个 64 通道 tile、并在单个融合 kernel 内全部用块矩阵乘完成 chunk 求解。",
+          "contributions": [
+            "指出 GPU 原生的线性注意力实现在 TPU 上因 tile 空置与向量单元瓶颈而严重低效。",
+            "以 256 宽 key + 分组 value head 填满脉动阵列，并把衰减门分成 4 个 64 通道 tile 以匹配硬件粒度。",
+            "把 chunk 求解整体改写为块矩阵乘并在单 kernel 内融合，消除向量单元上的串行瓶颈。"
+          ],
+          "conclusions": [
+            "线性注意力的高效实现强绑定加速器形态，跨硬件必须做算子级协同设计而非编译器迁移。",
+            "在 2048 卡 TPU v7x 的大规模预训练上，收益从 kernel 级延续到端到端训练时间与困惑度。"
+          ],
+          "experiments": [
+            "TPU v7x 单层 SLA-R4：比开源 Tokamax KDA kernel 快 1.6 至 2.5 倍（精确 chunk 求逆下 1.4 至 2.4 倍）。",
+            "2048 卡 TPU v7x、6.5B 至 63.1B 稀疏 MoE 预训练：训练速度比 KDA 快 11% 至 24%（同等困惑度）。",
+            "小规模同种子对照中困惑度略优于 KDA。"
+          ],
+          "significance": "证明线性注意力在非 GPU 加速器上仍有大量未被对齐的硬件余量。",
+          "arxivUrl": "https://arxiv.org/abs/2611.06828",
+          "pdfUrl": "https://arxiv.org/pdf/2611.06828.pdf",
+          "takeaway": "把 gated delta 注意力按 TPU 脉动阵列重塑：单层快 1.6~2.5 倍，2048 卡预训练快 11~24%。",
+          "keyExperiment": "TPU v7x 单层 1.6~2.5 倍加速；2048 卡 MoE 预训练提速 11~24% 且困惑度不升。",
+          "index": 8
+        },
+        {
+          "title": "CHARM+: Cross-Hardware Attention with Re-Merge Multistream Mechanism",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-11-05",
+          "authors": "Xinhang Zhang, Boning Zhang, Chengchun Liu, Chunpu Li, Lei Sun, Weifeng Zhang, Limin Xiao",
+          "institutions": "Lenovo Research",
+          "abstract": "随序列变长，基于序列并行的分布式注意力（如 Ring-Attention）已成为大模型的主流方案。但固有的通信依赖限制了计算—通信重叠，降低了 GPU 利用率；在跨硬件（NUMA 或跨节点）架构下，通信带宽不均衡导致的频繁同步进一步压制整体性能。CHARM+ 把顺序通信重组为多个层级，实现层内并行与计算重叠；并把跨硬件通信与硬件内通信解耦，消除带宽不均衡带来的同步开销。作者在多套硬件架构上评估前向与反向算法，均稳定优于现有方法。",
+          "contributions": [
+            "把 ring 式串行通信拆成多层级，使同一层级内的多个通信流可并行并与计算重叠。",
+            "将跨硬件（NUMA/节点）通信与硬件内通信解耦，消除带宽不均衡引发的全局同步。",
+            "前向与反向算法同时给出并在多种硬件拓扑上验证，覆盖训练而非仅推理。"
+          ],
+          "conclusions": [
+            "长序列注意力的瓶颈是通信结构而非单卡算力，通信分层与解耦比单纯增加带宽更有效。",
+            "带宽越不均衡的拓扑（跨节点 NVLink）收益越大，说明方法正好命中跨硬件场景的痛点。"
+          ],
+          "experiments": [
+            "双 NUMA PCIe 架构：前向平均 1.3 倍、反向 1.7 倍加速（对比 Ring-Attention）。",
+            "双节点 NVLink 架构：前向平均 2.8 倍、反向 3.9 倍加速。",
+            "在多套硬件架构上一致优于 SOTA 的分布式注意力方案。"
+          ],
+          "significance": "为跨 NUMA/跨节点的长序列注意力给出可落地的通信重组方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.05906",
+          "pdfUrl": "https://arxiv.org/pdf/2611.05906.pdf",
+          "takeaway": "把 ring 通信分层并解耦跨硬件同步：双节点 NVLink 上前向 2.8 倍、反向 3.9 倍。",
+          "keyExperiment": "双节点 NVLink 前向 2.8 倍、反向 3.9 倍；双 NUMA PCIe 前向 1.3 倍、反向 1.7 倍。",
+          "index": 9
+        },
+        {
+          "title": "Split-KV: Efficient Context Parallelism for Training Diffusion Drafters",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-11-05",
+          "authors": "Geng Zhang, Fangzhao Zhang, Cong Xie, Tiantian Fan, Yang You",
+          "institutions": "National University of Singapore",
+          "abstract": "扩散 drafter 通过并行去噪多个草稿 token 来加速投机解码，其训练使用锚点采样构造紧凑的草稿查询，并对长得多的上下文做带块稀疏掩码的交叉注意力。作者实证发现：在固定查询预算下，接受长度随上下文扩展保持稳定；而增大查询预算带来的质量增益递减——二者共同确立了查询远短于上下文的实用区间。现有上下文并行方法都没有同时利用这一查询—上下文不对称性，也没满足锚点采样带来的非线性、依赖样本的负载均衡需求。Split-KV 是精确的上下文并行方法：KV 分片保持本地，每层注意力的通信量只与查询规模相关，因而与上下文长度无关；全局查询视图还支持按实际注意力代价划分 KV chunk 的 LPT 均衡策略。",
+          "contributions": [
+            "实证确立扩散 drafter 训练的查询—上下文不对称区间：固定查询预算下接受长度不随上下文退化。",
+            "提出精确 CP：KV 分片本地化，每层通信只传查询规模张量，使通信量与上下文长度解耦。",
+            "利用全局查询视图做代价感知的 LPT 负载划分，把锚点采样的非线性负载压到 1% 以内。"
+          ],
+          "conclusions": [
+            "训练侧并行的设计应由「有效信息密度」而非张量形状决定，才能获得与序列长度无关的通信。",
+            "在 64 路上下文并行下仍保持 85% 以上弱扩展效率，说明该解耦在极致并行度下成立。"
+          ],
+          "experiments": [
+            "CP size 64：弱扩展效率 85% 至 91%。",
+            "较最快的上下文并行基线最高 3.67 倍加速。",
+            "LPT 负载不均衡低于 1%，且规划耗时比最好的负载均衡基线快三个数量级。"
+          ],
+          "significance": "把训练扩散 drafter 的上下文并行从「通信随长度涨」变成「通信与长度无关」。",
+          "arxivUrl": "https://arxiv.org/abs/2611.05926",
+          "pdfUrl": "https://arxiv.org/pdf/2611.05926.pdf",
+          "takeaway": "KV 本地化 + 查询规模通信，64 路 CP 保持 85~91% 弱扩展，比最快基线快 3.67 倍。",
+          "keyExperiment": "CP=64 时弱扩展效率 85~91%，最高 3.67 倍加速，负载不均衡 <1%。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
