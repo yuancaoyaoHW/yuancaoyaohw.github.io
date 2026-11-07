@@ -50,6 +50,37 @@
 .ix-modlist a b{font-family:var(--mono)}
 .ix-modlist a small{color:var(--mute);font-size:12px}
 .ix-pr h3{font-size:16px;margin:22px 0 6px}
+.ix-map .ix-planned rect.ix-box{stroke-dasharray:6 4;fill:color-mix(in srgb,var(--sim) 10%,var(--ix-box))}
+.ix-map .ix-planned .ix-nm{font-size:12px}
+.ix-map .ix-plan-title{font:700 14px var(--sans);fill:var(--ink)}
+.ix-map .ix-plan-status{font:600 10px var(--sans);fill:var(--sim)}
+.ix-map .ix-edge.ix-optional{stroke-dasharray:2 5;animation:none}
+.ix-decision-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.ix-decision-cards{margin:18px 0}
+.ix-decision-cards h3,.ix-decision-cards h4{font-size:16px;margin:0 0 8px}
+.ix-decision-cards p{font-size:13.5px;color:var(--ink2);margin:0}
+.ix-decision-pipeline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:18px 0}
+.ix-decision-step{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--panel)}
+.ix-decision-step small{display:block;font:600 11px var(--mono);color:var(--sim);margin-bottom:5px}
+.ix-decision-step b{display:block;font-size:13px}
+.ix-decision-step span{font-size:12px;color:var(--mute)}
+.ix-decision-checks{margin:0;padding-left:20px;font-size:13.5px;line-height:1.9}
+.ix-decision-checks li+li{margin-top:6px}
+.ix-price-modes .tab-bar button:focus-visible,.ix-modlist a:focus-visible{outline:2px solid var(--sim);outline-offset:3px}
+.ix-modlist a.ix-planned-link{border-color:var(--sim);border-style:dashed}
+.ix-design-intro{font-size:15px;color:var(--ink2)}
+.ix-design-details{margin:18px 0!important}
+.ix-design-details summary{gap:12px;font-size:14px}
+.ix-design-details summary:focus-visible{outline:2px solid var(--sim);outline-offset:-4px;border-radius:10px}
+.ix-design-details .body{font-size:13.5px;overflow-wrap:anywhere}
+.ix-design-details .body h4{margin:18px 0 6px;font-size:14px}
+.ix-design-example{border-left-color:var(--acct)}
+.ix-design-example p{margin:6px 0;font-size:13.5px}
+.ix-design-sources{font-size:12.5px;color:var(--mute);line-height:1.8}
+.ix-design-sources a{display:inline-block;margin-right:12px}
+.ix-design-clock{font-size:13.5px;color:var(--ink2);border-left:2px solid var(--sim);padding-left:14px;margin:18px 0}
+.ix-design-clock b{color:var(--ink)}
+@media(max-width:600px){.ix-decision-pipeline{grid-template-columns:repeat(2,minmax(0,1fr))}.ix-decision-step:last-child{grid-column:1/-1}.ix-mc-hd .btn{margin-left:0!important}}
 </style>
 </head>
 <body>
@@ -57,20 +88,20 @@
 <aside class="toc"></aside>
 <main>
 <header class="hero">
-<div class="eyebrow"><i></i>设计草案 v0.3（2026-10-31）· 尚未实现</div>
+<div class="eyebrow"><i></i>v0.3 + 三类独立决策模块详细设计（2026-11-02）· 尚未实现</div>
 <h1>模拟 A 股散户的<span class="grad">声音、态度与决策</span></h1>
-<p class="lead">一个研究用沙盒：由 LLM 驱动的合成散户在点时的信息流里读新闻、逛论坛、聊群、下单，产出帖子、结构化态度和交易决策，导出给下游项目使用 <span class="ref">§0</span>。</p>
-<div class="meta"><span class="chip social"><i></i>声音：帖子与群聊</span><span class="chip sim"><i></i>态度：信念与情绪</span><span class="chip acct"><i></i>决策与账户</span><span class="chip warn"><i></i>不做因子</span></div>
+<p class="lead">一个研究用沙盒：合成散户在点时的信息流里读新闻、交流、交易，产出声音、态度与决策 <span class="ref">§0</span>。模拟层新增三个并列、独立的模块：机构决策、游资决策、量化公司决策。各自管理状态与策略，共用市场和账户基础设施。</p>
+<div class="meta"><span class="chip social"><i></i>声音：帖子与群聊</span><span class="chip sim"><i></i>态度：信念与情绪</span><span class="chip acct"><i></i>决策与账户</span><span class="chip warn"><i></i>不做因子</span><a class="chip sim" href="#institutions"><i></i>新增：机构决策 ↓</a><a class="chip social" href="#hot_money"><i></i>新增：游资决策 ↓</a><a class="chip acct" href="#quant_firms"><i></i>新增：量化公司决策 ↓</a></div>
 </header>
 <section id="s1" class="reveal">
 <h2><span class="num">01</span>这是什么、不做什么</h2>
 <p class="sub">先讲清三件事：模拟谁、产出什么、怎样判断模拟得像不像。读完这一节，后面每个模块在整体里的位置就清楚了。</p>
-<p>RetailSim（仓库名 ashare-crowdsim）是一个可复现的多智能体模拟平台 <span class="ref">§1</span>。平台里的每个"智能体"是一个合成散户，有自己的年龄、性别、学历、职业、性格、人生与入市经历，由 LLM 扮演。它们在"点时"（point-in-time，PIT）的信息流里活动：任何数据、新闻、帖子只有到了它当年实际可见的时刻才会出现在智能体眼前，仿真时钟之前的东西一律看不到 <span class="ref">§3.1</span>。智能体读新闻、逛论坛、在熟人群里聊天、在模拟账户里下单。</p>
+<p>RetailSim（仓库名 ashare-crowdsim）是一个可复现的多智能体模拟平台 <span class="ref">§1</span>。散户支线里的每个"智能体"是一个合成散户，有自己的年龄、性别、学历、职业、性格、人生与入市经历，由 LLM 扮演。它们在"点时"（point-in-time，PIT）的信息流里活动：任何数据、新闻、帖子只有到了它当年实际可见的时刻才会出现在智能体眼前，仿真时钟之前的东西一律看不到 <span class="ref">§3.1</span>。智能体读新闻、逛论坛、在熟人群里聊天、在模拟账户里下单。</p>
 <p>产出分三类，各存一张主表 <span class="ref">§1</span><span class="ref">§10.3</span>。<b>声音</b>是帖子、评论、群聊的自由文本，按人设与渠道标注。<b>态度</b>是结构化的信念、情绪、理由与政策信任，可以按人群切片，也可以聚合成恐惧 / 贪婪、政策信任、杠杆意愿、入场意愿、分歧度这类描述性的群体态度指标。<b>决策</b>是买、卖、持有、观望，加上仓位和理由，并且同时记下"想做什么"（意向）、"实际成交了什么"和"为什么没做成"。此外每个智能体有一个跨日连续的模拟账户，逐日记录交易流水、出入金和投资战绩，战绩会回灌到记忆里，影响之后的发言与决策 <span class="ref">§1</span><span class="ref">§8.4</span>。几张表用 <code>persona_id</code>、<code>event_id</code>、<code>run_id</code> 关联，账户类表再加 <code>sim_date</code>。</p>
 <p>为什么模拟散户：按 Jones et al.（2025）对上交所 2016-01 至 2019-06 共 5,340 万个散户账户的研究，散户贡献约 81% 的成交额，只持有约 22% 的市值 <span class="ref">§2.1</span>。散户怎么说、怎么想、怎么做，是理解 A 股的一个重要切面。为什么不直接让一个 LLM 扮演"散户"：现有研究显示，人设标签只能解释标注差异的不到 10%，LLM 只抓住个人特异方差的 3.05%，而人类自己重测为 53.6% <span class="ref">§2.3</span>。LLM 演出来的人群偏窄、偏理性、容易刻板化。所以本项目把差异主要从 LLM 之外注入：每人看到的信息不同，社交网络、经历、内核参数各异 <span class="ref">§13.2</span>。底座模型不在单次运行内混用：同一底座内全体智能体用同一个开源权重模型，跨底座比较时全体一起换，模型差异计入 V5 <span class="ref">§6.6</span><span class="ref">§14.1</span>。</p>
 <p>使用方式分两步 <span class="ref">§1</span>。先做按需的情景推演：回放某个历史事件，或者给一个假设情景，看各类散户如何反应。再在同一套人设与内核上扩展成每日持续运行，每天生成当天的帖子、态度与决策。</p>
 <h3>怎样算"像"：V1–V5</h3>
-<p>平台内置验证框架，五项判据各自独立出结论 <span class="ref">§1</span><span class="ref">§12.3</span>。其中 V2"声音可信"是总闸门：帖子是最直接能拿真实数据对照的产出，也最容易露馅。V2 不过，帖子不对外交付，其余各项照常报告。下表的及格线是设计文档的经验设定，在 Phase 0 预注册，可依 B5（两批真实帖互相区分的噪声底线）调整一次 <span class="ref">§12.3</span>。</p>
+<p>散户支线内置验证框架，五项判据各自独立出结论 <span class="ref">§1</span><span class="ref">§12.3</span>。其中 V2"声音可信"是散户声音的总闸门：帖子是最直接能拿真实数据对照的产出，也最容易露馅。V2 不过，帖子不对外交付，其余各项照常报告。资金主体另验约束、行为与容量，不套用声音闸门。下表的及格线是设计文档的经验设定，在 Phase 0 预注册，可依 B5（两批真实帖互相区分的噪声底线）调整一次 <span class="ref">§12.3</span>。</p>
 <div class="tbl-wrap"><table class="tbl">
 <thead><tr><th>判据</th><th>问的是</th><th>及格线 <span class="ref">§12.3</span></th></tr></thead>
 <tbody>
@@ -81,13 +112,15 @@
 <tr><td>V5 稳定可解释</td><td>结论是否不取决于种子、模型、模板</td><td>校准前跨模型合并人群态度相关 ≥ 0.5，且可比率 ≥ 0.7、方向一致；同底座跨种子相关 &lt; 0.5 时不判</td></tr>
 </tbody></table></div>
 <p>TVD（总变差距离）衡量两个分布差多少，0 表示完全一致。B1 是"单个 LLM、不给人设"的基线，生成帖要比它更难被认出来才算数 <span class="ref">§11</span>。</p>
-<div class="callout warn"><b class="t">不做什么 <span class="ref">§1</span></b>不生成因子，不预测价格，不对下游用途的预测力负责；不做实盘交易系统；MVP 不模拟机构，也不做闭环价格形成；模拟帖子不进入对外渠道 <span class="ref">§16.2</span>。完整的非目标与风险见第 06 节。</div>
+<div class="callout warn"><b class="t">范围边界</b>不生成因子，不预测价格，不对下游用途的预测力负责；不做实盘交易系统，模拟帖子不进入对外渠道 <span class="ref">§16.2</span>。原散户 MVP 不含机构；本次分别增加机构、游资、量化公司三个独立模块的方案，首版仍使用给定行情，不做闭环价格形成。完整边界见<a href="#s6">非目标与风险</a>。</div>
 </section>
 <section id="s2" class="reveal">
 <h2><span class="num">02</span>模块地图</h2>
-<p class="sub">整个平台拆成 14 个子包 <span class="ref">§3.3</span>。图里按数据层、模拟层、产出层和基础层四组排列，颜色与顶栏分组一致（分组是本站的归纳，§3.2 的分层视图划得更细）。悬停看上下游，点击看职责与入口。</p>
+<p class="sub">现有骨架包含 14 个子包 <span class="ref">§3.3</span>，本次在模拟层分别增加 <code>institutions</code>、<code>hot_money</code>、<code>quant_firms</code> 三个独立模块的方案，共展示 17 个模块位置；三个新增模块均尚未建包。悬停看上下游，点击看各自职责与本页入口。</p>
 <div class="ix-mapwrap">
-<svg class="ix-map" id="ixMap" viewBox="0 0 1120 600" role="img" aria-label="RetailSim 模块地图">
+<svg class="ix-map" id="ixMap" viewBox="0 0 1120 738" role="group" aria-labelledby="ixMapTitle ixMapDesc">
+<title id="ixMapTitle">RetailSim 模块地图：14 个既有模块与机构、游资、量化公司三个独立模块方案</title>
+<desc id="ixMapDesc">institutions、hot_money、quant_firms 是三个可分别选择的独立节点，与散户 agents 并列，共用点时数据、market 与 accounts，互不依赖对方的决策状态。LLM 细虚线只表示可选的研究辅助。各模块可通过 Tab 聚焦、Enter 或空格选中查看职责。</desc>
 <defs>
 <marker id="ixArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--mute)"></path></marker>
 <linearGradient id="ixGData" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--data)" stop-opacity=".16"></stop><stop offset="1" stop-color="var(--data)" stop-opacity=".02"></stop></linearGradient>
@@ -95,14 +128,14 @@
 <linearGradient id="ixGOut" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--out)" stop-opacity=".16"></stop><stop offset="1" stop-color="var(--out)" stop-opacity=".02"></stop></linearGradient>
 <linearGradient id="ixGBase" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--orch)" stop-opacity=".14"></stop><stop offset="1" stop-color="var(--llm)" stop-opacity=".04"></stop></linearGradient>
 </defs>
-<rect x="20" y="30" width="230" height="400" rx="18" fill="url(#ixGData)" stroke="var(--data)" stroke-opacity=".35"></rect>
-<rect x="285" y="30" width="540" height="400" rx="18" fill="url(#ixGSim)" stroke="var(--sim)" stroke-opacity=".35"></rect>
-<rect x="860" y="30" width="240" height="400" rx="18" fill="url(#ixGOut)" stroke="var(--out)" stroke-opacity=".35"></rect>
-<rect x="20" y="462" width="1080" height="120" rx="18" fill="url(#ixGBase)" stroke="var(--orch)" stroke-opacity=".35"></rect>
+<rect x="20" y="30" width="230" height="540" rx="18" fill="url(#ixGData)" stroke="var(--data)" stroke-opacity=".35"></rect>
+<rect x="285" y="30" width="540" height="540" rx="18" fill="url(#ixGSim)" stroke="var(--sim)" stroke-opacity=".35"></rect>
+<rect x="860" y="30" width="240" height="540" rx="18" fill="url(#ixGOut)" stroke="var(--out)" stroke-opacity=".35"></rect>
+<rect x="20" y="600" width="1080" height="120" rx="18" fill="url(#ixGBase)" stroke="var(--orch)" stroke-opacity=".35"></rect>
 <text class="ix-layer" x="38" y="54" fill="var(--data)">数据层</text>
 <text class="ix-layer" x="303" y="54" fill="var(--sim)">模拟层</text>
 <text class="ix-layer" x="878" y="54" fill="var(--out)">产出层</text>
-<text class="ix-layer" x="38" y="482" fill="var(--orch)">基础层 · 被所有模块使用</text>
+<text class="ix-layer" x="38" y="620" fill="var(--orch)">基础层 · 被所有模块使用</text>
 <g id="ixEdges">
 <path class="ix-edge flowline" data-f="collect" data-t="data" d="M135 132 L135 186" marker-end="url(#ixArr)"></path>
 <path class="ix-edge flowline" data-f="data" data-t="events" d="M135 252 L135 306" marker-end="url(#ixArr)"></path>
@@ -121,10 +154,28 @@
 <path class="ix-edge flowline" data-f="accounts" data-t="outputs" d="M790 291 C840 291 840 230 886 230" marker-end="url(#ixArr)"></path>
 <path class="ix-edge flowline" data-f="social" data-t="outputs" d="M500 362 C620 410 840 410 940 256" marker-end="url(#ixArr)"></path>
 <path class="ix-edge flowline" data-f="outputs" data-t="validation" d="M985 252 L985 326" marker-end="url(#ixArr)"></path>
-<path class="ix-edge flowline" data-f="prompts" data-t="llm" d="M510 528 L576 528" marker-end="url(#ixArr)"></path>
-<path class="ix-edge flowline" data-f="llm" data-t="agents" d="M650 496 C650 420 540 250 504 250" marker-end="url(#ixArr)"></path>
-<path class="ix-edge flowline" data-f="llm" data-t="social" d="M630 496 C630 440 540 366 504 366" marker-end="url(#ixArr)"></path>
-<path class="ix-edge flowline" data-f="llm" data-t="events" d="M610 496 C610 452 262 452 232 368" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="data" data-t="institutions" d="M230 239 C264 239 264 391 284 391 L338 391 Q350 391 350 403 L350 424" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="events" data-t="institutions" d="M230 350 C254 350 254 461 306 461" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="accounts" data-t="institutions" d="M634 322 L634 392 Q634 404 622 404 L416 404 Q404 404 404 416 L404 424" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="institutions" data-t="market" d="M458 454 L464 454 L464 422 Q464 410 476 410 L800 410 Q812 410 812 398 L812 163 Q812 151 794 151" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="institutions" data-t="outputs" d="M384 546 L384 556 C384 584 832 584 832 260 C832 244 860 244 886 244" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="data" data-t="hot_money" d="M230 239 C262 239 262 383 284 383 L514 383 Q526 383 526 395 L526 424" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="events" data-t="hot_money" d="M230 350 C250 350 250 411 284 411 L454 411 Q466 411 466 423 L466 463 Q466 475 470 475" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="accounts" data-t="hot_money" d="M666 322 L666 400 Q666 412 654 412 L582 412 Q570 412 570 424" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="hot_money" data-t="market" d="M622 454 L630 454 L630 430 Q630 418 642 418 L808 418 Q820 418 820 406 L820 175 Q820 163 794 163" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="hot_money" data-t="outputs" d="M548 546 L548 556 C548 584 844 584 844 250 C844 234 864 234 886 234" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="data" data-t="quant_firms" d="M230 239 C260 239 260 375 284 375 L680 375 Q692 375 692 387 L692 424" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="events" data-t="quant_firms" d="M230 350 C246 350 246 419 284 419 L618 419 Q630 419 630 431 L630 475 Q630 487 634 487" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="accounts" data-t="quant_firms" d="M746 322 L746 424" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="quant_firms" data-t="market" d="M790 454 C830 454 830 139 794 139" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="quant_firms" data-t="outputs" d="M714 546 L714 556 C714 584 854 584 854 232 C854 216 866 216 886 216" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="prompts" data-t="llm" d="M510 666 L576 666" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="llm" data-t="agents" d="M640 634 C640 582 278 594 278 397 L278 285 C278 270 530 278 504 250" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="llm" data-t="social" d="M620 634 C620 586 292 596 292 400 C292 386 530 386 504 366" marker-end="url(#ixArr)"></path>
+<path class="ix-edge flowline" data-f="llm" data-t="events" d="M600 634 C600 594 258 596 232 372" marker-end="url(#ixArr)"></path>
+<path class="ix-edge ix-optional" data-f="llm" data-t="institutions" d="M620 634 C620 594 408 602 408 550" marker-end="url(#ixArr)"></path>
+<path class="ix-edge ix-optional" data-f="llm" data-t="hot_money" d="M650 634 C650 590 572 590 572 550" marker-end="url(#ixArr)"></path>
+<path class="ix-edge ix-optional" data-f="llm" data-t="quant_firms" d="M680 634 C680 590 738 590 738 550" marker-end="url(#ixArr)"></path>
 </g>
 <g font-family="ui-monospace,monospace" font-size="10.5" fill="var(--mute)">
 <text x="236" y="208">pit.query</text>
@@ -135,7 +186,15 @@
 <text x="842" y="262">账户表</text>
 <text x="640" y="88">态度 / 决策</text>
 <text x="640" y="402">帖子</text>
-<text x="518" y="520">模板</text>
+<text x="518" y="658">模板</text>
+<text x="704" y="380">只读账户</text>
+<text x="750" y="591">LLM：仅按需研究辅助</text>
+<text x="40" y="476">同一信息时钟</text>
+<text x="40" y="498">披露按 available_at 可见</text>
+<text x="880" y="460">分开验收</text>
+<text x="880" y="482">散户：声音 / 态度 / 行为</text>
+<text x="880" y="504">机构 / 游资 / 量化公司</text>
+<text x="880" y="526">各验约束、行为与容量</text>
 </g>
 <g id="ixNodes">
 <g class="ix-node" data-m="collect" tabindex="0" role="button"><rect class="ix-box" x="40" y="70" width="190" height="62" rx="12" style="stroke:var(--data)"></rect><text class="ix-nm" x="56" y="98">collect</text><text class="ix-ds" x="56" y="118">前向存档 · 股吧 / 快讯</text></g>
@@ -148,24 +207,241 @@
 <g class="ix-node" data-m="accounts" tabindex="0" role="button"><rect class="ix-box" x="600" y="260" width="190" height="62" rx="12" style="stroke:var(--acct)"></rect><text class="ix-nm" x="616" y="288">accounts</text><text class="ix-ds" x="616" y="308">记账 · 快照 · 战绩</text></g>
 <g class="ix-node" data-m="outputs" tabindex="0" role="button"><rect class="ix-box" x="890" y="190" width="190" height="62" rx="12" style="stroke:var(--out)"></rect><text class="ix-nm" x="906" y="218">outputs</text><text class="ix-ds" x="906" y="238">三张主表 · 切片 · 指标</text></g>
 <g class="ix-node" data-m="validation" tabindex="0" role="button"><rect class="ix-box" x="890" y="330" width="190" height="62" rx="12" style="stroke:var(--val)"></rect><text class="ix-nm" x="906" y="358">validation</text><text class="ix-ds" x="906" y="378">V1–V5 · B1–B6 · 探针</text></g>
-<g class="ix-node" data-m="schemas" tabindex="0" role="button"><rect class="ix-box" x="60" y="496" width="190" height="62" rx="12" style="stroke:var(--orch)"></rect><text class="ix-nm" x="76" y="524">schemas</text><text class="ix-ds" x="76" y="544">Pydantic v2 共享类型</text></g>
-<g class="ix-node" data-m="prompts" tabindex="0" role="button"><rect class="ix-box" x="320" y="496" width="190" height="62" rx="12" style="stroke:var(--llm)"></rect><text class="ix-nm" x="336" y="524">prompts</text><text class="ix-ds" x="336" y="544">模板 · 内容哈希</text></g>
-<g class="ix-node" data-m="llm" tabindex="0" role="button"><rect class="ix-box" x="580" y="496" width="190" height="62" rx="12" style="stroke:var(--llm)"></rect><text class="ix-nm" x="596" y="524">llm</text><text class="ix-ds" x="596" y="544">网关 · 缓存 · 结构化输出</text></g>
-<g class="ix-node" data-m="orchestrator" tabindex="0" role="button"><rect class="ix-box" x="840" y="496" width="190" height="62" rx="12" style="stroke:var(--orch)"></rect><text class="ix-nm" x="856" y="524">orchestrator</text><text class="ix-ds" x="856" y="544">时钟 · 激活 · 快照分叉</text></g>
+<g class="ix-node ix-planned" data-m="institutions" tabindex="0" role="button"><rect class="ix-box" x="310" y="428" width="148" height="118" rx="12" style="stroke:var(--sim)"></rect><text class="ix-plan-title" x="324" y="453">机构决策</text><text class="ix-nm" x="324" y="475">institutions</text><text class="ix-ds" x="324" y="499">研究 · 配置 · 申赎</text><text class="ix-plan-status" x="324" y="527">独立方案 · 未实现</text></g>
+<g class="ix-node ix-planned" data-m="hot_money" tabindex="0" role="button"><rect class="ix-box" x="474" y="428" width="148" height="118" rx="12" style="stroke:var(--sim)"></rect><text class="ix-plan-title" x="488" y="453">游资决策</text><text class="ix-nm" x="488" y="475">hot_money</text><text class="ix-ds" x="488" y="499">题材 · 情绪 · 进退</text><text class="ix-plan-status" x="488" y="527">独立方案 · 未实现</text></g>
+<g class="ix-node ix-planned" data-m="quant_firms" tabindex="0" role="button"><rect class="ix-box" x="638" y="428" width="152" height="118" rx="12" style="stroke:var(--sim)"></rect><text class="ix-plan-title" x="652" y="453">量化公司决策</text><text class="ix-nm" x="652" y="475">quant_firms</text><text class="ix-ds" x="652" y="499">预算 · 信号 · 组合</text><text class="ix-plan-status" x="652" y="527">独立方案 · 未实现</text></g>
+<g class="ix-node" data-m="schemas" tabindex="0" role="button"><rect class="ix-box" x="60" y="634" width="190" height="62" rx="12" style="stroke:var(--orch)"></rect><text class="ix-nm" x="76" y="662">schemas</text><text class="ix-ds" x="76" y="682">Pydantic v2 共享类型</text></g>
+<g class="ix-node" data-m="prompts" tabindex="0" role="button"><rect class="ix-box" x="320" y="634" width="190" height="62" rx="12" style="stroke:var(--llm)"></rect><text class="ix-nm" x="336" y="662">prompts</text><text class="ix-ds" x="336" y="682">模板 · 内容哈希</text></g>
+<g class="ix-node" data-m="llm" tabindex="0" role="button"><rect class="ix-box" x="580" y="634" width="190" height="62" rx="12" style="stroke:var(--llm)"></rect><text class="ix-nm" x="596" y="662">llm</text><text class="ix-ds" x="596" y="682">网关 · 缓存 · 结构化输出</text></g>
+<g class="ix-node" data-m="orchestrator" tabindex="0" role="button"><rect class="ix-box" x="840" y="634" width="190" height="62" rx="12" style="stroke:var(--orch)"></rect><text class="ix-nm" x="856" y="662">orchestrator</text><text class="ix-ds" x="856" y="682">时钟 · 激活 · 快照分叉</text></g>
 </g>
 </svg>
-<div class="ix-legend"><span><i style="background:var(--data)"></i>上游（悬停时）</span><span><i style="background:var(--out)"></i>下游（悬停时）</span><span><i style="background:var(--mute)"></i>数据流（虚线动画）</span><span>schemas 与 orchestrator 连接所有业务模块，不逐条画线，悬停时一并高亮</span></div>
+<div class="ix-legend"><span><i style="background:var(--data)"></i>上游（悬停时）</span><span><i style="background:var(--out)"></i>下游（悬停时）</span><span><i style="background:var(--mute)"></i>数据流（虚线动画）</span><span><i style="height:0;border-top:2px dotted var(--mute);background:none"></i>细虚线：可选研究辅助</span><span><i style="height:8px;border:1px dashed var(--sim);background:none"></i>虚线框：独立新增方案</span><span>schemas 与 orchestrator 连接所有业务模块，不逐条画线，悬停时一并高亮</span></div>
 </div>
 <div class="card ix-modcard" id="ixModCard" aria-live="polite"><p class="sub" style="margin:0">点击任一模块，这里显示它的职责、输入输出和上下游，并给出模块页链接。</p></div>
 <p style="margin-top:18px">读图的顺序可以跟着一条新闻走。<b>数据层</b>负责"世界上发生了什么"：<code>collect</code> 从今天起逐日存档只能前向积累的数据（真实帖子、快讯），<code>data</code> 把行情、复权、成分与存档帖子整理成按时点可查的数据湖，<code>events</code> 把新闻、政策、公告抽成结构化的事件卡 <code>EventCard</code> <span class="ref">§3.3</span>。</p>
-<p><b>模拟层</b>负责"散户怎么反应"。<code>population</code> 生成人设卡；<code>agents</code> 跑每个智能体的认知循环，产出信念更新、帖子和决策意向；<code>social</code> 管发布者、论坛、群聊和推荐流，决定谁看到哪条帖子；<code>market</code> 按 A 股规则判定订单能否成交并算好费用，输出 <code>Fill</code>；<code>accounts</code> 只把成交与出入金记账、结算、生成快照和战绩 <span class="ref">§3.3</span>。<b>产出层</b>的 <code>outputs</code> 把这些整理成交付表，<code>validation</code> 拿交付表去和真实数据对照，给出 V1–V5 的结论。</p>
+<p><b>模拟层</b>有四条并列的决策支线。散户侧由 <code>population</code> 生成人设，<code>agents</code> 跑认知循环，<code>social</code> 管论坛、群聊和推荐流 <span class="ref">§3.3</span>；<a href="#institutions"><code>institutions</code></a> 独立做机构研究、配置与申赎应对；<a href="#hot_money"><code>hot_money</code></a> 独立做游资题材与情绪决策；<a href="#quant_firms"><code>quant_firms</code></a> 独立做量化公司的风险分配、数值信号与组合。三者不是同一模块的三个角色，也不套用散户人口与行为内核。四条支线共用 <code>market</code> 判定成交和费用，共用 <code>accounts</code> 记账与结算。<b>产出层</b>按四类主体分别导出与验收，不把资金账户混进散户人头加权统计。</p>
 <p><b>基础层</b>被所有模块使用。<code>schemas</code> 定义模块之间传递的类型，<code>prompts</code> 存全部提示词模板，<code>llm</code> 是统一的调用网关，<code>orchestrator</code> 管仿真时钟、谁在何时被激活、快照与分叉。</p>
+<div class="callout info"><b class="t">三个独立模块，共用基础设施</b>机构、游资、量化公司各自配置、持有独立决策状态，可以分别启停、单独回放，也可以与散户联合运行；不依赖彼此的策略实现，不共享私有观点或订单。共用信息时钟、交易规则和账本，不等于共用决策引擎。各自的持仓与订单也不自动广播到 <code>social</code>。没有价格反馈的联合回放，不代表已经实现资金之间的价格博弈。</div>
 <p>依赖方向有三条硬规定 <span class="ref">§3.3</span>。第一，业务模块只经 <code>schemas</code> 共享类型，彼此不导入对方的类型，由 <code>orchestrator</code> 串起来。智能体不直接访问数据，只通过感知步骤拿到信息；所有读取都经 <code>pit.query(table, asof=clock)</code>，由数据层强制 <code>available_at ≤ clock</code> <span class="ref">§5.5</span>。第二，<code>market</code> 读账户只读视图、判定成交、算费用，从不写账户；<code>accounts</code> 只记账，不判定成交、不算费用。这样拆是因为 market、agents（prompt 里的账户摘要）、outputs（账户类表）都要读账户，记账逻辑只能有一处。第三，LLM 响应缓存跨运行共享，放在单次运行目录之外，分叉与重放都复用它。基线 B2–B4 与消融是同一套模拟换配置运行，写在 <code>configs/</code> 里，不另写代码。</p>
 <div class="callout info"><b class="t">事实与观点分开改写</b>events 只产出 <code>EventCard</code> 与 L0（官媒转述）、L1（快讯）两类不带立场的版本，与 <code>summary</code> 做事实一致性校验，按量级每类 1–3 个版本 <span class="ref">§5.3</span>。L2–L4 都是观点，由 social 的发布者以 <code>Post</code> 产出；夸张度、确定性是发布者参数，与立场、动机、准确率并列 <span class="ref">§5.6</span>。L3 可歪曲，但必须标注所依据的 <code>event_id</code>；L4 传闻另立 <code>origin="rumor"</code> 的事件卡，带"传闻"标签，只在沙盒运行 <span class="ref">§16.2</span>。<br>注：§3.3 模块表的 events 一行仍写"按渠道改写（官媒 / 财经快讯 / 传闻）"，本站按 §5.3 画。</div>
+<h3 id="sharedExecution">共用执行契约 · 不合并决策</h3>
+<div class="grid g2 ix-decision-cards">
+<div class="card"><h4>三份模块状态，一套接入规范</h4><p>机构、游资、量化公司分别维护配置、策略、私有状态与快照，由 <code>orchestrator</code> 分别调度。只经 <code>schemas</code> 共享类型，订单送 <code>market</code>，成交交 <code>accounts</code> 记账。输出保留模块与主体标识，按需关联产品、账户、策略、运行版本与信息截止点；各自独立导出和验收。</p></div>
+<div class="card"><h4>同一规则与时钟，不共享私有信息</h4><p>所有读取都受 PIT 约束，基金披露、龙虎榜与题材数据按 <code>available_at</code> 可见，规则按生效日使用。自己的账户只读视图不等于全市场持仓可见。现实中组织类型与交易方法可能交叉，但这里仍保留三个独立模块，同一账户不重复建模和计入成交量。</p></div>
+</div>
+<div class="callout warn"><b class="t">执行层要升级，不能把散户成交模型直接套给大资金</b>现有设计中的“全成或不成、独立抽签”简化不足以支持大资金战绩。拟在共用市场与账户层补齐母单 / 子单、部分成交与剩余订单、冻结资金、跨日执行、共享流动性预算和 T+1 可卖库存。首版可做日频容量约束与分日执行，不先假定已具备全量订单簿；多个模块同场运行时也不能重复使用同一份历史成交量。</div>
+<details class="acc ix-design-details" id="decisionContract">
+<summary>拟议接口与共同时间线 · 三个模块怎样接入</summary>
+<div class="body">
+<p>2026-11-02 的接口草案：<code>advance(frame, state) → {next_state, intents, records}</code>。三个模块分别实现这个小接口，把研究、状态迁移、配置与预算逻辑留在各自内部；本页字段与记录名均为拟议设计，尚未在 <code>schemas</code> 或代码中实现。</p>
+<div class="tbl-wrap"><table class="tbl"><thead><tr><th>调用约定</th><th>必须包含的内容与不变量</th></tr></thead><tbody>
+<tr><td><code>frame</code> · 冻结输入</td><td>运行 / 事件标识、<code>asof</code>、决策批次、阶段、PIT 观察、自有账户只读视图、订单与现金流处理回执；同批主体看到各自账户在同一时点的版本，不因调用先后获得其他主体订单。</td></tr>
+<tr><td><code>DECIDE</code> · 决策</td><td>只能使用当前可得输入；可生成 <code>OrderIntent</code> 与拟新增的撤单请求。订单记录主体、产品、账户、策略归因、意向标识、最早执行时间与有效期。未决订单计入资金 / 库存占用，不能重复下单。</td></tr>
+<tr><td><code>RECONCILE</code> · 回执处理</td><td>消费成交、拒单、撤单确认、部分成交及账本处理结果，不生成新订单。模块更新研究 / 交易状态；现金、持仓、可卖库存和冻结额始终以 <code>accounts</code> 为准，不在模块内再记一次账。</td></tr>
+<tr><td>重放与快照</td><td>同一 <code>event_id</code> 只接受一次状态更新，重复投递返回已有处理结果、不重复发单；恢复时保留状态版本、未决意向、数据 / 规则 / 模型 / 配置版本与种子。</td></tr>
+</tbody></table></div>
+<p><b>共同时间线：</b>T 日交易与账本回执 → T 日收盘信息公开后冻结输入 → 三模块分别决策 → 同批订单汇总 → 最早在 T+1 可交易时段按日频成交假设评估 → 账本记账 → 回执处理。晚于本批截止点发布的公告留到下一批；现金流到期日按产品配置单独处理。</p>
+<p><b>共同容量：</b><code>market</code> 按证券 / 时段汇总所有主体的可执行订单，保守限制模拟成交总量，首版采用预先声明的按量分配与整手取整规则，剩余额度按固定规则分配；结果不依赖子代理或模块调用顺序。日成交量只能作事后容量上界，不当作开盘已知信息，也不证明真实排队成交。</p>
+<p><b>身份与资金：</b>每个产品只配置一个主决策模块；机构身份、量化方法、渠道等可作交叉标签。同一资金不因标签交叉重复建账。公司或管理人可以看其授权产品的汇总风险，其他主体只能看已公开信息；跨产品没有默认现金划转或证券内部过户。</p>
+<p><b>统一硬验收：</b>零前视读取、零重复发单 / 记账、零越权读账户、零负可用资金 / 库存、零共享容量超配；相同快照与输入重放结果一致。行为指标分别报告，不凭收益高低判定模拟可信。</p>
+</div>
+</details>
+<h3 id="sharedPriceModes">共用价格机制 · 决策模拟与价格反馈分开建设</h3>
+<div class="tabs ix-price-modes" id="priceModes">
+<div class="tab-bar" role="tablist" aria-label="各独立模块共用的价格机制">
+<button type="button" class="on" data-t="price-a" id="price-tab-a" role="tab" aria-selected="true" aria-controls="price-pane-a">首版 · 给定行情</button>
+<button type="button" data-t="price-c" id="price-tab-c" role="tab" aria-selected="false" aria-controls="price-pane-c" tabindex="-1">后续 · 有界冲击 C</button>
+<button type="button" data-t="price-b" id="price-tab-b" role="tab" aria-selected="false" aria-controls="price-pane-b" tabindex="-1">远期 · 闭环市场 B</button>
+</div>
+<div class="tab-pane card on" data-t="price-a" id="price-pane-a" role="tabpanel" aria-labelledby="price-tab-a" tabindex="0"><span class="chip sim"><i></i>三个模块均先做这个</span><h4>在同一行情下，比决策与约束</h4><p>历史回放沿用模式 A，假设情景使用明确标注的脚本行情。机构、游资、量化公司各自可以单独运行，也可以与散户联合运行，但所有模拟订单都不改变价格。</p><p><b>能回答：</b>谁想买卖、如何配置、为何受限、实际执行多少。<b>不能回答：</b>这些资金是否推动了真实涨跌，或彼此造成了真实挤兑。</p></div>
+<div class="tab-pane card" data-t="price-c" id="price-pane-c" role="tabpanel" aria-labelledby="price-tab-c" tabindex="0"><span class="chip market"><i></i>需要独立校准</span><h4>只研究边界明确的增量冲击</h4><p>区分基准与情景的增量订单流，再对冲击参数做敏感性分析。历史价格已经包含真实机构交易，不能把模拟资金再次机械叠加上去。冲击是模型假设，不是真实资金因果效应的估计。</p></div>
+<div class="tab-pane card" data-t="price-b" id="price-pane-b" role="tabpanel" aria-labelledby="price-tab-b" tabindex="0"><span class="chip orch"><i></i>远期单独立项</span><h4>由交易与流动性共同形成价格</h4><p>建设撮合、背景流动性、订单簿和新的校准体系后，才能研究内生价格反馈。可借鉴 ABIDES 的离散事件与交易所交互，但仍需实现 A 股规则和校准；不能用回放价格自带的厚尾、波动聚集证明主体模型有效。</p></div>
+</div>
+</section>
+<section id="institutions" class="reveal">
+<h2><span class="num">03</span>机构决策 · institutions</h2>
+<p class="sub">把研究观点变成产品约束下的配置，解释“看好却卖出”等行为。2026-11-02 经独立子代理设计、主代理整合的草案；2026-11-07 补充机构全景调研与类型覆盖。尚未建包、尚未实现。</p>
+<div class="ix-decision-meta"><span class="chip sim"><i></i>管理人 → 产品 → 组合</span><span class="chip acct"><i></i>首版：主动开放式权益公募</span><span class="chip data"><i></i>日频 · 给定行情回放</span></div>
+<p class="ix-design-intro">管理人维护被授权产品可订阅的研究观点；产品分别持有账户、基准、现金政策与申赎安排。每次决策保留<b>理想组合 → 约束后组合 → 实际组合</b>，让观点、限制与成交之间的差异可以解释和重算。</p>
+<h3>原型与首版范围</h3>
+<div class="grid g3 ix-decision-cards">
+<article class="card"><h3>首版 · 主动公募</h3><p>一个管理人、两个独立产品，共享授权观点，各自配置基准、现金、行业 / 个股限制与申赎情景。用可重算规则配置组合，先验明同一观点为何产生不同交易。</p></article>
+<article class="card"><h3>后续 · 被动与委托</h3><p>被动指数基金 / ETF 另设基准跟踪与申赎机制；养老金另设委托范围和长期风险预算。不能直接把主动观点评分换个名称就使用。</p></article>
+<article class="card"><h3>后续 · 其他机构</h3><p>保险资金补资产负债匹配；主观私募按合同与开放窗口配置；外资按产品授权与渠道适配。法律身份、产品类型与投资方法分别记录。覆盖顺序与建模深度见下方“类型覆盖与优先级”。</p></article>
+</div>
+<details class="acc ix-design-details" id="institutionCoverage"><summary>类型覆盖与优先级 · 2026-11-07 机构全景调研</summary><div class="body">
+<p>调研按真实体量和公开数据的可得性，判断除主动公募外还有哪些机构值得建、建到什么深度。数字的口径、日期和来源见仓库 <code>docs/research/institution-landscape.md</code>，建模方式与优先级为拟议，见 <code>docs/institution-design-draft.md</code>，均未实现。</p>
+<div class="tbl-wrap"><table class="tbl"><thead><tr><th>类型</th><th>建模方式</th><th>依据</th><th>优先级</th></tr></thead><tbody>
+<tr><td>公募主动</td><td>完整决策模块；拟议加内生申赎与考核层</td><td>公募持有 A 股流通市值 7.3%（2023 年底，证监会）</td><td>P0</td></tr>
+<tr><td>国家队（汇金）</td><td>持仓状态 + 买入 / 退出规则</td><td>11 只样本宽基 ETF 持有约 1.41 万亿元（2025-12-31）；2026 上半年至少减持约 1.09 万亿元（下限推算）</td><td>P1</td></tr>
+<tr><td>产业资本、一般法人</td><td>公告驱动的事件注入器</td><td>持有沪市总市值 57.22%（2024 年底），行为体现为减持、增持、回购公告</td><td>P1</td></tr>
+<tr><td>北向</td><td>规则型渠道资金</td><td>沪股通成交占标的总交易额 8.99%（2024 年）；2024-08-19 起不再公布日度净买入</td><td>P1</td></tr>
+<tr><td>ETF 资金流</td><td>申赎序列与再平衡日历生成器，与国家队共用持仓状态</td><td>沪深 ETF 合计约 3.54 万亿元（2024 年底）</td><td>P1</td></tr>
+<tr><td>量化私募</td><td>沿用 <code>quant_firms</code></td><td>程序化交易成交约 29%（2024-04 单点，不分私募）</td><td>P1</td></tr>
+<tr><td>保险</td><td>季度配置器</td><td>权益类上限按偿付能力分 5 档，条文可复算</td><td>P2</td></tr>
+<tr><td>社保、年金、券商自营</td><td>暂缓</td><td>体量或决策方式缺一手来源</td><td>P3</td></tr>
+</tbody></table></div>
+<div class="callout todo"><b class="t">待定 · 内生申赎与国家队规则</b>首版申赎仍是情景输入。拟议改为由 RetailSim 的份额持有人内生产生，前提是人口模型有“持有基金份额”属性，尚待核对。汇金的买入与退出触发规则没有一手来源，全部为建模假设。</div>
+</div></details>
+<h3>从研究到订单 · 硬限制先于可选调仓</h3>
+<div class="ix-decision-pipeline">
+<div class="ix-decision-step"><small>01 · UPDATE</small><b>更新观点</b><span>来源、置信度、到期与撤销</span></div>
+<div class="ix-decision-step"><small>02 · IDEAL</small><b>形成理想组合</b><span>基准与观点映射为多头权重</span></div>
+<div class="ix-decision-step"><small>03 · FEASIBILITY</small><b>检查现金与限制</b><span>赎回到期、风险、可变现性</span></div>
+<div class="ix-decision-step"><small>04 · PLAN</small><b>生成净调仓计划</b><span>必要卖出优先，可选买入在后</span></div>
+<div class="ix-decision-step"><small>05 · RECONCILE</small><b>按回执确认</b><span>实际组合、现金流与未完成项</span></div>
+</div>
+<p>事件、观点到期、风险越限、申赎通知或例行复核可以触发决策，不强制每天交易。先确认交易权限、可卖库存与合同硬限制，再安排筹现和必要降险；余下预算用于可选配置。换手预算、偏离容忍带等只有在配置明确为软限制时才可放宽，并记录原因。硬限制冲突时保留缺口与不可行状态，不通过修改观点或虚构成交来“解决”。</p>
+<div class="ix-design-clock"><b>日频时序：</b>T 日收盘后按配置截止点冻结信息、规划 T+1 及以后的调仓；申赎通知应按约定支付日提前筹现。到期时仍未完成的现金需求记为短缺。卖出到账与实际支付均等待账本回执，支付完成后才关闭请求。</div>
+<div class="grid g2 ix-decision-cards">
+<div class="card"><h4>输入 · 研究与产品情景</h4><p>PIT 财报、行情、事件、基准与历史成分；带来源的观点；产品合同式限制、初始账户、申赎通知与支付日。申赎路径是明确标注的情景输入，不从定期报告补造每日真实数据。</p></div>
+<div class="card"><h4>输出 · 三层组合与筹现轨迹</h4><p>观点生命周期、理想 / 约束后 / 实际组合、<code>OrderIntent</code>、约束冲突、未成交原因与赎回缺口。组合同时记录估值时点和净资产口径；预计申赎后口径与实际支付后口径可分别核对。</p></div>
+</div>
+<details class="acc ix-design-details"><summary>状态、配置与组合规则 · 实现时需要保存什么</summary><div class="body">
+<div class="tbl-wrap"><table class="tbl"><thead><tr><th>归属</th><th>拟议字段与行为</th></tr></thead><tbody>
+<tr><td>管理人研究状态</td><td><code>manager_id</code>、授权产品、观点池；每条观点有标的、方向、置信度、证据、可见时点、到期时间与生效版本。LLM 可辅助提取，不能凭自由文本直接改变资金。</td></tr>
+<tr><td>产品决策状态</td><td><code>product_id / account_id</code>、订阅观点、上次目标、冻结新增风险标记、未决订单与筹现请求。产品是核算单元，不默认等于独立法人；账户以只读视图为准。</td></tr>
+<tr><td>产品配置</td><td>基准、权益区间、个股 / 行业限制、现金缓冲、再平衡容忍带、复核周期、观点有效期、申赎及到账规则。每项限制注明来源、适用日期和硬 / 软属性，示例值不冒充监管统一比例。</td></tr>
+<tr><td>筹现请求</td><td><code>request_id</code>、通知 / 支付日、金额与来源；状态为待筹现、部分筹现、短缺、已备付、已支付。只有支付回执能标记已支付；资金已备付不等于投资者已收到赎回款。</td></tr>
+</tbody></table></div>
+<h4>首版规则 · 简单、可复算的多头配置</h4>
+<p>对有效观点计算带置信度和衰减的有符号评分 <code>s_i</code>，与基准权重 <code>b_i</code> 合成 <code>u_i = max(0, b_i + k × s_i)</code>。按配置的权益比例归一化得到理想权重；<code>Σu_i = 0</code> 时退回基准规则，基准也不可用时暂停新增风险。负面观点减少权重，不生成裸卖空。</p>
+<p>随后检查个股 / 行业 / 现金限制与筹现需要；未使用的裁剪额度留现金，若因此违反产品权益下限则标为不可行，再按预先配置的可行性规则处理，不能假装一次裁剪满足所有约束。卖出优先级可按流动性、偏离程度和观点强度排序，固定并留档。</p>
+<p>订单差额须扣除仍有效的未决订单与冻结额度；观点撤销时先请求撤单，撤单确认前仍视为占用。部分成交后按实际账户重新规划，不把“卖出意向”直接当作可用赎回现金。</p>
+</div></details>
+<div class="callout ix-design-example"><b class="t">情景示例 · 看好，仍然需要筹现</b>
+<p>以下金额和缓冲为演示假设，单位万元。产品 P1 净资产 10,000、现金 500，收到到期支付 1,500 的赎回需求，计划支付后留现金 200：<b>净筹现需求 = 1,500 + 200 − 500 = 1,200</b>，费用准备金另计。即使仍看好持仓，也可能先卖出可变现证券。</p>
+<p>若到期实际只净筹得 700，支付前现金为 1,200，距赎回款还差 300，距“赎回 + 缓冲”差 500；记录短缺，不假设已足额支付。共享同一观点的 P2 若原有现金 2,500，则没有相同的强制卖出需求。</p>
+</div>
+<details class="acc ix-design-details"><summary>独立验收与交付顺序 · 5 个关键场景</summary><div class="body">
+<div class="tbl-wrap"><table class="tbl"><thead><tr><th>给定 / 触发</th><th>应有结果与检查</th></tr></thead><tbody>
+<tr><td>观点仍有效，赎回导致现金不足</td><td>产生筹现卖出且保留看多观点；能从净筹现、费用准备与未决订单重算计划，卖出原因不是“观点转空”。</td></tr>
+<tr><td>两个产品订阅相同观点，现金和限制不同</td><td>分别得到目标与订单；产品资金混用次数为 0，允许一个买入、另一个减仓。</td></tr>
+<tr><td>支付日前无法变现，或硬限制互斥</td><td>记录明确缺口与阻断原因；超卖 / 凭空到账为 0，不擅自放宽硬限制。</td></tr>
+<tr><td>观点到期或撤销，尚有未决买单</td><td>观点停止计分并请求撤单；确认前保留占用，必要减仓与常规调仓分开留档。</td></tr>
+<tr><td>卖出受 T+1、停牌或容量限制，只有部分成交</td><td>实际组合按回执更新，筹现状态保持未完成；订单重投与重复扣款为 0。</td></tr>
+</tbody></table></div>
+<p><b>交付：</b>先完成一个管理人、两个主动产品、三层组合与上述场景；再加入更细申赎 / 分日执行；最后分别适配 ETF、保险与养老金。验收报告分别列换手、持有期、风格偏离、筹现完成率和短缺时长；行为门槛在校准前预注册，避免用收益高低代替可信度。</p>
+</div></details>
+<p class="ix-design-sources"><b>证据与局限：</b>公募披露只校准可见的期末持仓与期间份额变化，按实际公告时间读取；季度前十、半年 / 年度所有股票仍不能还原日度交易。配置公式与情景参数为建模假设。<br><a href="https://www.csrc.gov.cn/csrc/c101954/c7619929/content.shtml">证监会 · 定期报告准则</a><a href="https://www.amac.org.cn/xwfb/xhyw/202603/t20260313_27409.html">基金业协会 · XBRL 模板</a><a href="#decisionContract">拟议共同接口 ↑</a></p>
+</section>
+<section id="hot_money" class="reveal">
+<h2><span class="num">04</span>游资决策 · hot_money</h2>
+<p class="sub">用题材、事件、价格与流动性代理驱动短线决策，重点验证进退节奏和退出受阻。2026-11-02 经独立子代理设计、主代理整合的草案；尚未建包、尚未实现。</p>
+<div class="ix-decision-meta"><span class="chip social"><i></i>账户 → 题材池 → 状态机</span><span class="chip sim"><i></i>三种短线原型</span><span class="chip warn"><i></i>日频不验证盘口打板</span></div>
+<p class="ix-design-intro">“游资”按行为原型建模，不绑定真实姓名或营业部。每个合成主体有独立账户、题材关注与风险参数；<b>想买、已挂单、已持仓、想退出、已清仓</b>分别留痕，不让一笔未成交订单把状态直接推到下一步。</p>
+<h3>原型与首版范围 · 同一调度，不同触发</h3>
+<div class="grid g3 ix-decision-cards">
+<article class="card"><h3>题材强势</h3><p>同时检查题材内上涨广度、相对强弱和成交活跃度，再从候选股中试探介入；不会因为名字叫“龙头”就自动加仓。</p></article>
+<article class="card"><h3>事件轮动</h3><p>由当时已公开、可追溯的事件建立关注窗口，检查相关标的和流动性；过期事件停止触发，价格已过度偏离时可选择不参与。</p></article>
+<article class="card"><h3>回撤反转</h3><p>在限定回撤区间里等待价格 / 广度确认，限制加仓次数；下跌本身不构成买入理由，风险触发后不能继续摊低。</p></article>
+</div>
+<p>三个原型共享账户检查与状态骨架，使用各自的评分和触发规则；阈值、持有期、单笔风险和亏损后降速参数按主体异质化。它们是本项目的仿真假设，不是已经证实的游资分类。</p>
+<h3>可观察的状态机 · 风险优先于加仓</h3>
+<div class="ix-decision-pipeline">
+<div class="ix-decision-step"><small>01 · WATCH</small><b>观察与选题</b><span>广度、事件、相对强度</span></div>
+<div class="ix-decision-step"><small>02 · ENTRY PENDING</small><b>试探待成交</b><span>提交不等于持有</span></div>
+<div class="ix-decision-step"><small>03 · HOLD</small><b>持有 / 有限加仓</b><span>实际持仓与未决单分开</span></div>
+<div class="ix-decision-step"><small>04 · EXIT PENDING</small><b>退出待完成</b><span>受阻仍有仓，不算空仓</span></div>
+<div class="ix-decision-step"><small>05 · COOLDOWN</small><b>清仓后冷却</b><span>无库存且未决订单已处理</span></div>
+</div>
+<p>决策顺序为<b>风险退出 → 未决订单处理 → 冷却 / 降速检查 → 候选评分 → 试探或加仓</b>。首笔部分成交即进入持有状态，但仍保留剩余买单；目标仓位未到不等于可以再挂全额买单。出现退出信号先取消未决买单，撤单确认前保留占用；需要卖出时只针对账本已确认的可卖库存。</p>
+<p>退出受阻时保持 <code>EXIT_PENDING</code>，记录 T+1、停牌、容量或成交假设的阻断原因。仅当<b>总持仓为零，且所有可能改变仓位的未决订单已结束</b>，才结算一次完整持仓回合并开始冷却；不是看到可卖数量为零就当作已清仓。</p>
+<div class="ix-design-clock"><b>日频时序：</b>T 日收盘后截止点决策 → 最早 T+1 尝试交易 → 按回执更新持仓阶段。晚于截止点公布的龙虎榜或新闻顺延到下一批；卖出未完成不会让冷却时钟提前走完。</div>
+<div class="grid g2 ix-decision-cards">
+<div class="card"><h4>输入 · 有定义的短线线索</h4><p>PIT 日线、历史题材成分、公开事件与可选龙虎榜；自己的资金、总持仓、可卖库存与费用回执。情绪用广度 / 强弱代理表达，不能读取别人的真实持仓或把席位名称当作身份。</p></div>
+<div class="card"><h4>输出 · 每一步为什么推进或停住</h4><p>题材分数及组成、选中原型、目标 / 实际状态、<code>OrderIntent</code>、撤单请求、风险触发、未执行原因、持仓回合净收益与冷却记录；保留事件、主体、账户、题材版本和订单标识。</p></div>
+</div>
+<details class="acc ix-design-details"><summary>状态、配置与情绪代理 · 把市场术语变成可计算输入</summary><div class="body">
+<div class="tbl-wrap"><table class="tbl"><thead><tr><th>归属</th><th>拟议字段与规则</th></tr></thead><tbody>
+<tr><td>主体级状态</td><td><code>actor_id / account_id</code>、全账户降速标记、连续亏损回合数、题材关注池、最近处理的批次。亏损按账本归因后的完整持仓回合净收益计数，同一回合的多笔卖出不能重复累计。</td></tr>
+<tr><td>标的级状态</td><td>原型、<code>position_episode_id</code>、入场时题材版本、观察 / 待成交 / 持有 / 退出 / 冷却状态、试探或加仓阶段、加仓次数、未决订单、冷却结束交易日。买入回执才增加已完成加仓次数。</td></tr>
+<tr><td>配置与预算</td><td>持有期、回撤 / 退出阈值、试探金额、加仓上限、全账户与单题材敞口上限、未决订单有效期、亏损降速规则、冷却交易日数。题材敞口从首版就跨股票合并检查。</td></tr>
+<tr><td>冷却作用范围</td><td>首版对退出标的及其入场题材暂停新开仓，避免立刻换同题材另一只股票绕过冷却；其他题材仍受账户总敞口和降速限制。更换题材标签不重置已有持仓回合的风险归属。</td></tr>
+</tbody></table></div>
+<h4>首版代理指标 · 都要有分母、窗口与历史版本</h4>
+<p><code>B = 题材内上涨的有效交易股票数 / 有效交易股票数</code>；<code>R = 题材成员当日收益中位数 − 配置的市场基准收益</code>；个股活跃度 <code>V = 当日成交量 / 前 20 个有效交易日平均成交量</code>。分母为零或历史不足则不触发，对停牌与缺数据采用冻结的剔除规则。</p>
+<p>演示题材强势条件可设 <code>B ≥ 0.65、R &gt; 0、V ≥ 1.2</code>；事件轮动另检查事件有效期、关联证据和价格偏离；回撤反转另检查配置的回撤区间与确认天数。这些数值全部是待校准假设，不代表自然的“情绪周期”。</p>
+<p>同一证券 / 账户 / 决策批次最多生成一份净调仓意向。多个事件可影响评分，但不分别发重复单；相同回执标识只处理一次。连续亏损降速按完整回合结算，不把每天浮亏都算成一次失败。</p>
+</div></details>
+<div class="callout ix-design-example"><b class="t">情景示例 · 试探仓只有部分成交</b>
+<p>假设账户 100,000 元，目标试探仓 30%，限价参考 12.30 元，示例标的买入按 100 股整手：<b>100,000 × 30% ÷ 12.30</b> 向下取整为 2,400 股，名义金额 29,520 元，另留费用缓冲。真正的申报单位与费用由当期规则配置决定。</p>
+<p>若下一交易日按假设价格只成交 800 股，实际名义持仓为 9,840 元，剩余 1,600 股继续作为未决单追踪；不能按 2,400 股计算持有。当日这 800 股不能自由卖出；之后即使触发止损也要等可卖库存与成交机会。冷却只在最终清仓、订单全部结束后开始。</p>
+</div>
+<details class="acc ix-design-details"><summary>独立验收与交付顺序 · 5 个关键场景</summary><div class="body">
+<div class="tbl-wrap"><table class="tbl"><thead><tr><th>给定 / 触发</th><th>应有结果与检查</th></tr></thead><tbody>
+<tr><td>龙虎榜或新闻晚于本批截止点发布</td><td>本批不可用；依赖未来记录的评分 / 订单数为 0，最早从下一批影响之后的交易。</td></tr>
+<tr><td>试探买入 2,400 股，只成交 800 股</td><td>实际持仓按 800 股，未决量 1,600 股单独记录；不满额补挂、不把当日新增持仓视为可卖。</td></tr>
+<tr><td>退出信号后连续两日未能卖出</td><td>持续处于退出待完成；虚假清仓和提前冷却次数为 0，每批记录原因与重新规划结果。</td></tr>
+<tr><td>同批多个事件、重复回执或分笔退出</td><td>每账户 / 标的仅一份净调仓意向；回执不重复处理，同一亏损持仓回合只增加一次连续亏损计数。</td></tr>
+<tr><td>清仓后同题材另一股票触发，或新题材使总敞口超限</td><td>冷却与账户总预算分别生效；未决买单计入额度，不能通过换股票或重贴题材绕过限制。</td></tr>
+</tbody></table></div>
+<p><b>交付：</b>先完成日频状态机、三原型参数组、题材 / 账户预算与受阻日志；再按独立样本校准阈值；最后在取得更细行情后研究盘中机制。分别报告持有期、换手、题材参与、加仓频率、降速比例、退出延迟和冷却违例，不能用短期盈利作为身份或行为验证。</p>
+</div></details>
+<p class="ix-design-sources"><b>证据与局限：</b>龙虎榜是条件触发的部分席位交易聚合，不能还原实际投资者。日线只支持对成交假设做情景分析，不能验证盘口队列或保证涨跌停成交。<br><a href="https://www.sse.com.cn/lawandrules/sselawsrules2025/stocks/exchange/c/c_20260424_10816482.shtml">上交所 · 交易规则</a><a href="https://doi.org/10.1146/annurev-financial-082123-110132">投资者异质性综述</a><a href="#decisionContract">拟议共同接口 ↑</a></p>
+</section>
+<section id="quant_firms" class="reveal">
+<h2><span class="num">05</span>量化公司决策 · quant_firms</h2>
+<p class="sub">模拟公司怎样管理多个产品、策略与容量，把信号收益和组织约束分开解释。2026-11-02 经独立子代理设计、主代理整合的草案；尚未建包、尚未实现。</p>
+<div class="ix-decision-meta"><span class="chip acct"><i></i>公司 → 产品 → 策略 → 执行</span><span class="chip sim"><i></i>首版：两只独立多头产品</span><span class="chip warn"><i></i>量化 ≠ 程序化 ≠ 高频</span></div>
+<p class="ix-design-intro">公司分配<b>风险与交易容量额度</b>，产品独立核算，策略生成可复现数值信号，共用执行层落单。公司管理规模是受托产品资产的汇总，不等于公司自有资本；同一策略被多个产品使用，也不能把资金与持仓合并。</p>
+<h3>原型与首版范围 · 一家公司，两只产品，每只至少两条策略</h3>
+<div class="grid g3 ix-decision-cards">
+<article class="card"><h3>产品 A · 指数增强原型</h3><p>以历史基准成分和权重为锚，使用动量 / 短期反转测试信号做有限偏离；检查权益区间、风格组权重偏离、个股与换手限制，不冒充已经具备完整跟踪误差模型。</p></article>
+<article class="card"><h3>产品 B · 股票多头原型</h3><p>使用独立股票池、目标权益比例与集中度上限，同样运行至少两条策略，按综合分数构建多头组合；目标与 A 不同，账户与预算分别保留。</p></article>
+<article class="card"><h3>公司层 · 分额度、看重叠</h3><p>监控所有授权产品的股票敞口、同向交易与容量占用；可降额度或暂停新增风险，但不能直接挪用另一产品的现金。策略是测试工具，不宣称真实 alpha。</p></article>
+</div>
+<p>首版只做日频股票多头。市场中性、期货与融券对冲需等工具、保证金、借券和结算规则齐备后再设计；算法执行可以被其他主体使用，量化公司没有默认 T+0 或做空权限。</p>
+<h3>从数值信号到公司约束 · 产品内净额，跨产品独立</h3>
+<div class="ix-decision-pipeline">
+<div class="ix-decision-step"><small>01 · VALIDATE</small><b>冻结数据与版本</b><span>股票池、特征、模型生效日</span></div>
+<div class="ix-decision-step"><small>02 · SIGNAL</small><b>按策略计算</b><span>打分、期限与策略权重</span></div>
+<div class="ix-decision-step"><small>03 · PRODUCT</small><b>产品内合成组合</b><span>净额、现金、风格与换手</span></div>
+<div class="ix-decision-step"><small>04 · FIRM LIMITS</small><b>公司额度检查</b><span>敞口、同向量与交易容量</span></div>
+<div class="ix-decision-step"><small>05 · FEEDBACK</small><b>执行回执与归因</b><span>已成、未成、费用与预算差异</span></div>
+</div>
+<p>先校验数据，再计算信号；每个产品内部将相反方向需求净额合并、对照实际账户和未决单计算增量。公司在各产品合同允许范围内检查额度，优先安排可执行的必要降险，再分配可选新增风险的交易额度；无法在硬限制内完成时记录缺口，不用新买单掩盖超限。</p>
+<p>跨产品的买卖仍是各自对外订单，不能自动内部对敲或转移证券。最终由 <code>market</code> 与其他主体一起分配同证券 / 时段的共享容量；公司额度是内部上限，不是市场成交保证。只在回执后确认实际成交和费用。</p>
+<div class="ix-design-clock"><b>日频时序：</b>T 日收盘后校验并生成 T+1 意向 → 共用执行层评估 → 账本处理 → 回执与归因。首版冻结规则参数；后续按固定周期滚动校准，新版本只能在数据截止与校准完成之后生效，不回写历史订单；早于生效日的回放不能使用新模型。</div>
+<div class="grid g2 ix-decision-cards">
+<div class="card"><h4>输入 · 数据、模型和股票池都要点时</h4><p>PIT 行情与特征、历史股票池 / 成分、基准、公司 / 产品 / 策略额度、费用与成本情景、产品申赎情景，以及授权账户只读视图。模型记录训练数据截止、产出时间、生效时间与版本。</p></div>
+<div class="card"><h4>输出 · 公司、产品、策略分别追溯</h4><p>策略分数、合成权重、产品理想 / 受约束目标、公司裁剪前后额度、<code>OrderIntent</code>、成本与未成交归因、暂停 / 恢复事件。策略虚拟归因与产品账本分开，不再计为额外资产。</p></div>
+</div>
+<details class="acc ix-design-details"><summary>状态、策略规则与预算单位 · 实现时怎样避免混算</summary><div class="body">
+<div class="tbl-wrap"><table class="tbl"><thead><tr><th>层级</th><th>拟议字段与规则</th></tr></thead><tbody>
+<tr><td>公司</td><td><code>firm_id</code>、授权产品、股票敞口限额（元）、日交易金额额度（元）、产品分配比例、暂停范围与原因。首版用股票敞口代理风险规模，集中度 / 风格另检；不把金额、波动率与百分比分值相加。</td></tr>
+<tr><td>产品</td><td><code>product_id / account_id</code>、股票池与基准版本、策略组合权重、目标权益区间、风格组权重界限、现金政策、未决订单、上次可行目标与当前不可行原因。A、B 都要执行资金与风险检查。</td></tr>
+<tr><td>策略实例</td><td><code>strategy_instance_id</code>、代码 / 参数 / 模型版本、窗口、训练截止、生效时间、信号期限、运行 / 暂停状态。允许复用策略代码，不允许同一实例在产品配置中重复占预算。</td></tr>
+<tr><td>执行反馈与归因</td><td>意向 / 成交 / 撤单标识、已执行与剩余量、约束裁剪、费用和策略归因权重。产品内归因权重规则预先冻结；合计归因回到产品结果，虚拟仓位不与产品资产相加。</td></tr>
+</tbody></table></div>
+<h4>测试策略 · 定义具体，但不声称发现了真实 alpha</h4>
+<p>动量取历史可得调整价格的 20 日收益横截面排序；短期反转取 5 日收益排序的反向分数。只在当时可交易股票池内标准化，历史不足或缺数据的标的按冻结规则排除。产品 A 对基准做有限分数偏离，产品 B 按综合分数选取前 K 只并在集中度约束内配置。</p>
+<p>策略权重先折算一次，再在产品内合成；任何参数估计都只用过去窗口，校准期与验收期分离。约束投影后还要复核全部限制，不能按顺序裁剪后假定天然可行。</p>
+<h4>失效处理 · 不可行不是“忽略限制继续交易”</h4>
+<p>坏数据、模型版本不匹配或运行故障先暂停受影响范围的新增风险；保留经可靠账户 / 市场视图验证的必要卖出。组合无解时退到可验证的不增险方案，旧目标也须重新检查，不能盲目复用。连减仓所需输入也不可靠时，停止相关发单并记录阻断原因。</p>
+<p>日终订单按预设有效期结束，剩余量在确认后释放占用；下一批对照实际账户重算，不全额重复追单。恢复需要数据与版本自检通过，并在下一个决策批次生效，不能因一次收益转正自动解除故障暂停。</p>
+</div></details>
+<div class="callout ix-design-example"><b class="t">情景示例 · 净额合成与额度裁剪分开算</b>
+<p>以下全为演示假设。公司日交易额度 2,000 万元，A 分得 1,200 万，B 分得 800 万。A 的两条策略对 X <b>已按策略权重折算</b>的调仓建议分别为 +200 万与 −50 万，产品内净需求为 +150 万，不再重复乘策略权重。</p>
+<p>假设 A 本轮全为可选买入、合计 1,400 万，超出其 1,200 万额度：缩放系数为 <b>1,200 ÷ 1,400 = 6/7</b>，X 意向约为 <b>150 × 6/7 = 128.57 万元</b>，再按价格、申报单位、现金与费用缓冲向下取整。B 的 800 万不是 A 可直接挪用的现金；实际成交还可能被共同市场容量进一步限制。</p>
+</div>
+<details class="acc ix-design-details"><summary>独立验收与交付顺序 · 6 个关键场景</summary><div class="body">
+<div class="tbl-wrap"><table class="tbl"><thead><tr><th>给定 / 触发</th><th>应有结果与检查</th></tr></thead><tbody>
+<tr><td>A 成交，B 同期没有其他事件</td><td>B 现金、持仓和份额不被 A 改动；无授权跨产品资金 / 证券转移为 0，策略归因不重复计算资产。</td></tr>
+<tr><td>产品内两策略对 X 的折算建议相反</td><td>代数净额为零时不出单；同向时只出一份产品净意向，归因能追到两条策略。</td></tr>
+<tr><td>产品需求超过公司分配额度</td><td>记录限额名称、裁剪前后、优先级与取整残差；可选下单不超额度，必要降险受阻须显式报告。</td></tr>
+<tr><td>管理规模 ×10，标的流动性减半</td><td>所有产品合计成交不越过共同预算，成交率 / 未成交量如实变化；意向不能直接增加实际持仓。</td></tr>
+<tr><td>缺数据、未来成分或模型尚未生效</td><td>受影响信号被拒绝或暂停；前视信号为 0。可验证的必要减仓保留，自检前不恢复新增风险。</td></tr>
+<tr><td>相同快照、数据、配置与回执重新运行</td><td>信号、目标、预算裁剪与意向标识一致；重复处理和重复归因为 0，滚动校准不改变已完成历史。</td></tr>
+</tbody></table></div>
+<p><b>交付：</b>先做两产品、每产品两策略、公司额度、净额与账户隔离；再加滚动校准、多日容量与细化风格模型；最后独立建设对冲产品。报告风格偏离、换手、敞口、策略重叠、成本 / 容量敏感性和样本外稳定性，不以赚钱证明公司行为已被还原。</p>
+</div></details>
+<p class="ix-design-sources"><b>证据与局限：</b>程序化包含自动生成或下达指令，也可由机构、个人采用；高频另按行为认定。Qlib 只作工程参考。公司预算、策略组合与参数是建模假设，公募披露规则不能直接套到量化私募。<br><a href="https://www.sse.com.cn/lawandrules/sselawsrules2025/trade/universal/c/c_20250612_10781696.shtml">上交所 · 程序化交易细则</a><a href="https://arxiv.org/abs/2009.11189">Qlib · 工程参考</a><a href="#decisionContract">拟议共同接口 ↑</a></p>
 </section>
 <section id="s3" class="reveal ix-pr">
-<h2><span class="num">03</span>五条设计原则</h2>
-<p class="sub">设计文档 §3.1 定了五条原则，后面每个模块的取舍都能追到其中一条。每条下面写它防的是什么错、具体怎么做、由哪个模块负责。</p>
+<h2><span class="num">06</span>五条设计原则</h2>
+<p class="sub">设计文档 §3.1 定了五条原则。下文的两次 LLM 调用、Tier-A/B 与声音闸门是既有散户主线的具体设计，不直接套给新增的三个模块；点时、硬约束、可复现和可分叉则共同遵守。</p>
 <h3>1. LLM 给意向，内核管约束</h3>
 <p>LLM 擅长读非结构化的东西：一条新闻、几条帖子、一段异动。它不擅长守规则，也不稳定地表现出可校准的行为偏差。所以每次激活最多两次 LLM 调用，帖子在成交判定之后写 <span class="ref">§6.1</span>。先感知注意力预算内的 K 条信息；第 1 次调用做解读与意向，只出结构化字段、不带风格示例帖：盘前与盘中输出 <code>BeliefUpdate</code>、<code>DecisionIntent[]</code>（买、卖、持有、观望，加仓位档与理由）和 <code>FundingIntent</code>，收盘后与晚间只输出 <code>BeliefUpdate</code> 加"明日打算"，不出订单 <span class="ref">§3.4</span>。然后内核做约束与成交判定，改动写回记忆。第 2 次调用只在 <code>want_to_post</code> 为真时发生，输入含当日意向与实际成交（含未执行原因），风格示例帖只放这次，正文是自由文本。反思低频，每周一次或大盈亏后触发。两次调用共用静态前缀，以命中前缀缓存。内核负责硬约束（T+1、涨跌停、资金、权限）和可校准的行为偏差修正（损失厌恶、从众等）<span class="ref">§3.1</span><span class="ref">§6.3</span>。内核改动了意向，实际结果与没做成的原因写回记忆，之后的发言与之自洽；帖子里说的和实际成交之差记为"言行不一"，收盘后的明日打算与次日盘前实际意向之差记为"隔夜变卦"，都是可测量的产出 <span class="ref">§6.1</span>。LLM 也不直接给连续数字，因为数值输出校准差、易扎堆在整数；它只输出分档，分档到数值的映射由内核按人设完成，例如过度自信者映射得更极端 <span class="ref">§6.2</span>。意向来源做成可替换接口，可以是 LLM、规则先验或 Jev（一个只输出各选项概率的校准型分类模型）<span class="ref">§6.6</span>。负责模块：<code>agents</code> 跑循环和内核，<code>market</code> 判定成交。</p>
 <h3>2. 一切点时（PIT）</h3>
@@ -179,7 +455,7 @@
 <p>同一配置跑两次要得到同一结果，才能谈消融和基线对比。做法是事件溯源（日志只追加）、LLM 响应缓存、固定种子、锁定模型版本：任一交易日可以重放，也可以从快照分叉做反事实情景 <span class="ref">§3.1</span>。缓存跨运行共享，放在运行目录之外 <span class="ref">§3.3</span>；缓存键是模型 ID 与带日期的版本号、推理引擎版本、结构化输出后端、schema、采样参数、种子与完整消息的哈希；重放只读缓存，未命中直接报错，不静默重新调用；解析失败的尝试也写入缓存，重放时复现同一重试序列。API 模型做不到确定性输出，只能靠缓存存档，厂商的模型别名会指向新版本，所以运行清单里写带日期的版本号 <span class="ref">§14.4</span>。负责模块：<code>orchestrator</code> 管快照、分叉与运行清单，<code>llm</code> 管缓存。</p>
 </section>
 <section id="s4" class="reveal">
-<h2><span class="num">04</span>阅读路线</h2>
+<h2><span class="num">07</span>阅读路线</h2>
 <p class="sub">站点按三种读法组织。第一次读建议先看流程篇，知道一天里发生什么；再看三个演示，直观感受发布者和散户各自怎样反应、群里每个人说了什么；最后按需查模块页，每页结构相同：职责、为什么、机制、示例、接口、取舍、关系、开放问题。</p>
 <div class="ix-grp">流程篇 · 跟着时间和数据走</div>
 <div class="grid g3 ix-route">
@@ -199,13 +475,19 @@
 <p>数据层</p>
 <div class="ix-modlist"><a href="mod-collect.html"><b>collect</b><small>真实帖子前向存档</small></a><a href="mod-data.html"><b>data</b><small>点时行情与复权</small></a><a href="mod-events.html"><b>events</b><small>事件卡与 L0/L1 改写</small></a></div>
 <p>模拟层</p>
-<div class="ix-modlist"><a href="mod-population.html"><b>population</b><small>人设卡与合成人口</small></a><a href="mod-agents.html"><b>agents</b><small>认知循环与内核修正</small></a><a href="mod-social.html"><b>social</b><small>发布者、论坛、群聊、推荐流</small></a><a href="mod-market.html"><b>market</b><small>A 股规则与成交判定</small></a><a href="mod-accounts.html"><b>accounts</b><small>账户、出入金与战绩</small></a></div>
+<div class="ix-modlist"><a href="mod-population.html"><b>population</b><small>人设卡与合成人口</small></a><a href="mod-agents.html"><b>agents</b><small>认知循环与内核修正</small></a><a href="mod-social.html"><b>social</b><small>发布者、论坛、群聊、推荐流</small></a><a class="ix-planned-link" href="#institutions"><b>institutions</b><small>机构决策 · 独立新增方案</small></a><a class="ix-planned-link" href="#hot_money"><b>hot_money</b><small>游资决策 · 独立新增方案</small></a><a class="ix-planned-link" href="#quant_firms"><b>quant_firms</b><small>量化公司决策 · 独立新增方案</small></a><a href="mod-market.html"><b>market</b><small>A 股规则与成交判定</small></a><a href="mod-accounts.html"><b>accounts</b><small>账户、出入金与战绩</small></a></div>
 <p>产出层</p>
 <div class="ix-modlist"><a href="mod-outputs.html"><b>outputs</b><small>帖子、态度、决策与账户类表</small></a><a href="mod-validation.html"><b>validation</b><small>V1–V5 验收、基线与校准</small></a></div>
 </section>
 <section id="s5" class="reveal">
-<h2><span class="num">05</span>路线图</h2>
+<h2><span class="num">08</span>路线图</h2>
 <p class="sub">顺序是先建探针与评估工具，再建模拟 <span class="ref">§15.1</span>。B1 与 B5 不依赖模拟，最先做好，之后 V2 的得分都相对它们看。点选项卡查看每个阶段的范围和过闸条件。</p>
+<div class="callout info"><b class="t">四条支线，分别交付</b>下方 Phase 0–3 保留主设计文档的散户路线与原估期，不包含新增工期。<a href="#institutions">机构</a>、<a href="#hot_money">游资</a>、<a href="#quant_firms">量化公司</a>各自确定首版、数据和验收门槛，独立排期与启停，不要求三个模块同时完成。</div>
+<div class="timeline">
+<div class="tl-item"><div class="when">新增模块 · 各自首版</div><div class="what">机构配置与申赎 / 游资题材状态机 / 量化公司风险分配</div><p>分别交付给定行情下可重放的决策、约束和执行记录，分别验证行为与容量；原散户 MVP 不被这三项扩展阻塞。</p></div>
+<div class="tl-item"><div class="when">共用执行 · 分步升级</div><div class="what">部分成交、跨日执行与流动性压力</div><p>统一扩展 market / accounts 契约，再由三个模块各自接入；更细的盘中机制以数据授权和粒度为前提。</p></div>
+<div class="tl-item"><div class="when">价格反馈 · 另行研究</div><div class="what">有界冲击 C / 闭环市场 B</div><p>另立实验、校准和验收，不把多个模块的联合回放等同于内生价格市场。范围明确后再安排实现。</p></div>
+</div>
 <p>真实帖子只能随日历时间积累，股吧帖子事后又常被删除或屏蔽，所以在合规结论允许之后，从 Phase 0 起就每日采集 <span class="ref">§15.1</span><span class="ref">§16.1</span>。每个阶段结束时有交付物，Phase 1 的过闸条件是 V2 达到及格线 <span class="ref">§15.1</span>；不过闸时按止损表处理，先启用风格微调 <span class="ref">§15.2</span>。</p>
 <div class="tabs">
 <div class="tab-bar"><button type="button" data-t="p0">Phase 0 数据与探针</button><button type="button" data-t="p1">Phase 1 情景推演 MVP</button><button type="button" data-t="p2">Phase 2 持续运行</button><button type="button" data-t="p3">Phase 3 扩展</button></div>
@@ -233,11 +515,11 @@
 <p>MVP 全部走国内厂商 API，不自部署；两个底座都从有开源权重的模型中选（如 Qwen、DeepSeek 系列），以后转自部署时可用同一权重做确定性重放和 LoRA 风格微调，闭源模型只作对比 <span class="ref">§14.4</span>。网关自写薄层，用官方 <code>openai</code> SDK 换 <code>base_url</code>，不用 LiteLLM；嵌入模型本地运行开源中文模型（如 BGE 系列），不用厂商嵌入 API <span class="ref">§14.4</span>。Phase 2 扩规模时 Tier-B 可换小模型或自部署，换前须通过大小模型对比 <span class="ref">§15.3</span><span class="ref">§14.1</span>。</p>
 </section>
 <section id="s6" class="reveal">
-<h2><span class="num">06</span>非目标与风险</h2>
+<h2><span class="num">09</span>非目标与风险</h2>
 <p class="sub">非目标划清项目边界；风险表说明这个设计最可能在哪里失败、靠什么发现、发现后怎么办。</p>
 <h3>不做什么</h3>
-<p>本项目只模拟散户的声音、态度和决策，不生成因子，不预测价格，也不对下游拿这些数据做出的预测力负责 <span class="ref">§1</span>。下游若用本项目数据做交易，合规由下游自己负责 <span class="ref">§16.3</span>。项目不接任何实盘交易系统，模拟账户只在仿真里记账。</p>
-<p>MVP 不建模机构，也不做闭环价格形成：价格来自真实行情回放（模式 A）或脚本化价格路径，散户的下单不会反过来推动价格。闭环撮合（模式 B）只作远期选项，冲击模型（模式 C）放到 Phase 3 <span class="ref">§3.5</span>。模拟生成的帖子只在团队内部和内部下游项目之间流转，不进入任何对外渠道 <span class="ref">§16.2</span>。</p>
+<p>项目以散户的声音、态度和决策为原主线，本次分别增加机构、游资、量化公司三个独立决策模块的方案；不生成对外因子产品，不预测价格，也不对下游拿这些数据做出的预测力负责 <span class="ref">§1</span>。下游若用本项目数据做交易，合规由下游自己负责 <span class="ref">§16.3</span>。项目不接任何实盘交易系统，模拟账户只在仿真里记账。</p>
+<p>原散户 MVP 不含机构 <span class="ref">§1</span>；<code>institutions</code>、<code>hot_money</code>、<code>quant_firms</code> 均为独立扩展方案，不把已调研的内容写成既有实现。首版价格仍来自真实行情回放（模式 A）或脚本化路径，所有主体的下单都不反过来推动价格。闭环撮合（模式 B）与有界冲击（模式 C）需另行设计、校准和验收，不冒充真实资金的价格影响。模拟生成的帖子只在团队内部和内部下游项目之间流转，不进入任何对外渠道 <span class="ref">§16.2</span>。</p>
 <h3>主要风险</h3>
 <p>下表每一行对应设计文档里的一节。"由谁发现"一列说明这个风险落到哪个指标或检查上，便于在运行清单和验收报告里追踪。</p>
 <div class="tbl-wrap"><table class="tbl">
@@ -250,17 +532,24 @@
 <tr><td>刻板化 <span class="ref">§16.5</span></td><td>把某类人群演成漫画，压扁群体内部差异</td><td>CoMPosT 两维诊断；对外引用注明是模型产物</td><td>§13.2 漫画化指标</td></tr>
 <tr><td>采集合规 <span class="ref">§16.1</span></td><td>自采触碰用户协议、robots 或个人信息规定</td><td>历史事件用授权数据，自采只补每日前向样本；不绕过登录与验证码；入库即去标识化</td><td>法务复核</td></tr>
 <tr><td>传闻外流 <span class="ref">§16.2</span></td><td>L4 传闻或喊单帖被当成真实信息传出</td><td>L4 只在沙盒运行；每条帖带"模拟生成"字段与传闻/喊单标签</td><td>帖子表字段检查</td></tr>
+<tr><td>资金主体误识别（新增）</td><td>将龙虎榜席位、滞后持仓或生成理由当成真实资金身份与策略</td><td>只建模行为原型；披露按可得时点读取；无可靠真值的参数标假设</td><td>PIT 泄漏测试、来源审计与样本外验证</td></tr>
+<tr><td>容量失真（新增）</td><td>多个大账户重复使用历史成交量，得到虚假的成交与战绩</td><td>母子单、部分成交、共享流动性预算、资金冻结与 T+1 库存</td><td>账本不变量、容量与成本敏感性测试</td></tr>
 </tbody></table></div>
 <p>DR 是离散度保留率，等于模拟人群立场的标准差除以真实人群的标准差，明显低于 1 说明观点被压扁 <span class="ref">§13.2</span>；"漫画化"沿用 CoMPosT 框架（Cheng、Piccardi 与 Yang，2023）的说法，指模拟出来的群体比真实群体更夸张、更单一 <span class="ref">§16.5</span>。</p>
 <div class="callout warn"><b class="t">合规说明 <span class="ref">§16</span></b>§16 的合规梳理不构成法律意见。著作权法第二十四条的合理使用能否覆盖团队研究、少样本示例、盲评与风格微调，仍待法务复核 <span class="ref">§16.1</span>。反不正当竞争法 2025 年修订的条号与原文〔需复核〕 <span class="ref">§16.1</span>；拟人化互动相关办法据二手报道，以网信办原文为准 <span class="ref">§16.3</span>。</div>
 </section>
 <section id="s7" class="reveal">
-<h2><span class="num">07</span>待定事项</h2>
-<p class="sub">设计文档 v0.3（2026-10-31）已并入逐模块架构讨论 A1–A12 的全部决定；讨论记录与设计文档有出入时，以设计文档为准。</p>
+<h2><span class="num">10</span>待定事项</h2>
+<p class="sub">既有散户设计以 v0.3（2026-10-31）为准。三个独立模块于 2026-11-01 加入本页，2026-11-02 由三个子代理分别设计后补充状态、机制、示例与验收；尚未同步到主设计文档、其他模块页与代码骨架。</p>
 <p>架构讨论从 2026-10-30 起按模块逐个进行，每谈完一个模块就把决定记进讨论记录，再统一写回设计文档。下面先列几项最常被问到的已定决定及其所在章节，再列仍待定的事项。</p>
 <div class="callout info"><b class="t">已并入的架构决定（节选）</b>数据层存不复权日线（开高低收、量、额、涨跌停价、停牌标记）和复权因子表，复权因子以除权除息日为 <code>available_at</code>；智能体看到的价格按当天现算前复权，收益与战绩统一用后复权；日线从 2005 年起 <span class="ref">§5.5</span>。采集范围是股吧列表与帖子正文、东财 7x24 快讯；股吧回复全文暂不采，只存回复数；雪球不能自采；题材成分改用授权来源；<code>user_id</code> 哈希，昵称、头像、IP 属地入库即删除；原始语料只在常开服务器上，90 天到期自动删除 <span class="ref">§16.1</span>。解析失败换种子重试最多 2 次，仍失败记"未激活"、不填默认值；拒答单独记类、不重试，作为底座选型扣分；失败的尝试也写入缓存 <span class="ref">§6.2</span><span class="ref">§14.4</span>。</div>
 <h3>仍待定的事项</h3>
 <div class="grid g2">
+<div class="callout todo"><b class="t">机构 · 待校准的产品配置</b><a href="#institutions">主动公募首版</a>已给出三层组合、筹现状态与验收场景；具体合同、基准、权益区间、支付规则、情景规模和行为门槛仍需选定并预注册。</div>
+<div class="callout todo"><b class="t">游资 · 待校准的代理与阈值</b><a href="#hot_money">三原型与状态机</a>已给出广度、相对强弱、冷却和题材预算规则；题材历史来源、阈值分布与样本外门槛待定。盘口级机制另按数据粒度验证。</div>
+<div class="callout todo"><b class="t">量化公司 · 待校准的额度与成本</b><a href="#quant_firms">两产品、多策略首版</a>已定义预算单位、净额、资金隔离和压力测试；基准、股票池、风格组、成本情景、滚动窗口与验收门槛仍需冻结。</div>
+<div class="callout todo"><b class="t">资金数据与规则版本（新增）</b>确认基金披露、历史基准与成分、龙虎榜和行情的授权、覆盖期及 <code>available_at</code>。规则按实际生效日使用，征求意见稿不直接作为已生效硬约束；组织、产品、策略标识不与散户 <code>persona_id</code> 混用。</div>
+<div class="callout todo"><b class="t">人群分布拟合 <span class="ref">§4.3</span></b>IPF 保边际不保联合，而 V1 只判主要边际；2023–2026 的官方年龄 / 性别 / 学历 / 地域分布也还没取到 <span class="ref">§2</span>。除 IPF 之外该用哪条路线（MRP、copula、贝叶斯融合、合成重建）、能拿到哪些真实边际、"主要边际"与"关键联合分布"的清单和指标怎么定，都要在 Phase 0 预注册 V1 之前调研定下。</div>
 <div class="callout todo"><b class="t">数据源 <span class="ref">§5.5</span></b>行情与历史新闻的数据源待定；各表 <code>available_at</code> 的取值规则和存储格式还没定。题材成分要等授权来源（如 Tushare 同花顺概念成分或数据商）。</div>
 <div class="callout todo"><b class="t">雪球没有对照 <span class="ref">§16.1</span></b>雪球风格仍留在 MVP，但雪球真实帖没有自采来源，V2 对照与文风示例池都要靠授权数据。授权来源落实前，雪球风格的 V2 结论记为无对照。</div>
 <div class="callout todo"><b class="t">法务复核</b>东财用户协议是否允许研究用途，与帖子著作权（著作权法第二十四条合理使用）一起待复核 <span class="ref">§16.1</span>。股吧回复全文是否用真实浏览器低频加载，复核后再定。</div>
@@ -277,9 +566,21 @@
 <script>
 (function(){
 'use strict';
+// 三个独立模块各有本页入口，不链接尚不存在的模块页。
+if(window.RS_PAGES){
+  var simEnd=window.RS_PAGES.findIndex(function(p){return p.g==='out';});
+  if(simEnd<0)simEnd=window.RS_PAGES.length;
+  window.RS_PAGES.splice(simEnd,0,
+    {f:'index.html#institutions',cn:'institutions · 机构决策',g:'sim',c:'--sim',d:'独立新增方案：研究、配置与申赎（本页）'},
+    {f:'index.html#hot_money',cn:'hot_money · 游资决策',g:'sim',c:'--sim',d:'独立新增方案：题材、情绪与进退（本页）'},
+    {f:'index.html#quant_firms',cn:'quant_firms · 量化公司',g:'sim',c:'--sim',d:'独立新增方案：公司预算、产品与策略（本页）'}
+  );
+}
+var footer=document.querySelector('footer.site');
+if(footer)footer.textContent='RetailSim · 既有散户设计 v0.3 + 2026-11-02 机构 / 游资 / 量化公司三个独立模块详细设计 · 设计草案，尚未实现';
 var MODS={
 collect:{l:'数据层',c:'--data',t:'前向存档',d:'从 Phase 0 起每日采集股吧帖子与东财 7x24 快讯（范围见 §16.1：雪球不自采，题材成分改用授权来源；docstring 仍列这两项），存来源时间戳与入库时间，入库即去标识化。原始语料放在仓库外，由环境变量指定路径。',i:'股吧列表与正文、快讯接口',o:'去标识化的帖子与快讯，进入 data'},
-data:{l:'数据层',c:'--data',t:'PIT 数据湖',d:'所有读取经 pit.query(table, asof=clock)，由数据层强制 available_at ≤ clock。智能体不直接访问数据，只通过感知步骤拿到信息（§5.5）。产出 Parquet 表。',i:'行情、资金、政策、新闻、公告、存档帖子',o:'PIT 查询结果给 events 与 agents 的感知步骤'},
+data:{l:'数据层',c:'--data',t:'PIT 数据湖',d:'所有读取经 pit.query(table, asof=clock)，由数据层强制 available_at ≤ clock。智能体不直接访问数据，只通过感知步骤拿到信息（§5.5）。机构、游资、量化公司三个独立模块拟复用同一时钟，披露也按可得时点读取。',i:'行情、资金、政策、新闻、公告、存档帖子；资金披露按授权扩展',o:'PIT 查询结果给 events 与各独立决策模块的感知步骤'},
 events:{l:'数据层',c:'--data',t:'事件卡',d:'新闻、政策、公告抽成 EventCard，每个事件 1 次 LLM 调用，再按量级产出 1–3 个 L0/L1 转述版本，不带立场；L2–L4 文本由 social 的发布者产出（§5.3；§3.3 表仍写传闻改写）。',i:'PIT 新闻与公告',o:'EventCard、L0/L1 文本'},
 schemas:{l:'基础层',c:'--orch',t:'共享类型',d:'Pydantic v2 类型：PersonaCard、EventCard、Post、FeedItem、BeliefUpdate、DecisionIntent、FundingIntent、OrderIntent、Fill、CashFlow、RunManifest；导出 JSON Schema 供约束解码。不依赖其他子包。',i:'无',o:'类型定义，被所有模块引用'},
 prompts:{l:'基础层',c:'--llm',t:'模板',d:'所有模板作为包数据，加载器记录内容哈希进运行清单；每种用途 2–3 个等价模板，用于 V5 稳健性。',i:'模板文件',o:'渲染后的消息给 llm'},
@@ -287,13 +588,16 @@ llm:{l:'基础层',c:'--llm',t:'网关',d:'自写薄网关，官方 openai SDK �
 orchestrator:{l:'基础层',c:'--orch',t:'调度',d:'时钟、激活、种子、快照、分叉与 RunManifest；定义 /runs/<run_id>/ 目录布局，事件日志只追加；缓存放在运行目录之外。持续运行按版本线 line_id 管理，漏跑日按 PIT 补跑并标 backfilled（§9.3）。',i:'运行配置',o:'驱动所有业务模块，写运行清单'},
 population:{l:'模拟层',c:'--sim',t:'合成人口',d:'生成人设卡：IPF 调权、MBTI 32 型抽样、大五分数、人生骨架在真实行情上预跑后改写成背景故事、说话风格与初始持仓。',i:'IPF 边际、国家类型分布、历史行情',o:'PersonaCard 与初始持仓'},
 agents:{l:'模拟层',c:'--sim',t:'智能体',d:'每次激活最多两次 LLM 调用：第 1 次出结构化的解读与意向，内核约束与成交判定之后，第 2 次只为发帖者写帖子（§6.1）。另有注意力预算、三层记忆、情绪；意向来源可替换（§6.6）。',i:'信息流、持仓只读视图、行情、人设',o:'BeliefUpdate、Post、DecisionIntent、FundingIntent、OrderIntent'},
+institutions:{l:'模拟层 · 独立新增方案',c:'--sim',t:'机构决策',planned:true,d:'管理人 → 产品 → 组合，首版一个管理人、两个主动开放式权益产品。分别维护理想 / 约束后 / 实际组合、观点到期和赎回筹现状态；硬限制冲突保留缺口，不虚构成交。LLM 只作可选研究辅助，数值配置与风控可重算。',i:'PIT 研究与行情、历史基准、产品限制、申赎通知与支付日、授权账户只读视图',o:'三层组合、观点生命周期、筹现 / 约束冲突 → outputs；净调仓计划 → OrderIntent',href:'#institutions',linkLabel:'查看机构详细设计 ↓',source:'来源：2026-11-02 独立子代理设计与主代理整合。含字段、机制、算术示例及 5 个验收场景；尚未建包、未实现。'},
+hot_money:{l:'模拟层 · 独立新增方案',c:'--sim',t:'游资决策',planned:true,d:'题材强势 / 事件轮动 / 回撤反转三个日频原型，分别配置触发规则。观察 → 试探待成交 → 持有 / 加仓 → 退出待完成 → 冷却；回执确认持仓，清仓且未决订单结束才开始冷却。LLM 仅作可选研究辅助，题材与账户预算独立管理。',i:'PIT 行情 / 事件 / 题材版本、广度与强弱代理、自有账户与回执、异质短线配置',o:'原型评分、状态 / 持仓回合 / 冷却与受阻记录 → outputs；交易意向 → OrderIntent',href:'#hot_money',linkLabel:'查看游资详细设计 ↓',source:'来源：2026-11-02 独立子代理设计与主代理整合。含代理公式、状态、示例及 5 个验收场景；尚未建包、未实现，不从席位命名真实身份。'},
+quant_firms:{l:'模拟层 · 独立新增方案',c:'--sim',t:'量化公司决策',planned:true,d:'公司 → 产品 → 策略 → 执行，首版两个独立股票多头产品、每产品至少两条日频测试策略。公司分配敞口 / 交易额度，产品内净额、跨产品独立下单；重叠交易消耗共同市场容量。LLM 仅作可选研究辅助，策略数值计算可复现。',i:'PIT 数据与历史股票池 / 基准、策略 / 模型版本、公司 / 产品额度、授权账户只读视图',o:'信号 / 产品目标 / 公司裁剪与归因 → outputs；净调仓计划 → OrderIntent',href:'#quant_firms',linkLabel:'查看量化公司详细设计 ↓',source:'来源：2026-11-02 独立子代理设计与主代理整合。含额度单位、策略规则、算术示例及 6 个验收场景；尚未建包、未实现，不声称复刻私有策略。'},
 social:{l:'模拟层',c:'--social',t:'社交层',d:'发布者 L0–L4、论坛（股吧与雪球两种风格）、熟人群聊、推荐流与传播；真实帖子注入只留接口，默认关闭。',i:'EventCard、智能体帖子',o:'Post、FeedItem'},
-market:{l:'模拟层',c:'--market',t:'市场层',d:'A 股规则、成交判定，价格用真实行情回放或脚本化路径。只读账户视图，从不写账户。',i:'OrderIntent、账户只读视图',o:'带佣金与印花税的 Fill'},
-accounts:{l:'模拟层',c:'--acct',t:'账户层',d:'记录 Fill 与 CashFlow，日终结算、快照、战绩；账户跨日连续，一切可由事件日志重算。',i:'Fill、FundingIntent 转成的 CashFlow',o:'只读视图、四张账户表'},
-outputs:{l:'产出层',c:'--out',t:'产出与导出',d:'三张主表、激活表、调查表、信任网络快照与账户类表，按 persona_id、event_id、run_id（账户表加 sim_date）关联，行级元数据取自激活表（§10.3）；态度指标分全体持有者与发声者两种口径（§10.1）。',i:'帖子、态度、决策、激活与账户记录',o:'Parquet 表给下游与 validation'},
-validation:{l:'产出层',c:'--val',t:'验收',d:'子包 acceptance、baselines、probes、discriminator、calibration；B2–B4 由 configs/ 里的运行配置实现。',i:'产出表、真实帖对照集',o:'V1–V5 报告、探针结果'}
+market:{l:'模拟层',c:'--market',t:'市场层',d:'A 股规则、成交判定，价格用真实行情回放或脚本化路径。只读账户视图，从不写账户。机构、游资、量化公司分别接入同一订单契约，拟扩展母子单、部分成交、分日执行和共享流动性预算；不是已实现的闭环市场。',i:'散户 / 机构 / 游资 / 量化公司的 OrderIntent、账户只读视图',o:'带佣金与印花税的 Fill'},
+accounts:{l:'模拟层',c:'--acct',t:'账户层',d:'记录 Fill 与 CashFlow，日终结算、快照、战绩；账户跨日连续，一切可由事件日志重算。三个独立新增模块拟复用此账本，补充主体 / 产品 / 账户标识、订单资金冻结和可卖库存管理，但互不共享私有账户状态。',i:'Fill、CashFlow',o:'按权限提供各自账户只读视图、四张账户表'},
+outputs:{l:'产出层',c:'--out',t:'产出与导出',d:'既有三张主表、激活表、调查表、信任网络快照与账户类表按 persona_id、event_id、run_id 关联（§10.3）。拟给三个独立模块增加模块 / 主体 / 产品 / 账户 / 策略标识，机构配置、游资状态迁移、量化公司预算与信号分别导出，不混入散户人头加权统计。',i:'帖子、态度、决策、激活；各模块的决策 / 约束及账户记录',o:'按散户 / 机构 / 游资 / 量化公司区分的 Parquet 表'},
+validation:{l:'产出层',c:'--val',t:'验收',d:'现有散户支线验 V1–V5；B2–B4 由 configs/ 里的运行配置实现。机构另验配置与申赎，游资另验状态与进退，量化公司另验预算、组合与数值循环；共同检查硬约束、容量、成本与样本外稳定性，但各自出结论，不套用散户声音闸门。',i:'各模块产出、真实帖与公开披露等可用对照',o:'散户 V1–V5 报告；机构 / 游资 / 量化公司各自的验证报告（拟新增）'}
 };
-var BIZ=['collect','data','events','population','agents','social','market','accounts','outputs','validation'];
+var BIZ=['collect','data','events','population','agents','social','institutions','hot_money','quant_firms','market','accounts','outputs','validation'];
 var map=document.getElementById('ixMap');
 var card=document.getElementById('ixModCard');
 function edgesOf(){return map?Array.prototype.slice.call(map.querySelectorAll('.ix-edge')):[];}
@@ -330,6 +634,12 @@ function focus(m){
   });
 }
 function names(o){var a=Object.keys(o);return a.length?a.join('、'):'无';}
+function upstreamNames(m,o){
+  return Object.keys(o).map(function(k){
+    var optional=edgesOf().some(function(e){return e.getAttribute('data-f')===k&&e.getAttribute('data-t')===m&&e.classList.contains('ix-optional');});
+    return k+(optional?'（可选研究辅助）':'');
+  }).join('、')||'无';
+}
 function el(tag,cls,txt){var x=document.createElement(tag);if(cls)x.className=cls;if(txt!=null)x.textContent=txt;return x;}
 function showCard(m){
   var d=MODS[m]; if(!card||!d)return;
@@ -340,31 +650,61 @@ function showCard(m){
   chip.appendChild(el('i')); chip.appendChild(document.createTextNode(d.l));
   hd.appendChild(chip);
   var h=el('h4',null,m+' · '+d.t); h.style.margin='0'; hd.appendChild(h);
-  var a=el('a','btn pri','进入 mod-'+m+'.html'); a.href='mod-'+m+'.html'; a.style.marginLeft='auto';
+  var a=el('a','btn pri',d.linkLabel||'进入 mod-'+m+'.html'); a.href=d.href||'mod-'+m+'.html'; a.style.marginLeft='auto';
   hd.appendChild(a);
   card.appendChild(hd);
   var p=el('p',null,d.d); p.style.margin='10px 0 0'; card.appendChild(p);
   var io=el('div','ix-mc-io');
-  [['输入',d.i],['输出',d.o],['上游模块',names(r.up)],['下游模块',names(r.dn)]].forEach(function(pair){
+  [['输入',d.i],['输出',d.o],['上游模块',upstreamNames(m,r.up)],['下游模块',names(r.dn)]].forEach(function(pair){
     var c=el('div'); c.appendChild(el('b',null,pair[0])); c.appendChild(document.createTextNode(pair[1])); io.appendChild(c);
   });
   card.appendChild(io);
-  var s=el('p','sub','来源：设计文档 v0.3 §3.3 模块划分与各子包 docstring。'); s.style.margin='10px 0 0'; card.appendChild(s);
+  var s=el('p','sub',d.source||'来源：既有职责依据设计文档 v0.3 §3.3 与各子包 docstring；机构、游资、量化公司三个独立模块的接入为本次新增方案，尚未实现。'); s.style.margin='10px 0 0'; card.appendChild(s);
 }
 if(map){
   map.querySelectorAll('.ix-node').forEach(function(n){
     var m=n.getAttribute('data-m');
+    n.setAttribute('aria-label',m+' · '+MODS[m].t+(MODS[m].planned?'（独立新增方案，未实现）':''));
+    n.setAttribute('aria-controls','ixModCard');
+    n.setAttribute('aria-pressed','false');
     n.addEventListener('mouseenter',function(){focus(m);});
     n.addEventListener('focus',function(){focus(m);});
     n.addEventListener('mouseleave',function(){clearFocus();});
     n.addEventListener('blur',function(){clearFocus();});
     function pick(){
-      map.querySelectorAll('.ix-sel').forEach(function(x){x.classList.remove('ix-sel');});
-      n.classList.add('ix-sel'); showCard(m);
+      map.querySelectorAll('.ix-node').forEach(function(x){x.classList.remove('ix-sel');x.setAttribute('aria-pressed','false');});
+      n.classList.add('ix-sel'); n.setAttribute('aria-pressed','true'); showCard(m);
     }
     n.addEventListener('click',pick);
     n.addEventListener('keydown',function(ev){if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();pick();}});
   });
+}
+// 共用价格机制补充键盘操作与可访问状态，不改变共享页面脚本。
+var priceTabs=document.getElementById('priceModes');
+if(priceTabs){
+  var priceButtons=Array.prototype.slice.call(priceTabs.querySelectorAll('[role=tab]'));
+  var pricePanes=Array.prototype.slice.call(priceTabs.querySelectorAll('[role=tabpanel]'));
+  function selectPriceTab(index){
+    priceButtons.forEach(function(b,i){
+      b.classList.toggle('on',i===index);
+      b.setAttribute('aria-selected',i===index?'true':'false');
+      b.tabIndex=i===index?0:-1;
+    });
+    pricePanes.forEach(function(p,i){p.classList.toggle('on',i===index);});
+  }
+  priceButtons.forEach(function(b,i){
+    b.addEventListener('click',function(){selectPriceTab(i);});
+    b.addEventListener('keydown',function(e){
+      var next=i;
+      if(e.key==='ArrowRight')next=(i+1)%priceButtons.length;
+      else if(e.key==='ArrowLeft')next=(i+priceButtons.length-1)%priceButtons.length;
+      else if(e.key==='Home')next=0;
+      else if(e.key==='End')next=priceButtons.length-1;
+      else return;
+      e.preventDefault(); selectPriceTab(next); priceButtons[next].focus();
+    });
+  });
+  selectPriceTab(0);
 }
 })();
 </script>
