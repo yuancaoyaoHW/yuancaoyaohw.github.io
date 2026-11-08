@@ -1,0 +1,345 @@
+{
+  "date": "2026-11-08",
+  "title": "2026-11-08 论文精选",
+  "lede": "今日主线仍是「把通信与显存搬离关键路径」：矩阵优化器靠所有权与拓扑感知通信挤进 FSDP，22B 生成模型把常驻显存压到固定 arena，循环 transformer 则按阶段分配 loop 预算。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 413
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "DMuon: Scaling Matrix Optimizers in Data Parallelism with Topology-Aware Matrix Ownership and Communication",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-06",
+          "authors": "Starrick Liu, Ruizhi Chengze, Lufang Chen, Michael Zhao, Ran Yu, Xiaofan Li, dance kuzi, Yue Zhang, Zijuan Lin, SongAo Han, YongHua Chen, Ruyi Gan, Hao Wang",
+          "institutions": "X Square Robot",
+          "abstract": "Muon 这类矩阵优化器对整个权重矩阵做更新，与数据并行运行时按元素或按行分片的布局冲突：参数被分片后，矩阵优化器要么多付一次通信，要么重复计算。DMuon 是面向 PyTorch FSDP（ZeRO-2/3）与 HSDP 的矩阵粒度优化器运行时：给每个矩阵指派唯一 owner，由 owner 在完整矩阵上执行 Newton–Schulz 迭代与优化器更新，并按计算代价在 owner 之间均衡负载。HSDP 下所有权跨副本全局唯一，集群只保留一份梯度与优化器状态，参数一旦就绪就跨节点发布，与后续计算重叠。该布局让所有集合通信变成稀疏且长度可变，DMuon 按时序调度这些通信并沿集群两级网络路由。",
+          "contributions": [
+            "矩阵粒度所有权 + 按计算代价均衡的负载分配，使矩阵级优化器可直接跑在 FSDP/HSDP 的分片之上，无需改成元素级更新。",
+            "HSDP 场景把梯度与优化器状态跨副本收敛成单份，更新完成的参数立即发布并与后续计算重叠。",
+            "把稀疏、变长的集合通信与集群两级网络拓扑联合调度，用通信重排吸收矩阵优化器带来的额外开销。"
+          ],
+          "conclusions": [
+            "在最多 256 张 H100、3 个稠密 LLM 与 2 个 VLA 模型上，DMuon 训练吞吐达到 FSDP2+AdamW 的中位数 1.05×，即矩阵优化器的额外开销被完全吸收。",
+            "相对 gather-then-replicate 的 Muon 基线，吞吐中位数为 2.1×。"
+          ],
+          "experiments": [
+            "在 256 张 H100 上跨 3 个稠密 LLM 与 2 个 VLA 模型评测，吞吐中位数为 PyTorch FSDP2+AdamW 的 1.05×。",
+            "相对朴素 gather-then-replicate 的 Muon 实现，吞吐中位数提升 2.1×。",
+            "优化后的参数 gather 与梯度 reduce 吸收了矩阵优化器新增的通信与计算。"
+          ],
+          "significance": "让矩阵级优化器进入生产级数据并行训练栈，而不牺牲通信效率。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07084",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07084.pdf",
+          "index": 1,
+          "takeaway": "矩阵优化器可以寄生在 FSDP 之上：靠矩阵所有权加通信重排吸收代价。",
+          "keyExperiment": "256 张 H100 上吞吐中位数超 FSDP2+AdamW 1.05×，是每次 all-gather 后重算的 Muon 基线的 2.1×。"
+        },
+        {
+          "title": "Precision-Preserving Subtensor Inference for a 22B Joint Audio-Video Generator under a Fixed GPU Working Set",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-06",
+          "authors": "Hanyue Shen, Xinling Liao",
+          "institutions": "YH Intelligence Technology (Beijing)",
+          "abstract": "整块 offload 能降低常驻显存，但要求每个被搬运的块都能塞进 GPU 预算。PSI 是面向 BF16 LTX-2.5 22B 音视频联合 transformer 的固定 arena 运行时，把子块权重流式搬运与单独管理的中间状态结合起来。其贡献是一种构造：受管 GPU 占用由可复用页、活跃状态与有界工作区共同决定，并配一组把资源占用、传输正确性、数值保真度分开的控件；分块算子在给定假设下保持与稠密实数算术一致的构造。",
+          "contributions": [
+            "固定 arena 的子块权重流加独立中间状态，把 22B 模型的 transformer 常驻显存压到显式可算的预算内。",
+            "数值保真度被做成可单独测试的性质：固定算术的一 token 传输控制逐位保持所有保存状态。",
+            "FFN 复用在不改变 BF16 输出的前提下降低平均块时间。"
+          ],
+          "conclusions": [
+            "RTX A6000 上采样阶段 transformer 峰值显存从 8,578 MiB 降到 360 MiB，受管 arena 仅 80 MiB，代价是 11 次 transformer 调用平均耗时从 247.11s 升到 349.00s。",
+            "在固定 3 GiB 可用显存上限下，原生完整生成与整块 FLASH 两条路径都能成功完成整段音视频解码。"
+          ],
+          "experiments": [
+            "9 个匹配的完整 prompt 用例上，峰值显存 8,578→360 MiB，受管 arena 80 MiB。",
+            "11 次 transformer 调用平均耗时 247.11s→349.00s。",
+            "固定 3 GiB 上限下原生与 FLASH 两条路径均成功；FFN 复用使平均块时间降低 4.0% 且 BF16 输出逐位不变。"
+          ],
+          "significance": "把「20B 级生成模型能否跑在固定显存额度里」变成一个可计算、可验证的工程问题。",
+          "arxivUrl": "https://arxiv.org/abs/2611.08023",
+          "pdfUrl": "https://arxiv.org/pdf/2611.08023.pdf",
+          "index": 2,
+          "takeaway": "显存预算可以被显式构造出来：固定 arena 加子块流，用时间换 24 倍显存下降。",
+          "keyExperiment": "峰值显存 8,578→360 MiB（约 23.8×），代价是单次调用从 247.11s 升到 349.00s。"
+        },
+        {
+          "title": "BlockLock: Reproducible LLM Inference with Fixed Batch Geometry",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-06",
+          "authors": "Xiuyuan Qi, Pedro Reviriego, Javier Conde, Shanshan Liu",
+          "institutions": "UESTC, Universidad Politecnica de Madrid",
+          "abstract": "可复现推理要求同一请求的输出不随同批其它请求变化。现有方案各有代价：batch-invariant kernel 约束每个算子，固定形状 decode 隔离 prefill 则放弃共享的 prefill 计算并要 padding。BlockLock 保留共享的批量 prefill，只钉住被保护请求的数值路径——固定该请求看到的形状几何，提供两种模式：BlockLock-Rows 用固定宽度行、仍保留全批 decode；BlockLock-Pack 用终止锚定的打包加一个隔离 dummy 段，再抽出被保护请求的 KV 状态做 target-only decode。在给定部署契约下，两种模式都在同伴请求变化时保持目标输出逐位一致。",
+          "contributions": [
+            "只约束受保护请求的数值几何，全批 prefill 仍然共享，避免整批退化。",
+            "两种模式分别覆盖「保留批量 decode」与「完全隔离 decode」，按场景取舍。",
+            "不需要自写 kernel，相对 vLLM 的 batch-invariant 方案延迟降 53.5–55.0%、吞吐升 115.2–122.2%。"
+          ],
+          "conclusions": [
+            "在 5 个稠密模型与 A6000/A100/H100 三种单卡部署上，两种模式都保持目标序列与 Top-20 logit 逐位一致。",
+            "相同交付工作量下，BlockLock-Rows 的延迟与吞吐都明显优于 vLLM Batch-Invariant。"
+          ],
+          "experiments": [
+            "Qwen3-8B/14B、Llama-3.1-8B-Instruct、Gemma-3-4B/12B-IT 上目标序列与 Top-20 logit 逐位不变。",
+            "相对 vLLM Batch-Invariant，延迟降低 53.5–55.0%，吞吐提升 115.2–122.2%。",
+            "双卡 A6000 的初始张量并行实验同样保持一致性。"
+          ],
+          "significance": "在不让整批推理退化的情况下给出可复现输出，对审计、缓存与回归测试类服务很实用。",
+          "arxivUrl": "https://arxiv.org/abs/2611.06977",
+          "pdfUrl": "https://arxiv.org/pdf/2611.06977.pdf",
+          "index": 3,
+          "takeaway": "复现性不必靠约束全批：只钉住被保护请求的形状几何即可。",
+          "keyExperiment": "相对 vLLM Batch-Invariant 延迟降 53.5–55.0%、吞吐升 115.2–122.2%，且零自定义 kernel。"
+        },
+        {
+          "title": "ACSeL: Adaptive Configuration Search for Hardware-Constrained LLM Inference",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-06",
+          "authors": "Bokun Wang, Hung-Yueh Chiang, Diana Marculescu",
+          "institutions": "University of Texas at Austin",
+          "abstract": "在内存与延迟 SLO 收紧的场景（含边缘设备）服务 LLM，需要联合选择模型规模、batch、量化算法与逐层混合精度配方，组合空间大到无法穷举。与数据中心偏好吞吐或生成速度不同，资源受限部署把内存与延迟当约束，再在可行域里挑生成质量最高的配置。ACSeL 用相对模型质量退化（RMQD）作质量代理：以候选模型与参考模型在小校准集上 next-token 分布的散度衡量，评估便宜且与下游基准强相关。系统由三部分组成：从配置直接预测 RMQD 的轻量代理、用少量端到端 profile 校准算子级延迟估计的 few-shot 中位数校准（FMC），以及探索逐层混合精度配置的结构化搜索 BandPareto。",
+          "contributions": [
+            "RMQD 质量代理：24 题 GSM8K 上评估耗时 6.84s，而直接跑同一基准需 626.91s，约 91.6× 加速。",
+            "FMC 用少量端到端 profile 校准算子级延迟模型，把「预测可行」变成「实际可行」。",
+            "BandPareto 在分层混合精度空间中做结构化搜索，避免穷举整个配置组合。"
+          ],
+          "conclusions": [
+            "在 RTX A6000 与 Jetson Thor 两类平台上，FMC 显著提升部署可行性判断的准确度，BandPareto+FMC 取得最高可行率与最小的 RMQD 差距。",
+            "方法的价值在于把「选配置」从经验试错变成带质量代理与延迟代理的约束优化。"
+          ],
+          "experiments": [
+            "RMQD 评估 24 题 GSM8K 仅 6.84s，直接跑同一基准需 626.91s（约 91.6×）。",
+            "在 NVIDIA RTX A6000 工作站与 Jetson Thor 边缘平台上验证，FMC 显著改善部署可行性。",
+            "BandPareto+FMC 在评测集上可行率最高，与最优实测配置的 RMQD 差距最小。"
+          ],
+          "significance": "为边缘与受限环境提供可自动化的「模型-量化-batch」联合选型流程。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07570",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07570.pdf",
+          "index": 4,
+          "takeaway": "先用分布散度代理质量、再用少量 profile 校准延迟，配置搜索才跑得动。",
+          "keyExperiment": "RMQD 评估 24 题仅 6.84s（直接测 626.91s，91.6×），配合 FMC 得到最高可行率。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "TileQuant: Tile as the Precision-Allocation Unit for LLM Mixed-Precision Post-Training Quantization",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-06",
+          "authors": "Hanzhi Zhang, Qiao Zhang, Qinglei Cao, Heng Fan, Yan Huang, Kewei Sha, Yunhe Feng",
+          "institutions": "Saint Louis University, University of North Texas",
+          "abstract": "PTQ 能降低部署成本，但要处理权重敏感度分布不均。均匀 PTQ 用单一 bit 宽，重要性感知 PTQ 在该宽度内调 scale 或重建权重，列级混合精度只保留部分列到高精度。问题在于敏感度在列内也有变化：整列保留会连带保护不敏感权重，而运行时 outlier 检测又给 decode 增加开销。TileQuant 是无训练框架，把精度分配给硬件对齐的二维权重 tile。离线校准给出两种打分：基于前向统计的输入激活感知分数（校准成本低）与基于损失敏感度的梯度分数（保质量更好）。在每个投影的保留预算内，得分最高的 tile 保持 16-bit、其余用 8-bit；映射结果指导权重重建进紧凑 buffer，kernel 复用该 buffer 做原生整数与 16-bit 计算并局部累加以减少访存。",
+          "contributions": [
+            "把精度分配的单元换成硬件对齐的二维 tile，比列级更贴合真实的局部敏感度。",
+            "双打分机制：激活感知打分便宜，梯度打分更保质量，二者在同一预算框架内组合。",
+            "重建到紧凑 buffer 的 kernel 同时支持整数与 16-bit 计算并做局部累加，降低访存开销。"
+          ],
+          "conclusions": [
+            "生成吞吐达到原模型的 2.66×，同时在语言建模、推理、长上下文检索与问答四类任务上保持质量。",
+            "多个任务上超过量化基线与原模型，说明更细的精度分配单元确有收益。"
+          ],
+          "experiments": [
+            "生成吞吐为原模型的 2.66×。",
+            "在语言建模、推理、长上下文检索与问答四类任务上质量保持良好。",
+            "多个任务上超过量化基线与原模型本身。"
+          ],
+          "significance": "把混合精度的粒度从列推进到 tile，给出了精度与硬件效率兼顾的实用折中。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07217",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07217.pdf",
+          "index": 5,
+          "takeaway": "精度分配的单元该由硬件对齐方式决定，而不是由张量维度决定。",
+          "keyExperiment": "生成吞吐达原模型 2.66×，四类任务质量不降且部分超越原模型。"
+        },
+        {
+          "title": "The Gating Mechanism of KV Cache Eviction",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-06",
+          "authors": "Hao Gu, Xintong Yang, Zhiwei Li, Lei Zhu, Jian Yang, Qiyuan Zhu, Dezhi Li, Jingyuan Zhang, Zhizhuo Kou, Hao Wang, Bei Liu, Jiacheng Liu, Sirui Han",
+          "institutions": "HKUST, Tencent HunYuan, New York University, Georgia Institute of Technology, City University of Hong Kong, Shanghai Jiao Tong University",
+          "abstract": "KV cache 驱逐要判断哪些条目携带了其余缓存无法再提供的信息。自然做法是给每个缓存条目的注意力权重配一个可学习门，并用模型自身目标训练它。门位于 softmax 归一化内部：抑制一个条目会把它的质量转给其它条目而不是丢弃；同一个归一化器会吸收任意 per-query 常数，因此常数门互相抵消、精确复现冻结模型。用语言建模损失训练时，门保持近常数而 loss 仍在下降——优化成功，但冻结骨干本就是为稠密注意力拟合的，其损失偏好「空操作」，近常数打分排不出任何次序。第二个障碍是同一梯度会把冻结模型已经犯的错误算在门头上。把稠密注意力移出门的作用范围、并以稠密模型的预测作为目标，可同时消除这两个障碍。",
+          "contributions": [
+            "指出可学习驱逐的两个结构性障碍：训练目标本身偏好 no-op，梯度又混入了骨干既有误差。",
+            "给出解法：把稠密注意力排除在门外，并以稠密模型的预测为目标，两个障碍同时消失。",
+            "证明满足条件后容量不是缺失要素——更大打分器、显式访问历史、可训练骨干都无效。",
+            "无参数质心在同一个 softmax 内部读回被丢弃的质量，优于任何外部 memory 读取。"
+          ],
+          "conclusions": [
+            "75% KV 压缩下，Qwen3-8B 在 RULER 8K 得 90.14、LongBench 得 46.03，仅比全缓存低 3.72 与 1.36 分。",
+            "结论把「可学习驱逐为何常常无效」从工程问题还原为优化目标设计问题。"
+          ],
+          "experiments": [
+            "75% KV 压缩下 RULER 8K 得 90.14，比全缓存低 3.72 分（Qwen3-8B）。",
+            "同一设置下 LongBench 得 46.03，比全缓存低 1.36 分。",
+            "增大打分器容量、显式访问历史、可训练骨干均无提升；无参数质心读回显著优于外部 memory。"
+          ],
+          "significance": "为 KV 驱逐给出了理论解释与一条更简单的实现路径，压缩率与精度都站得住。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07605",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07605.pdf",
+          "index": 6,
+          "takeaway": "可学习门失效不是优化不到位，而是目标函数在奖励空操作。",
+          "keyExperiment": "75% 压缩下 RULER 8K 90.14、LongBench 46.03，距全缓存仅 3.72/1.36 分。"
+        },
+        {
+          "title": "HyFlash: A Prefix-Memory Prior for On-Device Speculative Decoding",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-06",
+          "authors": "Jongwoo Ko, Pashmina Cameron",
+          "institutions": "Microsoft Applied Sciences Group",
+          "abstract": "并行块草稿让投机解码一次骨干前向就预测多个未来位置，但端侧部署同时限制草稿器容量与上下文存储。在紧张内存预算下，草稿器必须在不承担全上下文 KV 增长的前提下，同时建模长程依赖与细粒度的草稿位置交互。HyFlash 是紧凑的并行草稿器，用 prefix-memory 先验把长程上下文建模与草稿位置交互解耦：局部注意力捕捉近期上下文与草稿位置交互，循环记忆把历史 target 特征压缩成定长状态。这种归纳偏置让草稿侧内存有界的同时兼顾局部与长程建模，浅草稿器与长上下文的收益尤其明显。",
+          "contributions": [
+            "prefix-memory 先验：局部注意力管近期与位置交互，定长循环记忆管长程，草稿侧内存有界。",
+            "在草稿器容量受限时仍能建模长程依赖，避免全上下文注意力的 KV 膨胀。",
+            "在 math/code/chat 共 7 个基准上全面优于 DFlash 与 DSpark。"
+          ],
+          "conclusions": [
+            "Qwen3-4B 上平均解码加速从 1.95× 提到 2.15×，Phi-4-reasoning 从 2.22× 提到 2.58×。",
+            "平均接受长度同步从 3.67 到 4.10、从 3.28 到 3.79，KV 存储显著低于全上下文注意力。"
+          ],
+          "experiments": [
+            "相对 DSpark，Qwen3-4B 平均解码加速 1.95×→2.15×（+10.0%），Phi-4-reasoning 2.22×→2.58×（+16.2%）。",
+            "平均接受长度 3.67→4.10 与 3.28→3.79。",
+            "7 个基准（math/code/chat）全部优于 DFlash 与 DSpark；KV 存储显著低于全上下文注意力。"
+          ],
+          "significance": "给端侧投机解码一个内存可控的草稿器设计，直接提升可接受长度与端到端加速。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07263",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07263.pdf",
+          "index": 7,
+          "takeaway": "草稿器不必看全上下文：局部注意力加定长循环记忆就够了。",
+          "keyExperiment": "Qwen3-4B 解码 2.15×、Phi-4-reasoning 2.58×，接受长度提升到 4.10/3.79。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Not All Loops Cost the Same: Phase-Dependent Depth for Serving Looped Transformers",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-06",
+          "authors": "Zhixu Du, Yuhan Cheng, Hai (Helen) Li, Yiran Chen",
+          "institutions": "Duke University",
+          "abstract": "Looped transformer 通过反复复用共享核心来扩展推理期计算，增加算力而不增加参数。但用统一的 loop 预算同时服务 prefill 与 decode 会把两者的成本绑死。LoopDuet 是阶段相关深度、免训练的 serving 方法：联合选择 prefill 与 decode 两个预算，并在 prefill 边界保持 decode 深度。它的 vLLM 实现把需要继续递归的 token 聚成紧凑 batch，用现有权重与注意力 kernel 就把分配转成可执行的节省；运行时用 queue-age 控制器随需求变化调整 prefill 深度以保住质量。",
+          "contributions": [
+            "把 loop 预算拆成 prefill 与 decode 两个阶段参数，解耦两者的成本。",
+            "在 vLLM 中用紧凑 batch 聚合需要继续递归的 token，免训练、复用现有 kernel。",
+            "queue-age 控制器在负载变化时动态调 prefill 深度，把「质量-吞吐」前沿变成可调旋钮。"
+          ],
+          "conclusions": [
+            "单卡 A100-80GB、HotpotQA 全量：Huginn 在同等精度判据下吞吐比最快的统一设置高 19%。",
+            "更高吞吐的工作点在 uniform depth 8 的 97% 吞吐下取得 +6.04 EM；自适应 prefill 在 100% 满足 1s TTFT 目标的同时高 0.92–1.35 EM。"
+          ],
+          "experiments": [
+            "Huginn 在满足同一精度判据下，吞吐比最快的统一 loop 设置高 19%。",
+            "更高吞吐工作点在 uniform depth 8 的 97% 吞吐下获得 +6.04 EM。",
+            "两条 OLMo 到达轨迹上，自适应 prefill 在 100% 达成 1 秒 TTFT 目标下比最准的固定深度控制高 0.92–1.35 EM。"
+          ],
+          "significance": "把「循环深度」从模型属性变成服务期可调资源，直接换来服务容量。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07211",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07211.pdf",
+          "index": 8,
+          "takeaway": "prefill 与 decode 不该共用一个 loop 预算，拆开后质量与吞吐同时改善。",
+          "keyExperiment": "同等精度下吞吐 +19%；97% 吞吐下 +6.04 EM。"
+        },
+        {
+          "title": "CAMP: Context-Aware Mapping and Placement for LLMs on 3D-IMC Arrays",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-11-06",
+          "authors": "Orhun Gorkem, Athanasios Vasilopoulos, Georgios Pagonis, Victoria Clerico, Hadjer Benmeziane, Irem Boybat, Hsinyu Tsai, Abu Sebastian, William Andrew Simon",
+          "institutions": "IBM Research",
+          "abstract": "LLM 因权重矩阵与 KV cache 的加载产生严重访存开销。模拟存内计算（AIMC）让计算直接在存放静态权重的存储上完成，显著降低能耗与延迟。3D-IMC 进一步把存储阵列堆叠成垂直层以提升容量，却带来新问题：权重在存储中的摆放决定了哪些矩阵向量乘能并发执行，从而决定延迟与吞吐。这一并发性在 3D-IMC 权重映射中研究不足，导致算力利用率次优。CAMP 是推理上下文感知的权重映射算法：把架构、目标网络与运行时上下文造成的资源争用概括成冲突矩阵，据此求吞吐最优映射，再用 profiling 驱动的反馈环剪枝搜索空间，在可接受的运行时间内返回优化结果。",
+          "contributions": [
+            "首次把 3D-IMC 中「哪些 MVM 能并发」这一架构约束纳入权重映射目标。",
+            "用冲突矩阵表达架构、网络结构与运行时上下文的争用，再以 profiling 反馈环剪枝搜索。",
+            "纯离线软件方案，无需改硬件即可提升 3D-IMC 算力利用率。"
+          ],
+          "conclusions": [
+            "3D-IMC 算力利用率从 42.4% 提升到 60.3%，相对 SOTA 映射算法最高 2.0× 的 3D-IMC 吞吐与 1.74× 端到端吞吐。",
+            "说明在存内计算加速器上，编译/映射层的收益可以与器件层改进同量级。"
+          ],
+          "experiments": [
+            "3D-IMC 算力利用率 42.4%→60.3%。",
+            "相对 SOTA 映射算法最高 2.0× 的 3D-IMC 吞吐。",
+            "端到端吞吐最高 1.74×。"
+          ],
+          "significance": "提示存内计算加速器的瓶颈正从器件转到映射与调度。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07707",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07707.pdf",
+          "index": 9,
+          "takeaway": "3D 堆叠的收益取决于权重怎么摆：映射决定了哪些 MVM 能同时跑。",
+          "keyExperiment": "算力利用率 42.4%→60.3%，端到端吞吐最高 1.74×。"
+        },
+        {
+          "title": "Capability Gain from ISA to Shared Execution on AMD MI300A and MI250X",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-06",
+          "authors": "Aaron Jarmusch, Sunita Chandrasekaran",
+          "institutions": "University of Delaware",
+          "abstract": "每代 GPU 都以峰值指令速率宣传，但用户几乎不直接跑指令：性能要穿过厂商库、应用、以及与其它任务共享的设备才能拿到。有多少理论加速能在这些层次上活下来很少被测量，于是团队在决定是否换代、是否采用 FP8 或 2:4 稀疏时缺少依据。AMD MI300A（CDNA3）比前代 MI250X（CDNA2）新增 FP8 矩阵指令与 2:4 结构化稀疏指令。作者提出 capability gain 指标——某特性在指令级加速中被更高层（库、应用、共享设备）保留下来的比例——并从 ISA 微基准一路追到 hipBLASLt、hipSPARSELt、LLM 推理与混合精度 HPL，最后到最多 8 路并发流共享的设备。",
+          "contributions": [
+            "提出 capability gain 指标，量化「理论加速」到「实际可用加速」的逐层衰减。",
+            "对 FP8 与 2:4 稀疏做全栈追踪：ISA → 厂商库 → 应用 → 共享设备。",
+            "揭示共享设备下流间公平性取决于硬件队列数而非数值精度，且共享 LLM 服务拿不到 FP8 的好处。"
+          ],
+          "conclusions": [
+            "FP8 在库层保留大部分加速（8192³ GEMM 快于 MI250X 的 FP16），但未融合的量化把它在 LLM 中变成逐层变慢。",
+            "2:4 稀疏在 hipSPARSELt 最多只保留约一半加速；队列共享下 FP8 的 GEMM capability gain 反而升到 1 以上。"
+          ],
+          "experiments": [
+            "FP8 的 8192³ GEMM 快于 MI250X 的 FP16，但未融合量化使 LLM 推理逐层变慢。",
+            "2:4 稀疏在 hipSPARSELt 最多保留约一半的指令级加速。",
+            "8 路并发流共享设备时，流间公平性取决于硬件队列数；共享 LLM 服务未从 FP8 获得收益。"
+          ],
+          "significance": "给「新指令到底能兑现多少」提供了可测量的方法，也为选型决策提供数据。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07198",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07198.pdf",
+          "index": 10,
+          "takeaway": "峰值指令速率不等于应用收益：每上一层都会漏掉一部分加速。",
+          "keyExperiment": "FP8 GEMM 8192³ 快于 MI250X FP16，但未融合量化让 LLM 变慢；2:4 稀疏仅保留约一半加速。"
+        }
+      ]
+    }
+  ]
+}
