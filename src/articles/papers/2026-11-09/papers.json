@@ -1,0 +1,314 @@
+{
+  "date": "2026-11-09",
+  "title": "2026-11-09 论文精选",
+  "lede": "本期取自 11-06 公告批的剩余池（前两期已各取 10 篇），主线仍是把状态与访存搬出关键路径：NUMA 本地化、递归状态压缩、跨模型状态交接、百万上下文的层次稀疏选择，以及把 CPU 侧环境调度真正并行起来。",
+  "stats": {
+    "selected": 9,
+    "channels": 3,
+    "candidates": 403
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "NUMA-Torch: Compiler-Driven NUMA-Aware LLM Prefill on Multi-Socket CPUs",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-06",
+          "authors": "Thisara Rathnayaka Weerakoon, Ishan Dewpura, Niman Ransindu, Shavin Anjitha, Tharindu R. Patabandi, Sanath Jayasena",
+          "institutions": "University of Moratuwa, Independent Researcher",
+          "abstract": "参数量大到无法驻留片上缓存的语言模型，在多路 CPU 上做 prefill 时瓶颈往往不是峰值算力，而是可持续的 DRAM 带宽。标准 PyTorch 编译路径分配权重时不看 NUMA 拓扑，内存与计算核的亲和不被顾及，大量权重访问要穿过跨 socket 互联，每个 socket 的可用带宽被显著压低。作者在编译器层面让 TorchInductor 变成 NUMA 感知：把每个 socket 当作独立的张量并行分区（NUMA-TP），透明地按 socket 切权重，并用 CPU affinity 让线程池与内存分配留在本地。评测覆盖 GPT-2 117M/345M/762M、BERT Small/Large 与 Gemma 3 270M，双路 Haswell 上 prefill 最高 2.63 倍，双路 Cascade Lake 1.87 倍，四路 Haswell-EX 2.27 倍。",
+          "contributions": [
+            "指出多路 CPU prefill 的瓶颈是跨 socket 内存流量而非算力，并把解法放在编译器而不是运行时手工调优上。",
+            "提出 NUMA-TP：按 NUMA socket 切分张量并行分区，配合 CPU affinity 让 kernel 与内存分配都留在本地。",
+            "在 TorchInductor/FX 图上实现该变换，分别为多头注意力、门控 MLP 与归一化设计切分方式，跨 socket all-reduce 只在必要处保留。"
+          ],
+          "conclusions": [
+            "权重放置忽略 NUMA 拓扑是默认编译路径的系统性损失，仅靠内核级调优补不回来。",
+            "严格本地化在小模型族上就能稳定换来 1.9–2.6 倍 prefill 加速，且不必改动模型本身。"
+          ],
+          "experiments": [
+            "双路 Haswell 上 prefill 最高 2.63×，双路 Cascade Lake 1.87×，四路 Haswell-EX 2.27×。",
+            "GPT-2 117M/345M/762M、BERT Small/Large、Gemma 3 270M 六组模型一致提速。",
+            "每组延迟点丢弃 10 次预热、取 50 次计时均值，排除编译产物与冷缓存影响。"
+          ],
+          "significance": "给出一条不改模型、只改编译器就能拿到的 CPU 推理提速路径，对没有 GPU 的部署场景价值直接。",
+          "takeaway": "NUMA 拓扑不该由运行时去猜，编译器按 socket 切权重就能把 prefill 拉回本地带宽上限。",
+          "keyExperiment": "双路 Haswell 平台 prefill 最高 2.63 倍加速，四路 Haswell-EX 2.27 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07105",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07105.pdf",
+          "index": 1
+        },
+        {
+          "title": "AutoCompress: Automated Hardware-Guided Model Compression",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-06",
+          "authors": "Sheldon Liang, Ali Taghibakhshi, Saurav Muralidharan, Sharath Turuvekere Sreenivas, Ashwath Aithal, Pavlo Molchanov, Nima Tajbakhsh",
+          "institutions": "NVIDIA",
+          "abstract": "大模型剪枝必须同时守住质量与硬件、负载相关的约束（延迟、吞吐、显存），但现有流程通常只盯参数量，而参数量并不能预测这些指标——它们取决于结构、负载、硬件和 serving 引擎。作者提出 AutoCompress，把约束直接写进可微架构搜索：在 serving engine 的代价模型（用端到端延迟、吞吐、显存实测校准）引导下，联合优化全局与逐层结构，得到异构架构。评测覆盖长上下文本地编码、批式数据中心 serving、延迟敏感的端侧交互。相比 Minitron，八项基准平均准确率分别提升 6.57、2.35、0.57 个百分点（RTX 5070/5080/H100）；并把 Nemotron 3.5 Super 从 120B 压到 74B，单张 B200 上以 BF16 跑 128K 上下文，保留 95% 平均分。",
+          "contributions": [
+            "把 serving engine 的延迟、吞吐、显存代价模型接进可微架构搜索，搜索目标从参数量换成真实部署指标。",
+            "联合搜索全局与逐层结构，得到同一约束下质量更高的异构剪枝方案。",
+            "代价模型用实测校准，并复用 latency profiling 的测量，不引入额外运行开销。"
+          ],
+          "conclusions": [
+            "参数量不是部署指标的代理变量，硬件引导的搜索能同时拿到更高精度和更低延迟。",
+            "同样吞吐目标下不同层结构差别很大：窄而深的模型在 RTX 5070 上延迟高出 35%。"
+          ],
+          "experiments": [
+            "八基准平均准确率 +6.57 / +2.35 / +0.57 个百分点（RTX 5070 / 5080 / H100），对比 Minitron。",
+            "Nemotron 3.5 Super 120B→74B，单 B200 BF16、128K 上下文下保留 95% 平均基准分。",
+            "三种部署场景均超过针对部署适配过的 Minitron 基线，端到端延迟与显存都满足硬约束。"
+          ],
+          "significance": "把剪枝从参数压缩问题改成满足部署 SLA 的搜索问题，是企业侧落地更想要的那种剪枝。",
+          "takeaway": "剪枝的目标函数该是 serving engine 的实测代价，而不是参数量。",
+          "keyExperiment": "Nemotron 3.5 Super 120B 压到 74B，单张 B200 上 BF16 跑 128K 上下文仍保留 95% 平均分。",
+          "arxivUrl": "https://arxiv.org/abs/2611.08290",
+          "pdfUrl": "https://arxiv.org/pdf/2611.08290.pdf",
+          "index": 2
+        },
+        {
+          "title": "SPARE: Fast Linear Attention Decoding with Compact Recurrent States",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-11-06",
+          "authors": "Ke Wan, Zaiyi Zheng, Chen Chen",
+          "institutions": "University of Virginia",
+          "abstract": "线性注意力用固定规模的递归状态，把 softmax 注意力的序列平方复杂度压成线性，但这些状态随表示维度平方增长，解码时还要被反复搬运，成为明显的 GPU 显存瓶颈。已有研究发现递归状态存在显著的低秩冗余。SPARE 是一个免训练方法：用固定的低维子空间、异构的秩分配和轻量写补偿来利用这种冗余，直接在压缩状态上完成递归读与更新，既不做在线分解，也不重建稠密状态，从而削减访存。实测全模型解码 2.55 倍加速，递归 kernel 的 DRAM 流量降低 7.49 倍，峰值显存降低 3.31 倍。在同等显存预算下，它的联想检索准确率优于结构化剪枝，语言建模 NLL 更低，三项下游任务的平均准确率也更高。",
+          "contributions": [
+            "确认线性注意力的递归状态存在低秩冗余，并做成免训练、可直接套用的状态压缩。",
+            "用固定低维子空间加异构秩分配与轻量写补偿，在压缩状态上原地读写，避开在线分解与稠密重建的开销。",
+            "与结构化剪枝在同等显存预算下正面对比，保住联想检索与下游任务精度。"
+          ],
+          "conclusions": [
+            "线性注意力的解码瓶颈在状态搬运而非计算，压缩状态维度就能直接换吞吐。",
+            "免训练前提让方法能落在已训练好的线性注意力模型上，不需要重训或微调。"
+          ],
+          "experiments": [
+            "全模型解码 2.55× 加速，递归 kernel DRAM 流量降低 7.49×，峰值显存降低 3.31×。",
+            "同等显存预算下 WikiText-103 的 NLL 低于结构化剪枝。",
+            "512 条四选一提示的联想检索准确率更高，三项下游任务平均准确率也更高（TriviaQA 上略逊于 DRRQR-K64）。"
+          ],
+          "significance": "给线性注意力模型的显存瓶颈一个零训练成本的解法，直接作用在解码的访存路径上。",
+          "takeaway": "递归状态是低秩的，存小一点、少搬几次，解码就快了。",
+          "keyExperiment": "全模型解码 2.55 倍加速，同时递归 kernel DRAM 流量降 7.49 倍、峰值显存降 3.31 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07552",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07552.pdf",
+          "index": 3
+        },
+        {
+          "title": "Beyond K/V Caches: Cross-Model State Handoff in Hybrid Linear-Attention LLMs",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-11-06",
+          "authors": "Jiacheng Cai, Tao Zhang, Siqi Liang, Yun Dai, Ziqian Zeng",
+          "institutions": "South China University of Technology",
+          "abstract": "生产部署常用不同模型做级联、路由与切换来平衡成本与质量，长对话里上下文不断累积，每次切换都要重新 prefill 一遍。已有方法只迁移全注意力的 K/V cache，而混合线性注意力模型还额外保留递归状态与卷积历史，三者交互使迁移复杂：卷积扰动会改变递归层的 key/value 并影响状态更新，卷积历史可以覆盖，但递归状态的变化仍影响后续输出，更精确的重建也未必带来更好续写。作者提出 Hybrid State Transfer（HST）同时处理三类状态：结构化递归状态映射、卷积对齐时保持历史顺序，并用冻结目标模型的输出校准适配器。五个基准上，Qwen3.5 4B→27B 与 9B→27B 的平均任务保持率为 89.88% 与 94.11%；源 cache 就绪时，16K 输入上交接本体加速 21.66 倍与 21.91 倍。",
+          "contributions": [
+            "指出混合线性注意力跨模型切换的三类状态交互问题，并证明更强的递归状态重建不一定带来更好的续写。",
+            "提出 HST：结构化递归状态映射、保序卷积对齐，配合冻结目标模型的输出校准适配器。",
+            "全注意力 cache 映射离线合并，交接时不做在线训练。"
+          ],
+          "conclusions": [
+            "跨模型续写的瓶颈是状态对齐而非 cache 体积，三类状态必须分别处理。",
+            "小模型到大模型的级联能在保住九成任务表现的同时省掉重复 prefill。"
+          ],
+          "experiments": [
+            "Qwen3.5 4B→27B 与 9B→27B 的平均任务保持率 89.88% 与 94.11%（五个基准）。",
+            "16K 合成输入、源 cache 就绪时交接本体加速 21.66× 与 21.91×。",
+            "两个方向的平均任务保持率都高于所评测的混合注意力基线。"
+          ],
+          "significance": "把跨模型 cache 迁移从全注意力扩展到混合线性注意力，这是当前生产模型的常态架构。",
+          "takeaway": "模型切换要搬的不只是 K/V，还有递归状态与卷积历史，而且三者要按顺序对齐。",
+          "keyExperiment": "Qwen3.5 9B→27B 平均任务保持率 94.11%，交接本体加速 21.91 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2611.08133",
+          "pdfUrl": "https://arxiv.org/pdf/2611.08133.pdf",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "QRAE: Query-Relevant Attention Entropy for Context Compression in DeepSearch Agents",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-06",
+          "authors": "Yingjie Tan, Haiquan Qiu, Quanming Yao, Manyi Zhong, Xianzhi Yu, Yaqing Wang",
+          "institutions": "Tsinghua University, Huawei Technologies",
+          "abstract": "DeepSearch 类 LLM agent 反复检索并把来源带进后续推理，上下文持续膨胀，token 与延迟随之上升，而不少检索结果对后续推理没有贡献。作者提出 Query-Relevant Attention Entropy（QRAE）：用稀疏证据评估头判断哪些完整检索块应跨推理步保留。它对有界候选批做成对 prefill，一个不带 query 的对照 prefill 抑制共享注意力响应，再用归一化熵衡量每块内正响应的广度。高分块进入持久证据白名单并留在上下文，不确定的块不进上下文但留在候选缓存，之后可再评估。方法不需要额外生成式压缩，也不改注意力算子。多个 DeepSearch 基准上任务成功率平均提升 2.35 个百分点，端到端延迟与 token 用量平均降低 30% 与 45%，收益可推广到接近 100B 参数模型。",
+          "contributions": [
+            "用无 query 的对照 prefill 做基线抑制，把“这段检索是否相关”变成可比较的注意力熵标量。",
+            "在线判定加白名单与候选缓存两级保留，避免生成式压缩的额外前向。",
+            "不改注意力算子，可以直接落在现有 serving 栈上。"
+          ],
+          "conclusions": [
+            "检索上下文的压缩信号可以从注意力本身读出，不必训练额外的压缩器。",
+            "保留完整块而不是切碎 token，可以同时降低延迟与 token 用量而不损成功率。"
+          ],
+          "experiments": [
+            "任务成功率平均 +2.35 个百分点，端到端延迟 -30%，token 用量 -45%。",
+            "相对未压缩的 DeepSearch agent，单基准成功率最高提升 6 个百分点以上。",
+            "per-query token 从 74k、73k 压到 38k–65k 区间，收益在接近 100B 参数模型上仍成立。"
+          ],
+          "significance": "把 agent 长上下文的裁剪从“事后摘要”换成“检索时就地判别”，省的是最贵的那部分 token。",
+          "takeaway": "注意力熵可以当免费的检索相关性打分器，判完再决定哪块证据留进上下文。",
+          "keyExperiment": "成功率平均 +2.35 个百分点，同时端到端延迟降 30%、token 用量降 45%。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07976",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07976.pdf",
+          "index": 5
+        },
+        {
+          "title": "SpecCTMC: Exact Speculative Simulation of Diffusion Language Model Continuous-Time Markov Chains",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-06",
+          "authors": "Siva Rajesh Kasa, Yasong Dai, Sumit Negi, Hongdong Li",
+          "institutions": "Amazon, Australian National University",
+          "abstract": "掩码扩散语言模型支持并行文本生成，但独立采样多个 token 会破坏 token 之间的依赖，从而改变输出分布。精确的连续时间采样可以避免这种近似，代价是每生成一个 token 就要做一次顺序模型评估。作者提出 SpecCTMC：一个免训练、不需要独立 draft 模型的投机采样器。它用先前算出的模型预测提出连续若干 token 更新，并行评估这些中间状态，再做精确的接受与校正。论文证明 SpecCTMC 保持底层连续时间马尔可夫链在事件时间、生成顺序与 token 取值上的联合分布，因此既没有时间离散化误差，也没有并行解码带来的额外分解误差。在 LLaDA-8B-Instruct 与 Dream-v0-Instruct-7B、五个基准上，顺序模型评估次数比直接连续时间采样少 1.73 到 4.38 倍，同时保持参考采样分布。",
+          "contributions": [
+            "把投机采样搬到连续时间扩散采样上，且不需要 draft 模型、不需要训练。",
+            "给出精确性证明：保持事件时间、生成顺序与 token 取值的联合分布不变。",
+            "提出可并行的中间状态评估与接受校正流程，把顺序评估的瓶颈摊薄。"
+          ],
+          "conclusions": [
+            "扩散语言模型的精确采样不必逐 token 串行，投机化可以在不损分布的前提下降次数。",
+            "免 draft 设计让方法能直接叠加在已有采样器上，改动面小。"
+          ],
+          "experiments": [
+            "顺序模型评估减少 1.73–4.38×（LLaDA-8B-Instruct、Dream-v0-Instruct-7B，五个基准）。",
+            "单张 B200 上实测墙钟加速最高 2.88×。",
+            "GSM8K、256 token 生成下目标 NFE 降低 2.38×，精度差的 95% 置信区间均包含零。"
+          ],
+          "significance": "给“精确但慢”的扩散采样补上加速路径，而且证明没有用分布正确性换速度。",
+          "takeaway": "扩散模型的顺序评估也可以投机掉，只要接受校正严格保证分布不变。",
+          "keyExperiment": "单张 B200 上墙钟加速最高 2.88 倍，顺序模型评估减少最多 4.38 倍且分布不变。",
+          "arxivUrl": "https://arxiv.org/abs/2611.08362",
+          "pdfUrl": "https://arxiv.org/pdf/2611.08362.pdf",
+          "index": 6
+        },
+        {
+          "title": "AttnSR: Attention Step Reward for Long-Horizon Agentic RL",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-06",
+          "authors": "Mengsong Wu, Tianchen Zhou, Zhaochen Su, Zhenhua Liu, Zhe Cui, Aimin Zhou",
+          "institutions": "East China Normal University, Shanghai Innovation Institute, Hithink Research, HKUST",
+          "abstract": "长程 LLM agent 需要多步决策，而只给结果奖励的强化学习对单步几乎不提供监督。作者提出 AttnSR，一种步级奖励增强方法：从训练回放时策略的注意力里推导奖励分配，不需要额外训练奖励模型，也不需要额外 rollout。它沿策略模型的注意力图回溯，估计较早步骤对最终回答的相关性；终止步相对滑动基线的表现，决定这些奖励是强化还是惩罚被选中的步骤。在受控的 Qwen2.5-7B-Instruct 实验中，AttnSR 在所有评测 checkpoint 上都优于 PPO 基线，ALFWorld 留出成功率从 91.2% 提升到 97.1%。消融显示收益取决于中间奖励如何分配，而不是步级奖励的简单累积。ScienceWorld 上每个 checkpoint 都有提升，同时环境交互减少 29.9%。",
+          "contributions": [
+            "用策略自身的注意力图做步级信用分配，省掉奖励模型与额外 rollout 两笔开销。",
+            "用终止步相对基线的表现决定奖惩方向，抑制对近因步骤的偏好。",
+            "消融把收益来源定位到分配方式，而不是奖励项本身。"
+          ],
+          "conclusions": [
+            "注意力是长程 agent 强化学习中可用的步级先验，成本远低于训练过程奖励模型。",
+            "步级奖励的价值取决于怎么分配，简单累加并不成立。"
+          ],
+          "experiments": [
+            "ALFWorld 留出成功率 91.2%→97.1%（Qwen2.5-7B-Instruct）。",
+            "ScienceWorld 四个 checkpoint 全部提升，环境交互减少 29.9%。",
+            "ALFWorld 与 ScienceWorld 的所有评测 checkpoint 得分均高于 PPO/GRPO 基线。"
+          ],
+          "significance": "把过程奖励的获取成本压到几乎为零，长程 agent RL 不必再养一个奖励模型。",
+          "takeaway": "注意力图本身就是一份现成的步级信用记录，拿来当奖励比训练 PRM 便宜得多。",
+          "keyExperiment": "ALFWorld 留出成功率从 91.2% 提到 97.1%，同一轮还省下 29.9% 环境交互。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07932",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07932.pdf",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "Recursive Sparse Attention: Million-Token Length Extrapolation at Logarithmic Cost",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-11-06",
+          "authors": "Ruitian Wang, Xinyu Yang, Minshen Zhang, Hao Zhang",
+          "institutions": "University of California San Diego, Carnegie Mellon University",
+          "abstract": "上下文到百万 token 时，稠密注意力在 prefill 与解码上都很贵，长训练文档也更稀缺。多数稀疏注意力要对全部前序块打分，单 query 成本 O(L)；层次化选择可降到 O(log L)，但此前的可训练方法只在训练长度内报告精度。作者提出 RecSA：在 KV cache 上建树，每个节点用一个 key 与均值池化 value 概括子树，key 由逐层共享的 pooler 产生。每层最多选 k 个候选，单 query 选择与读取都是 O(log L)；条目的 RoPE 位置取同层候选序号，任意长度下相对距离都在训练范围内。以 Qwen3-4B 初始化、32K 长度训练 0.62B token，RecSA 在 RULER 131K–2M 每个长度都超基线，1M 时 60.5 分（最强基线 40.0）；单张 H200、524K 下 prefill 快 3.2 倍、解码 3.8 倍。",
+          "contributions": [
+            "在 KV cache 上建递归摘要树，把单 query 的选择成本与读取量都降到 O(log L)。",
+            "提出候选内局部 RoPE 序号，让百万级长度仍处在训练见过的相对距离范围内，从而实现长度外推。",
+            "单 pooler 逐层共享并由稠密注意力蒸馏，配合优化 kernel 拿到端到端加速。"
+          ],
+          "conclusions": [
+            "层次化稀疏注意力可以外推到训练长度之外，而不是只在训练长度内有效。",
+            "选择成本与访存量同时降到对数级，是百万上下文真正可跑的前提。"
+          ],
+          "experiments": [
+            "RULER 在 131K–2M 每个长度上都超过所有基线；1M 时 60.5 分，Dense+DCA 为 40.0。",
+            "单张 H200、524K 上下文：prefill 快 3.2×、解码快 3.8×，解码延迟从 131K 到 524K 近乎持平。",
+            "仅用 0.62B token、原模型 32K 训练长度完成训练，未做长文档继续预训练。"
+          ],
+          "significance": "把“训练长度内有效”这个稀疏注意力的老限制顶开了，百万上下文第一次有了对数级的训练配方。",
+          "takeaway": "树状摘要加候选内重新编号的 RoPE，让稀疏选择成本和外推能力可以同时拿到。",
+          "keyExperiment": "1M 上下文 RULER 得分 60.5（最强基线 40.0），同时 prefill 快 3.2 倍、解码快 3.8 倍。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07232",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07232.pdf",
+          "index": 8
+        },
+        {
+          "title": "SEER: A Scalable Event-Driven Runtime for Parallel Execution of Multi-Agent Reinforcement Learning Environments",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-06",
+          "authors": "Jiming Su, Feng Zhu, Yuhao Xiao, Miao Zhang",
+          "institutions": "National University of Defense Technology",
+          "abstract": "多智能体强化学习越来越多地用于大量实体共享同一环境的系统。这类负载里策略推理可以在 GPU 上批处理，但 CPU 侧的环境路径仍要在每个 env.step 内更新实体状态、处理局部交互、构造观测；在交互密集的负载上，策略批处理之后这一段反而成为延迟主项。现有向量化环境接口与通用事件驱动运行时，都没有直接处理单个有界 MARL 步内的细粒度跨实体工作，同时保持学习系统期望的步级语义。作者提出 SEER：在显式的事件局部性契约下执行 MARL 环境的运行时。它把每个环境步建模为有界的时间戳事件流：若直接状态更新是实体本地的、跨实体影响被表示为有序的未来事件，SEER 就能并行执行独立事件而保持与串行等价的边界输出。为此它使用 CAS 双层事件队列（本地队列保实体因果序，并行执行表向全局工作线程暴露就绪工作），并用 STPA 结合短时运行时轨迹与静态负载、硬件特征预选线程池规模。",
+          "contributions": [
+            "提出事件局部性契约，把 MARL 步内并行化的前提讲清楚，并保证边界输出与串行等价。",
+            "CAS 双层事件队列：本地队列保每实体因果序，全局就绪表让工作线程并行取用。",
+            "STPA 用 preflight 轨迹加静态特征预测线程数，替代按物理核数固定配置。"
+          ],
+          "conclusions": [
+            "策略批处理之后，CPU 侧环境路径是 MARL 的新瓶颈，需要运行时级而非算子级优化。",
+            "线程数不该按物理核数固定，事件粒度与交互强度才决定最优值。"
+          ],
+          "experiments": [
+            "Aircraft 负载环境吞吐 16.92→52.93 steps/s，其中动态事件共享贡献 143.63%，STPA 再贡献 28.41%。",
+            "10 组 Aircraft 配置下，平均延迟比 ROSS-T 低 68.32%。",
+            "3600 实体、10μs 事件时 CPU 利用率方差从 23.79 降到 2.59，单线程归一化加速比提升 44.4%。"
+          ],
+          "significance": "把 MARL 训练循环里被 GPU 掩盖的 CPU 环境开销拉出来单独优化，这是大规模并行 RL 常被忽略的一半。",
+          "takeaway": "环境步本身也能并行，只要把跨实体影响延迟成有序事件，并让线程数跟着事件粒度走。",
+          "keyExperiment": "Aircraft 负载环境吞吐从 16.92 提到 52.93 steps/s，延迟比 ROSS-T 低 68.32%。",
+          "arxivUrl": "https://arxiv.org/abs/2611.07996",
+          "pdfUrl": "https://arxiv.org/pdf/2611.07996.pdf",
+          "index": 9
+        }
+      ]
+    }
+  ]
+}
