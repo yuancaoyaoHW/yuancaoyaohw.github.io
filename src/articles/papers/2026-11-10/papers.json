@@ -1,0 +1,346 @@
+{
+  "date": "2026-11-10",
+  "title": "2026-11-10 论文精选",
+  "lede": "今日主线是「把状态搬出关键路径，把动态性交给编译期或调度器」：交换机内组播热门 MoE 专家、PD 分离下量化 KV 传输与后缀重算重叠、仿射折叠让 2-bit KV 真正变成延迟，晶圆级硬件则把动态事件编译成 per-core 调度表。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 423
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "5 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "5 篇推荐",
+      "papers": [
+        {
+          "title": "ISER-MoE: Dynamic In-Switch Replication of Hot Experts for Load Balancing in Expert-Parallel",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-09",
+          "authors": "Jintao Peng, Ethan Zhang, Kefeng Duan, Bangyu Sheng, Min Li, Itamar Rosenfeld Rauch, Jack Yang, June Yang",
+          "institutions": "NVIDIA",
+          "abstract": "专家并行 MoE 层的速度取决于负载最重的 GPU，而少数热门专家承担了大部分额外负载。逐层复制这些专家只有在权重能在该层内到达时才有效，从拥有者广播正是瓶颈：点对点拷贝压垮拥有者，基线广播又要付出延迟或带宽开销。作者提出 ISER-MoE（In-Switch Expert Replication for MoE），在 TensorRT-LLM 中实现，通过 NVLink 交换机把热门专家组播到固定的 GPU 组，使每个字节只从拥有者发出一次。GPU 调度器逐层把热门专家分配到各组，多端口广播把注入流量分散到组内各端口，两者都与共享专家的计算重叠。轨迹回放中调度器消除了 98–99% 的超额负载。",
+          "contributions": [
+            "把专家复制从「拥有者广播」搬到 NVLink 交换机内组播，同一字节只出一次，同时消掉点对点拷贝拥塞与广播的延迟/带宽开销",
+            "逐层把热门专家分配给固定 GPU 组、用多端口广播打散注入流量，并与共享专家的计算完全重叠",
+            "在 TensorRT-LLM 内实现端到端 prefill 服务路径，可直接承载真实 MoE 模型的在线负载"
+          ],
+          "conclusions": [
+            "trace 回放中调度器消除了 98–99% 的超额负载",
+            "DeepSeek-V4-Pro 的 prefill 服务中，数学基准吞吐提升 17.4%，agentic 提示提升 7.2%"
+          ],
+          "experiments": [
+            "trace 回放：每层热门专家到组分配消除 98–99% 超额负载",
+            "DeepSeek-V4-Pro prefill 服务：数学基准吞吐 +17.4%，agentic prompt +7.2%",
+            "实现于 TensorRT-LLM，复制流量从端点广播改为 NVLink 交换机组播"
+          ],
+          "significance": "把专家级复制的瓶颈从网络端点搬进交换机硬件，为 MoE 服务的负载均衡提供了可落地的通信原语。",
+          "arxivUrl": "https://arxiv.org/abs/2611.09008",
+          "pdfUrl": "https://arxiv.org/pdf/2611.09008.pdf",
+          "takeaway": "热门专家复制走交换机内组播，每字节只出一次。",
+          "keyExperiment": "DeepSeek-V4-Pro prefill 吞吐 +17.4%（数学）/ +7.2%（agentic），trace 回放消除 98–99% 超额负载。",
+          "index": 1
+        },
+        {
+          "title": "ReKV: Overlapping Quantized KV Transfer and Suffix Recomputation",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-09",
+          "authors": "Guangjian Dong",
+          "institutions": "机构未标注",
+          "abstract": "prefill–decode 分离必须先把手里的 KV cache 从 prefill worker 挪到 decode worker，首个 token 才能开始生成。把这一步简化成「压缩」或「重算」都会丢掉一个有用的选择：哪些层传输、以什么精度传输、哪些层在 decode worker 上重算。ReKV 只传量化后的前缀 KV 和一个 BF16 边界状态，并在前缀仍在线路上传输时重建连续后缀。在跨节点 H100 的形状对齐合成基准上，满足独立评估质量门槛的 Q8 配置把 8K 交接延迟分别降低 2.36×、2.84×、3.65×（Qwen2.5-7B、Qwen2.5-3B、Qwen3-8B），也快于实测最好的纯传输或纯重算动作。",
+          "contributions": [
+            "把 KV 交接建模为逐层的「精度 × 传输/重算」联合决策，而不是全局二选一策略",
+            "只传量化前缀 KV 加一个 BF16 边界状态，在传输飞行期间重建连续后缀，把通信与重算重叠起来",
+            "给出跨节点 H100 的实测比较，并指出最优动作随 prompt 长度与链路带宽切换"
+          ],
+          "conclusions": [
+            "Q8 配置在 8K 交接上比 BF16 传输快 2.36–3.65×，且快于纯传输或纯重算方案",
+            "最优策略不是固定的：prompt 长度与带宽变化时首选动作会切换"
+          ],
+          "experiments": [
+            "跨节点 H100、8K 交接：Q8 比 BF16 传输快 2.36×（Qwen2.5-7B）、2.84×（Qwen2.5-3B）、3.65×（Qwen3-8B）",
+            "真实权重 BF16 重算实验：prefill 到首 token 返回时间缩短 1.16–1.63×",
+            "同配置下优于实测最好的纯传输与纯重算动作"
+          ],
+          "significance": "把 PD 分离的 KV 交接从「带宽问题」改写成可按层调度的精度-计算权衡。",
+          "arxivUrl": "https://arxiv.org/abs/2611.08770",
+          "pdfUrl": "https://arxiv.org/pdf/2611.08770.pdf",
+          "takeaway": "传量化前缀，飞在途时重算后缀。",
+          "keyExperiment": "8K 交接延迟最高降到 1/3.65（Qwen3-8B），优于纯传输/纯重算。",
+          "index": 2
+        },
+        {
+          "title": "FOSCAR: Accelerating Decode Attention over 2- and 4-Bit KV Caches through Affine Folding",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-09",
+          "authors": "Donglin Zhuang, Pragaash Ponnusamy, Xiaoxia Wu, Shuaiwen Leon Song, Zhongzhu Zhou",
+          "institutions": "Together AI, University of Sydney",
+          "abstract": "decode attention 每生成一个 token 都要把 KV cache 从 HBM 流一遍；把 cache 打包成 2-bit 或 4-bit 整数能减少访存流量，却不自动变成延迟收益——现有 2-bit 融合 kernel 在 H100/B200 上只跑到峰值 HBM 带宽的 31%/15% 以下。瓶颈在于：把每个值反量化并施加 scale/offset 再喂 Tensor Core 时，指令发射吞吐成了稀缺资源。FOSCAR 不对每个 KV 值做变换，而是用「仿射折叠」把 scale/offset 施加到另一个操作数或矩阵乘输出上（按 token-wise、channel-wise 两种方案分别选择折叠位置），使 scale-offset 运算减少最多两个数量级，且精确算术下不改变反量化后的注意力输出。",
+          "contributions": [
+            "仿射折叠：把 KV 反量化的 scale/offset 折进另一操作数或 matmul 输出，避免逐元素变换",
+            "用位操作把 INT2/INT4 直接喂给 Tensor Core，每 INT2 元素仅需 1 条（H100）与 0.19 条（B200）ALU 指令",
+            "为 Hopper（wgmma）与 Blackwell（tcgen05）实现 warp 特化流水线，并集成进 SGLang 做端到端服务验证"
+          ],
+          "conclusions": [
+            "H100 上 INT2/INT4 kernel 相对 FlashInfer BF16 提速 3.36×/2.83×，相对 TensorRT-LLM FP8 提速 2.03×/1.71×",
+            "B200 上相对 FlashInfer BF16 提速 2.67×/2.30×，相对 TensorRT-LLM NVFP4 为 1.16×/1.00×",
+            "长上下文服务中峰值聚合吞吐相比 2-bit/16-bit 基线最高提升 170%/341%"
+          ],
+          "experiments": [
+            "H100：INT2 3.36× / INT4 2.83× 于 FlashInfer BF16；较 TensorRT-LLM FP8 为 2.03× / 1.71×",
+            "B200：INT2 2.67× / INT4 2.30× 于 FlashInfer BF16，较 NVFP4 为 1.16× / 1.00×",
+            "集成 SGLang 后长上下文服务峰值吞吐最高 +170%（对 2-bit）与 +341%（对 16-bit）"
+          ],
+          "significance": "低比特 KV 的收益取决于 kernel 是否把反量化开销移出关键路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.09722",
+          "pdfUrl": "https://arxiv.org/pdf/2611.09722.pdf",
+          "takeaway": "逐值反量化是瓶颈，把 scale/offset 折进 matmul。",
+          "keyExperiment": "H100 INT2 decode kernel 快于 FlashInfer BF16 3.36×，长上下文服务吞吐最高 +341%。",
+          "index": 3
+        },
+        {
+          "title": "Nebula: Distributed Position-Independent Caching for LLM Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-09",
+          "authors": "Yifei Liu, Junbin Pan, Junhao Hu, Yang Liu, Junyi Chen, Juntong Wu, Chen Chen, Haiyuan Zhao, Xiaoxu Chen, Weihang Chen 等",
+          "institutions": "Xiaohongshu, Shanghai Jiao Tong University, Peking University",
+          "abstract": "RAG 与 agent 工作流把长 prompt 由多个互相独立的文本片段拼成，prefill 因此成为主要开销，复用 KV cache 是降本关键。分布式缓存把 KV 摊到整个集群以扩大总容量，位置无关缓存（PIC）让重复片段在不同前缀下也能复用；但现有系统要么只做分布式、仍按前缀缓存匹配，要么只做 PIC、没有集群级资源管理。Nebula 是首个把 PIC 片段当作一等公民的分布式 LLM 服务框架，支持远程 PIC 复用与并行 prefill。为跟踪 PIC 细粒度、异步的状态变化，它把乐观记账与事件驱动更新结合，给出及时且可信的集群视图，并用 ghost-hit 反馈自动调节前缀缓存与 PIC 的容量分配。",
+          "contributions": [
+            "首个把 PIC 片段作为一等公民的分布式服务框架：支持远程 PIC 复用与并行 prefill",
+            "用乐观记账加事件驱动更新维护 PIC 的异步状态视图，用集群级 ghost-hit 反馈自动调节 PC 与 PIC 的容量分配",
+            "把排队、计算与 KV 传输成本纳入统一的 prefill 完成时间模型，指导弹性并行与局部性感知的算力放置"
+          ],
+          "conclusions": [
+            "四种模型、四种真实 RAG/agent 负载上，中位 TTFT 平均降低 61.4%",
+            "平均找回前缀缓存漏掉的 76.1% token"
+          ],
+          "experiments": [
+            "4 模型 × 4 真实负载：中位 TTFT 相对最强基线平均 −61.4%",
+            "回收前缀缓存漏命中 token 的 76.1%",
+            "依据统一 prefill 完成时间模型做弹性并行与放置调整"
+          ],
+          "significance": "把「片段复用」从单机前缀匹配推进成集群级调度问题。",
+          "arxivUrl": "https://arxiv.org/abs/2611.09474",
+          "pdfUrl": "https://arxiv.org/pdf/2611.09474.pdf",
+          "takeaway": "PIC 片段加集群级调度，TTFT 砍 61%。",
+          "keyExperiment": "中位 TTFT 平均降 61.4%，找回前缀缓存漏掉的 76.1% token。",
+          "index": 4
+        },
+        {
+          "title": "DataHelix: A CPU-GPU Co-Scheduling Data Plane for Multimodal Model Training",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-09",
+          "authors": "Yuanhe Li, Jiazhen Wu, Dian Ding, Guangtao Xue, Yiming Zhang",
+          "institutions": "Shanghai Jiao Tong University, Xiamen University",
+          "abstract": "多模态训练打破了传统流水线「数据加载与模型执行松耦合」的假设：每个样本的解码开销、token 或 latent 数量与张量尺寸差异极大，使 CPU 预处理时间和 GPU 计算时间在各数据并行 rank 之间剧烈波动。同步训练中这两种异构性紧耦合：GPU 执行决定输入流水线要为下一批准备多久，而任一 rank 的预处理延迟又会卡住所有 GPU，因此单独优化 CPU 吞吐或 GPU 负载均衡都消不掉流水线气泡。DataHelix 是元数据优先的 CPU-GPU 协同调度数据平面，把每个 GPU 计算窗口当作下一批的就绪预算，跨 rank 协调预处理以最小化截止期错失而非 CPU 完工时间。",
+          "contributions": [
+            "把 CPU 预处理与 GPU 执行联合建模：每个 GPU 计算窗口就是下一批的就绪预算",
+            "在样本仍是轻量描述符、尚未解码拼接成张量时决定放置，避免昂贵数据搬运",
+            "描述符级 token-latent 感知批处理做粗平衡，成本门控的集合式再平衡只在收益超过传输成本时纠正残差"
+          ],
+          "conclusions": [
+            "8 张 Ascend 910B、11 个视频/多模态负载：平均截止期错失率降低 67.8%，p95 输入等待延迟降低 87.0%",
+            "同 CPU 预算下吞吐为 rank-local DataLoader 的 2.72× 几何均值，为 Ray actor pool 的 1.82×"
+          ],
+          "experiments": [
+            "11 个视频与多模态负载：平均截止期错失率 −67.8%，p95 输入等待延迟 −87.0%",
+            "吞吐 2.72× 于 rank-local DataLoader，1.82× 于 Ray actor pool（同 CPU 预算）",
+            "实验平台为 8 张 Ascend 910B"
+          ],
+          "significance": "把多模态训练的输入流水线当成跨 rank 的联调问题，而不是单机吞吐问题。",
+          "arxivUrl": "https://arxiv.org/abs/2611.09411",
+          "pdfUrl": "https://arxiv.org/pdf/2611.09411.pdf",
+          "takeaway": "用 GPU 计算窗口给 CPU 预处理定截止期。",
+          "keyExperiment": "截止期错失 −67.8%、p95 输入等待 −87.0%，吞吐 2.72× 于本地 DataLoader。",
+          "index": 5
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "RPEG: Training Reasoning Language Models Scalably and Cost-Effectively",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.DC",
+          "date": "2026-11-09",
+          "authors": "Maciej Besta, Leonard Schmidt, Pierre Pang, Patrik Okanovic, Robert Gerstenberger, Torsten Hoefler",
+          "institutions": "ETH Zurich",
+          "abstract": "强化学习已是训练推理语言模型（RLM）的核心，但 RLM 流水线难以扩展且运行昂贵：每个 RL step 都要耦合多个大模型、异构阶段、跨 step 状态与复杂的异步依赖，现有系统通常只优化其中一部分。作者提出以数据为中心的图中间表示 RPEG（RLM Pipeline Execution Graph），把流水线结构与执行联合优化：结构层面暴露有界异步、actor-critic 共享等选择，执行层面给出阶段融合、细粒度调度与多维模型并行；并配套一个同时刻画计算、通信、内存与机架、节点、GPU 层级效应的解析性能模型。",
+          "contributions": [
+            "用图 IR 把 RLM 训练的结构选择与执行优化放进同一优化空间：有界异步、actor-critic 共享、阶段融合、细粒度调度、多维模型并行",
+            "配套解析性能模型，显式建模计算、通信、内存与 rack/node/GPU 三级层次效应",
+            "实现分布式运行时引擎，并与主流 RLM 训练框架在最多 256 张 GH200 上对比"
+          ],
+          "conclusions": [
+            "最多 256 张 GH200 上性能相对 ReaL 提升最多 2×，step 延迟相对 verl 降低最多 2.48×",
+            "硬件利用率提升最多 30%"
+          ],
+          "experiments": [
+            "256 GH200 规模：相对 ReaL 性能最高 2×，相对 verl step 延迟最多 −2.48×",
+            "硬件利用率最高 +30%",
+            "对比对象为 ReaL、verl 等 RLM 训练框架"
+          ],
+          "significance": "把 RL 后训练的调优从「改框架参数」变成可搜索的图级优化问题。",
+          "arxivUrl": "https://arxiv.org/abs/2611.09207",
+          "pdfUrl": "https://arxiv.org/pdf/2611.09207.pdf",
+          "takeaway": "用图 IR 统一 RL 训练的结构与执行优化。",
+          "keyExperiment": "256 GH200 上相对 verl step 延迟 −2.48×，利用率 +30%。",
+          "index": 6
+        },
+        {
+          "title": "Adaptive Scheduling Pipeline for Multi-Instance Asynchronous Reinforcement Learning",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.DC",
+          "date": "2026-11-09",
+          "authors": "Salah Chikhi, Luis Zuin, Entong Li, Li Zeng",
+          "institutions": "Ecole Polytechnique, Huawei Technologies, Shenzhen Research Institute of Big Data",
+          "abstract": "ASP 是面向 LLM 多实例异步强化学习的离线 rollout 调度器。它用一趟离线预处理同时削减 rollout 的三类利用率损失：小批内长度异构带来的 padding 气泡、长尾输出带来的偏斜气泡、以及按长度排序派发引起训练队列占用波动而带来的排序气泡。这让多实例 rollout 得以高效运行，突破单实例推理早期的扩展平台期，同时平滑生成样本到达训练器的节奏。调度器被集成进异步架构，把 rollout 与训练解耦，同时让策略滞后可观测且有界。",
+          "contributions": [
+            "一趟离线预处理同时处理 padding、长尾偏斜与排序三类气泡，而不是在线逐项补救",
+            "与异步架构集成：rollout 与训练解耦、策略滞后可观测且有界，用多实例 rollout 绕过单实例推理的早期扩展平台期",
+            "在真实后训练流程中落地验证，而非只报微基准"
+          ],
+          "conclusions": [
+            "端到端吞吐相对 MindSpeed-RL 最高 3.22×，迭代时间最多降低 76.8%；相对 verl 迭代时间最多降低 62.5%",
+            "调度环节本身贡献平均 10.9% 的迭代时间下降；已在电信领域 RL 后训练中把训练周期从三个多月压到约两个月"
+          ],
+          "experiments": [
+            "端到端吞吐最高 3.22×（对 MindSpeed-RL），迭代时间 −76.8%；对 verl 迭代时间 −62.5%",
+            "其中调度环节贡献平均 10.9% 的迭代时间下降",
+            "内部电信域 RL 后训练：训练周期从 3 个多月降到约 2 个月"
+          ],
+          "significance": "RL rollout 的浪费多半来自批内长度异构，可以在离线阶段一次性消掉。",
+          "arxivUrl": "https://arxiv.org/abs/2611.08864",
+          "pdfUrl": "https://arxiv.org/pdf/2611.08864.pdf",
+          "takeaway": "离线预处理削三类气泡，rollout 吞吐 3.22×。",
+          "keyExperiment": "相对 MindSpeed-RL 吞吐 3.22×、迭代时间 −76.8%。",
+          "index": 7
+        },
+        {
+          "title": "Two-Layer Evolutionary Scheduling for Machine Learning Jobs in Multi-Cluster Environments",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.NE",
+          "date": "2026-11-09",
+          "authors": "Jingyuan Xu, Changwu Huang, Lemeng Pan, Ke Tang, Xin Yao",
+          "institutions": "SUSTech, BNU-HKBU, Huawei Technologies, Lingnan University",
+          "abstract": "大规模 ML 负载给 GPU 集群调度带来前所未有的压力，但现有启发式调度器难以应对多集群环境的复杂度与动态性，常导致负载不均、排队延迟长、与业务目标脱节。论文把多集群 GPU 环境下的 ML 调度建模为在线多目标优化：同时最小化平均与最大加权排队时间、最大化 GPU 时间利用率。为此提出 EVO-GP，两层进化在线调度方法，把全局「作业到集群」分配与集群内「GPU 资源分配」解耦：上层用进化算法把到达作业分配到可行集群以促进跨集群负载均衡，下层用在离线阶段通过遗传编程学出的优先级函数给作业排序、指导集群内 GPU 分配。",
+          "contributions": [
+            "把多集群 ML 调度写成在线多目标优化：平均与最大加权排队时间最小化、GPU 时间利用率最大化",
+            "两层解耦：上层进化算法做作业到集群的分配，下层用遗传编程离线学出的优先级函数做集群内排序",
+            "学到的优先级函数可读（树结构可转成表达式），能在不同目标权重下平滑切换"
+          ],
+          "conclusions": [
+            "在 SenseTime 真实 trace 与华为生产集群模拟器上一致优于 Spark、Liquid、Tiresias、Lyra 与 MCT 分配策略",
+            "多集群 30 个测试实例上 EVO-GP 全部取得最优加权目标；仅用 MCT 分配加 GP 优先级函数时也有 25/30 最优"
+          ],
+          "experiments": [
+            "真实 trace：SenseTime Venus 集群两周快照 9,281 个作业 / 1,064 张 GPU（前两周 9,820 作业作训练）",
+            "多集群 30 个测试实例：EVO-GP 全部最优，MCT-GP 25 次第一、3 次第二、2 次第三",
+            "结果为 15 个随机种子的平均；单集群场景在 AvgJCT 与 MaxQT 的权衡上随权重 ω 平滑可调"
+          ],
+          "significance": "调度策略不必手写启发式，可以用遗传编程学出可读的优先级函数。",
+          "arxivUrl": "https://arxiv.org/abs/2611.09093",
+          "pdfUrl": "https://arxiv.org/pdf/2611.09093.pdf",
+          "takeaway": "进化算法分集群，GP 学优先级函数排作业。",
+          "keyExperiment": "30 个多集群实例全部最优，MCT-GP 25/30 第一。",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "MeshRT: Compile-Time Governed Wafer-Scale Runtime for Low-Latency High-Throughput Inference",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.OS",
+          "date": "2026-11-09",
+          "authors": "Congjie He, Le Xu, Zhan Lu, Yeqi Huang, Haocheng Xiao, Cheng Deng, Lingxiao Ma, Ziming Miao, Fan Yang, Luo Mai",
+          "institutions": "University of Edinburgh, Microsoft Research",
+          "abstract": "晶圆级加速器承诺超低延迟推理，但现有系统栈的成本溢价过高：批处理与 MoE 等推理技术引入运行时动态性，晶圆级系统无法高效支持，于是只能在「接受次优延迟」与「限制动态技术以保低延迟」之间二选一，前者降吞吐、后者限制可支持的模型。MeshRT 是首个同时做到超低延迟与高吞吐的晶圆级 LLM 推理系统，靠的是「编译期治理运行时动态性」的架构：把 LLM 推理产生的动态事件直接编译成每核调度表，实现异步、去中心化、运行时开销极低的执行。",
+          "contributions": [
+            "提出编译期治理运行时动态性（compile-time governance of runtime dynamism）的晶圆级架构：动态事件编译成 per-core 调度表，运行时几乎零调度开销",
+            "让批处理、MoE 等动态技术能在晶圆级硬件上保留，不必用限制动态性来换低延迟",
+            "在商用晶圆级加速器上实现，并与 H200 上的 SGLang 实测对比"
+          ],
+          "conclusions": [
+            "相比晶圆级加速器上的 SOTA 系统吞吐最高提升 56×",
+            "对比 H200 上单实例 SGLang 实测延迟低 4.5–7.0×；在功耗对齐的 H200 集群理想线性外推下，低延迟区间 decode 系统吞吐高 1.7–13.0×"
+          ],
+          "experiments": [
+            "吞吐最高 56× 于晶圆级加速器的 SOTA 系统",
+            "延迟比 H200 上 SGLang 单实例实测低 4.5–7.0×",
+            "功耗对齐的 H200 集群理想线性外推下，低延迟区间 decode 吞吐高 1.7–13.0×"
+          ],
+          "significance": "低延迟与高吞吐的取舍可以在编译期消掉，不必靠限制动态性。",
+          "arxivUrl": "https://arxiv.org/abs/2611.08508",
+          "pdfUrl": "https://arxiv.org/pdf/2611.08508.pdf",
+          "takeaway": "把动态事件编译成静态 per-core 调度表。",
+          "keyExperiment": "吞吐最高 56× 于晶圆级 SOTA，延迟比 H200+SGLang 低 4.5–7.0×。",
+          "index": 9
+        },
+        {
+          "title": "Atik: A Shared-Mesh Transformer Accelerator for RISC-V",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-11-09",
+          "authors": "Ahmed Zeer, Erkan Uslu",
+          "institutions": "Yildiz Technical University",
+          "abstract": "Transformer 推理反复调用稠密矩阵乘与注意力，其中包含数据相关的 softmax 归一化。Atik 是面向 RocketChip 的开源 RoCC 加速器，用同一块定点 MAC mesh 同时执行矩阵乘与稠密注意力；对外以 BF16 张量收发，内部采用流式 online-softmax 调度、从不物化完整的 score 矩阵，并通过小型描述符式 ABI 调用。作者在 FireSim 上逐周期评估三种 mesh 规模，并给出 Sky130 独立物理设计面积。",
+          "contributions": [
+            "单块共享定点 MAC mesh 同时承担 matmul 与 attention，省掉两套数据通路与搬运",
+            "流式 online-softmax 调度从不物化完整 score 矩阵；BF16 接口加描述符式 ABI 便于系统集成",
+            "开源实现，在 FireSim 上逐周期评估并给出 Sky130 面积数据"
+          ],
+          "conclusions": [
+            "137 条 FireSim 测试记录全部通过基准容差，零输出不一致",
+            "8×8 配置相对同款标量 Rocket BF16 参考，matmul 峰值 31.5×、attention 峰值 225.8×",
+            "用实测 kernel 周期的混合投影给出 ViT/TinyBERT/GPT-2 prefill 聚合加速 44.2×/77.1×/32.3×（非全模型硬件回放）"
+          ],
+          "experiments": [
+            "137 条 FireSim 测试全部通过容差，零输出不一致",
+            "8×8 mesh：matmul 峰值 31.5×、attention 峰值 225.8×（对标量 Rocket BF16）",
+            "混合投影：ViT 44.2×、TinyBERT 77.1×、GPT-2 prefill 32.3×（非完整模型回放）"
+          ],
+          "significance": "共享 mesh 的 RISC-V 加速器为边缘 Transformer 推理提供了可综合的开源基线。",
+          "arxivUrl": "https://arxiv.org/abs/2611.09522",
+          "pdfUrl": "https://arxiv.org/pdf/2611.09522.pdf",
+          "takeaway": "一块 MAC mesh 兼做 matmul 与 online-softmax 注意力。",
+          "keyExperiment": "8×8 mesh attention 峰值 225.8×（对标量 Rocket BF16）。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
