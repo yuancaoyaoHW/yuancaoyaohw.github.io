@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-11",
+  "title": "2026-11-11 论文精选",
+  "lede": "今日主线是 MoE 服务链路的端到端抠时间：从 dispatch send 占用 GPU 的暴露窗口、重叠策略的配置感知选择，到本地 agent 的常驻专家与 KV cache 的按需取回。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 638
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Ostinato: Fast CPU-GPU MoE Inference for Local Agents via Resident Experts in Every Forward Pass",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-10",
+          "authors": "Junning Zhu",
+          "institutions": "北京师范大学-香港浸会大学联合国际学院 (BNBU)",
+          "abstract": "本地 agent 常跑在只有几张消费级 GPU 的工作站上，大型 MoE 不得不把部分专家留在主机内存，现有 CPU-GPU 引擎只能在 prefill 快或 decode 快之间二选一：llama.cpp 的专家缓存让 agent 每次工具输出后等 2.1-2.8 秒。短 prefill 触及的专家太多无法全部上传，但 84% 的专家激活集中在能装进 GPU 的稳定集合。Ostinato 不改模型计算，每次前向都在 GPU 上算这些常驻专家：短 prefill 拆分路由，使每层平均不到一个路由专家落到 CPU；长 prefill 只上传每个冷专家一次；decode 每步用固定形状 CUDA graph 执行。在 DeepSeek-V4-Flash 与四张 RTX 4090D 的真实编码、客服会话上，两个阶段都最快，每个会话都早于六个基线结束。",
+          "contributions": [
+            "指出 agent 场景的 CPU-GPU MoE 引擎存在 prefill 与 decode 二选一的困境，量化了工具调用后 2.1-2.8 秒的等待",
+            "发现短 prefill 有 84% 的专家激活集中在可驻留 GPU 的稳定专家集合，提出常驻专家 + 路由拆分的前向方案",
+            "三种执行路径（短 prefill 拆分路由、长 prefill 单次上传冷专家、decode 固定形状 CUDA graph）组合成统一引擎"
+          ],
+          "conclusions": [
+            "在真实 agent 会话上同时做到 prefill 与 decode 最快，且不改变模型输出",
+            "常驻专家策略让短 prefill 每层平均不到一个路由专家落到 CPU，是低等待的关键"
+          ],
+          "experiments": [
+            "相对 llama.cpp 与 KTransformers，工具输出后的中位等待降低 22-55%",
+            "同一批真实会话的整体完成时间缩短 1.4-2.5 倍",
+            "在 DeepSeek-V4-Flash + 4×RTX 4090D 上，六基线中两个阶段均最快且每个会话都最先完成"
+          ],
+          "significance": "给消费级 GPU 上的本地 agent 提供了一个不牺牲 decode 速度的 MoE 引擎设计。",
+          "arxivUrl": "https://arxiv.org/abs/2611.11533",
+          "pdfUrl": "https://arxiv.org/pdf/2611.11533.pdf",
+          "index": 1,
+          "takeaway": "常驻专家 + 短 prefill 拆分路由，让消费级 GPU 上的 MoE agent 不再在 prefill 与 decode 之间二选一。",
+          "keyExperiment": "真实 agent 会话中工具输出后的中位等待降低 22-55%，会话完成快 1.4-2.5 倍"
+        },
+        {
+          "title": "Release Sooner, Expose Less: Offloading MoE Dispatch in NCCL-EP under Dual-Batch Overlap",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-10",
+          "authors": "Hsin-Chun Yin, Khaled Hamidouche, Ian Ziemba, Arjun Kashyap, Pak Markthub, Subhadeep Bhattacharya, Ke Wen, Assaf Ravid, Manjunath Gorentla Venkata, Gil Bloch",
+          "institutions": "NVIDIA",
+          "abstract": "双批次重叠（DBO）把 MoE 通信藏到另一微批计算之后，但前提是 dispatch send 已释放 GPU；send 占用 GPU 的这段时间仍暴露，而释放后的网络推进本可被隐藏。论文在 NCCL-EP 上评估三种针对该暴露时间的配置：GPI 由 GPU 构造 GPU-Friendly Descriptor 提交到网卡可访问内存；GPI-MC 用单个描述符表达 token 扇出；GDAKI Free Flow 把发送推进搬到 host 线程。在 GB300 NVL72 上，三者在参数扫描多数工作点都短于默认 GDAKI。插入 GPU 延迟的实验显示卸载拉长了 in-flight 区间：32-512 微秒的独立计算即可把延迟推进完全遮住。在带 DBO 的解耦式 vLLM 服务中，中位 TPOT 相对 NCCL-EP 默认降低 15-25%，相对 DeepEP v1 降低 16-42%。",
+          "contributions": [
+            "把 MoE 通信暴露时间精确定位到 dispatch send 占用 GPU 的阶段，指出 send 之后的推进其实可被隐藏",
+            "提出三种把发送推进从 GPU 卸载出去的机制：GPI、GPI-MC 单描述符扇出、GDAKI Free Flow host 线程推进",
+            "用插入 GPU 延迟的实验直接度量卸载带来的 in-flight 区间增长，量化可隐藏的计算窗口为 32-512 微秒"
+          ],
+          "conclusions": [
+            "卸载 send 进度能把原本暴露的通信时间转成可被独立计算遮住的时间",
+            "在 GB300 NVL72 与解耦式 vLLM 服务的真实链路上都能降低 TPOT，而不只是微基准改善"
+          ],
+          "experiments": [
+            "GB300 NVL72 参数扫描中，三种配置在多数工作点都优于默认 GDAKI 的 dispatch-send 时间",
+            "解耦式 vLLM 服务带 DBO 时，中位 TPOT 相对 NCCL-EP 默认降低 15-25%",
+            "同一设置下相对 DeepEP v1 中位 TPOT 降低 16-42%"
+          ],
+          "significance": "把 MoE 通信优化的着力点从带宽转到 GPU 占用时间，给出了 NCCL-EP 之上的可落地卸载路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.12362",
+          "pdfUrl": "https://arxiv.org/pdf/2611.12362.pdf",
+          "index": 2,
+          "takeaway": "让 dispatch send 尽早释放 GPU、把发送推进交给网卡或 host，暴露时间就变成可被计算遮住的时间。",
+          "keyExperiment": "解耦 vLLM 服务的 P50 TPOT 相对 NCCL-EP 默认降 15-25%，相对 DeepEP v1 降 16-42%"
+        },
+        {
+          "title": "OverlapAdvisor: Modeling and Adapting Computation-Communication Overlap for Distributed MoE Serving",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-10",
+          "authors": "Chutong Ding, Kaixuan Zhang, Luping Wang, Shiyou Qian, Jian Cao, Cheng Huang, Guodong Yang, Liping Zhang",
+          "institutions": "上海交通大学, 阿里巴巴",
+          "abstract": "专家并行（EP）的 MoE 推理依赖 All-to-All，计算-通信重叠策略是性能关键，但没有一种策略普遍最优。作者在 103 种生产配置、不同输入长度与四种硬件平台上测量，发现最快策略随模型形状、EP 度、输入长度和硬件而变，没有任何策略能在超过 80.6% 的配置中获胜。为此提出 OverlapAdvisor：用两种粒度对重叠阶段建模以刻画计算与通信依赖，构建统一性能模型把工作负载与硬件相对峰值算力、内存、通信的偏离纳入其中，从而在启动时做配置感知的策略选择，并集成进两个服务引擎。在 30B-235B 的四个 MoE 模型上，kernel 级平均加速 1.16 倍、最高 1.59 倍，策略预测 MAPE 3.3%-15.9%；SGLang 与 vLLM 端到端吞吐最高提升 31.7%。",
+          "contributions": [
+            "用 103 种生产配置的大规模测量证明重叠策略与模型形状、EP 度、输入长度、硬件强相关，单一策略上限 80.6%",
+            "提出两种粒度的重叠阶段建模与统一性能模型，把算力、内存、通信相对峰值的偏离纳入预测",
+            "把配置感知的策略选择做成启动期决策并集成到 SGLang 与 vLLM 两个服务引擎"
+          ],
+          "conclusions": [
+            "重叠策略应按配置在线选择，模型预测误差足以支撑正确的策略决策",
+            "粒度引导的建模不仅能选策略，还能反向给出 kernel 级优化方向"
+          ],
+          "experiments": [
+            "kernel 级平均加速 1.16 倍、最高 1.59 倍，策略预测 MAPE 3.3%-15.9%",
+            "SGLang 与 vLLM 端到端吞吐最高提升 31.7%",
+            "对 DeepEP-v1 与 FlashMoE 的中位加速分别为 1.10 倍与 1.22 倍"
+          ],
+          "significance": "把 MoE 服务的计算-通信重叠从固定策略升级为基于统一性能模型的配置感知选择。",
+          "arxivUrl": "https://arxiv.org/abs/2611.11857",
+          "pdfUrl": "https://arxiv.org/pdf/2611.11857.pdf",
+          "index": 3,
+          "takeaway": "没有万能的重叠策略：用统一性能模型在启动时按配置选策略，kernel 与端到端都能拿到稳定收益。",
+          "keyExperiment": "kernel 级平均 1.16 倍、最高 1.59 倍；SGLang/vLLM 端到端吞吐最高 +31.7%"
+        },
+        {
+          "title": "Verify Before You Fetch: Reliable KV Cache Compression for LLM Inference",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-10",
+          "authors": "Devanshu Jha, Gaurav Kumar, Agniva Chowdhury, Kumar Krishna Agrawal, Aditya Desai",
+          "institutions": "IIT Bombay, Rice University, UC Berkeley",
+          "abstract": "长上下文应用、长期存活的 agent 与多智能体系统要保留大量信息，KV cache 常超出 HBM 容量而须卸载到主机内存，CPU-GPU 传输于是主导延迟。与查询无关又对任意查询保证准确的压缩极其困难。作者提出 VerKV：GPU 上保留一小组与查询无关的关键 token 和全量缓存的 token 级 sketch，完整 cache 留在 CPU，并用新的随机采样 PoissonComp 挑选关键 token。推理时 KVFetch 用关键 token 与 sketch 估计注意力相对误差，满足 (ε,δ) 容差就直接计算、不访问主机内存，否则查询感知检索取回额外 token 修正。PoissonComp 优于现有 KV 压缩，组合 KVFetch 在 32K 上下文达到稠密注意力 90-100% 质量，显存占用降低 8-32 倍，每 token 取回量仅为缓存的 2-23%。",
+          "contributions": [
+            "把 KV 压缩从与查询无关的近似问题改写为带 (ε,δ) 保证的“先验证再取回”流程",
+            "提出 PoissonComp 随机采样挑关键 token，在压缩率与注意力质量之间优于现有方法",
+            "提出 KVFetch：用关键 token 与 sketch 估计相对误差，只在超出容差时做查询感知的 CPU 取回"
+          ],
+          "conclusions": [
+            "绝大多数生成步可以完全不访问主机内存即满足误差容差，取回成为少数事件",
+            "给出可调的精度-带宽权衡：容差由用户给定，显存与取回量随之变化"
+          ],
+          "experiments": [
+            "在 Qwen3-4B、Qwen3.5-9B、Ministral-3-8B 上，32K 上下文达到稠密注意力 90-100% 的质量（RULER 与 LOFT 平均）",
+            "GPU 显存占用降低 8-32 倍",
+            "每生成 token 的 CPU-GPU 取回量只占全量缓存的 2-23%"
+          ],
+          "significance": "把 KV cache 卸载从“猜哪些 token 重要”变成“先验证误差、不够再取回”。",
+          "arxivUrl": "https://arxiv.org/abs/2611.11319",
+          "pdfUrl": "https://arxiv.org/pdf/2611.11319.pdf",
+          "index": 4,
+          "takeaway": "离线关键 token 加 token 级 sketch 先估误差，够准就不碰主机内存，不够才取回——把取回变成少数事件。",
+          "keyExperiment": "32K 上下文保持稠密注意力 90-100% 质量，显存降 8-32 倍，每 token 取回量仅 2-23%"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Coverage-Verified Sparse Attention: Closed-Loop Quality Control for Long-Context LLM Decoding",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-10",
+          "authors": "Yan-Cheng Li, Chun-Yi Lee",
+          "institutions": "National Taiwan University",
+          "abstract": "稀疏注意力通过只读部分 KV cache 加速长上下文解码，但现有方法是开环的：kernel 一旦选定子集就无法知道注意力质量是否保住，也没有恢复路径。作者指出所需信号就在 kernel 内部——被选中 token 上的 softmax 质量占比（coverage）与单步输出误差满足精确代数等式，因此既可作接受判据又可作恢复的插值权重。CVSA 据此构造免训练、闭环的 verify-then-correct 解码循环：接受高 coverage 的草稿，只对不达标的 head 做恢复，不需要采样、草稿模型或投机解码基础设施。阈值扫描下质量仅波动 0.14 分；7B 与 70B 上 LongBench 与稠密注意力相差 1.13 分以内（70B 统计等价），RULER 仅降 0.8 分，128K 上下文实测中位解码步加速 6.21 倍。",
+          "contributions": [
+            "发现被选 token 的 softmax 质量占比（coverage）与单步输出误差满足精确代数关系，可作为内生的质量信号",
+            "把 coverage 同时用作接受判据与恢复插值权重，构成免训练的闭环 verify-then-correct 解码循环",
+            "按 head 粒度做恢复，避免全局回退到稠密注意力，也不需要草稿模型或投机解码框架"
+          ],
+          "conclusions": [
+            "稀疏注意力的质量可以在 kernel 内部闭环自检，而不必依赖离线标定或外部验证器",
+            "按 head 恢复足以弥补 coverage 不足，阈值选择对质量不敏感"
+          ],
+          "experiments": [
+            "阈值扫描下质量仅变化 0.14 分，操作点稳健",
+            "LongBench 上 7B 与 70B 与稠密注意力相差 1.13 分以内，70B 统计等价；RULER 仅降 0.8 分",
+            "128K 上下文实测中位解码步加速 6.21 倍"
+          ],
+          "significance": "给稀疏注意力装上闭环质量控制，把长上下文解码的近似误差变成可度量、可恢复的量。",
+          "arxivUrl": "https://arxiv.org/abs/2611.10634",
+          "pdfUrl": "https://arxiv.org/pdf/2611.10634.pdf",
+          "index": 5,
+          "takeaway": "coverage 与输出误差有精确代数关系，用它当接受判据和恢复权重，稀疏注意力就能免训练自检。",
+          "keyExperiment": "128K 上下文解码步中位加速 6.21 倍，LongBench 与稠密注意力差 1.13 分以内"
+        },
+        {
+          "title": "Agentic-OPD: Recovering Forgotten Agent Capabilities via On-Policy Distillation for Agentic Tasks",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-10",
+          "authors": "Tingcheng Bian, Kangye Gong, Jinchang Luo, MingQuan Cheng, Feiran Liu, Ni Li, Xiaoling Xia, Haiwei Wang, Hui Li",
+          "institutions": "百度, 北京交通大学",
+          "abstract": "强化学习已是 agentic 任务训练 LLM 的主流范式，但常规做法只保留验证集最好的 checkpoint。作者证明这是有损的：GRPO 训练中最佳 checkpoint 会在同一次训练早期 checkpoint 已解出的问题上失败，跨 checkpoint 的解集并集远大于任何单个 checkpoint。被丢弃的 checkpoint 因此构成零成本的教师池，可用 on-policy 蒸馏挖掘。难点是从哪个 checkpoint 蒸馏（无人全面占优，互补性因问题而异）、在哪里信任它（好的教师也只局部更优）。Agentic-OPD 以最佳 checkpoint 为学生、其余为冻结教师，用 HCN 按对学生未解问题的加权覆盖率动态选教师，用 LAD 只在学生失败且教师更好的问题上蒸馏。在五个 agentic 域、24 个基准上相对初始化 checkpoint 提升最多 7.4 分。",
+          "contributions": [
+            "揭示 RL 训练中“只留最佳 checkpoint”是有损的，跨 checkpoint 解集并集远大于单个 checkpoint",
+            "把被丢弃的 checkpoint 视为零成本教师池，把 on-policy 蒸馏用于事后能力恢复",
+            "提出 HCN 动态教师选择与 LAD 局部监督过滤，解决教师互补性与局部可信度两个问题"
+          ],
+          "conclusions": [
+            "post-RL 能力恢复是与改进 RL 算法正交的一个独立阶段，可复用已完成训练的算力",
+            "局部化蒸馏既恢复了早期 checkpoint 的能力，又不破坏学生已掌握的行为"
+          ],
+          "experiments": [
+            "五个 agentic 域、24 个基准与子集上，相对初始化 checkpoint 提升最多 7.4 分",
+            "4B 学生在深度搜索任务上超过 GPT-5.6 与 DeepSeek-V4.1",
+            "教师选择与监督过滤两项都必要：不加区分的全量蒸馏会覆盖学生已掌握能力"
+          ],
+          "significance": "把一次 RL 训练留下的 checkpoint 序列变成可复用的策略池，开辟 post-RL 能力恢复阶段。",
+          "arxivUrl": "https://arxiv.org/abs/2611.12799",
+          "pdfUrl": "https://arxiv.org/pdf/2611.12799.pdf",
+          "index": 6,
+          "takeaway": "别丢中间 checkpoint——它们是零成本教师池，按学生的能力缺口选教师、只在失败处蒸馏即可找回能力。",
+          "keyExperiment": "五个域 24 个基准相对初始化提升最多 7.4 分，4B 学生在深度搜索上超过 GPT-5.6"
+        },
+        {
+          "title": "AutoEMatic: Runtime-Adaptive Mixed-Precision LLM Inference via Automatic Exponent-Mantissa Refinement",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-10",
+          "authors": "Akshat Ramachandran, Reena Elangovan, Rangharajan Venkatesan, Charbel Sakr, Tijmen Blankevoort, Brucek Khailany, Tushar Krishna",
+          "institutions": "Georgia Institute of Technology, NVIDIA Research",
+          "abstract": "现有 LLM 训练后量化在推理前固定精度，但所需精度随 prompt、层与阶段动态变化。作者提出 AutoEMatic 全栈协同设计，在运行时调整权重、激活与 KV cache 精度：轻量策略在每次 prefill 与 decode 步依据下一 token 分布熵与各层隐藏状态更新幅度为每层选精度。为此提出 AutoFP：从单一 NVFP4 基础格式派生 2/4/6 bit 的多尺度浮点格式。作者在 NVFP4 Tensor Core 的 GPU kernel 与支持全部 AutoFP 格式的向量 MAC 加速器上落地。推理与 agentic 基准相对 NVFP4 提升最多 21.7%，多数基准追平分组缩放 FP6，平均每权重 4.9 bit（NVFP4 4.5）；GB300 上保留约 90-98% 的 NVFP4 解码吞吐，加速器同精度下延迟降 1.6-2.3 倍、能耗降 7-23%。",
+          "contributions": [
+            "指出量化精度应随 prompt、层与推理阶段动态变化，而非在推理前一次性固定",
+            "用下一 token 分布熵与层隐藏状态更新幅度两个运行时信号驱动逐层精度选择",
+            "提出 AutoFP 多尺度浮点格式，从单一 NVFP4 基础格式派生 2/4/6 bit，并在 GPU kernel 与加速器两条路径上落地"
+          ],
+          "conclusions": [
+            "运行时自适应精度在几乎不损吞吐的前提下显著优于固定 NVFP4",
+            "单一基础格式派生多精度使硬件只需一套数据通路即可支持动态精度"
+          ],
+          "experiments": [
+            "推理与 agentic 基准上相对 NVFP4 准确率提升最多 21.7%，多数基准追平分组缩放 FP6",
+            "平均 4.9 bit/权重（NVFP4 为 4.5 bit），GB300 上保留 90-98% 的 NVFP4 解码吞吐",
+            "自研加速器在同精度下延迟降低 1.6-2.3 倍，能耗降低 7-23%"
+          ],
+          "significance": "把混合精度量化从静态配置推进到运行时逐层自适应，并给出可行的数据格式与硬件通路。",
+          "arxivUrl": "https://arxiv.org/abs/2611.10165",
+          "pdfUrl": "https://arxiv.org/pdf/2611.10165.pdf",
+          "index": 7,
+          "takeaway": "用熵与隐藏状态更新幅度在线选每层精度，配一个从 NVFP4 派生的 2/4/6 bit 格式，兼顾精度与吞吐。",
+          "keyExperiment": "相对 NVFP4 准确率最多 +21.7%，GB300 上保留 90-98% 解码吞吐"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Translating KV Caches Between Hybrid-Attention Language Models: MLA Latents, Linear-Attention States and Sparse-Attention Indexers",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-10",
+          "authors": "Povilas Kvedaras, Tomas Rasymas",
+          "institutions": "Hostinger Research",
+          "abstract": "接管另一个模型对话的模型通常要重读全部历史，文本交接只能靠丢内容缩短重读。KV cache 翻译把源缓存映射到目标格式，使目标在完整上下文上继续。此前工作只覆盖 GQA，而开源前沿模型现在缓存 MLA 隐向量、稀疏注意力 indexer key 与定长线性注意力状态。作者为每类对象给出捕获与注入位置以及达到原生质量的机制，研究 16-48B 两组混合架构双向迁移（Kimi MLA 系、Qwen Gated DeltaNet 系）并加上稀疏注意力目标。MLA 隐向量用逐 token 线性映射，循环状态用闭式修正或重放目标递归合成；精确长程召回需要 token 身份，从第 0 层 MLA 隐向量解出 token id 把 2-32K needle 召回从 0.09 提到 0.99、64K 达 0.83-1.00，首 token 时间比重读快 18.7 与 46.8 倍。",
+          "contributions": [
+            "把 KV cache 翻译从 GQA 扩展到 MLA 隐向量、线性注意力循环状态与稀疏注意力 indexer 三类新缓存对象",
+            "为每类对象给出捕获位置、注入位置与达到原生质量的机制（逐 token 线性映射、闭式修正、重放递归）",
+            "指出长程精确召回依赖 token 身份，并给出从第 0 层 MLA 隐向量反向解出 token id 的方法"
+          ],
+          "conclusions": [
+            "混合注意力模型之间的缓存迁移在多数任务指标上可达到原生质量，内存受限部署可以无缝换模型",
+            "token 身份是精确长程召回的必要条件，仅靠隐向量不足以恢复细节"
+          ],
+          "experiments": [
+            "从 MLA 隐向量解出 token id 把 2-32K needle 召回从 0.09 提升到 0.99，64K 达到 0.83-1.00",
+            "64K 上下文首 token 时间比重读分别快 18.7 与 46.8 倍",
+            "全 MLA 方向的混合模型在所有任务指标上落在原生质量的置信区间内，同形状 GDN 混合双向达到原生水平"
+          ],
+          "significance": "让不同注意力架构的大模型之间可以直接交接对话状态，为异构模型编排与内存受限部署开路。",
+          "arxivUrl": "https://arxiv.org/abs/2611.12062",
+          "pdfUrl": "https://arxiv.org/pdf/2611.12062.pdf",
+          "index": 8,
+          "takeaway": "KV cache 翻译要处理 MLA 隐向量、线性注意力状态与 indexer：解出 token id 才能保住长程召回。",
+          "keyExperiment": "64K 上下文首 token 时间比重读快 18.7-46.8 倍，多数任务指标达到原生质量"
+        },
+        {
+          "title": "Network Contention State Aware Dynamic Optimizer for Accelerator Collective Communication Libraries",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-10",
+          "authors": "Rajat Bisht, Tevfik Kosar, Anthony Skjellum, Gene Cooperman, MD S Q Zulkar Nine",
+          "institutions": "Tennessee Technological University, University at Buffalo, Northeastern University, Arkansas Tech University",
+          "abstract": "集合通信库（CCL）是大规模分布式训练的关键，但配置由静态启发式决定，不考虑实时网络状况。作者实测这些启发式在无竞争时接近最优，有背景流量时明显退化。为此提出面向加速器集合通信的协作式多智能体运行时优化器：检测器用 LSTM 分类头加序贯概率比检验区分持续性拥塞与瞬时抖动；选择器用带 Conservative Q-Learning 的 Dueling Double DQN 据此调整配置参数，实现构建在 NCCL 之上。在 Chameleon Cloud 隔离裸金属集群上，AllReduce 延迟相对 NCCL 降低 36%、相对完全收敛的 AutoCCL 降低 32%；在六种真实 AI 工作负载（卷积、Transformer、推荐）上，于 Delta 集群（A100 + Slingshot-11）最高取得 65% 加速。",
+          "contributions": [
+            "实证静态启发式在无竞争时接近最优、在有背景流量时显著退化，暴露 CCL 配置的时间不变性假设",
+            "提出检测器 + 选择器的双 agent 架构：LSTM 加序贯概率比检验区分持续拥塞与瞬时抖动，D3QN 加 CQL 选择配置",
+            "把动态调优器实现在 NCCL 之上，可直接替换现有集合通信配置路径"
+          ],
+          "conclusions": [
+            "实时网络状态感知的配置调整能稳定超过静态启发式与自动调优基线",
+            "用强化学习做配置选择需要配套的拥塞状态判别，否则会对瞬时抖动过度反应"
+          ],
+          "experiments": [
+            "Chameleon Cloud 隔离裸金属集群上 AllReduce 延迟相对 NCCL 降低 36%，相对收敛的 AutoCCL 降低 32%",
+            "六种真实 AI 工作负载（卷积、Transformer、推荐）全部受益",
+            "Delta 集群 A100 + Slingshot-11 上最高取得 65% 加速"
+          ],
+          "significance": "把集合通信配置从静态启发式改为网络状态感知的在线决策，直接作用于训练吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2611.10984",
+          "pdfUrl": "https://arxiv.org/pdf/2611.10984.pdf",
+          "index": 9,
+          "takeaway": "静态 NCCL 调优在有背景流量时失效：用 LSTM 判别拥塞状态、D3QN 选配置，AllReduce 延迟降 36%。",
+          "keyExperiment": "AllReduce 延迟相对 NCCL 降 36%，Delta 集群真实负载最高 65% 加速"
+        },
+        {
+          "title": "HeteroTask: Multi-Variant Task Scheduling and Execution on Distributed Heterogeneous Clusters",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-10",
+          "authors": "Hongzheng Tian, Alok Mishra, Haocheng Xu, Dejan Milojicic, Sitao Huang",
+          "institutions": "University of California Irvine, Hewlett Packard Enterprise",
+          "abstract": "跨多台服务器组合 CPU 与 GPU 的异构系统算力可观但调度复杂：对有多种实现版本的 DAG 应用，需同时协调变体选择、设备放置与数据移动。离线规划能利用全局依赖，但从孤立 kernel profile 推出的计划会因运行时开销偏离执行。作者提出 HeteroTask，集成逐 kernel 性能画像、基于 PEFT 的多变体规划、主机缓冲区生命周期建模与调度驱动的 MPI 执行，并用贝叶斯优化为独占节点上反复执行的固定 DAG 工作流校准经验开销修正。在最多六个 8-GPU 节点上评测五个基准与工作流应用：两个节点上相对 StarPU 把应用级完成时间降低 19.7-72.1%；Canny 边缘检测中校准把任务窗口 makespan 降 25.0%，结合变体选择相对未校准纯 GPU 执行降 58.9%。",
+          "contributions": [
+            "指出从孤立 kernel profile 推出的离线计划会因运行时开销偏离实际执行，需要经验校准闭环",
+            "把多变体规划、主机缓冲区生命周期建模与调度驱动的 MPI 执行整合进同一框架",
+            "用贝叶斯优化为固定 DAG 工作流校准开销修正，把重复执行的稳定性转成收益"
+          ],
+          "conclusions": [
+            "异构集群上的变体选择与数据移动必须联合规划，单看 kernel 性能会误导",
+            "开销校准对工作流类应用收益显著，且可与变体选择叠加"
+          ],
+          "experiments": [
+            "两个 8-GPU 节点上相对 StarPU 应用级完成时间降低 19.7-72.1%",
+            "Canny 边缘检测中开销校准把任务窗口 makespan 降低 25.0%",
+            "结合 CPU/GPU 变体选择，相对未校准纯 GPU 执行降低 58.9%"
+          ],
+          "significance": "把异构集群调度从 kernel 级画像推进到带开销校准的端到端 DAG 规划。",
+          "arxivUrl": "https://arxiv.org/abs/2611.10055",
+          "pdfUrl": "https://arxiv.org/pdf/2611.10055.pdf",
+          "index": 10,
+          "takeaway": "异构集群上 kernel profile 会骗人：把开销校准、变体选择、缓冲区生命周期一起规划才有 19.7-72.1% 的端到端收益。",
+          "keyExperiment": "两个 8-GPU 节点上相对 StarPU 完成时间降 19.7-72.1%，Canny 案例再降 58.9%"
+        }
+      ]
+    }
+  ]
+}
