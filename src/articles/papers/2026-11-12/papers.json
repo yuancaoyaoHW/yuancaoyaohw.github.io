@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-12",
+  "title": "2026-11-12 论文精选",
+  "lede": "今日几乎被 LLM 服务系统包场：从单边 NVLink all-to-all、解码令牌并行，到前缀缓存自锁与前缀预取的存储分层，再到投机解码的草稿预算与损失函数——方向高度一致：把被浪费的算力和内存收回来。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 318
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Decode Token Parallelism: Memory-Efficient Distributed Attention Parallelism for Scalable LLM Decoding",
+          "score": 4.7,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-11",
+          "authors": "Susav Shrestha, Brad Settlemyer, Narasimha Reddy",
+          "institutions": "NVIDIA, Texas A&M University",
+          "abstract": "高并发长上下文解码时，KV cache 容量与注意力带宽都随解码池规模增长，而现有并行策略难以兼得：数据并行复制权重、挤占 KV 容量；张量并行在模型 KV head 数上停止扩展，还把密集集合通信推过节点；解码上下文并行虽恢复容量，却需要跨节点聚合部分注意力结果。作者观察到解码期密集层与注意力扩展规律不同——密集层按批摊薄权重读取、在单个 NVLink 域内高效，注意力开销却随每个活跃请求的 KV 增长。据此提出 Decode Token Parallelism（TKNP）：把单份模型权重按层块均衡分布到各节点，持块节点用节点内张量并行对全批执行投影与 MLP，各节点只对本地驻留的 KV 计算自己所持请求的注意力。跨节点只传当前 token 激活，密集 all-reduce 保留在 NVLink 内，注意力无需跨节点合并部分结果，从而在不复制权重的前提下把请求本地注意力扩展到多节点。",
+          "contributions": [
+            "把解码期的权重放置与注意力归属彻底解耦：单一模型副本按层块分布，既避免权重复制，又让每个请求的 KV 始终留在本地。",
+            "设计双活跃根微批（dual-active-root microbatching）与 token 级通信路径，使跨节点流量仅限于当前 token 激活。",
+            "在 vLLM 中实现并扩展到 64 卡 H100，验证 405B 与 340B 级模型的可行部署。"
+          ],
+          "conclusions": [
+            "长上下文、高并发负载下，TKNP 的完成吞吐相对解码上下文并行最高 1.7 倍、相对数据并行最高 2.06 倍（同等 GPU 数）。",
+            "结果表明解码吞吐瓶颈已从权重读取转向 KV 容量与注意力带宽，并行策略应按层类型而非全模型统一设计。"
+          ],
+          "experiments": [
+            "在 8 卡 H100（TP8）、32K 上下文下，Llama 3.1 405B 单解码层中注意力在 batch 128 时已占各组件延迟之和的近 70%。",
+            "Llama 3.1 405B 与 Nemotron-4 340B，最多 64 张 H100，长上下文高并发负载下吞吐较 DCP 提升 1.7 倍、较数据并行提升 2.06 倍。",
+            "在混合长度真实服务负载与微批消融中，TKNP 均保持吞吐优势，说明收益不只来自单一配置调优。"
+          ],
+          "significance": "把权重放置与注意力归属拆开后，长上下文解码可以在多节点上同时获得 KV 容量与注意力带宽，为 400B 级模型的高并发服务提供了一条非张量并行的扩展路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.13293",
+          "pdfUrl": "https://arxiv.org/pdf/2611.13293.pdf",
+          "index": 1,
+          "takeaway": "单份权重按层块分节点、注意力留本地，只传当前 token：长上下文解码吞吐较 DCP 高 1.7 倍",
+          "keyExperiment": "Llama 3.1 405B 在 64 卡 H100 上，长上下文高并发完成吞吐较 DCP 高 1.7 倍、较数据并行高 2.06 倍。"
+        },
+        {
+          "title": "One-Sided Expert-Parallel All-to-All for Mixture-of-Experts Inference over NVLink",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-11",
+          "authors": "Bo Li, Chulian Zhang, Or Biri, Anthony Chang, Anton Korzh, Noam Duvdevani, XingFei Xi, Daniel Stokes, Zhenhuan Chen, Ludwig Schneider, Artem Y. Polyakov, Julien Demouth, Chandler Zhou",
+          "institutions": "NVIDIA",
+          "abstract": "专家并行（EP）把 MoE 层的专家切分到多卡，因此每个 MoE 层都要做两次 all-to-all（dispatch 与 combine）。与训练不同，推理时每卡每次处理的 token 很少，小批下主导延迟的不是数据搬运量，而是不随 token 数增长的固定开销。作者提出 NVLinkOneSided：面向单 NVLink 域的单边 EP all-to-all。每个源 rank 无需先交换元数据，直接把 token 推入目标 GPU 上按 rank 组织的缓冲区，分组 GEMM 就地读取，省掉按专家复制的中间步骤。同步提供 Fence 与 Sentinel 两套协议，分别面向高吞吐与低延迟场景；接口按模块化设计，与激活量化等前后处理解耦。该设计把通信开销压到与 token 数成正比的部分，使小批解码也能从 EP 中获益。",
+          "contributions": [
+            "提出单边、免元数据交换的 EP all-to-all，源 rank 直接写目标 GPU 的 rank-major 缓冲区，分组 GEMM 原地读取。",
+            "给出 Fence 与 Sentinel 两种同步协议，分别优化高吞吐与低延迟，并说明其适用边界。",
+            "接口模块化、与量化方案无关，可直接替换现有 EP 通信层。"
+          ],
+          "conclusions": [
+            "在 Blackwell GPU 上，dispatch 与 combine 比 DeepEP 快 1.2–3.0 倍，小批量时加速最大。",
+            "端到端 MoE 层比 DeepEP 配 DeepGEMM 最多快 2.4 倍，在每卡 128 token 以内仍优于融合版 DeepGEMM MegaMoE。"
+          ],
+          "experiments": [
+            "Blackwell GPU 单 NVLink 域内，dispatch/combine 相对 DeepEP 加速 1.2–3.0 倍，batch 越小收益越大。",
+            "MoE 层端到端最多 2.4 倍加速；在每卡最多 128 token 的解码区间仍胜过融合 MegaMoE。",
+            "偏斜路由与大 EP 规模扩展测试中保持优势，说明收益来自固定开销削减而非特定路由分布。"
+          ],
+          "significance": "MoE 推理的 EP 通信瓶颈在固定开销而非带宽，单边写入加就地 GEMM 是小批解码阶段最直接的解法。",
+          "arxivUrl": "https://arxiv.org/abs/2611.13188",
+          "pdfUrl": "https://arxiv.org/pdf/2611.13188.pdf",
+          "index": 2,
+          "takeaway": "免元数据单边写入 + 就地 GEMM，小批 MoE 解码比 DeepEP 快 1.2–3.0 倍",
+          "keyExperiment": "Blackwell 上 dispatch/combine 比 DeepEP 快 1.2–3.0 倍，MoE 层端到端最多 2.4 倍，128 token/卡以内仍胜 MegaMoE。"
+        },
+        {
+          "title": "Placing LLM Lookup Tables by Per-Layer Prefetch Deadlines",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-11",
+          "authors": "Wen Huang, Jack Liu",
+          "institutions": "Microsoft, Independent Researcher",
+          "abstract": "DeepSeek-V4.1 的 203 GB Engram n-gram 表目前常驻主机 DRAM，在一个 4 卡服务进程占用的 223 GiB 中吃掉 190 GiB。由于行索引只由输入 token 决定，查表可以在每步开始就发起，并与前若干层重叠。V4.1 的两个 Engram 层预取窗口相差 30 倍（0.3 ms 与 9.3 ms），作者指出正是这个期限，叠加会话内复用与共享设备上的争用，决定了每张表能放在哪一层存储、哪些层需要缓存，并给出可由实测读时间预测减速的模型。实测发现 agent 与聊天流量在会话内复用行，静态热集迁移效果差。据此实现 SlackTier：在 SGLang 中于步起始一次性发起全部查表，先读短窗口层，并把小块 GPU 行缓存按层切分；该路径嵌在解码 CUDA graph 内，与原 gather 位精确一致。",
+          "contributions": [
+            "以每层预取期限（而非访问频次）作为表分层的判据，并给出从实测读时间预测解码减速的一阶模型。",
+            "在 SGLang 中实现 SlackTier：步起始发起全部查表、短窗口层优先、GPU 行缓存按层切分，且嵌入解码 CUDA graph 保持位精确。",
+            "揭示会话内行复用与静态热集迁移的差异，说明按会话动态分配缓存比离线热集更有效。"
+          ],
+          "conclusions": [
+            "两张表全部放到 4 块 NVMe 上，agent 与聊天回放的每输出 token 平均时间较原生 SGLang 最多增加 1.4%，主机内存从 212 GiB 降到 34 GiB。",
+            "把省下的内存改作主机 KV cache 后，KV 受限的 agent 负载中位吞吐提升 36%，p90 首 token 时间从 38 s 降到 24 s。"
+          ],
+          "experiments": [
+            "203 GB 表、4 卡服务进程 223 GiB 内存中 190 GiB 被表占用，是原始问题的量化起点。",
+            "两表置于 4 块 NVMe 时每输出 token 平均耗时仅增 1.4%，主机内存 212→34 GiB。",
+            "省出内存转作 KV cache 后中位吞吐 +36%，p90 TTFT 38→24 s；RDMA 远读时两表均无需缓存，一份可服务两个实例。"
+          ],
+          "significance": "把 embedding/查表类大表按预取期限下沉到 NVMe 或远端内存，能把被表吃掉的主机内存换回 KV 容量，代价不到 1.5% 的解码时间。",
+          "arxivUrl": "https://arxiv.org/abs/2611.13413",
+          "pdfUrl": "https://arxiv.org/pdf/2611.13413.pdf",
+          "index": 3,
+          "takeaway": "按层预取期限给大表分层：表下沉 NVMe 仅增 1.4% 时延，主机内存 212→34 GiB",
+          "keyExperiment": "两表全放 4 块 NVMe 时每 token 平均耗时仅升 1.4%，主机内存 212→34 GiB，转作 KV cache 后中位吞吐 +36%。"
+        },
+        {
+          "title": "Bursts That Outlast Themselves: Persistent Degradation in Prefix-Cached Agent Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-11",
+          "authors": "Wen Huang, Jack Liu",
+          "institutions": "Microsoft, Independent Researcher",
+          "abstract": "LLM agent 以闭环会话驱动推理引擎，上下文逐轮增长，前缀缓存是经济服务的关键：命中只需约一千 token 的增量 prefill，未命中则要重算 10–40K token 的上下文。作者指出这让前缀缓存服务呈亚稳态：在完全相同的基础负载上，仅多几分钟的额外到达就可能把 vLLM 服务器推入退化态——命中率跌到约 10%、吞吐约为原来一半、积压在其后 70 分钟持续增长，而无突发对照运行保持健康（12 对中 9 对如此，反向为 0）。该退化态出现在原本可承载的负载下，去掉前缀缓存即消失，在 Qwen3-32B + SWE-bench trace 形状与 SGLang 上同样复现。机理是服务变慢→更多会话滞留→工作集超出 KV 池→每轮都变成重算。作者据此给出可排空的一阶负载平衡条件，并比较多种恢复手段。",
+          "contributions": [
+            "识别并系统刻画前缀缓存 agent 服务的亚稳态退化：一次短突发可导致持续数十分钟的吞吐塌陷。",
+            "给出退化态的机理链条与一阶排空条件，并在 vLLM、SGLang、不同模型与 trace 形状上交叉复现。",
+            "比较三类恢复/预防手段，提出把活跃会话常驻 KV 需求限制在池容量内的预算器，无需逐负载调参。"
+          ],
+          "conclusions": [
+            "限流新准入只恢复了 7 次匹配崩溃中的 1 次；按容量上限挂起已准入会话则全部在数分钟内恢复。",
+            "CPU offload 层只能推迟崩溃不能避免；KV 预算器在所有测试运行中都预防了失败。"
+          ],
+          "experiments": [
+            "12 对同样负载对比中 9 对出现退化、0 对反向出现；退化态命中率约 10%、吞吐减半、积压增长 70 分钟。",
+            "恢复实验：新准入限流 1/7 成功，会话挂起 7/7 分钟级恢复，CPU offload 仅延迟崩溃。",
+            "预算器把活跃会话常驻 KV 需求约束在池内，在全部运行中预防了塌陷，阈值无需按负载调。"
+          ],
+          "significance": "前缀缓存的收益是负载相关的：缓存越有效，工作集越容易撑爆 KV 池，从而自锁在退化态——需要按常驻 KV 预算而不是按请求速率做准入控制。",
+          "arxivUrl": "https://arxiv.org/abs/2611.13412",
+          "pdfUrl": "https://arxiv.org/pdf/2611.13412.pdf",
+          "index": 4,
+          "takeaway": "前缀缓存 agent 服务会自锁进退化态：命中率 10%、吞吐减半、积压涨 70 分钟",
+          "keyExperiment": "同负载下 12 对中 9 对退化、0 对反向；按 KV 预算挂起会话 7/7 恢复，预算器全部场景预防成功。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "ForeSpark: Joint Draft and Verification Budget Scheduling for Parallel Speculative Decoding",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.DC",
+          "date": "2026-11-11",
+          "authors": "Jaeyong Song, Daniel Wang, Pratyush Patel, Jonny Kong, Preyas Shah, Shobhit Kanaujia",
+          "institutions": "Meta, Seoul National University",
+          "abstract": "并行草稿器一次前向即可提出整块候选 token，在高负载 LLM 服务中很受欢迎。已有系统以 goodput（每秒被接受 token 数）为目标，因为被拒草稿会偷走其他请求的算力，但它们只能控制验证多少 token，每个请求仍会草拟完整块。作者测得高负载下草拟占步时间的 40%，其中多数因从未被验证而被丢弃。自回归草稿器的定长控制无法沿用：并行草稿器在单次前向之前就必须锁定长度，且草稿长度与验证长度在批内相互耦合，必须逐请求联合选取。为此提出 work-conserving speculation（WCS）：用基于目标模型上下文特征的预草稿接受率估计器预测各候选长度的接受情况，用全局排序的轻量联合调度器同时选定草稿与验证长度，并在草拟后把验证预算分配给最有希望的 token。",
+          "contributions": [
+            "指出并行投机解码中草稿阶段浪费最多 40% 步时间，且草稿长度必须在单次前向之前决定，因此需要新的控制变量。",
+            "提出 WCS 框架：上下文感知的预草稿接受率估计 + 草稿/验证长度联合调度 + 草拟后预算再分配。",
+            "在 vLLM 上实现 ForeSpark，且不改变输出分布（保持无损）。"
+          ],
+          "conclusions": [
+            "在相同每请求生成速率下，吞吐较当前最优 DSpark 高最多 1.77 倍、较自回归解码高 2.49 倍。",
+            "在延迟 SLO 约束下可承受的请求速率达 DSpark 的 1.51 倍，说明收益来自负载适应而非固定参数。"
+          ],
+          "experiments": [
+            "动机测量：高负载下草拟占步时间的 40%，其中大部分草稿从未进入验证。",
+            "vLLM 实现下吞吐较 DSpark 高 1.77 倍、较自回归解码高 2.49 倍（同生成速率）。",
+            "SLO 约束下可持续请求速率为 DSpark 的 1.51 倍，且对其它草稿器与负载敏感性测试保持优势。"
+          ],
+          "significance": "投机解码的调度对象应从\"验证多少\"扩展到\"草拟多少\"，在批内联合分配两个预算才能把被丢弃的草稿算力还给系统。",
+          "arxivUrl": "https://arxiv.org/abs/2611.13442",
+          "pdfUrl": "https://arxiv.org/pdf/2611.13442.pdf",
+          "index": 5,
+          "takeaway": "把草稿预算也纳入调度：吞吐超 DSpark 1.77 倍，SLO 下请求速率 1.51 倍",
+          "keyExperiment": "vLLM 上吞吐较 DSpark 高 1.77 倍、较自回归高 2.49 倍，SLO 下可承载请求速率 1.51 倍。"
+        },
+        {
+          "title": "REAL Loss: Optimizing Real Expected Acceptance Length for Speculative Decoding",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-11",
+          "authors": "Yu Tian",
+          "institutions": "The University of Hong Kong",
+          "abstract": "投机解码靠草稿模型一次提出多个 token、由目标模型一次验证来加速推理，加速比由期望接受长度（EAL）决定。但交叉熵、KL 散度、全变差等标准训练目标只关注分布匹配或单步重合；近期的块级目标虽试图直接优化 EAL，仍是替代量而非精确形式——例如有的在目标分布延续上平均后续接受率，而不是沿被接受 token 所选出的验证分支求期望，由此引入协方差缺口，甚至可能反转梯度方向。作者分析该缺口并推导出 REAL：用路径权重做无偏估计、用 Rao-Blackwell 化降方差，得到对真实 EAL 的训练损失。方法只改训练损失，不改草稿器结构、不改推理过程。",
+          "contributions": [
+            "指出既有块级投机解码训练目标只是 EAL 的替代量，并形式化其协方差缺口与梯度反转风险。",
+            "推导 REAL：以路径权重无偏估计真实期望接受长度，并用 Rao-Blackwell 化降低方差。",
+            "方法即插即用：仅替换训练损失，草稿器架构与推理流程均不变，并公开参考实现。"
+          ],
+          "conclusions": [
+            "以 Qwen3.6-35B-A3B 为目标模型、Domino 为草稿器，在 9 个任务子集与 5 个随机种子上，REAL 在服务端接受长度上优于 WTV、VSD、DBLast 与静态 LK 基线。",
+            "增益完全来自训练目标替换，不需要改动草稿器或推理栈，可直接叠加到现有投机解码训练流程。"
+          ],
+          "experiments": [
+            "受控的损失级对比：Qwen3.6-35B-A3B + Domino，9 个任务子集 × 5 个种子，REAL 全面优于 WTV/VSD/DBLast/静态 LK。",
+            "评测指标采用概率化服务接受长度（而非仅单步重合），更贴近线上加速比。",
+            "不修改草稿器架构与推理过程即取得增益，验证收益源于目标函数而非容量。"
+          ],
+          "significance": "投机解码的草稿器训练目标要精确对齐\"沿实际接受路径的期望长度\"，否则优化方向可能系统性偏离线上加速比。",
+          "arxivUrl": "https://arxiv.org/abs/2611.14399",
+          "pdfUrl": "https://arxiv.org/pdf/2611.14399.pdf",
+          "index": 6,
+          "takeaway": "真实 EAL 损失 + 路径权重无偏估计，只换损失函数即超过 WTV/VSD/DBLast",
+          "keyExperiment": "Qwen3.6-35B-A3B + Domino，9 个子集 × 5 种子，概率化服务接受长度全面优于 WTV、VSD、DBLast 与静态 LK。"
+        },
+        {
+          "title": "Train High, Ship Low: Efficient LoRA Synchronization for Distributed On-Policy Post-Training",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-11",
+          "authors": "Shenghui Li, Li Ju, Thiemo Voigt",
+          "institutions": "Uppsala University, Research Institutes of Sweden (RISE)",
+          "abstract": "在带宽受限的分布式 on-policy 后训练中，把 LoRA 适配器同步给 rollout worker 会成为瓶颈。降低训练 rank 会削弱所需容量，而自适应优化器更新本身难以压缩。作者换了个方向：让 rollout worker 维护一份复制的优化器状态，改传压缩梯度并在本地重放优化器步，从而重构出与学习端一致的更新。据此提出 HiLo——一个与压缩器无关的框架，用压缩梯度传播加本地优化器重放替代参数传输；在可复现执行下，学习端与 worker 在同一版本上保持策略一致。为进一步压低通信，设计 Spar：结合谱截断、自适应 rank 分配与误差反馈的预算感知梯度压缩器，把训练 rank 与通信成本解耦。",
+          "contributions": [
+            "把 LoRA 同步从\"传参数\"改为\"传压缩梯度 + 本地优化器重放\"，绕开自适应优化器更新难压缩的问题。",
+            "提出 Spar 预算感知压缩器：谱截断、自适应 rank 分配与误差反馈三者结合，使训练 rank 不再决定通信量。",
+            "在可复现执行下保证学习端与 rollout worker 的策略版本严格一致。"
+          ],
+          "conclusions": [
+            "在 on-policy 蒸馏与奖励引导后训练中，HiLo+Spar 保持接近全量同步的学习质量，传输字节数仅为适配器的 1.6%。",
+            "带宽受限条件下端到端更新最多加速 2.2 倍。"
+          ],
+          "experiments": [
+            "on-policy 蒸馏与奖励引导后训练两类任务上，学习质量与全量同步接近。",
+            "通信量最低降至适配器参数的 1.6%，端到端更新在带宽受限时最多 2.2 倍加速。",
+            "梯度压缩率可随带宽预算调整而不牺牲训练 rank，说明训练容量与通信成本已被解耦。"
+          ],
+          "significance": "分布式后训练的同步瓶颈可以用\"传梯度而非传权重\"化解：只要优化器状态可复制，通信量就能与模型容量解耦。",
+          "arxivUrl": "https://arxiv.org/abs/2611.13306",
+          "pdfUrl": "https://arxiv.org/pdf/2611.13306.pdf",
+          "index": 7,
+          "takeaway": "传梯度+本地重放替代传 LoRA：通信降至 1.6%，带宽受限下更新快 2.2 倍",
+          "keyExperiment": "on-policy 蒸馏与奖励后训练中传输字节仅 1.6% 适配器，带宽受限下端到端更新最多 2.2 倍。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Looping Deeper Without Growing the KV Cache: Recurrent Depth for Causal Encoder-Decoders",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-11",
+          "authors": "Jiaqi Leng, Minshen Zhang, Zhaofeng Sun, Yu-Yang Qian, Peng Zhao, Hao Zhang",
+          "institutions": "University of California San Diego, Tsinghua University, Nanjing University",
+          "abstract": "循环（looped）语言模型能在不增加参数的前提下加深计算，但跨层、跨轮缓存完整上下文的 KV 状态会严重限制服务批大小。作者设计循环式因果编码器-解码器（CED），实现\"轮间 KV 零增长\"的循环深度：在只有稀疏编码器层生成全局 KV 的非对称栈中，回答\"在哪循环、如何循环\"。他们发现循环必须放在编码器侧以迭代精炼全局 KV 表示，而不是反复读取静态解码器投影——这既带来语言建模收益，也保住了长上下文扩展性。进一步用随机循环深度训练编码器循环，诱导出不动点均衡：每一轮都可无损共享最后一轮的 KV。跨层与跨轮 KV 共享叠加后，循环 CED 的内存占用与未循环版本持平，并以 1/6 的全局 KV 拿回循环 Transformer 86–93% 的增益。",
+          "contributions": [
+            "定位循环应放在编码器而非解码器：迭代精炼全局 KV，才能同时获得建模增益与长上下文扩展。",
+            "用随机循环深度训练诱导不动点均衡，使每轮可无损复用最后一轮 KV，实现轮间 KV 零增长。",
+            "叠加跨层与跨轮 KV 共享后，循环 CED 在内存上等价于未循环版本，回收 86–93% 的循环增益。"
+          ],
+          "conclusions": [
+            "在单台 4×GB200 节点上把 552B 的 DeepSeek-V4.1-Flash 循环 8 轮：逐层逐轮存 KV 时单个 128K token 请求都放不下，而循环 CED 每 token KV 少 36.8 倍，可容纳 38 个此类请求（与未循环模型相同）。",
+            "8K prompt 上服务吞吐提升 3.6 倍，说明循环深度可以真正上生产而不被 KV 内存拖垮。"
+          ],
+          "experiments": [
+            "552B DeepSeek-V4.1-Flash 循环 8 轮，单 4×GB200 节点：逐层逐轮 KV 连 1 个 128K 请求都放不下。",
+            "循环 CED 每 token KV 少 36.8 倍，可同时容纳 38 个 128K 请求（与未循环模型持平），8K prompt 吞吐 3.6 倍。",
+            "质量上以 1/6 全局 KV 回收循环 Transformer 86–93% 的增益，长上下文评测保持扩展趋势。"
+          ],
+          "significance": "循环深度此前被 KV 内存判了死刑；把循环放进编码器并用不动点训练共享最后一轮 KV，让\"免费加深\"重新变得可服务。",
+          "arxivUrl": "https://arxiv.org/abs/2611.13378",
+          "pdfUrl": "https://arxiv.org/pdf/2611.13378.pdf",
+          "index": 8,
+          "takeaway": "循环放编码器 + 共享最后一轮 KV：每 token KV 少 36.8 倍，8K 吞吐 3.6 倍",
+          "keyExperiment": "552B DeepSeek-V4.1-Flash 循环 8 轮单节点：每 token KV 少 36.8 倍，容纳 38 个 128K 请求，8K prompt 吞吐 3.6 倍。"
+        },
+        {
+          "title": "ADIndex: Layer-Adaptive Sparse Attention Indexing via Group-Level Distillation",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-11",
+          "authors": "Jin-Fei Qi, Yiduo Li, Jiang-Xin Shi, Kan Liu, Tao Lan, Hanlin Tang, Yu-Feng Li",
+          "institutions": "Nanjing University, Alibaba Group",
+          "abstract": "DeepSeek 稀疏注意力（DSA）通过 token 级选择降低注意力计算，但其 indexer 仍要为每个 query 打分整个因果前缀，使索引在长上下文推理中成为主要延迟来源——长上下文下 indexer 单独可占 prefill GPU 时间的 50% 以上。作者提出 ADIndex：一是层自适应校准，基于观察到的显著层间异质性，自适应容纳跨 query 的检索重叠；二是组级蒸馏，利用这种异质性高效训练各层自适应的组索引器，捕获单个 query 的显著检索信号；三是低延迟推理策略，通过 query 组内 token bank 共享减少重复全前缀扫描，同时保留 query 级精修。方法在保持任务性能的同时，把索引本身的开销大幅压低。",
+          "contributions": [
+            "指出 DSA 的 indexer 在长上下文 prefill 中可占一半以上 GPU 时间，是被忽视的主要瓶颈。",
+            "提出层自适应校准与组级蒸馏，用层间异质性训练分层组索引器，兼顾跨 query 重叠与 query 级信号。",
+            "设计 token bank 共享的低延迟推理路径，减少重复全前缀扫描而保留 query 级精修。"
+          ],
+          "conclusions": [
+            "在 DeepSeek-V3.2 与 GLM-5.1 上，LongBench、LongBench v2、RULER 任务性能接近无损。",
+            "256K 上下文下 prefill 与解码 kernel 分别最高加速 6.22 倍与 3.40 倍；128K 上下文端到端服务加速 1.54 倍。"
+          ],
+          "experiments": [
+            "动机测量：长上下文下 indexer 单独占 prefill GPU 时间 50% 以上。",
+            "256K 上下文、各层复用配置下，prefill kernel 最高 6.22 倍、解码 kernel 最高 3.40 倍加速。",
+            "128K 上下文端到端服务 1.54 倍加速，且在 LongBench/LongBench v2/RULER 上性能接近无损。"
+          ],
+          "significance": "稀疏注意力的成本不只在稀疏注意力本身，索引器已是长上下文 prefill 的头号开销，必须与注意力核一起优化。",
+          "arxivUrl": "https://arxiv.org/abs/2611.12956",
+          "pdfUrl": "https://arxiv.org/pdf/2611.12956.pdf",
+          "index": 9,
+          "takeaway": "给稀疏注意力的 indexer 做分层蒸馏：prefill kernel 6.22 倍、端到端 1.54 倍",
+          "keyExperiment": "DeepSeek-V3.2/GLM-5.1 上 256K 上下文 prefill kernel 加速 6.22 倍、解码 3.40 倍，128K 端到端 1.54 倍。"
+        },
+        {
+          "title": "One Byte, One Token: Byteifying a 27B Hybrid-Attention LLM with Self-Generated Data",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-11-11",
+          "authors": "Liwei Zhang, ZhiMing Tong",
+          "institutions": "Landi Lab",
+          "abstract": "字节级 BPE 会把中文切碎（Qwen3.8 在中文维基上平均 3.84 字节/token，64% 的 token 是单字），也把拼写信息藏在 token 里。作者问：能否把一个已训好的 27B 子词模型直接转成纯字节级模型（一字节一 token），不用 patch 结构、不用局部编码器，还保留大部分能力？他们以 Qwen3.8-27B（48 层 Gated DeltaNet + 16 层全注意力）为起点，把词表从 248,320 缩到 384 项（BPE 词表中已有的 256 个字节符号加特殊 id），其余权重全部不动，用两阶段课程（先编码、后阅读）在 4.77 GB 监督字节上继续训练；所有对话与行为监督都由原模型自身在线生成。训练在 8×H200 上耗时 178.6 小时，并系统记录了字节模型的四种失效模式及其修复。",
+          "contributions": [
+            "证明已训好的 27B 混合注意力模型可原位转成纯字节级模型：只改词表，不动其余权重。",
+            "提出两阶段课程（编码→阅读）与自生成监督数据配方，用原模型在线生成对话/行为监督。",
+            "给出字节模型的四类失效模式（贪心失控、采样破坏 UTF-8、小词表惩罚项失效、重复）及对应修复。"
+          ],
+          "conclusions": [
+            "纯字节化后模型仍保留核心推理与知识能力：多数高难度基准的差距落在统计噪声内。",
+            "收益集中在字符级任务，代价是序列长度膨胀带来的 3–5 倍吞吐损失，且汉字查表知识难以恢复。"
+          ],
+          "experiments": [
+            "同 GPU 同服务栈下，字节模型在 MATH-500、HumanEval+、MMLU-Pro 与非思考 GSM8K 上与原始模型的差距落在配对 bootstrap 区间内；C-Eval、思考模式 GSM8K、非思考 IFEval 掉 4–6 分。",
+            "字符级任务全面领先（CUTE 75.2→84.0、EXECUTE-zho 81.6→93.9、自建中文字符集 54.4→64.0），但汉字读音、笔画等查表知识下降且思考模式无法挽回。",
+            "代价在吞吐：每步速度相同但每步产出少 3–5 倍，中文每秒字符数约为原来 1/4，64K 字节 prefill 慢 6.5 倍。"
+          ],
+          "significance": "子词词表是可以被\"拆掉\"的：纯字节化保留推理能力与字符级能力，代价是序列变长带来的 3–5 倍吞吐损失。",
+          "arxivUrl": "https://arxiv.org/abs/2611.13607",
+          "pdfUrl": "https://arxiv.org/pdf/2611.13607.pdf",
+          "index": 10,
+          "takeaway": "27B 混合注意力模型只换词表即可纯字节化，字符级任务大涨但吞吐降至 1/4",
+          "keyExperiment": "Qwen3.8-27B 词表 248,320→384、8×H200 训 178.6 h；CUTE 75.2→84.0、EXECUTE-zho 81.6→93.9，中文速度约 1/4。"
+        }
+      ]
+    }
+  ]
+}
