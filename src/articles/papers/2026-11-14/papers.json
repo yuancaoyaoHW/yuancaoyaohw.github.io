@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-14",
+  "title": "2026-11-14 论文精选",
+  "lede": "今日主线是\"把浪费掉的时间捡回来\"：卡内空间流水线、warp 级融合 MoE、agent 批量长尾调度与共享文档多流解码，都在同一个瓶颈上做文章——不是算力不够，而是重叠得不够。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 646
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "SubGPU Pipelining: Intra-GPU Fine-Grained Spatial Parallelism for LLM Inference",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Muralidhar Andoorveedu, Marius Juston, Tingkai Liu, Sanjay Patel",
+          "institutions": "NVIDIA",
+          "abstract": "LLM 解码由大量短小的访存受限内核构成，它们突发式争用片上计算资源与带宽，SM 与显存带宽难以同时打满。论文提出 SubGPU Pipelining：把算子图切成有序连续段，绑定到由互不重叠 SM 池支撑的空间阶段，令微批次沿流水线流动。切点选择、段-阶段绑定、每阶段 SM 分配与微批次大小构成强耦合优化问题，任一选择都会改变重叠模式、共享资源争用与缓存状态。作者用共享资源分析模拟器搜索流水线结构与批大小、刻画每用户/每 GPU 吞吐的 Pareto 前沿，并在硅上用单张 B200 模拟 32 卡 B200 部署（CUDA Green Contexts + TensorRT-LLM 内核）验证可行性。",
+          "contributions": [
+            "把\"整卡时序执行\"改为\"卡内空间流水线\"：同一 GPU 上按 SM 池切出多个阶段，让不同微批次的不同层并行，专门收割解码阶段用不满的计算与带宽。",
+            "给出共享资源分析模拟器，显式建模 SM 争用、带宽争用与缓存干扰，用搜索而非手工调参确定切点、阶段绑定与微批次大小。",
+            "在真实硅上验证：仅用 CUDA Green Contexts 与现成 TensorRT-LLM 内核即可复现模拟收益，说明方案不需要新内核。"
+          ],
+          "conclusions": [
+            "卡内空间流水线能把解码的访存与计算重叠起来，在每用户与每 GPU 吞吐之间提供可调的 Pareto 前沿。",
+            "收益上限由共享资源的争用结构决定，需要按部署的批大小与卡数重新搜索流水线配置，没有通用最优切法。"
+          ],
+          "experiments": [
+            "GPT-OSS 120B + 32×B200 部署设定下，匹配每 GPU 吞吐时每用户吞吐最高提升 2.2×；匹配每用户吞吐时每 GPU 吞吐最高提升 1.9×。",
+            "单卡 B200 模拟 32 卡部署（global batch 2048）实测：DRAM 读写吞吐从峰值 71.8% 提升到 83.6%。",
+            "同一实验把 36 层解码器单次迭代时间降低 10.33%。"
+          ],
+          "significance": "在\"单卡内做流水线\"这一被忽视的维度上，为解码阶段的资源利用率提供了可复现的收益。",
+          "arxivUrl": "https://arxiv.org/abs/2611.14904",
+          "pdfUrl": "https://arxiv.org/pdf/2611.14904.pdf",
+          "index": 1,
+          "takeaway": "解码不只靠批更大，还可以在卡内按 SM 池切段做空间流水，2.2× 每用户吞吐来自重叠而非新内核。",
+          "keyExperiment": "单卡 B200 模拟 32 卡部署，DRAM 读写吞吐 71.8%→83.6%，36 层解码迭代时间降低 10.33%。"
+        },
+        {
+          "title": "GC-MoE on SM120: Overlapping Expert-Parallel Token Dispatch with Warp-Level FP8xFP4 Block-Scaled MMA on Consumer Blackwell",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Yong Li, Haoyu Wang, Kan Liu, Tao Lan",
+          "institutions": "Alibaba Inc.",
+          "abstract": "专家并行 MoE 解码是延迟受限的：每层串行执行 token 交换、按路由做分组 GEMM、再聚合，三个阶段互相等待。前作 GC-MoE 已在 Hopper 与数据中心 Blackwell 上把三阶段融进持久化、Green Context 分区的 CUDA Graph。本文把算子重建到消费级 Blackwell（SM120，如 RTX PRO 5000）的 PCIe 场景：该芯片只通过 warp 级 mxf8f6f4 暴露块缩放张量核，没有 tensor memory 与双 CTA MMA，也没有 cluster multicast。作者改用 swap-AB 的 warp 级块缩放 MMA（FP4 权重作 A 操作数驻寄存器、FP8 激活作 B），并配合 MMA 立即数选 scale byte、紧凑权重路径、自适应 token tile 几何等 SM120 专属机制。",
+          "contributions": [
+            "把 GC-MoE 的融合思想移植到消费级 Blackwell：在只有 warp 级块缩放 MMA 的受限 ISA 上重新组织 token 分发、GEMM 与聚合的重叠。",
+            "专家粒度的流式分发：批量 bulk-pull 引擎加 64 位去重 pull cache，避免同一专家在 PCIe 上被反复拉取。",
+            "共享专家折入计算角色，并用位置主序 arena + 常驻 relay copier 承接 BF16 回传，避免额外同步。"
+          ],
+          "conclusions": [
+            "在缺失 tensor memory、双 CTA MMA 与 multicast 的消费级芯片上，仍可通过软件重排获得与数据中心级融合算子相当的效率。",
+            "PCIe 互联的 8 卡消费级平台可以承载专家并行 MoE 解码，关键在于把跨卡拉取做去重与流式化。"
+          ],
+          "experiments": [
+            "8×RTX PRO 5000 over PCIe：比 FlashInfer CuTe DSL 的 W4A8 MegaMoE 快 1.522×，比 Cake MegaMoE 快 1.387×，18 个解码点 18/18 全胜。",
+            "融合共享专家后仍比 Cake 快 1.388×。",
+            "94 个数值用例与 752 次逐 rank 校验全部通过，跨算子余弦相似度不低于 0.9999997。"
+          ],
+          "significance": "说明消费级 GPU 集群也能跑低延迟专家并行 MoE 解码，把 MoE 服务从数据中心下放到 PCIe 工作站。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16219",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16219.pdf",
+          "index": 2,
+          "takeaway": "在只有 warp 级 FP8xFP4 MMA 的消费级 Blackwell 上重建融合 MoE 算子，PCIe 8 卡比 MegaMoE 快 1.52×。",
+          "keyExperiment": "8×RTX PRO 5000 over PCIe，对 FlashInfer W4A8 MegaMoE 1.522×、对 Cake 1.387×，18/18 解码点全胜。"
+        },
+        {
+          "title": "Recompute or Restore? Host-Tier KV for Multi-Model Agent Workflows on a Static-Graph NPU Serving Stack",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Sungwon Woo, Seyeon Kim",
+          "institutions": "Korea University",
+          "abstract": "Agent 工作流会发起共享长前缀的依赖式模型调用，服务效率取决于能否复用这些前缀的 KV cache。但在提前编译计算图的加速器上，设备侧 KV 预算固定，负载下被驱逐的前缀只能重算；从主机内存恢复可避免重算，然而搬移与 prefill、decode 争用同一引擎线程，收益并不必然。论文在商用静态图 NPU 栈（Rebellions ATOM+，vllm-rbln 0.10.2）上研究\"何时恢复胜过重算\"：两张卡跑 Qwen3-8B planner、一张卡跑 Qwen3-0.6B executor。作者先证明默认服务崩塌时重复 prefill 主导 planner 工作——89.5% 已执行的 planner prompt token 此前已经材料化过；再用运行时公开的 KV copy 调用搭同步主机 DRAM 层，并配一个调度感知事件模型，其预测在每轮测试前冻结。",
+          "contributions": [
+            "量化了静态图 NPU 上 agent 工作流的核心浪费：默认配置下 89.5% 的 planner prompt token 是重复 prefill。",
+            "不修改运行时，仅用公开 KV copy 调用实现同步主机 DRAM KV 层，并给出\"恢复 vs 重算\"的调度感知判定模型。",
+            "用冻结预测 + 多种子端点的实验协议，把主机层收益与\"模型挑对了条件\"区分开。"
+          ],
+          "conclusions": [
+            "主机内存 KV 层在过载条件下能把 agent 工作流的 SLO 达成率从个位数/两成拉满，但收益强依赖运行时调度与传输成本，不能只看缓存容量。",
+            "该事件模型在常见负载下预测准确，但会错判少数策略对比并高估廉价 store 路径的收益。"
+          ],
+          "experiments": [
+            "两种过载条件下 SLO 达成率分别从 22.8% 提升到 100%、从 9.4% 提升到 99.8%。",
+            "两个新种子的端点确认给出保守负载增益：链式工作流 11.8%、分叉工作流 18.2%。",
+            "冻结模型在全部 24 个常见负载条件下把中位与 P99 延迟预测控制在 15% 容差内，包括主机层给分叉工作流带来的 16-18% P99 上升；但对廉价 store 路径高估（预测 11% vs 实测 3.1%）。"
+          ],
+          "significance": "把 KV 分层从 GPU 厂商的私有优化变成静态图 NPU 栈上的可判定工程问题，并给出可复用的收益边界。",
+          "arxivUrl": "https://arxiv.org/abs/2611.15126",
+          "pdfUrl": "https://arxiv.org/pdf/2611.15126.pdf",
+          "index": 3,
+          "takeaway": "NPU 设备侧 KV 预算固定时，把被驱逐前缀放进主机 DRAM 层比重算更划算，SLO 从 22.8% 拉到 100%。",
+          "keyExperiment": "两种过载条件下 SLO 22.8%→100%、9.4%→99.8%，新种子负载增益 11.8%/18.2%，模型预测误差在 15% 内。"
+        },
+        {
+          "title": "Reducing Batch Makespan for LLM Agent Workloads through Inference-Environment Coordination",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Wei Feng, Meiling Chen, Boxiao Chen, Lu Liu, Bin Zi, Libin Ye, Xingyu Lu, Lei Xu, Jun Zhou",
+          "institutions": "Ling Team, Ant Group",
+          "abstract": "agent 任务的批量执行是 LLM 训练与研发流程的关键环节——基准评测、合成数据生成、RL rollout 都靠它，而这些任务在推理与环境交互之间反复交替。论文提出一组推理侧与环境侧的协同优化来压缩 batch makespan，即完成整批任务所需时间：对混合 LLM，用基于工作负载的资源模型在 KV cache 与循环状态之间划分显存，并给出参考样本并发度以在利用并行度的同时限制重算；轨迹感知的路由与调度在提升前缀缓存复用的同时均衡 worker 负载；环境容量受限时把样本准入与环境执行解耦，并提出链式推进动作调度（CAAS），用已观测进度优先推进长链以缩短批次尾部。另用可控重放（真实推理 + 录制的环境响应与时长）对单项优化做消融。",
+          "contributions": [
+            "把 agent 批量执行的 makespan 作为一等目标，联合优化显存划分、路由调度与环境准入三个原本分开调的环节。",
+            "提出 CAAS 调度：以链的已观测进度而非先来先服务决定优先级，专门压短长尾，解决环境容量瓶颈下的批次尾部问题。",
+            "给出可控重放方法，使各项优化的贡献可以在固定环境下单独测量，而不是只看端到端差异。"
+          ],
+          "conclusions": [
+            "agent 批量任务的瓶颈常在环境交互与长尾链，而非纯推理吞吐；推理与环境联合调度比单侧优化更有效。",
+            "该组优化已进入 Ling-3.x 的实际训练与评测流程，说明在生产规模上可落地。"
+          ],
+          "experiments": [
+            "用 Ling-3.0-Flash 与 Ling-3.1-Flash 在 BFCL、SWE-bench Multilingual、WideSearch、MCP-Atlas 上实测，makespan 降低 10.4%–65.0%。",
+            "评测得分与优化前保持对齐，未以牺牲质量为代价。",
+            "相关方法已应用于 Ling-3.x 系列模型的训练与评测流程，加速模型开发迭代。"
+          ],
+          "significance": "把\"跑完一批 agent 任务要多久\"从工程细节提升为可优化目标，并给出跨行业务验证的调度方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16661",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16661.pdf",
+          "index": 4,
+          "takeaway": "agent 批量任务的瓶颈在长尾链与环境容量，CAAS 加显存/路由协同把 makespan 压低 10.4%-65.0%。",
+          "keyExperiment": "Ling-3.x 四个基准实测 makespan 降低 10.4%–65.0%，评测分数对齐。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Read Once, Answer Many: Parallel Prompting for Shared-Context LLM Inference",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-13",
+          "authors": "Zekun Zhao, Jeffrey Flanigan",
+          "institutions": "UC Santa Cruz",
+          "abstract": "文档问答、数据标注、LLM 评测等场景会对同一份长文档提出大量独立问题。前缀缓存消除了这些查询共享的重复 prefill，但每个解码步仍要按问题数各读一遍文档的 KV cache，解码因此受显存带宽限制且随问题数线性变慢。论文提出 Parallel Prompting：把 P 个问题作为单个请求的 P 条独立流一次性解码，每步只为全部 P 条流读一次共享文档；一个 stream-id 注意力掩码在注意力核内求值，保证每条答案只条件于文档与自己的问题。方法在 SGLang 中仅需在三个既有文件加约 80 行并新增一个小 engine 包，掩码不需要稠密张量，每个解码步形状固定因而可被 CUDA graph 捕获，不牺牲工程上的可部署性。",
+          "contributions": [
+            "把\"多问题共享文档\"从 P 个独立请求重构成 1 个请求的 P 条流，使每步的文档 KV 读取从 P 次降到 1 次，直接绕开显存带宽瓶颈。",
+            "用核内求值的 stream-id 注意力掩码实现流隔离，避免构造稠密掩码张量，保持解码步形状固定以兼容 CUDA graph。",
+            "在 SGLang 上以极小改动实现（约 80 行 + 小 engine 包），不改 FlashInfer 后端。"
+          ],
+          "conclusions": [
+            "共享上下文批量问答的主要成本是重复读取文档 KV，而非重复 prefill；把它折叠成多流解码可获得接近问题数上限的加速。",
+            "该方案与现有引擎的图捕获机制兼容，因此不限于特定硬件或某一代 SGLang 版本。"
+          ],
+          "experiments": [
+            "CodeLlama-7B、8k-16k token 文档、每文档 64-256 个问题：A100 上比原生 SGLang（FlashInfer 后端）快 3.7×。",
+            "RTX A6000 上比原生 SGLang 快 5.9-6.0×。",
+            "跨两个 SGLang 版本（含最新版）共 144 次计时（2 卡 × 2 版本 × 6 负载 × 6 输入集），全部快于原生实现。"
+          ],
+          "significance": "把共享文档的多问场景从\"重复读 KV\"变成\"读一次答多问\"，是批处理维度之外的一类新并行。",
+          "arxivUrl": "https://arxiv.org/abs/2611.15130",
+          "pdfUrl": "https://arxiv.org/pdf/2611.15130.pdf",
+          "index": 5,
+          "takeaway": "同一长文档的 P 个问题合成 1 个请求的 P 条流解码，A100 上快 3.7×、A6000 上快约 6×。",
+          "keyExperiment": "CodeLlama-7B、8k-16k 文档、64-256 问题，A100 3.7×、RTX A6000 5.9-6.0×，144/144 次计时全胜。"
+        },
+        {
+          "title": "TraceKV: Policy-Preserving Low-Rank KV Cache Compression for Reasoning Vision-Language Models",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CV",
+          "date": "2026-11-13",
+          "authors": "Ke Li, Zishan Shao, Yiran Chen",
+          "institutions": "Duke University",
+          "abstract": "推理型视觉语言模型同时承受两类 KV 压力：庞大的多模态上下文，以及不断增长的推理链。低秩 KV 压缩存放 KV 状态的低维 latent，还能与量化叠加，但现有方法压缩推理态 KV 时会让模型逐步偏离原策略，最终推理失败。作者定位两个成因：其一，静态上下文上的标定状态与 on-policy 推理时的真实状态不匹配；其二，不同 KV 状态的误差敏感度差异很大，统一压缩会伤害关键状态。据此提出 TraceKV——一个免训练低秩压缩框架，把 on-policy 标定、敏感度感知 SVD 与全局秩分配统一在\"策略保持\"原则下，显著降低推理过程中的 policy-KL 散度，使压缩后的模型沿原推理轨迹前进。",
+          "contributions": [
+            "指出低秩 KV 压缩在推理模型上失败的根因是策略漂移，并把\"保持策略\"显式作为压缩目标而非事后指标。",
+            "提出 on-policy 标定：用模型自身推理时产生的状态而非静态语料做 SVD 标定，消除状态分布错配。",
+            "敏感度感知的 SVD 加全局秩分配，把有限的秩预算给到对输出影响大的 KV 状态。"
+          ],
+          "conclusions": [
+            "推理链越长，KV 压缩的策略漂移越会累积，因此压缩方法必须按推理态而非静态上下文评估。",
+            "在策略保持约束下，低秩压缩可以与量化叠加，同时拿到高压缩比与接近无损的推理精度。"
+          ],
+          "experiments": [
+            "在多组 VLM 与视觉推理基准上取得更优的精度-显存折中，配合量化实现 5.64× KV cache 压缩且推理精度接近无损。",
+            "配套优化的低秩注意力核带来最高 1.83× 端到端解码加速。",
+            "方法无需训练，仅需标定阶段的前向计算。"
+          ],
+          "significance": "为\"推理型多模态模型能不能压 KV\"给出可行答案：关键不是压多少，而是压缩时别让策略漂移。",
+          "arxivUrl": "https://arxiv.org/abs/2611.15569",
+          "pdfUrl": "https://arxiv.org/pdf/2611.15569.pdf",
+          "index": 6,
+          "takeaway": "低秩 KV 压缩的失败源于策略漂移；on-policy 标定 + 敏感度感知秩分配做到 5.64× 压缩近无损、1.83× 解码加速。",
+          "keyExperiment": "多 VLM 视觉推理基准上配量化达 5.64× KV 压缩且精度近无损，端到端解码最高 1.83× 加速。"
+        },
+        {
+          "title": "SignRot: LLM Quantization with Massive Outlier-Aware Sign-Adjusted Rotation",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-13",
+          "authors": "Jaehun Gim, Jaewoo Kim, Gyuwan Kim, Seo Yeon Park",
+          "institutions": "Hanyang University, University of California Santa Barbara",
+          "abstract": "量化能压缩 LLM 并加速推理，但离群激活会破坏低比特表示，其中超大离群造成的性能下降尤甚。基于随机 Hadamard 变换的在线旋转是主流缓解手段，然而当一个超大离群主导某 token 的激活时，旋转后分布会碎片化、出现空 bin，均匀量化随之失效。更棘手的是，超大离群集中在 down-projection 的输入处，其前接非线性使旋转必须在推理时执行，这挡住了 SpinQuant 这类训练式方法——学到的稠密矩阵无法使用快速 Walsh-Hadamard 变换，只能做全矩阵乘。SignRot 的做法是识别超大离群通道，构造一个符号调整向量统一对应 Hadamard 行的符号，把双峰分布压成适合量化的单峰；对齐会让激活均值偏离零点，于是配合非对称激活量化，用零点吸收该偏移。",
+          "contributions": [
+            "把\"离群导致旋转后分布碎片化\"这一现象形式化为符号不一致问题，用 Hadamard 行的符号对齐直接消解。",
+            "与任意 Hadamard 类量化方法即插即用，只需一次标定前向，推理端只增加逐元素符号翻转，不引入额外矩阵乘。",
+            "与非对称激活量化配对，用零点吸收对齐带来的均值偏移，避免为对齐付出精度代价。"
+          ],
+          "conclusions": [
+            "旋转类量化的瓶颈不在旋转本身，而在符号结构；只改符号即可让分布回到均匀量化友好的单峰形态。",
+            "免训练的符号级干预可以在大模型上超过需要训练旋转矩阵的 SpinQuant。"
+          ],
+          "experiments": [
+            "在 QuaRot 上叠加 SignRot，LLaMA3-70B 的 WikiText2 困惑度为 5.88。",
+            "同设定下零样本推理平均准确率 72.73，超过 SpinQuant。",
+            "推理端仅增加逐元素符号翻转，不增加矩阵乘法开销。"
+          ],
+          "significance": "给出一种几乎零成本、可叠加的量化前端修正，说明\"符号\"是被忽视的量化自由度。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16502",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16502.pdf",
+          "index": 7,
+          "takeaway": "超大离群让旋转后分布碎片化；只调 Hadamard 行符号（SignRot）就把它变回单峰，LLaMA3-70B 上超过 SpinQuant。",
+          "keyExperiment": "QuaRot+SignRot 在 LLaMA3-70B 上 WikiText2 PPL 5.88、零样本均值 72.73，优于 SpinQuant。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Starscream: Reimagining LLM Sharding on AMD Instinct GPUs with GPU Partitioning",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Sumanth Gudaparthi, Smeet Chheda, Ganesh Dasika",
+          "institutions": "AMD Research and Advanced Development",
+          "abstract": "GPU 越做越大，非统一访存（NUMA）特性也越发突出，现有 LLM 框架难以应对。chiplet 设计是继续做大 GPU 且规避良率限制的现实路径，AMD Instinct MI300X 就是多 die 设计，并额外提供 GPU 分区能力——把一块物理 GPU 切成多个带 NUMA 感知内存域的逻辑设备，理论上能加速内核启动、降低访存延迟并改善局部性。但现有的并行策略是为同构 GPU 拓扑设计的，直接套到分区上只是把一维切分拉得更薄，于是暴露三个瓶颈：显存冗余、算术强度崩塌、扁平集合通信带来的开销。Starscream 的做法是反其道而行：不再把跨 GPU 切分摊薄，而是在正交维度上增加\"GPU 内切分\"，并以张量并行为案例展示其可推广性。",
+          "contributions": [
+            "指出 chiplet GPU 上\"把切分拉薄\"是性能退化的根源，并从显存冗余、算术强度、集合通信三方面给出机制解释。",
+            "提出三条可迁移的切分原则：内核形状保持、显存冗余消除、通信开销最小化，可把任意切分策略扩展到分区场景。",
+            "以张量并行为案例，给出分区感知的 GPU 内切分具体实现，并说明原则对其它并行策略与未来架构同样适用。"
+          ],
+          "conclusions": [
+            "chiplet 时代的并行策略要从\"跨卡切更多\"转向\"卡内切开\"，否则新硬件特性反而变成负担。",
+            "分区带来的加速集中在注意力与融合 GEMM 这类对形状和局部性敏感的算子，收益随切分维度正交化而放大。"
+          ],
+          "experiments": [
+            "AMD MI300X 与 MI355X 上利用 GPU 分区能力，注意力算子相对 chiplet-oblivious 基线最高 4× 加速。",
+            "融合 GEMM 在同设定下最高 1.43× 加速。",
+            "结论在两种 Instinct 平台上一致，说明原则可跨代复用。"
+          ],
+          "significance": "为 chiplet/NUMA 时代的 LLM 切分提供了一套可迁移的设计原则，而不是一次性调优。",
+          "arxivUrl": "https://arxiv.org/abs/2611.15951",
+          "pdfUrl": "https://arxiv.org/pdf/2611.15951.pdf",
+          "index": 8,
+          "takeaway": "chiplet GPU 上别把切分摊薄，要在卡内正交切开：MI300X/MI355X 注意力 4×、融合 GEMM 1.43×。",
+          "keyExperiment": "MI300X 与 MI355X 上注意力最高 4×、融合 GEMM 1.43× 加速（相对 chiplet-oblivious 基线）。"
+        },
+        {
+          "title": "Broadcast, Don't Replicate: Eliminating Weight HBM in Datacenter LLM Serving",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-11-13",
+          "authors": "Hannah Atmer, Yuan Yao, Thiemo Voigt, Stefanos Kaxiras",
+          "institutions": "Uppsala University",
+          "abstract": "数据中心级 LLM 推理的瓶颈在显存容量与带宽。模型权重只读且各实例完全相同，但传统架构仍在数万台加速器的本地 DRAM 中复制这些参数，带来巨额资本开支、可观的静态功耗与冗余的取数能耗。此前有人提出用光纤环路作延迟线内存来缓解，但其循环环路必须容纳整个模型：环路长度随模型增大，可用 slack 在建环时就固定，而高效服务现代 MoE 的权值布局根本放不进去。论文提出 Optical Broadcast Memory（OBM）：一种开放式分层 Tap-and-Amplify 光纤架构，推广并取代光环路范式。中心内存服务器持续向分布式推理节点广播权重，节点用仅接收的共封装光学被动抽头，把参数直接送到计算单元而不经中间缓冲；再用动态大小的 slack 适配长且可变的上下文。",
+          "contributions": [
+            "把\"权重常驻本地 HBM\"改为\"权重集中广播、节点被动抽头\"，从架构上消除权重复制带来的容量与能耗成本。",
+            "用开放式分层光纤 tap-and-amplify 取代闭环光延迟线，解除\"环路必须容纳整个模型\"与\"slack 建环即固定\"两条硬约束。",
+            "给出动态 slack 机制以适配可变上下文长度，并说明该结构如何高效承载 MoE 的稀疏权重布局。"
+          ],
+          "conclusions": [
+            "模型权重只读且全局相同这一事实，使\"广播而非复制\"在数据中心规模上具有架构级可行性。",
+            "解除光环路约束后，该架构对 MoE 这类权重布局不规则、按需激活的模型同样适用。"
+          ],
+          "experiments": [
+            "在 8 万台加速器的数据中心规模上评估，OBM 消除了 PB 级 HBM 需求。",
+            "同规模下吞吐与每 token 能耗与基于 HBM 的系统相当或更优。",
+            "动态 slack 设计支持大范围变化的上下文长度，而闭环方案在该维度上受限。"
+          ],
+          "significance": "把\"权重不该被复制\"这一观察推到光学实现层面，为数据中心显存墙提供了一条非堆 HBM 的路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17097",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17097.pdf",
+          "index": 9,
+          "takeaway": "权重只读且相同，就别复制：中心广播 + 节点光学被动抽头，8 万卡规模省掉 PB 级 HBM。",
+          "keyExperiment": "8 万加速器规模评估：消除 PB 级 HBM，吞吐与每 token 能耗与 HBM 系统相当或更好。"
+        },
+        {
+          "title": "SlipStream: Enabling HBF for GPU Systems by Mitigating the Latency and SRAM Overheads",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-11-13",
+          "authors": "Anish Saxena, Hritvik Taneja, Christos Kozyrakis, Aamer Jaleel",
+          "institutions": "Georgia Tech, NVIDIA Research, Stanford University",
+          "abstract": "HBF 把 HBM 的 DRAM die 换成 NAND 闪存，在带宽相当的前提下把容量提到最多 16×，非常适合更大模型与更大批的推理。代价是读延迟接近 20μs——约为 HBM 的 20 倍，按需访问会让推理慢上 12.8×。传统 cache-line 预取器要覆盖这段延迟就得增加约 20× 的在途跟踪状态；H3 之类张量流式设计按虚拟地址序而非内核需求序取数，需要数百 MB 缓冲。SlipStream 把预取变成\"随需求定速的生产者-消费者流水线\"：软件侧剖析数据无关内核可重复的权重页需求序，插入一个 staging warp 用非阻塞 STAGE 指令重放；硬件侧 staging warp 为生产者、work warp 为消费者。关键洞察是——只在需求首次访问该页时才退休跟踪项，让需求给 staging 定速并限制其领先距离。",
+          "contributions": [
+            "提出\"需求定速\"的软硬协同预取：退休时机与需求首访绑定，而不是与数据返回绑定，从而无需为长延迟膨胀跟踪状态。",
+            "按 4KB 页而非 cache line 跟踪，且只在页返回时才分配缓冲槽，使缓冲大小与在途流量解耦。",
+            "用内核级 staging warp 重放可复现的权重页需求序，保持数据无关内核的访存顺序可预测，无需改动算子语义。"
+          ],
+          "conclusions": [
+            "HBF 的可用性瓶颈是延迟与缓冲，而不是带宽；把预取改成需求定速的生产者-消费者流水线即可把两者同时压下来。",
+            "该机制的缓冲需求与 HBF 延迟和工作负载基本无关，因此对未来的更慢/更大容量介质同样适用。"
+          ],
+          "experiments": [
+            "7 个 16-800GB 稠密模型上，40MB staging 缓冲达到\"理想 HBF（延迟等同 HBM）\"性能的 92.4%；H3 即便用 320MB 缓冲也只有 43.1%。",
+            "16MB 缓冲（比 H3 小 20×）的性能与 40MB 版本差距在 4% 以内。",
+            "支持 Mixture-of-Experts 模型，40MB 缓冲下达到理想性能的 91.2%。"
+          ],
+          "significance": "让 HBF 从\"理论容量优势\"变成\"工程可用\"，为大容量低成本推理显存给出可上硅的方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.14776",
+          "pdfUrl": "https://arxiv.org/pdf/2611.14776.pdf",
+          "index": 10,
+          "takeaway": "HBF 慢 20× 的读延迟靠需求定速预取抵消：40MB 缓冲即达理想性能 92.4%，H3 用 320MB 只有 43.1%。",
+          "keyExperiment": "7 个稠密模型上 40MB 缓冲达理想 HBF 的 92.4%（H3 320MB 仅 43.1%），MoE 上 91.2%。"
+        }
+      ]
+    }
+  ]
+}
