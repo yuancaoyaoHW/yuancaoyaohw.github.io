@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-15",
+  "title": "2026-11-15 论文精选",
+  "lede": "今日主线是“把抽象层重新打开”：tile 级依赖替代内核屏障、插桩还原 GPU-GPU 通信、CXL 共享编译产物，从调度粒度与可见性两端挤推理与训练的性能。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 636
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "5 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "2 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "5 篇推荐",
+      "papers": [
+        {
+          "title": "MegaOps: A Kernel Overlapping Framework with PyTorch-like Modularity and Megakernel Performance",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Jinkun Lin, Byungsoo Oh, Rachee Singh",
+          "institutions": "Cornell University",
+          "abstract": "现代框架以逐算子单内核方式执行模型：每个算子启动一个独立 GPU 内核，模块化好、可单独剖析，但依赖关系被绑定在整个内核粒度上，形成内核之间的屏障——SM 空转、计算与通信被迫串行、后继内核也无法预取权重。Megakernel 把整层甚至整模型融成单个内核以消除屏障，代价是彻底放弃模块化。本文提出 MegaOps，其核心观察是：去掉屏障并不需要融合内核。做法是把相互依赖的内核发到不同 CUDA 流上，并把同步约束细化到中间张量的 tile 粒度——生产者写完一个数据块，消费者即可读取；任意两个采用相同数据分块的内核都能直接组合，双方代码一行都不用改。这样既保留了逐算子范式下的内核复用与可剖析性，又拿到了跨内核的并行与预取机会。",
+          "contributions": [
+            "提出以 tile 粒度的数据依赖替代 kernel 粒度的屏障，在保留逐算子模块化的前提下实现跨内核重叠执行。",
+            "设计一套与内核实现无关的组合规则：只要两个内核采用相同数据分块即可组合，无需修改 Triton、cuBLAS、cuDNN 中的任一内核。",
+            "在单卡与多卡服务器上系统评估，证明其吞吐可与手工调优的 megakernel 持平，同时保持 PyTorch 式的可组合性。"
+          ],
+          "conclusions": [
+            "逐算子框架不必靠融合内核也能达到 megakernel 级性能，模块化与极致性能之间并非二选一。",
+            "把同步粒度从内核降到数据块，是释放 SM 占用率与计算通信重叠的一条通用路径。"
+          ],
+          "experiments": [
+            "在单卡 H100、A100、L40 以及 4×A100、8×H100 多卡服务器上测试 dense Llama3 与 Qwen3 模型。",
+            "解码吞吐达到最优基线的 1.09–1.10 倍，预填充吞吐为 0.98–1.10 倍。",
+            "整体吞吐与手工调优的 ThunderKittens megakernel 持平，且完全复用 Triton、cuBLAS、cuDNN 的现成内核。"
+          ],
+          "significance": "把 GPU 内核调度从“融不融合”的二选一问题，改写为“同步粒度放在哪一层”的可调设计问题。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16248",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16248.pdf",
+          "index": 1,
+          "takeaway": "tile 级数据依赖替代内核级屏障，逐算子框架也能跑出 megakernel 性能。",
+          "keyExperiment": "解码吞吐 1.09–1.10 倍于最优基线，吞吐与 ThunderKittens megakernel 持平。"
+        },
+        {
+          "title": "Snoopie: A Multi-GPU Communication Profiler and Visualizer",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Mohammad Kefah Taha Issa, Muhammad Aditya Sasongko, Ilyas Turimbetov, Javid Baydamirli, Doğan Sağbili, Didem Unat",
+          "institutions": "Koç University",
+          "abstract": "数据搬运已成为现代计算最昂贵的瓶颈之一，多 GPU 应用要有效扩展，就必须能剖析通信本身。现有剖析工具（包括 GPU 厂商的第一方软件）在单卡计算操作捕获上很强，但对 GPU 与 GPU 之间的数据传输、以及通信库内部发起的调用支持明显不足：程序员看得到自己写的 kernel，却看不见底层通信库里真正搬了什么、搬到哪。本文提出 Snoopie，一个基于 NVBit 插桩的多 GPU 通信剖析与可视化工具，可跟踪点对点传输与以 GPU 为中心的通信库调用，并把数据搬运归因到源码行和具体数据对象，从而回答“这次通信是谁引发的、搬的是哪个数组”。工具提供由粗到细的多种可视化粒度，从系统整体数据流一直到单条指令与地址。",
+          "contributions": [
+            "基于 NVBit 构建插桩式剖析器，补上厂商工具缺失的 GPU-GPU 点对点传输与通信库调用可见性。",
+            "实现数据搬运到源码行、数据对象的归因，让通信开销可以回溯到具体的编程构造。",
+            "提供多层次可视化模式，并给出定位真实性能缺陷的案例研究，工具已开源。"
+          ],
+          "conclusions": [
+            "通信库把底层搬运抽象掉的同时也隐藏了低效来源，插桩级剖析能把这层抽象重新打开。",
+            "把数据搬运归因到源码对象，比只看通信时间总量更能指导实际优化。"
+          ],
+          "experiments": [
+            "在 NVBit 框架上实现，可捕获 peer-to-peer 传输与 GPU 为中心的通信库调用。",
+            "案例研究覆盖整体数据流粗粒度视图到指令/地址级细粒度视图，用于监测数据搬运与定位性能缺陷。",
+            "成功揭示了通信库抽象之下的具体数据传输行为，工具已公开可用。"
+          ],
+          "significance": "为多 GPU 通信这一最贵瓶颈提供了“看得见源码对象”的剖析手段，与 GPU 通信优化方向直接互补。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16330",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16330.pdf",
+          "index": 2,
+          "takeaway": "NVBit 插桩补齐 GPU-GPU 通信剖析盲区，数据搬运可归因到源码行。",
+          "keyExperiment": "案例研究在真实应用中定位到通信性能缺陷，可视化覆盖系统级到指令地址级。"
+        },
+        {
+          "title": "PACER: GPU Excursion Management for ML Workloads",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Rutwik Jain, Nathaniel Morris, Yiwei Jiang, Shidhartha Das, Gary Kao, Indrani Paul, Shivaram Venkataraman, Srilatha Manne, Matthew D. Sinclair",
+          "institutions": "University of Wisconsin-Madison, Advanced Micro Devices (AMD)",
+          "abstract": "现代 GPU 的算力表现天然存在波动，来源包括工艺偏差、环境条件与功耗管理决策。以往研究多关注卡间差异，本文却发现 LLM 等现代负载存在显著的卡内波动：它们的单个内核运行时间极短，与动态功耗管理机制的粗粒度调节相互错配，导致性能难以预测。核心诱因是功率超调（power excursion，即电气设计功率峰值 EDPp）——瞬时功率超过 GPU 额定上限。作者首次系统刻画了 EDPp 的幅度与频率，指出高频、大幅的超调在机器学习负载中尤其普遍，因为这类负载同时具备高功耗、短内核与快速变化的算力需求。针对该问题，他们利用硬件与固件机制提供一致的功耗管理行为，降低因 EDPp 引起的卡内波动。",
+          "contributions": [
+            "首次系统刻画 GPU 功率超调 EDPp 的幅度与频率，指出 ML 负载因“高功耗+短内核+需求剧变”成为重灾区。",
+            "把性能不稳定性的分析视角从卡间差异推进到卡内瞬态波动，并定位到动态功耗管理的粗粒度错配。",
+            "设计基于硬件与固件的功耗管理机制，在不牺牲峰值算力的前提下抑制 EDPp 引发的降频。"
+          ],
+          "conclusions": [
+            "LLM 推理的性能抖动很大一部分来自功率管理而非软件调度，短内核负载尤其敏感。",
+            "细粒度、软硬协同的功耗管理可把这类抖动压到接近理论最优的水平。"
+          ],
+          "experiments": [
+            "在多种主流 ML 负载上评估，相比当前最优 GPU 功耗管理性能提升 3–12%。",
+            "与掌握全部信息的理想化（oracular）方案相比，性能差距收窄到 3% 以内。",
+            "刻画结果显示，频繁且显著的功率超调在 ML 负载中尤为常见。"
+          ],
+          "significance": "揭示 GPU 功耗管理是 LLM 推理性能抖动的隐藏来源，为集群调度与 SLO 保障提供了新的可控变量。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17206",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17206.pdf",
+          "index": 3,
+          "takeaway": "LLM 短内核与粗粒度功耗管理错配，抑制功率超调即可提升 3–12%。",
+          "keyExperiment": "相较最优功耗管理提升 3–12%，距理想方案仅 3% 以内。"
+        },
+        {
+          "title": "Fast Serverless LLM Cold Starts by Sharing and Prewarming Startup Work",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Hongjin Kim, Igjae Kim, Kwanghoon Choi, Minho Ha, Jaehyuk Huh",
+          "institutions": "KAIST, SK hynix",
+          "abstract": "Serverless LLM 平台按需拉起模型 worker 时，冷启动动辄接近一分钟，但其中只有 5–11% 的时间真正花在加载权重上。剩余大头是编译、显存剖析与运行时初始化——而这些工作每台服务器都要重做一遍，尽管编译结果对所有服务器完全一致、部分初始化甚至与具体模型无关。本文提出 Cairn：最先启动某模型的服务器把权重与引擎产物发布到集群共享的 CXL 内存池，其余服务器就地读取；与模型无关的初始化步骤在预热容器中提前完成，并用模板进程在使用后立刻替换掉已污染的容器。这样把“重复劳动”从关键路径上整体移除。在 ServerlessLLM + vLLM v0.20、1B–14B 六个模型、两台共享模拟 CXL 池的服务器上完成验证。",
+          "contributions": [
+            "量化冷启动时间构成：权重加载仅占 5–11%，编译与运行时初始化才是主要成本，且这部分在服务器间可完全复用。",
+            "用集群级 CXL 内存池发布权重与引擎产物，让后续服务器零拷贝就地读取，避免重复传输与重复编译。",
+            "把与模型无关的初始化提前到预热容器，并用模板进程即时替换，消除容器状态污染带来的额外开销。"
+          ],
+          "conclusions": [
+            "Serverless LLM 冷启动优化的重点应从“更快加载权重”转向“共享编译与初始化产物”。",
+            "CXL 共享内存池为跨节点的引擎产物复用提供了可行的硬件基础。"
+          ],
+          "experiments": [
+            "在 1B 到 14B 的六个模型上测试，无本地 checkpoint 的服务器冷启动加速 4.1–5.2 倍。",
+            "请求流上的中位首 token 时延（TTFT）降低 64%。",
+            "实验平台为 ServerlessLLM + vLLM v0.20，两台通过模拟 CXL 池互联的服务器。"
+          ],
+          "significance": "把 serverless LLM 冷启动从“每台机器各自重来”变成“一次编译、全集群共享”。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16180",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16180.pdf",
+          "index": 4,
+          "takeaway": "冷启动只有 5–11% 是权重加载，共享编译产物即换来 4.1–5.2 倍加速。",
+          "keyExperiment": "无本地 checkpoint 的服务器冷启动加速 4.1–5.2 倍，中位 TTFT 降 64%。"
+        },
+        {
+          "title": "Together Compiler: Continual Compilation for AI Inference",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Reyna Abhyankar, Dylan Lim, Drew Wadsworth, Venkata Hasith Vattikuti, YuTong Julia Zhang, Jung Hwan Heo, Taeksang Kim, Kesavan Ramakrishnan, Evangelene Stanley, Xinyu Fang, Daniel Y. Fu, Simran Arora",
+          "institutions": "Together AI Research",
+          "abstract": "今天的 AI 负载变化极快：新模型发布频繁、架构日益多样、线上流量分布也在持续漂移，因此在生产环境中持续做编译优化成为核心挑战。把一次部署编译成最优前向图，恰好适合交给 agent 做爬山搜索。但现有系统卡在“测量吞吐”与“测量保真度”的取舍上：用 agent 优化单个内核时依赖离线基准，由于 MoE 等原语的时延依赖数据分布，测出来的时间保真度很低；用 agent 直接优化端到端引擎，则每次引擎启动太慢，搜索迭代数被压死。本文提出 Together Compiler（TKCC），首个真正面向 AI 推理的持续 agent 编译循环，通过分层持久引擎把启动开销与前向计算解耦，并用代价模型挑选并行配置作为搜索起点，从而同时拿到高保真度与高吞吐的测量。",
+          "contributions": [
+            "提出分层持久引擎（Tiered Persistent Engine），把引擎启动开销从搜索循环的关键路径上剥离，使端到端保真测量可以高频进行。",
+            "设计代价模型自动选择并行配置作为 agent 搜索的种子，加速收敛并避免陷入局部配置。",
+            "系统消融了 agent 上下文管理策略，并给出把持续编译部署到生产集群的工程经验。"
+          ],
+          "conclusions": [
+            "持续编译的瓶颈不是搜索算法而是测量：解开启动开销与测量保真度的耦合后，agent 爬山可直接作用于端到端引擎。",
+            "数据依赖的 MoE 等原语决定了内核级离线基准不可信，必须测真实前向。"
+          ],
+          "experiments": [
+            "在 Llama 1B 主力负载上，吞吐超过高度优化的人工 Megakernel 最多 1.7 倍。",
+            "在 InferenceX 基准上，对 Kimi K3、GLM 5.3、MiniMax M3.1 Flash、DeepSeek v4.1 Flash 等前沿模型，TPS 比最优开源引擎高最多 2.6 倍。",
+            "batch size 1 下刷新 SOTA：M3.1 Flash 达 1111 TPS、DeepSeek v4.1 Flash 达 1205 TPS；系统已在生产集群服务数万亿 token。"
+          ],
+          "significance": "把“编译器”从一次性离线产物变成持续在线的 agent 循环，代表了推理引擎优化的新范式。",
+          "arxivUrl": "https://arxiv.org/abs/2611.14681",
+          "pdfUrl": "https://arxiv.org/pdf/2611.14681.pdf",
+          "index": 5,
+          "takeaway": "分层持久引擎解开测量保真度与吞吐的取舍，agent 持续编译超 Megakernel 1.7 倍。",
+          "keyExperiment": "InferenceX 上比最优开源引擎高 2.6 倍 TPS，batch 1 下 1205 TPS。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SS-HSDP: Efficient and Flexible Sharded Data Parallelism via Runtime-Update Decoupling",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Chendong Xiang, Pengle Zhang, Jinliang Li, Zichen Liang, Jintao Zhang, Fan Bao, Jun Zhu, Jianfei Chen",
+          "institutions": "Tsinghua University, Shengshu Technology",
+          "abstract": "分片数据并行（FSDP 一类）是省显存训练大模型的主流手段，但存在一个结构性矛盾：高效训练内核偏爱紧凑的、面向内核定制的数据布局，而优化器（尤其 Muon 这类矩阵型二阶方法）需要另一套数据结构作为更新单元。现有框架把这两个选择耦合在一起——布局为内核服务就没法当优化单元，反之则牺牲运行效率。本文提出 SS-HSDP，把“运行时参数”与“更新参数”彻底解耦：计算布局与优化单元可以各自独立组织，再通过共享数据视图与分层分片在两者之间搭桥，避免为解耦而引入冗余数据搬运；该设计同时支持 Muon 等矩阵优化器和全零拷贝执行。在视频与语言模型、MXFP8 训练场景下验证，MFU 优于 FSDP2、veScale-FSDP 与 Megatron-FSDP。",
+          "contributions": [
+            "提出运行时参数与更新参数解耦的分片框架，让计算数据布局与优化器更新单元各自最优化，不再互相牵制。",
+            "用共享数据视图与分层分片实现零冗余解耦，把解耦带来的额外数据搬运压到零，并支持全零拷贝执行。",
+            "把 Muon 等矩阵型优化器纳入分片训练的一等公民，扩展了 FSDP 类框架的优化器生态。"
+          ],
+          "conclusions": [
+            "FSDP 类框架的性能损失有相当部分来自布局耦合，而非通信本身；解耦后可在同通信量下拿到更高算力利用率。",
+            "分层分片是兼顾显存效率与优化灵活性的可行折中。"
+          ],
+          "experiments": [
+            "在视频生成与语言模型两类负载、MXFP8 训练精度下评估。",
+            "MFU 高于 FSDP2、veScale-FSDP、Megatron-FSDP 三个基线。",
+            "在 128 GPU 规模上，MFU 比最快基线最多提升 21.7%，峰值显存相当或更低。"
+          ],
+          "significance": "为分片数据并行解开了“内核布局 vs 优化器单元”的死结，直接利好大模型训练吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16467",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16467.pdf",
+          "index": 6,
+          "takeaway": "运行时参数与更新参数解耦，128 卡上 MFU 超最快基线 21.7%。",
+          "keyExperiment": "128 GPU 下 MFU 提升最多 21.7%，显存持平或更低。"
+        },
+        {
+          "title": "Fewer Expert Transfers Without Changing Routing: Expert Eviction for MoE Offloading",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Pierre-Luc Bacon, Diego Calanzone, Jean-Maxime Larouche",
+          "institutions": "CarbonForge, Mila, Université de Montréal",
+          "abstract": "MoE 语言模型每个 token 只激活少数专家，因此服务器可以把大部分专家权重留在 CPU 内存，等路由命中时再把专家拷到 GPU。近期一些方法训练路由器让同一批专家连续服务多个 token，并把“路由切换变少”当作“拷贝变少”的代理指标。本文直接在真实拷贝上测这条因果链：搭建会真正执行并计时 CPU→GPU 拷贝的测试台，用 OLMoE-1B-7B 在 L40S 上验证。结果发现，任何固定专家集合的策略虽然解码更快，但下一 token 损失至少上升 0.067 nats——即用质量换拷贝次数并不划算。不改动任何路由决策的做法反而更好：缓存需要驱逐时，踢掉“下次使用最远”的那个专家。该规则比 LRU 少拷 2.1 倍专家且质量无损。",
+          "contributions": [
+            "指出“路由切换次数”是不合格的拷贝次数代理：固定专家集合的政策必然带来至少 0.067 nats 的困惑度代价。",
+            "提出保持全部路由决策不变、仅优化驱逐顺序的 Belady 式策略——驱逐下次使用最远的专家。",
+            "实测未来 16 个 token 的需求即可恢复 96% 的拷贝削减，而只统计历史频次的规则仅恢复 27%。"
+          ],
+          "conclusions": [
+            "MoE offloading 的优化空间主要不在改路由，而在缓存替换顺序；改路由换取拷贝减少得不偿失。",
+            "短窗口内的未来需求已经足够精确，无需长程预测即可逼近最优驱逐。"
+          ],
+          "experiments": [
+            "在 L40S 上对 OLMoE-1B-7B 执行并计时真实的 CPU→GPU 专家拷贝。",
+            "最优驱逐规则比 LRU 少拷贝 2.1 倍的专家，下一 token 损失无变化，且距理论最少拷贝仅差 3.5%。",
+            "所有固定专家集合的策略（比 LRU 解码更快）均使下一 token 损失至少增加 0.067 nats。"
+          ],
+          "significance": "给 MoE offloading 的“少拷专家”目标泼了冷水，并给出零质量损失的替代优化点。",
+          "arxivUrl": "https://arxiv.org/abs/2611.15842",
+          "pdfUrl": "https://arxiv.org/pdf/2611.15842.pdf",
+          "index": 7,
+          "takeaway": "别改路由，只改驱逐顺序：少拷 2.1 倍专家且质量无损。",
+          "keyExperiment": "比 LRU 少拷 2.1 倍专家，质量无损，距最优仅 3.5%。"
+        },
+        {
+          "title": "DRAMA: Dissecting Attention Redundancy for Accelerating Multimodal Diffusion Large Language Models",
+          "score": 3.8,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Yi-Hsin Hung, Fangfu Liu, Shao-Yuan Lo, Chu-Song Chen",
+          "institutions": "National Taiwan University, Tsinghua University",
+          "abstract": "多模态扩散大语言模型（dLLM）通过迭代掩码去噪、配合双向注意力生成文本，是自回归视觉语言建模之外的一条新路线。但每个去噪步都要对超长多模态序列做一次完整前向，而视觉 token 又主导了序列长度，加上固定步数预算，逐步的二次复杂度开销被反复放大。现有加速方法对注意力冗余的刻画多为隐式的，设计动机来自零散的注意力可视化而非系统测量，因此既不知道冗余有多少，也不知道该砍哪里。本文用 DRAMA 补上这一步：沿空间与时间两个轴剖析注意力张量，发现两个稳定存在的冗余结构，并据此设计两个互补机制——空间冗余感知的视觉 token 剪枝与充分性引导的自适应停止，全程无需训练。",
+          "contributions": [
+            "系统测量多模态 dLLM 的注意力冗余，揭示两个稳定结构：注意力质量集中于稀疏视觉 token 子集；注意力分布在初期形成后跨去噪步迅速稳定。",
+            "提出空间冗余感知视觉 token 剪枝（SVTP），按注意力质量而非固定比例裁剪视觉 token。",
+            "提出充分性引导自适应停止（SGAS），依据注意力分布是否已稳定提前结束去噪，省掉后续无用步。"
+          ],
+          "conclusions": [
+            "多模态 dLLM 的冗余在空间与时间两个维度上同时存在，两者叠加带来的加速远大于单独优化其一。",
+            "无需训练、无需改架构、无需注意力缓存，仅靠测量驱动的剪枝与早停即可获得数量级加速。"
+          ],
+          "experiments": [
+            "在六个视觉语言基准上平均获得 18.67 倍推理加速。",
+            "加速过程完全 training-free，不修改模型架构，也未引入注意力缓存机制。",
+            "在显著加速的同时保持有竞争力的准确率。"
+          ],
+          "significance": "为多模态扩散 LLM 推理给出了一个以实测冗余为依据的强加速基线。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16345",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16345.pdf",
+          "index": 8,
+          "takeaway": "注意力在空间与时间双轴冗余，剪枝+早停换来 18.67 倍加速。",
+          "keyExperiment": "六个视觉语言基准平均 18.67 倍加速，且训练-free。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "2 篇推荐",
+      "papers": [
+        {
+          "title": "NVIDIA Vera: A Microarchitecture-Level Comparison with Grace, Turin, and Granite Rapids",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Joseph Moore, Thomas Green, Simon McIntosh-Smith",
+          "institutions": "University of Bristol",
+          "abstract": "新建 HPC 系统基本围绕 NVIDIA、AMD、Intel 三家的 CPU 展开。Vera 是 NVIDIA 最新的数据中心 CPU，也是其首个自研数据中心核心 Olympus 的落地产品：88 个 Olympus 核心、Armv9.2-A 指令集、单片计算 die。本文以 Grace 为基线，把 Vera 与 AMD Turin、Intel Granite Rapids 放在同一把尺子上比较，并刻意沿性能阶梯向上走——从隔离单一指标的微基准，到 NAS 并行内核与 miniapp，再到整机单路跑真实科学应用，从而把“快多少”拆解成“为什么快”。结论是 Vera 在被测多数代码中性能最好，收益主要来自最高持续内存带宽、有效的空间多线程（Spatial Multithreading）实现，以及由预测结构支撑的低延迟存储子系统。",
+          "contributions": [
+            "建立从微基准到 NAS 内核再到真实科学应用的多层级评测方法，把性能差异归因到具体微架构结构。",
+            "测得 Vera 的持续内存带宽为受测平台最高，达 1088.2 GB/s，并在缓存访问与核间通信上取得最低平均延迟。",
+            "剖析空间多线程与可针对不规则访存模式的预取器对特定负载的加速作用，并指出其浮点算力在少数计算密集负载上落后于 Intel/AMD。"
+          ],
+          "conclusions": [
+            "Vera 相对 Grace 的几何平均性能提升为 1.89 倍，并在多数被测代码中胜过 96 核 EPYC 9R45 与 Xeon 6975P-C。",
+            "NVIDIA 的 CPU 设计重心放在带宽与延迟而非浮点吞吐，这与其“GPU 负责重算力”的整体路线一致。"
+          ],
+          "experiments": [
+            "Vera 在整套 HPC 负载上相对 Grace 几何平均提升 1.89 倍。",
+            "在多数被测代码中性能优于 AMD Turin（96 核 EPYC 9R45）与 Intel Granite Rapids（Xeon 6975P-C）。",
+            "持续内存带宽 1088.2 GB/s 为受测平台最高，缓存访问与核间通信平均延迟最低。"
+          ],
+          "significance": "为首个自研 Olympus 核心的数据中心 CPU 提供了可复现的第三方微架构评测，也说明带宽与延迟仍是 CPU 侧的决胜点。",
+          "arxivUrl": "https://arxiv.org/abs/2611.15926",
+          "pdfUrl": "https://arxiv.org/pdf/2611.15926.pdf",
+          "index": 9,
+          "takeaway": "Vera 靠带宽与延迟取胜：相对 Grace 几何平均 1.89×，1088.2 GB/s 带宽最高。",
+          "keyExperiment": "相对 Grace 几何平均 1.89 倍提升，持续带宽 1088.2 GB/s 居首。"
+        },
+        {
+          "title": "LazyWeights: Decode-on-Demand Edge LLMs",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Arnab Sanyal, Gourav Datta, Sandeep P. Chinchali",
+          "institutions": "The University of Texas at Austin, Case Western Reserve University",
+          "abstract": "边缘设备能跑哪个 LLM、跑多快，由内存决定：4 GB 的 Jetson Nano 上瓶颈是容量，8 GB 的 Jetson Orin Nano Super 上瓶颈是带宽。而现有部署格式（GPTQ、AWQ、llama.cpp 的 K/I-quant）对矩阵里每个整数码分配相同位宽，尽管这些码的分布远非均匀。LazyWeights 保留这些格式的兼容性，但把 GPTQ 的量化调成让码值可压缩，再用交织通道的 Huffman 编码无损压缩，并在 DRAM 与 L2 之间放置一个小解码单元按需解码——GPU 内核一行不改，DRAM 上只搬运编码后的字节，从而把“带宽瓶颈”直接换算成容量与延迟收益，并在同精度预算下比最优 llama.cpp 格式更小。",
+          "contributions": [
+            "发现量化码值分布高度不均匀，通过重调 GPTQ 使码可压缩，再用交织通道 Huffman 无损压缩，保持既有格式兼容。",
+            "在 DRAM 与 L2 之间插入按需解码单元，使上层 GPU 内核无需任何修改即可享受带宽缩减。",
+            "给出 0.21 mm²、1 GHz、7 nm 的比特精确 ASIC 解码器设计，把方案从仿真推进到可实现硬件。"
+          ],
+          "conclusions": [
+            "边缘 LLM 的真正约束是内存容量与带宽，而非算力；压缩传输字节比压缩计算更有效。",
+            "无损码压缩 + 硬件即时解码可以在不牺牲精度的前提下同时缓解容量与带宽两个瓶颈。"
+          ],
+          "experiments": [
+            "在 1% 与 3.5% 困惑度预算下，编码后的 Phi-3-mini、Mistral-7B、SmolLM-1.7B 比最优 llama.cpp 格式小 5.7–31.4%。",
+            "比特精确的 0.21 mm² 7 nm ASIC 解码单元将 Orin 上每 token 的延迟与能耗分别降低最多 36% 与 38%。",
+            "叠加 prompt-lookup 投机解码后，延迟与能耗降幅进一步扩大到 54% 与 44%。"
+          ],
+          "significance": "把边缘 LLM 的压缩从“少存几个 bit”推进到“带宽级优化 + 专用解码器”，为端侧部署给出硬件协同方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17108",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17108.pdf",
+          "index": 10,
+          "takeaway": "无损 Huffman 码 + DRAM/L2 间解码器，Orin 上每 token 延迟降 36%。",
+          "keyExperiment": "比最优 llama.cpp 格式小 5.7–31.4%，Orin 每 token 延迟降 36%、能耗降 38%。"
+        }
+      ]
+    }
+  ]
+}
