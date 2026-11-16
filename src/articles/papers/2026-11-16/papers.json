@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-16",
+  "title": "2026-11-16 论文精选",
+  "lede": "今日主线是把「隐形的中间层」摊开到明面上：并行布局决定 MoE 走哪条等价路径但不改质量，跨层 KV 冗余可压成低维增量，GPU 访存复用结构能从二进制直接还原，小模型 RL 的开销则在主机协调而非网络。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 415
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "MoE Pretraining: Parallelism Layout Changes the Model, Not Quality",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Esther Xin",
+          "institutions": "Independent Researcher",
+          "abstract": "大型 MoE 训练要跨机器切分，而并行布局（数据并行度、专家并行度）在实践中经常变动：作业换到不同 GPU 数量上恢复、集群扩容、或在新配置上跑消融。精确算术下布局不该影响结果，但真实算术会改变浮点求和顺序，负载均衡与专家容量这类规则还常按机器粒度计算。论文用同一小规模 MoE（25M-117M 参数、20M token）、同种子与超参，在 9 种数据/专家并行布局下预训练，共 80 次运行，把换布局的影响与换种子对照。结论：布局不改变模型质量，但确实改变模型——最终预测差异约为换种子的 80%，超过 90% 的路由决策翻转；改一个比特的权重或换个 CPU 线程数效果相同。根因是路由器：翻转的决策几乎都是两个专家几乎打平的那些（前 16 步 AUC 0.97-1.00）。专家更多更小会产生更多近似平局（8 专家 2.7%，64 专家 23%），路由可复现性从 100% 降到 68%。",
+          "contributions": [
+            "把「并行布局是否影响训练结果」从经验判断变成可量化的实验：9 种数据/专家并行布局、80 次同种子运行，直接与「换随机种子」的扰动幅度对照。",
+            "定位到唯一根因是路由器的近似平局决策——翻转几乎全部发生在两个专家得分几乎相等的 token 上，前 16 步即可用 AUC 0.97-1.00 预测哪些决策会翻转。",
+            "给出可迁移的工程判据：专家数量越多、粒度越细，近似平局比例越高（8 专家 2.7% → 64 专家 23%），路由复现性从 100% 掉到 68%。"
+          ],
+          "conclusions": [
+            "并行布局与随机种子属于同一量级的不同扰动源，但二者对模型质量（loss/下游指标）的影响都可以忽略，差异体现在具体预测与路由路径上。",
+            "恢复训练时的切换时机比切换本身更重要：在预训练进度 10% 处换布局造成的最终模型差异，远大于在 84% 处换布局。"
+          ],
+          "experiments": [
+            "布局变化使最终预测差异达换随机种子的约 80%，超过 90% 的专家路由决策不同，但模型质量指标几乎不变。",
+            "第 8 步时，布局变化带来的预测 KL 仅约 4×10⁻⁹，比换种子小约 2500 万倍；到第 16 步，被翻转决策的得分余量中位数比未翻转决策小 380-700 倍。",
+            "专家数从 8 增到 64，近似平局比例从 2.7% 升到 23%，路由完全可复现的比例从 100% 降到 68%；粗粒度算术下稠密模型的布局差异为种子水平的 0.58 倍，而 MoE 在第 64 步就已达 40-80 倍。"
+          ],
+          "significance": "给「换机器续训是否可比」这一日常工程问题提供了量化答案：布局不影响质量，但会让模型走上另一条等价的实现路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.15271",
+          "pdfUrl": "https://arxiv.org/pdf/2611.15271.pdf",
+          "index": 1,
+          "takeaway": "并行布局改的不是质量而是具体模型：预测差异约为换种子的 80%，九成路由决策翻转，根因是专家近似平局。",
+          "keyExperiment": "同一 MoE、同种子、9 种并行布局共 80 次运行：>90% 路由决策翻转，但 loss 与下游指标不变；64 专家时近似平局比例 23%。"
+        },
+        {
+          "title": "Reconstructing Fine-grained Memory Reuse Structure in GPU Kernels",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-13",
+          "authors": "Yanbo Zhao, Yueming Hao, Zecheng Li, Mao Lin, Shuyin Jiao, Keren Zhou, Xu Liu, Jiajia Li",
+          "institutions": "North Carolina State University, Meta, University of California Merced, George Mason University",
+          "abstract": "优化 GPU 数据搬运的前提是知道哪些指令访问同一份数据、复用发生在什么执行范围，但现有 profiler 只把访存行为归因到单条指令，不暴露指令间的复用关系；别名与动态索引让静态分析无法建立这些关系，周期级模拟又代价过高。论文提出两个抽象：Topological Distance 给每条动态访存打标签，记录其最近一次复用的最小执行范围（线程、warp、block 或 grid）；PCDepGraph 把这些标签组织成 PC 级的核内访存复用结构图。二者定义在逻辑执行范围而非瞬时硬件状态上，因此跨运行、跨 GPU 目标稳定，并指出候选优化必须覆盖的共享范围。工具 cuVein 从优化后二进制直接重建该图、不做采样，开销一般低于 10 倍。在 RTX 4090/H100 的 HPC 与 AI 负载中，依图指导的优化最多消除 90.18% 的访存指令、最高带来 2.84 倍核加速。",
+          "contributions": [
+            "提出 Topological Distance 与 PCDepGraph 两个抽象，把「访存复用在哪个执行范围发生」变成可标注、可成图的稳定结构，而不是依赖瞬时硬件状态的统计量。",
+            "cuVein 直接从优化后的二进制重建 PC 级复用图，无需采样、无需重新编译，开销一般低于 10 倍，把周期级模拟才能得到的关系下放到生产负载。",
+            "把复用结构与优化动作直接对应：图中标记的共享范围就是候选优化（寄存器提升、共享内存、跨 block 融合）必须覆盖的最小范围。"
+          ],
+          "conclusions": [
+            "复用结构定义在逻辑执行范围上，因此在不同运行与不同 GPU 目标之间保持稳定，可作为跨代硬件迁移的优化依据。",
+            "以复用图为指导的访存优化在真实 HPC/AI 核上可同时获得指令数下降与端到端加速，说明数据搬运仍是主要优化空间。"
+          ],
+          "experiments": [
+            "在 NVIDIA RTX 4090 与 H100 上，依 PCDepGraph 指导的优化最多消除 90.18% 的访存指令，核函数最高加速 2.84 倍。",
+            "cuVein 直接从优化后二进制重建复用图、不做采样，一般开销低于 10 倍；复用范围分布在多次运行与不同 GPU 目标间保持一致。",
+            "在 HPC 与 AI 两类负载上均验证有效，说明该方法不限于某类核函数形态。"
+          ],
+          "significance": "把「访存复用」从经验调优变成可从二进制直接读出的结构信息，为 GPU 核优化的自动化提供了中间表示。",
+          "arxivUrl": "https://arxiv.org/abs/2611.14741",
+          "pdfUrl": "https://arxiv.org/pdf/2611.14741.pdf",
+          "index": 2,
+          "takeaway": "从优化后二进制重建算核内访存复用图，指出优化必须覆盖的共享范围，最多省 90% 访存指令、加速 2.84 倍。",
+          "keyExperiment": "RTX 4090/H100 上，依复用图指导的优化消除最多 90.18% 访存指令、核加速 2.84 倍，重建开销 <10 倍。"
+        },
+        {
+          "title": "UniPipe: Unified Inference Serving and Fine-Tuning for Deadline-Constrained DNN Surrogate Workflows",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Jaiaid Mobin, Avinash Maurya, M. Mustafa Rafique, Bogdan Nicolae",
+          "institutions": "Rochester Institute of Technology, Argonne National Laboratory",
+          "abstract": "DNN 代理模型被用于加速必须近实时处理高速传感器流的科学工作流，典型例子是下一代 X 射线光源的叠层成像：代理模型比迭代求解器吞吐高 100-1000 倍，可让实验边跑边调参。但实验过程中输入分布会漂移，为保持精度，现有部署要么冻结预训练代理，要么另开一个 CUDA 上下文与推理并发微调；多上下文并发会在 GPU 上产生严重争用，抬高推理延迟的均值与方差，在「每单元数据有硬截止时间」的工作流里直接造成超时。论文提出 UniPipe：在单块边缘 GPU 上、单上下文内统一推理服务与微调。它基于三点观察——推理与微调都需要前向、可融合为一次；现代 GPU 的单样本延迟对 batch size 呈非线性；负载在时间区间上高度重复、可离线调度。据此把训练与推理数据融合进一次前向，只对训练子集做选择性反向，并用多项式时间调度器求解批大小与频率。",
+          "contributions": [
+            "单上下文统一服务与微调：训练样本与推理样本共享一次前向，只回传训练子集的梯度，从根上消除双 CUDA 上下文的 GPU 争用。",
+            "把「batch size—单样本延迟非线性」这一硬件事实纳入调度，用多项式时间算法离线求解时间区间内的批组成与节奏，满足硬截止时间。",
+            "在真实科学工作流（叠层成像代理）上同时改善精度、延迟与截止时间违约率，而不是只牺牲其一。"
+          ],
+          "conclusions": [
+            "多上下文并发微调会造成 13%-22% 的截止时间违约率上升，单上下文融合是更稳妥的工程路线。",
+            "统一部署把延迟的 95 分位离散度从均值的 106% 压到 57%，在保持甚至提升重建精度的同时维持吞吐。"
+          ],
+          "experiments": [
+            "相较预训练基线，重建 MSE 最多降低 30%、推理 MSE 最多降低 50%；相较多上下文基线，截止时间违约率降低 13%-22%。",
+            "95 分位延迟从均值的 106% 降到 57%，且训练+推理总吞吐高于多上下文基线。",
+            "在 2000 patterns/sec 以上的数据率下，多上下文基线的违约率上升 13%-22%，而 UniPipe 与仅服务的预训练基线基本贴合。"
+          ],
+          "significance": "说明边缘 GPU 上「边服务边微调」的瓶颈不是算力而是上下文争用，单上下文融合加离线调度是可行解法。",
+          "arxivUrl": "https://arxiv.org/abs/2611.14748",
+          "pdfUrl": "https://arxiv.org/pdf/2611.14748.pdf",
+          "index": 3,
+          "takeaway": "把推理与微调塞进同一次前向、单上下文，再用离线调度卡死截止时间：违约率降 13-22%，p95 延迟离散度从 106% 降到 57%。",
+          "keyExperiment": "单上下文融合后重建 MSE 最多降 30%、推理 MSE 最多降 50%，截止时间违约率比多上下文基线低 13%-22%。"
+        },
+        {
+          "title": "LoCoJAX: Host-Local Coordination for Small-Model RL on TPUs",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Loki Chen, Gregory B. Rehm, Yang Song, Hongye Xie, Ming Lei, Chongyang Bai, Bob Kamma, Mingfu Liang, Kavosh Asadi, Yufei Li, Xi Liu, Jay Xu, Rui Liu, Maziar Sanjabi, Luke Simon, Hamed Firooz",
+          "institutions": "Meta",
+          "abstract": "强化学习越来越多地针对小语言模型，多加速器上的协调方式因此变得关键。TPU 上基于 Pathways 的 RL 用单一控制器协调跨主机计算，这对大模型有效，但小模型反复发起短计算时，这份协调开销难以摊薄。论文先在 TPU v7x 上扫描 0.6B 到 405B 稠密模型、跑解码为主的负载，量化主机与网络开销随规模的变化：0.6B 时主机编排占 step 时间 36%、网络通信只占 2%；模型变大后网络开销才主导非计算时间。据此提出 LoCoJAX：每个 TPU 主机本地完成 rollout 与奖励处理，只让训练保持全局同步。在 Qwen3-0.6B、8-64 颗 TPU v7x、三种负载的受控对比中，同址模式每步快 1.3-3.6 倍；GSM8K 上 8 颗芯片完成一步快于 Pathways 用 64 颗。另有 Ray 管理的分离模式，把 rollout 与训练放到不同主机上重叠。",
+          "contributions": [
+            "先做规模扫描再设计系统：用 0.6B-405B 的 TPU v7x 测量把「小模型 RL 的开销在主机编排而非网络」量化出来（0.6B 时 36% vs 2%）。",
+            "LoCoJAX 把 rollout 与奖励计算下放到每个 TPU 主机本地、仅训练全局同步，直接消掉小模型上摊不薄的中央协调成本。",
+            "给出同址（CO）与分离（DA）两种部署形态，并用受控对比证明前者在小模型上优于经过调优的 Pathways 基线。"
+          ],
+          "conclusions": [
+            "RL 训练的系统开销结构随模型规模反转：小模型是主机编排受限，大模型才是网络受限，因此同一套协调方案不能通吃。",
+            "把协调下放到主机后，小模型 RL 可用更少芯片达到同等或更好的吞吐，芯片利用率的提升来自消除空闲而非更快算子。"
+          ],
+          "experiments": [
+            "TPU v7x 上 0.6B 模型以解码为主时，主机编排占 step 时间 36%、网络通信占 2%。",
+            "Qwen3-0.6B、8-64 颗 TPU v7x、三种负载下，LoCoJAX-CO 每步比调优后的 Pathways 基线快 1.3-3.6 倍。",
+            "GSM8K 上 LoCoJAX 用 8 颗芯片完成一步，快于 Pathways 用 64 颗芯片；分离模式可把 rollout 与训练重叠。"
+          ],
+          "significance": "提醒系统设计者：小模型 RL 的瓶颈在主机侧协调而非通信，把控制面下沉到主机比加芯片更有效。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16301",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16301.pdf",
+          "index": 4,
+          "takeaway": "小模型 RL 的开销在主机编排（0.6B 时占 36% 步时）而非网络，协调下放到主机后每步快 1.3-3.6 倍、8 芯片快过 64 芯片。",
+          "keyExperiment": "Qwen3-0.6B 在 8-64 颗 TPU v7x 上每步快 1.3-3.6 倍；GSM8K 用 8 芯片即快于 Pathways 的 64 芯片。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Towards Green Text Generation: Memory-Based Speculative Decoding",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-13",
+          "authors": "Antal van den Bosch",
+          "institutions": "Utrecht University",
+          "abstract": "投机解码让廉价草稿模型提议 token、由大模型一次前向统一验证。论文提出 Olifant：建立在记忆式分类器上的草稿模型，只看四 token 窗口预测下一个 token，在 CPU 上耗时不到 0.3 毫秒，不需要 GPU、不做反向传播。作者在消费级硬件上按两种验证器配置测吞吐与能耗。没有 KV cache 时草稿几乎免费：Olifant 在欧盟法律文本上接受率 38.1%，吞吐 2.43 倍、每 token 能耗比单用神经验证器低 2.51 倍。启用 KV cache（本身约 10 倍节能）后草稿成本变关键：TinyLlama 草稿尽管接受率高，却让吞吐减半、能耗增至三倍；Olifant 仍有 1.25 倍吞吐，且是全研究最低能耗（每 100 token 93 焦耳，比未缓存基线低 14 倍）。作者进一步指出 KV cache 把时间与能耗解耦，能耗最优草稿长度短于速度最优长度。",
+          "contributions": [
+            "用记忆式分类器替掉神经草稿模型，把草稿成本压到 CPU 上 0.3 毫秒以内且零显存占用，使投机解码在「验证器已经很快」的今天依然划算。",
+            "在两种验证器配置下同时测吞吐与能耗，给出「草稿是否免费」这一判据：无 KV cache 时草稿近乎免费，有 KV cache 时神经草稿反而亏本。",
+            "指出 KV cache 使时间与能耗解耦，能耗最优的草稿长度短于速度最优长度，为绿色推理给出与延迟不同的调参目标。"
+          ],
+          "conclusions": [
+            "投机解码并未因验证器变快而失效，前提是草稿几乎免费；一旦草稿需要 GPU 与显存，收益可能被能耗与吞吐双重抵消。",
+            "能效与延迟是两个不同的优化目标，KV cache 打开后二者对草稿长度的最优取值不再一致。"
+          ],
+          "experiments": [
+            "无 KV cache 时，领域匹配的 Olifant 在欧盟法律文本上接受率 38.1%，吞吐 2.43 倍、每 token 能耗降低 2.51 倍。",
+            "有 KV cache 时，TinyLlama 草稿让吞吐减半、能耗增至三倍；Olifant 仍取得 1.25 倍吞吐，每 100 token 93 焦耳，比未缓存基线低 14 倍。",
+            "验证更长草稿会抬高功耗，能耗最优草稿长度低于速度最优长度，两者在最优点上分离。"
+          ],
+          "significance": "把投机解码的评价从「加速比」扩展到「每 token 焦耳」，并给出草稿侧几乎零成本的实现路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16714",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16714.pdf",
+          "index": 5,
+          "takeaway": "草稿几乎免费才有意义：CPU 记忆式草稿 0.3ms、零显存，无 KV cache 时 2.43 倍吞吐，有 KV cache 时仍是全场最低能耗。",
+          "keyExperiment": "欧盟法律文本上接受率 38.1%、吞吐 2.43 倍；带 KV cache 时 1.25 倍吞吐、每 100 token 93 焦耳（比未缓存基线低 14 倍）。"
+        },
+        {
+          "title": "SoScale: Second-Order Scale Search for FP4 Quantization",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Pengxiang Zhao, Xing Li, Hui-Ling Zhen, Weizhe Lin, Xianzhi Yu, Zhenhua Dong",
+          "institutions": "Huawei Technologies",
+          "abstract": "低比特量化能压缩大模型显存与推理成本，但准确的 FP4 量化仍很难。MXFP4、NVFP4、HiF4 等格式把 4 比特浮点载荷与块级或分层 scale 码配对，精度对每个局部分布怎么定标极其敏感。默认的最大绝对值定标保住动态范围，却可能把稀缺码点浪费在很少落入的离群区域，让稠密数值区分辨率不足。现有 scale 搜索最小化逐元素重建误差，优化的是张量保真度而非层输出保真度。论文提出 SoScale：在 Hessian 加权的层重建目标下搜索硬件合法的 scale 码，并与 GPTQ 式误差补偿耦合，按对层输出的影响挑选 scale。在 Qwen3 系列上，SoScale 在 MXFP4、NVFP4、HiF4 三种格式下都稳定降低下游量化退化；权重离线量化、服务路径不做搜索，因而与已有 FP4 硬件推理路径兼容。",
+          "contributions": [
+            "把 scale 搜索的目标从「逐元素重建误差」换成 Hessian 加权的层输出误差，并直接在硬件合法的离散 scale 码空间里搜索，而不是事后就近取整。",
+            "针对 MXFP4 搜索块 scale 码、NVFP4 搜索 E4M3 块 scale 码、HiF4 搜索 E6M2 scale 码并推导 E1 scale，一套框架覆盖三种分层格式。",
+            "与 GPTQ 式误差补偿互补而非替代：搜索定标、GPTQ 补误差，二者叠加后仍保持目标 FP4 编码，服务端零搜索开销。"
+          ],
+          "conclusions": [
+            "分层 FP4 的精度瓶颈主要不在载荷位宽而在 scale 码的选择，按层输出而非张量逐元素误差选 scale 更贴近下游表现。",
+            "离线搜索、服务端零开销的设计使该方法可直接落到已有 FP4 推理路径上，不需要改动运行时。"
+          ],
+          "experiments": [
+            "Qwen3-14B 上，各格式变体分别保留 BF16 平均精度的 97.17%（MXFP4）、99.20%（NVFP4）、99.40%（HiF4）。",
+            "在 Qwen3-8B 与 Qwen3-14B 两个模型、MXFP4/NVFP4/HiF4 三种格式下均降低量化退化，且与块 Hadamard 旋转等预处理方法互补。",
+            "量化完全离线完成，服务路径上不引入 scale 搜索，保持与现有 FP4 推理内核兼容。"
+          ],
+          "significance": "把 FP4 量化的最后一档精度损失归因到 scale 码选择，并提供一套可直接落地、不增加推理开销的定标搜索。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16426",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16426.pdf",
+          "index": 6,
+          "takeaway": "按层输出保真度搜索 FP4 的 scale 码：Qwen3-14B 上保留 97.17% (MXFP4)/99.20% (NVFP4)/99.40% (HiF4) 的 BF16 精度。",
+          "keyExperiment": "Qwen3-14B 在 MXFP4/NVFP4/HiF4 下分别保留 97.17%/99.20%/99.40% 的 BF16 平均精度，服务端零搜索开销。"
+        },
+        {
+          "title": "Beyond Compressing Everything: Contrastive Memory Learning for Selective Context Compression",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-13",
+          "authors": "Sikui Zhang, Haowei Liu, Ziyun Gan, Chunfeng Yuan, Guangze Gao, Nian Liu, Boyu Cai, Bo Li, Xiaolei Lv, Jun Gao, Bing Li, Weiming Hu",
+          "institutions": "Institute of Automation, Chinese Academy of Sciences, Alibaba Group, Hello Group",
+          "abstract": "长输入带来的推理成本让软上下文压缩成为一条高效路径：把长输入转成紧凑记忆槽。但任务相关证据在不同 query 之间差别很大——可能集中一处、可能多段远距离、也可能散布全文，一视同仁地压缩会浪费预算。论文提出 CoMem：由 query 引导的选择性上下文压缩框架，学习同时以文档与 query 为条件的记忆表示。它用对比式压缩器学习获得对 query 敏感又保留上下文的表示；为注入 query 相关证据分布的先验，设计同上下文硬负例挖掘——同一文档配多个 query，迫使压缩器按各 query 的不同证据需求选择性保留；针对因果掩码造成的信息流受限，允许记忆槽之间做双向注意力。在问答与 RULER-NIAH 上，CoMem 在各压缩比下稳定优于现有方法，64 倍压缩时推理延迟最多降低 4.8 倍，高压缩比下仍保持可靠的关键信息定位。",
+          "contributions": [
+            "把上下文压缩从「无条件压缩」改成「按 query 选择性保留」，用同一文档配多 query 的硬负例挖掘，让压缩器学到与证据分布相关的保留策略。",
+            "允许记忆槽之间双向注意力，绕过因果掩码对压缩后信息流的限制，使分散证据在压缩后仍可互相参照。",
+            "在压缩比扫描下同时报告精度、延迟与 GFlops，证明收益不只是省显存而是端到端延迟下降。"
+          ],
+          "conclusions": [
+            "记忆预算应当分配给 query 相关证据而非均匀分配，选择性压缩在高压缩比下的优势更明显。",
+            "在 64 倍压缩时仍能保持关键信息定位能力，说明软压缩在超长上下文场景可以替代硬截断。"
+          ],
+          "experiments": [
+            "在问答与 RULER-NIAH 基准上，各压缩比下均优于既有上下文压缩方法，64 倍压缩时仍保持较强的关键信息定位能力。",
+            "相对全上下文基线，64 倍压缩下推理延迟最多降低 4.8 倍，而 GFlops 计算量与基线相当。",
+            "在 128 倍压缩等高压缩比下仍保留相当比例的性能，显存占用随压缩比线性下降。"
+          ],
+          "significance": "把长上下文压缩的目标从「压缩率」转为「按需保留」，为记忆预算分配提供了可学习的选择机制。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16384",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16384.pdf",
+          "index": 7,
+          "takeaway": "压缩不该一视同仁：用同文档多 query 的硬负例训练 query 敏感的记忆槽，64 倍压缩下延迟降 4.8 倍。",
+          "keyExperiment": "64 倍压缩时推理延迟最多降低 4.8 倍且 GFlops 持平，高压缩比下仍能定位关键证据。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "KVPath: Connecting Key-Value Representations Across Transformer Layers",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Xuan Luo, Zhiyuan Wang, Hanzhong Cao, Xifeng Yan",
+          "institutions": "University of California, Santa Barbara",
+          "abstract": "Transformer 通常为每个 token 在每一层缓存一份独立 KV，显存随层数线性增长。已有工作发现同一 token 在相邻层的 KV 高度相关、含共享信息。论文据此假设层间变化是增量式的、可用低维 delta 刻画，提出 KVPath：把 KV 表示沿网络深度连成路径的新范式——第一层建立全维基础 KV，后续层只生成低维 delta 更新前一层状态来构造本层 KV。缓存时只存一次基础 KV 加这些紧凑 delta，即可保留各层不同表示而无需每层存全量。作者给出两个变体：KVPath-Residual 用残差加法更新向量值，KVPath-Rolling 以滚动方式逐步更新特征维度。在参数量对齐下，KVPath 相对分组查询注意力（GQA）把 KV cache 存储最多降低 68%、相对多头潜在注意力（MLA）降低 55%，同时模型表现持平甚至更好。",
+          "contributions": [
+            "把相邻层 KV 的相关性从观察升级为表示范式：一层全维基础 KV 加后续层的低维 delta，等价于沿深度维护一条增量路径。",
+            "给出 Residual（残差加）与 Rolling（维度滚动更新）两种更新方式，并在 GQA 与 MLA 两种注意力结构上分别实例化为 ResGQA/RollGQA 与 ResMLA/RollMLA。",
+            "在参数量对齐下同时报告困惑度与缓存占用，说明压缩不是靠削减模型容量换来的。"
+          ],
+          "conclusions": [
+            "KV 的层间冗余足以支撑「一份基础 + 多份增量」的缓存结构，缓存体积不再必须随层数线性增长。",
+            "两种更新方式的取舍不同：残差保持全维度、滚动逐步替换特征维度，可按注意力结构选择。"
+          ],
+          "experiments": [
+            "32,768 序列长度下，相对 GQA 总缓存存储最多减少 68%，相对 MLA 减少 53%-55%。",
+            "在 2K/8K/32K 上下文下参数对齐比较，困惑度持平或略有下降（平均困惑度降低 0.x%-2.x%）。",
+            "同一方法在 GQA 与 MLA 两种结构上均成立，说明冗余是层间共性而非某种注意力的特例。"
+          ],
+          "significance": "为长上下文推理的显存瓶颈提供了架构层解法：不再逐层存全量 KV，而是存基础加增量。",
+          "arxivUrl": "https://arxiv.org/abs/2611.16072",
+          "pdfUrl": "https://arxiv.org/pdf/2611.16072.pdf",
+          "index": 8,
+          "takeaway": "KV 跨层相关可压成低维增量：一层全量基础 + 后续层 delta，GQA 缓存降 68%、MLA 降 55%，表现不降。",
+          "keyExperiment": "32K 上下文下相对 GQA 缓存减少 68%、相对 MLA 约 55%，困惑度持平或小幅下降。"
+        },
+        {
+          "title": "Metal Sandbox: Isolated Execution and Command Scheduling for GPU Coding Agents on Apple Silicon",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Haozhe Wang, Lina Chen, Fanqi Wan, Qi Han, Yinmin Zhang, Zheng Ge, Daxin Jiang, Junchi Yan",
+          "institutions": "Shanghai Jiao Tong University, Beijing Zhongguancun Academy, StepFun",
+          "abstract": "端侧推理需要能有效利用本地加速器的核函数，而要训练与评估生成 Apple Metal 核的模型，最好用原生 macOS 工具并跑并发 agent 会话。这些会话在模型请求、开发命令与 GPU 执行之间交替，导致 rollout 大部分时间 GPU 容量闲置。论文提出 Metal Sandbox：把受限的实例级文件访问、原生命令执行与跨互联 Mac 的命令级调度结合起来。每个 agent 保留自己的工作区；并行命令可并发，串行命令共享每节点一个执行槽；符合条件、正在等待的命令可迁移到空闲 Mac 上执行并把结果送回原 agent，与 Harbor 集成后支持任务执行、自动校验与 rollout 收集。四台 Mac mini M4 的受控实验中，需求集中时命令吞吐提升 1.68-2.05 倍；按动态调度重放实测轨迹，平均工具等待降低 18.8%、批耗时降低 22.3%。",
+          "contributions": [
+            "把「agent 的串行命令独占一台机器」改成命令级调度：串行命令共享每节点单槽、并行命令可并发、满足条件的等待命令可跨机迁移。",
+            "在执行层同时解决隔离与吞吐：实例级受限文件访问保住每个 agent 的私有工作区，调度层则把闲置的 GPU 容量填给别的会话。",
+            "与 Harbor 集成形成完整流水线（任务执行、自动校验、轨迹收集），使核生成模型的训练数据采集不再被机器空转拖慢。"
+          ],
+          "conclusions": [
+            "GPU coding agent 的瓶颈往往是机器被单个会话的串行命令占住，而非 GPU 本身算力不足。",
+            "命令级跨机调度在真实轨迹上带来的收益（等待 -18.8%、批耗时 -22.3%）小于静态吞吐上界（2.14 倍），说明收益依赖会话是否持续补充。"
+          ],
+          "experiments": [
+            "四台 Mac mini M4 节点、需求集中时，命令吞吐提升 1.68-2.05 倍。",
+            "16 条静态 agent 轨迹估计：每节点 4 会话、会话持续补充且平均时长不变时，持续吞吐可达 2.14 倍。",
+            "用实测轨迹重放动态调度：平均工具等待时间降低 18.8%，批耗时降低 22.3%。"
+          ],
+          "significance": "说明 agent 训练基础设施的优化点在命令调度粒度，而非单纯堆机器或换更强加速器。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17294",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17294.pdf",
+          "index": 9,
+          "takeaway": "把 agent 的串行命令从独占机器改为跨机命令级调度：四台 Mac mini 上吞吐 1.68-2.05 倍，工具等待降 18.8%。",
+          "keyExperiment": "四节点 Mac mini M4 上命令吞吐提升 1.68-2.05 倍；实测轨迹重放使工具等待降 18.8%、批耗时降 22.3%。"
+        },
+        {
+          "title": "KernelMosaic: An Open Dataset and Agentic Framework for CUDA Kernel Generation",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-13",
+          "authors": "Ningyuan Xi, Yuhang Lai, Ning Miao",
+          "institutions": "City University of Hong Kong, Hong Kong Institute of AI for Science",
+          "abstract": "训练大模型生成高效 CUDA 核，需要覆盖多样计算需求并能支撑迭代优化的监督数据，而这类数据很难构造：规格异构，有价值的实现往往要在反复测试与修正中才浮现。论文提出 KernelMosaic：把多样 CUDA 任务与已验证的解及求解轨迹配对的开源数据集与 agent 框架。任务用自然语言描述、参考程序、数学规格及交叉形式表达，经人工审核与多样性筛选。为构造轨迹，agent 框架引导强 LLM 完成实现、正确性修复与性能优化，过程中复用 CUDA 指导并接收执行反馈。用它对一个 5-9B 小开源模型做监督微调后，KernelBench L1/L2/L3 正确率从 4%、0%、0% 提升到 88%、82%、16%，各级「快于 PyTorch eager」的比例也同步上升。进一步实验表明轨迹监督显著优于直接回答，并能促使模型持续测试与修订。",
+          "contributions": [
+            "发布同时含任务规格（自然语言、参考程序、数学规格及交叉）与已验证解、求解轨迹的 CUDA 生成数据集，补上「过程监督」这一缺口。",
+            "agent 框架把实现、正确性修复、性能优化串成轨迹，并把执行反馈与可复用 CUDA 指导注入训练数据，而非只提供一次性答案。",
+            "在 5-9B 小模型上用 SFT 证明轨迹监督的价值：L1/L2/L3 正确率从 4%/0%/0% 跳到 88%/82%/16%，且各级「快于 eager」比例从 0 提升到 64%/62%/12%。"
+          ],
+          "conclusions": [
+            "核生成的瓶颈在过程而非终点：带测试与修订的轨迹数据比等量直接答案更有训练价值。",
+            "小模型经轨迹微调后可在 L1/L2 上接近可用水平，但高难度 L3 仍是明显短板（16% 正确率）。"
+          ],
+          "experiments": [
+            "KernelBench L1/L2/L3 正确率：4%/0%/0% → 88%/82%/16%；快于 PyTorch eager 的比例：0 → 64%/62%/12%。",
+            "移除历史推理内容会使总 token 减少 41.0%，说明测试与修订轨迹是训练信号的主体部分。",
+            "在 65,536 输出 token 预算下，SFT 模型解出 L1/L2/L3 的 66%/59%/8%，快于 eager 的覆盖率为 49%/42%/8%。"
+          ],
+          "significance": "把 CUDA 核生成从「一次性代码补全」推向「带执行反馈的迭代优化」，并给出可复现的数据与训练配方。",
+          "arxivUrl": "https://arxiv.org/abs/2611.14604",
+          "pdfUrl": "https://arxiv.org/pdf/2611.14604.pdf",
+          "index": 10,
+          "takeaway": "给核生成补上过程监督：任务规格+已验证轨迹微调 5-9B 小模型，KernelBench L1/L2 正确率 4%/0% → 88%/82%。",
+          "keyExperiment": "L1/L2/L3 正确率 4%/0%/0% → 88%/82%/16%，快于 PyTorch eager 的覆盖从 0 升到 64%/62%/12%。"
+        }
+      ]
+    }
+  ]
+}
