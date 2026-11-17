@@ -1,0 +1,343 @@
+{
+  "date": "2026-11-17",
+  "title": "2026-11-17 论文精选",
+  "lede": "今日主题：通信不再抢 SM——从零 SM 的 NCCL、GPU 发起网络的编译特化，到解码抖动与 RL 长尾 rollout 的调度修补，系统层把“省下来的空闲”变成了吞吐。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 210
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Zero-SM NCCL: A Systematic Guide to Designing and Deploying SM-Free GPU Communication",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-16",
+          "authors": "Zhenhao He, Siyuan Shen, Ke Wen, Prajwal Singhania, Shiqing Fan, Youngeun Kwon, Sangkug Lym, Vasudevan Rengasamy, Vishnuswaroop Ramesh, Yicheng Qiang, Craig Belusar, Jeff Hammond, Torsten Hoefler",
+          "institutions": "NVIDIA, ETH Zurich",
+          "abstract": "GPU 通信库（如 NCCL）用流式多处理器（SM）搬数据和同步，SM 被占住就无法同时跑计算，互联带宽越高这笔干扰代价越大。作者提出 Zero-SM NCCL：在 scale-up 域内不启动任何 SM kernel，改用 CUDA stream memory operations 同步、用 copy engine 异步搬数据；跨节点由按流顺序执行的 CPU proxy 驱动网络 RDMA。它支持 AllGather/AlltoAll 等集合通信与单边 put/wait 接口。在 GB200 NVL72 与 B200 NVL8 上，AllGather 带宽最高比 NCCL 传统 SM kernel 高 1.36 倍，被重叠 GEMM 的中位减速从 33% 压到 4%；Megatron-LM 中 FSDP 提速最多 3.5%，流水并行最多 15%。",
+          "contributions": [
+            "隔离通信与计算的资源占用：用 stream memory ops、copy engine 与 CPU proxy 取代 SM kernel，让通信不再吃走计算 SM。",
+            "给出可落地的接口设计（集合通信 + 单边 put/wait）以及何时该启用 Zero-SM 的系统性判据。",
+            "在 GB200 NVL72/B200 NVL8 上量化了带宽收益与延迟代价，并在 Megatron-LM 中检验 FSDP 与流水并行的端到端影响。"
+          ],
+          "conclusions": [
+            "Zero-SM 通信在 GPU 计算密集、大消息、深流水（气泡大）的场景明显有利，在小消息与 host 受限负载上会退化。",
+            "它是“按场景启用”的优化而非默认替代，论文据此给出启用指南。"
+          ],
+          "experiments": [
+            "AllGather 带宽最高提升 1.36 倍（相对 NCCL legacy SM kernel）。",
+            "重叠 GEMM 的中位减速从 33% 降至 4%。",
+            "Megatron-LM 中 FSDP 加速最多 3.5%，单边 put 加速流水并行最多 15%。"
+          ],
+          "significance": "把 GPU 通信从“抢 SM”改成“完全不占 SM”，为高带宽互联下的通信-计算重叠提供了新的库级设计范式。",
+          "arxivUrl": "https://arxiv.org/abs/2611.18075",
+          "pdfUrl": "https://arxiv.org/pdf/2611.18075.pdf",
+          "index": 1,
+          "takeaway": "通信不占 SM，重叠才真正免费。",
+          "keyExperiment": "GB200 NVL72 上 AllGather 带宽 +1.36x、重叠 GEMM 减速 33%→4%。"
+        },
+        {
+          "title": "Fuse-All MoE Inference Kernel with Load Balancing on TPUs",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-16",
+          "authors": "Rupeng Liu, Bangsheng Tang, Zongwei Zhou, Chengji Yao, Yejin Lee",
+          "institutions": "Meta SuperIntelligence Lab",
+          "abstract": "MoE 每个 token 只激活部分专家，让大模型扩参数时算力不必等比涨；但在 TPU 上，中间数据搬运和专家负载不均严重拖累推理效率。作者提出 Fuse-All MoE kernel，把 token 收集、专家投影、门控激活与输出写回融合，中间结果留在片上，输出 token slot 固定，调度与专家放置可改而不影响路由语义。PD 分离服务中，prefill 用调度+专家重分配均衡 EP16 负载，decode 用对称 EP8TP2 让同一芯片内两个 TensorCore 共享活跃专家计算。实测偏斜 EP16 prefill 的 kernel 时间从均衡参考的 2.3 倍压到 1.09 倍；32-512 个 decode token 下 EP8TP2 相比 fused EP16 延迟最多降 21.3%；配合服务栈优化，吞吐比 Megablox EP16 基线最多提升 34.5%。",
+          "contributions": [
+            "提出全融合 MoE kernel：token 收集、专家投影、门控与输出写回一体，中间结果常驻片上，省掉中间数据往返。",
+            "用“固定 token slot”把路由语义与调度/专家放置解耦，使负载均衡可以在不改语义的前提下在线调整。",
+            "针对 PD 分离给出 prefill（EP16）与 decode（对称 EP8TP2）两套并行与均衡策略。"
+          ],
+          "conclusions": [
+            "MoE 推理在 TPU 上的瓶颈是板间数据搬运与专家负载偏斜，融合 kernel 加动态再均衡可同时缓解两者。",
+            "decode 阶段改为芯片内两个 TensorCore 共享活跃专家，比继续扩大 EP 更划算。"
+          ],
+          "experiments": [
+            "偏斜 EP16 prefill kernel 时间：2.3x 参考 → 1.09x。",
+            "32-512 decode token 下对称 EP8TP2 相对 fused EP16 延迟降低最多 21.3%。",
+            "整体服务吞吐比 Megablox EP16 基线提升最多 34.5%。"
+          ],
+          "significance": "在 TPU 上把 MoE 的“融合 + 负载均衡 + PD 分离”打通，说明加速器专用 kernel 仍是 MoE 服务的主要收益来源。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17857",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17857.pdf",
+          "index": 2,
+          "takeaway": "MoE 在 TPU 上的瓶颈是搬运与偏斜，融合 kernel 加在线再均衡可吃掉大半。",
+          "keyExperiment": "偏斜 EP16 prefill 从 2.3x 参考时间降到 1.09x，服务吞吐 +34.5%。"
+        },
+        {
+          "title": "VelServe: Taming Decode Jitters in LLM Inference with Tail-Calibrated Scheduling",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-16",
+          "authors": "Ishaan Datta, Alind Khare, Koushik Kumar Dey, Ratnesh Jamidar, Anand Kumar Singh",
+          "institutions": "Sprinklr, Microsoft",
+          "abstract": "流式与软实时 LLM 服务必须同时满足首 token 时延（TTFT）与 token 间隔（TBT）两个 SLO，但作者发现聚合式与分离式服务都存在“解码抖动”：某一步变慢会拖住整批，长回答要跑几百步，罕见超时也会累积成大量违约。聚合式里 SLO 感知调度把每步 prefill 预算卡到刚好满足 TBT、不留余量；分离式达成平均 TBT，但接纳新请求的步仍迟到。VelServe 用自身迭代时延的实测尾部标定每步能带多少 prefill：SLO 决定迟到必须多罕见，调度据此留足余量。留余量会拖慢 prefill，于是优先服务最短 prompt；分离式下按 P99 限制慢接纳步频率。三个注意力族上，Qwen3-8B 与 DeepSeek-V4-Flash 的 SLO goodput 是最强基线的 2.4-2.9 倍，DeepSeek-V2-Lite 达 4.4 倍以上。",
+          "contributions": [
+            "指出解码抖动（单步超时会拖累整批、并沿数百步累积）是 LLM 服务 SLO 违约的主因而非平均时延问题。",
+            "提出按迭代时延实测尾部标定 prefill 预算的调度器，把“迟到多罕见”变成可由 SLO 反解的余量参数。",
+            "配套最短等待优先与分离式下的接纳步间隔控制，使 tail 约束在两种部署形态下都成立。"
+          ],
+          "conclusions": [
+            "SLO 感知调度若不按尾部而非均值设预算，预测量误差与 host 停顿会直接转成违约。",
+            "在分离式服务中，接纳新请求的步同样需要尾部预算，否则 P99 仍被拖垮。"
+          ],
+          "experiments": [
+            "Qwen3-8B / DeepSeek-V4-Flash 上 SLO goodput 达最强基线 2.4-2.9 倍。",
+            "DeepSeek-V2-Lite 上至少 4.4 倍。",
+            "八卡 PD 分离部署下满足 SLO 的请求数超过 SOTA 基线两倍。"
+          ],
+          "significance": "把 LLM 服务调度从“追平均时延”推进到“按尾部时延反解每步预算”，是交互式服务的实用改进。",
+          "arxivUrl": "https://arxiv.org/abs/2611.18392",
+          "pdfUrl": "https://arxiv.org/pdf/2611.18392.pdf",
+          "index": 3,
+          "takeaway": "解码抖动要靠尾部预算治，不是靠均值调度。",
+          "keyExperiment": "SLO goodput 2.4-2.9x（Qwen3-8B、DeepSeek-V4-Flash），V2-Lite 上 4.4x 以上。"
+        },
+        {
+          "title": "Callo: Serving Cache-Miss Requests with Speculative Decoding on Invalidated KV under Prefill-Decode Disaggregation",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-16",
+          "authors": "Jianjun Ou, Matthew Lentz",
+          "institutions": "Duke University",
+          "abstract": "Agent 会话经常编辑上下文，这会让已缓存的 KV 失效，请求必须等一次完整 re-prefill 才能继续解码。Callo 是一个 PD 分离服务系统：它把这批“已失效的 KV”当作投机草稿的来源来缩短等待，同时在 prefill 之后用精确 KV 校验草稿，只有通过才提交 token。为了让投机不白占解码资源，Callo 只在解码资源空闲时排布投机，并在草稿大概率不会被接受时抢占掉这次投机。作者在两卡测试床、三个模型族上用 SWE-agent 会话评测，中等负载下相对 vLLM 的全请求加速为 1.05-1.19 倍；并用真实 trace 驱动的集群级仿真说明收益在更大规模下依然成立。",
+          "contributions": [
+            "把“被上下文编辑作废的 KV”从垃圾变成投机解码的草稿源，在不牺牲正确性的前提下缩短 re-prefill 等待。",
+            "设计投机调度：只在解码资源富余时发起投机，按接受概率抢占，避免投机本身拖慢正常解码。",
+            "用精确 KV 事后校验保证提交 token 与全量重算一致，给出两卡实测加集群仿真的双层验证。"
+          ],
+          "conclusions": [
+            "在 agent 这类高上下文编辑率负载下，作废 KV 仍含足够信息支撑有效草稿。",
+            "投机的收益取决于调度时机，盲目投机反而会挤占解码吞吐。"
+          ],
+          "experiments": [
+            "两卡测试床、SWE-agent 会话、三个模型族：全请求加速 1.05-1.19 倍（相对 vLLM，中等负载）。",
+            "真实 trace 驱动的集群级仿真中收益同样成立。"
+          ],
+          "significance": "为 agent 场景的 PD 分离服务指出一条“废 KV 复用 + 投机校验”的实用路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.18459",
+          "pdfUrl": "https://arxiv.org/pdf/2611.18459.pdf",
+          "index": 4,
+          "takeaway": "作废的 KV 别急着扔，可以当投机草稿用。",
+          "keyExperiment": "SWE-agent 会话下相对 vLLM 全请求加速 1.05-1.19x。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "TIDE: Reclaiming Lost Performance In On-Policy Reinforcement Learning",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-16",
+          "authors": "Mathew Jacob, Morgan Borjigin-Wang, Kan Zhu, Po Hao Chen, Yi Pan, Andy Ruan, Nayani Modugula, Ethan Lavi, Luis Ceze, Malte Schwarzkopf, Akshay Narayan, Deepti Raghavan, Stephanie Wang",
+          "institutions": "University of Washington, Brown University",
+          "abstract": "同步、同址（colocated）的 LLM 强化学习后训练存在严重的资源浪费：rollout 的长尾让推理引擎空等，或只能以很低的有效 batch 解码。TIDE 在不破坏 on-policy 语义的前提下把利用率找回来，靠两项互补技术：一是长尾 rollout 还在跑时，动态把 rollout GPU 改作训练用；二是在多个推理引擎之间动态迁移 rollout，以提高解码吞吐。什么时候该改作训练由自适应迁移策略自动判定，因此不需要为每个应用手工调参，性能收益可跨应用与硬件配置泛化。评测中 TIDE 相对同址系统端到端加速最高 1.36 倍，优于所有被比较的 on-policy 基线，并达到最优吞吐的 97%。",
+          "contributions": [
+            "指出同步 on-policy RL 后训练的真实瓶颈是 rollout 长尾导致的 GPU 空转，而非算法本身。",
+            "提出 rollout GPU 动态改作训练 + rollout 跨引擎迁移两项互补机制，二者都不破坏 on-policy 语义。",
+            "用自适应迁移策略自动决定改作时机，免去逐应用调参。"
+          ],
+          "conclusions": [
+            "保持 on-policy 语义与提升资源利用率并不冲突，只要把“什么时候切换”交给运行时策略。",
+            "长尾 rollout 的算力可被回收，系统能逼近理论最优吞吐。"
+          ],
+          "experiments": [
+            "端到端加速最高 1.36 倍（相对同址系统）。",
+            "优于所有被评估的 on-policy 基线。",
+            "达到最优吞吐的 97%。"
+          ],
+          "significance": "把 RL 后训练的系统瓶颈明确为长尾调度问题，并给出可自动配置的解法。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17924",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17924.pdf",
+          "index": 5,
+          "takeaway": "RL 后训练的浪费在长尾 rollout，回收即可提速 1.36 倍。",
+          "keyExperiment": "端到端 1.36x 加速，达最优吞吐 97%。"
+        },
+        {
+          "title": "LACCO: Local Accumulation with Computation--Communication Overlap",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-16",
+          "authors": "Daniele Kopyshevskiy, Benjamin Therien, Nicolas Pinto, Edouard Oyallon",
+          "institutions": "Sorbonne Universite (ISIR), Mila, Universite de Montreal, Cygni Labs, CNRS",
+          "abstract": "在低带宽网络上训练语言模型，同步开销是主要瓶颈。DiLoCo 一类本地优化方法只在若干本地步之后才通信，但外层梯度平均与外层更新仍留在关键路径上；已有的计算-通信重叠方法靠延迟更新或副本本地更新来消掉停顿，代价是收敛变差或副本漂移。LACCO 提出两阶段算法：让全局通信与本地计算重叠，同时仍然施加所有副本共享的、全局聚合后的更新，外层更新不引入任何陈旧性。作者对光滑非凸目标给出收敛保证。FineWeb 语言模型预训练实验中，LACCO 稳定优于 Eager、Delayed DiLoCo 等重叠基线；该优势在模型规模扩到 0.5B、通信间隔与副本数（最多 16 个 worker）大幅变化时依然成立，而额外计算与显存开销可忽略或完全被重叠掉。",
+          "contributions": [
+            "两阶段设计把全局通信与本地计算重叠，同时保留全局聚合更新，消除已有方法的外层陈旧性。",
+            "对光滑非凸目标给出收敛保证，而不是只靠经验对齐。",
+            "在最多 16 个 worker、0.5B 规模与多种通信间隔下验证收益稳定，且开销可忽略。"
+          ],
+          "conclusions": [
+            "在低带宽下做数据并行，可以既重叠通信又不牺牲外层更新的同步语义。",
+            "相比 Delayed/Eager DiLoCo，重叠策略带来的收益随规模与 worker 数扩大仍保持。"
+          ],
+          "experiments": [
+            "FineWeb 预训练上稳定优于 Eager 与 Delayed DiLoCo。",
+            "模型扩到 0.5B、副本数最多 16 时优势保持。",
+            "额外计算/显存开销可忽略或可完全重叠。"
+          ],
+          "significance": "为低带宽分布式训练提供了一条“不损收敛的重叠”路线，对跨机房训练尤其相关。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17991",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17991.pdf",
+          "index": 6,
+          "takeaway": "通信可以重叠，但外层更新不必因此变陈旧。",
+          "keyExperiment": "FineWeb 预训练优于 Eager/Delayed DiLoCo，扩展至 0.5B 与 16 worker 仍成立。"
+        },
+        {
+          "title": "Do Mixture-of-Experts Routers Benefit from Ensembling?",
+          "score": 3.7,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-16",
+          "authors": "Viktor Vesely, Sebastian Jitaru",
+          "institutions": "University of Groningen",
+          "abstract": "集成之所以常优于单模型，理论归因于成员精度与成员间多样性。MoE 本身已经组合了很多专家，但每条输入的专家权重由单个 router 决定。作者把集成搬到路由这一层：用一组 router 与专家联合训练，由它们共同给出专家权重。实验在欠参数化网络上进行，覆盖两个图像分类与两个表格回归任务，并针对 router 集成提出“性能-多样性”分解分析。四个结论：router 越多验证损失越低；显式最大化专家多样性在四个任务中的三个上提升平均性能；显式最大化 router 之间多样性没有效果；用算术平均而非几何平均合并 router 权重更好。总体而言路由从集成中只获得温和收益，且被训练额外 router 的算力开销抵消。",
+          "contributions": [
+            "首次把集成思想系统地施加到 MoE 的路由环节，并给出 router 集成的性能-多样性分解。",
+            "区分“专家多样性”与“router 多样性”两种正则目标，发现只有前者有效。",
+            "在四类任务上系统比较权重合并方式（算术 vs 几何平均）。"
+          ],
+          "conclusions": [
+            "router 集成能降验证损失，但收益温和，边际收益被额外训练成本吃掉。",
+            "想让集成起作用，应优化专家之间的多样性，而不是 router 之间的多样性。"
+          ],
+          "experiments": [
+            "router 数量增加时验证损失单调下降。",
+            "显式最大化专家多样性在 3/4 任务上提升平均性能。",
+            "算术平均合并 router 权重优于几何平均；router 多样性正则无效果。"
+          ],
+          "significance": "给 MoE 路由设计一个负面+温和正面的清晰边界：集成不是免费的，且该优化的多样性维度有限。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17472",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17472.pdf",
+          "index": 7,
+          "takeaway": "router 集成只在“专家多样性”这一维度上划算。",
+          "keyExperiment": "更多 router 降低验证损失但被算力开销抵消；专家多样性在 3/4 任务有效。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Compiling Specialized GPU-Initiated Networking",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-16",
+          "authors": "Javid Baydamirli, Ismayil Ismayilov, Kaan Oktay, Didem Unat",
+          "institutions": "Koc University, fal.ai",
+          "abstract": "ML 系统会把计算按负载与硬件做特化，但通信仍留在通用库里——其 device 代码与传输决策对高层编译器不可见。Obaleth 是一个编译器，它把 GPU 发起的通信纳入 kernel 的中间表示，与计算一起协同优化，再下降为特化的传输代码；它围绕 buffer 生命周期规划 completion，并优化内存序、同步与批处理，同时支持 NVIDIA 与 AMD GPU。在 H100 上小消息发送最多快 3.3 倍；在 256 卡上 all-to-all 分别比 NVSHMEM 与 NCCL GIN 快 1.25 倍和 2.3 倍，且显存与寄存器占用显著更小。接入 vLLM 后在 16 张 B200 上服务 Qwen3-235B，请求完成速度比 DeepEP 方案最多快 1.29 倍。",
+          "contributions": [
+            "把 GPU 发起的通信提升为编译器可见的一等公民，纳入 kernel IR 与计算一起做协同优化。",
+            "围绕 buffer 生命周期规划 completion，并系统优化内存序、同步与批处理，跨 NVIDIA 与 AMD 后端。",
+            "在 256 卡集合通信与 vLLM 的 Qwen3-235B 服务两个真实场景验证收益，同时降低显存与寄存器占用。"
+          ],
+          "conclusions": [
+            "通信特化应交给编译器而非通用库，因为传输决策必须与 kernel 的数据流、buffer 生命周期一起看。",
+            "编译出来的通信代码在延迟敏感的小消息与大规模 all-to-all 上都优于手工库。"
+          ],
+          "experiments": [
+            "H100 上小消息发送最多快 3.3 倍。",
+            "256 卡 all-to-all 比 NVSHMEM 快 1.25 倍、比 NCCL GIN 快 2.3 倍。",
+            "vLLM 中 16×B200 服务 Qwen3-235B，请求完成比 DeepEP 快最多 1.29 倍。"
+          ],
+          "significance": "指向“通信也进编译器”的路线：把 NCCL/NVSHMEM 式的通用库换成按 kernel 特化生成的传输代码。",
+          "arxivUrl": "https://arxiv.org/abs/2611.18145",
+          "pdfUrl": "https://arxiv.org/pdf/2611.18145.pdf",
+          "index": 8,
+          "takeaway": "通信该由编译器按 kernel 特化生成，而不是套通用库。",
+          "keyExperiment": "256 卡 all-to-all 比 NVSHMEM 快 1.25x、比 NCCL GIN 快 2.3x。"
+        },
+        {
+          "title": "AscendGYM: A Cost-Aware Kernel Optimization Benchmark for Real-World Workloads on Ascend NPUs",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-11-16",
+          "authors": "AI Training Platform Team, Bingwei Zhang, Jing Li, Amir Abdullin, Sihang Chen, Xin Chen, Liangjun Feng, Yingmeng Gao, Tao Guo, Junjie Huang, Dongfang Li, Zhanglian Lin, Jiajun Liu, Zekun Liu, Zhengxuan Lu, Xiaodong Luo, Jian Meng, Ivan Nosov, Linyuan Qiu, Weijian Sun, Wanrui Yan, Binfan Zheng, Zhichao Zhang",
+          "institutions": "Huawei",
+          "abstract": "kernel 优化是 Ascend NPU 上 LLM 训练与推理效率的关键，但现有 Ascend kernel 基准多聚焦“生成 kernel”，较少考察 agent 在真实负载输入配置下优化既有实现的能力。AscendGYM 初始套件含 48 个 kernel、分三档难度，每个 kernel 配套测试用例的数据类型与张量形状均采自真实训练/推理任务，因此在 AscendGYM 上的性能提升可直接映射到对应负载。它支持模型评测与 model-harness 两种模式，既能测训练好的模型也能测自定义 agent，并提供贴近实际流水线调用方式的完整执行环境；模型评测模式还内置带搜索编排与经验积累的 harness。作者同时提出 Speedup-Token Score（STS）指标，把加速比与 token 成本放在一起，衡量给定预算下模型或 harness 的真实 kernel 优化能力。",
+          "contributions": [
+            "提出面向 Ascend NPU 的 kernel 优化基准，48 个 kernel 的测试用例形状与类型取自真实训练/推理负载。",
+            "同时支持模型评测与 model-harness 评测，并提供内置搜索编排与经验积累的 harness。",
+            "提出 Speedup-Token Score（STS），把加速比与 token 成本联合计入，避免只看加速比。"
+          ],
+          "conclusions": [
+            "kernel 优化能力必须放在真实输入配置下测，否则加速比无法映射到生产负载。",
+            "评估 agent 的 kernel 优化能力要计成本，STS 比单纯加速比更能反映实用性。"
+          ],
+          "experiments": [
+            "初始套件 48 个 kernel，覆盖三个难度档。",
+            "测试用例的数据类型与张量形状来自真实训练与推理任务。",
+            "提供模型评测与 harness 两种模式及完整执行环境。"
+          ],
+          "significance": "补上国产 NPU 生态里“优化既有 kernel”这一环的评测空白，并把成本纳入评分。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17621",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17621.pdf",
+          "index": 9,
+          "takeaway": "Ascend 上的 kernel 优化需要真实负载 + 成本感知的评测。",
+          "keyExperiment": "48 个真实负载 kernel + STS（加速比/成本）双维度评分。"
+        },
+        {
+          "title": "Advancing Quantization for R&R Models with Microscaling Formats",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.AI",
+          "date": "2026-11-16",
+          "authors": "Yavuz Yetim, Bor-Yiing Su, Zhe Wang, Arthur Liu, Pranav Sharma, Ying Wang, Randy Shuai, Luke Pfister, Ruichao Xiao, Bill Zhao, Zihao Liu, Liyuan Li, Jiangyuan Li, Gaoxiang Liu, Nathan Yan, Geonhwa Jeong, Jatin Chhugani, Elias Ellison, Uladzimir Pashkevich",
+          "institutions": "Meta Platforms, AMD",
+          "abstract": "推荐排序（R&R）模型要求极高吞吐，却对精度极度敏感：LLM 常能容忍 1% 以上的量化掉点，而生产级 R&R 要求归一化熵（NE）相对 FP16/FP32 基线的偏移不超过 0.01%。作者在 AMD MI350X 上评估 MXFP8 与 6 bit 的 MXFP6 用于工业级 R&R 推理，这是 R&R 领域首次报告原生 MXFP6 GEMM（权重与激活都量化、直接在 6 bit 元素上算）带来显著加速且不损质量。他们按层选择性使用 6 bit 最大化 QPS 且不越 NE 门槛，并证明 MXFP8 可替代 row-wise FP8。两个生产广告模型上，GEMM kernel 相对 FP16 提速 1.33-1.55 倍（MXFP8）与 1.73-1.99 倍（MXFP6）；选择性 MXFP6 带来端到端吞吐提升 1.5-5.3%（模型 A）与 7.6-14.3%（模型 B）。",
+          "contributions": [
+            "首次在工业级 R&R 模型上报告原生 MXFP6 GEMM（权重与激活同时量化、6 bit 直接计算）的可用加速。",
+            "给出按层选择性使用 MXFP6 的策略，在 0.01% NE 门槛内最大化整体 QPS。",
+            "证明 MXFP8 可作为 row-wise FP8 的替代，二者精度几乎相同，可按 GEMM 形状选更快的 kernel。"
+          ],
+          "conclusions": [
+            "在 NE 偏移 0.01% 的严格约束下，6 bit 微缩放格式仍可选择性落地并带来实际吞吐收益。",
+            "格式选择应按层与 GEMM 形状决定，而非全局一刀切。"
+          ],
+          "experiments": [
+            "GEMM kernel 相对 FP16：MXFP8 提速 1.33-1.55 倍，MXFP6 提速 1.73-1.99 倍，单层最高 2.90 倍。",
+            "端到端吞吐提升：模型 A 1.5-5.3%，模型 B 7.6-14.3%（相对其 FP8 配置）。",
+            "MXFP8 与 row-wise FP8 精度几乎一致。"
+          ],
+          "significance": "把微缩放 6 bit 格式从 LLM 推到对精度更苛刻的推荐排序推理，给出可上线的分层策略。",
+          "arxivUrl": "https://arxiv.org/abs/2611.17501",
+          "pdfUrl": "https://arxiv.org/pdf/2611.17501.pdf",
+          "index": 10,
+          "takeaway": "精度门槛极严的 R&R 也能吃 6 bit：关键是按层选格式。",
+          "keyExperiment": "MXFP6 GEMM 相对 FP16 提速 1.73-1.99x，端到端吞吐 +7.6~14.3%（模型 B）。"
+        }
+      ]
+    }
+  ]
+}
