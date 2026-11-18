@@ -1,0 +1,343 @@
+{
+  "date": "2026-11-18",
+  "title": "2026-11-18 论文精选",
+  "lede": "今日主题：低精度走到端到端——FP4 同时压 KV 存储与注意力计算、MXFP4 训练做到跨厂逐位可复现，系统侧则把抢占、专家并行与 GPU 原生 I/O 的等待时间挤出来。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 894
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "NVFP4-MLA: Unified FP4 KV-Cache Storage and Attention Computation for Multi-Head Latent Attention",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-17",
+          "authors": "Chao Ni, Qi Zhang, Xiao Wang, Zongfei Jing, Mingyang Hao, Binghan Chen, Kefeng Duan, Yu-Jung Chen, Mengdi Wang, Tijmen Blankevoort, Jun Yang",
+          "institutions": "NVIDIA",
+          "abstract": "长上下文推理与 agent 负载下，KV cache 容量与注意力计算已成为前沿模型服务的主导成本。本文提出 NVFP4-MLA，首次把多头潜在注意力（MLA）的 KV cache 存储与注意力计算同时压到 FP4，并做量化算法、注意力 kernel 与缓存系统的联合设计：选择性残差补偿只对量化敏感通道追加 NVFP4 残差以保精度；二维量化块让共享 latent cache 同时适配两次注意力 BMM 的不同归约方向，从而省去中间的重量化步骤。作者强调 4 bit 不只是省显存——算力侧同样吃到了低精度收益。",
+          "contributions": [
+            "首个将 MLA 的 KV 存储与注意力计算统一到 FP4 的端到端设计，量化算法与 kernel、缓存系统协同优化",
+            "提出选择性残差补偿：仅对量化敏感通道保留 NVFP4 残差，在 3 倍级压缩下维持与 BF16 持平的精度",
+            "二维量化块同时兼容两次注意力 BMM 的归约方向，消除两次矩阵乘之间的重量化开销"
+          ],
+          "conclusions": [
+            "FP4 路径在精度上与 BF16 MLA 持平，说明 MLA 的 latent 表示对 4 bit 存储相对宽容",
+            "大量收益来自 kernel 侧而非仅省显存：低精度计算直接缩短了注意力 kernel 的执行时间"
+          ],
+          "experiments": [
+            "在 DeepSeek-R1 与 Kimi-K3 上九项基准平均精度与 BF16 MLA 持平，KV cache 分别压缩 3.20x 与 3.05x",
+            "NVIDIA Rubin GPU 上注意力 kernel 相对 FP8 MLA 加速至多 2.82x（R1）与 2.71x（K3）",
+            "agentic 多轮服务 p90 首 token 延迟降低至多 3.5x 与 2.1x；分离式 DeepSeek-R1 部署单卡吞吐至多 2.30x"
+          ],
+          "significance": "把 MLA 的 KV 存储与注意力计算一起压进 FP4，是长上下文推理降本的一条端到端路线。",
+          "arxivUrl": "https://arxiv.org/abs/2611.18972",
+          "pdfUrl": "https://arxiv.org/pdf/2611.18972.pdf",
+          "index": 1,
+          "takeaway": "FP4 不只是省显存：MLA 的 KV cache 压 3 倍后精度持平，注意力 kernel 比 FP8 版本快 2.7–2.8 倍。",
+          "keyExperiment": "Rubin GPU 上注意力 kernel 相对 FP8 MLA 加速 2.82x（DeepSeek-R1）/2.71x（Kimi-K3），KV cache 压缩 3.20x/3.05x 且精度持平"
+        },
+        {
+          "title": "Making Preemption Productive in Long-Output LLM Serving",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-17",
+          "authors": "Ziji Shi, Xinyi Wan, Chaoyi Ruan, Guangxing Huang, Min Lin, Jialin Li",
+          "institutions": "National University of Singapore, Sea AI Lab",
+          "abstract": "推理模型输出长，KV cache 会在 GPU 上驻留数分钟；显存填满时服务器抢占请求，而被抢占的请求可能反复丢失并恢复状态、却几乎不产出新 token，作者称这种现象为 KV thrashing——某些情形下超过五分之一的请求被卡住一分钟以上。既然不延迟准入就无法避免抢占，论文转而追问如何让抢占变得有产出。Stint 保存被抢占请求已完成的工作、限定其等待时长，并在请求回归后先给一轮新解码；显存侧用固定长度 KV 快照配连续性优先的 CPU 池与精确 extent 分配器，搬运靠融合 K/V gather-scatter kernel 与双缓冲。",
+          "contributions": [
+            "提出并量化 KV thrashing：长输出服务中抢占让请求反复丢弃与恢复状态，部分系统里超过 1/5 请求停顿逾一分钟",
+            "用固定长度 KV 快照 + 连续性优先 CPU 池 + 精确 extent 分配器，配合融合 K/V gather-scatter kernel 与双缓冲做大块搬移",
+            "年龄式重新准入与保护窗口让回归请求先跑一轮新解码，并以解码隐状态估计的剩余长度指导 victim 选择"
+          ],
+          "conclusions": [
+            "抢占在长输出服务中无法靠调度彻底消除，但可以改造为有产出的抢占——保住已完成工作并给等待上限",
+            "整体 replay 时间与尾延迟同时改善，说明被基线饿死的长尾请求才是拖慢全局的原因"
+          ],
+          "experiments": [
+            "Qwen3-32B + H200 的奥数题 replay 中，无任何请求停顿超过 50 秒，p99 每 token 时间相对重算降低 50.7%",
+            "整个 replay 提前 10.7% 完成，吞吐提升 12.0%",
+            "同等引擎内与重算基线对比，改善主要来自被基线饿死的请求不再拖到最后"
+          ],
+          "significance": "长输出服务里抢占不可避免，但保住被抢占请求的已完成工作能同时救回尾延迟与吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2611.20106",
+          "pdfUrl": "https://arxiv.org/pdf/2611.20106.pdf",
+          "index": 2,
+          "takeaway": "把抢占当成可复用状态而非重算：p99 每 token 时间降 50.7%，整个 replay 提前 10.7% 完成。",
+          "keyExperiment": "Qwen3-32B/H200 上无请求停顿超过 50 秒，p99 每 token 时间相对重算降 50.7%，吞吐 +12.0%"
+        },
+        {
+          "title": "Supercharging Olmo-core for Efficient and Scalable MoE Training",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-17",
+          "authors": "Tianhua Tao, Akshita Bhagia, Dirk Groeneveld, Pete Walsh, Tyler Romero, Yashas Samaga, Jacob Morrison, Iz Beltagy, Taira Anderson, Noah A. Smith, Hannaneh Hajishirzi",
+          "institutions": "Allen Institute for AI",
+          "abstract": "MoE 增加参数但不按比例增加每 token 计算，然而训练成本还取决于搬运字节数、占用显存与 kernel 启动次数，这些开销多随总参数量而非活跃计算增长。在面向稠密模型搭的基础设施上这种错配代价很高：早期 baseline 中，存储的专家参数变大时吞吐反而下降。作者重构 Olmo-core 训练栈：用 DDP 取代 FSDP，加入专家并行（EP）、流水并行（PP）、分布式优化器与激活重算；提出基于 NVSHMEM 的 rowwise EP，把 token 直接写入对应专家缓冲，去掉 dispatch 与 combine 的置换开销；路由元数据常驻 GPU、配合设备端调度的 grouped GEMM 让 EP 完全无同步。",
+          "contributions": [
+            "以 DDP 为底座重建 Olmo-core 训练栈，叠加 EP、PP、分布式优化器与激活重算，替掉原先的 FSDP 架构",
+            "NVSHMEM rowwise EP 让 token 直写专家缓冲，消除 dispatch/combine 置换；路由元数据留在 GPU + 设备端调度 grouped GEMM 实现无同步 EP",
+            "曝光两类系统级陷阱：路由学会 hack 负载均衡损失的 Token Gerrymandering，以及通信计算重叠反而拖慢被重叠 kernel"
+          ],
+          "conclusions": [
+            "MoE 训练效率的瓶颈是总参数带来的搬运、显存与 kernel 开销，而不是活跃计算量",
+            "紧耦合 MXFP8 与拓扑无关 checkpoint 让同一套栈在超大模型与变化的并行布局间都可运行"
+          ],
+          "experiments": [
+            "NVL8 B300 节点上支持从 12.9B 到 1.2T 总参数的配置，最多 512 张 GPU",
+            "1.2T 规模配合 MXFP8 与逐层重算达到 858 useful-model TFLOP/s/GPU",
+            "可选 DeepEP v2 后端的容量实验做到 2.38T 参数"
+          ],
+          "significance": "MoE 训练栈要围绕总参数量而非活跃计算重做，否则吞吐会随专家参数增长而倒退。",
+          "arxivUrl": "https://arxiv.org/abs/2611.18956",
+          "pdfUrl": "https://arxiv.org/pdf/2611.18956.pdf",
+          "index": 3,
+          "takeaway": "把 EP 做成真正无同步的 rowwise 写入，1.2T 模型在 512 卡上跑出 858 useful TFLOP/s/GPU。",
+          "keyExperiment": "1.2T 参数 + MXFP8 + 逐层重算在 NVL8 B300 上达 858 useful-model TFLOP/s/GPU，容量测试到 2.38T"
+        },
+        {
+          "title": "CertiSum: Bitwise-Identical MXFP4 Training Across Platforms and Parallelism Layouts",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-17",
+          "authors": "Steve Rhyner, Yubo Gao, Stefan de Lasa, Sankeerth Durvasula, Nandita Vijaykumar",
+          "institutions": "University of Toronto, Vector Institute",
+          "abstract": "用 MXFP4 训练是非确定的：相同输入在不同并行布局、不同厂商 GPU 上会得到不同结果，给调试、训练审计以及训推引擎一致性带来麻烦。CertiSum 要让 MXFP4 训练在多次运行、不同并行布局与不同 GPU 厂商之间按位一致。核心洞察是：对 MXFP4 乘积做原生 FP32 累加，在很多求和顺序下本来就是精确的。据此 CertiSum 在量化时收集统计量来认证原生矩阵乘结果，只对未通过认证的输出精确重算，在认证很少成功的场景直接改用精确 kernel；量化块在不同布局间保持不变，部分和合并时不做舍入，并覆盖注意力与权重梯度。",
+          "contributions": [
+            "提出以统计量认证原生矩阵乘精确性的机制，只对认证失败的部分付出精确重算代价",
+            "量化块跨布局保持不变 + 部分和无舍入合并，使注意力与权重梯度计算在布局切换后仍按位一致",
+            "把精确 kernel 用作认证失败率高时的兜底，兼顾可复现性与可接受的额外开销"
+          ],
+          "conclusions": [
+            "4 bit 训练的不可复现并非不可避免：多数归约顺序下原生 FP32 累加已经精确，只需认证少数情形",
+            "按位一致性与 BF16 级吞吐可以兼得，代价取决于输入形状而非全局固定开销"
+          ],
+          "experiments": [
+            "200 步 Qwen3-8B-Base 在 AMD MI350X 与 NVIDIA GB200 之间、以及 MI350X 上数据/张量/上下文并行切换时训练状态逐位一致",
+            "三个 8B–14B 模型在 FineWeb-Edu 上，较大输入形状下训练步延迟相对非精确 MXFP4 只增加 11.8–60.5%",
+            "相对 BF16 仍快至多 1.24x，相对确定性 BF16 快至多 1.70x"
+          ],
+          "significance": "让 MXFP4 训练跨厂商、跨并行布局按位可复现，是低精度训练进入审计与调试流程的前提。",
+          "arxivUrl": "https://arxiv.org/abs/2611.21584",
+          "pdfUrl": "https://arxiv.org/pdf/2611.21584.pdf",
+          "index": 4,
+          "takeaway": "只认证那些真正需要精确重算的归约，换来跨 AMD/NVIDIA、跨并行布局的逐位一致训练。",
+          "keyExperiment": "Qwen3-8B-Base 训练 200 步在 MI350X 与 GB200 之间逐位一致，相对确定性 BF16 快至多 1.70x"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "ToolGraph as a Q-Function for Test-Time Scaling of Tool-Use Agents",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-17",
+          "authors": "Ke Shen, Ankita Bhaumik, Li Dong, Shengjie Liu, Shuzhen Li, Naveed Ahmed Janvekar",
+          "institutions": "Amazon, Princeton University",
+          "abstract": "工具调用 agent 必须串联相互依赖的调用，但某个输出能否满足后续哪个输入，很难指望通用语言模型仅凭工具描述推断出来。论文把这种结构一次性编译成可复用的外部表示：ToolGraph 是工具目录上的有向加权依赖图，边由参数匹配与干预式探针（带/不带候选前驱各执行一次链）提出，再合成边置信度。与已有工作用图检索工具、搜路径或给下一步打分不同，本文问同一结构能否通过组合图路径给出多步价值，即目标条件动作价值 Q(s,a,g)，并比较动态规划、由其蒸馏的 GraphSAGE、以及条件于图证据的 LLM 估计器。",
+          "contributions": [
+            "把工具依赖结构一次性编译为可复用加权图，用参数匹配 + 干预式探针产生带置信度的边",
+            "把图上路径组合成目标条件动作价值 Q(s,a,g)，将工具图从检索结构升级为多步价值估计器",
+            "系统对比三类估计器与个性化 PageRank、直接与反思式 agent，并单独报告图构建的一次性成本"
+          ],
+          "conclusions": [
+            "组合式价值只有当估计器同时读入具体状态时才有效：纯结构估计器无法区分正确工具配错误参数",
+            "图构建成本在该规模下与请求时成本相当，不能默认被摊销掉"
+          ],
+          "experiments": [
+            "两个工具使用基准 × 三个 backbone 上，LLM 估计器相对同图上的个性化 PageRank 平均提升 8.3 点",
+            "两个纯结构估计器（动态规划与 GraphSAGE）反而低于 PageRank",
+            "扫描四个控制图证据暴露量的旋钮，对照成功率与 token 消耗"
+          ],
+          "significance": "工具图的价值不在检索而在多步估值，但估值必须看见真实状态参数。",
+          "arxivUrl": "https://arxiv.org/abs/2611.20569",
+          "pdfUrl": "https://arxiv.org/pdf/2611.20569.pdf",
+          "index": 5,
+          "takeaway": "把工具依赖图当 Q 函数用：LLM 估值器比 PageRank 高 8.3 点，纯结构估值反而更差。",
+          "keyExperiment": "两个基准 × 三个 backbone 上 LLM 估计器相对个性化 PageRank 平均 +8.3 点，纯结构估计器低于 PageRank"
+        },
+        {
+          "title": "ECOD: Experience-Calibrated On-Policy Distillation for Multi-Turn Agents",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-17",
+          "authors": "Jie Jin, Shengqin Wang, Yan Gao, Xin Tan, Yuan Xie",
+          "institutions": "East China Normal University, Shanghai Innovation Institute, Shanghai AI Laboratory",
+          "abstract": "稀疏且延迟的奖励让长程语言 agent 的强化学习很困难。on-policy 蒸馏（OPD）用教师在学生自己生成的上下文上给出稠密反馈作为补充。但标准 OPD 的监督容易与教师相对能力、学生轨迹的实际结果、以及任务执行的时间结构错位；近期变体靠散度加权和时间调度来调节，从任务完成经验出发的联合校准仍未被探索。ECOD 在任务、轨迹、轮次三个层级分配教师监督：在匹配任务条件下比较师生成功率后验，只对失败的学生轨迹施加直接监督，并从成功教师长度导出时间先验。",
+          "contributions": [
+            "在任务、轨迹、轮次三级分配监督，用匹配任务条件下师生成功率后验校准教师可信度",
+            "只对失败轨迹做直接监督，避免在教师也未必更强的场景上浪费密集反馈",
+            "从成功教师的长度分布导出时间先验，权重可作用于教师 loss 或教师导出的 advantage，机制与具体蒸馏目标解耦"
+          ],
+          "conclusions": [
+            "经验校准的监督分配是可跨 SOD、TCOD-F2B、ATOD 等不同蒸馏目标复用的通用机制",
+            "长程 agent 的瓶颈不只在于奖励稀疏，也在于教师反馈与学生实际能力的不对齐"
+          ],
+          "experiments": [
+            "ALFWorld 与 WebShop，Qwen2.5-1.5B-Instruct 与 7B-Instruct 两个规模",
+            "相同教师设置下，相对标准 OPD 在 ALFWorld unseen 成功率最高提升 4.06%（相对）",
+            "跨两规模，ECOD 加持的三种蒸馏配置平均成对相对增益 6.20%（ALFWorld unseen）与 7.05%（WebShop），WebShop 单点 2.29%–21.60%"
+          ],
+          "significance": "把教师监督按经验校准后分配到三级粒度，让 on-policy 蒸馏在多轮 agent 上稳定增益。",
+          "arxivUrl": "https://arxiv.org/abs/2611.18656",
+          "pdfUrl": "https://arxiv.org/pdf/2611.18656.pdf",
+          "index": 6,
+          "takeaway": "只监督学生失败的轨迹、按师生后验成功率加权，ALFWorld/WebShop 上稳定拿到 6%–7% 相对提升。",
+          "keyExperiment": "ALFWorld unseen 相对标准 OPD 最高 +4.06%，跨配置平均 +6.20%；WebShop 平均 +7.05%（2.29%–21.60%）"
+        },
+        {
+          "title": "Understanding the Role of Reasoning Data in Pretraining",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-17",
+          "authors": "Jianhao Huang, Allan Zhang, Ali Payani, Baharan Mirzasoleiman",
+          "institutions": "University of California, Los Angeles, Cisco Research",
+          "abstract": "推理数据让模型接触多步推理，但推理轨迹往往只覆盖可得事实的一个子集。预训练应如何在原子事实与推理轨迹之间分配数据？作者构造了一个可控设定：每条事实都提供原子训练信号，但只有其中一部分出现在推理监督里，于是可以测量模型对这类转移的泛化——它们只以原子形式出现过、从未在推理轨迹中被使用。对线性 transformer，论文推导出使 held-transition 平方误差最小的原子信号权重，并证明其主阶最优随推理链长度增加、随被排除在推理轨迹之外的事实比例下降；该趋势在含 MLP、softmax 注意力与交叉熵的完整 transformer 层中依然成立。",
+          "contributions": [
+            "构造能分离原子事实与推理轨迹覆盖的受控预训练设定，用于测量对未见转移的泛化",
+            "对线性 transformer 解析推导最优原子信号权重，给出与推理链长度、事实覆盖率相关的显式依赖",
+            "把理论趋势在完整 transformer 层与两个自然语言设定（受控多跳推理、数学预训练）中验证"
+          ],
+          "conclusions": [
+            "推理数据的价值取决于链长与覆盖率：链越长、未覆盖事实越少，越应加大推理监督权重",
+            "预训练数据配比存在可推导的定量规律，而非只能靠经验调参"
+          ],
+          "experiments": [
+            "线性 transformer 上的解析最优权重，与完整 transformer 层（MLP + softmax 注意力 + 交叉熵）实验趋势一致",
+            "受控多跳推理与数学预训练两个自然语言设定均复现推理复杂度与数据覆盖度的影响"
+          ],
+          "significance": "给出预训练中推理数据与原子事实配比的第一性分析，把数据混合从经验调参变成可推导量。",
+          "arxivUrl": "https://arxiv.org/abs/2611.19042",
+          "pdfUrl": "https://arxiv.org/pdf/2611.19042.pdf",
+          "index": 7,
+          "takeaway": "推理链越长、覆盖越全，预训练里就该给推理轨迹更大权重——这条规律可从线性 transformer 推到完整层。",
+          "keyExperiment": "线性 transformer 上推导的最优权重随链长上升、随未覆盖事实比例下降，完整 transformer 层与两个自然语言设定均复现"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Integrated GPU Core for Mamba-3",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-11-17",
+          "authors": "Shiva Raja, William Desueza, Ajay Joshi",
+          "institutions": "Boston University",
+          "abstract": "Mamba-3 用一半的状态规模达到 Mamba-2 的困惑度，并提升了长上下文建模的解码算术强度，但其 MIMO 计算、指数-梯形离散化与 RoPE 引入大量稠密、逐元素与串行操作；即便做了 kernel 融合，传统 GPU 执行这些操作仍然低效。作者的特征刻画显示：Mamba-3 混合模型存在大量 kernel 启动、可观的数据搬动与上升的寄存器压力，进而降低 warp 占用与访存延迟隐藏能力。为此提出 RescuCore——一种专用 GPU 执行单元，与 CUDA core、Tensor core 并列集成在每个 SM sub-partition 内，共享寄存器堆、共享内存与 warp 调度器。",
+          "contributions": [
+            "系统刻画 Mamba-3 混合模型在 GPU 上的执行瓶颈：kernel 启动多、数据搬动大、寄存器压力压低 warp 占用",
+            "提出 SM 内集成的专用执行单元 RescuCore，流水化离散化、归一化、RoPE、MIMO 计算、状态更新与输出门控",
+            "稠密投影仍留在常规 CUDA/Tensor core 资源，专用单元只接管碎片化的逐元素与串行算子，避免整层重构"
+          ],
+          "conclusions": [
+            "Mamba-3 这类 SSM 混合模型的瓶颈在软件层难以靠 kernel 融合继续消除，需要执行单元层面的改动",
+            "以约 6% 的 die 面积换来 prefill 与解码两侧的加速与能耗下降，对混合架构是划算的集成方式"
+          ],
+          "experiments": [
+            "cycle-accurate Accel-Sim 仿真 + RTL 综合 + 综合 informed 的 AccelWattch 功耗建模评估",
+            "prefill 相对常规 GPU 执行加速 1.4–9.4x，能耗降低 1.4–5.0x",
+            "自回归解码加速 1.3–2.8x、能耗降 1.2–2.6x；state 取 32、MIMO rank 取 4 时面积开销约为 A100 die 的 5.9%，数值格式选定 BF16"
+          ],
+          "significance": "为 Mamba-3 这类 SSM 混合模型在 SM 内加一块专用执行单元，是软件融合失效后的硬件出路。",
+          "arxivUrl": "https://arxiv.org/abs/2611.20409",
+          "pdfUrl": "https://arxiv.org/pdf/2611.20409.pdf",
+          "index": 8,
+          "takeaway": "把离散化、RoPE、MIMO 这些碎片算子收进 SM 内的专用单元：prefill 快 1.4–9.4x，只花 A100 die 的 5.9% 面积。",
+          "keyExperiment": "Accel-Sim + RTL 综合评估：prefill 加速 1.4–9.4x、能耗降 1.4–5.0x；解码加速 1.3–2.8x，面积开销约 A100 die 的 5.9%"
+        },
+        {
+          "title": "GNoF: A Low-SM-Overhead GPU-Native NVMe-over-Fabrics Completion Path for Data-Intensive GPU Workloads",
+          "score": 3.8,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-11-17",
+          "authors": "Lei Tian, Wenhao Gu",
+          "institutions": "National University of Defense Technology",
+          "abstract": "当数据密集型负载的数据集超出显存、需要驻留在远端 flash 上时，GPU 是主力算力。传统路径由 host CPU 编排每一次 NVMe-oF 事务并经 host 内存中转，代价是 CPU 占用高、反复的 CPU-GPU 同步与冗余数据搬动。GPU 发起存储能把 CPU 移出 I/O 路径，但现有设计留了两个问题：同步 lock-step 完成让 SM 卡在自旋轮询上，而一次 RDMA 往返是 10–100 微秒；现有 GPU-native 远端系统又多聚焦 target 侧固件，仍用逐命令 doorbell 和周期性 CQ 轮询。GNoF 让 GPU 线程在设备侧构造命令 capsule、投递 send WQE、敲 doorbell 并收割完成。",
+          "contributions": [
+            "把 NVMe-oF/RDMA 数据路径整体下沉到 GPU：命令构造、WQE 投递、doorbell 与完成收割全在设备侧，CPU 只做连接建立与保活",
+            "针对长 fabric 往返设计三件套：doorbell mover 把一批 doorbell 合并成一次 MMIO、带无锁 fast peek 与单调完成计数器的批量 CQ 轮询、集合关联且引用钉住的 GPU 页缓存配 split fetch/wait 流水",
+            "不需要改 target 与固件，可直接跑在未修改的 SPDK target 上"
+          ],
+          "conclusions": [
+            "GPU 发起存储的关键不是把 CPU 挪开，而是别让 SM 为等一次 fabric 往返而自旋",
+            "主机 CPU 与 SM 占用同时降到接近零，说明 I/O 路径可以真正做到设备侧闭环"
+          ],
+          "experiments": [
+            "200 Gb/s InfiniBand 上单 client 达 177 万 4KB IOPS，host CPU 占用 0.37%、SM 占用约 1%",
+            "对比 kernel nvme-rdma 的 40% CPU 占用与 lock-step 轮询近乎 100% 的 SM 占用",
+            "与 kernel nvme-rdma、BlueField-3 DPU 上的 BaM、本地 SSD 上的 BaM 三个基线相比，选择性列 I/O 等场景取得 10–22x 提升"
+          ],
+          "significance": "把 NVMe-oF 完成路径做成 GPU 原生的低 SM 占用实现，让远端 flash 在数据密集型负载里接近本地盘。",
+          "arxivUrl": "https://arxiv.org/abs/2611.21288",
+          "pdfUrl": "https://arxiv.org/pdf/2611.21288.pdf",
+          "index": 9,
+          "takeaway": "GPU 线程自己敲 doorbell、批量轮询完成，SM 占用从 100% 降到约 1%，选择性列 I/O 快 10–22x。",
+          "keyExperiment": "200 Gb/s IB 上单 client 177 万 4KB IOPS，host CPU 0.37%、SM 约 1%；相对 kernel nvme-rdma/DPU 上 BaM 等基线快 10–22x"
+        },
+        {
+          "title": "Benchmarking LLM Inference on Desktop-Scale NVIDIA Grace Blackwell Clusters",
+          "score": 3.7,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-17",
+          "authors": "Kevin Bhimani, Christian Escobar, Daniel Mihovch, Rudolf Eigenmann, Sunita Chandrasekaran",
+          "institutions": "University of Delaware",
+          "abstract": "两台 NVIDIA DGX Spark GB10 通过 200 GbE 直连，可以服务更大的模型并提升推理容量，但收益取决于部署方式。论文在单台与两台 RDMA 互联系统上基准了 17 个开源权重 checkpoint，覆盖稠密与 MoE、8B 至 235B 参数、四种权重精度，用 vLLM 比较张量并行（TP=2）、流水并行（PP=2）与双副本基线，并发从 1 到 64，每个配置三次独立启动。结果显示桌面级集群上并行策略的选择并不服从直觉：TP=2 在吞吐与延迟两侧都优于 PP=2。",
+          "contributions": [
+            "在 17 个 checkpoint（8B–235B、稠密与 MoE、四种权重精度）上系统比较 TP=2、PP=2 与双副本三种部署方式",
+            "用三次独立启动与 95% Welch 区间做统计上可分辨的比较，而非单次跑分",
+            "给出可操作的部署指引：低并发选 TP=2、高并发且模型单机可装则选双副本，并指出 NCCL 集合通信开销是 TP=2 优势来源之一"
+          ],
+          "conclusions": [
+            "桌面级小集群上 TP=2 普遍优于 PP=2：流水并行对空载 inter-token 延迟几乎没有改善",
+            "精度阶梯与并行策略存在替代关系：NVFP4 比再添一台 Spark 跑 BF16 更能降低空载延迟"
+          ],
+          "experiments": [
+            "TP=2 峰值吞吐相对单 Spark 中位提升 1.59x，PP=2 为 1.39x；96 组匹配比较中 TP=2 在 93 组更高且 95% Welch 区间分离",
+            "TP=2 把空载 inter-token 延迟降到单机的 0.52–0.73x，PP=2 几乎无改善",
+            "100 ms inter-token 延迟目标下 TP=2 的 goodput 最高；三个精度阶梯上 NVFP4 比加第二台 Spark 跑 BF16 降延迟更多"
+          ],
+          "significance": "给桌面级 Grace Blackwell 双机部署划出策略边界：小集群里 TP 优于 PP，量化比加机器更划算。",
+          "arxivUrl": "https://arxiv.org/abs/2611.20289",
+          "pdfUrl": "https://arxiv.org/pdf/2611.20289.pdf",
+          "index": 10,
+          "takeaway": "两台 DGX Spark 上 TP=2 比 PP=2 更值：峰值吞吐 1.59x vs 1.39x，96 组比较赢 93 组。",
+          "keyExperiment": "TP=2 峰值吞吐中位 +1.59x（PP=2 为 1.39x），96 组匹配比较 93 组更优，空载 ITL 降至 0.52–0.73x"
+        }
+      ]
+    }
+  ]
+}
