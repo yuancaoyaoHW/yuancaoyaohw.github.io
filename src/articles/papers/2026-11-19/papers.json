@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-19",
+  "title": "2026-11-19 论文精选",
+  "lede": "今日主线是\"通信与访存\"：MoE 专家并行只传残差增量、跨地域预训练改用稀疏 gossip、扩散 LM 用可恢复稀疏注意力，再叠加国产 285B 全流程报告与投机解码硬件感知选型。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 290
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Communicate the Change: Efficient Expert Parallelism via Activation Compression",
+          "score": 4.6,
+          "category": "cs.LG",
+          "date": "2026-11-18",
+          "authors": "Fengyuan Liu, Jay Gala, Siva Reddy, Dzmitry Bahdanau",
+          "institutions": "Mila - Quebec AI Institute, McGill University, Periodic Labs",
+          "abstract": "MoE 模型靠专家并行把专家分散到各设备，每个 MoE 层推理时要做两次同步集合通信：把隐藏态 dispatch 到被激活的专家、再把专家输出 combine 回来。算力增长已远超互连带宽，这两次同步通信成了 MoE 扩展的主要瓶颈。作者提出 EchoMoE：利用 Transformer 块对残差流只做增量更新的特性，以较早层的隐藏态为参考，只同步传输当前态与参考态之间的压缩差值，而非每个隐藏态全量传输，并周期性刷新参考态。该改动轻量、可改造已有 MoE 模型，所需训练 token 比全量预训练少约 8500 倍。真机实验把跨节点通信量降低 58%、吞吐提升 22.6%，18 个基准上平均性能差距控制在 3.8 个百分点内；在带宽受限的以太网上推理吞吐最高提升 2.38 倍，且对通信表示做量化也不会带来可测的质量损失。作者开源了实现并给出 vLLM 推理集成。",
+          "contributions": [
+            "提出 EchoMoE：以早层隐藏态为参考、只传增量压缩差值的专家并行通信方案，直接削减延迟关键路径上的流量",
+            "设计参考态周期刷新机制，使压缩差值始终小幅、可在不显著增加算力的前提下同步传输",
+            "给出可对已有 MoE 模型做轻量改造的流程（约 8500 倍更少训练 token）并开源 vLLM 推理集成"
+          ],
+          "conclusions": [
+            "MoE 的瓶颈已从算力转向互连，通信内容而不是通信次数才是可优化的对象",
+            "增量传输在带宽受限环境（以太网、广域分布式推理）收益更大，且与量化通信兼容"
+          ],
+          "experiments": [
+            "跨节点通信量降低 58%，训练/推理吞吐提升 22.6%，18 个基准平均性能差距 ≤3.8 个百分点",
+            "带宽受限以太网下推理吞吐最高提升 2.38 倍",
+            "对传输的压缩表示做量化后无可测质量损失"
+          ],
+          "significance": "把 MoE 专家并行的通信开销从\"传全量隐藏态\"改成\"传增量\"，为带宽受限下的 MoE 扩展提供低成本改造路径",
+          "takeaway": "只传残差流的压缩增量，MoE 跨节点通信量降 58%、吞吐升 22.6%",
+          "keyExperiment": "跨节点通信量 -58%、吞吐 +22.6%，以太网受限下推理吞吐最高 2.38 倍，18 基准性能差距 ≤3.8pp",
+          "arxivUrl": "https://arxiv.org/abs/2611.22215",
+          "pdfUrl": "https://arxiv.org/pdf/2611.22215.pdf",
+          "index": 1,
+          "channel": "AI Infra"
+        },
+        {
+          "title": "XM-Sparse: High-Throughput Sparse-Attention LLM Serving over Scale-up Memory Pools",
+          "score": 4.5,
+          "category": "cs.DC",
+          "date": "2026-11-18",
+          "authors": "Yijun Sun, Xudong Liao, Zhuobin Huang, Kai Chen, Nikita Lazarev, Zhizhen Zhong",
+          "institutions": "Netpreme, The Hong Kong University of Science and Technology, National University of Singapore",
+          "abstract": "稀疏注意力已被生产级长上下文模型广泛采用，但服务系统仍需保留完整 KV 历史，HBM 容量因此成为并发上限。主机内存卸载受限于 PCIe 带宽与容量；新兴的 scale-up 内存池（如 X-Mem）同时缓解两者，为稀疏注意力卸载打开新空间。本文深入剖析后指出，即便有内存池，解码吞吐仍受 HBM 约束：热 KV 缓冲与完全常驻的索引器 key（K-index）缓存占用大量显存，且两者访问模式截然不同。据此提出 XM-Sparse，首个面向 scale-up 内存扩展的稀疏注意力卸载系统：把两类缓存都激进卸载，并各配 I/O 机制——对动态选中的 KV 条目，用 TMA 取回与注意力在 tile 级流水融合以隐藏延迟；对可预测的 K-index 访问，用 GPU 发起 DMA 按页预取，并与延迟关键操作协调避免干扰解码。系统实现在 SGLang 之上。",
+          "contributions": [
+            "首次剖析 scale-up 内存池下稀疏注意力服务的真实瓶颈：热 KV 缓冲与常驻 K-index 缓存共同吃满 HBM，且访问模式不同",
+            "为两类缓存分别设计 I/O：KV 走 TMA tile 级流水与注意力融合，K-index 走 GPU 发起 DMA 的分页预取并与解码协调",
+            "在 SGLang 上落地系统，跨 16K-1M 上下文保持高吞吐"
+          ],
+          "conclusions": [
+            "内存池只解决容量与带宽，不解决 HBM 驻留策略；按访问模式分层卸载才是稀疏注意力服务的关键",
+            "把取数延迟藏进注意力计算流水，比单纯提高卸载带宽更有效"
+          ],
+          "experiments": [
+            "DeepSeek-V3.2 与 GLM-5.3 上解码吞吐分别为 PCIe 方案 ECHO 的 4.98 倍、HiSparse 的 4.52 倍",
+            "较同平台朴素集成提升 1.34 倍，覆盖 16K-1M 上下文",
+            "实验基于仿真 scale-up 内存池"
+          ],
+          "significance": "把\"稀疏注意力 + 分层内存\"做成可落地的服务系统，说明卸载策略要按缓存访问模式分别设计",
+          "takeaway": "KV 与 K-index 分开卸载、各配 I/O 机制，解码吞吐达 ECHO 的 4.98 倍",
+          "keyExperiment": "相对 ECHO 4.98 倍、HiSparse 4.52 倍解码吞吐（16K-1M 上下文，SGLang 实现）",
+          "arxivUrl": "https://arxiv.org/abs/2611.22280",
+          "pdfUrl": "https://arxiv.org/pdf/2611.22280.pdf",
+          "index": 2,
+          "channel": "AI Infra"
+        },
+        {
+          "title": "Storing the Gemma 4 K=V Cache Once: Exact Global-KV Memory Savings in a Paged Serving Engine with Unchanged Attention Kernels",
+          "score": 4.3,
+          "category": "cs.LG",
+          "date": "2026-11-18",
+          "authors": "Kushagra Bainsla",
+          "institutions": "San José State University",
+          "abstract": "在 Gemma 4 31B 的全局注意力层里，value 就是归一化后的 key 投影，而 key 是 value 乘固定权重缩放、并只对四分之一维度施加旋转位置编码。Gemma 4 报告称该设计最多可减少 37.5% 的全局 KV 缓存，但开源服务引擎仍按每 token、每 KV 头存满 1024 个值。本文改为只存一行 640 个值，实数运算下精确等价，并让未改动的 paged attention 核通过两个重叠跨步视图分别当作 key 与 value 读取。16-bit 31B 的 vLLM 原型中输出与原生缓存模拟逐位一致，432 个答案仅 2 个不同（在运行波动内）；32K-64K token 时每请求稳态解码 KV 内存降为 1/1.34 到 1/1.40。两块 A100 加 NIXL 下 16K 提示解码每步 token 数为原生 1.38 倍、8K 为 1.24 倍。",
+          "contributions": [
+            "指出 Gemma 4 的 K=V 共享结构在开源服务引擎中未被利用，实际仍存满 key 与 value 两份",
+            "用一行 640 值表示精确等价的 K=V，并通过两个重叠跨步视图喂给未修改的 paged attention 核",
+            "给出 vLLM 原型与显存/吞吐实测，并用块池模型预测吞吐比（误差 <1%）"
+          ],
+          "conclusions": [
+            "模型架构里的代数冗余可以在服务栈里\"零核改动\"地兑现为显存收益，值得系统性地排查同族模型",
+            "收益与代价并存：显存与批容量提升，但同等 batch 下 eager step 慢 4%-9%，且暂不能与 8-bit KV 缓存叠加"
+          ],
+          "experiments": [
+            "解码 KV 内存每请求降至 1/1.34-1/1.40（32K-64K token，16-bit 31B）",
+            "两卡 A100 + NIXL 下解码每步 token 数 1.38 倍（16K）与 1.24 倍（8K），吞吐提升 1.30 与 1.11 倍",
+            "432 个答案中 2 个与原生引擎不同，其余逐位一致；eager step 同 batch 慢 4%-9%"
+          ],
+          "significance": "证明\"不改 kernel\"也能把模型层的 KV 冗余变成显存与并发收益，同时诚实标注了延迟与量化叠加的边界",
+          "takeaway": "Gemma 4 的 K=V 只存一行 640 值，KV 显存降 1.34-1.40 倍且输出近乎逐位一致",
+          "keyExperiment": "32K-64K 下每请求 KV 显存降到 1/1.34-1/1.40，两卡 A100 解码 token 数 1.38 倍（16K）",
+          "arxivUrl": "https://arxiv.org/abs/2611.23035",
+          "pdfUrl": "https://arxiv.org/pdf/2611.23035.pdf",
+          "index": 3,
+          "channel": "AI Infra"
+        },
+        {
+          "title": "TAILROLL: Tail-Aware Rollout Acceleration for RL-Based LLM Post-Training",
+          "score": 4.4,
+          "category": "cs.DC",
+          "date": "2026-11-18",
+          "authors": "Niloofar Gholipour, Marcos Assuncao, Timothy Yu, Gursimran Singh, Rajkumar Buyya, Julien Gascon-Samson, Zhenan Fan, Yong Zhang",
+          "institutions": "École de technologie supérieure, University of Melbourne, RBC",
+          "abstract": "LLM 的强化学习后训练被 rollout 卡住：响应长度呈重尾分布，每一步都要等最长的那条，引擎因此空转；异步训练只能掩盖而不能消除空闲。作者把浪费分成不均衡浪费（放置不均与解码争用）与掉队浪费（等最长响应），指出决定步长上限的常是尾部长度而非平均负载。TAILROLL 是集成进开源 RL 框架的在线调度器：在 chunk 边界把解码请求在引擎间无状态迁移，并以一次 re-prefill 续跑，按空闲度与代价做尾部均衡；当某响应的 GRPO 组已凑够优势估计所需样本时提前终止，并把其部分输出从损失中屏蔽。十种配置下 rollout 气泡比降 21%-74%、跨引擎 KV 不均衡降 44%-79%；端到端 rollout 时间减 24%-34%，长 CoT 整步时间减 21%-22%，p95 延迟降 28%-37%，吞吐最高 +33%，最终奖励相当或更高。",
+          "contributions": [
+            "把 rollout 浪费明确拆成不均衡浪费与掉队浪费，指出尾部长度而非平均负载决定步长",
+            "提出 chunk 边界无状态迁移 + 一次 re-prefill 续跑的代价感知尾部均衡策略",
+            "提出充分性门控终止：GRPO 组凑够样本即停，屏蔽部分输出对损失的贡献"
+          ],
+          "conclusions": [
+            "RL 后训练的吞吐瓶颈在调度层而非模型层，尾部治理比对冲（异步）更彻底",
+            "允许\"不完整响应\"参与训练不损奖励，是可观的额外加速来源"
+          ],
+          "experiments": [
+            "rollout 气泡比 -21%~-74%，跨引擎 KV 不均衡 -44%~-79%",
+            "端到端 rollout 时间 -24%~-34%，长 CoT 整步时间 -21%~-22%，p95 延迟 -28%~-37%",
+            "生成吞吐最高 +33%，最终奖励相当或更高"
+          ],
+          "significance": "把 RL 训练中最贵的 rollout 阶段当作调度问题处理，给出可直接接入现有 RL 框架的在线方案",
+          "takeaway": "迁移 + 提前终止治尾部拖累：rollout 时间减 24%-34%，吞吐 +33%",
+          "keyExperiment": "rollout 时间 -24%~-34%、p95 延迟 -28%~-37%、吞吐 +33%，奖励不降",
+          "arxivUrl": "https://arxiv.org/abs/2611.22206",
+          "pdfUrl": "https://arxiv.org/pdf/2611.22206.pdf",
+          "index": 4,
+          "channel": "AI Infra"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SpecSearch: Towards Hardware-Aware Efficient Speculative Decoding",
+          "score": 4.4,
+          "category": "cs.AI",
+          "date": "2026-11-18",
+          "authors": "Selin Yildirim, Ali Zeyrek, Deming Chen",
+          "institutions": "University of Illinois Urbana-Champaign",
+          "abstract": "投机解码能加速 LLM 推理，但最优配置同时取决于负载特征、GPU 硬件与可用内存。例如在 RTX 5090 上，当前最强草稿器 DFlash 低并发吞吐是自回归的 3.50 倍，高并发短输出时却只有 0.76 倍。SpecSearch 是硬件感知搜索器，联合优化解码策略、草稿长度与精度：解析代价模型刻画内存与算力约束、筛掉不可行配置以缩小搜索空间，再以多 GPU 标定测量训练基于 Jev 的预测器，使其能在未见过的 GPU 上直接选高吞吐配置而无需部署端标定。预测器用 LoRA 适配器加线性校正层参数高效训练，主干是冻结的 Qwen3-4B。在 RTX 5090、H100、L40 与 MI300X 上，完整标定的 SpecSearch 平均达自回归 2.01 倍、vLLM 投机解码 1.36 倍吞吐；免标定预测器达 1.30 倍，保留完整标定性能的 97.36%。",
+          "contributions": [
+            "用解析代价模型把\"策略 × 草稿长度 × 精度\"的搜索空间压缩到可行域，再由实测标定做最终取舍",
+            "训练 Jev 预测器在未见过的 GPU 上直接选配置，消除部署端标定的工程量",
+            "跨 NVIDIA 与 AMD 四款 GPU 统一验证，覆盖低/高并发与长短输出"
+          ],
+          "conclusions": [
+            "投机解码不存在通用最优配置，硬件感知的选择本身比设计新的草稿器更实际",
+            "用冻结小模型 + LoRA 的参数高效预测器可保留 97% 以上的搜索收益"
+          ],
+          "experiments": [
+            "四款 GPU 上平均 2.01 倍于自回归、1.36 倍于 vLLM 投机解码",
+            "免标定预测器达 1.30 倍，为完整标定性能的 97.36%",
+            "RTX 5090 上 DFlash 低并发 3.50 倍、高并发短输出仅 0.76 倍，说明配置敏感性"
+          ],
+          "significance": "把投机解码从\"选一个草稿器\"变成\"按负载与硬件在线选配置\"，为异构推理集群提供可迁移的方法",
+          "takeaway": "按负载与 GPU 联合选解码策略，平均 2.01 倍于自回归、1.36 倍于投机解码",
+          "keyExperiment": "四款 GPU 平均 2.01× 自回归 / 1.36× vLLM 投机解码，免标定版仍达 97.36%",
+          "arxivUrl": "https://arxiv.org/abs/2611.22296",
+          "pdfUrl": "https://arxiv.org/pdf/2611.22296.pdf",
+          "index": 5,
+          "channel": "Algorithms"
+        },
+        {
+          "title": "The Hidden Cost of MoE Diffusion Decoding: Profiling and Fixing the Sampler",
+          "score": 4.3,
+          "category": "cs.LG",
+          "date": "2026-11-18",
+          "authors": "Harshit Samrat, Ramakrishna Paramahamsa Kompella",
+          "institutions": "Indian Institute of Technology Madras",
+          "abstract": "掩码扩散语言模型通过迭代去噪整块 token 画布来解码，每次前向都要对整个画布×词表的 logits 张量做逐 token 采样与停止判定。作者在带宽受限的 NVIDIA GB10 上剖析 26B 扩散 MoE 单用户解码，发现权重量化之后，这条 logits 流水线而非专家 GEMM 才是解码耗时最大项。扩散解码每个输出 token 要处理 S 倍（S 为去噪步数）于自回归的 logit 条目，而该流水线大部分冗余或可融合。两级无损优化：bit-exact 级与参考逐字节相同；精度对齐级用融合单趟熵核与 Gumbel-max 采样。配合 W4A16 专家核，在 273 GB/s 单卡上较 bf16 端到端加速 2.4-2.7 倍，三项基准精度不变；独立实现的 LLaDA2.0-mini 上占解码 28.8%、融合后 3.3 倍；稠密扩散模型上该现象消失（3.6%）。",
+          "contributions": [
+            "定位量化后扩散 MoE 解码的新瓶颈：采样与停止判定流水线，而非专家 GEMM",
+            "给出两级无损优化（bit-exact 与精度对齐），并用融合熵核 + Gumbel-max 实现单趟采样",
+            "在第二个独立模型上复现，并指出该开销是 MoE 扩散特有而非扩散通用"
+          ],
+          "conclusions": [
+            "量化的收益会被非矩阵乘的\"胶水\"流水线吃掉，剖析要覆盖到采样层",
+            "同一现象在稠密扩散模型上仅占 3.6%，说明优化目标应针对 MoE 稀疏结构而非模型族"
+          ],
+          "experiments": [
+            "26B 扩散 MoE + W4A16 在 GB10 上端到端加速 2.4-2.7 倍，三项基准精度不变",
+            "LLaDA2.0-mini 上采样流水线占解码 28.8%，融合后 W4A16 加速 3.3 倍",
+            "稠密扩散模型上该流水线仅占 3.6%"
+          ],
+          "significance": "提醒\"量化之后瓶颈会迁移\"，并给出可直接复用的无损采样融合实现",
+          "takeaway": "量化后扩散 MoE 的最大开销是采样流水线，融合后端到端 2.4-2.7 倍",
+          "keyExperiment": "GB10 上 2.4-2.7 倍端到端加速（精度不变），LLaDA2.0-mini 复现 3.3 倍",
+          "arxivUrl": "https://arxiv.org/abs/2611.21852",
+          "pdfUrl": "https://arxiv.org/pdf/2611.21852.pdf",
+          "index": 6,
+          "channel": "Algorithms"
+        },
+        {
+          "title": "RISA: Recoverable Sparse Attention for Block-Diffusion Language Models",
+          "score": 4.1,
+          "category": "cs.CL",
+          "date": "2026-11-18",
+          "authors": "Xinrui Zhong, Fanjiang Ye, Yuke Wang",
+          "institutions": "Rice University",
+          "abstract": "块级扩散语言模型并行精修多个 token，是自回归之外的一条路径；但长上下文推理仍受限于访存瓶颈的注意力——每个去噪步都要重读不断增长的历史 KV 缓存。直接套用稀疏注意力并不能完全解决：不同 query 选中不同 page 使整块集合读集膨胀，反复构建稀疏支撑集本身有开销，永久驱逐又可能丢掉后续需要的信息。RISA 利用一个结构事实：一个块内历史 KV 固定，query 却随去噪步演化。于是把新生成历史组织成精确优先级层与可恢复层，由种子 query 构建受保护、有界的读计划并在整块内复用其索引，注意力再用新 query 与当前块 KV 重算。这样把历史保留与重复读取解耦，并摊销支撑集构建成本，且不改变主干与解码器。DreamReasoner-8B 上任务性能相当；32K 时注意力较稠密快 2.67 倍、固定轨迹请求快 1.36 倍，128K 时注意力加速达 5.53 倍。",
+          "contributions": [
+            "提出可恢复稀疏注意力：把历史 KV 分为精确优先级层与恢复层，避免永久驱逐造成的信息丢失",
+            "用种子 query 构建跨去噪步复用的有界读计划，摊销支撑集构建并控制集合读集膨胀",
+            "在扩散骨干上端到端验证，跨三模型八设置对比 MAGE/QUEST/LoSA"
+          ],
+          "conclusions": [
+            "块内历史静止是扩散 LM 独有的可利用结构，稀疏注意力的设计应围绕\"块\"而不是单步 query",
+            "无需改主干即可拿到 2.67-5.53 倍注意力加速，说明访存层优化仍有大空间"
+          ],
+          "experiments": [
+            "32K 上下文注意力快 2.67 倍、固定轨迹请求快 1.36 倍，128K 注意力加速 5.53 倍",
+            "DreamReasoner-8B 任务性能与稠密注意力相当",
+            "三模型八设置下在匹配 KL 时解码速度快于 MAGE、QUEST 与 LoSA"
+          ],
+          "significance": "给扩散语言模型补上长上下文推理的关键一块：可恢复、可复用的稀疏注意力",
+          "takeaway": "按块复用读计划 + 可恢复层，32K 注意力 2.67 倍、128K 达 5.53 倍",
+          "keyExperiment": "128K 上下文注意力加速 5.53 倍，32K 端到端固定轨迹请求 1.36 倍",
+          "arxivUrl": "https://arxiv.org/abs/2611.22191",
+          "pdfUrl": "https://arxiv.org/pdf/2611.22191.pdf",
+          "index": 7,
+          "channel": "Algorithms"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "SPICE: Sparse Parameter Gossip for LLM Pretraining",
+          "score": 4.1,
+          "category": "cs.DC",
+          "date": "2026-11-18",
+          "authors": "Pietro Cagnasso, Daniele Kopyshevskiy, Edouard Oyallon, Eugene Belilovsky",
+          "institutions": "Concordia University, Mila, Sorbonne Université, CNRS",
+          "abstract": "跨地理位置分散的资源预训练语言模型，需要能在有限且波动的互联网带宽下工作的通信高效方法。去中心化训练用点对点交换替代全局集合通信，但整模型消息会让更大的邻居规模变得极其昂贵。SPICE 把稀疏参数 gossip 与误差反馈结合起来：用校正后的参数值承载累积误差，而这些值在邻居集合变化时仍保持可解释（可以直接当作参数使用）。稀疏交换让更宽的邻居成为可负担的选择，从而在比所评测的稠密去中心化基线更少的通信下取得更好的训练质量。随着副本数增长，SPICE 增加被联系的 peer 数量而让单条消息保持稀疏，抑制了稠密 gossip 在副本增多时出现的质量退化。在带宽受限条件下，SPICE 的训练吞吐高于 DDP 与稠密 gossip，并且能在链路瞬时变慢时维持吞吐。",
+          "contributions": [
+            "提出稀疏参数 gossip + 误差反馈，使\"每次只发一小部分参数\"不损失收敛质量",
+            "设计邻居变化时仍可直接解释的校正参数表示，支持动态扩展 peer 规模",
+            "在带宽受限与链路抖动条件下对比 DDP 与稠密 gossip 验证吞吐与质量"
+          ],
+          "conclusions": [
+            "广域去中心化训练的关键是每消息的稀疏度与邻居宽度的权衡，而非总体通信量的简单压缩",
+            "误差反馈让稀疏交换不退化为质量损失，链路抖动下吞吐仍稳定"
+          ],
+          "experiments": [
+            "带宽受限下训练吞吐高于 DDP 与稠密 gossip",
+            "副本数增加时以稀疏单消息 + 更多 peer 抑制稠密 gossip 的质量退化",
+            "链路瞬时变慢期间仍维持吞吐"
+          ],
+          "significance": "为跨地域、带宽不稳的分布式预训练提供一条可扩展的去中心化通信路径",
+          "takeaway": "稀疏参数 gossip + 误差反馈，带宽受限下吞吐胜过 DDP 且质量不降",
+          "keyExperiment": "带宽受限下吞吐高于 DDP 与稠密 gossip，且链路抖动期间吞吐不塌",
+          "arxivUrl": "https://arxiv.org/abs/2611.23053",
+          "pdfUrl": "https://arxiv.org/pdf/2611.23053.pdf",
+          "index": 8,
+          "channel": "Architecture"
+        },
+        {
+          "title": "TeleChat to Xing4: Advancing Frontier Agentic Models on Domestic Chips and Frameworks",
+          "score": 4.5,
+          "category": "cs.AI",
+          "date": "2026-11-18",
+          "authors": "Xingchen AGI Lab, Baotian Hu, Bingkai Yang, Boyang Wang, Changzai Pan, Chao Lyu, Chao Wang et al.",
+          "institutions": "Xingchen AGI Lab, China Telecom",
+          "abstract": "Xing 4 系列通过模型架构与 Ascend 训练基础设施的协同推进，扩展了 TeleChat 谱系。本报告阐述其设计原则与系统工程，覆盖架构选型、大规模预训练以及推理与智能体后训练：研究稀疏激活、注意力设计、模型深度与宽度、投机解码如何在容量、计算、访存与执行开销间取舍。预训练基础设施基于 MindSpore HyperParallel，结合拓扑感知混合切分、分布式优化器执行与长序列/激活显存协同管理，CPU 亲和性与核隔离进一步降低主机调度干扰，支撑在 8192 张 Ascend 910C 上训练 285B 参数模型。后训练提出 TeleGym——统一连接执行、评测与轨迹构建到策略优化的智能体平台，用分离式异步执行、有界过采样与部分 rollout 适配任务时长异构并保持轨迹连续。",
+          "contributions": [
+            "给出 285B 模型在 8192 张 Ascend 910C 上预训练的完整系统工程：拓扑感知混合切分、分布式优化器、长序列与激活显存协同管理",
+            "系统研究稀疏激活、注意力设计、深度/宽度与投机解码在容量-计算-访存-执行开销间的取舍",
+            "提出 TeleGym 智能体执行平台，用分离式异步执行、有界过采样与部分 rollout 处理异构任务时长"
+          ],
+          "conclusions": [
+            "国产芯片上训练前沿模型的主要难点在系统工程（通信、显存编排、主机调度）而非算子本身",
+            "后训练阶段的任务时长异构需要执行层（异步 + 部分 rollout）解决，而非简单加大 batch"
+          ],
+          "experiments": [
+            "在 8192 张 Ascend 910C 上完成 285B 参数模型预训练",
+            "CPU 亲和性与核隔离降低主机调度干扰，配合拓扑感知混合切分支撑长序列负载",
+            "TeleGym 在智能体后训练中保持轨迹连续并吸收异构任务时长"
+          ],
+          "significance": "国产算力栈上少见的 285B 规模全流程技术报告，架构取舍与系统工程细节都可复用",
+          "takeaway": "8192 张 Ascend 910C 训 285B：拓扑感知切分 + 显存编排 + TeleGym 后训练",
+          "keyExperiment": "285B 模型于 8192 张 Ascend 910C 完成预训练（MindSpore HyperParallel）",
+          "arxivUrl": "https://arxiv.org/abs/2611.22115",
+          "pdfUrl": "https://arxiv.org/pdf/2611.22115.pdf",
+          "index": 9,
+          "channel": "Architecture"
+        },
+        {
+          "title": "VisHead-Spec: Head-Routed Visual Attention for Multimodal Speculative Decoding",
+          "score": 4.1,
+          "category": "cs.LG",
+          "date": "2026-11-18",
+          "authors": "Xin Guo, Arushi Rai, Xiang Zhou, Qiang Zhang, Siyu Lin, Xiangjun Fan, Lizhu Zhang",
+          "institutions": "Meta Recommendation Systems (MRS)",
+          "abstract": "投机解码能加速视觉语言模型并保持目标模型输出，但高并发服务时系统转为算力受限，加速比随之衰减。多模态场景更突出：图像 token 序列很长，显著抬高草稿预测开销。块扩散草稿器（DFlash、DSpark）一次前向出多个草稿 token，但高并发下对 VLM 的加速仍不足 9%。作者考察目标到草稿模型的跨模态信息流，发现视觉注意力存在稀疏模式：草稿模型只有一小部分 KV 头需要直接关注图像，且只有目标模型顶层的视觉特征值得关注。据此提出 VisHead-Spec：固定选取少量 KV 头关注顶层全部图像特征，其余头只看文本。在 Qwen3-VL-8B 与 MMSpec 上，40 个草稿 KV 头中只让 8 个读图像，接受长度与 DSpark 差距在 0.3% 内；batch 64 时相对自回归吞吐增益升至 16.0%（DSpark 9.5%），batch 1 与 DSpark 相当。",
+          "contributions": [
+            "揭示多模态投机解码中视觉注意力的头级稀疏性：少数 KV 头吃图像、且顶层视觉特征足够",
+            "提出固定头路由方案，让草稿器只让少量 KV 头读图像，其余头处理文本，从而压低草稿计算量",
+            "在高并发 batch 64 与服务端低延迟两端都验证收益"
+          ],
+          "conclusions": [
+            "多模态投机解码的瓶颈是草稿器的视觉计算，而非接受率本身",
+            "头级路由几乎不损接受长度，却能在高并发下把加速比从 9.5% 提到 16.0%"
+          ],
+          "experiments": [
+            "Qwen3-VL-8B / MMSpec 上 8/40 个 KV 头读图像，接受长度与 DSpark 差距 ≤0.3%",
+            "batch 64 吞吐增益 16.0%（DSpark 9.5%），batch 1 与 DSpark 相当",
+            "草稿器为块扩散式（DFlash、DSpark 族）"
+          ],
+          "significance": "指出多模态投机解码真正贵的部分在草稿器的视觉注意力，给出零训练的头部路由裁剪",
+          "takeaway": "只让 8/40 个 KV 头看图像，batch 64 吞吐增益从 9.5% 提到 16.0%",
+          "keyExperiment": "batch 64 下较自回归吞吐 +16.0%（DSpark 为 +9.5%），接受长度差距 ≤0.3%",
+          "arxivUrl": "https://arxiv.org/abs/2611.21839",
+          "pdfUrl": "https://arxiv.org/pdf/2611.21839.pdf",
+          "index": 10,
+          "channel": "Architecture"
+        }
+      ]
+    }
+  ]
+}
