@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-20",
+  "title": "2026-11-20 论文精选",
+  "lede": "今日主线是把“不该浪费的时间与带宽”逐层榨回来：专家并行气泡、跨 GPC 的 crossbar 端口、被 nvcc 丢弃的调度控制码。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 426
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Harvesting Expert-Parallel Bubbles for Fine-Tuning",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.OS",
+          "date": "2026-11-19",
+          "authors": "Oana Balmau, Saurav Banka, Jiaxuan Chen, Anne-Marie Kermarrec, Ramya Narasimha Prabhu, Rafael Pires, Mathis Randl, Martijn de Vos",
+          "institutions": "McGill University, ETH Zurich, EPFL",
+          "abstract": "GPU 昂贵，但时延敏感的 LLM 推理常让部分算力闲置，托管（colocation）方案用微调等尽力任务回收。MoE 专家并行下路由不均使轻载卡等待最重载卡，即使做了负载均衡，气泡仍占 prefill 时间的 8–13%。本文提出 BubbleTea：依据路由器 token 分配逐层预测每张卡的气泡，用复用已加载服务权重的短微调块填充，并用编译器 pass 从原模型自动派生这些块。四张 A100 上三个 MoE 模型实测：微调吞吐比 LLMStation 快 1.9–6.2 倍，63 个工作负载中 50 个把 p90 时延保持在纯服务状态的 10% 以内（LLMStation 44 个），突发 trace 上训练快 3.3 倍、比 CUDA MPS 常规训练器快 14 倍。",
+          "contributions": [
+            "首个把专家并行气泡当作可调度资源的托管系统：按层预测每张 GPU 的气泡长度再填任务，而非整轮前向只做一次全局决策。",
+            "编译器 pass 从被服务的 MoE 模型自动派生微调块，避免为每个架构单独移植到训练引擎。",
+            "填充工作复用服务端已加载的专家权重，冷启动开销几乎为零；p90 时延约束被显式纳入填充规模决策。"
+          ],
+          "conclusions": [
+            "在 prefill 阶段被“等最忙卡”浪费的 8–13% 时间足以承载可观的微调吞吐，前提是填充粒度做到逐层。",
+            "按层预测 + 权重复用的方案让共置训练的收益不必以推理 SLO 为代价，突发负载下也能维持 p90 时延。"
+          ],
+          "experiments": [
+            "三个 MoE 模型、四张 A100：微调吞吐比 LLMStation 快 1.9–6.2 倍。",
+            "63 个工作负载中 50 个把 p90 推理时延控制在纯服务状态的 10% 以内，LLMStation 为 44 个。",
+            "突发生产 trace 上训练速度是 LLMStation 的 3.3 倍，是 CUDA MPS 下常规训练器的 14 倍，p90 时延仍仅比纯服务高 7%。"
+          ],
+          "significance": "把 MoE 专家并行的固有等待时间变成免费训练算力，给出共置系统的逐层调度范式。",
+          "arxivUrl": "https://arxiv.org/abs/2611.24496",
+          "pdfUrl": "https://arxiv.org/pdf/2611.24496.pdf",
+          "index": 1,
+          "takeaway": "逐层预测专家并行气泡并用服务端权重跑微调块，1.9–6.2 倍训练吞吐且不动推理 SLO。",
+          "keyExperiment": "四张 A100、三个 MoE 模型：微调吞吐 1.9–6.2 倍于 LLMStation，63 个负载中 50 个守住 p90 10% 时延窗口。"
+        },
+        {
+          "title": "DexAttention: Distributed Sparse Attention through Rapid Online Planning and Persistent GPU Execution",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-19",
+          "authors": "Sirui Chen, Xuehai Qian",
+          "institutions": "Purdue University, Tsinghua University",
+          "abstract": "稀疏注意力降低了计算量，但分布式执行仍会传输无用数据并产生大量逐算子开销。按 mask 感知做分配与调度能降低这些成本，关键是动态 mask 的重规划必须比它节省的执行时间更便宜。作者提出 DexAttention，把快速在线规划与持久化执行协同设计：assigner 用 GPU 加速的拓扑感知聚类平衡计算负载并减少通信；轻量贪心调度器对粗粒度通信/计算算子排序；每张 GPU 上的 persistent kernel 负责细粒度依赖与就绪任务派发，把同步细节移出规划、无需重复 launch 也能实现重叠。系统支持逐 head 的静态与动态 mask，并适配多种注意力计算 kernel。在四节点 16 卡集群、11 种配置上端到端训练几何平均加速 1.39 倍；动态视频注意力相对 Ring Attention 加速 2.11–2.37 倍（含规划开销）。",
+          "contributions": [
+            "把稀疏注意力的分布式规划拆成“GPU 聚类分配 + 贪心算子排序 + persistent kernel 执行”三层，规划耗时被压到远低于收益。",
+            "persistent kernel 在设备侧维护细粒度依赖，通信与计算的重叠不再依赖反复 launch，动态 mask 也可承受。",
+            "同一框架覆盖逐 head 静态与动态 mask，兼容多种注意力 kernel，可直接替换常见训练栈中的稀疏注意力后端。"
+          ],
+          "conclusions": [
+            "稀疏注意力的分布式收益主要被通信与逐算子开销吃掉，只有把规划做到毫秒级在线才能兑现计算节省。",
+            "规划与执行解耦后，动态视频注意力这类强时变 mask 也能获得 2 倍以上加速，且加速已含规划成本。"
+          ],
+          "experiments": [
+            "四节点 16 卡集群、11 种配置：端到端训练几何平均加速 1.39 倍（对比最快的适用基线）。",
+            "动态视频注意力相对 Ring Attention 加速 2.11–2.37 倍，该数字已包含在线规划开销。",
+            "persistent kernel 执行使通信与注意力计算重叠，避免每步重复 launch；规划用 GPU 拓扑感知聚类平衡负载。"
+          ],
+          "significance": "证明分布式稀疏注意力的瓶颈是规划与同步而非算力，给出可复用的“快速规划 + 持久 kernel”架构。",
+          "arxivUrl": "https://arxiv.org/abs/2611.23512",
+          "pdfUrl": "https://arxiv.org/pdf/2611.23512.pdf",
+          "index": 2,
+          "takeaway": "GPU 聚类分配加 persistent kernel 执行，让动态稀疏注意力在 16 卡上端到端快 1.39 倍、视频注意力快 2.1 倍。",
+          "keyExperiment": "16 卡集群 11 配置几何平均 1.39 倍；动态视频注意力对 Ring Attention 加速 2.11–2.37 倍。"
+        },
+        {
+          "title": "A Fast, Programmable GPU-to-CPU Invocation Layer for GPU-Initiated Communication",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-19",
+          "authors": "Jiakun Yan, Shiksha Patel, David Sidler, Gengyu Rao, Brandon Potter, Bradford Beckmann",
+          "institutions": "Advanced Micro Devices (AMD)",
+          "abstract": "现代 GPU 负载越来越依赖设备发起通信，让 kernel 直接在边界处通信、无需与主机同步。现有库倾向把传输控制放在 GPU 线程上（GPUDirect Async），把反向卸载给主机代理线程视为较慢的退路。本文主张反向卸载能超过 GDA、应作为一等的通信路径，并把它暴露为可编程接口，使用户能自定义负载专属通信算子。作者提出 KIWI：单向设备到主机延迟低于 1 微秒、每秒上亿次操作，并解决共享队列争用、轮询开销与代理间负载不均等扩展难题。基于 KIWI 的 SHMEM 式库 KIWI-P2P 在延迟与带宽上超过 SOTA 的 GDA 实现；KIWI-EP 围绕负载定义算子重写低延迟 MoE dispatch/combine，在 AMD GPU 上把专家并行通信延迟最多降低 2.3 倍，把 vLLM 的每输出 token 时间最多降低 29%。",
+          "contributions": [
+            "用测量推翻“反向卸载必然更慢”的前提：把传输控制交给主机代理线程，在细粒度小消息路径上反而快过 GPU 线程内联。",
+            "KIWI 提供可编程接口，用户可定义负载专属通信算子（如 MoE dispatch/combine），而非套用固定集合通信原语。",
+            "针对扩展性的三项工程：共享队列争用消解、轮询开销抑制、代理线程间负载均衡。"
+          ],
+          "conclusions": [
+            "设备发起通信的瓶颈在控制路径而非带宽，主机代理线程是值得作为主路径优化的资源。",
+            "把通信原语开放给负载层设计，能直接换来 MoE 场景 2.3 倍通信延迟下降与 29% 的 TPOT 改善。"
+          ],
+          "experiments": [
+            "单向设备到主机延迟达亚微秒级，吞吐达每秒数亿次操作。",
+            "KIWI-P2P 在延迟与带宽两项上均优于最先进的 GDA 实现。",
+            "KIWI-EP 在 AMD GPU 上把专家并行通信延迟最多降低 2.3 倍，vLLM 的每输出 token 时间最多降低 29%。"
+          ],
+          "significance": "重新定位主机代理线程在 GPU 发起通信中的角色，并给出可编程通信层的可用实现。",
+          "arxivUrl": "https://arxiv.org/abs/2611.23848",
+          "pdfUrl": "https://arxiv.org/pdf/2611.23848.pdf",
+          "index": 3,
+          "takeaway": "反向卸载当成主路径：亚微秒 D2H 延迟，MoE 通信延迟降 2.3 倍、vLLM TPOT 降 29%。",
+          "keyExperiment": "KIWI-EP 在 AMD GPU 上让专家并行通信延迟最多降 2.3 倍，vLLM 每 token 时间最多降 29%。"
+        },
+        {
+          "title": "LoopCache: Accelerating Long-Context Self-Speculative Decoding for Looped Transformers",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-11-19",
+          "authors": "Zizhuo Fu, Haochen Huang, Shengxuan Qiu, Linye Wei, Ziyu Tang, Runsheng Wang, Meng Li",
+          "institutions": "Peking University",
+          "abstract": "Looped Transformer 通过重复应用权重共享块 R 次，以紧凑模型获得大有效深度，但每次循环维护各自的 KV cache。WaveFront Decoding 等 wave 式自投机方法单步内跨循环流水草稿与目标 token，却有两个问题：只在固定循环处起草、忽略中间预测变化，在陈旧轨迹上浪费算力；把不同循环的 token 拼批会每步加载最多 R 倍 KV。本文提出 LoopCache：利用预测翻转与输出置信度的相关性，做置信度引导的动态草稿更新；采用循环轮转 KV cache 策略，每步只访问单个循环的 KV，并在最近匹配周期处拼批以保证无损验证；另对小部分循环敏感的浅层保留独立 KV 以提升接受率，开销可忽略。实验显示相对 WFD 与 LoopSpec 分别平均加速 10.25 倍与 14.56 倍。",
+          "contributions": [
+            "指出 wave 式自投机在长上下文下的真实瓶颈是 R 倍 KV 加载，而非草稿质量。",
+            "置信度引导的动态草稿更新：所有中间循环都参与修正，不必等到固定循环点。",
+            "循环轮转 KV cache + 最近周期拼批，把每步 KV 流量压回单循环水平且验证无损。"
+          ],
+          "conclusions": [
+            "Looped Transformer 的自投机加速必须同时处理草稿陈旧与 KV 放量，只改一处收益有限。",
+            "少量循环敏感浅层保留独立缓存，用极小额外流量换到更高接受率，是性价比最高的补丁。"
+          ],
+          "experiments": [
+            "相对 WaveFront Decoding 平均加速 10.25 倍，相对 LoopSpec 平均加速 14.56 倍。",
+            "循环轮转 KV cache 把每步 KV 加载从最多 R 倍降到单循环量级。",
+            "保留少量浅层独立 KV 提升接受率，额外开销可忽略；验证过程无损（拼批在最近匹配周期）。"
+          ],
+          "significance": "为循环权重共享模型的长上下文推理给出一套针对 KV 放量的专用投机解码方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.24301",
+          "pdfUrl": "https://arxiv.org/pdf/2611.24301.pdf",
+          "index": 4,
+          "takeaway": "轮转 KV cache 加置信度引导草稿，长上下文 Loop 模型自投机比 WFD 快 10.25 倍、比 LoopSpec 快 14.56 倍。",
+          "keyExperiment": "相对 WFD 平均 10.25 倍、相对 LoopSpec 平均 14.56 倍加速。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "NarrowSpec: Draft Hidden Width Need Not Match the Target in Speculative Decoding",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-19",
+          "authors": "Alagappan Valliappan, Ankit More, Dheevatsa Mudigere, Jatin Mitra",
+          "institutions": "NVIDIA",
+          "abstract": "投机解码用小草稿模型提议、目标模型一次前向验证。DFlash、EAGLE-3 这类读取目标隐藏状态的草稿模型通常沿用目标的隐藏宽度，本文表明草稿的整条残差流可以只用一半甚至四分之一宽度而基本保持接受率。对借用目标词表投影的 DFlash，训练好的输出适配器可折叠进该投影，得到一个更窄的投影，logits 在浮点误差内不变。作者在 SGLang 上对 DFlash 与 EAGLE-3 两个草稿族、Qwen3-8B（NVFP4）与 GPT-OSS-20B（MXFP4）两个目标、B200 与 DGX Spark（GB10）两块卡测试：batch=1、温度 0 时收窄草稿使端到端解码加速 1.06–1.12 倍（B200）与 1.13–1.44 倍（GB10）；更大 batch 下依然有效，最大可达 1.21 倍，且没有任何窄草稿比全宽更慢。",
+          "contributions": [
+            "证明草稿隐藏宽度无需与目标对齐：整条残差流降到 1/2 或 1/4 宽度，接受率基本不变。",
+            "给出 DFlash 的适配器折叠技巧，使窄投影的 logits 与全宽等价，避免精度回退。",
+            "在两个草稿族、两个目标模型、两种精度与两块 GPU 上做完整扫描，明确收益与 batch 规模的单调关系。"
+          ],
+          "conclusions": [
+            "投机解码的草稿侧存在大量可压缩的宽度冗余，收窄几乎是免费的加速。",
+            "收窄在 batch=1 与大批量下均成立且从不更慢，可直接作为默认配置而非需要调参的选项。"
+          ],
+          "experiments": [
+            "B200、batch=1、温度 0：端到端解码加速 1.06–1.12 倍；DGX Spark（GB10）上 1.13–1.44 倍。",
+            "batch 从 32 到各卡最大可容纳批，收窄后最多加速 1.21 倍（两块 GPU 均如此）。",
+            "无任何配置出现窄草稿慢于全宽草稿，接受率基本保持。"
+          ],
+          "significance": "把“草稿必须复刻目标宽度”的默认假设去掉，给出一条零风险的投机解码提速路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.23835",
+          "pdfUrl": "https://arxiv.org/pdf/2611.23835.pdf",
+          "index": 5,
+          "takeaway": "草稿残差流砍到 1/2–1/4 宽度，接受率不掉，端到端最多快 1.44 倍。",
+          "keyExperiment": "DGX Spark batch=1 温度 0 时加速 1.13–1.44 倍；大批量最多 1.21 倍且从不更慢。"
+        },
+        {
+          "title": "QDA: Closed-Loop LLM Quantization Design with Agents",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-19",
+          "authors": "Xingyang Li, Tianlang Zhao, Song Han, Ligeng Zhu",
+          "institutions": "MIT, NVIDIA",
+          "abstract": "训练后量化是低成本部署 LLM 的标准手段，但最佳配方随模型与精度而变，专家需为每个新模型重新设计。LLM agent 可通过多轮“构建—评估”迭代改进配方，瓶颈在于评估一个量化推理模型需数十 GPU 小时。本文提出 QDA：agent 为每个模型与精度设计配方；评估用 agent 未见过的推理轨迹上的输出 KL 散度做分钟级打分，并对有希望的候选做长生成复核；构建端提供互相兼容的公开 PTQ 方法库。四个推理模型上，W4A16/W4A8/W3A16 平均比最强公开配方分别提升 0.9/1.4/2.2 个百分点，每次搜索用 64 GPU 小时；在 320B MoE 模型 GLM-5.3-Flash 的 NVFP4 W4A4 上恢复 FP8 模型 98.3% 的准确率（最佳厂商 checkpoint 为 96.9%），且所有 checkpoint 在现有服务 kernel 上无推理开销。",
+          "contributions": [
+            "把量化配方设计交给 agent 闭环，替代专家逐模型手工调参，搜索一次约 64 GPU 小时。",
+            "用未见过的推理轨迹上的 KL 散度做分钟级代理评估，再用长生成复核筛掉重复循环等隐性失败。",
+            "提供互操作且兼容新架构的 PTQ 方法库，消除“换代码库就要重新移植”的工程税。"
+          ],
+          "conclusions": [
+            "量化配方的组合搜索空间足以让 agent 超过人工最佳实践，且代理指标能可靠预测真实精度。",
+            "搜索产出的 checkpoint 完全落在现有服务 kernel 上，说明收益不需要自定义推理栈来兑现。"
+          ],
+          "experiments": [
+            "四个推理模型：W4A16/W4A8/W3A16 平均较最强公开配方提升 0.9/1.4/2.2 个百分点，每次搜索 64 GPU 小时。",
+            "320B MoE 模型 GLM-5.3-Flash 的 NVFP4 W4A4 上恢复 FP8 准确率的 98.3%，最佳厂商 checkpoint 为 96.9%。",
+            "所有产出的 checkpoint 在现有服务 kernel 上运行，推理零额外开销。"
+          ],
+          "significance": "把“量化配方工程”从人工经验转为可自动搜索的闭环，并证明其在超大 MoE 上优于厂商权重。",
+          "arxivUrl": "https://arxiv.org/abs/2611.23388",
+          "pdfUrl": "https://arxiv.org/pdf/2611.23388.pdf",
+          "index": 6,
+          "takeaway": "agent 闭环调量化配方：三个精度档均超最强公开配方，320B MoE 的 W4A4 恢复 FP8 准确率 98.3%。",
+          "keyExperiment": "GLM-5.3-Flash NVFP4 W4A4 恢复 FP8 模型 98.3% 准确率，超过厂商 checkpoint 的 96.9%。"
+        },
+        {
+          "title": "Optimize the Cob, Then the Kernel: Optimizing Beam Search for Generative Recommendation Inference",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-19",
+          "authors": "Shing Wai Pun, Kai Wu, Pengfei Xia, Hui Zang, Wei Guo, Yong Liu",
+          "institutions": "Huawei Technologies",
+          "abstract": "生成式推荐（GR）推理与传统 LLM 服务差异显著：输入长、beam 宽、输出只有少量固定 token。vLLM 等引擎把各 beam 当作独立批序列，导致对共享 prompt 前缀的 KV cache 冗余访问；且每个 beam search 步骤是一次独立引擎调用，带来主机侧 beam 处理开销与 PagedAttention 的运行时 KV 块管理成本。本文用 Tree Attention 把 beam 沿序列维拼接，消除冗余 KV 访问，并配合预生成部分注意力 mask、静态 KV 分配、循环展开的生成派发、TorchAir 图编译、自动算子融合与词表约束解码。不使用自定义 kernel，端到端时延相对 vLLM 在昇腾 NPU 上最多降低 25 倍，生成时延与采用自定义 kernel 的 SOTA 方案相当。",
+          "contributions": [
+            "识别出 GR 推理的三处结构性浪费：beam 重复读共享前缀 KV、逐步引擎调用、运行时 KV 块管理。",
+            "用 Tree Attention 把 beam 拼到序列维，一次前向覆盖全部 beam，消除冗余 KV 访问。",
+            "在昇腾 NPU 上用图编译 + 算子融合 + 静态 KV 分配替代自定义 kernel，证明“先优化整条流水线再写 kernel”更划算。"
+          ],
+          "conclusions": [
+            "GR 推理的延迟大头在框架层调度与 KV 访问模式，而非单个 kernel 的算术效率。",
+            "不写自定义 kernel 也能达到自定义 kernel 方案的时延，说明系统级重构的收益被长期低估。"
+          ],
+          "experiments": [
+            "端到端时延相对 vLLM 在昇腾 NPU 上最多降低 25 倍。",
+            "不使用任何自定义 kernel，生成时延即与采用自定义 kernel 的 SOTA 方案相当。",
+            "Tree Attention 消除 beam 对共享 prompt 前缀的重复 KV 访问，配合图编译与算子融合进一步压缩主机侧开销。"
+          ],
+          "significance": "给生成式推荐推理一条“先整体流水线、后 kernel”的优化路线，并把结论落到国产 NPU 上。",
+          "arxivUrl": "https://arxiv.org/abs/2611.23339",
+          "pdfUrl": "https://arxiv.org/pdf/2611.23339.pdf",
+          "index": 7,
+          "takeaway": "Tree Attention 拼 beam 加图编译，不写 kernel 就把 GR 推理比 vLLM 快 25 倍。",
+          "keyExperiment": "昇腾 NPU 上端到端时延较 vLLM 最多降低 25 倍，且全程零自定义 kernel。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "A Runtime System for Mitigating Crossbar Port Contention on SM-Partitioned GPUs",
+          "score": 4.3,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-19",
+          "authors": "Ziwen Wang, Qi Luo, Kunlin Li, Changxi Liu, Dongsheng Wang, Yun Chen",
+          "institutions": "HKUST (Guangzhou), Tsinghua University",
+          "abstract": "为避免并发负载的调度延迟，CUDA Green Contexts 等 SM 分区机制把每个负载限制在独立 SM 上，但并发负载仍显著拖慢时延敏感负载，已有研究归因于共享 L2 与内存争用；其实争用还发生在连接每个 GPC 与 L2 的 crossbar 端口上——同一 GPC 内所有 SM 共享一个端口。Green Contexts 把负载分散到各 GPC，会让并发负载落在同一 GPC，时延敏感请求排在后台请求之后；打包到不同 GPC 虽避免端口争用，却只能用更少端口、限制带宽。作者提出 GPCPlace：在目标 GPU 上剖析负载，估算“分散”与“打包”两种策略的减速，动态二选一，并在驱动层 hook kernel launch 设置 SM mask。在 14 块 GPU、112 个用例上，相对 Green Contexts 平均提速 1.15 倍、最高 2.38 倍，且不损吞吐。",
+          "contributions": [
+            "定位到被忽视的争用层级：GPC 到 L2 的 crossbar 端口，而非仅 L2 与内存带宽。",
+            "指出分散与打包各自的最优性取决于负载，任何固定策略都必然在部分场景变慢。",
+            "GPCPlace 在驱动层 hook kernel launch 设置 SM mask，运行时剖析后动态选策略，应用零改动。"
+          ],
+          "conclusions": [
+            "SM 分区并不隔离全部共享资源，crossbar 端口让“分散放置”在部分 GPU 上反而更慢。",
+            "在 14 块 GPU 上不存在单一最优放置策略，运行时自适应是唯一稳健方案。"
+          ],
+          "experiments": [
+            "14 块 GPU、112 个用例：时延敏感负载相对 Green Contexts 平均提速 1.15 倍，最高 2.38 倍。",
+            "提速过程中后台负载吞吐无退化。",
+            "策略切换由运行时剖析决定，通过 CUDA 驱动层 hook 实现，无需修改应用或重编译。"
+          ],
+          "significance": "把 GPU 共置争用的分析推进到 NoC/端口层，并交付无需改代码的运行时方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.24458",
+          "pdfUrl": "https://arxiv.org/pdf/2611.24458.pdf",
+          "index": 8,
+          "takeaway": "GPC 到 L2 的 crossbar 端口才是隐藏瓶颈，运行时自适应分散/打包平均快 1.15 倍、最高 2.38 倍。",
+          "keyExperiment": "14 块 GPU、112 用例：平均 1.15 倍、最高 2.38 倍提速且后台吞吐无损。"
+        },
+        {
+          "title": "Dissecting an Unexplored SASS Control-Code Field: Barrier Exemption and Programmable Warp Priority",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-11-19",
+          "authors": "Ziwen Wang, Qi Luo, Kunlin Li, Changxi Liu, Dongsheng Wang, Yun Chen",
+          "institutions": "HKUST (Guangzhou), Tsinghua University",
+          "abstract": "每条 NVIDIA 原生 GPU ISA（SASS）指令都带控制码来指导硬件调度，此前工作已解读已知字段，但有一个字段仍未被探索：它在 cuBLAS、cuDNN 等闭源库中出现超过 50 万次，nvcc 编译用户程序时却从不生成它。本文首次系统研究该字段（Volta 到 Blackwell）：指令级微基准表明它控制两个独立硬件机制——屏障豁免（EXEMPT，允许被未决屏障阻塞的指令在等待期提前发射）与可编程 warp 优先级（START/TILE/END，把 warp 在三个硬件优先级间移动）。作者给出两种机制各自有效的条件，并实现后编译二进制优化器，直接在已编译二进制中打标。在跨四代架构的六块 GPU 上，代表性 kernel 最多加速 31.9%；生产 kernel（cuBLAS 与 vLLM 中）最多 5.4%，端到端 LLM 推理最多 3.6%。",
+          "contributions": [
+            "首次解码 SASS 中一个未被文献涉及的 3 位控制码字段，并定位到 EXEMPT 与 warp 优先级两个硬件机制。",
+            "用指令级微基准给出两种机制各自起效的条件，解释闭源库为何大量使用该字段。",
+            "实现后编译二进制优化器，直接在 cubin 中打标，无需源码或编译器配合。"
+          ],
+          "conclusions": [
+            "闭源厂商库的性能部分来自编译器不生成的调度提示，这是用户代码隐性吃亏的来源之一。",
+            "后编译改写在生产 kernel 上有 5.4%、端到端推理有 3.6% 的收益，属于零源码改动可得的增量。"
+          ],
+          "experiments": [
+            "代表性 kernel 最多加速 31.9%（跨四代架构、六块 GPU）。",
+            "cuBLAS 与 vLLM 中的生产 kernel 最多加速 5.4%。",
+            "端到端 LLM 推理最多加速 3.6%；该字段在闭源库中出现超过 50 万次而 nvcc 从不生成。"
+          ],
+          "significance": "揭示 GPU 硬件调度器中未公开的可编程入口，并给出可用的二进制级优化工具路线。",
+          "arxivUrl": "https://arxiv.org/abs/2611.24437",
+          "pdfUrl": "https://arxiv.org/pdf/2611.24437.pdf",
+          "index": 9,
+          "takeaway": "SASS 里被 nvcc 忽略的控制码能开屏障豁免与 warp 优先级，生产 kernel 快 5.4%、端到端推理快 3.6%。",
+          "keyExperiment": "跨四代架构六块 GPU：代表性 kernel 最高 31.9%，cuBLAS/vLLM 生产 kernel 最高 5.4%。"
+        },
+        {
+          "title": "Clover-35B-A3B-Preview Technical Report",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-11-19",
+          "authors": "DiffuSpace Technical Team",
+          "institutions": "DiffuSpace (diffuspace.ai)",
+          "abstract": "本文提出 Clover-35B-A3B-Preview：总参数 350 亿、激活 30 亿的 MoE 扩散语言模型，支持 thinking 模式生成。Clover 把 Gated Delta Networks 适配到块扩散：把已生成上下文的循环记忆与当前块内的双向 softmax 注意力结合，历史记忆读出与当前块 token 在同一 softmax 中竞争，并加入可学习的块大小校准与零初始化的右上下文卷积分支。在 7 项 agent 指标上均领先，包括 SWE-bench Verified 的 73.6 与 Terminal-Bench 2.1 的 51.7；内部 agent 负载上，单张 GB300、BF16、batch=1 报告生成速度 680 tokens/s。作者另给出决策模型变体，在一次去噪中同时回答相关问题：500 组内部集合上问题准确率从 90.37% 升到 93.88%。",
+          "contributions": [
+            "把 Gated Delta Networks 的循环记忆与块内双向注意力拼在同一 softmax 中，解决扩散 LM 的上下文记忆问题。",
+            "加入可学习块大小校准与零初始化右上下文卷积，稳定块扩散训练。",
+            "给出并行去噪式“决策模型”变体，一次去噪同时回答一组相关问题。"
+          ],
+          "conclusions": [
+            "扩散式并行生成可以在 agent 类任务上与自回归模型正面竞争，同时保留高吞吐优势。",
+            "块扩散天然适配组内联合预测，把“必须逐问回答”的串行结构换成一次去噪。"
+          ],
+          "experiments": [
+            "七项 agent 指标全部领先，含 SWE-bench Verified 73.6、Terminal-Bench 2.1 的 51.7。",
+            "单张 GB300、BF16、batch=1 时报告生成速度 680 tokens/s。",
+            "决策模型变体在 500 组内部集合上把问题准确率从 90.37% 提到 93.88%，全对组准确率从 65.4% 提到 77.0%。"
+          ],
+          "significance": "给出 MoE + 扩散 + 循环记忆的一种可行组合，并提供单卡高吞吐的部署数据点。",
+          "arxivUrl": "https://arxiv.org/abs/2611.24636",
+          "pdfUrl": "https://arxiv.org/pdf/2611.24636.pdf",
+          "index": 10,
+          "takeaway": "35B-A3B 的 MoE 扩散 LM：SWE-bench Verified 73.6，单卡 GB300 上 680 tokens/s。",
+          "keyExperiment": "单张 GB300、BF16、batch=1 达 680 tokens/s，SWE-bench Verified 73.6。"
+        }
+      ]
+    }
+  ]
+}
