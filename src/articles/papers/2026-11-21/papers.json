@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-21",
+  "title": "2026-11-21 论文精选",
+  "lede": "今日 478 篇候选中，agent 场景的 KV 分层复用（三级缓存、前缀重放、排队期压缩）、GPU 共享调度与 scale-up 互连、以及 FP4 时代的稀疏补偿与隐藏维度注意力构成主线。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 478
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "RoCoKV: Accelerating LLM Inference Serving through Uncertainty and Redundancy Aware KV Cache Compression",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-11-20",
+          "authors": "Payman Behnam, Elaheh Sobhani, Saad Amin, Yahya Hassan, Daniyal Khan, Biswadeep Chakraborty, Tanish Patwa, Souvik Kundu, Alexey Tumanov",
+          "institutions": "Georgia Institute of Technology, Annapurna Labs (Amazon), Google, Intel",
+          "abstract": "大推理模型的开销主要来自长思维链生成而非输入提示，而思维链里的循环、自我验证与纠错会产生大量冗余低效 token；麻烦在于这些 token 往往仍拿到高注意力分数，按分数剪枝会伤到推理过程。作者提出 RoCoKV：先用不确定性引导的自适应剪枝，按模型置信度调节压缩强度，不确定阶段多留显存、自信时加强剪枝；再用冗余感知的 token 选择，压低与近期推理内容高度相似 token 的影响，促使保留信息量更大、更互补的 token。算法之外还与服务栈协同设计，开发融合的三阶段 CUDA 解码内核，并以即插即用插件接入 vLLM，保持其分页 KV 布局与 CUDA graph 捕获，把算法节省真正转成端到端加速。",
+          "contributions": [
+            "不确定性引导的自适应剪枝：按模型置信度动态分配 KV 预算，而非固定压缩率。",
+            "冗余感知 token 选择，专门抑制思维链中的重复与自我纠错内容。",
+            "与 vLLM 协同设计的三阶段融合 CUDA 解码内核，保留 paged KV 与 CUDA graph。"
+          ],
+          "conclusions": [
+            "在受限 KV 预算下，推理精度一致优于现有 KV 压缩方法。",
+            "算法节省能落成端到端吞吐提升，而非停留在离线指标上。"
+          ],
+          "experiments": [
+            "DeepSeek-R1-Distill-Llama-8B 接入 vLLM 后，AIME25 上 1.27 倍加速、吞吐提升 38%。",
+            "长合成基准上 1.43 倍加速、吞吐提升 45%（对比 Full-KV）。",
+            "三个推理基准 × 两个推理模型上精度均优于 SOTA 压缩方法。"
+          ],
+          "significance": "把「按模型状态而非固定比例」压缩 KV 的思路，第一次完整落到生产级推理栈里。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25433",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25433.pdf",
+          "takeaway": "按不确定性分配 KV 预算、按冗余度选 token，比固定压缩率更能保推理精度。",
+          "keyExperiment": "AIME25 上 1.27 倍加速与 38% 吞吐提升（R1-Distill-Llama-8B + vLLM）。",
+          "index": 1
+        },
+        {
+          "title": "FrontierReplay: Split-Free Exact Prefix Caching for Hybrid Language Models",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-20",
+          "authors": "Zekun Wang, Yizhuo Wang",
+          "institutions": "Beijing Institute of Technology",
+          "abstract": "混合语言模型把自注意力与递归层结合，递归层的就地状态更新使前缀复用只能发生在已保存的精确位置上。按粗网格存状态浪费可复用前缀，而现有细粒度精确缓存在每个提示中点截断 prefill 前向，多出来的调度步在高负载下超过复用收益。作者观察到多轮对话、agent 循环、文档问答与树搜索中，前缀复用几乎总结束于可提前预测的结构边界（轮次结束点、已知分支点）。FrontierReplay 不截断 prefill 就在这些边界物化精确检查点：前向连续执行时记录一小段递归层输入窗口，再调用跨层、仅状态的重放内核重建目标状态，比完全重算每个 token 便宜 6–37 倍且无需主机同步。前沿感知的保留策略优先活跃锚点与已验证分支，并把死检查点槽位借给注意力 KV 缓存。",
+          "contributions": [
+            "发现前缀复用几乎总在可预测的结构边界结束，据此把检查点物化点从「网格」改成「前沿」。",
+            "跨层 state-only 重放内核：不切分 prefill 也能重建精确递归状态，每 token 比全量重算便宜 6–37 倍。",
+            "前沿感知保留策略，把已死检查点槽位借给注意力 KV 缓存。"
+          ],
+          "conclusions": [
+            "精确前缀缓存在混合架构上可拿到接近近似方法的收益，但零精度损失。",
+            "近似重放方法在长上下文最多掉 17% 精度，本方法规避了这一代价。"
+          ],
+          "experiments": [
+            "中位 TTFT 降低 16–89%（最高 8.9 倍），80% SLO 下容量提升最多 1.73 倍。",
+            "goodput 最多提升 4.26 倍，更大模型规模下仍有 3.67 倍。",
+            "相比近似重放方法 goodput 高 1.54 倍，且任务精度完全保持。"
+          ],
+          "significance": "混合架构（注意力+递归）的服务系统终于有了「精确且便宜」的前缀复用方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26020",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26020.pdf",
+          "takeaway": "在结构边界做精确状态重放，比截断 prefill 或粗网格检查点都划算。",
+          "keyExperiment": "中位 TTFT 降低 16–89%、goodput 提升最多 4.26 倍，精度零损失。",
+          "index": 2
+        },
+        {
+          "title": "TripleKV: Predict, Prefetch, Protect -- KV Cache Management for AI Agents",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-20",
+          "authors": "Shashwat Jaiswal, Chloe Alverti, Mengmei Ye, Chen Wang, Hubertus Franke, Fan Lai, Tianyin Xu, Josep Torrellas",
+          "institutions": "University of Illinois Urbana-Champaign, IBM Research, National Technical University of Athens",
+          "abstract": "LLM agent 在推理与工具执行之间交替，不断增长的上下文被反复复用；高并发下其合并 KV cache 工作集可达数百 GiB，远超 GPU 显存。空闲 KV 块被换出到更慢的存储层后，返回的 agent 要付昂贵检索代价，推理随之停顿。TripleKV 是三级 KV 缓存管理系统，用来隐藏检索延迟：agent 场景下，下一次推理请求需要的 KV 块事先已知，不确定的只是复用时刻。系统用工具感知的延迟预测器估计每次工具调用何时完成，提前把所需 KV 块从 SSD 预取到主机 DRAM；与 GPU 预取不同，这不占用稀缺显存，也不干扰并发推理。为提升 DRAM 利用率，它还消除 GPU 常驻块在 DRAM 中的重复副本，并用 victim-cache 机制在块被逐出 GPU 后从 SSD 回填。",
+          "contributions": [
+            "工具感知时延预测 + 主机 DRAM 预取，把 KV 检索移出关键路径。",
+            "消除 GPU 常驻块在 DRAM 的重复副本，等效扩大 DRAM 可用容量。",
+            "victim-cache 机制：块被 GPU 逐出后从 SSD 快速回填，减少二次缺失。"
+          ],
+          "conclusions": [
+            "agent 负载下关键路径上的 SSD 读基本可以消掉。",
+            "三级层次能以远低于 GPU 显存的成本承载数百 GiB 的 agent 工作集。"
+          ],
+          "experiments": [
+            "需关键路径 SSD 读取的请求比例从 45–76% 降到 10% 以下。",
+            "相比带 DRAM/SSD 层的 vLLM，P95 TTFT 最多降低 49%。",
+            "相比近期 agent 感知系统，P95 TTFT 低 1.5–7 倍（数据、Web、编码三类 agent）。"
+          ],
+          "significance": "给出 agent 时代 KV 管理的正确分层：GPU / DRAM / SSD 各管一段，预测负责把接缝抹平。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25112",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25112.pdf",
+          "takeaway": "工具调用时长可预测，KV 预取就应落在主机 DRAM 而不是抢 GPU 显存。",
+          "keyExperiment": "关键路径 SSD 读请求占比从 45–76% 压到 10% 以下，P95 TTFT 最高降 49%。",
+          "index": 3
+        },
+        {
+          "title": "Berth: SLO-Preserving GPU Sharing Without New Preemption",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-20",
+          "authors": "Mohammadali Khodabandehlou, Mahdi Alizadeh, Lei Gao, Murali Annavaram, Bhaskar Krishnamachari",
+          "institutions": "University of Southern California",
+          "abstract": "推理服务按最坏负载预留 GPU，大部分容量长期闲置；用训练这类尽力而为任务填满是显然的补救，但延迟让这件事很少发生——共享 GPU 上，要求毫秒级完成的请求会发现 best-effort 任务的内核正在运行或排在前面。空间共享无法驱逐这些内核，时间共享只给请求一个时间片，硬件分区则靠闲置资源来保护它。既保 SLO 又保利用率的系统通常要深入栈内改内核、打驱动补丁、插桩框架，而闭源 GPU 栈的运营者做不到。本文论证无需深入：商用 GPU 自带的时间切片器已在亚毫秒级抢占运行中的内核，缺的只是优先级，而优先级能从外部制造——只要控制 best-effort 上下文「要运行什么」。Berth 是纯用户态系统：预载 shim 仅在无请求需要时才把作业喂给 GPU，声明的截止期参考把规则扩展到连续批处理 LLM 引擎，无特权设置的更短时间片则限制长内核的代价。",
+          "contributions": [
+            "提出「不需要新抢占原语，只需控制既有抢占机制看到什么」的设计原则。",
+            "feed control + 截止期参考 + 无特权可调时间片三件套，全部在用户态实现。",
+            "把规则扩展到连续批处理 LLM 引擎，覆盖 per-token 时延目标场景。"
+          ],
+          "conclusions": [
+            "闭源 GPU 上保住 SLO 的共享不需要改驱动或内核，只需外部调度。",
+            "SLO 达成度接近独占运行，同时 best-effort 吞吐显著高于全部基线。"
+          ],
+          "experiments": [
+            "31 个 MLPerf SLO 场景点、13 个基线，SLO 达成距独占运行仅几个百分点。",
+            "best-effort 吞吐为最强基线的 2.7–3.5 倍。",
+            "LLM 服务场景下，几乎每个请求都满足 per-token 目标而训练持续运行。"
+          ],
+          "significance": "把 GPU 共享从「改栈」问题降级为「用户态调度」问题，对闭源与云上租户都很实用。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25091",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25091.pdf",
+          "takeaway": "GPU 时间切片器本来就够快，缺的优先级可以从用户态「喂什么给 GPU」造出来。",
+          "keyExperiment": "31 个 MLPerf SLO 场景点上 SLO 接近独占，best-effort 吞吐为最强基线 2.7–3.5 倍。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Beam Model Technical Report",
+          "score": 4.6,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-20",
+          "authors": "Reflection Team (Adam Abdulhamid, Osama Abuelsorour, Yasmin Alameddine, ..., Ivan Komarov 等)",
+          "institutions": "Reflection",
+          "abstract": "Beam 是稀疏混合专家模型，总参数 501.3B、激活 23.4B，专为编码、推理与 agent 负载构建与优化，在比同类模型少 3–4 倍推理算力的前提下达到前沿推理水平。预训练使用 23.8T 多样且经过筛选的高质量 token；通过新颖的两阶段 midtraining（基于可验证、锚定正确性的数据）获得 1M token 上下文窗口。后训练在 10.5K 块 GB300 上开展大规模全异步强化学习，四周训练产生超过 1 亿条 rollout，作者称这是目前开放实验室中规模最大的 RL 训练之一。扩展 RL 算力时能力持续提升，未见平台期。配合硬件-模型协同设计、FP8/NVFP4 量化与 1.93B 参数的投机解码草稿模型 DFlash 2，服务吞吐被推到很高。安全侧对有害请求的拒绝或转向率为 88.9%，对无害请求合规率 81.5%。",
+          "contributions": [
+            "501.3B/23.4B 稀疏 MoE，推理算力仅为同类模型的 1/3–1/4。",
+            "两阶段 midtraining 把上下文扩到 1M，训练数据以可验证正确性为锚。",
+            "10.5K GB300 上的全异步 RL 战役（4 周、超 1 亿 rollout）+ DFlash 2 投机解码草稿。"
+          ],
+          "conclusions": [
+            "继续增加 RL 算力时能力仍持续提升，没有看到平台期。",
+            "硬件-模型协同设计加低精度量化，是前沿能力能被经济地服务的前提。"
+          ],
+          "experiments": [
+            "预训练 23.8T token，上下文窗口 1M。",
+            "4 周全异步 RL（10.5K GB300）产出超过 1 亿条 rollout。",
+            "有害请求拒绝/转向率 88.9%（开放权重 Pareto 前沿最高），无害请求合规率 81.5%。"
+          ],
+          "significance": "一次性给出「规模 RL + 长上下文 + 低精度服务」的组合配方，是今年最完整的公开 MoE 训练叙事之一。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26358",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26358.pdf",
+          "takeaway": "RL 算力尚未饱和：4 周 1 亿 rollout 的规模下能力仍在涨。",
+          "keyExperiment": "10.5K 块 GB300 上 4 周全异步 RL，超 1 亿条 rollout 且无平台期。",
+          "index": 5
+        },
+        {
+          "title": "Efficient and Robust Drafting with Multi-Token Prediction",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-20",
+          "authors": "Filippo Galgani, Ziwei Ji, Omri Homburger, Ganesh Jawahar, Michelle Ramanovich, Ivan Korotkov, Luciano Martins, Utku Evci, Edouard Yvinec, Pooja Consul, Vivek Kumar, Tal Schuster",
+          "institutions": "Google",
+          "abstract": "投机解码把生成拆成草稿与并行验证两个阶段，因此核心难题是设计一个既轻量又足够准确、能逼近目标模型的草稿器。本文提出高度优化的多 token 预测（MTP）架构，在现有主干 LLM 上扩展出高质量草稿，围绕单一共享草稿头做三项架构优化：目标激活注入，用目标模型的激活锚定语义规划；零拷贝 KV 缓存交叉注意力，绕过草稿阶段的 prefill 计算并降低内存开销；高效聚类词表投影，降低全词表解码成本。在 Gemma 4 系列上验证，G-MTP 开箱即用地在大型服务器部署上取得最高 3.1 倍加速，在面向内存受限端侧的小模型上取得 H100 最高 2.3 倍、手机 GPU 最高 2.2 倍加速。作者还给出参数高效微调配方，使草稿在域迁移下持续与主干对齐。",
+          "contributions": [
+            "单一共享草稿头 + 目标激活注入，兼顾草稿质量与参数开销。",
+            "零拷贝 KV 交叉注意力，草稿阶段不再重复做 prefill。",
+            "聚类词表投影压缩全词表解码成本，并给出域适配的参数高效微调配方。"
+          ],
+          "conclusions": [
+            "MTP 草稿可以「开箱即用」挂到既有主干上，服务器与端侧同时受益。",
+            "域迁移只需参数高效微调即可保持草稿与主干的语义对齐。"
+          ],
+          "experiments": [
+            "Gemma 4 上服务器侧最高 3.1 倍加速。",
+            "H100 上 2.3 倍、手机 GPU 上 2.2 倍（内存受限小模型）。",
+            "域适配微调所需的目标前向次数最多减少 1.83 倍。"
+          ],
+          "significance": "把投机解码的草稿器从「另训一个小模型」变成「主干自带的一颗头」。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25813",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25813.pdf",
+          "takeaway": "共享草稿头 + 零拷贝 KV 交叉注意力，让 MTP 草稿足够便宜也足够准。",
+          "keyExperiment": "Gemma 4 服务器侧最高 3.1 倍、手机 GPU 2.2 倍加速。",
+          "index": 6
+        },
+        {
+          "title": "DTS: Delta-Based Tile Scoring for Efficient Long-Context Sparse Attention",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-20",
+          "authors": "Emre Uğur, Jiawen Qi, Qinyu Chen",
+          "institutions": "Leiden University (LIACS)",
+          "abstract": "长文档与代码库让长上下文注意力成为 prefill 的主要瓶颈。块稀疏注意力通过跳过不重要的注意力块来减少计算，但准确地给块打分本身可能同样昂贵。作者提出 Delta-Based Tile Scoring（DTS）：一种免训练、内容自适应的块稀疏注意力打分方法。DTS 按局部向量的变化来选择 query 与 key 锚点，在冗余区域用更少的代表点、在异质区域保留更多细节；为加速锚点选择，并行 delta packing 把 query/key 序列切成与 tile 对齐的分块，并发地对这些分块做有界局部扫描。被选中的 tile 最终仍用原始 query、key、value 计算，因此不改变模型语义，也不引入额外训练。",
+          "contributions": [
+            "用局部向量变化决定锚点密度：冗余区少采样、异质区多采样。",
+            "并行 delta packing，使锚点选择本身可并行且有界，避免打分成为新瓶颈。",
+            "免训练且不改变模型：选中 tile 用原始 K/Q/V 计算。"
+          ],
+          "conclusions": [
+            "块打分只要跟着内容变化走，就能在几乎不掉精度的情况下大幅降低打分开销。",
+            "长上下文 prefill 的瓶颈可以从「算注意力」前移到「选块」，而选块可以做得更便宜。"
+          ],
+          "experiments": [
+            "LLaMA-3.1-8B-Instruct 上 RULER（至 128K）与 LongBench 平均分与全注意力差距小于 0.10 个百分点。",
+            "128K token 时打分流水线延迟比 XAttention 低 38%。",
+            "4 块 H100、512K token 下 prefill 比 FlashAttention-2 全注意力基线快 3.3 倍。"
+          ],
+          "significance": "把稀疏注意力的成本中心从主计算搬到廉价的块选择，且几乎零精度代价。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25938",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25938.pdf",
+          "takeaway": "锚点选择按内容变化自适应，是让块稀疏打分变便宜的关键。",
+          "keyExperiment": "128K 时打分延迟比 XAttention 低 38%，512K 时 prefill 快 3.3 倍且精度差 <0.1 点。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Towards Scale-Up Networking: Challenges and Open Questions",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.NI",
+          "date": "2026-11-20",
+          "authors": "Tingting Xu, Zixun Su, Xinyang Huang, Bowen Liu, Kun Tan, Dong Lin, Hao Wang, Yinben Xia, Weifeng Zhang, Binzhang Fu, Shuihai Hu, Kai Chen",
+          "institutions": "HKUST (iSING Lab), Huawei, Tencent, Alibaba Group",
+          "abstract": "模型规模增长与分布式训练、推理的普及，使加速器间通信成为关键的系统瓶颈。scale-up fabric 通过在紧耦合加速器域内同时提供高单卡带宽与低而可预测的延迟来应对这一瓶颈，但合适的拓扑、协议机制、通信语义与系统集成仍在激烈争论中。本文先分析各类并行策略产生的关键路径通信，据此推导出对域规模、单卡带宽与集合通信完成时延的量化需求；再以这些需求为统一框架，考察有代表性的专有与开放 scale-up fabric，揭示其物理互连、拓扑、协议与语义在性能、可扩展性、兼容性和实现成本之间做出的不同取舍。结合与产业专家的讨论，作者进一步给出物理互连与交换、高效通信、语义、资源共享以及异构设备互连方面的挑战与开放问题清单。",
+          "contributions": [
+            "从并行策略的关键路径通信反推对域规模、单卡带宽、集体完成时延的量化需求。",
+            "用统一需求框架横向对比专有与开放 scale-up fabric 的互连、拓扑、协议与语义取舍。",
+            "给出互连与交换、高效通信、语义、资源共享、异构互连五类开放问题。"
+          ],
+          "conclusions": [
+            "scale-up 设计的核心是让互连取舍匹配并行策略的真实通信需求，而非追单卡峰值带宽。",
+            "现有各家的 fabric 在性能、可扩展性、兼容性与实现成本上的取舍差异明显，尚无统一答案。"
+          ],
+          "experiments": [
+            "以关键路径通信需求为标尺，对比多套专有与开放 scale-up fabric 的拓扑、协议与语义。",
+            "作者来自 HKUST iSING Lab 与华为、腾讯、阿里的互连团队，开放问题清单直接来自产业实践讨论。",
+            "文中给出域规模、单卡带宽与集合通信时延三类需求的推导框架，可直接用于新 fabric 的设计评估。"
+          ],
+          "significance": "把「GPU 互连该怎么做」从厂商白皮书叙事拉回到可量化的通信需求上。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26156",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26156.pdf",
+          "takeaway": "scale-up 网络应按并行策略的关键路径通信需求设计，而不是按峰值带宽军备竞赛。",
+          "keyExperiment": "以三类量化需求（域规模、单卡带宽、集合完成时延）横评多套专有与开放 fabric。",
+          "index": 8
+        },
+        {
+          "title": "VR-SparseQuant: Accurate FP4 Quantization with 2:4 Sparsity on Vera Rubin",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-11-20",
+          "authors": "Samir Khaki, Wei-Chen Wang, Song Han, Ryan Hanrui Wang",
+          "institutions": "Nebius Applied AI, Massachusetts Institute of Technology",
+          "abstract": "GPU 对低精度计算的支持越来越专门化：从 Hopper 的 FP8 到 Blackwell 的 FP4 Tensor Core，精度格式也随硬件演进，从 Blackwell 的 MXFP4/NVFP4 到 Vera Rubin 上带直接 UE5M3 块缩放的 E2M1 FP4（作者记作 VRFP4）。这些进展让更大模型能以更低成本服务，但四位激活量化会显著损伤模型质量。VR-SparseQuant 利用 Vera Rubin 的逐元素 2:4 稀疏，在保留原生 FP4 执行的同时恢复精度：让两条稀疏流相互重叠，用与稠密量化相同的 FP4 数值预算去修正误差较大的激活；离线 scale-ratio 校准避免运行时搜索，共享权重 GEMM 则把两条流高效累加。这是作者所知首个利用 Vera Rubin 逐元素 2:4 结构化稀疏 FP4 指令做自适应激活量化的研究。",
+          "contributions": [
+            "用逐元素 2:4 结构化稀疏承载激活量化误差，不增加 FP4 数值预算。",
+            "离线 scale-ratio 校准，避免运行时搜索带来的开销。",
+            "共享权重 GEMM 一次累加两条稀疏流，配合原生 Rubin 内核实现端到端加速。"
+          ],
+          "conclusions": [
+            "稀疏可以当作「几乎免费」的精度补偿手段，挂在原生 FP4 指令上使用。",
+            "四位激活量化的质量损失主要来自动态范围，而非数值位数本身。"
+          ],
+          "experiments": [
+            "Nemotron-3-Nano-30B-A3B 上 WikiText-2 困惑度从 6.85（稠密 RTN W4A4）降到 5.57。",
+            "含激活准备开销，原生 Rubin 内核在 VRFP4 上取得最高 3.1 倍 GEMM 加速。",
+            "MoE 层上取得 2.7 倍加速（对比 BF16）。"
+          ],
+          "significance": "示范了「用稀疏换精度」在新一代 FP4 指令集上如何落地，为 W4A4 服务提供可行路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25717",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25717.pdf",
+          "takeaway": "两条 2:4 稀疏 FP4 流重叠，可把 W4A4 的精度拉回 W4A16 附近而不多花数值预算。",
+          "keyExperiment": "WikiText-2 困惑度 6.85→5.57，GEMM 最高 3.1 倍、MoE 2.7 倍加速（对比 BF16）。",
+          "index": 9
+        },
+        {
+          "title": "HiSA: Sparsifying the Hidden Dimension of RoPE Attention in LLMs",
+          "score": 4.2,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-20",
+          "authors": "Ambroise Borbely, Mathieu Salzmann, Olivier Verscheure",
+          "institutions": "EPFL, Swiss Data Science Center",
+          "abstract": "LLM 的注意力对每个 query-key 都做完整点积。本文追问这个点积是否必须算全：作者提出 Hidden Sparse Attention（HiSA），保留 query 与 key 的投影不变，但只计算部分点积，遵循由 token 位置决定的静态、无参数规则——稀疏发生在隐藏（特征）维度，而非几乎所有稀疏注意力方法所用的 token 维度。基于旋转位置编码（RoPE）的结构，作者把 key 与 query 分解成可以在注意力计算中省略的部分。从头训练 LLM 后发现，这种部分点积不仅不掉点，反而优于完整点积，而 query-key 乘积只算约三分之一。推理阶段解码更快、显存占用更小。作者还把 HiSA 扩展到 FlashAttention-3 内核以支持训练与推理，并论证稠密注意力本来就在抑制 HiSA 所丢弃的那部分注意力分数。",
+          "contributions": [
+            "提出隐藏维度稀疏注意力：静态、无参数、由位置决定的省略规则。",
+            "基于 RoPE 结构分解 K/Q，使可省略部分有明确几何含义而非启发式剪枝。",
+            "扩展至 FlashAttention-3 训练与推理内核，提供可落地的实现。"
+          ],
+          "conclusions": [
+            "注意力点积约三分之二可以省掉而不损失精度，甚至略有提升。",
+            "稠密注意力本身就在学会抑制这些被丢弃的分量，这解释了稀疏为何可行。"
+          ],
+          "experiments": [
+            "从头训练下仅计算约 1/3 的 query-key 乘积，性能反而优于完整点积。",
+            "推理阶段解码速度提升、显存占用下降。",
+            "给出 FlashAttention-3 内核实现，覆盖训练与推理两端。"
+          ],
+          "significance": "开辟了与 token 稀疏正交的另一条轴：特征维度稀疏，且不需要任何训练后剪枝流程。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26363",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26363.pdf",
+          "takeaway": "注意力稀疏不必只在 token 维度做，RoPE 结构允许在隐藏维度静态省掉 2/3 点积。",
+          "keyExperiment": "仅算约 1/3 的 query-key 点积，从头训练后性能反而优于完整点积。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
