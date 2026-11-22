@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-22",
+  "title": "2026-11-22 论文精选",
+  "lede": "本批（11-20 公告批）的显存账本被反复重写：混合模型缓存分层、稀疏注意力索引缓存卸载、agent 队首阻塞期的增量压缩，再加上 FP4 MLA 与 KV 中心的 MoBA 执行——服务系统的优化重心正从「算得快」转向「搬得省」。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 468
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "TideCache: Efficient Hybrid LLM Serving with Transparent Cache Management and Layer-Wise Streaming",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-20",
+          "authors": "Jinbin Luo, Xiaozhe Yao, Shang Yang, Zhijian Liu, Song Han, Qinghao Hu",
+          "institutions": "MIT, ETH Zurich, UC San Diego",
+          "abstract": "混合架构（全局注意力层加有界状态层）已成为开源权重模型的主流，两类层维护的缓存异构，需求随上下文长度与并发数急剧变化。TideCache 是面向 CPU–GPU 超级芯片的服务系统：透明缓存池在固定虚拟地址背后重分配物理页，不改变缓存布局与后端接口；Cache Streamer 利用有界状态层给出的计算空档，把下一层全局注意力的前缀预取到各层共享的 GPU 槽位，既减少常驻显存又把逐层传输与计算重叠，新生成的 KV 仍留在 GPU；请求调度器按请求规模与队列状态决定常驻或流式执行。三者使流式释放的 HBM 可容纳其它缓存组件与更多请求。基于 SGLang 实现，在 GB300 与 GH200 的七种模型/平台配置上完成最多 2.04 倍的 agent 轮数，整体 P50 每 token 延迟下降 20–59%，agent 场景 P50 首 token 时间提升 1.40–3.05 倍。",
+          "contributions": [
+            "提出透明缓存池，在固定虚拟地址下动态重分配 HBM 物理页，使不同缓存组件（全局注意力 KV 与有界状态缓存）共享一份显存而无需改动缓存布局与推理后端接口。",
+            "设计 Cache Streamer：利用有界状态层的计算窗口预取下一层全局注意力前缀，在跨层共享槽位中流式驻留，把主机到设备的逐层传输与计算重叠。",
+            "加入请求调度器，根据请求规模与队列状态在常驻执行与流式执行之间选择，并把释放出的 HBM 转给其它缓存与新增请求。"
+          ],
+          "conclusions": [
+            "在 GB300/GH200 七种配置下，相对带 HiCache 的 SGLang 完成最多 2.04 倍 agent 轮数。",
+            "整体 P50 每 token 延迟降低 20–59%，agent 场景 P50 TTFT 提升 1.40–3.05 倍。"
+          ],
+          "experiments": [
+            "GB300 与 GH200 两种超级芯片平台、七种模型/平台配置、agent 多轮负载，全部相对 SGLang+HiCache 基线比较。",
+            "吞吐上最多完成 2.04 倍 agent 轮数，同时 P50 每 token 延迟下降 20–59%，说明收益不只是显存换吞吐。",
+            "agent 场景 P50 首 token 延迟提升 1.40–3.05 倍，流式预取未以首字延迟为代价。"
+          ],
+          "significance": "把「异构缓存的显存分配」变成一次页表级的透明重排，为混合架构模型给出可落地的逐层流式服务方案。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26619",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26619.pdf",
+          "index": 1,
+          "takeaway": "混合模型的显存瓶颈不在 KV 总量，而在两种缓存抢同一块 HBM；用固定虚拟地址的页重分配加逐层预取即可把常驻压力转成可控流量。",
+          "keyExperiment": "七种模型/平台配置最多 2.04 倍 agent 轮数、P50 每 token 延迟降 20–59%、agent P50 TTFT 提升 1.40–3.05 倍。"
+        },
+        {
+          "title": "Twindex: Index Cache Offloading with Coarse-to-Fine Selection for Long-Context Sparse-Attention Serving",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-20",
+          "authors": "Yuxuan Xia, Jiakun Fan, Han Meng, Hao Mark Chen, Shenji Wan, Dongsheng Yang",
+          "institutions": "New York University, Virginia Tech, UC Merced, Imperial College London, Princeton University, ByteDance",
+          "abstract": "长上下文解码的并发数被 HBM 容量卡住。稀疏注意力模型（Qwen3.8-Flash-Next、DeepSeek V4.1-Flash、GLM-5.2）引入了 indexer：每步给全部历史条目打分，注意力只读 top-k 主 KV。主 KV 一旦卸载到主机内存，indexer 缓存反成 HBM 瓶颈——1M token 时分别占 Qwen 每请求 HBM 的 63%、V4.1 的 75%。Twindex 让 HBM 只留 indexer 缓存的紧凑副本，完整副本放主机内存；每步副本先粗选出更大候选集，再由模型自身 indexer 在候选原始行上精选。副本由离线学习一次的共享分量与压缩残差组成，不改权重、可跑在 CUDA graph 内。1M token 下并发容量是纯 KV 卸载的 1.78、1.62、3.03 倍，解码吞吐 1.44、1.25、2.54 倍，基准平均分最多低 3.1%。",
+          "contributions": [
+            "指出主 KV 卸载后 indexer 缓存成为新的 HBM 瓶颈（1M token 下占 Qwen 每请求 HBM 的 63%、V4.1 的 75%），把优化目标从主 KV 转到索引缓存。",
+            "提出粗到精的两级选择：HBM 内紧凑副本先选大候选集，模型自身 indexer 再在主机内存原始行上精选 top-k，索引语义与模型保持一致。",
+            "紧凑副本由离线学习一次的共享分量加压缩残差构成，零权重改动、可嵌入 CUDA graph，且保留每请求独立索引。"
+          ],
+          "conclusions": [
+            "在 1M token 下，并发容量为纯 KV 卸载的 1.78/1.62/3.03 倍（Qwen/V4.1/GLM-5.2），主机内存不构成限制时解码吞吐为 1.44/1.25/2.54 倍。",
+            "性能保持良好：基准平均分相对基线最多只下降 3.1%。"
+          ],
+          "experiments": [
+            "Qwen3.8-Flash-Next、DeepSeek V4.1-Flash、GLM-5.2 三个真实稀疏注意力模型，1M token 长上下文。",
+            "容量：纯 KV 卸载之上再容纳 1.78×、1.62×、3.03× 的请求数。",
+            "吞吐：主机内存不受限时解码吞吐提升 1.44×、1.25×、2.54×，平均基准分降幅 ≤3.1%。"
+          ],
+          "significance": "把长上下文服务的显存账本从「主 KV」改写到「索引缓存」，用离线学的紧凑副本换取近乎无损的并发扩容。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25078",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25078.pdf",
+          "index": 2,
+          "takeaway": "主 KV 卸载之后，indexer 缓存就是新的显存天花板；粗到精的两级索引查找让 63%–75% 的索引占用压缩到 HBM 可承受的规模。",
+          "keyExperiment": "1M token 下并发容量为纯 KV 卸载的 1.78/1.62/3.03 倍，解码吞吐 1.44/1.25/2.54 倍，精度损失 ≤3.1%。"
+        },
+        {
+          "title": "Aggron: Aggressive Compression of Agentic KV Caches during Head-of-Line Stalls in the Request Queue",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-20",
+          "authors": "Rishabh Ravi, Tony Hong, Chen Wang, Yue Zhu, Mengmei Ye, Hubertus Franke, Fan Lai, Josep Torrellas",
+          "institutions": "University of Illinois Urbana-Champaign, IBM Research",
+          "abstract": "LLM agent 执行长程多轮程序，上下文每步增长，服务受 KV 缓存容量限制。现有上下文压缩方法通常等到 KV 超过一个大阈值，再一次性摘要大段历史，或在后台推进、或压在关键路径上；若摘要与在线请求共用同一引擎，还会同时抢夺算力和显存。Aggron 提出另一种做法：每一轮都做摘要，但只摘要 KV 缓存的特定部分，从而既保住精度又让摘要请求足够轻。它把摘要请求放到独立的摘要队列，只在对应 agent 请求因队首阻塞停在主队列时发起，利用阻塞期间闲置的算力与内存；服务器还会预测摘要能否在该 agent 请求真正执行前完成，只在这些情况下发出摘要。与最先进的异步摘要方案相比，高负载下 P99 程序延迟降低 27%–31%，吞吐提升 1.34–1.40 倍。",
+          "contributions": [
+            "把压缩时机从「KV 超过大阈值再一次性摘要」改为「每轮摘要 + 只摘 KV 缓存特定片段」，使摘要请求足够轻且不损精度。",
+            "引入独立摘要队列，只在目标 agent 请求因队首阻塞（HoL stall）停在主队列时发起摘要，回收阻塞期间闲置的算力与显存。",
+            "加入完成时间预测：只有预测能在对应 agent 请求执行前完成的摘要才被发出，避免摘要反噬关键路径。"
+          ],
+          "conclusions": [
+            "高负载下相对 Slipstream/APEC 两类 SOTA 异步摘要方案，P99 程序延迟降低 27%/31%，平均延迟降低 11%/15%，吞吐提升 1.34×/1.40×。",
+            "压缩带来的精度损失在运行的随机波动范围内，四个前沿模型上吞吐还比 120K 或 24K 硬上限方案高出最多 14%。"
+          ],
+          "experiments": [
+            "高负载 agent 服务场景：P99 程序延迟降 27%–31%，平均延迟降 11%–15%，吞吐提升 1.34×–1.40×。",
+            "精度与未压缩执行相比处于 run-to-run 噪声内，摘要复用被替换文本的缓存 KV 时在四个前沿模型上吞吐再提 5%–17%。",
+            "1,350 次调度试验外的对比覆盖 Slipstream 与 APEC 两种 SOTA 异步摘要基线。"
+          ],
+          "significance": "把「等待」当成可回收资源——队首阻塞期正好是压缩别人 KV 的最佳窗口，为 agent 服务的容量问题给出零额外硬件的解法。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26435",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26435.pdf",
+          "index": 3,
+          "takeaway": "agent 负载的显存压力可以用阻塞窗口内做增量摘要来化解，关键是把摘要排到独立队列并预测其完成时间。",
+          "keyExperiment": "相对 SOTA 异步摘要，P99 延迟降 27%–31%、吞吐升 1.34–1.40×，精度损失在噪声范围内。"
+        },
+        {
+          "title": "AscMLA: Unlocking FP4 Efficiency for Long-Context MLA Decoding through Asymmetric Scaling",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-20",
+          "authors": "Zechun Zhou, Zhiyong Zheng, Xiaomin Zhang, Lin Ye, Han Li, Jingwei Sun, Guangzhong Sun, Jing Li",
+          "institutions": "University of Science and Technology of China, Kuaishou Technology",
+          "abstract": "长上下文解码每步都要重读不断增长的 KV 缓存。FP4 能同时降低缓存占用与访存流量，但其动态范围有限，必须做块缩放；把 FP4 用到多头潜在注意力（MLA）上时，K 与 V 共享同一潜向量却对缩放有不同要求，现有做法靠反量化或分离编码来化解冲突，额外增加执行或存储开销。AscMLA 提出 K/V 非对称缩放加流水化缩放因子投递，直接消费单一 FP4 负载：K 与 V 各自使用匹配其数值分布的缩放策略，缩放因子沿解码流水线提前送达，避免停顿。相比 FP8，其缓存占用减少 38.2%；几何平均加速为 TRT-LLM FP8 的 1.35 倍、CAKE NVFP4 MLA 内核的 1.26 倍。作为 Kimi-K2.6 在 1.8 请求/秒下的解码后端，同时满足两项延迟目标，吞吐比 TRT-LLM FP8 基线高 18.8%。",
+          "contributions": [
+            "提出面向 MLA 的 K/V 非对称缩放：在共享潜向量上为 K、V 分别配置缩放策略，避免反量化或分离编码带来的额外开销。",
+            "设计流水化缩放因子投递，使 kernel 直接消费单一 FP4 负载而不因等待 scale 停顿。",
+            "表示与内核协同设计，可直接作为生产级 MLA 模型（Kimi-K2.6）的解码后端。"
+          ],
+          "conclusions": [
+            "相比 FP8 缓存占用降低 38.2%，几何平均加速为 TRT-LLM FP8 的 1.35×、CAKE NVFP4 MLA 内核的 1.26×。",
+            "在 Kimi-K2.6、1.8 请求/秒的生产条件下同时满足两项延迟目标，吞吐较 TRT-LLM FP8 基线高 18.8%。"
+          ],
+          "experiments": [
+            "内核级：相对 TRT-LLM FP8 几何平均 1.35×，相对 CAKE 的 NVFP4 MLA 内核 1.26×。",
+            "缓存：FP4 KV 比 FP8 少占 38.2% 显存。",
+            "端到端：Kimi-K2.6 serving 在 1.8 req/s 下两项延迟目标均达标，吞吐 +18.8%。"
+          ],
+          "significance": "说明 MLA 的 K/V 共享潜向量不是 FP4 的死结，非对称缩放能让 4 bit 缓存真正跑进生产解码路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26106",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26106.pdf",
+          "index": 4,
+          "takeaway": "MLA 上做 FP4 的关键是承认 K 与 V 的数值分布不同，各自缩放并把 scale 提前投递，就能直接吃单份 FP4 负载。",
+          "keyExperiment": "相对 FP8 缓存省 38.2%，比 TRT-LLM FP8 快 1.35×，Kimi-K2.6 生产服务吞吐 +18.8%。"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Raptor: Rejection-aware Adaptive Tree based on Speculative Decoding",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CV",
+          "date": "2026-11-20",
+          "authors": "Qishu Hu, Haozhao Wang, Zicong Hong, Yufeng Zhan, Yuanqing Xia",
+          "institutions": "Beijing Institute of Technology, Huazhong University of Science and Technology, EPFL",
+          "abstract": "树形投机解码通过并行验证多条候选续写来加速视觉语言模型（VLM），但长视觉上下文提高了投机计算成本，使候选覆盖度与冗余扩展成为拓扑自适应之外的关键问题。作者指出仅看接受长度无法区分「候选覆盖不足」与「过度深扩展」，二者需要不同的资源分配决策。Raptor 是免训练框架，从拒绝反馈中提取三类互补信号——投机进展、前沿覆盖、冗余扩展，联合指导树深、分支宽度与起草预算的有界动量平滑更新，并用执行控制区分浅层拒绝与路径耗尽，抑制无效起草、在合适时机逐步恢复扩展。在两个 VLM、七个多模态基准上，相对自回归解码平均加速最高 2.39 倍，且优于原始投机解码配置与已评估的自适应树策略。",
+          "contributions": [
+            "指出接受长度是单一且含糊的信号，无法区分候选覆盖不足与冗余深扩展，据此定义三类互补的拒绝感知信号。",
+            "用有界、动量平滑的更新同时调节树深、分支宽度与起草预算，并以执行控制区分浅层拒绝与路径耗尽。",
+            "全程免训练，可直接套用到已有树形投机解码实现上。"
+          ],
+          "conclusions": [
+            "两个 VLM、七个多模态基准上相对自回归解码平均加速最高 2.39×，优于原始投机解码配置与已评估的自适应树策略。",
+            "消融显示联合配置自适应与时间平滑各自贡献互补收益。"
+          ],
+          "experiments": [
+            "两个视觉语言模型 × 七个多模态基准，平均加速最高 2.39×（相对自回归解码）。",
+            "与固定拓扑的原始投机解码配置、以及现有自适应树方法对比均有稳定吞吐提升。",
+            "消融实验验证三类拒绝信号与动量平滑的互补作用。"
+          ],
+          "significance": "把投机解码的自适应从「猜树形」推进到「读拒绝信号」，为长视觉上下文下的 VLM 推理提供免训练加速路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25436",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25436.pdf",
+          "index": 5,
+          "takeaway": "接受长度不够用，拒绝的形态才说明该加宽还是该收窄——这是树形投机解码调度的正确观测量。",
+          "keyExperiment": "两 VLM、七基准平均加速最高 2.39×，超越固定拓扑与已有自适应树策略。"
+        },
+        {
+          "title": "NariQ: Sub-3-Bit Quantization for Long-Horizon Agentic Tasks",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-20",
+          "authors": "Doyeob (Toby) Kim",
+          "institutions": "Nari Labs",
+          "abstract": "长程 agent 任务要求模型在 100K 以上上下文里连续调用工具，但许多低比特量化只在短网页文本上校准、用困惑度评估，代价很高：已有 Qwen3.8-27B 的 ≤3 bit 量化在 AIME 等短任务上与 BF16 持平，在长程 agent 基准 DeepSWE 上最多只解出 BF16 的 72%。NariQ 用格状编码（trellis-coded）后训练量化，校准数据取自 BF16 模型在 agent 会话中自生成的 token。在 Qwen3.8-27B 上，3.0 与 2.5 bit 权重版本在 DeepSWE、Terminal Bench 两个长程基准及 AIME、RealWorldQA 上与 BF16 持平；2.0 bit 开始落后。作者称这是首批 ≤3 bit 在长程 agent 任务上与全精度持平的结果，并开源 GGUF 权重与 llama.cpp 分支。",
+          "contributions": [
+            "揭示低比特量化的评估错配：短文本校准 + 困惑度评估会掩盖长程 agent 任务上高达 28% 的解任务数损失。",
+            "提出用 BF16 模型在 agent 会话中自生成 token 做校准的 trellis-coded 后训练量化。",
+            "开源 Qwen3.8-27B-NariQ-GGUF 权重与配套 llama.cpp 推理分支，可直接部署。"
+          ],
+          "conclusions": [
+            "Qwen3.8-27B 的 3.0 bit 与 2.5 bit 版本在 DeepSWE、Terminal Bench、AIME、RealWorldQA 上与 BF16 持平，2.0 bit 开始落后。",
+            "作者称这是首批在 ≤3 bit 权重下与全精度在长程 agent 任务上持平的量化结果。"
+          ],
+          "experiments": [
+            "对比基线：已有 ≤3 bit 量化在 DeepSWE 上仅解出 BF16 的 72% 任务数。",
+            "NariQ 3.0/2.5 bpw 在 DeepSWE、Terminal Bench、AIME、RealWorldQA 四个基准上与 BF16 持平。",
+            "2.0 bpw 检查点出现性能下滑，给出该方法的下界参考。"
+          ],
+          "significance": "给低比特量化换了一把正确的尺子：校准分布要来自 agent 轨迹，评估要看长程任务完成率而不是困惑度。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26157",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26157.pdf",
+          "index": 6,
+          "takeaway": "≤3 bit 能不能用，取决于校准数据是否来自 agent 自身生成的 token；换成 agent 轨迹后 2.5 bpw 即可对齐 BF16。",
+          "keyExperiment": "Qwen3.8-27B 在 3.0/2.5 bpw 下于 DeepSWE、Terminal Bench、AIME、RealWorldQA 与 BF16 持平。"
+        },
+        {
+          "title": "One Schedule Does Not Fit All: Adaptive Inference Schedules for Diffusion Language Models",
+          "score": 3.9,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-20",
+          "authors": "Rabimba Karanjai, Linsey Pang, Hemanth Hegadehalli Madhavarao, Richard Williamson, Uma Kona, Prakhar Mehrotra",
+          "institutions": "PayPal Inc.",
+          "abstract": "扩散语言模型通常在所有负载上使用同一套固定去噪调度。作者证明：能保住质量的最便宜调度取决于任务、模型与采样器。为此提出 TCDA（任务校准去噪配额），一条带显式误差保证的部署规则：给定候选采样器库、配对校准数据、效用容忍度与防退化护栏，用同时单侧 bootstrap 界判定哪些候选同时满足效用与护栏，随后部署最便宜的被认证候选，证据不足则回退完整调度；部署不可行调度的概率渐近不超过 alpha。候选包括提前前缀解码、状态复用续写、缩减时间网格与置信度阈值解码。七个数据集、两个模型族上认证的去噪器评估次数降幅为：ELF-B 在 XSum 3.4 倍、WMT14 2.0 倍，LLaDA-8B 在 WMT14 8.0 倍、GSM8K 4.1 倍，ELF-M/L 在 OpenWebText 1.33 倍；500 次校准划分中误认证率在 5% 名义水平下始终低于 2%。",
+          "contributions": [
+            "证明最优（最省）调度是任务、模型、采样器三者共同的性质，单一固定调度会在不同任务上分别浪费或失效。",
+            "提出 TCDA：用同时单侧 bootstrap 界联合认证效用与护栏，输出带误差保证的调度选择，证据不足时回退完整调度。",
+            "实现提前前缀解码、状态复用续写、缩减时间网格、置信度阈值解码四类候选，并给出固定的事前校验协议。"
+          ],
+          "conclusions": [
+            "七个数据集、两个模型族上认证降幅：ELF-B 于 XSum 3.4×、WMT14 2.0×；LLaDA-8B 于 WMT14 8.0×、GSM8K 4.1×；ELF-M/L 于 OpenWebText 1.33×。",
+            "在 5% 名义水平下 500 次校准划分的误认证率始终低于 2%，且每个选择都在新种子上被确认。"
+          ],
+          "experiments": [
+            "七个数据集 × 两个模型族（ELF-B/M/L、LLaDA-8B），去噪器评估次数降幅 1.33×–8.0×。",
+            "500 次校准划分：误认证率在 5% 名义水平下始终 <2%。",
+            "轨迹测量显示 token 提交状态比剩余潜空间离散误差更能预测调度是否安全。"
+          ],
+          "significance": "把扩散语言模型的推理预算从拍脑袋的固定调度变成可认证的部署决策，并指出可复现比较必须固定 ELF 的随机时间网格。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25895",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25895.pdf",
+          "index": 7,
+          "takeaway": "扩散 LM 没有通用最省调度，只有按任务认证过的最省调度；用 bootstrap 联合认证效用与护栏即可安全剪枝去噪步数。",
+          "keyExperiment": "认证后的去噪器评估次数降幅 1.33×–8.0×（ELF-B/LLaDA-8B/ELF-M/L 七个数据集），误认证率 <2%。"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Accelerating Mixture of Block Attention via Dynamic Routing, KV-Centric Execution and Runtime Pipelining",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-20",
+          "authors": "Yingqi Shi, Junru Lu, Yun Liu, Di Yin, Xing Sun",
+          "institutions": "Tencent Youtu Lab",
+          "abstract": "Mixture of Block Attention（MoBA）通过为每个 query 选择 KV 块来降低长上下文计算。FlashMoBA 虽已高效实现 MoBA，但保留固定 Top-k 预算与 query 中心调度：固定 Top-k 对不同分数分布用同一预算；query 区间归属会让多个区间选中同一列时 KV 复用被切碎。LightningMoBA 让选择与执行协同设计：动态路由对每 query 的块分数阈值化，直接产出变长稀疏元数据；KV 中心归属按（query head, KV 块）列对选中行分组，把高扇出列切成有界任务以复用 KV tile；在 Hopper 上用流水线把规则 K/V 传输与不规则 query gather 同 Tensor Core 计算重叠。五个检查点上 Top-16 匹配时长生成加速 1.20–1.60 倍，RULER 均分从 74.42 升到 75.28。",
+          "contributions": [
+            "用阈值化动态路由替代固定 Top-k，直接产生变长稀疏元数据，把保留量与 GPU 调度粒度解耦。",
+            "提出 KV 中心的执行归属：按（query head, KV 块）列分组选中行、切分高扇出列，使同一 KV tile 只加载一次即被多任务复用。",
+            "在 Hopper 上实现运行时流水线，将规则 K/V 传输、不规则 query gather 与 Tensor Core 计算重叠。"
+          ],
+          "conclusions": [
+            "Top-16 保留率匹配时，五个检查点上端到端生成加速 1.20–1.60×，RULER 均分从 74.42 提升至 75.28。",
+            "受控重放中 Top-32 的设备路径加速达 2.16–2.56×，Top-64 的路由与 CSC 构建加速达 6.99–11.25×；同后端对比显示执行优化贡献了大部分 Top-16 收益。"
+          ],
+          "experiments": [
+            "五个检查点、Top-16 匹配保留：端到端生成加速 1.20–1.60×，RULER 74.42→75.28。",
+            "受控重放：Top-32 设备路径 2.16–2.56×，Top-64 路由/CSC 构建 6.99–11.25×。",
+            "同后端对比拆分出执行优化与动态路由各自的贡献，动态路由在更大预算下收益升至 1.16–1.56×。"
+          ],
+          "significance": "把稀疏注意力的优化点从「选多少块」移到「选中之后如何被同一批 GPU 任务复用」，这是长上下文 kernel 的下一个瓶颈。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26268",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26268.pdf",
+          "index": 8,
+          "takeaway": "MoBA 的浪费不在选块策略，而在 query 中心的调度切碎了 KV 复用；改成 KV 中心归属后执行优化即可拿到大部分加速。",
+          "keyExperiment": "Top-16 匹配下五个检查点端到端加速 1.20–1.60×，RULER 均分 74.42→75.28。"
+        },
+        {
+          "title": "Splice-Core: Low-Order-Bit-Splicing GEMM for Highly Energy-Efficient AI Inference Accelerators",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-11-20",
+          "authors": "Prabhu Vellaisamy, Hsien-Fu Hung, Andrew Kim, Shawn Blanton, John Paul Shen",
+          "institutions": "Carnegie Mellon University, MIT",
+          "abstract": "Splice-Core 是时序一元/二元（tub）混合的 GEMM 单元，目标是压缩低阶累加延迟，同时对高阶激活位保留按值驱动的执行。作者给出两种处理元：Splice-BP 使用位平面，Splice-LUT 在单周期内选择一个共享权重倍数。以二元脉动阵列为基线，在 45nm 工艺下 26 个 INT4 卷积网络与大模型负载上，Splice-BP/Splice-LUT 的 tile 能量几何平均分别降低 77.4%/76.4%；Splice-LUT 还使几何平均吞吐提升 44.4%，能量延迟积（EDP）降低 6.13 倍。在评估的 W8A8 卷积与专家投影负载上，两者 tile 能量降幅为 77.3%–88.1%。布局布线后 INT4 下 Splice-BP/Splice-LUT 面积比脉动阵列小 14%/9%。",
+          "contributions": [
+            "提出时序一元/二元混合 GEMM 数据通路：低阶位用拼接方式快速累加，高阶位仍按值条件执行。",
+            "给出两种处理元实现——位平面的 Splice-BP 与单周期查表的 Splice-LUT，后者偏向降低隔离 tile 延迟。",
+            "完成 45nm 综合与布局布线评估，量化面积、能量、吞吐与 EDP 的权衡。"
+          ],
+          "conclusions": [
+            "26 个 INT4 CNN/LLM 负载上 tile 能量几何平均降 77.4%（Splice-BP）与 76.4%（Splice-LUT），后者吞吐 +44.4%、EDP 降 6.13×。",
+            "W8A8 卷积与专家投影负载上 tile 能量降 77.3%–88.1%；INT4 布局布线面积比脉动阵列小 14%/9%。"
+          ],
+          "experiments": [
+            "45nm、26 个 INT4 CNN/LLM 负载：tile 能量几何平均降 77.4%/76.4%。",
+            "Splice-LUT 吞吐几何平均 +44.4%，EDP 降 6.13×。",
+            "W8A8 卷积与专家投影：tile 能量降 77.3%–88.1%；INT4 面积小 14%/9%。"
+          ],
+          "significance": "说明量化激活的零值/近零值分布本身就是能耗机会——把低阶累加变短，比一味提高并行度更省能量。",
+          "arxivUrl": "https://arxiv.org/abs/2611.25617",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25617.pdf",
+          "index": 9,
+          "takeaway": "大部分量化激活接近零，高阶执行常被跳过；把低阶拼接压短即可在保持吞吐的同时砍掉 3/4 以上 tile 能量。",
+          "keyExperiment": "26 个 INT4 负载 tile 能量降 76%–77%，Splice-LUT 的 EDP 降低 6.13×。"
+        },
+        {
+          "title": "Live Migration of Gated DeltaNet Requests: Exact Catch-Up and the Cost of Log Backlog",
+          "score": 3.6,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-20",
+          "authors": "Hanqing Yu, Jiaqi Yang, Si Wu, Feng Li, Xiuzhen Cheng, Pengfei Hu, Yongbo Yu",
+          "institutions": "机构未标注",
+          "abstract": "流式 Gated DeltaNet（GDN）请求的在线迁移需要在正确 token 边界上、在持有同版权重的目标 worker 上恢复递推状态。作者适配了快照、批量重放与 token 追赶三种路径，并设计紧凑的更新日志迁移路径；精确追赶保持原生单 token 解码，在测试输入上与参考实现逐比特一致。系统用先验与探测校准两种选择器，按用户中断、源端释放、输出速率三种目标选择路径。在两个 GPU 部署的 1,350 次纯 GDN 调度试验中，紧凑日志在全部 90 种配置下取得最短精确切换间隙；80 种完整配置中精确追赶总是最早释放源端，允许算术差异时 32 步重放给出最高输出速率。10 MB/s 下 32 步重放把中位切换间隙从日志路径的 445–464 ms 降到约 81 ms；40 个历史 KV 对齐的 Qwen 配置上回溯选择器再降 13.9% 平均间隙。",
+          "contributions": [
+            "为线性注意力（Gated DeltaNet）请求迁移定义三条可执行路径：快照、批量重放、token 追赶，并新增紧凑更新日志路径。",
+            "实现逐比特一致的精确追赶与按目标（中断、源端释放、输出速率）切换的选择器，含先验与探测校准两种版本。",
+            "在 1,350 次调度试验与 40 个 KV 对齐配置上量化各路径的切换间隙与日志积压代价。"
+          ],
+          "conclusions": [
+            "90 种配置下紧凑日志均取得最短精确切换间隙；80 种完整配置中精确追赶最早释放源端，允许算术差异时 32 步重放输出速率最高。",
+            "10 MB/s 带宽下 32 步重放把中位切换间隙从 445–464 ms 压到约 81 ms，回溯选择器在 40 个 Qwen 配置上再降 13.9%。"
+          ],
+          "experiments": [
+            "1,350 次纯 GDN 调度试验、两个 GPU 部署、90 种配置：紧凑日志全部取得最短精确切换间隙。",
+            "10 MB/s 下单次手部带宽：32 步重放中位间隙约 81 ms，日志路径 445–464 ms。",
+            "40 个历史 KV 对齐 Qwen 配置：回溯选择相对最强简单规则降低 13.9% 平均间隙。"
+          ],
+          "significance": "把「有状态的线性注意力模型如何被调度器搬走」从不可说变成可度量：精确追赶与日志积压是两类必须分开定价的代价。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26153",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26153.pdf",
+          "index": 10,
+          "takeaway": "线性注意力模型的请求迁移不能沿用 KV 重算思路——递推状态要靠逐比特一致的追赶，日志积压则是随带宽放大的隐形成本。",
+          "keyExperiment": "32 步重放把中位切换间隙从 445–464 ms 降到约 81 ms，紧凑日志在 90/90 配置中给出最短精确间隙。"
+        }
+      ]
+    }
+  ]
+}
