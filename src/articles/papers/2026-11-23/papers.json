@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-23",
+  "title": "2026-11-23 论文精选",
+  "lede": "周五批剩余池第三日：KV cache 的驱逐与量化继续双向逼近 2 bit，LLM 服务的容量规划被证明普遍高估一倍并发，而 DiT 的 RL 后训练被拆解成一组固定激活偏移。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 458
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Global Importance Estimation for KV Cache Eviction",
+          "score": 4.4,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-11-20",
+          "authors": "Seojin Kim, Noseong Park",
+          "institutions": "KAIST",
+          "abstract": "长上下文 LLM 推理中 KV cache 的显存占用始终是核心瓶颈。作者提出 PRKV：完全免训练、不改模型，把注意力诱导的转移图当作有向图，用个性化 PageRank（PPR）做多跳传播，从而估计 token 的全局重要性——突破“只看最近窗口”和“只看瞬时注意力权重”这两类局部信号。两种变体分别对应不同场景：PRKV 用 landmark 增强局部转移图（定位更尖锐），PRKV-GLB 用全局共注意力图（传播更平滑一致）。在 RULER、LongBench、NIAH 与 AIME25、MATH-500 上跨多个指令微调模型评测，压缩率最高达 90% 时仍与强驱逐基线持平，峰值显存随之显著下降。Llama-3.1-8B 在 RULER-16K、50% 压缩下 TTFT 仅上升 2.4% 与 6.3%，解码吞吐从 46.49 升到 49.12 与 49.14 tok/s。",
+          "contributions": [
+            "把 KV 驱逐重构为注意力图上的多跳重要性传播问题，用个性化 PageRank 估计 token 的全局影响力，无需训练、无需改模型权重",
+            "给出两种转移图构造：landmark 增强的局部图（定位更尖锐）与全局共注意力图（传播更平滑），并给出按证据是否稀疏分布选择变体的经验规则",
+            "实验证明有限次 PPR 迭代即可得到几乎相同的 token 排序，因而实际开销很低；同时释放了融合的 Trition/PyTorch 实现与完整消融"
+          ],
+          "conclusions": [
+            "只看局部信号（最近性或瞬时注意力）会系统性低估跨长距离传递信息的 token，多跳全局传播能把这类证据保住",
+            "PRKV 家族在 50%–90% 压缩区间的准确率与强基线持平，且峰值显存随序列增长收益更大，适合 16K–128K 长上下文部署"
+          ],
+          "experiments": [
+            "Llama-3.1-8B、RULER-16K、50% 压缩：PRKV/PRKV-GLB 相对 Full KV 的 TTFT 仅增 2.4%/6.3%，解码吞吐 46.49 → 49.12/49.14 tok/s",
+            "RULER 与 LongBench 在 10%/25%/50%/75%/90% 五档压缩率上逐档对比 SnapKV 等驱逐基线，在激进压缩（75%–90%）区间优势最明显",
+            "NIAH 检索在 50% 压缩下，PRKV-GLB 跨位置更稳定，而 PRKV 对 needle 位置更敏感（0–10% 深度处尤甚）"
+          ],
+          "significance": "用图上的多跳影响力度量替代“注意力打分 + 保留 top-k”的直觉，让免训练 KV 驱逐在 90% 压缩下仍可用。",
+          "takeaway": "把 KV 驱逐当成 PageRank：多跳传播找到“被间接依赖”的 token。",
+          "keyExperiment": "RULER-16K/50% 压缩下 TTFT 仅 +2.4%，吞吐反升至 49.12 tok/s（Full KV 46.49）。",
+          "index": 1,
+          "arxivUrl": "https://arxiv.org/abs/2611.24969",
+          "pdfUrl": "https://arxiv.org/pdf/2611.24969.pdf"
+        },
+        {
+          "title": "Validation-driven Deployment of LLM Inference Platforms for Agentic Workloads",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-20",
+          "authors": "Shai Gretz, Alon Halfon, Yoav Katz, Lena Dankin, Michal Jacovi, Rachel Tzoref-Brill, Kfir Toledo, Elron Bandel, Natan Ergas, Michal Malka, Pravein Govindan Kannan, Maroon Ayoub, Michal Shmueli-Scheuer",
+          "institutions": "IBM Research, Red Hat AI",
+          "abstract": "企业正把 agentic 负载从闭源 API 迁到自建的开源权重模型部署上，于是从小规模测试、容量规划到生产上线的全生命周期验证变得关键；但实际 rollout 常用临时工具，且这些工具的准确性几乎没人校验。本文给出一条端到端的 agentic LLM 服务评测流水线，并用实验把各阶段之间的设计选择坐实。核心发现：重放采集到的真实 trace 能复现原始会话的逐会话负载——p95 下重放与记录输入 token 的偏差在 1.18 倍以内，而实时重跑会漂到 4.98 倍，因此少量录制会话即可得到可重复的负载。对 vLLM 的代码覆盖率分析显示，实时、重放与合成三类负载在该配置下互补，各自覆盖了对方未触达的 Python 服务路径。案例研究在 llm-d 上上线四个大型 MoE 模型，实测目标模型只跑到约一半的最优并发、约 60% 的吞吐，并提前暴露了路由不均衡。",
+          "contributions": [
+            "提出贯穿“小规模测试→容量规划→预生产→生产”的 agentic 服务评测流水线，并把阶段间的衔接选择用实验量化，而非靠经验拍板",
+            "证明 trace 重放在 per-session token 负载上远比实时重跑稳定（p95 1.18× vs 4.98×），使小样本录制成为可重复的容量测试基准",
+            "用 vLLM 代码覆盖率证明实时/重放/合成三类负载互补，并给出 MoE 模型上线时“公开 trace 调参 → 目标 trace 暴露并发与路由问题”的实操路径"
+          ],
+          "conclusions": [
+            "容量规划必须用目标模型自身采集的 trace，用公开 trace 调参会高估最优并发近一倍、高估吞吐约 40%",
+            "重放负载稳定但覆盖有限，三种负载应组合使用，单一负载的覆盖率会漏掉真实生产才走的服务路径"
+          ],
+          "experiments": [
+            "重放 vs 实时重跑：p95 输入 token 偏差 1.18× vs 4.98×，重放同样给出稳定的服务器负载",
+            "四个大型 MoE 模型在 llm-d 上线：目标 trace 下只达到约一半最优并发、约 60% 的 per-GPU 吞吐（相对公开 trace 调参结果）",
+            "vLLM 覆盖率：419,671 条可测语句中 180,352 条（43.0%）在该部署中根本无法 import，剩余语句上三类负载互补；KV 命中率在不同工作流下 70.8%–98.2%"
+          ],
+          "significance": "把“上线前怎么验”从经验变成可复现的度量流程，并量化了用错 trace 做容量规划的真实代价。",
+          "takeaway": "容量规划别用公开 trace：目标模型自身 trace 显示并发只有调参值的一半。",
+          "keyExperiment": "llm-d 上四个 MoE 模型只跑到约一半最优并发、约 60% 吞吐。",
+          "index": 2,
+          "arxivUrl": "https://arxiv.org/abs/2611.25905",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25905.pdf"
+        },
+        {
+          "title": "Held While Waiting: What LLM Agent Sessions Reserve on Serverless and Agent Runtimes",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.PF",
+          "date": "2026-11-20",
+          "authors": "Mekhala Hithyshini Sreenivasa",
+          "institutions": "Amazon Web Services",
+          "abstract": "LLM agent 几乎全部时间都在等模型返回：在 Amazon Bedrock AgentCore 上，agent 每次模型回复的中位等待为 2.7 秒，真正计算只有估计 5 到 40 毫秒。等待期间的 CPU 不计费，但每个会话都要占用一个独立的虚拟机环境（含自己的内存），并一直保留到会话关闭。结果是 1,000 个会话就预留 1,000 个环境，却只干 2 到 15 个核的活——服务往往先耗尽环境配额，而不是算力。短缺有两个成因，各自有解：其一，会话结束后环境仍被持有，客服基准里一次会话平均 33 秒，若客户端不主动关闭环境还要再多占 15 分钟；其二，一个环境只服务一个会话，而该会话大部分时间在等。模拟显示把 64 个会话复用到一个环境，所需环境数减少 59 倍，同时 99% 的回复延迟增加不超过 40 毫秒。作者强调这些毫秒级数字是估计值，因为真实测量本身很难。",
+          "contributions": [
+            "首次把 serverless/agent 运行时的配额瓶颈定位到“环境持有时间 × 单会话独占”这两个乘性因子，而非 CPU 算力",
+            "给出可量化的复用收益：64 会话/环境 → 环境数降 59 倍，p99 每步额外延迟 ≤40 ms，并用 Little 定律交叉校验模拟结果（误差 1% 内）",
+            "指出“等待型负载”几乎不产生 CPU 争用（等待占比 >98%），因此多路复用在这类负载上代价极低，与常规高密度部署的风险模型不同"
+          ],
+          "conclusions": [
+            "agent 平台的成本与容量规划应按“环境秒”而非“CPU 秒”计，否则会系统性高估算力、低估配额",
+            "乐观的复用策略（几十路会话共享一个环境）在等待主导的负载上几乎免费，真正的风险在于会话生命周期管理而非调度"
+          ],
+          "experiments": [
+            "AgentCore 实测：每次模型回复中位等待 2.7 秒，单步计算占比 0.16%–1.5%，环境被持有 28 秒而计算仅占 ≤0.7%",
+            "模拟：64 会话共享一个环境需 17 个环境（较独占少 59 倍），256 会话/环境下仅需 5 个；p99 额外延迟 ≤40 ms",
+            "客服基准：一次会话平均 33 秒，但环境在会话结束后仍被多持有 15 分钟，除非客户端显式关闭"
+          ],
+          "significance": "把 agent 基础设施的成本主战场从“模型算力”挪到“会话环境生命周期”，并给出可落地的复用倍数。",
+          "takeaway": "agent 服务的瓶颈是环境配额不是算力：64 会话共享一个环境省 59 倍。",
+          "keyExperiment": "模拟 64 会话/环境下环境数降 59 倍，p99 每步仅 +40 ms。",
+          "index": 3,
+          "arxivUrl": "https://arxiv.org/abs/2611.26480",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26480.pdf"
+        },
+        {
+          "title": "LoongForge-Embodied: A Unified Framework for Training Heterogeneous Embodied Models",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-20",
+          "authors": "LoongForge Team",
+          "institutions": "Baidu",
+          "abstract": "VLA（视觉-语言-动作）与 WAM（世界-动作）模型的训练本身很贵，而它们的异构架构与碎片化训练栈让系统优化难以跨模型复用。本文提出 LoongForge-Embodied：一个原生 PyTorch 框架，把异构具身模型的训练统一并加速。核心是一个公共抽象层，把模型相关实现与共享训练基础设施解耦，从而在不限制各自架构与执行要求的前提下实现跨模型复用。在此之上，它把可复用的加速机制与模型/硬件感知的优化策略结合，覆盖计算、执行、内存、数据 I/O 与分布式通信，包括 DDP 与 FSDP 上的 FP8 通信优化。除训练加速外，框架还集成统一数据基础设施（从第一视角数据合成机器人数据的流水线）与支持并发与优化计算的评测框架。在九个代表性 VLA/WAM 模型上，端到端训练吞吐相对各自开源实现提升 1.47 至 4.38 倍，同协议下评测加速 4.1 至 23.2 倍，成功率与官方基线相当。",
+          "contributions": [
+            "提出跨异构 embodied 模型的统一训练抽象层，把模型特定实现与共享基础设施解耦，使加速优化可跨模型复用",
+            "给出面向 VLA/WAM 的系统优化组合：算子融合与 CUDA Graph、选择性激活检查点、多组编译与重叠，以及 DDP/FSDP 上的 FP8（含 Delta-FP8）通信压缩",
+            "在 9 个模型（含 GR00T N1.7、Cosmos 3、LingBot-VA 等）上验证：训练吞吐 1.47×–4.38×、评测 4.1×–23.2×，成功率不掉"
+          ],
+          "conclusions": [
+            "具身模型训练的主要瓶颈是主机同步与算子碎片化（78.2% 的内核启动短于 20 微秒），而非单个 GEMM 效率，故系统级融合收益远大于换更大矩阵乘",
+            "统一抽象不会牺牲单模型最优性：框架保留了各模型的专用路径，并在 RoboTwin 对齐任务集上达到 89.71% 成功率"
+          ],
+          "experiments": [
+            "九个 VLA/WAM 模型端到端训练吞吐提升 1.47×–4.38×，同协议评测加速 4.1×–23.2×",
+            "SwiGLU/RMSNorm 位精确融合内核把峰值显存从 92,362 MiB 降到 73,244 MiB（−20.7%），吞吐从 25.x 提升",
+            "消融：关闭选择性激活检查点步时 +70%，关闭多组编译与重叠优化步时 +65%；合成数据把 RoboTwin 50 任务成功率从 75.76% 提到 77%（约）"
+          ],
+          "significance": "把分散的 VLA/WAM 训练栈收敛成一套可复用加速层，并首次系统量化 FP8 通信在具身模型分布式训练中的收益。",
+          "takeaway": "具身模型训练瓶颈在碎片化执行而非 GEMM：统一抽象层换来 1.5–4.4 倍吞吐。",
+          "keyExperiment": "9 个模型训练吞吐 1.47×–4.38×、评测 4.1×–23.2×；融合内核降显存 20.7%。",
+          "index": 4,
+          "arxivUrl": "https://arxiv.org/abs/2611.25460",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25460.pdf"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "RL Post-Training in Diffusion Transformers Is Activation Steering",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.CV",
+          "date": "2026-11-20",
+          "authors": "Tuna Han Salih Meral, Kaan Oktay, Alec Helbling, Atakan Kara, Duen Horng Chau, Pinar Yanardag",
+          "institutions": "Virginia Tech, fal, Georgia Tech, IBM Research",
+          "abstract": "对扩散 Transformer 做 RL 后训练能显著改善画质、文字渲染与组合准确性。这类能力看似依赖提示，直觉上需要学复杂的输入相关变换；本文用极端简化的参数化隔离“与输入无关的常量偏移”能解释多少收益：在冻结基座模型的每个 block 输出上叠加一组固定 steering 向量。在 SD3.5-M 上，这组向量比 RL 调过的 LoRA 少 65 倍参数（0.29M vs 18.8M），通过在速度预测上拟合公开 RL checkpoint 得到，目标函数里没有 reward。尽管向量对每个提示、token 与采样种子都相同，它们仍复现了六个图像模型 RL 收益的 90.0%–96.3%，两个视频模型上是 89.8% 与 111.9%。若从零初始化并用在线 RL 训练，仅这组向量在文字渲染（OCR）与人类偏好（PickScore）上就超过基于权重更新的 RL。",
+          "contributions": [
+            "证明 DiT 的 RL 后训练收益绝大部分可被一个输入无关的常量激活偏移解释，参数量仅为 rank-32 LoRA 的约 1.5%",
+            "给出零 reward 的“速度匹配”拟合方法：让 steering 向量复现 RL checkpoint 的速度场，即可直接搬运收益",
+            "定位收益来源：文本流、条件引导分支与早期采样步贡献最大，单独拟合这些部分即可恢复 89.5%（OCR）与 73.x%（PickScore）"
+          ],
+          "conclusions": [
+            "DiT 的 RL 后训练在机制上更接近全局激活偏移，而非提示无关的复杂策略学习，这对 RL 后训练与蒸馏的算法设计是直接挑战",
+            "常量 steering 向量可作为“RL 收益转移”的极低成本载体：换基座、换任务的迁移不必再训练 LoRA"
+          ],
+          "experiments": [
+            "SD3.5-M：0.29M 参数的固定向量复现 6 个 RL 图像模型 90.0%–96.3% 的 reward 增益，参数量为 RL LoRA（18.8M）的 1/65",
+            "视频模型上复现 89.8% 与 111.9% 的增益；在线 RL 从零训练该向量，在 OCR 与 PickScore 上达到 RL 收益的 104.6% 与 103.6%",
+            "块输出变化集中在两个采样步区间，即可保留八档能量的 83%–94%，说明收益高度集中在少数步"
+          ],
+          "significance": "用 0.29M 参数的固定向量复现 90%+ 的 RL 后训练收益，说明 DiT 的 RL 更像激活操控而非策略学习。",
+          "takeaway": "DiT 的 RL 后训练收益 ≈ 一组固定激活偏移，参数只要 LoRA 的 1/65。",
+          "keyExperiment": "0.29M 固定向量复现 90.0–96.3% reward 增益（LoRA 18.8M）。",
+          "index": 5,
+          "arxivUrl": "https://arxiv.org/abs/2611.26627",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26627.pdf"
+        },
+        {
+          "title": "ROAM-GRPO: Enforcing Reasoning Diversity in GRPO via Routed Off-mode Approach Mining",
+          "score": 4.1,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-20",
+          "authors": "Jeff Duan, Matt Thomson",
+          "institutions": "Caltech",
+          "abstract": "SFT 加可验证奖励强化学习（RLVR）已是复杂推理任务后训练的主流配方，但已知会把策略压进低多样性模式：重复采样得到的输出几乎一致，pass@k 随之收敛甚至退化。作者提出 ROAM-GRPO（Routed Off-mode Approach Mining）：在训练中检测“已被解得很好的题”，把它们转到 off-mode 轨道，提示模型为这些题产出彼此不同的解题策略，再由 LLM judge 校验逻辑有效性与差异度，最后自蒸馏回策略。这样把“把题做对”与“把题做出花”两类信号分开优化，避免 GRPO 的组内归一化把多样性压平。在 MATH level 5 的 1,000 题子集上训练 Qwen3.5-2b，ROAM-GRPO 在困难评测集上把峰值 pass@16 提高 4.7%，正确解嵌入的余弦距离提升约 1.5 到 2 倍，说明模型确实在探索不同解题路径而非同一路径的措辞变体。",
+          "contributions": [
+            "识别出 GRPO 组内归一化与“题已被解出即无梯度”的交互会压平推理多样性，并把该问题转化为可利用的训练信号",
+            "提出 off-mode 轨道：对已解出题强制生成“不同策略”答案，用 LLM judge 同时对逻辑有效性与差异度做双过滤后自蒸馏",
+            "在 MATH lvl5 子集上同时报告准确率与多样性两类指标，给出多样性提升不牺牲 pass@1 的证据"
+          ],
+          "conclusions": [
+            "推理多样性可以作为一个独立于正确率的可优化目标，通过路由“已解出题”释放梯度预算",
+            "多样性提升会转化为 pass@k 的实际上限提升，而不仅是输出表面差异"
+          ],
+          "experiments": [
+            "Qwen3.5-2b + MATH lvl5 1,000 题子集：困难评测集峰值 pass@16 提升 4.7%",
+            "正确解嵌入余弦距离提升约 1.5×–2×，作为策略多样性的直接度量",
+            "pass@1 与 pass@16 均给出 95% bootstrap 置信区间，确认增益不是种子噪声"
+          ],
+          "significance": "把“GRPO 压平多样性”从已知缺陷变成可训练目标，给出一条低成本提升 pass@k 上界的路径。",
+          "takeaway": "把已解出的题路由成 off-mode 轨道强制多策略，pass@16 提升 4.7%。",
+          "keyExperiment": "Qwen3.5-2b 上 pass@16 +4.7%，多样性余弦距离 1.5–2×。",
+          "index": 6,
+          "arxivUrl": "https://arxiv.org/abs/2611.25926",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25926.pdf"
+        },
+        {
+          "title": "How Much Should an Agent Remember? Deployment Lessons from Self-Distilled Memory for LLM Agents",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-20",
+          "authors": "K. R. Jayaram, Vatche Isahagian, Aswath Vaithinathan Aravindan, Vinod Muthusamy, Punleuk Oum, Gaodan Fang, Michal Ulewicz, Gegi Thomas, Evelyn Duesterwald",
+          "institutions": "IBM Research",
+          "abstract": "长程任务上的 LLM agent 会以程序化方式反复失败：分页拼错、解析错实体、或在不该回答时回答。作者搭了一条让 agent 从自身历史中学习的流水线：先从自身轨迹挖出 1 到 3 条简短 lesson，再合并成更少的 guideline，并记录每条 guideline 合并了多少条 lesson；推理时给出全部 guideline 或经检索选出的子集。流水线以开源库 altk-evolve 发布，部署在 IBM CUGA agent 与 watsonx Orchestrate。主实验平台 AppWorld 覆盖基线完成率 40%–92% 的多个模型。核心发现：合适的记忆量是模型的属性，而非记忆系统的属性。强模型随 guideline 增加持续变好——DeepSeek-V3.2 用满 191 条后任务完成率 +9.5 点、场景完成率 +16.1 点；弱模型相反，用小子集优于全量。",
+          "contributions": [
+            "提出 lesson→guideline 的两级自蒸馏记忆流水线，压缩过程可无损或带验证反馈，并在开源库与生产平台落地",
+            "给出“记忆量最优值取决于模型能力”的量化结论：强模型全量更好（+9.5 点），弱模型子集更好（gpt-oss-120b 51.2% → 55.4%）",
+            "给出成本侧的实操选择：47 条 guideline 的支持集是效率甜点（token +27% 换来 +5.x 点），全量 191 条则 token 成本 +78%"
+          ],
+          "conclusions": [
+            "agent 记忆不应按“越多越好”设计，而应按目标模型能力分档配置检索与全量策略",
+            "把记忆做成可审计的 guideline（含合并计数）比堆原始轨迹更划算，显著降低 token 成本并提升可维护性"
+          ],
+          "experiments": [
+            "AppWorld：DeepSeek-V3.2 用满 191 条 guideline，任务完成率 +9.5 点、场景完成率 +16.1 点",
+            "gpt-oss-120b 从 39.9% 起步：全量 199 条到 51.2%，而约 29 条的选子集到 55.4%（两次运行均值）",
+            "成本：全量 191 条每任务 token +78%；47 条支持集 +27% token 换 +5.x 点；-bench 上 12 条 guideline 把均值从 51.7% 提到 55.x%，pass^3 从 27.5% 到 32.5%"
+          ],
+          "significance": "把“agent 该记多少”从拍脑袋变成按模型能力分档的工程决策，并给出可直接照抄的 token 成本曲线。",
+          "takeaway": "记忆量是模型的属性：强模型吃全量，弱模型要小检索子集。",
+          "keyExperiment": "DeepSeek-V3.2 全量 191 条 +9.5 点；gpt-oss-120b 小集 55.4% > 全量 51.2%。",
+          "index": 7,
+          "arxivUrl": "https://arxiv.org/abs/2611.26361",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26361.pdf"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Online Temporal Rotations for 2 Bit KV-Cache Quantization in Video Diffusion Transformers",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CV",
+          "date": "2026-11-20",
+          "authors": "Ryan Lucas, Petros Prastakos, Rahul Mazumder",
+          "institutions": "Massachusetts Institute of Technology",
+          "abstract": "视频扩散 Transformer 会在多个去噪步间复用 KV cache，长视频生成时这很快成为瓶颈。作者发现：量化时间上相距很远的 cache 向量取值范围过大、误差很高，但相邻视频 token 的逐通道模式稳定且可持续；同时这些模式又随视频而变，因此最优旋转必须针对每个视频自己的 cache 自适应。据此提出 Temporal Rotation Quantization（TRQ）：量化前先把时间上相邻的帧在 cache 内旋转。对每个时间相邻块，TRQ 拟合一个正交变换，把块内逐通道均值映射到各通道近似为常数的向量。为使格式轻量，旋转参数化为 2×2 平面旋转树，每个只存 2 bit，后接所有块共享的固定 Hadamard 变换。旋转不用梯度、不改权重拟合，并证明简单贪心拟合对“均值压平”目标全局最优；变换逐视频在线拟合，另放出融合 Triton 内核。",
+          "contributions": [
+            "发现视频 KV cache 的时间局部性：相邻帧共享逐通道模式，可把量化难度转化为可消除的“通道均值偏置”",
+            "提出可 2 bit 存储的平面旋转树 + 共享 Hadamard 变换，参数仅约 0.25 bit/标量，并把在线拟合证明为全局最优的贪心解",
+            "在三个视频 DiT 上实现 2 bit KV 量化，在七个保真度/质量指标上多数超过 SOTA 的 QVG，并给出融合 Triton 内核"
+          ],
+          "conclusions": [
+            "视频 KV cache 的量化误差主要来自时间维不均衡而非通道维度本身，按时间块做自适旋转比全局旋转更有效",
+            "轻量参数化（每块 254 bit）足以承载逐视频自适应的旋转，使 2 bit 量化在长视频生成中实用"
+          ],
+          "experiments": [
+            "2 bit、匹配压缩率下 VBench 主体一致性：LongCat-Video-13B 从 QVG 的 90.38 提到 92.02，HY-WorldPlay-8B 从 86.33 提到 87.61",
+            "LongCat-13B 480p 消融：完整方法 PSNR 27.69 / SSIM 0.883 / LPIPS 0.082，优于仅旋转（25.90 / 0.853 / 0.099）与随机旋转（23.30 / 0.803 / 0.140）",
+            "三个模型（LongCat-Video-13B、Self-Forcing-Wan-1.3B、HY-WorldPlay-8B）上 LongCat 与 Self-Forcing 七项指标全胜，HY 为 7 项中 6 项"
+          ],
+          "significance": "把 LLM 低比特量化里的“旋转”思路搬到视频 KV cache，用时间局部性换来 2 bit 可用。",
+          "takeaway": "相邻帧的 KV 共享通道模式：按时间块自适旋转后 2 bit 可用。",
+          "keyExperiment": "2 bit 下 VBench 主体一致性 90.38 → 92.02（LongCat-13B）。",
+          "index": 8,
+          "arxivUrl": "https://arxiv.org/abs/2611.26334",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26334.pdf"
+        },
+        {
+          "title": "Asuka-FM: A System-Architectural Co-Design Framework for Efficient Text-to-Image Pretraining on Consumer Hardware",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CV",
+          "date": "2026-11-20",
+          "authors": "Víctor Rodrigo González, Pablo M. Olmos, Ignacio Peis, Alejandro Lancho",
+          "institutions": "Universidad Carlos III de Madrid, Technical University of Denmark",
+          "abstract": "前沿文生图基础模型依赖数十亿参数的扩散 Transformer，并在大规模集群上预训练，这构成学术实验室的门槛。在单张消费级 GPU（24 GB RTX 4090）上从零训练 DiT 有三个瓶颈：注意力序列长度的二次代价、可变长宽比分桶引发的 JIT 编译图断裂、以及冻结 VAE 吞吐墙（VAE 操作支配每步延迟）。本文提出 Asuka-FM：系统与架构协同设计框架，证明约 206M 参数双流 DiT 可在单张消费级 GPU 上以约 160 GPU 小时、低于 55 美元从零预训练出有竞争力的模型。它集成四项设计：无 AdaLN 双流 DiT 主干（减参数）；SPRINT 结构化序列稀疏化，砍掉 50% 以上注意力 FLOPs；连续长宽比归一化 RoPE 配合分桶；以 VAE 为重点的流水线改造。最终在单卡上维持平均 75.6% 的物理有效性。",
+          "contributions": [
+            "给出单卡（24 GB）从零预训练双流 DiT 的完整系统方案：约 206M 参数、约 160 GPU 小时、成本低于 55 美元",
+            "用 SPRINT 结构化稀疏（75% token 丢弃 + 稠密浅层/深层）把注意力 FLOPs 减半以上，同时充当正则；配合连续长宽比 RoPE 与三档上下文分桶把 padding 开销降到最多 −66%",
+            "把 VAE 吞吐墙当一等公民处理：剖析出 VAE 编码占每步 62.0% 延迟、解码占推理 70% 以上，并给出对应的解耦与编译策略"
+          ],
+          "conclusions": [
+            "消费级硬件上的文生图预训练瓶颈是多处系统开销的叠加（JIT 断裂 + VAE 墙 + 二次注意力），需要架构与系统联合设计而非单点优化",
+            "在 2 亿参数量级上，稀疏化主干可以在不牺牲生成质量的前提下把单卡预算压进 160 GPU 小时"
+          ],
+          "experiments": [
+            "单张 RTX 4090（24 GB）：约 206M 参数双流 DiT，约 160 GPU 小时、<$55 完成预训练，平均 75.6% 物理有效性",
+            "SPRINT 把注意力 FLOPs 降低 50% 以上；三档上下文分桶把 padding 开销降低至多 66%，预热期只触发两次 TorchInductor 重编译",
+            "剖析：冻结 VAE 编码器占每步 62.0% 延迟；推理期 VAE 解码占墙钟 70% 以上"
+          ],
+          "significance": "把“前沿文生图必须大集群”的假设撕开一个口子：单卡 160 GPU 小时、55 美元即可从零训练可用 DiT。",
+          "takeaway": "单张 4090、160 GPU 小时、55 美元即可从零预训练 206M 双流 DiT。",
+          "keyExperiment": "单卡 4090 上 206M DiT 预训练 160 GPU 小时、<$55，注意力 FLOPs 减半。",
+          "index": 9,
+          "arxivUrl": "https://arxiv.org/abs/2611.26437",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26437.pdf"
+        },
+        {
+          "title": "Matching Architecture to Workload: Comparing RISC-V Parallel Accelerators for Energy-Efficient Embedded Computing",
+          "score": 3.8,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-20",
+          "authors": "Luca Colombo, Luigi Ghionda, Amirhossein Kiamarzi, Yvan Tortorella, Riccardo Giunti, Niccolò Giuliani, Samuele Colmi, Angelo Garofalo, Giuseppe Tagliavini, Davide Rossi",
+          "institutions": "Fondazione Chips-IT, University of Pavia, University of Bologna, ETH Zürich",
+          "abstract": "嵌入式计算需要在计算特征差异极大的负载上都拿到高性能与高能效，因此选哪种执行模型必须建立在对“每种模型如何映射到各类负载”的定量认识上。本文比较三种节能嵌入式执行模型：标量多核、流式（streaming）多核与向量处理，并各选一个开源 RISC-V 加速器作代表实现——PULP Cluster、Snitch Cluster 与 Spatz。三者都基于同一 12 nm 工艺、共用一套基准，开源硬件与软件栈使这种受控比较可行。结果显示不存在通吃的执行模型：Spatz 在规整、高度可向量化的计算密集负载上收益最大，性能最高达其它架构的 4.29 倍、能效达 5.17 倍；但它的有效性强烈依赖数据级并行与规整的访存模式，在不规整负载上优势收窄甚至反转。作者据此给出按负载类别选择执行模型的经验准则。",
+          "contributions": [
+            "在完全同工艺（12 nm）、同基准、全开源栈的条件下，对三种 RISC-V 执行模型做受控对比，消除跨平台不可比因素",
+            "量化各模型的适用边界：Spatz 在规整向量化负载上达 4.29× 性能与 5.17× 能效，但收益随数据级并行度与访存规整性下降而消失",
+            "给出按负载类别（规整计算密集 / 流式 / 标量控制流）选择执行模型的工程准则，而非追求单一最优架构"
+          ],
+          "conclusions": [
+            "嵌入式加速器的选型应由负载类别的占比决定，混合部署多种执行模型往往优于单一模型拉满",
+            "向量单元的收益高度条件化：没有数据级并行与规整访存时，其能耗优势会被调度与访存开销吃掉"
+          ],
+          "experiments": [
+            "同 12 nm 工艺下：Spatz 在规整可向量化负载上性能最高 4.29×、能效 5.17×（相对 PULP/Snitch 集群）",
+            "流式多核在规则数据流类负载上优于标量多核，但在不规则访存下失去优势",
+            "三类执行模型在同一基准套件上无一致赢家，最佳选择随负载类别变化"
+          ],
+          "significance": "给嵌入式 SoC 的“选执行模型”提供一份同工艺、可复现的定量对照表。",
+          "takeaway": "没有万能的 RISC-V 执行模型：Spatz 规整负载 4.29×/5.17×，不规整就退回。",
+          "keyExperiment": "同 12 nm 工艺下 Spatz 达 4.29× 性能、5.17× 能效，但仅限规整向量化负载。",
+          "index": 10,
+          "arxivUrl": "https://arxiv.org/abs/2611.25947",
+          "pdfUrl": "https://arxiv.org/pdf/2611.25947.pdf"
+        }
+      ]
+    }
+  ]
+}
