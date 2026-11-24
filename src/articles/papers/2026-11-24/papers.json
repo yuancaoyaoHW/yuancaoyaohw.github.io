@@ -1,0 +1,338 @@
+{
+  "date": "2026-11-24",
+  "title": "2026-11-24 论文精选",
+  "lede": "今日主线是「把空闲资源榨出来」：MoE megakernel 在 warp 粒度自适应分工、RL 训练让 learner 与 rollout 同卡共驻、agent 服务按工具语义驱逐 KV、前缀缓存的时序侧信道被请求级隔离抹平。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 388
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Contexture: Runtime Context Eviction for High-Throughput Agent Serving",
+          "score": 4.5,
+          "category": "cs.DC",
+          "date": "2026-11-23",
+          "authors": "Colin Hong, Bryan Shan, Wei Siong Pang, Chengzhi Lu, Xu Guo, Nitin Shivaraman, Tao Luo, Esha Choukse, Kisson Lin, Dmitrii Ustiugov",
+          "institutions": "Nanyang Technological University, A*STAR IAIC, Microsoft, SuperMem",
+          "abstract": "LLM agent 会反复重发不断变长的执行历史，使共享 KV cache 占满 HBM 并成为 serving 吞吐的主要瓶颈。作者把 token 追溯到其来源的工具操作，发现后续操作会取代先前输出及其对应轮次，最终历史中 64% 的 token 属于可移除候选。Contexture 将 harness 的完整对话历史与模型执行上下文分离，把工具执行信息与共享 KV 压力、前缀驻留状态的全局可见性结合起来：取代关系给出移除候选，运行时状态决定移除是否值得牺牲已缓存的计算。整个过程不改 harness 逻辑、不额外调用模型、不需训练，同时通过限制重 prefill 对并发 decode 的干扰来保住延迟。",
+          "contributions": [
+            "提出 token 到工具操作的溯源机制，测得 agent 最终历史中 64% 的 token 已被后续操作取代、可作为移除候选。",
+            "设计 harness 与模型无关的运行时上下文驱逐架构，把工具语义和全局 KV 压力、前缀驻留信息联合起来做决策。",
+            "无需额外模型调用或训练，配合重 prefill 与并发 decode 的干扰控制，可直接接入现有 serving 栈。"
+          ],
+          "conclusions": [
+            "共享 KV 容量而非算力是 agent serving 吞吐的主要约束，驱逐决策必须同时看语义取代关系与运行时缓存状态。",
+            "在两个模型、两个 harness、两个 benchmark 上一致优于无驱逐、harness 压缩、AgentDiet、Continuum 与 observation masking。"
+          ],
+          "experiments": [
+            "SLO 约束下吞吐比最优基线提升 20-73%，在 8 个配置中的 5 个比 observation masking 高 7-63%。",
+            "H100 上比单独 LMCache 的吞吐高 23%，每完成会话的 GPU 能耗最多降低 11%。",
+            "真实 agent 实验平均准确率比无驱逐高 1.4 个百分点、最差下降 3.7 点；observation masking 则下降 3-28 点。"
+          ],
+          "significance": "把工具调用语义引入 KV 管理，为 agent 场景的上下文驱逐提供了可落地的运行时方案。",
+          "takeaway": "64% 的 agent 历史 token 已被后续工具操作取代，语义加运行时的联合驱逐比纯压缩策略更准。",
+          "keyExperiment": "SLO 下吞吐较最优基线提升 20-73%，同时准确率不降反升 1.4 个百分点。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26980",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26980.pdf",
+          "index": 1,
+          "channel": "AI Infra"
+        },
+        {
+          "title": "IsoMoE: Placement-Invariant Hybrid CPU-GPU MoE Inference with Lossless 12-bit Experts",
+          "score": 4.3,
+          "category": "cs.DC",
+          "date": "2026-11-23",
+          "authors": "Hang Gu, Teng Wang, Zhendong Zheng, Qianyu Cheng, Wenqi Lou, Lei Gong, Xi Li, Xuehai Zhou",
+          "institutions": "University of Science and Technology of China, Suzhou Institute for Advanced Research",
+          "abstract": "混合 CPU-GPU 推理把部分 expert 卸载到 CPU，让单卡跑得下超出显存的 MoE；但两设备用不同算术计算 expert，专家放置一变 greedy 解码输出就变，破坏了「放置只影响速度、不影响结果」的语义。同时解码受 CPU 访存带宽限制，而无损压缩虽省流量，CPU 解压熵编码格式的速度却跟不上访存。IsoMoE 给出三项设计：GPU expert kernel 位级重放 CPU kernel 的算术；内存布局让 CPU 用 AVX-512 点积指令高效计算无损 12-bit expert；双 micro-batch 流水线在重叠 CPU 与 GPU 计算的同时不改输出。三个 MoE 模型上跨放置输出逐位一致，且在所有设置中都快于最强基线。",
+          "contributions": [
+            "指出混合推理的放置依赖性源于两设备算术差异，使 greedy 输出随专家放置漂移。",
+            "用 GPU kernel 位级重放 CPU 算术，配合 AVX-512 无损 12-bit 专家布局，实现放置无关且省内存的 CPU 端计算。",
+            "双 micro-batch 流水线在保持输出完全不变的前提下重叠 CPU 与 GPU 计算。"
+          ],
+          "conclusions": [
+            "greedy 解码每步都从同一批 logits 取 argmax，任何一位数值差异都可能改变整条生成轨迹，故必须位级对齐算术。",
+            "无损压缩要在 CPU 上以接近访存的速度解压才有意义，否则带宽收益被解压开销吃掉。"
+          ],
+          "experiments": [
+            "三个 MoE 模型上，不同专家放置下输出逐位一致（bitwise identical）。",
+            "每个设置都快于最快基线，平均解码加速 1.26×、最大 1.54×。"
+          ],
+          "significance": "把「结果可复现」变成混合 CPU-GPU MoE 推理的硬约束，为卸载策略的调优腾出了自由度。",
+          "takeaway": "GPU 位级重放 CPU 算术加无损 12-bit 专家，让 MoE 卸载只影响速度不影响输出。",
+          "keyExperiment": "跨专家放置输出逐位一致，同时平均解码加速 1.26×、最高 1.54×。",
+          "arxivUrl": "https://arxiv.org/abs/2611.27604",
+          "pdfUrl": "https://arxiv.org/pdf/2611.27604.pdf",
+          "index": 2,
+          "channel": "AI Infra"
+        },
+        {
+          "title": "Isonomy: Isolating Every Request from Timing Side Channels at Nearly Full-Sharing Throughput in Multi-Instance LLM Prefill",
+          "score": 4.2,
+          "category": "cs.DC",
+          "date": "2026-11-23",
+          "authors": "Bowen Sun, Chaowei Xiao",
+          "institutions": "Johns Hopkins University",
+          "abstract": "长 prompt 共享前缀时可复用 KV 省下 prefill，但 cache 命中会让首 token 更早返回，从而泄露「这段前缀刚被别人用过」，因此厂商只在账号内共享缓存。按 least privilege，即便同账号也不该因发送并付费请求而暴露他人 prompt：agent 会发出未经审查的请求、转售商把多用户聚到一个账号、凭证也可能被盗。Isonomy 默认隔离每个请求，只允许显式加入共享组，同时保留跨账号的单一缓存、仅隐藏对组外前缀的命中。prediction 模式按队列与可见前缀预测首 token 就绪时刻并门控释放；execution 模式预留被隐藏命中省下的算力，尽量用其他请求的 prompt 填满。2、4、8 实例的直接探测测试中，两种模式都把探测方优势压进测量噪声。",
+          "contributions": [
+            "把 KV 前缀复用带来的时序侧信道形式化，提出请求级隔离加显式共享组的访问控制模型。",
+            "在 vLLM 网关上实现 prediction 与 execution 两种隐藏命中的模式，不需要放弃单一共享缓存。",
+            "在 2、4、8 实例的直接探测实验中验证探测方优势被压到测量噪声以内。"
+          ],
+          "conclusions": [
+            "缓存命中带来的延迟差本身就是敏感信息，账号级共享不足以满足 least privilege。",
+            "用队列预测或算力预留做时序补偿，可以在几乎不损失共享吞吐的前提下实现请求级隔离。"
+          ],
+          "experiments": [
+            "三个商用 API 上，监听方无法把额外 prefill 工作与短请求区分开（超出噪声水平）。",
+            "饱和时 prediction 模式保留 0.98 的无保护共享吞吐；账号级隔离为 0.95，跨账号复用较多时降到 0.80。"
+          ],
+          "significance": "把前缀缓存的安全边界从「账号」推进到「请求」，且代价只有个位数百分点的吞吐。",
+          "takeaway": "缓存命中造成的首 token 提前会泄露前缀共享，Isonomy 用请求级隔离把这一时序信道抹平。",
+          "keyExperiment": "请求级隔离下探测方优势消失于噪声，prediction 模式仍保住 0.98 的共享吞吐。",
+          "arxivUrl": "https://arxiv.org/abs/2611.27596",
+          "pdfUrl": "https://arxiv.org/pdf/2611.27596.pdf",
+          "index": 3,
+          "channel": "AI Infra"
+        },
+        {
+          "title": "MemOnce: A Scalable Memory Architecture for Large Language Models",
+          "score": 4.0,
+          "category": "cs.CL",
+          "date": "2026-11-23",
+          "authors": "Chang Nie, Chaoyou Fu, Songlin Liu, Yiqing Hu, Caifeng Shan",
+          "institutions": "Nanjing University, University of Science and Technology of China",
+          "abstract": "长程连续交互要求 LLM 维持可复用的记忆状态，而标准 Transformer 累积逐层 token 级 KV cache，显存线性增长、计算二次增长；线性时间架构把历史压成固定大小状态，却丢掉了细粒度细节。MemOnce 给出两项设计：记忆编解码器只缓存最后一层少量 hidden state 作为紧凑记忆表示，再动态解码回各注意力层所需的 KV；记忆稀疏注意力对每段连续输入自适应检索相关记忆表示，且稀疏索引跨层只计算一次。二者耦合实现按需加载记忆与 KV 解码，显著降低显存占用并达到线性复杂度。以 Qwen3.5-4B 适配为例，1M 上下文下记忆状态缓存降低 1313×、prefill 延迟降低 6.9×，吞吐提升 3.5×，并可零样本迁移到表示类下游任务。",
+          "contributions": [
+            "把「记忆」从逐层 token 级 KV 改为最后一层少量 hidden state 的紧凑表示，由编解码器按需还原为 KV。",
+            "提出记忆稀疏注意力：每段输入自适应检索记忆，稀疏索引跨层共享计算一次。",
+            "在模型规模、上下文长度、预训练与后训练适配三种设定下验证优于 Transformer 与其他线性架构。"
+          ],
+          "conclusions": [
+            "完整 KV 中大量逐层冗余可以被压缩到末层表示，解码时的 KV 可按需重建而不损精度。",
+            "记忆检索的索引开销应在层间共享，否则会抵消压缩带来的收益。"
+          ],
+          "experiments": [
+            "Qwen3.5-4B 在 1M 上下文下记忆状态缓存降低 1313×、prefill 延迟降低 6.9×。",
+            "同设定下吞吐提升 3.5×，整体记忆性能指标提升 5.77%。",
+            "零样本迁移到下游表示类任务，与专门模型相比仍有竞争力。"
+          ],
+          "significance": "在 Transformer 与线性注意力之间给出第三条记忆路径：缓存末层表示、按需重建 KV。",
+          "takeaway": "只存末层少量 hidden state 当记忆、按需解码回 KV，1M 上下文下缓存小 1313 倍。",
+          "keyExperiment": "1M 上下文下 Qwen3.5-4B 的 prefill 延迟降 6.9×、吞吐升 3.5×。",
+          "arxivUrl": "https://arxiv.org/abs/2611.27973",
+          "pdfUrl": "https://arxiv.org/pdf/2611.27973.pdf",
+          "index": 4,
+          "channel": "AI Infra"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "LongCat Recall Sparse Attention: Co-Designing Key Organization and Retrieval for Long-Context Inference",
+          "score": 4.4,
+          "category": "cs.CL",
+          "date": "2026-11-23",
+          "authors": "Hao Zhang, Bin Xiao, Kefeng Zhang",
+          "institutions": "Meituan LongCat Team",
+          "abstract": "检索式稀疏注意力（如 DeepSeek Sparse Attention）只对少量 KV 条目做注意力以省算力，但「选出这些条目」本身仍要搜索整个可见历史；长序列下检索成为主要瓶颈，抵消了稀疏化收益。LRSA 把细粒度代表与分页检索结合进一个增量维护的索引：序列按时间桶切分，新 key 到来时可独立建索引而不重组历史；桶内把索引 key 组织成容量均衡的方向组，整组打包进固定大小页并每组保留一个中心作为代表；页选择后再与 sink、滑窗和未索引可见候选一起精化出最终 Top-K 逻辑位置。执行侧用重排页存储成员、按组大小融合构建阶段、chunked prefill 中共享重叠固定候选的存储，减少 kernel 启动与候选搬运。",
+          "contributions": [
+            "把稀疏注意力的检索瓶颈拆成「索引组织」与「检索执行」两部分联合设计，避免选 key 时全历史搜索。",
+            "提出时间桶增量索引加容量均衡方向组的分页结构，组中心作为细粒度代表支撑页级选择。",
+            "在 SGLang 中实现异步桶索引构建与前缀命中复用，使索引维护与推理计算重叠。"
+          ],
+          "conclusions": [
+            "检索式稀疏注意力的收益上限由选 key 的复杂度决定，而不是由注意力本身决定。",
+            "索引必须能在新 key 到达时增量构建，否则长上下文下重建成本会吃掉加速。"
+          ],
+          "experiments": [
+            "1024K token 上下文下，key 选择比 DSA 快 4.70×。",
+            "选择加注意力的整体比 full attention 快 35.60×。"
+          ],
+          "significance": "把 DeepSeek Sparse Attention 这类检索式稀疏注意力的检索开销压下去，使其在百万级上下文真正划算。",
+          "takeaway": "稀疏注意力的真瓶颈是选 key 要扫全历史，LRSA 用增量分页索引把它加速 4.7 倍。",
+          "keyExperiment": "1024K 上下文下 key 选择比 DSA 快 4.70×，整体比 full attention 快 35.60×。",
+          "arxivUrl": "https://arxiv.org/abs/2611.27233",
+          "pdfUrl": "https://arxiv.org/pdf/2611.27233.pdf",
+          "index": 5,
+          "channel": "Algorithms"
+        },
+        {
+          "title": "Cannot Wait to Verify: Parallel Drafting to Eliminate Verifier Idle Time in Speculative Decoding",
+          "score": 4.0,
+          "category": "cs.LG",
+          "date": "2026-11-23",
+          "authors": "Divya Jyoti Bajpai, Arun Verma, Manjesh K. Hanawal",
+          "institutions": "IIT Bombay, Singapore-MIT Alliance for Research and Technology",
+          "abstract": "自回归推理受 token 级串行执行限制，延迟高、GPU 利用率低；投机解码用 draft-verify 两段式缓解，但 draft 阶段本身仍是串行，verifier 只能空转、算力闲置。本文提出一种即插即用的自适应 draft 方法：在 draft 生成时跨 transformer 层并行推理——从共享 hidden state 出发并行评估多层，用 hidden state 空间中的偏差衡量一致性，偏差小时接受该层的 draft 状态，否则施加一次校正。方法利用层间冗余加速 draft 并提高硬件利用率，不改模型架构、不需重新训练。NLP 任务上 draft 阶段最多加速 1.65×，精度损失极小，整体性能与标准投机解码持平。",
+          "contributions": [
+            "识别出投机解码中 verifier 空转这一被忽视的瓶颈，把优化目标从接受率转向流水线利用率。",
+            "提出跨层并行 draft：共享 hidden state 起算并行评估多层，用 hidden state 偏差做一致性校验与校正。",
+            "方法即插即用，无需改架构或重训，可与现有投机解码实现叠加。"
+          ],
+          "conclusions": [
+            "draft 阶段的串行依赖让 verifier 成为闲置资源，层间冗余是比增大 draft 模型更便宜的可挖掘空间。",
+            "hidden state 空间的偏差足以作为接受准则，无需额外的验证前向。"
+          ],
+          "experiments": [
+            "NLP 任务上 draft 阶段加速最多 1.65×，精度下降极小。",
+            "整体端到端性能与标准投机解码持平，同时提升 GPU 利用率。"
+          ],
+          "significance": "给投机解码补上 draft 端并行化这一环，把注意力从接受率转到硬件空闲时间。",
+          "takeaway": "draft 阶段可以跨层并行，用 hidden state 偏差做校验，draft 提速 1.65 倍而精度几乎不掉。",
+          "keyExperiment": "draft 阶段最多加速 1.65×，端到端与标准投机解码持平。",
+          "arxivUrl": "https://arxiv.org/abs/2611.27477",
+          "pdfUrl": "https://arxiv.org/pdf/2611.27477.pdf",
+          "index": 6,
+          "channel": "Algorithms"
+        },
+        {
+          "title": "PLoQ: A Prompt-Specific Low-Rank Basis for 4-bit Quantization of LLM Activations",
+          "score": 4.1,
+          "category": "cs.LG",
+          "date": "2026-11-23",
+          "authors": "Faraz Tahmasebi, Michael Pellauer, Hyoukjun Kwon, Sitao Huang",
+          "institutions": "University of California Irvine, NVIDIA",
+          "abstract": "LLM 低比特激活量化的难点在于少数主导方向决定了整个量化范围。SOTA 方法把主导方向隔离到高精度子空间，但变换离线校准并折叠进权重，等于对所有 prompt 固定同一子空间：每个 prompt 独有的方向得不到保护，且在没有权重可吸收变换的位置（如 FFN 中门控与上投影的 elementwise 乘积）直接失效。PLoQ 提出 prompt 自适应低秩分解：量化前提取主导激活分量并单独量化，再在该层 GEMM 内部还原，完全不改权重；低秩基在 prefill 阶段按 prompt 估计，解码期间复用。在与 SOTA 混合精度量化相同的比特宽度下（4-bit 权重/激活/KV，八分之一通道 8-bit，平均约 4.2 bit/激活），六个 1B-70B 的 Llama 与 Qwen 模型上全面胜出。",
+          "contributions": [
+            "指出离线固定子空间的混合精度量化在 prompt 级与「无权重可吸收变换」位置上存在结构性盲区。",
+            "提出 prompt 自适应低秩基：prefill 时按 prompt 估计主导分量、单独量化、在 GEMM 内还原，不改权重。",
+            "在等比特宽度下跨 1B-70B 六个模型全面超过 SOTA 混合精度量化，最多挽回 46% 的困惑度差距。"
+          ],
+          "conclusions": [
+            "激活量化误差主要来自每个 prompt 各自的主导方向，把子空间固定成全局量会浪费精度预算。",
+            "把低秩分量放进 GEMM 内还原，代价只有个位数百分点的 prefill 与 decode 开销。"
+          ],
+          "experiments": [
+            "与 SOTA 同比特宽度下（约 4.2 bit/激活），在 6 个 Llama/Qwen 模型（1B-70B）上全部胜出，最长 8k token（两个模型 16k）。",
+            "最多挽回 SOTA 相对 4-bit 激活仍丢失的困惑度的 46%。",
+            "Llama-3.1-8B 在 8k token 下仅增加 4% prefill 与 8% decode 开销。"
+          ],
+          "significance": "把激活量化的保护子空间从「全局离线」改为「每 prompt 在线估计」，几乎零开销换来稳定精度。",
+          "takeaway": "量化前按 prompt 估一个低秩基单独保护，等比特下六个模型全面胜过 SOTA 混合精度量化。",
+          "keyExperiment": "同比特宽度下最多挽回 46% 的困惑度差距，仅增加 4% prefill 开销。",
+          "arxivUrl": "https://arxiv.org/abs/2611.27092",
+          "pdfUrl": "https://arxiv.org/pdf/2611.27092.pdf",
+          "index": 7,
+          "channel": "Algorithms"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Weave: Routing-Adaptive Runtime Warp Scheduling for MoE Megakernels",
+          "score": 4.7,
+          "category": "cs.DC",
+          "date": "2026-11-23",
+          "authors": "Ziyu Huang, Yangjie Zhou, Chenhao Zhu, Hongzhe Yan, Tianwei Qiao, Sicheng He, Zihan Liu, Peng Yu, Shulai Zhang, Xingxun Tang, Xinhao Luo, Minyi Guo, Xiu Lin, Yinghao Yu, Guodong Yang, Liping Zhang, Shixuan Sun, Qingyun Chen, Jingwen Leng",
+          "institutions": "Shanghai Jiao Tong University, National University of Singapore, Fudan University, Alibaba Group, Shanghai TokMach",
+          "abstract": "MoE 在专家并行下，SOTA 系统把每层 MoE 融合成一个持久 megakernel 以提升性能；但 EP 使每张卡的通信量与计算量随路由结果变化。既有工作要么在编译期固定通信与计算的资源划分（如 MegaMoE），要么只在 SM 粒度粗调（如 mKernel），把整块 SM 专用于通信、Tensor Core 闲置；而在 SM 内的 warp 粒度上，静态 warp 调度既匹配不了随路由变化的负载，也避免不了 warp 等输入或做完任务后空转。Weave 提出三项设计：空间调度在 SM 与 warp 两级分配通信/计算资源以匹配每卡负载；时间调度随执行进程切换 warp 角色，层首尾动员全部 warp，并把输出 scatter 交给空闲的通信 warp；融合 cost model 在启动时依据运行时路由统计为每卡联合选择两种调度。",
+          "contributions": [
+            "把 MoE megakernel 的资源划分粒度从编译期/SM 级推进到运行时 warp 级，正对 EP 下路由导致的负载不均。",
+            "提出空间调度（SM+warp 两级分工）与时间调度（warp 角色随阶段切换、输出 scatter 转交空闲通信 warp）的联合设计。",
+            "用融合 cost model 在 kernel 启动时按运行时路由统计为每卡选调度，跨 NVIDIA 与 AMD 平台生效。"
+          ],
+          "conclusions": [
+            "EP 下每卡通信与计算量的路由依赖必须由运行时调度吸收，静态 warp 划分必然留下空转。",
+            "让空闲通信 warp 接管输出 scatter 这类尾部工作，是在不增加资源的前提下压缩层时间的关键。"
+          ],
+          "experiments": [
+            "EP8 对 DeepGEMM-MegaMoE：SM103 上 MoE 层加速 1.30× geomean、最高 1.97×；SM90 上 1.24× geomean、最高 1.72×。",
+            "CDNA3 的 EP16 下比最快官方 RCCL+AITER 基线快 1.44× geomean、最高 2.87×。",
+            "同设定下比 vLLM 快 1.67×。"
+          ],
+          "significance": "把 MoE megakernel 的 warp 级调度做成路由自适应，同时覆盖 NVIDIA 与 AMD 平台。",
+          "takeaway": "EP 下的负载随路由抖动，Weave 在 warp 粒度动态划分通信与计算，MoE 层快 1.3 倍。",
+          "keyExperiment": "EP8 下 SM103 MoE 层 geomean 加速 1.30×、最高 1.97×；CDNA3 上 1.44× geomean。",
+          "arxivUrl": "https://arxiv.org/abs/2611.27765",
+          "pdfUrl": "https://arxiv.org/pdf/2611.27765.pdf",
+          "index": 8,
+          "channel": "Architecture"
+        },
+        {
+          "title": "CTRL: Concurrent Training and Rollout for LLM Reinforcement Learning via GPU Co-Residency",
+          "score": 4.3,
+          "category": "cs.DC",
+          "date": "2026-11-23",
+          "authors": "Ruijia Yang, Ruikai Li, Zeyi Wen",
+          "institutions": "The Hong Kong University of Science and Technology (Guangzhou)",
+          "abstract": "LLM 的 RL 后训练同时跑两类硬件需求不同的 GPU 负载：rollout 解码受访存带宽限制、batch 随响应完成而收缩，以及稠密 learner。现有系统要么让每张卡时分复用（付出串行阶段与切换开销），要么把 GPU 切成只能整卡调整的池子。CTRL 提出第三种执行布局 co-residency：每张卡在 CUDA MPS 下同时跑一个 learner rank 与常驻 rollout 引擎。host 侧持有 learner 让布局可行——优化器状态留在主机内存，策略权重按层流过有界的 GPU 窗口；publication gate 先训练已就绪的 batch，只在释放下一版策略前等待，保持 dropless 的 staleness 上界；step-time 界指导计算份额选择，GPU-time 账本解释重叠与共享成本。",
+          "contributions": [
+            "提出 co-residency 作为 RL 训练的第三种执行布局：单卡同时驻留 learner rank 与 rollout 引擎，摆脱时分复用与整卡切分的二元选择。",
+            "用 host 端 learner（优化器状态留主机内存、权重按层流过有界 GPU 窗口）解决共驻所需的显存问题。",
+            "设计 publication gate 与 step-time 界，在 dropless 前提下把 staleness 控制在 2 以内。"
+          ],
+          "conclusions": [
+            "rollout 是访存受限、learner 是计算受限，二者共驻的互补性比同质负载共享更高。",
+            "把优化器状态搬到 host 是让共驻可行的关键，代价是需要按层流式搬运策略权重。"
+          ],
+          "experiments": [
+            "H100/A800/RTX 4090 加 Qwen3，24 个负载设置、staleness 上限 2 时，吞吐是 verl 更强异步基线的 1.11-2.24×。",
+            "8 张 H100 上是 verl colocate_async 的 1.23×。",
+            "同等 learner 下比时分复用快 1.10-1.26×，比最优整卡切分（H100 DAPO-Math，256-528 轨迹/步，4 卡与 8 卡）快 1.10-1.30×。"
+          ],
+          "significance": "给 RL 后训练多开了一种执行布局，把 rollout 与 learner 的互补硬件特性直接换成吞吐。",
+          "takeaway": "learner 与 rollout 同卡共驻（MPS + host 优化器状态），RL 训练吞吐最高提升 2.24 倍。",
+          "keyExperiment": "24 个负载设置下吞吐是 verl 更强异步基线的 1.11-2.24×，8 卡 H100 上 1.23×。",
+          "arxivUrl": "https://arxiv.org/abs/2611.27119",
+          "pdfUrl": "https://arxiv.org/pdf/2611.27119.pdf",
+          "index": 9,
+          "channel": "Architecture"
+        },
+        {
+          "title": "Contention-Aware Flexible Execution for Machine Learning Workloads",
+          "score": 3.9,
+          "category": "cs.DC",
+          "date": "2026-11-23",
+          "authors": "Marco Kurzynski, Shaizeen Aga, Di Wu",
+          "institutions": "University of Central Florida, AMD",
+          "abstract": "并发 kernel 执行是 AI/ML 训练与推理中的常见范式，但并发 kernel 争抢 GPU 的核、cache 与访存带宽，会带来不可忽视的减速。本文做两件事：一是首次系统刻画并发 kernel 执行，在面向数据中心 AI 的 AMD Instinct MI300X 上用内部毫秒级采样器，不仅分析性能，还分析并发下的访存行为，按「访存受限 vs 计算受限」「大 kernel vs 小 kernel」两个维度给出减速规律；二是据此提出 contention-aware flexible execution（CAFEML），利用 ML 数据流在「哪些算子可以重叠、硬件资源如何分配」上的内在灵活性，用简单启发式同时调整重叠锚点与资源分配。当前框架对并发 kernel 一律采用 early-first，是次优选择。",
+          "contributions": [
+            "首次在 MI300X 上系统刻画并发 kernel 的性能与访存行为，给出按受限类型与 kernel 大小划分的减速规律。",
+            "指出框架通用的 early-first 并发策略是次优的，提出按争用情况调整重叠锚点与资源分配的启发式。",
+            "在推理 decode、推理 prefill、训练三类场景验证调度改动的收益，不需要重写 kernel。"
+          ],
+          "conclusions": [
+            "并发带来的减速与 kernel 的受限类型强相关，统一策略无法同时兼顾访存受限与计算受限的算子对。",
+            "ML 数据流本身允许改变重叠点，这为纯调度层面的优化留出了空间。"
+          ],
+          "experiments": [
+            "在推理 decode、推理 prefill、训练多种场景下，仅靠调度改动、不重写 kernel，端到端最多加速 13%。"
+          ],
+          "significance": "把并发 kernel 的争用代价量化成可操作的调度启发式，验证了 AMD 数据中心 GPU 上的多流优化空间。",
+          "takeaway": "并发 kernel 的减速取决于受限类型与大/小组合，改调度锚点即可端到端提速 13%。",
+          "keyExperiment": "MI300X 上仅改调度、不重写 kernel，端到端最多加速 13%。",
+          "arxivUrl": "https://arxiv.org/abs/2611.26840",
+          "pdfUrl": "https://arxiv.org/pdf/2611.26840.pdf",
+          "index": 10,
+          "channel": "Architecture"
+        }
+      ]
+    }
+  ]
+}
