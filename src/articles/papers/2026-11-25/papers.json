@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-25",
+  "title": "2026-11-25 论文精选",
+  "lede": "今日主题是「把显存与带宽的账算到底」：从 4 比特 KV 解码 kernel、top-p 稀疏注意力与 indexer 状态分层，到受控实验厘清分解式 serving 的适用边界，硬件侧则补上了 GB10 统一内存的带宽可观测性。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 923
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Fast 4-bit KV-Cache Decoding on Hopper GPUs: Why Existing Kernels Are Slow and How to Fix Them",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-24",
+          "authors": "Jian Zhang",
+          "institutions": "Northeastern University",
+          "abstract": "4 比特 KV cache 的读取字节数约为 FP8 的一半，但 Hopper 架构没有 FP4 硬件，且每字节内存带宽对应的指令发射能力很弱，因此 4 比特值只能用软件解码，解码开销常常吃掉省下的带宽。作者在 H200 上测得 vLLM 的 NVFP4 路径（FlashInfer decode）只能达到 10-20% 峰值带宽，比 FP8 最多慢 1.7 倍；用 NVBit 采集指令数后发现根因：这些 kernel 每字节执行 2-6 倍于 Hopper 发射预算的指令，并把加载、解码、矩阵乘三步串行化。为此作者实现了一个 Hopper 原生解码 kernel：用一个 TMA 生产者 warp 与两个计算 warpgroup 重叠，在写入时就按解码后布局摆放 cache，让解码值从寄存器直接喂给 tensor core，并交换矩阵操作数顺序，使小 query 组无需 padding。",
+          "contributions": [
+            "用 NVBit 指令计数定量定位 4 比特 KV 解码慢的根因：指令发射预算而非带宽。",
+            "提出写入期布局改造 + TMA 生产者与双计算 warpgroup 重叠的原生解码 kernel。",
+            "交换矩阵操作数顺序消除小 query 组的 padding，配合 K 均值去除与首层 BF16 的精度配方。"
+          ],
+          "conclusions": [
+            "在 H200 上达到 67-75% 峰值带宽，对所有 11 种形状均快于 XQA 与 FlashAttention-4 的 FP8 方案。",
+            "4 比特 KV 在多数负载下可替代 FP8，唯一明显代价是 prefill 密集型流慢约 7%。"
+          ],
+          "experiments": [
+            "batch 32-128 下达到 67-75% 峰值带宽，11 种形状全部比 XQA 与 FA-4 FP8 快 1.12-1.49 倍。",
+            "接入 vLLM 后 Llama-3.1-8B 每步解码比 FlashInfer FP8 快 1.12-1.64 倍，同显存可容纳 1.63 倍 token。",
+            "单卡 H200 推理型请求流下，满足 99% 延迟目标的最高速率是 FP8 的 1.23-1.32 倍（Qwen2.5-72B 达 1.67-2.20 倍）。"
+          ],
+          "significance": "把「4 比特 KV 慢」从带宽问题重构为指令发射问题，并给出可直接接入 vLLM 的 Hopper 原生实现。",
+          "arxivUrl": "https://arxiv.org/abs/2611.30027",
+          "pdfUrl": "https://arxiv.org/pdf/2611.30027.pdf",
+          "takeaway": "4 比特 KV 解码的瓶颈在指令发射而非带宽，重叠式布局改造可让它在多数负载上真正打败 FP8。",
+          "keyExperiment": "H200 上 11 种形状全部比 XQA 与 FA-4 FP8 快 1.12-1.49 倍，vLLM 内 Llama-3.1-8B 每步快 1.12-1.64 倍。",
+          "index": 1
+        },
+        {
+          "title": "DisSparse: Pipelined Top-$p$ Sparse Attention for Long-Context LLM Serving",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-24",
+          "authors": "Nurlan Nazaraliyev, Elaheh Sadredini, Nael Abu-Ghazaleh",
+          "institutions": "University of California, Riverside",
+          "abstract": "长上下文推理受限于随上下文线性增长的 KV cache，动态稀疏注意力只取关键 token 来缓解这一瓶颈。当前研究与部署的主流原语是固定预算的 top-k 选择，因为其块数确定、契合 vLLM 等系统的静态显存分配；但固定预算无视注意力质量在头、层、解码步之间的分布差异，在注意力集中的头上浪费带宽，在分散的头上丢掉上下文。top-p（nucleus）选择能自然自适应，却因两个系统级障碍难以进入生产：块数可变破坏确定性分配，选择 kernel 的计算开销甚至超过注意力本身。作者提出 DisSparse，把 top-p 稀疏注意力端到端集成进 vLLM：让块选择脱离调度器关键路径，用双流流水线把选择延迟藏在层计算之后，并实现单遍直方图式 top-p kernel。作者还发现块内稀疏问题并用基于 prefill 累积注意力的 token 重定位 kernel 处理。",
+          "contributions": [
+            "把 top-p 选择引入 vLLM 生产路径，解决变长块数与静态显存分配的冲突。",
+            "提出双流流水线，将块选择延迟隐藏在层计算之下，配合单遍直方图 top-p kernel。",
+            "识别块内稀疏（高低重要性 token 混在同一 KV 块内）并用累积注意力引导的 token 重定位缓解。"
+          ],
+          "conclusions": [
+            "DisSparse 在保持精度几乎无损的同时，把稀疏分析阶段提速 1.17-1.80 倍。",
+            "同等显存预算下可支撑的最大 batch 是稠密 vLLM 的 8 倍。"
+          ],
+          "experiments": [
+            "稀疏分析（块选择）比 SOTA top-p 方法快 1.17-1.80 倍，精度损失可忽略。",
+            "相同显存下支持的最大 batch size 达稠密 vLLM 的 8 倍。",
+            "在多个模型的长/中上下文基准上验证，覆盖 vLLM 端到端部署路径。"
+          ],
+          "significance": "给出把自适应稀疏预算真正落进生产级 serving 系统的工程范本，而不只是一次算法改进。",
+          "arxivUrl": "https://arxiv.org/abs/2611.28522",
+          "pdfUrl": "https://arxiv.org/pdf/2611.28522.pdf",
+          "takeaway": "top-p 稀疏注意力进生产的关键不是算法而是调度与 kernel 工程，DisSparse 用流水线与直方图选择同时解掉两个障碍。",
+          "keyExperiment": "稀疏分析阶段比 SOTA top-p 快 1.17-1.80 倍，同显存下最大 batch 达稠密 vLLM 的 8 倍。",
+          "index": 2
+        },
+        {
+          "title": "IndexerStage: Staging Indexer-K across Memory Tiers for Sparse-Attention LLM Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-24",
+          "authors": "Xin Zhang, Weifeng Zhang, Xianyan Xie, Huijun Shen, Xijin Yin, Zhen He, Yinben Xia, Xiang Li, ZeKun He, Yachen Wang, Xianneng Zou, Guo Chen",
+          "institutions": "Hunan University, Tencent",
+          "abstract": "长上下文稀疏注意力 serving 即便把注意力数据卸载出去，仍会被 GPU 显存卡住。DeepSeek 稀疏注意力需要保留 Indexer-K 状态来挑选注意力要读的 token，而 indexer 在每层每个解码步都要全量扫描这份不断增长的 state；但全量扫描只需要当前层的 state，并不需要所有层同时常驻。作者提出 IndexerStage，把这个 state 外置到更低存储层级，同时保留 GPU 原生的打分、top-k 与注意力 kernel。它通过共享执行缓冲区搬运已完成的页，把新写入的条目留在本地，并在接纳增长中的 batch 之前同时检查存储容量与每层的传输需求；后端层级负责聚合页，模型 serving GPU 掌握传输时机与字节预算。作者在 SGLang 上以 16 个 serving GPU 加 16 个后备 H800 实现。",
+          "contributions": [
+            "把 Indexer-K state 从 HBM 外置到后备层级，保留原生 GPU 打分/top-k/注意力 kernel。",
+            "提出联合显存与传输准入检查，在接纳新 batch 前同时验证存储与每层传输需求。",
+            "让 serving GPU 掌握传输时机与字节预算，用共享执行缓冲区重叠搬运与计算。"
+          ],
+          "conclusions": [
+            "16K-64K 输入下每张 serving GPU 只需 0.65-0.70 GiB 本地流式存储。",
+            "相对主机内存支持的 HiSparse，batch 提升 12.28-23.08%，解码吞吐达 1.08-1.14 倍。"
+          ],
+          "experiments": [
+            "相对 HiSparse，batch size 提升 12.28-23.08%，解码 TPS 达 1.08-1.14 倍。",
+            "64K 上下文下更大 batch 带来 1.10 倍解码 TPS；开启流式仅增加 2.42% 单 token 时间。",
+            "混合长度动态 serving 下平均生成长度与吞吐均有提升，本地存储占用 0.65-0.70 GiB/GPU。"
+          ],
+          "significance": "为 DeepSeek 式稀疏注意力的 indexer 状态找到了一条显存分层路线，把「显存墙」转成可控的带宽预算问题。",
+          "arxivUrl": "https://arxiv.org/abs/2611.28625",
+          "pdfUrl": "https://arxiv.org/pdf/2611.28625.pdf",
+          "takeaway": "稀疏注意力的真正常驻瓶颈是 indexer 状态而非 KV，外置 + 移植传输控制权即可换来更大 batch。",
+          "keyExperiment": "相对 HiSparse，batch 提升 12.28-23.08%、解码 TPS 提升 1.08-1.14 倍，本地流式存储仅 0.65-0.70 GiB/GPU。",
+          "index": 3
+        },
+        {
+          "title": "When Does Decomposition Help? Empirical Study on Workload-Architecture Affinity in LLM Inference Serving",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-24",
+          "authors": "Jihui Yang, Wentai Wu, Jiahua Huang, Weiwei Lin, Ligang He, Linghong Tsang",
+          "institutions": "Meta Platforms, Jinan University, South China University of Technology, University of Warwick",
+          "abstract": "LLM 推理可以组织成独立单体副本、张量/流水并行 serving 组，或 prefill 与 decode 分离的 disaggregated 服务。分解常被宣传为提升效率的路径，但其收益取决于负载形状、模型是否放得下，以及各阶段资源能否独立扩缩；已有对比往往同时改变了多个因素，无法归因。作者固定四张 A100-40GB 的硬件包络、Qwen3-8B 模型、软件栈、prompt 与到达序列，只隔离架构差异，在 SGLang 上对比五种 serving 组织方式，共 150 个审计条件，覆盖短对话、decode 密集与 32K prefill 密集负载。结论是存在清晰的「负载-架构亲和性」：流水线分解有利于 prefill 密集计算，而副本式扩展在 decode 密集与短对话下更稳。",
+          "contributions": [
+            "用固定硬件、模型、软件栈与请求序列的受控实验，把分解收益从多因素混杂中隔离出来。",
+            "提出「负载-架构亲和性」框架，指出分解收益由负载形状与阶段资源可独立扩缩程度决定。",
+            "给出 150 个审计条件下的架构选择指导，包括静态 TP 切分在何种情况下会崩塌。"
+          ],
+          "conclusions": [
+            "四张单卡副本在短对话与长输出下端到端延迟最低，且是唯一在所有条件下都稳定的架构。",
+            "流水并行在非压力速率下把 32K 首 token 时间降低 58-59%；静态 TP2+TP2 切分不带来延迟收益并在高负载下崩塌。"
+          ],
+          "experiments": [
+            "流水并行在非压力速率下把 32K TTFT 降低 58-59%。",
+            "混合流水线式 disaggregation 在 0.4 req/s 下取得最佳 32K 端到端延迟。",
+            "单 VM 静态 TP2+TP2 切分相对副本无延迟收益，在高 32K 负载下性能崩塌。"
+          ],
+          "significance": "给「要不要上 prefill/decode 分离」这个工程决策提供了受控实验证据，而不是又一个新系统。",
+          "arxivUrl": "https://arxiv.org/abs/2611.29104",
+          "pdfUrl": "https://arxiv.org/pdf/2611.29104.pdf",
+          "takeaway": "分解不是普适解：收益取决于负载形状与阶段能否独立扩缩，短对话与 decode 密集场景下朴素副本反而最稳。",
+          "keyExperiment": "四卡单副本在短对话/长输出下延迟最低且全条件稳定；流水并行把 32K TTFT 降 58-59%。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "RefineKV: Query-Adaptive KV Cache Compression via Attention-Error Bounds",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-24",
+          "authors": "Kewei Lian, Jiayi Zhai, Anji Liu",
+          "institutions": "National University of Singapore",
+          "abstract": "反复访问完整 KV cache 是长上下文解码的主要瓶颈。作者发现，针对单个 query 的小规模 KV 子集就能很好地近似完整注意力，但不同 query 的子集并起来几乎覆盖整个 cache——这说明正确的方向不是静态淘汰，而是按 query 自适应地访问。自然做法是把 KV cache 聚成簇：对误差可忽略的簇用紧凑代表，对重要簇展开成原始条目。作者从注意力输出误差的上界推导出选择准则，揭示两个互补因素：重要性衡量簇对输出的影响，失真度衡量簇能被多忠实地代表。基于该准则提出 RefineKV，一种解码期 query 自适应 KV 压缩方法，只对真正需要的簇付出完整读取代价。",
+          "contributions": [
+            "揭示 query 特定子集虽小但并集覆盖近乎全 cache，从而把问题从淘汰重构为自适应访问。",
+            "从注意力输出误差上界推导出「重要性 × 失真度」双因素簇选择准则。",
+            "实现解码期 query 自适应压缩，只展开高风险簇、其余用紧凑代表。"
+          ],
+          "conclusions": [
+            "在保持接近全注意力质量的同时，注意力阶段最高提速 7.6 倍、端到端解码快 1.66 倍。",
+            "在两个模型三个基准上建立了新的质量-延迟 Pareto 前沿。"
+          ],
+          "experiments": [
+            "注意力阶段最高提速 7.6 倍，端到端解码提速 1.66 倍。",
+            "在两个模型、三个长上下文基准上质量接近全注意力。",
+            "相较静态淘汰类方法在同等预算下质量更高，Pareto 前沿整体外推。"
+          ],
+          "significance": "把 KV 压缩从「哪些 token 该丢」改写为「这个 query 该读哪些簇」，并给出可解释的误差界。",
+          "arxivUrl": "https://arxiv.org/abs/2611.28171",
+          "pdfUrl": "https://arxiv.org/pdf/2611.28171.pdf",
+          "takeaway": "KV 压缩的正确姿势是按 query 自适应读取簇，用误差上界的两个因子决定展开还是近似。",
+          "keyExperiment": "注意力阶段最高 7.6 倍提速、解码 1.66 倍提速，质量接近全注意力。",
+          "index": 5
+        },
+        {
+          "title": "LiveLoRA: Exact KV Cache Migration Across LoRA Updates for LLM Agents",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-24",
+          "authors": "Tianyi Huang, Samuel Xu, Ivy Gu, Nathan Huang, Siqi Zhang",
+          "institutions": "Ryquo, App-In Club",
+          "abstract": "在线更新 LLM 适配器不该要求把每个活跃会话的完整交互历史重放一遍。但直接复用旧版本下算出的 KV cache 会混用模型版本，而全历史重 prefill 的代价随历史长度与会话规模快速增长。LiveLoRA 提出模型-运行时协同设计，实现精确的末块 KV cache 迁移：冻结的下层解码块与固定的 K/V 适配器降维投影，保证每个 token 的基础投影与低秩坐标在适配器版本间不变；运行时据此重建候选 K/V，用末块重算最新 token，并把适配器、cache 与下一个 token 的 logits 一起提交。作者证明在所述假设与精确算术下，其续写与全历史重 prefill 等价。这让持久化 agent 可以在不重放历史的前提下切换适配器版本。",
+          "contributions": [
+            "提出模型-运行时协同设计：冻结下层块与固定 K/V 降维投影，使 token 基础投影跨版本不变。",
+            "给出精确迁移流程：重建候选 K/V、末块重算最新 token、原子提交适配器与 cache。",
+            "在给定假设下证明续写等价于全历史重 prefill，并给出紧凑保留策略降低存储。"
+          ],
+          "conclusions": [
+            "Qwen2.5-3B-Instruct 上 32 个 8K 会话，发布速度平均比全历史重 prefill 快 68.98 倍。",
+            "相对原生缓存解码仅增加约 4.8% 解码开销，紧凑保留使额外会话存储降低 3.42 倍。"
+          ],
+          "experiments": [
+            "32 会话 × 8K token 下，中位配对发布速度平均 68.98 倍（五次运行）于全历史重 prefill。",
+            "相对原生缓存解码约 4.8% 开销。",
+            "8K 时紧凑保留相比边界重放把额外会话存储降低 3.42 倍，发布+解码成本相近。"
+          ],
+          "significance": "为持续在线的 agent 服务解决了「换适配器就要重放历史」这一实际成本黑洞，且给出精确性证明。",
+          "arxivUrl": "https://arxiv.org/abs/2611.31105",
+          "pdfUrl": "https://arxiv.org/pdf/2611.31105.pdf",
+          "takeaway": "只要让 token 的基础 K/V 投影跨版本不变，适配器热切换就能复用旧 KV cache 而不重放历史。",
+          "keyExperiment": "32×8K 会话发布速度平均快 68.98 倍，解码开销仅约 4.8%。",
+          "index": 6
+        },
+        {
+          "title": "PackLoop: Row-Packed Self-Speculative Decoding for Looped Language Models under Concurrency",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-24",
+          "authors": "Runguo Li, Dezhen Lu",
+          "institutions": "University of Illinois Urbana-Champaign, University of Tübingen",
+          "abstract": "循环（looped）语言模型对每个 token 复用同一组权重 T 次，用参数换测试时深度，代价是自回归解码要付 T 次串行前向。自投机解码在单请求下能拿回 2-10 倍，但请求共享 GPU 后收益迅速消失，业界做法是负载越高越少投机。作者指出失败的不是投机本身，而是投机工作的布局：并发解码的成本单位是「行」（一个请求在某个循环上前进一步，读一次该循环的 KV cache），行内多出的位置几乎免费；而 wavefront 这类流水线调度把每个投机位置放在不同循环上，也就放在不同的行里，于是每个 token 仍被读 T 次。PackLoop 的原则是「只在本来就要读的行内投机」：深循环累积位置并成块推进，上下文复制提议并入首循环已读的行，并用库存论的 EOQ 公式给出接纳规则。",
+          "contributions": [
+            "把并发下自投机失效归因于工作布局（行）而非投机本身，给出成本模型。",
+            "提出行内打包原则：深循环位置成块推进、上下文复制提议并入已读行。",
+            "用库存论 EOQ 闭式解导出累积长度接纳规则，且方法在 FP32 下逐 token 精确。"
+          ],
+          "conclusions": [
+            "在 164 个负载点上，单一配置在 161 个点快于逐点挑选的最佳现有调度，中位 1.25 倍、最高 1.76 倍。",
+            "收益随并发度与上下文长度增长，而这正是现有自投机收益最差的区间。"
+          ],
+          "experiments": [
+            "164 个负载点（3 GPU、4 个 Ouro 模型、6 基准、最长 32K）中 161 点胜出，中位 1.25 倍、最高 1.76 倍。",
+            "FP32 下输出与自回归解码逐 token 一致，采样与早退场景同样成立。",
+            "没有任何负载点上显著慢于现有最佳调度。"
+          ],
+          "significance": "用一个「读一次就多用」的布局原则，让自投机在真正需要它的高并发区间恢复收益。",
+          "arxivUrl": "https://arxiv.org/abs/2611.30205",
+          "pdfUrl": "https://arxiv.org/pdf/2611.30205.pdf",
+          "takeaway": "并发下自投机的瓶颈是投机位置被摊到不同的行，把投机塞回本来要读的行就能拿回收益。",
+          "keyExperiment": "164 个负载点中 161 点胜出，中位 1.25 倍、最高 1.76 倍，且逐 token 精确。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "A Pipeline-Parallel System for Depth-Recurrent Models",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-24",
+          "authors": "Yunjia Xi, Jiarui Qin, Di Yin, Xing Sun",
+          "institutions": "Tencent Youtu Lab",
+          "abstract": "深度循环（looped）模型通过多次复用同一组块来提升有效深度，而扩展它们通常需要流水并行；但常用的交错 1F1B 是为无环阶段图设计的，假定每个 micro-batch 只进入每个阶段一次。一旦这摞共享块被切到多个阶段，同一个阶段会在一个 micro-batch 上被访问多次，后面的阶段还会回喂前面的阶段：原生 1F1B 没有为多出来的访问留槽位，无法给第一次与第二次迭代排序，其只与邻居通信的收发顺序也没有回到首阶段的反向边，于是调度要么停摆要么乱序发射。作者提出 Loop-PP，为这种循环布局重建时间表与通信：把同一阶段的不同迭代分开调度，把 1F1B 骨架特化成覆盖所有访问的全局一致顺序，并为每个 rank 生成静态指令流，把投递与等待分离以重叠通信与本地计算。",
+          "contributions": [
+            "指出循环深度破坏 1F1B 的两个前提：阶段图无环、每次进入只访问一次。",
+            "提出把同阶段不同迭代分开排序的全局一致时间表，特化 1F1B 骨架以覆盖循环访问。",
+            "为每个 rank 生成静态指令流，分离投递与等待，实现通信与计算重叠且保持位精确。"
+          ],
+          "conclusions": [
+            "在 8B-60B MoE 模型上峰值显存最多降低 32.8%，计算预算固定时最优吞吐提升 12.7%。",
+            "输出与单阶段参考实现位级一致。"
+          ],
+          "experiments": [
+            "8B-60B MoE 上峰值显存最多降低 32.8%。",
+            "计算预算固定时最佳吞吐提升 12.7%。",
+            "结果与单阶段参考实现位级一致（bit-identical）。"
+          ],
+          "significance": "补上了循环/深度递归模型走向多卡流水并行时缺失的调度与通信基础件。",
+          "arxivUrl": "https://arxiv.org/abs/2611.30581",
+          "pdfUrl": "https://arxiv.org/pdf/2611.30581.pdf",
+          "takeaway": "循环模型的流水并行不能照搬 1F1B，必须把「同阶段多迭代」当成一等公民重排时间表与反向边。",
+          "keyExperiment": "8B-60B MoE 上峰值显存降 32.8%、吞吐提升 12.7%，且输出位级一致。",
+          "index": 8
+        },
+        {
+          "title": "Measuring GPU Memory Traffic on the NVIDIA GB10 Without C2C Telemetry",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.AR",
+          "date": "2026-11-24",
+          "authors": "Deepak Panigrahy, Sirisha Kota, Aakash Tyagi, David Kebo, Rabi Mahapatra",
+          "institutions": "Texas A&M University",
+          "abstract": "NVIDIA GB10 用于 DGX Spark 等桌面 AI 系统，通过 NVLink C2C 把 Arm CPU die 与 Blackwell GPU die 连起来。该 GPU 没有本地显存，任何未命中 L2 的访问都要跨 C2C 到 CPU die 上的 LPDDR5X，但作者测试的系统上没有任何软件计数器暴露这部分流量。作者提出用 GPU 的五个 L2 sector 计数器，通过 CUPTI 采样接口每 10 ms 由不附加到被测进程的外部进程读取，从而实时测量 GPU 访存流量，并把拷贝引擎流量与 kernel 的读 miss、写分开；相比之下 SMMU 计数器统计的是地址翻译次数而非字节数。方法在一个未修改的服务器上应用，显示 Mistral 7B 解码每个 token 读 13.47 GiB，即所用权重加 KV cache，达到 NVIDIA 标称带宽的 83%。",
+          "contributions": [
+            "在无 C2C 遥测的 GB10 上，用五个 L2 sector 计数器 + CUPTI 外部采样构建可用的访存流量测量法。",
+            "区分拷贝引擎流量与 kernel 读写 miss，并说明 SMMU 计数器为何不能代替。",
+            "开源工具化，可对未修改的真实服务直接测量。"
+          ],
+          "conclusions": [
+            "已知大小的流式传输下，两台机器上误差分别为 0.28% 与 0.005%。",
+            "测量到 Mistral 7B 解码每 token 读 13.47 GiB，相当于标称带宽的 83%。"
+          ],
+          "experiments": [
+            "Acer GN100 上误差 0.28%、DGX Spark 上 0.005%，且不受拷贝切分方式影响并排除 L2 复用。",
+            "Mistral 7B 解码每 token 读 13.47 GiB（权重 + KV cache），为标称带宽的 83%。",
+            "方法部署在未修改的服务器上即可运行，无需附加到被测进程。"
+          ],
+          "significance": "在统一内存形态的 GB10 上补上了缺失的带宽可观测性，为后续 C2C/统一内存优化提供测量基础。",
+          "arxivUrl": "https://arxiv.org/abs/2611.29915",
+          "pdfUrl": "https://arxiv.org/pdf/2611.29915.pdf",
+          "takeaway": "GB10 的所有 GPU 访存都跨 C2C 且无原生计数器，L2 sector 计数器的外部采样是可行替代。",
+          "keyExperiment": "测量误差 0.005-0.28%，并测出 Mistral 7B 解码每 token 读 13.47 GiB、达标称带宽 83%。",
+          "index": 9
+        },
+        {
+          "title": "KernelShift: Benchmarking Kernel Optimization Across Evolving Hardware",
+          "score": 4.1,
+          "channel": "Architecture",
+          "category": "cs.CL",
+          "date": "2026-11-24",
+          "authors": "Shuaiwei Huang, Weihua Du, Allen Wu, Ivan Fox, Manupa Karunaratne, Yiming Yang, Sean Welleck",
+          "institutions": "Carnegie Mellon University, Arm Ltd",
+          "abstract": "高效 AI 计算依赖不断演进的硬件，而硬件演进而来的新指令扩展会改变 kernel 优化策略。作者研究编码 agent 能否用好这些新出现、往往不熟悉的扩展来写出快代码，并提出 KernelShift：一套评测 agent 在演进 CPU 架构上做 kernel 优化的基准流水线与环境。其 agent 辅助、人工校验的流程把真实代码仓库转成基准实例，环境让 agent 在目标硬件反馈下优化。作者据此从 ncnn、Arm SIMD Loops、KleidiAI 等在活跃开发中的仓库构建了 99 个 kernel，包括由真实模型执行导出的推理负载；流水线支持随后续库与处理器演进而加入新 kernel 与硬件配置。作者用闭源与开源模型在 Neon、SVE、SVE2、SME2 上逐步评测。",
+          "contributions": [
+            "提出可随硬件演进而扩展的 kernel 优化基准流水线，把真实仓库自动转成实例并人工校验。",
+            "构建 99 个真实 kernel 环境，覆盖 Neon/SVE/SVE2/SME2 四代 Arm 扩展与真实模型推理负载。",
+            "系统评测编码 agent 在陌生新扩展上的表现与迁移能力。"
+          ],
+          "conclusions": [
+            "在成熟扩展上 agent 全面超过自动向量化编译器（2.4-19.8 倍）。",
+            "随扩展更新，agent 相对编译器的优势收窄，揭示其对陌生指令的学习瓶颈。"
+          ],
+          "experiments": [
+            "既有扩展上 agent 比自动向量化编译器快 2.4-19.8 倍。",
+            "在更新一代扩展（如 SME2）上优势明显收窄，显示新指令的学习成本。",
+            "评测覆盖 99 个来自 ncnn、Arm SIMD Loops、KleidiAI 的真实 kernel 与多款闭源/开源模型。"
+          ],
+          "significance": "把「agent 会不会写 kernel」从一次性演示变成可随硬件演进的持续基准，暴露出跨架构迁移的真实短板。",
+          "arxivUrl": "https://arxiv.org/abs/2611.29590",
+          "pdfUrl": "https://arxiv.org/pdf/2611.29590.pdf",
+          "takeaway": "编码 agent 在成熟 SIMD 扩展上远超编译器，但面对新扩展优势迅速收窄，硬件演进正是其软肋。",
+          "keyExperiment": "既有扩展上比自动向量化编译器快 2.4-19.8 倍，新扩展上优势显著收窄。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
