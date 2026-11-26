@@ -1,0 +1,344 @@
+{
+  "date": "2026-11-26",
+  "title": "2026-11-26 论文精选",
+  "lede": "今日主题是把并行、通信与显存的账算到底：从统一五种并行的广义张量并行、按 GEMM 排 all-gather，到 MoE 的梯形残差让 dispatch/combine 与注意力重叠，再到无损 KV 压缩、按秩比价的专家驻留与可缩到零的 GPU 无服务器。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 356
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Generalized Tensor Parallelism: Powering Trillion-Parameter LLM Training at 10+ EFLOP/s",
+          "score": 4.8,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-25",
+          "authors": "Shiqing Fan, Deepak Narayanan, Jimmy Zhang, Jiangfei Duan, Prajwal Singhania, Haoran Zhang, Wanying Wang, Philip Monk, Xuwen Chen, Jared Casper, Jun Yang, Mohammad Shoeybi, Bryan Catanzaro, Vijay Anand Korthikanti",
+          "institutions": "NVIDIA",
+          "abstract": "现有大模型并行方案总要牺牲单卡显存或吞吐：数据并行复制参数，张量并行与 FSDP 分别为每个 micro-batch 增加激活与参数通信，流水并行则在填充与排空阶段让 GPU 空转。本文指出数据、张量、序列、上下文并行与 FSDP 其实都是同一框架——广义张量并行（GTP）的特例：每层参数与激活都被切分，二者都可以在使用前通过 all-gather 重新物化。在 GTP 视角下，参数 all-gather 只是矩阵乘一个输入上的可选预处理，而不必像 FSDP 那样以整个 Transformer block 为粒度，因此可以按 GEMM 逐个调度 all-gather，既早到足以隐藏通信，又晚到足以限制显存峰值。开源实现把该调度落到生产级训练栈中，在万卡级 GPU 上跑通万亿参数 MoE 预训练。",
+          "contributions": [
+            "把数据、张量、序列、上下文并行与 FSDP 统一为广义张量并行（GTP），参数与激活皆可切分并 all-gather 物化",
+            "将参数 all-gather 从“整个 block 前一步”下沉到“单个 GEMM 的输入预处理”，从而按 GEMM 调度通信以同时最小化显存与暴露的通信时间",
+            "给出开源实现，并在万亿参数 MoE 与百万 token 长序列两类负载上验证扩展效率"
+          ],
+          "conclusions": [
+            "GTP 框架下五种主流并行只是切分维度不同的特例，框架统一后调优空间从“选并行方案”变为“排通信顺序”",
+            "通信隐藏的关键是粒度而非带宽：把 all-gather 绑到 GEMM 上，可在不增加显存的前提下把通信压进计算窗口"
+          ],
+          "experiments": [
+            "内部 2T 参数 MoE 模型在 12,288 张 GB300 上达到 13.0 model EFLOP/s，弱扩展效率 98%",
+            "512 张 GPU 上可训练 100 万 token 序列",
+            "256–1,024 GPU 区间，三个 MoE 模型吞吐为 Megatron-FSDP 的 1.05–1.55 倍，DeepSeek-V4-Pro 代理模型上为调优 3D 并行（含流水）方案的 1.27–1.31 倍"
+          ],
+          "significance": "把并行策略统一成一个可调度框架，是万亿参数训练继续线性扩展的关键一步。",
+          "arxivUrl": "https://arxiv.org/abs/2611.32057",
+          "pdfUrl": "https://arxiv.org/pdf/2611.32057.pdf",
+          "index": 1,
+          "takeaway": "五种并行是同一件事，按 GEMM 排 all-gather 就能同时省显存与藏通信。",
+          "keyExperiment": "12,288 张 GB300 上 2T MoE 达 13.0 EFLOP/s，弱扩展效率 98%"
+        },
+        {
+          "title": "LoomKV: Lossless KV Cache Compression from GPU Memory to SSD for LLM Serving",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-25",
+          "authors": "Wentao Zhu, Ziao Sheng, Peng Deng, Huiqi Hu, Xuan Zhou, Xing Wei, Zhuang Wang",
+          "institutions": "华东师范大学, 中兴通讯",
+          "abstract": "LLM 服务引擎把 KV cache 从显存卸载到主机 DRAM 与 SSD，以便多轮对话与 agent 请求复用前缀，于是容量在两个层面成为瓶颈：外部层级决定淘汰前的可复用范围，显存 KV 池决定能并发多少长请求；而此前的有损压缩会改变 KV 数值进而改变输出。LoomKV 在不改动引擎的前提下，把无损 KV 压缩同时用于外部层级（tier 模式）与显存池（pool 模式）：用按头标定的两级 3 比特码编码 BF16 的高字节（符号位与指数高 7 位），九种模型上把 BF16 KV 压到原始体积的 0.71，FP8 KV 压到 0.85–0.87。tier 模式用 TileStream 写定长记录并把长度回读移出加载路径，解压后直接写入离散的 GPU 页；pool 模式用 FragPack 把变长记录打包进更小的共享额度页，由融合解码注意力核原地读取。",
+          "contributions": [
+            "提出对 BF16 高字节做两级 3 比特编码的无损 KV 压缩，大小与数值都精确可逆，不需要修改引擎即可接入",
+            "tier 模式（TileStream）在外部层级保持存储、淘汰与预取逻辑不变，解压直接落到离散 GPU 页",
+            "pool 模式（FragPack）把变长压缩记录打包进共享显存页，并用比 FlashAttention-3 更快的融合解码核原地读取"
+          ],
+          "conclusions": [
+            "压缩后的 tier 可以当作“更大的 raw tier”使用，在 LRU 悬崖下直接把可用前缀容量放大",
+            "无损压缩的代价极小：容量充裕时吞吐损失至多 2.2%，tier 模式与原始层级逐位一致"
+          ],
+          "experiments": [
+            "九模型上 BF16 KV 压到原始 0.71 倍、FP8 压到 0.85–0.87 倍",
+            "AgentX 上 tier 模式相对 raw 层级的 LRU 悬崖提供 2.7–3.6 倍 goodput、平均 TTFT 降低 1.9–3.1 倍，SSD→DRAM 提升使重复前缀 TTFT 最多降低 1.7 倍",
+            "pool 模式可容纳 1.31–1.34 倍 GPU token，在 12 个长请求下与 8 个时的队列与 goodput 相当；AI IDE 轨迹上 tier/pool 分别提升 goodput 1.24 倍与 1.59 倍"
+          ],
+          "significance": "证明了无损压缩可以在 KV 的每一层存储上“白拿”容量，是有损 KV 压缩之外一条更安全的路线。",
+          "arxivUrl": "https://arxiv.org/abs/2611.32954",
+          "pdfUrl": "https://arxiv.org/pdf/2611.32954.pdf",
+          "index": 2,
+          "takeaway": "无损压缩把 KV 层级容量放大 1.4 倍，且不牺牲精度。",
+          "keyExperiment": "AgentX 上 tier 模式 goodput 提升 2.7–3.6 倍，TTFT 降低 1.9–3.1 倍"
+        },
+        {
+          "title": "RankServe: Rank-Aware CPU-GPU Scheduling for Memory-Constrained MoE Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-25",
+          "authors": "Hengyi Zhu, Zhendong Mi, Pu Zhao, Yanzhi Wang, Hao Wang, Shaoyi Huang",
+          "institutions": "Stevens Institute of Technology, Northeastern University",
+          "abstract": "MoE 模型靠稀疏激活扩展容量，但海量专家池在推理时带来巨大的显存压力；低秩压缩能减小专家占用，却使各专家秩不同，存储、传输与执行代价随之不齐。在显存有限时，仅凭专家热度或传输代价都无法判断哪些专家最值得驻留 GPU。RankServe 是一个面向定秩压缩 MoE 检查点的 CPU-GPU 服务系统，其核心洞见是：把“驻留 GPU”与更便宜的非驻留路径（CPU 执行，或先传权重再在 GPU 执行）按专家秩与当前 token 负载逐项比价，把节省量按路由需求聚合后以“每字节节省”排序优先级。系统用近期路由历史更新驻留集合，按当前负载选择 miss 路径，允许临时上 GPU 执行而不做缓存准入；变秩运行时用分组矩阵乘执行异构因子，避免统一秩填充。",
+          "contributions": [
+            "把专家驻留决策表述为“GPU 驻留 vs CPU 执行 / 权重复制”的按秩、按负载比价，并按每字节节省排序",
+            "用近期路由历史动态更新驻留集合，允许临时 GPU 执行但不进入缓存，避免抖动",
+            "变秩运行时以分组矩阵乘执行异构低秩因子，无需把专家填充到统一秩"
+          ],
+          "conclusions": [
+            "在显存受限时，秩不一致带来的代价差异必须进入缓存决策，热度与传输代价单独都不足以定序",
+            "无需修改模型结构即可在 vLLM 上获得接近两倍的端到端加速"
+          ],
+          "experiments": [
+            "在单机 CPU-GPU 平台上对三个 MoE 模型与六个服务系统对比，batch size 1–32 全覆盖",
+            "TTFT 相对各配置最快基线取得 1.69–2.29 倍几何平均加速",
+            "TPOT 取得 1.71–2.48 倍几何平均加速"
+          ],
+          "significance": "为“压缩后的 MoE 如何在有限显存上服务”给出了可直接落地的调度策略。",
+          "arxivUrl": "https://arxiv.org/abs/2611.31869",
+          "pdfUrl": "https://arxiv.org/pdf/2611.31869.pdf",
+          "index": 3,
+          "takeaway": "把专家驻留决策当成按秩比价，压缩 MoE 服务提速约 2 倍。",
+          "keyExperiment": "TTFT 1.69–2.29 倍、TPOT 1.71–2.48 倍加速（vLLM，三个 MoE 模型）"
+        },
+        {
+          "title": "ModelLess: A Serverless System for Multi-Tier LLM Inference on Shared GPUs",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-25",
+          "authors": "Ding Shi, Wei Wu, Jiayuan Chen, Chenghu Yang",
+          "institutions": "蚂蚁集团",
+          "abstract": "LLM 推理平台为在线、异步、批处理与 rollout 等产品各自预留 GPU，服务在突发之间空转，而其他任务在排队。ModelLess 是一个面向 LLM 推理的无服务器系统：用户只声明模型服务，实例由平台托管，空闲服务可缩到零——实例带着权重睡进主机内存（GLM-5.2 TP8 上释放约 1 秒、唤醒约 4 秒，而冷启动超过四分钟），计费按服务实际持有 GPU 的时间计。睡着的实例释放出的 GPU 借给低优先级层使用。由于 LLM 实例的被驱逐代价取决于权重、执行状态、KV cache 与在途请求哪些能存活，系统为每个层级（在线、作业、弹性）定义不同的驱逐语义，并实现“先关闭准入再释放内存、先持久化重入队再中止请求、失败即关闭”的抢占协议。",
+          "contributions": [
+            "提出可缩到零的 LLM 无服务器抽象：权重驻留主机内存，秒级休眠与唤醒替代分钟级冷启动",
+            "为不同优先级层定义各自的驱逐语义，明确被抢占时允许丢失哪些状态",
+            "用入口、调度器、节点代理与 SGLang 插件四组件实现 sleep/wake、在途请求 pause/resume 与权重复制（follow/seal）路径"
+          ],
+          "conclusions": [
+            "“抢占即全丢”的集群管理器假设不适用于 LLM，按层声明可丢失状态才能安全借出空闲 GPU",
+            "暂停在途请求比重入队中止更划算，在同等的在线延迟下能借出更多算力"
+          ],
+          "experiments": [
+            "回放 1,100 张 H20 卡一周的轨迹：在粗粒度延迟目标与固定空闲阈值下，约 38% 的 GPU 时间（等价 417 张卡）可被借出",
+            "该上界依赖秒级恢复；若冷启动为 240 秒，即使按服务设阈值也只剩不到 8%",
+            "单节点四小时实验中，暂停策略每持有 GPU 样本产生的借用 token 比中止重排多 22%，在线中位延迟相同"
+          ],
+          "significance": "把无服务器“缩到零”的思路搬到 GPU 上的 LLM 服务，为多优先级共享集群提供了计费与抢占契约。",
+          "arxivUrl": "https://arxiv.org/abs/2611.32634",
+          "pdfUrl": "https://arxiv.org/pdf/2611.32634.pdf",
+          "index": 4,
+          "takeaway": "秒级休眠唤醒是无服务器 LLM 的前提，否则借出空闲 GPU 的收益归零。",
+          "keyExperiment": "一周 H20 轨迹回放中约 38% GPU 时间（等价 417 卡）可借出，但需秒级恢复"
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "RePrism: Joint Request and Representation Scheduling for LLM Agent Serving",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.DC",
+          "date": "2026-11-25",
+          "authors": "Xijiang Shen, Aoli Zhu, Yanbo Tan, Xiyuan Hu, Huailiang Tan",
+          "institutions": "湖南大学, 上海交通大学",
+          "abstract": "Agent 工作流常常多次调用大模型；当服务系统能看到请求之间的依赖时，就能据此调度请求、缓存可复用内容，从而提升工作流执行效率。已有工作多聚焦于给请求排序，或在固定缓存方案下管理共享资源，但一段规定模型行为的可复用提示往往存在多种表示（例如不同 LoRA 适配器）。RePrism 同时决定“下一个服务哪个就绪请求”与“用它的哪一种提示表示”：调度器把（请求，表示）成对的即时价值与其基于可见工作流的未来价值估计相结合来排序；资源管理器则同时为 LoRA 适配器与 KV 状态分配显存，并在内存压力变化时协调二者的准入与淘汰。",
+          "contributions": [
+            "把 agent 服务的调度对象从“请求”扩展为“请求 × 提示表示”的配对，联合优化吞吐与会话完成时间",
+            "用当前即时代价加基于工作流图的未来价值估计给配对打分，兼顾局部与全局",
+            "统一管理 LoRA 适配器与 KV cache 的显存，在压力变化下协调二者的准入与淘汰"
+          ],
+          "conclusions": [
+            "可复用提示的多表示是 agent 服务里被忽略的调度维度，与请求排序联合考虑才有收益",
+            "把表示选择前移进调度，比先排请求再选表示的贪心策略更优"
+          ],
+          "experiments": [
+            "动态负载（1.8 会话/秒）下相对 S-LoRA 请求吞吐 1.37 倍，P95 会话完成时间降低 4.10 倍",
+            "受控负载下平均 TTFT 相对 S-LoRA 降低 5.26 倍",
+            "与“先排请求再选表示”的策略相比，联合打分的吞吐高 2.7%、平均 SCT 低 12.3%"
+          ],
+          "significance": "为 agent 化负载的服务系统指出了一条新调度轴：谁被服务，与以何种表示被服务，应当一起决定。",
+          "arxivUrl": "https://arxiv.org/abs/2611.32545",
+          "pdfUrl": "https://arxiv.org/pdf/2611.32545.pdf",
+          "index": 5,
+          "takeaway": "agent 服务要同时调度请求与其提示表示，S-LoRA 上吞吐 1.37 倍。",
+          "keyExperiment": "P95 会话完成时间降至 S-LoRA 的 1/4.10，平均 TTFT 降至 1/5.26"
+        },
+        {
+          "title": "Wavefront: Low-Rank Drafting with Parallel Causal Refinement for Speculative Decoding",
+          "score": 4.3,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-25",
+          "authors": "Huy Huu Nguyen, Xin Huang",
+          "institutions": "University of Oregon, Amazon",
+          "abstract": "投机解码用便宜草稿模型提议 token、由目标模型并行验证来加速推理。DFlash、P-EAGLE 这类并行块草稿器一次前向就产出整块，却丢掉了块内 token 之间的依赖；DSpark 用轻量修正头串行地补回一部分。作者实测 DSpark 后发现，修正头在多数槽位上都覆盖了基础预测，目标模型全量 lm_head 的那次昂贵读出其实只起到提供种子的作用。于是提出 Wavefront：缩小基础、强化修正——用学习到的低秩基替代完整 lm_head，让修正头在块内以整段已草稿前缀为条件，并用少量并行 Jacobi 迭代求解。固定的迭代次数使草稿步不含数据相关控制流，可在 vLLM 中捕获为单个 CUDA graph 并融合核。",
+          "contributions": [
+            "诊断出块草稿器的修正头已主导预测、全量 lm_head 读出仅提供种子，据此重新分配草稿预算",
+            "用低秩基替代完整 lm_head，并让修正头以块内整段前缀为条件，靠少量并行 Jacobi 迭代收敛",
+            "固定迭代次数消除数据相关控制流，使草稿步可整体捕获为单个 CUDA graph 并配融合核"
+          ],
+          "conclusions": [
+            "块内并行草稿的瓶颈不在读出头的大小而在条件信息是否完整，整段前缀条件比顺序修正更高效",
+            "把草稿步做成无分支的固定图，使投机解码在真实服务栈里获得稳定加速"
+          ],
+          "experiments": [
+            "Qwen3-8B 上，数学/代码/对话/agent 基准平均吞吐比 xPress、DSpark、DFlash 分别高 2.6%、10.7%、23.6%",
+            "SPEED-Bench 长上下文提示上分别高 9.6%、14.3%、28.9%",
+            "Qwen3.8-27B 上比 DFlash2、DSpark、xPress 分别高 7.6%、10.6%、5.0%，并发升到 32 时增益仍保持"
+          ],
+          "significance": "把投机解码的草稿器设计从“加头”推向“重分配预算”，并给出可直接进服务栈的工程形态。",
+          "arxivUrl": "https://arxiv.org/abs/2611.31638",
+          "pdfUrl": "https://arxiv.org/pdf/2611.31638.pdf",
+          "index": 6,
+          "takeaway": "砍掉全量 lm_head、强化块内修正头，投机解码吞吐再涨 10–24%。",
+          "keyExperiment": "Qwen3-8B 上比 DFlash 高 23.6%，长上下文提示上高 28.9%"
+        },
+        {
+          "title": "Cheap Memory Costs Future Compute: Co-Designing Persistent KV and GPU Execution for Efficient Streaming Video Diffusion",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.AI",
+          "date": "2026-11-25",
+          "authors": "Jian Yang, Zhizhuo Kou, Qiyuan Zhu, Han Chen, Sirui Han, Yike Guo",
+          "institutions": "香港科技大学",
+          "abstract": "块因果视频扩散逐块生成长视频，并以常驻 KV cache 作为条件。每块去噪完成后，还要用一次无噪（t=0）前向把干净 KV 写回 cache；当蒸馏与投机早退把去噪变得便宜后，这次干净 KV 更新反而主导了运行时。复用陈旧 KV 能缩短更新，但陈旧记忆会污染后续块的条件、抬高其去噪步数，省下的算力在下游又还回来。作者提出 SAMR：一种免训练的、针对冻结因果视频 DiT 的方法，只刷新部分 cache，其余部分不做 DiT 前向直接重建。关键观察是：去掉旋转位置相位后，运动对齐的历史 KV 与 token 在退出步持有的在途 KV 是同一干净 KV 的互补估计。SAMR 在 Pre-RoPE 空间用离线标定的逐头仿射映射给在途 KV 去偏，融合两个估计，并用注意力读出误差代理筛出需要真正 t=0 刷新的 token。",
+          "contributions": [
+            "指出干净 KV 更新在去噪变便宜后成为视频扩散的主开销，且陈旧 KV 的代价会以更多去噪步的形式回流",
+            "发现 Pre-RoPE 空间下历史 KV 与在途 KV 互相补充，用逐头仿射标定去偏后融合即可免前向重建",
+            "用注意力读出误差代理决定哪些 token 必须真正刷新，全部由对齐 tile、无同步的 Triton 核执行"
+          ],
+          "conclusions": [
+            "视频扩散的 KV 记忆不能只按“新旧”取舍，要去掉位置相位后在数值层面重建",
+            "重建结果可零样本迁移到其他冻结模型，只需一次性标定即可恢复诊断指标"
+          ],
+          "experiments": [
+            "48 秒 LongLive-1.3B 视频上，DiT 延迟降低 20.9%、主 FLOPs 降低 30.7%",
+            "相对 token 复用，末段 PSNR 提升 1.61 dB（留出集 VidProM-16 上 1.14 dB）",
+            "零样本迁移到 Self-Forcing-DMD-1.3B：复用导致的步数膨胀从 2.47 降到 2.30 步/token，末段 PSNR +0.33 dB"
+          ],
+          "significance": "把视频扩散的长上下文记忆问题转化为可重建的数值问题，为流式生成省下三成算力。",
+          "arxivUrl": "https://arxiv.org/abs/2611.31892",
+          "pdfUrl": "https://arxiv.org/pdf/2611.31892.pdf",
+          "index": 7,
+          "takeaway": "KV 不必全部重算：去相位后两路估计融合即可重建干净记忆。",
+          "keyExperiment": "DiT 延迟降 20.9%、FLOPs 降 30.7%，末段 PSNR 反升 1.61 dB"
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Breaking Routing And Inter-device Dependencies in Mixture-of-Experts",
+          "score": 4.6,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-25",
+          "authors": "John Zarka, Danyal Ahmed, Eugene Belilovsky, Edouard Oyallon",
+          "institutions": "Sorbonne Université (ISIR), Concordia University, Mila",
+          "abstract": "随着 MoE 规模扩大，专家并行（EP）成为把专家分布到各设备的关键，但随之而来的 token dispatch 与 combine 往往成为推理主瓶颈。标准 MoE 架构的顺序依赖限制了通信与计算的重叠空间。本文提出 BRAID-MoE：用梯形残差连接配合提前路由来放松这些依赖——梯形残差允许每个专家的 combine 推迟到下一个 block，提前路由则用 combine 前的残差算出下一次路由决策，同时专家仍收到 combine 后的更新隐状态。这样就在前一个 combine 与下一个 dispatch 之间造出更长的通信窗口，两者可在专用通信流上背靠背执行，与注意力计算重叠。",
+          "contributions": [
+            "用梯形残差把专家 combine 推迟到下一个 block，改变 MoE 的层间依赖结构",
+            "提前路由从 combine 前残差算下一跳路由，使 dispatch 可与当前 combine 背靠背排队",
+            "造出更长的通信窗口，让 dispatch/combine 在专用通信流上与注意力计算重叠"
+          ],
+          "conclusions": [
+            "MoE 通信瓶颈可以由架构改动而非通信库优化来缓解，代价是极小的质量损失",
+            "已有 MoE 检查点只需少量继续训练即可迁移到 BRAID，工程迁移成本低"
+          ],
+          "experiments": [
+            "Qwen3 形状的 0.4B-A0.1B 与 2.5B-A0.5B 模型上，等算力下验证损失分别只升 1% 与 0.5%",
+            "转换后的 Qwen3-30B-A3B：prefill 最高 1.29 倍、decode 最高 1.37 倍加速",
+            "在一或两个四卡 H100 节点的多种 EP 配置与负载下均至少 1.12 倍，且优于所有对比重叠策略"
+          ],
+          "significance": "说明 MoE 的通信-计算重叠上限可以由模型结构本身改写，是架构与系统协同设计的范例。",
+          "arxivUrl": "https://arxiv.org/abs/2611.32572",
+          "pdfUrl": "https://arxiv.org/pdf/2611.32572.pdf",
+          "index": 8,
+          "takeaway": "梯形残差 + 提前路由为新 MoE 架构换来 1.12–1.37 倍 EP 推理加速。",
+          "keyExperiment": "转换 Qwen3-30B-A3B 后 prefill 1.29 倍、decode 1.37 倍，验证损失仅升 0.5%"
+        },
+        {
+          "title": "Joule is FLOP: Optimizing Tensor-Core Kernels Beyond Latency Hiding at the GPU Power Wall",
+          "score": 4.4,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-25",
+          "authors": "Taowen Liu, Zhiwen Mo, Hongxiang Fan, Aaron Zhao",
+          "institutions": "Imperial College London",
+          "abstract": "对平均板功耗贴近功耗墙的张量核 kernel，运行时间约等于每次调用的能耗除以功耗上限。被计算掩盖了延迟的数据搬运依然消耗能量；减少这部分流量可以在不减少周期数的情况下提高持续频率、缩短执行时间。本文提出 Joule 框架，把这种能耗-频率耦合纳入张量核设计与调度：代价模型结合硬件事件计数、物理数据通路能耗与跨电压域的非线性缩放，求解功耗上限下的持续频率与运行时间；再结合跨存储层级与跨 die 的数据搬运下界，得到“功耗感知的速度上限”（PSoL），可量化结构性差距与实现差距。该分析指导了在 B200 上吃满 TMEM 的宽 tile kernel，以及以细粒度异步轮转把累加器读出与张量核计算重叠的做法。",
+          "contributions": [
+            "指出功耗墙下被隐藏延迟的数据搬运仍耗能，须把能耗-频率耦合显式建模进 kernel 设计",
+            "用硬件事件计数 + 物理通路能耗 + 非线性电压缩放求解持续频率，得到功耗感知速度上限 PSoL",
+            "据此设计吃满 B200 TMEM 的宽 tile kernel、累加器异步轮转与功耗感知的时空 tile 调度"
+          ],
+          "conclusions": [
+            "在功耗墙附近，“藏住延迟”不再是充分的优化目标，减少能量流量本身就能缩短时间",
+            "事件级代价模型可以把能耗预测误差压到 1% 以内，足以指导 kernel 设计"
+          ],
+          "experiments": [
+            "给定实测事件计数，模型在 B200 上平均能耗预测误差 0.69%",
+            "60 个稠密层形状上，GEMM 相对穷举选择的 cuBLAS 算法在 B200/H100 NVL/RTX PRO 6000 上几何平均加速 4.94%/6.64%/2.12%",
+            "八卡 B200 上的融合 Mega-MoE 相对上游 DeepGEMM（die 内专家权重）提升 2.60–5.17%"
+          ],
+          "significance": "为功耗墙时代的 kernel 优化给出了新的第一性判据：算能量，而不只是算周期。",
+          "arxivUrl": "https://arxiv.org/abs/2611.32440",
+          "pdfUrl": "https://arxiv.org/pdf/2611.32440.pdf",
+          "index": 9,
+          "takeaway": "功耗墙下要优化的是能量流量，不只是隐藏延迟。",
+          "keyExperiment": "能耗预测误差 0.69%，GEMM 比 cuBLAS 快 2.1–6.6%，Mega-MoE 提升 2.6–5.2%"
+        },
+        {
+          "title": "Real-Time AI Acceleration on a 2D Spatial Dataflow Architecture",
+          "score": 3.9,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-25",
+          "authors": "Shriram Raja, Anton Njavro, Richard West",
+          "institutions": "Boston University",
+          "abstract": "机器学习正被越来越多地集成进实时系统，因此需要对 ML 加速器做时序分析；但最流行的商用加速器 GPU 行为（包括 SIMT 线程调度与内存访问延迟）未被完整文档化，难以分析。空间数据流加速器天然支持计算与内存分区、数据搬运与计算局部性由程序员显式控制，是 GPU 之外的一种选择。本文以基于商用 RISC-V 架构的 Tenstorrent Blackhole 为对象——它由二维核阵列经片上网络（NoC）互连，软件运行时完全开放——对该平台做性能刻画，并把最坏执行时间（WCET）任务模型写成同构同步数据流图，再考虑 NoC 相关延迟扩展到多核负载的初步分析。",
+          "contributions": [
+            "以开源运行时、RISC-V 为基础的 Tenstorrent Blackhole 为对象，刻画空间数据流加速器的时序行为",
+            "把 WCET 任务模型写成同构同步数据流图，并扩展到含 NoC 延迟的多核分析",
+            "在 12,567 个任务配置与负载上验证模型始终给出观测最坏情况之上界"
+          ],
+          "conclusions": [
+            "空间数据流架构的可分析性来自显式的搬运与局部性控制，这是 GPU 难以提供的",
+            "当前模型上界偏保守（多核可达 5 倍），但方向可行，为实时 ML 的时序认证奠定基础"
+          ],
+          "experiments": [
+            "覆盖 12,567 个任务配置与工作负载评估",
+            "所有配置下模型估计值均高于实测最坏情况",
+            "单核负载多数情况下开销 <100%（最大 <200%），多核在悲观 NoC 争用分析下 <500%"
+          ],
+          "significance": "为“实时系统里可认证的 ML 加速器”提供了第一个成体系的 WCET 建模尝试。",
+          "arxivUrl": "https://arxiv.org/abs/2611.31556",
+          "pdfUrl": "https://arxiv.org/pdf/2611.31556.pdf",
+          "index": 10,
+          "takeaway": "空间数据流加速器显式可控，比 GPU 更适合做实时时序认证。",
+          "keyExperiment": "12,567 个配置下模型上界始终覆盖实测最坏情况，单核开销多数 <100%"
+        }
+      ]
+    }
+  ]
+}
