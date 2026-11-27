@@ -1,0 +1,341 @@
+{
+  "date": "2026-11-27",
+  "title": "2026-11-27 论文精选",
+  "lede": "今日主题是把并行与显存的老账重新算一遍：MoE 服务按 prefill/decode 分别均衡 rank 负载，流水并行把计算粒度与通信粒度拆开，长上下文投机解码直接借目标模型的稀疏选择，量化侧则把档位从整比特细化到半比特。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 497
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "RankCast: Phase-Aware Rank Balancing in MoE Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-26",
+          "authors": "Kaidi Fu, Xu-Hao Lu, Pingwei Sun, Jianchao Tan, Yuchen Xie, Xunliang Cai",
+          "institutions": "University of Illinois Urbana-Champaign, Meituan",
+          "abstract": "现代大模型推理越来越多采用 Prefill 与 Decode 分离的架构，MoE 服务则普遍依赖专家并行（EP）。但负载不均仍拖慢推理：每一层都要等最忙的那个 EP rank 算完。两个相位的瓶颈根本不同——prefill 是计算受限，延迟由最忙 rank 上的最大 token 数决定；decode 在中等 batch 下是访存受限，延迟由跨 rank 的最大活跃专家数决定。RankCast 用统一框架同时压低这两个最大值：每个 token 保留预测的 Top-p 专家，其余 k-p 个从 Top-L 候选（L>k）中重选。prefill 阶段为每个 rank 定价，把 token 柔性导向较闲的 rank；decode 阶段在守住每 token 约束下关掉最忙 rank 上的部分专家。两条路径都在 SGLang 与 DeepEP 中实现，kernel 与执行重叠，元数据复用既有通信通道。",
+          "contributions": [
+            "把 MoE 服务的 rank 级负载均衡拆成相位感知的两套目标：prefill 压 token 数、decode 压活跃专家数。",
+            "设计\"保 Top-p + 从 Top-L 重选剩余 k-p\"的分配策略，既不破坏每 token 的专家约束，又能在两个相位分别实现柔性导向与主动关闭。",
+            "在 SGLang 与 DeepEP 中落地，kernel 与计算重叠、复用既有通信通道，几乎无额外开销。"
+          ],
+          "conclusions": [
+            "同一框架能同时改善 prefill 与 decode 的 rank 级不均衡，说明两个相位必须用不同的均衡目标，而不是一套统一策略。",
+            "质量代价很小，模型精度损失不足一个百分点。"
+          ],
+          "experiments": [
+            "Qwen3-235B-A22B（EP=8）与 Qwen3.5-397B-A17B（EP=16）上，消除了最忙 rank 超过 75% 的额外 prefill 负载。",
+            "prefill 输入吞吐最高提升 19%，decode 每输出 token 耗时最多降低 10%。",
+            "模型质量损失低于 1 个百分点。"
+          ],
+          "significance": "MoE 服务的负载均衡应从\"统一策略\"转为按相位定制目标，这是可直接落地的推理系统优化。",
+          "arxivUrl": "https://arxiv.org/abs/2611.33542",
+          "pdfUrl": "https://arxiv.org/pdf/2611.33542.pdf",
+          "takeaway": "prefill 看 token 数、decode 看活跃专家数，两个相位要两套均衡目标。",
+          "keyExperiment": "最忙 rank 的额外 prefill 负载消除 75% 以上，prefill 吞吐 +19%、decode TPOT -10%，精度损失 <1pp。",
+          "index": 1
+        },
+        {
+          "title": "PipeAxes: Decoupling Compute and Communication Granularities for Pipeline-Parallel LLM Serving",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-26",
+          "authors": "Xiaoqiang Guo, Yifan Lin, Yang Liu, Jianan Zhang, Yingqi Peng, Jiamei Lv, Yi Gao, Wei Dong",
+          "institutions": "Zhejiang University",
+          "abstract": "流水并行能在 PCIe 服务器和异构 GPU 集群上服务长上下文模型。现有引擎把 prefill 切成 token chunk 来限制 decode 停顿，但 chunk 大小同时钉死了两件事：GPU 的 batch 宽度，以及级间激活传输的大小。chunk 太小要反复重载权重，chunk 太大又会把 GPU 和链路占满、拖慢交互请求。PipeAxes 改成一次只跑几层的宽 prefill 批次，让 decode 能穿插在切片之间；激活经融合的 Triton Hadamard-INT4 编解码压缩，按独立定长的行组走并行 TCP 套接字；调度器用延迟余量（slack）联合决定 batch 宽度、切片深度与行组大小。核心思路是把\"算多少\"和\"传多少\"从同一个旋钮上解耦。",
+          "contributions": [
+            "解耦计算粒度与通信粒度：prefill 用宽 batch 配浅切片，传输用独立可变的行组，不再让 chunk 大小同时决定两者。",
+            "实现融合 Triton Hadamard-INT4 codec，把级间激活压到 4bit 传输，并保留精度。",
+            "基于延迟余量的调度器，随带宽波动自适应选择 batch 宽度、切片深度与行组大小三个耦合参数。"
+          ],
+          "conclusions": [
+            "在带宽剧烈波动下仍能守住延迟目标，说明粒度解耦比固定 chunk 更鲁棒。",
+            "INT4 传输的精度代价极小，MMLU 反而升 0.06 个百分点，GSM8K 仅降 0.46 个百分点。"
+          ],
+          "experiments": [
+            "97 组回放、5016 个请求，覆盖 A800、RTX 4090、RTX 3090；带宽十倍变化下 74 个请求全部达标。",
+            "四阶段 MoE 流水线中达标速率是校准 Revisit-PP 的 23.3 倍、Fixed-4096 + Express 的 4.44 倍。",
+            "64K 混合负载中，短请求 p95 首 token 延迟从原生 vLLM 的 129.8 秒降到 512 毫秒。"
+          ],
+          "significance": "把 prefill 的计算粒度与级间通信粒度解耦，是在受限互联上服务长上下文的关键一步。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34615",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34615.pdf",
+          "takeaway": "让\"算多少\"和\"传多少\"分开调，固定 chunk 的老做法必然在两端之间妥协。",
+          "keyExperiment": "短请求 p95 TTFT 从 129.8s 降到 512ms；四阶段 MoE 吞吐达 Revisit-PP 的 23.3 倍。",
+          "index": 2
+        },
+        {
+          "title": "DFly2: Turbocharging Long-Context Speculative Decoding by Sharing the Target Sparsity",
+          "score": 4.5,
+          "channel": "AI Infra",
+          "category": "cs.CL",
+          "date": "2026-11-26",
+          "authors": "Hong Liu, Rui Cen, Junhan Shi, Lin Niu, Runzhi Fan, Zhaojing Zhou, Haodi Lei, Jiebin Zhang, Saiyong Yang, Junqiang Zheng, 等",
+          "institutions": "Tencent",
+          "abstract": "为避开长上下文稠密注意力的二次成本，DeepSeek-V4、Hy4 这类模型已经原生稀疏化，而投机解码恰恰在最慢的解码环节最重要、也越来越多跑在这类模型上。问题是它们的草稿模型仍保留自己的上下文 cache——要么覆盖整个 prompt，要么是个滑窗。除了占显存，这个 cache 还要吃掉 prefill 时间、前缀缓存命中率和 decode 并发度。让草稿读目标模型 cache 的做法省掉了自己的 cache，但只回答了\"用哪个 cache\"，没回答\"读哪些位置\"，于是仍然读全部或读最近窗口。DFly2 的观察是：原生稀疏的目标模型本来就为每个 query 选好了位置，而且是在它无论如何都要维护的 cache 上选的。于是草稿层直接读配对目标层缓存的 KV（KV 共享），并且只读该层 indexer 选中的那批位置（Index 共享），草稿既不跑打分 pass，也不留自己的 cache。",
+          "contributions": [
+            "观测到稀疏目标模型的选择可跨步复用：提前一步做出的选择，仍覆盖后续 token 实际选择的近九成。",
+            "提出 block-parallel 草稿器，同时共享目标的 KV 与 index 选择，彻底取消草稿的 cache 与打分开销。",
+            "在 DeepSeek-V4.1-Flash、GLM-5.3-Flash、Hy4-flash 三种注意力与架构都不同的模型上验证通用性。"
+          ],
+          "conclusions": [
+            "草稿模型的 cache 与位置选择本可由目标模型\"已经付过的成本\"承担，长上下文越长收益越大。",
+            "与同配方训练的 DFlash、DSpark 相比，每步接受的 token 数在所有基准类上更高。"
+          ],
+          "experiments": [
+            "相对更强基线，通用负载领先 3.9%–10.5%，长上下文与 agentic 负载领先 10.0%–31.5%。",
+            "DS-V4.1-Flash 高并发下，在等每用户解码速度时，两组 64K 数据集的吞吐分别高 62% 与 81%。",
+            "提前一步的选择在 DS-V4.1-Flash 上仍覆盖后续 token 选择的近 90%。"
+          ],
+          "significance": "长上下文投机解码的瓶颈是草稿缓存，而稀疏目标模型早已把缓存与位置选择\"付过账\"，直接共享即可。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34776",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34776.pdf",
+          "takeaway": "草稿层不需要自己的 KV cache——照抄目标 sparse indexer 的选择就够。",
+          "keyExperiment": "长上下文与 agentic 负载上接受长度领先 10.0%–31.5%，64K 高并发放吞吐 +62%/+81%。",
+          "index": 3
+        },
+        {
+          "title": "Any-Rate: Half-Bit Multi-Precision LLM Quantization with Coded Bit-Planes",
+          "score": 4.0,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-26",
+          "authors": "Hoonki Lee, Haechan Shin, Hyuntaek Jung, Yeonu Choi, Sangyeob Kim",
+          "institutions": "Yonsei University, Agency for Defense Development",
+          "abstract": "嵌套多精度量化能从单一 checkpoint 派生出多个精度——只读每个权重的前导比特即可，这对显存与能耗预算多变的端侧部署很有吸引力。但现有方法只提供整比特档位，相邻精度之间落差很大，2bit 更是严重退化。Any-Rate 用一个 checkpoint 服务 2 到 8bit，并在 2–4bit 区间以半比特为步长：把部分 bit-plane 限制为 8 个权重块上的扩展 Hamming 码字（折合每权重 0.5 bit），每行跨精度共享同一张 LUT，同时对每个精度分别设目标做联合编码，以减少共享 bit-plane 带来的质量损失。结果是端侧可以在半比特粒度上切换精度，而不是在整比特台阶上硬跳。",
+          "contributions": [
+            "首次在 2–4bit 区间提供 0.5bit 步进的嵌套多精度表示，缓解相邻精度之间的断崖。",
+            "用 8 权重块的扩展 Hamming 码构造\"每权重 0.5 bit\"的编码 bit-plane，实现半比特档位。",
+            "每行共享一张 LUT 并为各精度设独立目标联合训练，压低共享 bit-plane 造成的精度损失。"
+          ],
+          "conclusions": [
+            "多精度量化不必以 2bit 大幅掉点为代价，细粒度精度切换对端侧更实用。",
+            "解码速度与现有 kernel 相当，等精度下能耗更低。"
+          ],
+          "experiments": [
+            "四个 LLM 上，2bit 与 3bit 精度为多精度方法中的 SOTA，2bit 保留 69% 的 FP16 精度，4bit 距最佳不到 1 分。",
+            "LPDDR 能耗模型估计等精度下最多省 27% 能耗。",
+            "解码速度与现有量化 kernel 大致相当。"
+          ],
+          "significance": "把多精度量化的档位从整比特细化到半比特，让端侧能按预算平滑降档。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34402",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34402.pdf",
+          "takeaway": "2bit 保留 69% FP16 精度，等精度能耗省 27%。",
+          "keyExperiment": "2bit 保留 69% FP16 精度，2bit/3bit 为多精度 SOTA，能耗最多省 27%。",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Asymmetric Speculative Decoding: Unlocking In-Context Learning in Draft Models",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.DC",
+          "date": "2026-11-26",
+          "authors": "Guang Huang, Zeyi Wen",
+          "institutions": "HKUST (Guangzhou)",
+          "abstract": "投机解码先草稿再并行验证，但实测加速远低于理论上界，推理任务上尤其明显。作者把根因归为\"任务同构\"：现有方法给草稿模型和目标模型一模一样的 prompt，等于逼草稿去解超出它能力的问题，拒绝率因此很高，并行带来的收益被吃光。实验发现接受率随生成过程单调上升，揭示出一种隐式的上下文学习（ICL）效应——草稿模型正在从已验证的 token 里逐步对齐目标分布；控制上下文窗口大小的实验进一步确认，这种提升来自 ICL 驱动的对齐，而非 token 难度。据此提出免训练的 AsymSpec：解耦两个模型收到的 prompt，给草稿模型喂任务相关的示例解，把它的目标从\"推理解题\"改写成\"模拟续写\"，把 ICL 效应提前到第一个 token。",
+          "contributions": [
+            "识别并命名\"任务同构\"是投机解码在推理任务上加速打折的根因。",
+            "发现接受率随生成单调上升，并用控制实验把增益归因于 ICL 驱动的分布对齐，而非 token 难度。",
+            "提出免训练的非对称 prompt 框架，并证明它产生精确样本、指数收敛到目标分布。"
+          ],
+          "conclusions": [
+            "让草稿模型从\"解题\"转为\"模仿\"，是把 ICL 对齐效应前置到首 token 的有效手段。",
+            "无需重训练即可超过标准投机解码。"
+          ],
+          "experiments": [
+            "推理、代码生成、摘要三类任务上，相对自回归解码加速 2.29 倍到 4.95 倍。",
+            "效果超过未做模型重训练的标准投机解码。"
+          ],
+          "significance": "免训练、只改 prompt 就能把投机解码在推理任务上的加速从\"打折\"拉回到接近上界。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34010",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34010.pdf",
+          "takeaway": "草稿模型不该解题，只该模仿——给示例解而不是同一个 prompt。",
+          "keyExperiment": "三类任务加速 2.29×–4.95×，且不需要任何模型重训练。",
+          "index": 5
+        },
+        {
+          "title": "Maco-RL: Scaling Agent Capabilities with Mixed-Task Reinforcement Learning",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-26",
+          "authors": "Jiacheng Zhang, Qixing Zhou, Haiyang Wang, Qipeng Gu, Shuzhe Wu, Feiyang Pan, Lue Fan, Dandan Tu, Zhaoxiang Zhang",
+          "institutions": "Institute of Automation, Chinese Academy of Sciences, Huawei",
+          "abstract": "混合任务强化学习（MixRL）直接训练一个跨域统一策略，从而持续扩展 agent 能力，既不需要为每个领域单独训专家，也不需要额外的蒸馏阶段。听起来很美，但规模化有三个硬问题：混合任务训练如何稳定高效、rollout 算力如何分配、新领域如何持续接入。Maco-RL 针对这三点给出方案：用量额制（quota）调度器异步调度多个任务域的 rollout，通过平衡各域梯度贡献、抑制 off-policy 效应来稳住训练；在正交的另一个维度上提出 Tri-Buffer Sampling，按样本的掌握程度分档分配算力，既维持前沿探索又保住已经学到的能力。",
+          "contributions": [
+            "量额制异步 rollout 调度器，用配额平衡各域梯度贡献，缓解混合任务训练的不稳定与 off-policy 漂移。",
+            "Tri-Buffer Sampling 按样本掌握度三档分配 rollout 算力，兼顾前沿探索与能力保持。",
+            "给出可持续扩展新域的训练范式，且策略更新算力低于单任务 RL。"
+          ],
+          "conclusions": [
+            "MixRL 是可实用、算力高效的 post-training 路线，能持续推动通用 agent 能力前沿。",
+            "统一策略可以随领域扩充持续变强，而不牺牲既有能力。"
+          ],
+          "experiments": [
+            "五个基准上把 Qwen3.5-27B 的整体分数从 43.6 提到 54.2，持续扩展后达到 60.1。",
+            "追平 Qwen3.8-27B 所在的前沿，并再往外推 5.7 分。",
+            "策略更新的算力消耗低于单任务 RL。"
+          ],
+          "significance": "证明混合任务 RL 可以像\"持续预训练\"一样持续扩展 agent 能力，而不必为每域造专家。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34703",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34703.pdf",
+          "takeaway": "一个策略跨域持续学习，靠配额调度与掌握度分档稳住训练。",
+          "keyExperiment": "Qwen3.5-27B 总分 43.6→54.2→60.1，超过 Qwen3.8-27B 前沿 5.7 分。",
+          "index": 6
+        },
+        {
+          "title": "MGMem: An Efficient, Deterministic, and Provenance-Preserving Framework for Long-Horizon Agent Memory",
+          "score": 4.0,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-26",
+          "authors": "Junhong Huang, Xin Tong, Jun Xia",
+          "institutions": "HKUST (Guangzhou)",
+          "abstract": "长程大模型 agent 需要持久记忆，在成千上万轮交互里把对的往事在对的时刻翻出来。不少系统靠调用生成式 LLM 把历史改写成摘要、事实或知识图谱来建索引，但这一步有三个硬伤：贵（每次构建要上千次生成调用）、不确定（破坏可复现性，同一问题多次运行答案不一致）、且抹掉出处（下游读到的是合成文本，不是原始对话）。MGMem 提出一条不含任何生成式索引调用的路线：用确定性的判别式解析流水线替代。跨会话反复出现的提及被组织成关联图（incidence graph），查询中的提及由主体条件化的三阶段解析器定位，最终把原始对话片段直接返回给读者，出处与可复现性都保住了。",
+          "contributions": [
+            "用确定性判别式解析流水线替代生成式索引，彻底去掉每次构建的上千次生成调用。",
+            "把跨会话的重复提及组织成 incidence graph，并用主体条件化的三阶段解析器定位证据位置。",
+            "保留出处：直接返回原始对话片段而非合成摘要，同一问题可复现同一答案。"
+          ],
+          "conclusions": [
+            "长程 agent 记忆的索引环节不必依赖生成式 LLM，确定性与可复现可以和效果并存。",
+            "在没有生成式索引调用的前提下，多会话对话问答仍能超过同协议基线。"
+          ],
+          "experiments": [
+            "英语多会话对话 QA 的 LoCoMo 上，优于匹配协议的基线，且完全不使用生成式索引调用。",
+            "在完整 LongMemEval-S 上整体具竞争力，单会话各类型在本检索对比中领先或持平。"
+          ],
+          "significance": "给长程 agent 记忆提供了一条\"便宜、确定、可溯源\"的索引路线，直指生产可用性。",
+          "arxivUrl": "https://arxiv.org/abs/2611.33174",
+          "pdfUrl": "https://arxiv.org/pdf/2611.33174.pdf",
+          "takeaway": "索引不用生成式 LLM：确定性解析 + 原始片段返回，既省钱又可复现。",
+          "keyExperiment": "在 LoCoMo 上无生成式索引即超过同协议基线，LongMemEval-S 单会话类型领先或持平。",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Mixture-of-Loops Transformer",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-26",
+          "authors": "Lianghui Zhu, Shijie Wang, Xinggang Wang, Jinze Bai, Bo Wang, Xiang Bai",
+          "institutions": "Huazhong University of Science and Technology, ByteDance Seed, University of Toronto",
+          "abstract": "Loop Transformer 通过跨 loop 复用共享层来提升表达力，代价是效率。要继续推进表达力-效率前沿，必须先回答：相邻 loop 之间到底该传什么？MoLT 的答案是 Mixture-of-Loops Attention（MoLA）——把 KV 当作跨深度、跨 loop 选择性复用的显式记忆。loop residual 形态下 MoLT-R 保留残差流、读取跨 loop 的局部 KV 换表达力；loop KV 形态下 MoLT-KV 从 embedding 重新起步，读当前 loop 的局部 KV 与前一 loop 更早位置的记忆 KV 换效率。MoLT-KV 消除了同位置的跨 loop 依赖，配合 loop forcing 并行训练，解锁超出训练 loop horizon 的单趟解码。U 形的 U-MoLT 再把记忆构建与预测读出分开，跳过用不到的解码遍历而不改变预测。",
+          "contributions": [
+            "提出 MoLA：以 KV 为跨深度与跨 loop 的显式记忆，统一了 residual-loop 与 KV-loop 两种范式。",
+            "MoLT-KV 消除同位置跨 loop 依赖，配合 loop forcing 支持并行训练与单趟 MoL 解码。",
+            "U 形 U-MoLT 分离记忆构建与读出，跳过无用遍历且不改变预测。"
+          ],
+          "conclusions": [
+            "\"loop 之间传什么\"比\"loop 几次\"更决定表达力与效率的权衡。",
+            "在等参数量、等算力约束下，U-MoLT 一致优于同预算的 OLMo3。"
+          ],
+          "experiments": [
+            "400B token 预训练：700M 上验证交叉熵 token 效率提升 1.7 倍；3B MoE 十域困惑度改善 0.75、十任务准确率 +2.1 个百分点。",
+            "Qwen3.5-0.8B-Base 上 100B token 续训，11 个领域的交叉熵全部低于匹配基线。",
+            "700M/1.5B dense 与 3B MoE 三种规模上均优于 OLMo3。"
+          ],
+          "significance": "把 loop 结构的复用对象从\"层\"推进到\"KV 记忆\"，在等算力下拿到更好的表达力-效率前沿。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34923",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34923.pdf",
+          "takeaway": "循环 Transformer 的关键不是循环几次，而是 loop 之间传什么。",
+          "keyExperiment": "700M 上交叉熵 token 效率 1.7×，3B MoE 十任务准确率 +2.1pp。",
+          "index": 8
+        },
+        {
+          "title": "State Space Attention: Learning Context-Dependent Memory Retention",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-26",
+          "authors": "Ege Çakar, Cengiz Pehlevan",
+          "institutions": "Harvard University",
+          "abstract": "标准注意力的 KV cache 随上下文长度线性增长。要给它设一个上界，就必须回答：序列模型到底该为长上下文推理保留什么？作者主张这个选择应当被学习，并提出 State Space Attention（SSA）：学习维护一个有界的过去表示集合，再用标准注意力去读取。一个可学习的打分器在新上下文到来时，对每个 chunk 依据新上下文与记忆中的其余内容重新打分；固定窗口 Transformer 在这个框架下成为\"永远保留最近 token\"的特例。打分器与读取器联合训练，既可以从可微的软加权逐步过渡到硬保留，也可以一开始就硬保留；为了给打分器提供训练信号，作者在训练中生成监督样本，称为 recovery。",
+          "contributions": [
+            "把\"保留什么\"变成可学习目标：用一个可学习打分器维护有界记忆集合。",
+            "给出从软加权到硬保留的渐进训练路径，并用生成监督样本（recovery）为打分器提供信号。",
+            "把固定窗口注意力统一为该框架的特例，说明它是一族方法的推广。"
+          ],
+          "conclusions": [
+            "有限的 token 预算可以被\"用得更久\"：同等可读预算下远超同预算 Transformer，并与约 4 倍预算的模型相当或更好。",
+            "推理显存恒定；小模型规模下与全注意力最大的差距出现在 RULER 上。"
+          ],
+          "experiments": [
+            "在检索、变量追踪、多跳推理与语言建模四类任务上，多数任务与全注意力持平或只差数点。",
+            "所有长上下文检索任务上大幅优于同可读预算的 Transformer，与约 4 倍预算者相当或更好。",
+            "推理显存恒定；与全注意力的最大差距出现在 RULER 上。"
+          ],
+          "significance": "为\"有界 KV cache 该保留什么\"给出了可学习的答案，是长上下文架构的一条通用改进路径。",
+          "arxivUrl": "https://arxiv.org/abs/2611.33625",
+          "pdfUrl": "https://arxiv.org/pdf/2611.33625.pdf",
+          "takeaway": "KV 预算有限时，保留哪一段应该学出来，而不是固定最近窗口。",
+          "keyExperiment": "同预算下远超同预算 Transformer，媲美约 4 倍预算模型，推理显存恒定。",
+          "index": 9
+        },
+        {
+          "title": "JetDiffusion: Pushing the Speed Limits of Video Generation with NVFP4 Sparse Attention",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.CV",
+          "date": "2026-11-26",
+          "authors": "Yulun Wu, Zihan Min, Minshen Zhang, Kaiqin Kong, Ji Xie, Will Lin, Junda Chen, Wenxuan Tan, Aryan Kumar, Loay Rashid, 等",
+          "institutions": "University of California San Diego, Carnegie Mellon University, University of Wisconsin-Madison, National University of Singapore",
+          "abstract": "长序列注意力是视频生成的主要计算瓶颈，稀疏化与低比特量化是两条现成的缓解路径。JetDiffusion 把它做成一个系统：底层是可训练的 Video Sparse Quantized Attention（VSQA），配套的推理 kernel 融合了原生 NVFP4 计算与算子融合。在 90% 稀疏度下，VSQA 在不同硬件上比 FlashAttention 快 8 到 29 倍。要进一步提速，作者把 VSQA 与 NVFP4 线性量化、步数蒸馏三者叠加。问题在于三者单独都能保住画质，联合适配（尤其在激进的 NVFP4 下）却很难；作者通过一系列实证研究摸索出分阶段训练配方，让模型稳定地同时适配量化、稀疏与少步去噪。",
+          "contributions": [
+            "提出可训练的 VSQA，把稀疏注意力与 NVFP4 量化注意力统一为可学习形式。",
+            "定制推理 kernel：原生 NVFP4 计算加算子融合，90% 稀疏下相对 FlashAttention 加速 8–29 倍。",
+            "给出一套分阶段训练配方，使量化、稀疏、少步去噪三者可以联合适配而不掉画质。"
+          ],
+          "conclusions": [
+            "稀疏、低比特、蒸馏的收益可以叠加，但必须在训练阶段联合适配，分阶段是最可行的路径。",
+            "消费级显卡上也能把 14B 级视频模型推到接近实时的量级。"
+          ],
+          "experiments": [
+            "Wan2.1-14B 在 RTX 5090 上端到端视频生成加速 273 倍，画质相当。",
+            "90% 稀疏度下，VSQA 相对 FlashAttention 在多种硬件上加速 8–29 倍。"
+          ],
+          "significance": "把稀疏注意力、FP4 量化与步数蒸馏在训练阶段联合适配，是视频生成提速的可行组合拳。",
+          "arxivUrl": "https://arxiv.org/abs/2611.33268",
+          "pdfUrl": "https://arxiv.org/pdf/2611.33268.pdf",
+          "takeaway": "稀疏 + NVFP4 + 蒸馏必须联合训，单打独斗的收益叠不起来。",
+          "keyExperiment": "RTX 5090 上 Wan2.1-14B 端到端 273× 加速，画质相当。",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
