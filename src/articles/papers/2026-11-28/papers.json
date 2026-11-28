@@ -1,0 +1,343 @@
+{
+  "date": "2026-11-28",
+  "title": "2026-11-28 论文精选",
+  "lede": "今日批次被循环架构刷屏：一边是 LoopTitan 用对照组证明“参数复用”几乎白给、一边是美团给出等预算下的循环 MoE 配置律，再加上把循环模型变成多 token 并行草稿器的 Floodgates；服务侧则出现让模型自管上下文、把算力预算当作全局资源来路由的新思路。",
+  "stats": {
+    "selected": 10,
+    "channels": 3,
+    "candidates": 487
+  },
+  "channels": [
+    {
+      "name": "AI Infra",
+      "countText": "4 篇推荐"
+    },
+    {
+      "name": "Algorithms",
+      "countText": "3 篇推荐"
+    },
+    {
+      "name": "Architecture",
+      "countText": "3 篇推荐"
+    }
+  ],
+  "channelGroups": [
+    {
+      "channel": "AI Infra",
+      "countText": "4 篇推荐",
+      "papers": [
+        {
+          "title": "Letting Models Manage Their Own Context: Where We Stand",
+          "score": 4.6,
+          "channel": "AI Infra",
+          "category": "cs.AI",
+          "date": "2026-11-26",
+          "authors": "Alessio Devoto, Avinash Vem, Tara Safavi, Sanjay Kariyappa, Yu-Hsuan Tseng, Paul Furgale, Ricardo Silveira Cabral",
+          "institutions": "NVIDIA",
+          "abstract": "现有 agent 框架由外部 harness 代管上下文：窗口一满就自动摘要压缩。本文研究把控制权交回模型本身，让模型通过 context API 自行决定何时压缩、压缩哪些内容。作者在 NVIDIA 开源的 agent harness NOOA 上实现该接口，并在文档研究与机器学习工程两类任务、8K 到 512K token 的预算区间对比两种策略。结果显示，善用该 API 的模型在更少输入 token 下取得更高准确率，预算越紧收益越大：GPT 6.1 在 32K 预算下 OfficeQA Pro v2 分数从 21% 提到 56%，Kimi 最高省下 41% 的输入 token。作者进一步指出推理引擎可以配合：编辑后用未变后缀的 KV 缓存复用，可把每请求 prefill 计算量降低至多 15%，且精度无可测变化。",
+          "contributions": [
+            "提出 model-driven 上下文管理范式：由模型通过 context API 自行决定何时、压缩什么，取代 harness 侧的固定压缩策略",
+            "在 NVIDIA 开源 harness NOOA 上落地该接口，并在 8K–512K 五档预算、两类长任务上做对照实验",
+            "给出模型-推理引擎协同设计路线：上下文编辑后复用未变后缀的 KV 缓存，直接省下 prefill 算力"
+          ],
+          "conclusions": [
+            "紧预算下由模型自管上下文明显优于 harness 压缩，且往往用更少输入 token；但模型间行为差异大，策略还不够稳定",
+            "上下文管理的瓶颈正从 prompt 工程转移到推理引擎是否支持 KV 缓存编辑，二者需要联合设计"
+          ],
+          "experiments": [
+            "GPT 6.1 在 32K 预算下 OfficeQA Pro v2 准确率 21%→56%，接近三倍",
+            "Kimi 在同等或更高准确率下输入 token 最多减少 41%",
+            "复用未变后缀 KV 缓存使每请求 prefill 计算量降低至多 15%，精度无可测变化"
+          ],
+          "significance": "上下文压缩从“外部启发式”变成“模型可学习能力”，并把 KV 缓存编辑推到 agent 系统的主路径上。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34147",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34147.pdf",
+          "takeaway": "上下文该由模型自己管：同预算下 GPT 6.1 分数从 21% 翻到 56%，Kimi 省 41% 输入 token；推理引擎复用后缀 KV 还能再省 15% prefill。",
+          "keyExperiment": "32K 预算下 OfficeQA Pro v2 准确率 21%→56%；后缀 KV 复用降 prefill 15%",
+          "index": 1
+        },
+        {
+          "title": "CoordRoute: Coordinated Multi-Model Routing for Maximum Compute-Budget Utility",
+          "score": 4.2,
+          "channel": "AI Infra",
+          "category": "cs.DC",
+          "date": "2026-11-26",
+          "authors": "Boning Huangfu, Boxiao Du, Chen Chen",
+          "institutions": "Shanghai Jiao Tong University",
+          "abstract": "模型路由把每个请求分给不同规模的 LLM，但现实中请求共享一份固定算力预算——或是租用 API 的花费上限，或是私有 GPU 集群的容量。现有路由器对每个请求独立决策，逐请求最优并不等于整体最优。本文提出协同路由，沿“预测—规划—校正”三步把预算分配到请求之间以最大化总体满意度：先预测每个模型能给出什么、要花多少；在后续请求未知时规划当前选择；生成过程中再按预算实时降级或升级。三个环节分别用相对需求预测（用导致同一路由选择的历史请求做比较）、带机会成本的前瞻求解器、以及预算感知的运行时校正（只在划算时才检查答案）解决。在 Azure Conversation 与 BurstGPT 两条真实 trace 上，CoordRoute 相比最强现有路由器把总满意度提升 18.72%。",
+          "contributions": [
+            "指出路由的核心矛盾是共享预算下的全局最优，而非逐请求最优，并把问题形式化为预算在请求间的分配",
+            "用相对需求预测 + 前瞻求解器 + 预算感知运行时校正三件套解决“收益未卜、后续未知、观测也花钱”的难题",
+            "在真实服务 trace 上验证协同路由的收益随预算收紧而放大"
+          ],
+          "conclusions": [
+            "在固定算力预算下，协同路由应作为 LLM 服务层的默认组件，而不是把每个请求独立交给分类器",
+            "生成过程中的答案观测本身消耗预算，因此校正策略必须显式做代价-收益权衡"
+          ],
+          "experiments": [
+            "Azure Conversation 与 BurstGPT trace 上总满意度比最强基线高 18.72%",
+            "前瞻求解器为每次选择计入“这笔算力留给后续请求能赚多少”的机会成本"
+          ],
+          "significance": "把多模型路由从单请求分类问题，推进为共享算力预算下的在线资源分配问题。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34161",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34161.pdf",
+          "takeaway": "路由不是逐请求挑模型，而是把固定预算在请求间分配：真实 trace 上总满意度 +18.72%。",
+          "keyExperiment": "Azure Conversation 与 BurstGPT 上总满意度较最强路由器提升 18.72%",
+          "index": 2
+        },
+        {
+          "title": "BReD: Block Replay Dithering for Stable Low-Bit EMA Optimizer States",
+          "score": 4.1,
+          "channel": "AI Infra",
+          "category": "cs.LG",
+          "date": "2026-11-26",
+          "authors": "Heshen Zhan, Youhan Huang, Yunke Peng, Yao Wang, Linghui Kong, Ziwei Zhu, Qingyu Han, Yaoyuan Wang, Congliang Chen, Ruoyu Sun",
+          "institutions": "The Chinese University of Hong Kong (Shenzhen), Huawei, Shenzhen Research Institute of Big Data",
+          "abstract": "低比特存储优化器状态能大幅压缩大模型训练的显存占用，但状态并非量化一次就完：每个训练步都要反量化、更新、再量化回写，这条迭代量化链路会破坏训练稳定性。本文定位了失效机理——按指数滑动平均（EMA）更新的状态会把量化误差递归带入后续更新，偏差随时间累积、高方差误差被放大，EMA 衰减系数越接近 1 越严重。作者提出 BReD，把经典减法抖动（subtractive dithering）搬到优化器状态量化上：用确定性种子重放加块内共享抖动值，既压低舍入偏差又控制舍入方差，且无需额外随机存储。在默认预训练设置（120M 的五个优化器、1.1B 与 3.4B 的 AdamW 与 Muon）以及 7B 监督微调上，4-bit BReD 与全精度优化器状态训练几乎无差：预训练困惑度偏移不超过 0.5、微调不超过 0.2，下游平均表现变化在 0.7 分以内；3-bit 版本在这些设置下仍能稳定收敛。",
+          "contributions": [
+            "识别低比特优化器状态的真正失效机理：EMA 状态的量化误差被递归反馈，偏差累积、方差放大",
+            "提出 BReD：确定性种子重放 + 块内共享抖动，把减法抖动改造为零额外存储、零逐元素生成的方案",
+            "在 120M 到 7B、AdamW 与 Muon 两类优化器上给出 4-bit 甚至 3-bit 可用的经验边界"
+          ],
+          "conclusions": [
+            "低比特优化器状态的难点不是单次量化误差，而是每步重复量化引入的偏置累积",
+            "加性抖动在深度网络里就被认为能提升低精度训练，本文把它落到 EMA 状态的“量化-反量化”环节"
+          ],
+          "experiments": [
+            "120M 五优化器、1.1B/3.4B 的 AdamW 与 Muon、7B 微调上，4-bit BReD 预训练 PPL 偏移≤0.5、微调≤0.2",
+            "下游平均性能变化不超过 0.7 分；3-bit BReD 仍保持稳定收敛",
+            "无需额外随机张量存储与逐元素抖动生成，训练开销几乎不变"
+          ],
+          "significance": "把优化器状态压缩从“省显存但要重调超参”变成可以默认开启的训练基础设施。",
+          "arxivUrl": "https://arxiv.org/abs/2611.33951",
+          "pdfUrl": "https://arxiv.org/pdf/2611.33951.pdf",
+          "takeaway": "EMA 优化器状态反复量化会把误差累加：BReD 用块重放抖动把 4-bit 状态做到与全精度几乎无差。",
+          "keyExperiment": "4-bit 优化器状态在 7B 微调上 PPL 偏移≤0.2、下游变化≤0.7 分",
+          "index": 3
+        },
+        {
+          "title": "FlashProve-Next: Verifiable Inference for Production LLM APIs",
+          "score": 4.3,
+          "channel": "AI Infra",
+          "category": "cs.CR",
+          "date": "2026-11-26",
+          "authors": "Liang Song",
+          "institutions": "Independent Researcher",
+          "abstract": "闭源 LLM API 的客户无法核验服务方是否真的跑了宣称的模型、精度、隐藏提示与推理预算。现有方案要么信任硬件或第三方，要么用整数替代模型逐层重证，代价高且与原生浮点服务不一致。本文提出 FlashProve-Next：在不改动原生服务路径（bf16/fp8/mxfp4、随机采样、FlashAttention、CUDA Graph、批处理、前缀缓存）的前提下，为单条响应生成零知识遮蔽的证明，且不泄露权重、隐藏提示、隐藏推理与激活。关键设计是用 Reed-Solomon 权重承诺做隐藏列打开，再以代价加权抽查支持非交互公共验证。作者另用 28 个 Lean 4 模块机械化验证了逐轮可靠性。实测 Qwen3-0.6B 单次证明 450.2 秒（GPU），vLLM 在线服务的 Qwen3-30B-A3B-FP8 只需 1.49 秒证明、23.4 毫秒 Rust 验证。",
+          "contributions": [
+            "在完全不改原生推理栈的前提下，为 LLM API 单条响应产生零知识可验证证明，且隐藏权重、提示与激活",
+            "用 RS 权重承诺 + 逐算子舍入契约替代整数替代模型，去掉逐层重证的巨大开销",
+            "28 个 Lean 4 模块、696 条声明、零 sorry 的形式化可靠性证明，并给出 Blackwell 五模型标定"
+          ],
+          "conclusions": [
+            "可验证推理可以与生产级浮点服务共存，代价压到单请求秒级甚至亚秒级证明",
+            "形式化验证（Lean 4）与实测作弊矩阵结合，可作为这类密码学系统的可靠性验收范式"
+          ],
+          "experiments": [
+            "Qwen3-0.6B ExtSeed-153 在 GPU 上 450.2 秒完成证明（CPU 路径 10.76 秒）",
+            "vLLM 上的 Qwen3-30B-A3B-FP8 证明 1.49 秒、Rust 验证 23.4 毫秒",
+            "Blackwell 五模型标定在 185 万 GEMM/MoE 块与 196 万非 GEMM 行上零误拒；通过 14/14 作弊矩阵"
+          ],
+          "significance": "把“信任服务商”换成“验证服务商”，让可验证推理第一次接近生产可用。",
+          "arxivUrl": "https://arxiv.org/abs/2611.33741",
+          "pdfUrl": "https://arxiv.org/pdf/2611.33741.pdf",
+          "takeaway": "不改推理栈就能给每条 API 响应出零知识证明：30B MoE 上证明 1.49 秒、验证 23.4 毫秒。",
+          "keyExperiment": "vLLM 上 Qwen3-30B-A3B-FP8 证明 1.49 秒、Rust 验证 23.4 毫秒",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "channel": "Algorithms",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "Improving Tail-Augmented Speculative Drafting with Hidden State Mixing and Gradient Detach",
+          "score": 4.5,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-26",
+          "authors": "Yaniv Galron, Rabeeh Karimi Mahabadi, Maor Ashkenazi, Roger Waleffe, Talor Abramovich, Tiyasa Mitra, Yoav Miron, Dor Tsur, Sanjeev Satheesh, Jimmy Zhang, Jiaji Huang, Yonatan Geifman, Mostofa Patwary, Mohammad Shoeybi, Bita Rouhani, Ran Zilberstein",
+          "institutions": "NVIDIA",
+          "abstract": "多 token 预测（MTP）模块与 EAGLE 式草稿模型靠复用目标模型隐状态做投机解码，但自回归使用带来训练-推理错配：训练时喂的是主干或单步 MTP 的隐状态序列，推理时却要在目标模型前缀之后接一串自回归生成的 MTP 状态。EAGLE-3 的训练时测试（TTT）靠显式模拟解决，代价是额外显存与专用注意力掩码。本文提出两个只在训练期生效的方法：隐状态混合（HSM）在同一预测目标下采样主干与 MTP 隐状态；隐状态梯度截断（HSGD）随机阻断隐状态与嵌入通路的梯度但保留前向计算。两者都不增加推理成本。实验显示 HSGD 在草稿前段接受率最高，HSM 在后段更优。在四个 Nemotron 模型与 DeepSeek-V4-Pro 上，冻结主干 + HSM 让平均接受长度最多提升 52.2%；EAGLE-3 草稿器上 HSM 与 TTT 接受率相当，但训练峰值预留显存少 48%。",
+          "contributions": [
+            "把 MTP/EAGLE 草稿器的训练-推理错配拆成两个可训练的替代方案：隐状态混合与隐状态梯度截断",
+            "给出“长草稿选 HSM、短草稿选 HSGD”的选型依据：两者分别在草稿后段与前段接受率领先",
+            "方法实现已并入 Megatron-LM 与 NVIDIA Model Optimizer，训练期改动、推理零成本"
+          ],
+          "conclusions": [
+            "不需要显式模拟推理轨迹，也能缩小 MTP 草稿器的训练-推理分布差",
+            "接受率的“位置分布”比平均接受率更能指导草稿器训练方法的选择"
+          ],
+          "experiments": [
+            "四个 Nemotron 模型与 DeepSeek-V4-Pro 上，冻结主干 + HSM 让平均接受长度最多提升 52.2%",
+            "EAGLE-3 草稿器上 HSM 与 TTT 接受率相当，四步 Qwen3-8B 对比训练峰值预留显存低 48%",
+            "两个方法均不改变推理路径，无额外推理延迟"
+          ],
+          "significance": "给出投机解码草稿器训练的一套低成本改进，并在工业级模型与训练框架里落地。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34092",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34092.pdf",
+          "takeaway": "少模拟多混合：HSM/HSGD 只在训练期动手，投机解码平均接受长度最多 +52.2%，训练显存再省 48%。",
+          "keyExperiment": "冻结主干 + HSM 使平均接受长度最多提升 52.2%，训练峰值显存降 48%",
+          "index": 5
+        },
+        {
+          "title": "FlyingStart: Learned Cross-Token Warm Starts for Fixed-Point Decoding in Recurrent-Depth Language Models",
+          "score": 4.2,
+          "channel": "Algorithms",
+          "category": "cs.CL",
+          "date": "2026-11-26",
+          "authors": "Runguo Li, Dezhen Lu, Zixiang Ni",
+          "institutions": "University of Illinois Urbana-Champaign, University of Tübingen, Xi'an Jiaotong University",
+          "abstract": "循环深度（recurrent-depth）语言模型生成每个 token 时反复迭代同一组层，直到隐状态收敛。现有推理方法只决定何时停止迭代，但每个 token 仍从随机噪声起步、付满整个收敛代价。本文指出迭代的起点是第二个独立杠杆：一个 token 的不动点可以由上一个 token 停止时的状态经一次学到的坐标变换预测出来。作者提出 FlyingStart，一个在冻结模型上闭式拟合的线性热启动，成本不到一次循环的 5%。迭代过程与停止规则都不变，因此退出判据仍然认证同样的不动点距离——更好的起点只是少走几圈，而不是牺牲精度。在 Huginn-0125 上，FlyingStart 以 14%–19% 更少的解码层达到最强免训练基线的精度，在两个服务引擎里把批处理吞吐提升 16%–18%，叠加自投机解码后再涨 10%–14%。收缩分析能在全部四个模型上预测节省的循环数。",
+          "contributions": [
+            "指出循环深度模型的推理优化有两个独立杠杆：停止规则（何时收敛）与起点（从哪开始）",
+            "把跨 token 的不动点迁移写成可闭式拟合的线性热启动，成本不到一次循环的 5%，不改迭代与停止规则",
+            "用收缩分析给出“哪些模型值得热启动”的预测性判据，并在服务引擎里验证吞吐收益"
+          ],
+          "conclusions": [
+            "热启动不改变退出判据的语义，因此是“免费”的循环削减，而不是精度-延迟折中",
+            "循环次数越多的模型，跨 token 状态迁移的价值越大，可作为该架构的通用推理组件"
+          ],
+          "experiments": [
+            "Huginn-0125 上以 14%–19% 更少的解码层匹配最强免训练基线精度",
+            "两个服务引擎批处理吞吐提升 16%–18%，叠加自投机解码再提升 10%–14%",
+            "收缩分析在四个模型上准确预测节省的循环数（含一次事先登记预测）"
+          ],
+          "significance": "把循环深度模型的推理优化从“停得早”扩展到“起步好”，几乎零成本换来两位数吞吐提升。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34492",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34492.pdf",
+          "takeaway": "每个 token 不必从噪声起步：线性热启动少走 14–19% 解码层，服务吞吐 +16–18%。",
+          "keyExperiment": "Huginn-0125 上解码层减少 14–19%、两个服务引擎吞吐提升 16–18%",
+          "index": 6
+        },
+        {
+          "title": "Looped Models are Fast Multi-Token Predictors",
+          "score": 4.4,
+          "channel": "Algorithms",
+          "category": "cs.LG",
+          "date": "2026-11-26",
+          "authors": "Ayhan Suleymanzade, Sean McLeish, Sehoon Kim, Jinwoo Kim, Antoine Bosselut",
+          "institutions": "EPFL, University of Maryland, KAIST",
+          "abstract": "循环语言模型可以通过调整循环次数为预测某个 token 分配更多算力，而不必等比放大参数量；这一性质此前被用于自投机解码——浅循环当快速草稿器、深循环当验证器。本文进一步发现，浅循环不只预测下一个 token，还能同时预测后续多个 token，据此提出 Floodgates：在序列尾部追加一块掩码 token，用低秩适配训练模型并行草拟这些位置，再交给深循环验证。方法不需要额外草稿模型，草稿器仍能利用全深度计算——它以验证阶段算出的深前缀缓存为条件。在七个模型、五个基准、多种批大小以及贪心与采样两种解码下，Floodgates 在多数情形是更快的无损解码方法，最高加速达 7.5 倍。分析表明这一加速来自循环模型的全程深度训练：正因为每一层都在所有深度上被训练过，浅循环才能借深前缀缓存做出高质量并行草稿。",
+          "contributions": [
+            "发现循环模型的浅循环可并行预测多个未来 token，而不只是下一步，并据此设计自投机解码 Floodgates",
+            "用掩码 token 后缀 + 低秩适配实现并行草稿，草稿器仍以验证阶段的深前缀缓存为条件，保持全深度计算",
+            "给出加速来源的机制解释：收益来自循环模型的全程深度训练，而非额外参数或更大草稿预算"
+          ],
+          "conclusions": [
+            "循环架构在投机解码上天然占优，因为草稿与验证共享同一套参数，不存在草稿-目标分布漂移",
+            "无损解码的加速比可以来自“少走循环 + 并行草稿”的叠加，而不只是提高单步接受率"
+          ],
+          "experiments": [
+            "七个模型、五个基准、多种批大小与贪心/采样解码下，多数情形为最快无损方法，最高加速 7.5 倍",
+            "掩码后缀块使多个未来 token 在一次前向中并行草拟",
+            "加速随批大小与模型循环深度变化，收益在深循环模型上更明显"
+          ],
+          "significance": "把循环深度模型的结构优势转化成实打实的推理加速，给自投机解码一条不需要额外草稿模型的路线。",
+          "arxivUrl": "https://arxiv.org/abs/2611.33896",
+          "pdfUrl": "https://arxiv.org/pdf/2611.33896.pdf",
+          "takeaway": "浅循环能并行猜多个未来 token：Floodgates 无损解码最高 7.5 倍加速，不需要额外草稿模型。",
+          "keyExperiment": "七个模型五基准上最高 7.5 倍无损解码加速",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "channel": "Architecture",
+      "countText": "3 篇推荐",
+      "papers": [
+        {
+          "title": "LoopTitan: What Does Parameter Revisit Buy a Mixture-of-Experts?",
+          "score": 4.8,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-26",
+          "authors": "Zichen Tian, Yudong Lu, Xuansheng Wu, Na Zou, Xia Hu, Guanchu Wang, Qianru Sun",
+          "institutions": "Shanghai Artificial Intelligence Laboratory, Singapore Management University",
+          "abstract": "循环 MoE 架构在不同深度重复使用同一批层参数，以不增加参数换取有效深度；近期几项循环 MoE 研究报告在参数、FLOPs 与 KV 缓存对齐时显著优于标准 MoE。但这些收益混杂了网络形状、残差缩放等其他设计选择。本文用对齐的非复用对照组追问：参数复用本身到底买到了什么？答案是几乎什么都没买——复用只是把一个 MoE 本来就有的自由度（固定参数下用层数换专家数）显式化。在匹配预算下逐步分解最强循环配方、把复用放到最后加入，非复用对照组保留了全部收益：大部分来自网络形状，其余来自残差缩放，并证明该缩放等价于给被复用层更小的学习率，这在 AdamW 层步长不均时有用，在 Muon 层步长近似相等时消失。无复用的更深标准 MoE 在同等参数与算力下能拿到复用收益的 90.2%。作者据此提出 LoopTitan-Base 作为更强的 MoE 基线并开源 17 个预训练模型。",
+          "contributions": [
+            "用严格的非复用对照组把循环 MoE 的收益拆开，指出“参数复用”本身几乎不贡献收益",
+            "把收益归因于网络形状、残差缩放（等价于更低学习率）与额外算力，并指出 Muon 下残差缩放红利消失",
+            "提出 LoopTitan-Base 更强基线（无需复用与残差缩放即可匹配最强循环配方），开源 17 个预训练模型与全部实验记录"
+          ],
+          "conclusions": [
+            "循环 MoE 的“免费深度”叙事需要重新审视：架构形状与优化器才是主要收益来源",
+            "在 Muon 时代，用更低学习率模拟复用层收益的做法失效，标准 MoE 加深即可获得大部分好处"
+          ],
+          "experiments": [
+            "匹配预算下分解最强循环配方：非复用对照保留全部收益，其中约 90% 来自网络形状、其余来自残差缩放",
+            "固定参数增加算力时，多一次复用的收益大于专家数翻倍；但无复用的更深标准 MoE 达到该收益的 90.2%",
+            "LoopTitan-Base 在 Muon 下不使用复用与残差缩放即匹配最强循环配方"
+          ],
+          "significance": "给火热的循环 MoE 方向泼了一盆严谨的冷水，并交付一个可复现的更强基线。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34821",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34821.pdf",
+          "takeaway": "循环 MoE 的收益其实不来自参数复用：网络形状+残差缩放（等价低学习率）才是主因，Muon 下红利消失；标准 MoE 加深即可拿到 90.2%。",
+          "keyExperiment": "非复用对照保留全部收益，等参数等算力的更深标准 MoE 达到复用收益的 90.2%",
+          "index": 8
+        },
+        {
+          "title": "Scaling Looped MoE Language Models under Matched Budgets: Information Flow and Parameter Allocation",
+          "score": 4.5,
+          "channel": "Architecture",
+          "category": "cs.LG",
+          "date": "2026-11-26",
+          "authors": "Shipeng Bai, Jiayu Qin, Hong Liu, Xili Wang, Jianchao Tan, Jiacheng Li, He Zhang, Yifan Lu, Jiaqi Zhang, Kefeng Zhang, Yuchen Xie, Xunliang Cai",
+          "institutions": "Meituan",
+          "abstract": "循环 Transformer 把计算深度与参数量解耦，此前研究显示加大计算量能带来可观收益，但在严格等参数、等 FLOPs 约束下如何配置这类模型，仍缺少系统性设计原则。本文先改进循环体的信息流：用门控内循环状态更新与跨阶段残差连接，让状态在多次循环之间平滑传递；在此基础上做受控实验，扫出配置结论——单次通过的核心深度取展开总深度的 25%–35%，把由此省下的参数重新分配给每层更多路由专家，可在零额外算力下提升性能，且与现有训练基础设施兼容。以 1T token 预训练后，69B 的 MLA 与 51B 的 KDA 两个 MoE 模型在四个基准上分别比预算对齐的非循环基线平均高 1.16 与 2.29 个百分点。在共同主干、200B token 训练预算的复现实验里，该方法困惑度低于其他循环方法，代码已公开。",
+          "contributions": [
+            "改进循环 MoE 的信息流：门控内循环状态更新 + 跨阶段残差连接",
+            "给出等参数等 FLOPs 下的配置律：核心深度取总展开深度的 25%–35%，省下的参数转成每层更多专家",
+            "用 1T token 预训练的 69B MLA 与 51B KDA 双模型验证，并开源 200B token 复现代码"
+          ],
+          "conclusions": [
+            "循环深度的收益依赖参数如何重新分配：把省下的参数投给路由专家比投给循环次数更划算",
+            "该配置与现有训练基础设施兼容，意味着不需要重写训练栈即可采用"
+          ],
+          "experiments": [
+            "1T token 预训练后，69B MLA 与 51B KDA MoE 在四个基准上平均领先预算对齐非循环基线 1.16 与 2.29 个百分点",
+            "共同主干、200B token 复现实验中困惑度低于其他循环方法",
+            "零额外算力条件下的配置改进即可带来稳定收益"
+          ],
+          "significance": "把循环 MoE 从“多循环就更好”的经验做法，推进为等预算下可复用的配置律。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34276",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34276.pdf",
+          "takeaway": "等参数等 FLOPs 下循环 MoE 的最优配置：核心深度 25%–35%，省下的参数换专家——两个大模型平均 +1.16/+2.29 分。",
+          "keyExperiment": "69B MLA 与 51B KDA 分别平均领先 +1.16 与 +2.29 个百分点",
+          "index": 9
+        },
+        {
+          "title": "Libtt: A Compiler and Runtime for Tenstorrent Processors",
+          "score": 4.0,
+          "channel": "Architecture",
+          "category": "cs.DC",
+          "date": "2026-11-26",
+          "authors": "Philipp Moritz, Sarah Dong",
+          "institutions": "Relativity",
+          "abstract": "Libtt 把 PyTorch 与 JAX 生态接到 Tenstorrent 硬件上。它实现了 PJRT——XLA 系框架用来驱动 Google TPU 的那个接口——因此 JAX 可以直接运行，PyTorch 经 TorchTPU 运行，为 TPU 写的软件除替换自定义核外无需改动即可迁移过来。它以 Tenstorrent 的开源编译器和运行时为底座，把从编译器到多芯片运行时的整条栈打包成单个共享库，同时对上游软件做了大量修复，使现有 PyTorch/JAX 代码开箱可用，并加入大量新的编译优化以取得性能。论文报告它通过了大部分 JAX 与 TorchTPU 测试集，并能跑起 SGLang、TorchTitan 与 Miles，覆盖在线服务、微调与强化学习三类负载。",
+          "contributions": [
+            "用 PJRT 把 JAX/PyTorch 生态整体接到 Tenstorrent，实现“TPU 软件换核即迁移”",
+            "以 Tenstorrent 开源编译器/运行时为底，打包编译器到多芯片运行时为单一共享库，并补齐上游缺陷与编译优化",
+            "在 JAX/TorchTPU 测试集与 SGLang、TorchTitan、Miles 三类真实负载上验证可用性"
+          ],
+          "conclusions": [
+            "把非 NVIDIA 加速器的可用性问题，从“重写算子”降级为“换一个后端共享库”",
+            "PJRT 作为跨硬件抽象层，可能成为新加速器接入主流训练/服务栈的标准入口"
+          ],
+          "experiments": [
+            "通过大部分 JAX 与 TorchTPU 测试集",
+            "可直接运行 SGLang（服务）、TorchTitan（预训练/微调）与 Miles（强化学习）",
+            "整栈以单一共享库形式分发，无需改动用户代码"
+          ],
+          "significance": "给“非 NVIDIA 加速器进不了主流栈”这道老题提供了一个工程解法：瞄准 PJRT 这一层做后端。",
+          "arxivUrl": "https://arxiv.org/abs/2611.34273",
+          "pdfUrl": "https://arxiv.org/pdf/2611.34273.pdf",
+          "takeaway": "用 PJRT 把 PyTorch/JAX 直接接到 Tenstorrent：整栈一个共享库，SGLang、TorchTitan、Miles 都能跑。",
+          "keyExperiment": "通过大部分 JAX/TorchTPU 测试集，并跑通 SGLang、TorchTitan、Miles",
+          "index": 10
+        }
+      ]
+    }
+  ]
+}
